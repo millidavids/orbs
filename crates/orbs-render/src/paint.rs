@@ -1,0 +1,286 @@
+//! Writing into a frame.
+//!
+//! Every write goes through a [`Painter`] bounded to a rectangle, so painting
+//! outside a pane is impossible rather than merely discouraged — a stale layout
+//! draws less, never into a neighbour.
+//!
+//! # The split that matters
+//!
+//! The API divides into **content**, which speaks, and **structure**, which does
+//! not:
+//!
+//! | Method | Cells | Speech |
+//! |---|---|---|
+//! | [`Painter::span`], [`Painter::paragraph`], [`Painter::progress`] | yes | yes |
+//! | [`Painter::fill`], [`Painter::clear`], [`Painter::border`] | yes | no |
+//! | [`Painter::announce`] | no | yes |
+//!
+//! Borders, rules, and padding carry no information, so speaking them would
+//! drown the stream in `"┌──────┐"`. Everything else must speak, because §14
+//! makes the linear stream a first-class view of the frame rather than a
+//! debugging aid.
+//!
+//! [`Painter::border`] announces its title for exactly this reason: the title is
+//! drawn *into* the structural border, so without the announcement a pane would
+//! lose its identity in the linear stream.
+
+use crate::cell::Cell;
+use crate::cp437::box_drawing;
+use crate::frame::Frame;
+use crate::geometry::{Pos, Rect};
+use crate::linear::UtteranceKind;
+use crate::span::Span;
+use crate::style::{Presentation, Role, Style};
+use crate::wrap::Wrap;
+
+/// A clipped writer into a region of a [`Frame`].
+///
+/// All positions are absolute grid coordinates, matching the rectangles
+/// [`crate::ScreenLayout`] hands out.
+#[derive(Debug)]
+pub struct Painter<'a> {
+    frame: &'a mut Frame,
+    area: Rect,
+}
+
+impl<'a> Painter<'a> {
+    pub(crate) fn new(frame: &'a mut Frame, area: Rect) -> Self {
+        let area = area.intersection(frame.area());
+        Self { frame, area }
+    }
+
+    /// The region this painter may write to.
+    #[must_use]
+    pub const fn area(&self) -> Rect {
+        self.area
+    }
+
+    /// A painter for a sub-region, clipped to this one.
+    pub fn sub(&mut self, area: Rect) -> Painter<'_> {
+        Painter {
+            area: area.intersection(self.area),
+            frame: &mut *self.frame,
+        }
+    }
+
+    /// Draw a span on one row, truncating at the region's right edge.
+    ///
+    /// Returns the number of cells written.
+    ///
+    /// The **full** text is recorded for the linear stream even when the visual
+    /// form is truncated. A narrow pane is a visual constraint; withholding the
+    /// rest of the sentence from a screen reader would make it an informational
+    /// one.
+    ///
+    /// # Panics
+    ///
+    /// In debug builds, if the span is [`Presentation::Eldritch`] without an
+    /// authored spoken variant. DESIGN.md §3 requires one, and the alternative
+    /// to catching it here is shipping a tonal register that screen-reader
+    /// players cannot hear.
+    pub fn span(&mut self, at: Pos, span: &Span<'_>) -> u16 {
+        debug_assert!(
+            span.style().presentation != Presentation::Eldritch || span.has_spoken_variant(),
+            "eldritch span with no authored spoken variant: {:?}",
+            span.text()
+        );
+        self.frame
+            .speech_mut()
+            .push(span.kind(), span.style().role, span.spoken_text());
+        self.put_str(at, span.text(), span.style(), u16::MAX)
+    }
+
+    /// Draw a span as word-wrapped prose filling `area`.
+    ///
+    /// Honours embedded newlines, including blank lines. Returns the number of
+    /// rows used.
+    ///
+    /// # Panics
+    ///
+    /// As [`Painter::span`].
+    pub fn paragraph(&mut self, area: Rect, span: &Span<'_>) -> u16 {
+        debug_assert!(
+            span.style().presentation != Presentation::Eldritch || span.has_spoken_variant(),
+            "eldritch paragraph with no authored spoken variant: {:?}",
+            span.text()
+        );
+        self.frame
+            .speech_mut()
+            .push(span.kind(), span.style().role, span.spoken_text());
+
+        let area = area.intersection(self.area);
+        if area.is_empty() {
+            return 0;
+        }
+
+        let mut row = area.row;
+        for line in span.text().split('\n') {
+            if row >= area.bottom() {
+                break;
+            }
+            if line.is_empty() {
+                row = row.saturating_add(1);
+                continue;
+            }
+            for wrapped in Wrap::new(line, area.cols) {
+                if row >= area.bottom() {
+                    break;
+                }
+                self.put_str(Pos::new(area.col, row), wrapped, span.style(), area.right());
+                row = row.saturating_add(1);
+            }
+        }
+        row.saturating_sub(area.row)
+    }
+
+    /// Draw a meter as a bar, and record `spoken` as its description.
+    ///
+    /// Integer-only: progress in this game is elapsed ticks against a duration
+    /// (DESIGN.md §5.0), and keeping floats out of the render path keeps a
+    /// deterministic sim rendering deterministically. `done` is clamped to
+    /// `total`; a `total` of zero draws an empty bar.
+    ///
+    /// `spoken` is what a reader hears — `"east wall integrity 34 percent"`, not
+    /// a row of block glyphs. §14 names progress bars specifically.
+    pub fn progress(&mut self, area: Rect, done: u32, total: u32, style: Style, spoken: &str) {
+        self.frame
+            .speech_mut()
+            .push(UtteranceKind::Progress, style.role, spoken);
+
+        let area = area.intersection(self.area);
+        if area.is_empty() {
+            return;
+        }
+
+        // Widened to u64 so a long duration cannot overflow the multiply.
+        let filled = if total == 0 {
+            0
+        } else {
+            let scaled = u64::from(area.cols) * u64::from(done.min(total)) / u64::from(total);
+            u16::try_from(scaled).unwrap_or(area.cols)
+        };
+
+        let row = Rect::new(area.col, area.row, area.cols, 1);
+        self.fill(row, '░', style);
+        self.fill(Rect::new(area.col, area.row, filled, 1), '█', style);
+    }
+
+    /// Speak something with no visual form of its own.
+    ///
+    /// For information a sighted player reads from structure — a pane's title in
+    /// its border, a column header, a layout grouping.
+    pub fn announce(&mut self, kind: UtteranceKind, role: Role, text: &str) {
+        self.frame.speech_mut().push(kind, role, text);
+    }
+
+    /// Draw text whose meaning a neighbouring span already carries. Structural:
+    /// writes no speech.
+    ///
+    /// For a row drawn in several styles — `battlements ....... [ DEGRADED ]`,
+    /// where the label is base hue, the leader is dim, and only the bracket takes
+    /// the danger accent. One [`Painter::span`] announces the row as a whole;
+    /// the remaining runs are drawn with this so the reader hears one sentence
+    /// rather than three fragments.
+    ///
+    /// Returns the number of cells written.
+    ///
+    /// **This is not a silent [`Painter::span`].** Text drawn here is invisible
+    /// to a screen reader, so use it only where a span or [`Painter::announce`]
+    /// on the same row has already said what the row means.
+    pub fn glyphs(&mut self, at: Pos, text: &str, style: Style) -> u16 {
+        self.put_str(at, text, style, u16::MAX)
+    }
+
+    /// Fill a region with one glyph. Structural: writes no speech.
+    pub fn fill(&mut self, area: Rect, glyph: char, style: Style) {
+        let area = area.intersection(self.area);
+        let cell = Cell::new(glyph, style);
+        for row in area.row..area.bottom() {
+            for col in area.col..area.right() {
+                self.frame.set(Pos::new(col, row), cell);
+            }
+        }
+    }
+
+    /// Blank the painter's whole region.
+    pub fn clear(&mut self) {
+        self.fill(self.area, ' ', Style::NORMAL);
+    }
+
+    /// Draw a single-line box, optionally titled.
+    ///
+    /// The box itself is structural and silent; the title is announced as a
+    /// [`UtteranceKind::Heading`], which is what gives the pane an identity in
+    /// the linear stream.
+    ///
+    /// A region narrower or shorter than two cells draws nothing.
+    pub fn border(&mut self, area: Rect, title: Option<&str>, style: Style) {
+        let area = area.intersection(self.area);
+        if area.cols < 2 || area.rows < 2 {
+            return;
+        }
+
+        let left = area.col;
+        let right = area.right() - 1;
+        let top = area.row;
+        let bottom = area.bottom() - 1;
+
+        for col in left..=right {
+            self.put_cell(Pos::new(col, top), box_drawing::HORIZONTAL, style);
+            self.put_cell(Pos::new(col, bottom), box_drawing::HORIZONTAL, style);
+        }
+        for row in top..=bottom {
+            self.put_cell(Pos::new(left, row), box_drawing::VERTICAL, style);
+            self.put_cell(Pos::new(right, row), box_drawing::VERTICAL, style);
+        }
+        self.put_cell(Pos::new(left, top), box_drawing::TOP_LEFT, style);
+        self.put_cell(Pos::new(right, top), box_drawing::TOP_RIGHT, style);
+        self.put_cell(Pos::new(left, bottom), box_drawing::BOTTOM_LEFT, style);
+        self.put_cell(Pos::new(right, bottom), box_drawing::BOTTOM_RIGHT, style);
+
+        let Some(title) = title else {
+            return;
+        };
+        self.frame
+            .speech_mut()
+            .push(UtteranceKind::Heading, style.role, title);
+
+        // ` title ` inset one cell from the top-left corner, stopping short of
+        // the far corner so the box never breaks.
+        let mut col = left.saturating_add(1);
+        for text in [" ", title, " "] {
+            col = col.saturating_add(self.put_str(Pos::new(col, top), text, style, right));
+        }
+    }
+
+    fn put_cell(&mut self, at: Pos, glyph: char, style: Style) {
+        if self.area.contains(at) {
+            self.frame.set(at, Cell::new(glyph, style));
+        }
+    }
+
+    /// Write `text` rightwards from `at`, clipped to the region and to
+    /// `right_limit`. Returns cells written.
+    fn put_str(&mut self, at: Pos, text: &str, style: Style, right_limit: u16) -> u16 {
+        if at.row < self.area.row || at.row >= self.area.bottom() {
+            return 0;
+        }
+
+        let limit = self.area.right().min(right_limit);
+        let mut col = at.col.max(self.area.col);
+        // Glyphs falling left of the region are consumed, not shifted right.
+        let skipped = usize::from(col.saturating_sub(at.col));
+
+        let mut written = 0u16;
+        for glyph in text.chars().skip(skipped) {
+            if col >= limit {
+                break;
+            }
+            self.frame
+                .set(Pos::new(col, at.row), Cell::new(glyph, style));
+            col = col.saturating_add(1);
+            written = written.saturating_add(1);
+        }
+        written
+    }
+}
