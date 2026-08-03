@@ -13,13 +13,23 @@ use orbs_render::{Frame, Pos, Rect, ScreenLayout, ScreenRequest, Span, Style, Ut
 use crate::shell::screen::Screen;
 use crate::sim::Tower;
 
+/// The frame, reused across ticks.
+///
+/// `Frame`'s own documentation says to reset rather than reallocate: the grid
+/// reaches 160x45 and a siege redraws it every frame. This module is the shape
+/// the real cell renderer will be written from, so it should model the right
+/// habit rather than the convenient one.
+#[derive(Resource, Default)]
+pub(crate) struct Canvas(Frame);
+
 /// Log one painted frame per world tick.
-pub(crate) fn log_frame(screen: Res<Screen>, tower: Res<Tower>) {
+pub(crate) fn log_frame(screen: Res<Screen>, tower: Res<Tower>, mut canvas: ResMut<Canvas>) {
     if !screen.is_hostable() {
         return;
     }
 
-    let mut frame = Frame::new(screen.grid);
+    let frame = &mut canvas.0;
+    frame.reset(screen.grid);
     let layout = ScreenLayout::compute(&ScreenRequest::single(screen.grid));
     let pane = layout.main().first().copied().unwrap_or(Rect::EMPTY);
 

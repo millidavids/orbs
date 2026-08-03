@@ -10,6 +10,12 @@
 //! would leave stale cells from the previous frame visible; an overlap would let
 //! one pane write over another's content, which is exactly the failure the
 //! painter's clipping exists to prevent.
+//!
+//! Tilers also never *place* a rectangle with no area. `ScreenLayout::main()`
+//! is what a frontend zips against its open domains, so a counted-but-invisible
+//! pane would bind a domain to a rectangle that cannot draw a single cell — and
+//! the exact-cover tests would not notice, because a zero-area rectangle
+//! contributes zero to the sum.
 
 use crate::geometry::Rect;
 use crate::layout::{MAX_MAIN_PANES, MIN_PANE_ROWS, STRIP_ROWS};
@@ -59,6 +65,9 @@ pub(crate) fn deep(area: Rect, panes: u16, out: &mut [Rect; MAX_MAIN_PANES]) -> 
         let in_band = (panes - placed).min(columns);
         for column in 0..in_band {
             let (col_offset, cols) = slice(area.cols, column, in_band);
+            if rows == 0 || cols == 0 {
+                continue;
+            }
             let Some(slot) = out.get_mut(usize::from(placed)) else {
                 return usize::from(placed);
             };
@@ -96,6 +105,9 @@ pub(crate) fn wide(area: Rect, panes: u16, out: &mut [Rect; MAX_MAIN_PANES]) -> 
     let mut row = area.row;
     for index in 0..panes {
         let rows = if index == 0 { focus_rows } else { strip_rows };
+        if rows == 0 {
+            continue;
+        }
         let Some(slot) = out.get_mut(usize::from(placed)) else {
             break;
         };
@@ -111,6 +123,9 @@ fn even(area: Rect, panes: u16, out: &mut [Rect; MAX_MAIN_PANES]) -> usize {
     let mut placed = 0u16;
     for index in 0..panes {
         let (row_offset, rows) = slice(area.rows, index, panes);
+        if rows == 0 {
+            continue;
+        }
         let Some(slot) = out.get_mut(usize::from(placed)) else {
             break;
         };
@@ -196,6 +211,36 @@ mod tests {
             for rect in tiled(deep, area, panes) {
                 assert!(rect.col >= 7 && rect.row >= 5, "{rect:?} escaped {area:?}");
                 assert!(rect.right() <= area.right() && rect.bottom() <= area.bottom());
+            }
+        }
+    }
+
+    #[test]
+    fn a_pane_is_never_placed_with_no_area() {
+        // `main()` is zipped against open domains. A counted-but-invisible pane
+        // binds a domain to a rectangle that cannot draw a cell, and the
+        // exact-cover tests cannot see it because zero area sums to zero.
+        for area in [
+            Rect::new(0, 0, 80, 3),
+            Rect::new(0, 0, 80, 1),
+            Rect::new(0, 0, 3, 4),
+        ] {
+            for panes in 1..=4u16 {
+                for (name, tiler) in [
+                    (
+                        "deep",
+                        deep as fn(Rect, u16, &mut [Rect; MAX_MAIN_PANES]) -> usize,
+                    ),
+                    ("wide", wide),
+                    ("even", even),
+                ] {
+                    for rect in tiled(tiler, area, panes) {
+                        assert!(
+                            !rect.is_empty(),
+                            "{name} placed an empty pane in {area:?} with {panes} panes"
+                        );
+                    }
+                }
             }
         }
     }
