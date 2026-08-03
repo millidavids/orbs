@@ -18,7 +18,7 @@ use rand_chacha::rand_core::SeedableRng;
 /// Deliberately **not** `#[non_exhaustive]`. That attribute exists for downstream
 /// compatibility across crate versions; here every consumer is inside this
 /// workspace, and exhaustive matching is a feature — adding a stream should force
-/// [`RngStream::index`] to be updated rather than silently compiling.
+/// the private `index` mapping to be updated rather than silently compiling.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RngStream {
     /// Parser tie-breaking when candidate intents score equally.

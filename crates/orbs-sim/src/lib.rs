@@ -6,6 +6,8 @@
 //!
 //! See `CLAUDE.md` for the architectural rules this crate exists to uphold.
 
+pub mod parser;
+
 mod rng;
 mod schedule;
 mod sim;

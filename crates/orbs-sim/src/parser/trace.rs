@@ -1,0 +1,328 @@
+//! Instrumentation — what the Phase 0 gate actually measures.
+//!
+//! DESIGN.md §6: *"Every resolution reproducible — full input, resolution, and
+//! candidate scores logged and exportable."* §15 sets the bar this feeds:
+//!
+//! > ≥ 85% of inputs resolve to the intended action on first attempt, **and**
+//! > ≥ 95% of initially-unresolved inputs reach the intended action within two
+//! > further attempts, with zero dead ends.
+//! >
+//! > Act on the per-input failure *clustering*, not the aggregate.
+//!
+//! Clustering is why every candidate is kept and not just the winner: a miss
+//! caused by an unknown verb and a miss caused by an argument that did not exist
+//! look identical in an aggregate and need opposite fixes.
+//!
+//! # Why TSV
+//!
+//! The consumer is a spreadsheet or a five-line script, run once per playtest by
+//! one person. TSV needs no dependency, survives `grep`, and pastes into
+//! anything. Records carry no timing — wall-clock in a sim record would make two
+//! runs of the same seed differ.
+
+use core::fmt::Write as _;
+
+use super::intent::{Candidate, Mode, Resolution};
+use super::resolve::Analysis;
+use super::verb::Verb;
+use super::vocabulary::Register;
+
+/// What became of one line of input.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Outcome {
+    /// A command ran, chosen outright.
+    Resolved,
+    /// A command ran, chosen under siege pressure with correction offered.
+    Forced,
+    /// The player was asked which of several readings they meant.
+    Ambiguous,
+    /// Nothing scored; suggestions were offered.
+    Unresolved,
+}
+
+impl Outcome {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Resolved => "resolved",
+            Self::Forced => "forced",
+            Self::Ambiguous => "ambiguous",
+            Self::Unresolved => "unresolved",
+        }
+    }
+}
+
+/// One resolution, in full.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParseRecord {
+    /// World time when the input arrived.
+    pub tick: u64,
+    /// Exactly what the player typed, before normalisation.
+    pub input: String,
+    /// Whether a blocking prompt was permitted.
+    pub mode: Mode,
+    /// What became of it.
+    pub outcome: Outcome,
+    /// The canonical echo, if a command was chosen.
+    pub echo: Option<String>,
+    /// Which dialect the player reached for, if one was identified.
+    pub register: Option<Register>,
+    /// Every scored reading, best first. The raw material for clustering.
+    pub candidates: Vec<Candidate>,
+    /// Verbs offered when nothing resolved.
+    pub suggestions: Vec<Verb>,
+}
+
+impl ParseRecord {
+    /// Record a resolution, keeping every reading that was scored.
+    ///
+    /// Takes an [`Analysis`] rather than a [`Resolution`] because §6 wants the
+    /// candidate scores for *successful* resolutions too — a command that won by
+    /// four points and one that won by four hundred are the same `Resolved` and
+    /// very different data.
+    #[must_use]
+    pub fn new(tick: u64, input: &str, mode: Mode, analysis: &Analysis) -> Self {
+        let (outcome, echo, register, suggestions) = match &analysis.resolution {
+            Resolution::Resolved { intent, confidence } => (
+                match confidence {
+                    super::intent::Confidence::Clear => Outcome::Resolved,
+                    super::intent::Confidence::Forced => Outcome::Forced,
+                },
+                Some(intent.echo()),
+                Some(intent.register),
+                Vec::new(),
+            ),
+            Resolution::Ambiguous { candidates } => (
+                Outcome::Ambiguous,
+                None,
+                candidates.first().map(|c| c.intent.register),
+                Vec::new(),
+            ),
+            Resolution::Unresolved { suggestions } => {
+                (Outcome::Unresolved, None, None, suggestions.clone())
+            }
+        };
+        let candidates = analysis.candidates.clone();
+
+        Self {
+            tick,
+            input: input.to_owned(),
+            mode,
+            outcome,
+            echo,
+            register,
+            candidates,
+            suggestions,
+        }
+    }
+}
+
+/// Every resolution this session, in order.
+#[derive(Debug, Default, Clone)]
+pub struct ParseLog {
+    records: Vec<ParseRecord>,
+}
+
+impl ParseLog {
+    /// An empty log.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Append a record.
+    pub fn push(&mut self, record: ParseRecord) {
+        self.records.push(record);
+    }
+
+    /// Everything recorded.
+    #[must_use]
+    pub fn records(&self) -> &[ParseRecord] {
+        &self.records
+    }
+
+    /// How many inputs resolved on the first attempt.
+    ///
+    /// The numerator of the gate's headline number. Forced resolutions count —
+    /// they ran the intended command — but they are reported separately by
+    /// [`ParseLog::forced`] because a high forced rate means siege play is
+    /// guessing.
+    #[must_use]
+    pub fn resolved(&self) -> usize {
+        self.records
+            .iter()
+            .filter(|record| matches!(record.outcome, Outcome::Resolved | Outcome::Forced))
+            .count()
+    }
+
+    /// How many resolutions were taken under siege pressure.
+    #[must_use]
+    pub fn forced(&self) -> usize {
+        self.count(Outcome::Forced)
+    }
+
+    /// How many inputs produced a numbered prompt.
+    #[must_use]
+    pub fn ambiguous(&self) -> usize {
+        self.count(Outcome::Ambiguous)
+    }
+
+    /// How many inputs scored nothing.
+    #[must_use]
+    pub fn unresolved(&self) -> usize {
+        self.count(Outcome::Unresolved)
+    }
+
+    fn count(&self, outcome: Outcome) -> usize {
+        self.records
+            .iter()
+            .filter(|record| record.outcome == outcome)
+            .count()
+    }
+
+    /// Every record as tab-separated rows, with a header.
+    ///
+    /// One row per *candidate*, so a spreadsheet can pivot on why a reading lost
+    /// rather than only on whether it won. Inputs with no candidates still get a
+    /// row, or unresolved inputs — the ones the gate cares about most — would
+    /// vanish from the export.
+    #[must_use]
+    pub fn to_tsv(&self) -> String {
+        let mut out = String::from(
+            "tick\tinput\tmode\toutcome\techo\tregister\trank\tcandidate\tscore\tverb_score\targ_score\tsuggestions\n",
+        );
+
+        for record in &self.records {
+            let mode = match record.mode {
+                Mode::Calm => "calm",
+                Mode::Siege => "siege",
+            };
+            let echo = record.echo.as_deref().unwrap_or("");
+            let register = record.register.map_or("", register_label);
+            let suggestions = record
+                .suggestions
+                .iter()
+                .map(|verb| verb.canonical())
+                .collect::<Vec<_>>()
+                .join(",");
+
+            if record.candidates.is_empty() {
+                let _ = writeln!(
+                    out,
+                    "{}\t{}\t{mode}\t{}\t{echo}\t{register}\t\t\t\t\t\t{suggestions}",
+                    record.tick,
+                    escape(&record.input),
+                    record.outcome.label(),
+                );
+                continue;
+            }
+
+            for (rank, candidate) in record.candidates.iter().enumerate() {
+                let _ = writeln!(
+                    out,
+                    "{}\t{}\t{mode}\t{}\t{echo}\t{register}\t{rank}\t{}\t{}\t{}\t{}\t{suggestions}",
+                    record.tick,
+                    escape(&record.input),
+                    record.outcome.label(),
+                    escape(&candidate.intent.echo()),
+                    candidate.score,
+                    candidate.verb_score,
+                    candidate.argument_score,
+                );
+            }
+        }
+        out
+    }
+}
+
+const fn register_label(register: Register) -> &'static str {
+    match register {
+        Register::Arcane => "arcane",
+        Register::Shell => "shell",
+        Register::Plain => "plain",
+    }
+}
+
+/// Keep one record on one row. Players type tabs and newlines by accident.
+fn escape(field: &str) -> String {
+    field.replace(['\t', '\n', '\r'], " ")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::parser::{NounKind, Scene, analyse};
+
+    fn tower() -> Scene {
+        Scene::new()
+            .with(NounKind::Essence, "clarity")
+            .with(NounKind::Essence, "warding")
+    }
+
+    fn log_of(inputs: &[&str], mode: Mode) -> ParseLog {
+        let scene = tower();
+        let mut log = ParseLog::new();
+        for (tick, input) in inputs.iter().enumerate() {
+            let analysis = analyse(input, &scene, mode);
+            let tick = u64::try_from(tick).expect("small");
+            log.push(ParseRecord::new(tick, input, mode, &analysis));
+        }
+        log
+    }
+
+    #[test]
+    fn outcomes_are_tallied_for_the_gate() {
+        let log = log_of(&["decoct clarity", "brew", "xyzzy"], Mode::Calm);
+        assert_eq!(log.resolved(), 1);
+        assert_eq!(log.ambiguous(), 1);
+        assert_eq!(log.unresolved(), 1);
+    }
+
+    #[test]
+    fn forced_resolutions_are_counted_separately() {
+        // A high forced rate means siege play is guessing, which the aggregate
+        // "resolved" number would hide.
+        let log = log_of(&["brew"], Mode::Siege);
+        assert_eq!(log.resolved(), 1);
+        assert_eq!(log.forced(), 1);
+    }
+
+    #[test]
+    fn every_candidate_survives_into_the_export() {
+        // Clustering needs the losers, not just the winner.
+        let log = log_of(&["brew"], Mode::Calm);
+        let tsv = log.to_tsv();
+        assert!(tsv.contains("decoct clarity"), "{tsv}");
+        assert!(tsv.contains("decoct warding"), "{tsv}");
+    }
+
+    #[test]
+    fn unresolved_inputs_still_appear() {
+        // These are the rows the gate cares about most; dropping them would
+        // silently flatter the numbers.
+        let tsv = log_of(&["xyzzy"], Mode::Calm).to_tsv();
+        assert!(tsv.contains("xyzzy"), "{tsv}");
+        assert!(tsv.contains("unresolved"), "{tsv}");
+    }
+
+    #[test]
+    fn the_export_is_rectangular() {
+        let tsv = log_of(&["decoct clarity", "brew", "xyzzy"], Mode::Calm).to_tsv();
+        let mut lines = tsv.lines();
+        let columns = lines.next().expect("header").split('\t').count();
+        for line in lines {
+            assert_eq!(line.split('\t').count(), columns, "ragged row: {line:?}");
+        }
+    }
+
+    #[test]
+    fn tabs_and_newlines_in_input_cannot_break_a_row() {
+        let scene = tower();
+        let input = "decoct\tclarity\nrm -rf";
+        let analysis = analyse(input, &scene, Mode::Calm);
+        let mut log = ParseLog::new();
+        log.push(ParseRecord::new(0, input, Mode::Calm, &analysis));
+
+        let tsv = log.to_tsv();
+        assert_eq!(tsv.lines().count(), 2, "one header plus one row: {tsv:?}");
+    }
+}

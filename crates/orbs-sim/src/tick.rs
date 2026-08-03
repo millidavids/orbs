@@ -51,8 +51,8 @@ impl Tick {
     ///
     /// # Panics
     ///
-    /// Debug builds only, if the count exceeds [`Self::EXACT_F64_LIMIT`] and the
-    /// conversion would lose precision.
+    /// Debug builds only, if the count exceeds `2^53` ticks and the conversion
+    /// would lose precision.
     #[must_use]
     pub fn as_seconds(self) -> f64 {
         debug_assert!(
