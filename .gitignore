@@ -32,3 +32,6 @@ Thumbs.db
 
 # Local Claude state (project skills at .claude/skills/ ARE tracked)
 .claude/settings.local.json
+
+# Screenshots from ORBS_CAPTURE / F12
+orbs-screenshot.png

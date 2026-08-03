@@ -1476,11 +1476,15 @@ Start from `default-features = false`. The custom text renderer means **`bevy_te
 and every screen are rendered as terminal content, in-fiction. That is a
 substantial saving over court_wizard's list.
 
+**`bevy_sprite_render` is required and was missing from this list.** 0.19 split
+the 2D rendering half out of `bevy_sprite`; without it `Mesh2d`, `ColorMaterial`,
+and `MeshMaterial2d` do not exist and nothing 2D draws at all.
+
 ```toml
 bevy = { version = "=0.19.0", default-features = false, features = [
     "std", "async_executor", "multi_threaded",
     "bevy_winit", "bevy_window", "bevy_input_focus",
-    "bevy_render", "bevy_core_pipeline", "bevy_sprite",
+    "bevy_render", "bevy_core_pipeline", "bevy_sprite", "bevy_sprite_render",
     "bevy_mesh", "bevy_image", "bevy_camera", "bevy_color",
     "bevy_asset", "bevy_state", "bevy_log",
     "bevy_audio", "vorbis",
@@ -1832,6 +1836,19 @@ domains are settled (brewing + archive), and the fragment trickle has a rate
    price-shop — Exapunks is $19.99.
 
 ## 19. Decisions log
+
+### Cell renderer — implemented, Phase 0 item 4
+
+| Question | Decision |
+|---|---|
+| Which of §4's two options | **Single mesh, one quad per visible cell.** Measured at **227 µs for the worst case** — a full 160×45 grid, 7200 quads, rebuilt from scratch in release. That is 1.4% of a 60 Hz frame, so the cell-index-texture alternative is not needed and the simpler path wins |
+| Draw calls | **One, at any grid size.** The whole screen is a single mesh with a single material |
+| No custom shader | Each vertex carries its colour and Bevy's stock `ColorMaterial` multiplies the sampled texel by it. The atlas stores **white RGB with coverage in alpha**, so `(1,1,1,coverage) × (r,g,b,1)` is "this glyph in this cell's colour" with no WGSL of ours. An `R8Unorm` atlas would have sampled as `(coverage,0,0,1)` and tinted the screen red |
+| Blank cells | **Emit nothing.** A space is the commonest glyph on screen by a wide margin, and a quad sampling a fully transparent texel is pure cost |
+| Camera | `ScalingMode::Fixed` at the window's **physical** size, so one world unit is one physical pixel. Bevy's default 2D projection works in logical pixels, which on a 2× display stretches every glyph across four physical pixels — a blurred bitmap font, which §4 names as the thing legibility cannot survive |
+| Palette | Three phosphor themes, `(Role, Intensity) → Color`. `Presentation` deliberately has **no** entry: it selects a face in the atlas, and a tonal register that existed only as a hue would be exactly what §14 forbids |
+| Colours are solved, not chosen | The first pass was picked by eye and **failed its own accessibility tests** — muted violet's cost and success accents were 1.19:1 apart, which is the same colour in greyscale. The shipped values satisfy every constraint the tests assert: body ≥4.5:1 on background, dim ≥3:1, a monotonic intensity ramp, and every accent pair ≥1.25:1 from each other and from body text |
+| Verifying it draws | `ORBS_CAPTURE=1 cargo run -p orbs` saves a screenshot after 30 frames. A renderer that cannot be checked without a human at the keyboard is one nobody checks |
 
 ### Naming pass — Phase 0, done
 

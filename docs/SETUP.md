@@ -118,6 +118,7 @@ Compiling is not the same as looking at it.
 
 ```sh
 cargo run -p orbs                            # the game
+ORBS_CAPTURE=1 cargo run -p orbs             # ...and screenshot it
 cargo run -p orbs-render --example screens   # real Frames dumped as text
 ```
 
@@ -126,7 +127,7 @@ public API both frontends use, prints them by walking `Frame::rows()` exactly as
 a rasteriser would, and prints the linearised (screen-reader) view beside them.
 It also asserts §9's Deep/Wide parity rule.
 
-**It has caught bugs the 98-test suite did not** — an em-dash in DESIGN.md's own
+**It has caught bugs the test suite did not** — an em-dash in DESIGN.md's own
 boot text that CP437 cannot draw, and pane content overwriting a border because
 no sub-painter was established. Add a screen to it whenever a new surface is
 built.

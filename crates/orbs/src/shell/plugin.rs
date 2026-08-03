@@ -5,7 +5,6 @@ use bevy::input::common_conditions::input_just_pressed;
 use bevy::prelude::*;
 use bevy::window::WindowResized;
 
-use super::preview::{Canvas, log_frame};
 use super::screen::{Screen, spawn_camera, track_window};
 
 /// The window, the camera, and the grid the window resolves to.
@@ -14,7 +13,6 @@ pub struct ShellPlugin;
 impl Plugin for ShellPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Screen>()
-            .init_resource::<Canvas>()
             .add_systems(Startup, (spawn_camera, track_window).chain())
             .add_systems(
                 Update,
@@ -22,8 +20,7 @@ impl Plugin for ShellPlugin {
                     track_window.run_if(on_message::<WindowResized>),
                     quit.run_if(input_just_pressed(KeyCode::Escape)),
                 ),
-            )
-            .add_systems(FixedUpdate, log_frame.after(crate::sim::advance));
+            );
     }
 }
 

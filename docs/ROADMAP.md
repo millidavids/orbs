@@ -74,8 +74,14 @@ hide. Release posture: demo first, then full 1.0. No Early Access.
       `inscribe`→`scribe`; old words kept as synonyms. Canonical collisions 1→0,
       prefix ambiguity 1→0, synonym collisions 7→3 all claimed. Now enforced
       continuously by `crates/orbs-sim/tests/naming.rs` — DESIGN.md §6.1, §19
-- [ ] **Cell-grid text renderer** — glyph atlas + instanced quads, integer
-      fidelity tiers
+- [x] **Cell-grid text renderer** — glyph atlas + single-mesh quads, integer
+      fidelity tiers. One draw call at any grid size; **227 µs to rebuild the
+      worst-case 160×45 grid in release**, 1.4% of a 60 Hz frame, so §4's
+      cell-index-texture alternative is not needed. No custom shader: the atlas
+      carries coverage in alpha and stock `ColorMaterial` multiplies by vertex
+      colour. Camera fixed to *physical* pixels so integer scaling survives to
+      the framebuffer. Three phosphor themes, contrast-solved rather than
+      eyeballed. `ORBS_CAPTURE=1 cargo run -p orbs` screenshots it
 - [ ] **CRT port** — 2,638 lines + 242-line shader from `court_wizard`, Bevy
       0.18.1 → 0.19, made cell-size-aware
 - [ ] **Structured-record output model** — linear, semantic, presentation separate

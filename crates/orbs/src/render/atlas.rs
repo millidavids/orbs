@@ -17,9 +17,14 @@
 //! stacking by face means a cell's atlas coordinate is pure arithmetic on
 //! `(cp437_index, Presentation)` with no lookup table.
 //!
-//! The texture is `R8Unorm` — coverage only. Colour is resolved per cell from
-//! the phosphor theme, because `orbs-render` never emits one (architectural
-//! rule 2).
+//! The texture is **white with coverage in alpha**, not a single-channel
+//! coverage map. Bevy's stock `ColorMaterial` multiplies the sampled texel by
+//! the vertex colour, so `(1, 1, 1, coverage) * (r, g, b, 1)` gives the glyph in
+//! the cell's colour with no custom shader at all. An `R8Unorm` atlas would
+//! sample as `(coverage, 0, 0, 1)` and tint the whole screen red.
+//!
+//! Colour itself is resolved per cell from the phosphor theme, because
+//! `orbs-render` never emits one (architectural rule 2). See [`super::palette`].
 
 use bevy::asset::RenderAssetUsages;
 use bevy::image::{ImageFilterMode, ImageSampler, ImageSamplerDescriptor};
@@ -52,21 +57,33 @@ const FALLBACK_BDF: &str = include_str!("../../../../assets/fonts/spleen/spleen-
 /// The built atlas texture and the numbers needed to address it.
 #[derive(Resource, Debug, Clone)]
 pub(crate) struct GlyphAtlas {
-    /// The `R8Unorm` coverage texture.
-    #[expect(
-        dead_code,
-        reason = "consumed by the grid draw step; #[expect] fails once it is"
-    )]
+    /// White RGB with coverage in alpha.
     pub(crate) image: Handle<Image>,
     /// How many blank slots the fallback font had to fill, per face.
     pub(crate) filled_from_fallback: [usize; FACES as usize],
 }
 
+/// The UV rectangle for a glyph, as `(u0, v0, u1, v1)`.
+///
+/// Half-texel insets are deliberately absent: sampling is Nearest and the cell
+/// grid is integer-scaled, so a texel is never interpolated across a glyph
+/// boundary and the exact edges are correct.
+pub(crate) fn uv(index: u8, presentation: Presentation) -> (f32, f32, f32, f32) {
+    let column = f32::from(u16::from(index) % 16);
+    let row = f32::from(u16::from(index) / 16);
+    let band = f32::from(u16::try_from(band(presentation)).unwrap_or(0));
+
+    let cell_u = f32::from(CELL_WIDTH) / f32::from(u16::try_from(WIDTH).unwrap_or(1));
+    let cell_v = f32::from(CELL_HEIGHT) / f32::from(u16::try_from(HEIGHT).unwrap_or(1));
+    let band_v = f32::from(u16::try_from(BAND_HEIGHT).unwrap_or(0))
+        / f32::from(u16::try_from(HEIGHT).unwrap_or(1));
+
+    let u0 = column * cell_u;
+    let v0 = band * band_v + row * cell_v;
+    (u0, v0, u0 + cell_u, v0 + cell_v)
+}
+
 /// Which vertical band a presentation draws from.
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "consumed by the grid draw step")
-)]
 pub(crate) const fn band(presentation: Presentation) -> u32 {
     match presentation {
         Presentation::Plain => 0,
@@ -90,7 +107,8 @@ pub(crate) fn build(images: &mut Assets<Image>) -> GlyphAtlas {
         filled_from_fallback[index] = glyphs::fill_gaps(face, &fallback);
     }
 
-    let mut pixels = vec![0u8; (WIDTH * HEIGHT) as usize];
+    // RGBA: white everywhere, alpha carries coverage.
+    let mut pixels = vec![0u8; (WIDTH * HEIGHT * 4) as usize];
     for (face_index, face) in faces.iter().enumerate() {
         let band_top = u32::try_from(face_index).unwrap_or(0) * BAND_HEIGHT;
         blit(&mut pixels, face, band_top);
@@ -104,7 +122,7 @@ pub(crate) fn build(images: &mut Assets<Image>) -> GlyphAtlas {
         },
         TextureDimension::D2,
         pixels,
-        TextureFormat::R8Unorm,
+        TextureFormat::Rgba8UnormSrgb,
         RenderAssetUsages::RENDER_WORLD,
     );
 
@@ -135,11 +153,12 @@ fn blit(pixels: &mut [u8], face: &Face, band_top: u32) {
                 if !glyphs::pixel(glyph, column, row) {
                     continue;
                 }
-                let offset = (top + row) * WIDTH + left + column;
-                if let Ok(offset) = usize::try_from(offset)
-                    && let Some(texel) = pixels.get_mut(offset)
+                let texel = ((top + row) * WIDTH + left + column) * 4;
+                if let Ok(texel) = usize::try_from(texel)
+                    && let Some(rgba) = pixels.get_mut(texel..texel + 4)
                 {
-                    *texel = u8::MAX;
+                    // White, fully opaque. Everything else stays transparent.
+                    rgba.fill(u8::MAX);
                 }
             }
         }
@@ -225,9 +244,13 @@ mod tests {
         );
     }
 
+    fn blank_atlas() -> Vec<u8> {
+        vec![0u8; (WIDTH * HEIGHT * 4) as usize]
+    }
+
     #[test]
     fn blitting_places_a_glyph_at_its_codepage_coordinate() {
-        let mut pixels = vec![0u8; (WIDTH * HEIGHT) as usize];
+        let mut pixels = blank_atlas();
         let mut face = [glyphs::BLANK; 256];
         // Codepage 0x11 -> column 1, row 1. Set its top-left pixel.
         face[0x11][0] = 0b1000_0000;
@@ -235,8 +258,57 @@ mod tests {
 
         let x = u32::from(CELL_WIDTH);
         let y = u32::from(CELL_HEIGHT);
-        assert_eq!(pixels[(y * WIDTH + x) as usize], u8::MAX);
-        assert_eq!(pixels[0], 0, "nothing should land at the origin");
+        let texel = ((y * WIDTH + x) * 4) as usize;
+        assert_eq!(&pixels[texel..texel + 4], &[u8::MAX; 4]);
+        assert_eq!(&pixels[0..4], &[0; 4], "nothing should land at the origin");
+    }
+
+    #[test]
+    fn unset_pixels_stay_fully_transparent() {
+        // The material multiplies texel by vertex colour, so a glyph's empty
+        // pixels must be alpha 0 — otherwise every cell draws a solid block.
+        let mut pixels = blank_atlas();
+        let mut face = [glyphs::BLANK; 256];
+        face[0][0] = 0b1000_0000;
+        blit(&mut pixels, &face, 0);
+
+        assert_eq!(pixels[3], u8::MAX, "the set pixel should be opaque");
+        assert_eq!(pixels[7], 0, "its neighbour should be transparent");
+    }
+
+    #[test]
+    fn uvs_tile_the_atlas_without_overlapping() {
+        // Every glyph must map to its own rectangle; an off-by-one here draws
+        // the neighbouring character, which is the kind of bug that only shows
+        // on the glyphs nobody tested.
+        let (u0, v0, u1, v1) = uv(0, Presentation::Plain);
+        assert!((u0 - 0.0).abs() < 1e-6 && (v0 - 0.0).abs() < 1e-6);
+        assert!((u1 - 1.0 / 16.0).abs() < 1e-6);
+
+        // Index 16 is the start of the second row of the first band.
+        let (_, v0_row1, _, _) = uv(16, Presentation::Plain);
+        assert!((v0_row1 - (v1 - v0)).abs() < 1e-6);
+
+        // The same index in a later band sits exactly one band lower.
+        let (_, plain_v, _, _) = uv(65, Presentation::Plain);
+        let (_, eldritch_v, _, _) = uv(65, Presentation::Eldritch);
+        assert!((eldritch_v - plain_v - 1.0 / 3.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn every_uv_stays_inside_the_texture() {
+        for index in 0..=u8::MAX {
+            for presentation in [
+                Presentation::Plain,
+                Presentation::Eldritch,
+                Presentation::Tampered,
+            ] {
+                let (u0, v0, u1, v1) = uv(index, presentation);
+                assert!((0.0..=1.0).contains(&u0) && (0.0..=1.0).contains(&u1));
+                assert!((0.0..=1.0).contains(&v0) && (0.0..=1.0).contains(&v1));
+                assert!(u1 > u0 && v1 > v0);
+            }
+        }
     }
 
     #[test]

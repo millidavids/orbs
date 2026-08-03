@@ -12,7 +12,9 @@ enemy attacks the automation.
 Artless by design. No sprites, no characters, no illustrations. A single curved
 CRT glowing in the dark.
 
-**Status: pre-production. No implementation code has been written.**
+**Status: Phase 0 in progress.** The determinism spine, the Frame boundary, the
+parser, the font assets, and the cell renderer are built and the game draws.
+See [docs/ROADMAP.md](docs/ROADMAP.md) for what remains.
 
 **The design is authoritative and lives in [docs/DESIGN.md](docs/DESIGN.md)** —
 ~2,000 lines, eight drafts, four independent staff-level reviews. Read it before
@@ -172,7 +174,8 @@ rather than discovered at the end of a phase.
 Work is not done when it compiles. It is done when it has been *looked at*.
 
 ```bash
-cargo run -p orbs                        # the game — window, sim, log preview
+cargo run -p orbs                        # the game — window, sim, cell renderer
+ORBS_CAPTURE=1 cargo run -p orbs         # ...and save a screenshot to check it
 cargo run -p orbs-render --example screens   # real Frames dumped as text
 ```
 
