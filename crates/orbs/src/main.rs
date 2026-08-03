@@ -11,6 +11,7 @@
 //!
 //! Escape leaves the orb.
 
+mod render;
 mod shell;
 mod sim;
 
@@ -39,6 +40,10 @@ fn main() -> AppExit {
         // this window it is an empty screen, and an empty screen that is exactly
         // #000000 is indistinguishable from a crashed one.
         .insert_resource(ClearColor(Color::srgb(0.10, 0.06, 0.15)))
-        .add_plugins((sim::SimPlugin { seed: 0x0B5 }, shell::ShellPlugin))
+        .add_plugins((
+            sim::SimPlugin { seed: 0x0B5 },
+            render::RenderPlugin,
+            shell::ShellPlugin,
+        ))
         .run()
 }
