@@ -5,10 +5,11 @@ use bevy::input::common_conditions::input_just_pressed;
 use bevy::prelude::*;
 use bevy::render::view::screenshot::{Screenshot, save_to_disk};
 use bevy::sprite_render::{AlphaMode2d, ColorMaterial, MeshMaterial2d};
+use bevy::window::WindowResized;
 use orbs_render::Frame;
 
 use super::atlas::{self, GlyphAtlas};
-use super::grid::{self, GridBuffers};
+use super::grid;
 use super::palette::{self, Phosphor};
 use crate::shell::Screen;
 use crate::sim::Tower;
@@ -17,14 +18,14 @@ use crate::sim::Tower;
 #[derive(Component)]
 struct CellGrid;
 
-/// The frame being painted, and the vertex buffers it becomes.
+/// The frame being painted, reused every frame.
 ///
-/// Both are reused every frame. `Frame`'s own documentation says to reset rather
-/// than reallocate — the grid reaches 160×45 and a siege redraws it every frame.
+/// `Frame`'s own documentation says to reset rather than reallocate — the grid
+/// reaches 160×45 and a siege redraws it every frame. The vertex buffers live in
+/// the mesh itself; see [`super::grid`].
 #[derive(Resource, Default)]
 pub(crate) struct Canvas {
     pub(crate) frame: Frame,
-    buffers: GridBuffers,
 }
 
 /// The active phosphor theme (§4). A setting, never earned.
@@ -46,18 +47,27 @@ impl Plugin for RenderPlugin {
             .init_resource::<Theme>()
             .add_systems(PreStartup, build_atlas)
             .add_systems(Startup, spawn_grid.after(build_atlas))
+            .add_systems(Startup, fit_camera.after(spawn_grid))
             .add_systems(
                 Update,
                 (
                     cycle_theme.run_if(input_just_pressed(KeyCode::F2)),
                     capture.run_if(input_just_pressed(KeyCode::F12)),
-                    auto_capture,
-                    fit_camera,
+                    auto_capture.run_if(resource_exists::<AutoCapture>),
+                    // The projection only needs revisiting when the window
+                    // changes; every Update system carries a guard (CLAUDE.md).
+                    fit_camera.run_if(on_message::<WindowResized>),
                     redraw.run_if(atlas_ready),
                 )
                     .chain()
                     .after(crate::shell::track_window),
             );
+
+        // Read once at startup rather than polling the environment sixty times a
+        // second forever.
+        if std::env::var_os("ORBS_CAPTURE").is_some() {
+            app.init_resource::<AutoCapture>();
+        }
     }
 }
 
@@ -116,15 +126,16 @@ fn cycle_theme(mut theme: ResMut<Theme>) {
 /// caught mid-setup.
 const CAPTURE_AT: u32 = 30;
 
-/// Take one screenshot automatically when `ORBS_CAPTURE` is set.
+/// Present only when `ORBS_CAPTURE` was set at startup.
+#[derive(Resource, Default)]
+struct AutoCapture;
+
+/// Take one screenshot automatically.
 ///
 /// §4 says work is done when it has been *looked at*, and a renderer that cannot
 /// be checked without a human at the keyboard is one nobody checks. This makes
 /// "did it actually draw" answerable from a script.
 fn auto_capture(mut commands: Commands, mut frames: Local<u32>) {
-    if std::env::var_os("ORBS_CAPTURE").is_none() {
-        return;
-    }
     *frames += 1;
     if *frames == CAPTURE_AT {
         capture(commands.reborrow());
@@ -194,17 +205,18 @@ fn redraw(
     let Some(mut mesh) = meshes.get_mut(&grid_mesh.0) else {
         return;
     };
-    if !screen.is_hostable() {
-        // Below the floor there is nothing honest to draw; §4's minimum is a
-        // real constraint, not a target to squeeze under.
-        *mesh = grid::empty_mesh();
-        return;
+    let frame = &mut canvas.frame;
+    frame.reset(screen.grid);
+
+    if screen.is_hostable() {
+        crate::shell::paint(frame, tower.tick().get(), tower.seed());
+    } else {
+        // `Screen::is_hostable` documents this as a real state to render, not a
+        // reason to stop drawing. Blanking the mesh left the player looking at an
+        // empty rectangle with no idea why.
+        crate::shell::paint_too_small(frame);
     }
 
-    let Canvas { frame, buffers } = &mut *canvas;
-    frame.reset(screen.grid);
-    crate::shell::paint(frame, tower.tick().get(), tower.seed());
-
     let scale = screen.fidelity.map_or(1, |tier| u16::from(tier.scale()));
-    grid::build(frame, &theme.0, scale, buffers, &mut mesh);
+    grid::build(frame, &theme.0, scale, &mut mesh);
 }
