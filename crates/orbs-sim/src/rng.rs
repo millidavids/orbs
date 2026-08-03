@@ -14,6 +14,11 @@ use rand_chacha::rand_core::SeedableRng;
 
 /// Independent random streams. Add variants freely — existing streams are
 /// unaffected, which is the entire point.
+///
+/// Deliberately **not** `#[non_exhaustive]`. That attribute exists for downstream
+/// compatibility across crate versions; here every consumer is inside this
+/// workspace, and exhaustive matching is a feature — adding a stream should force
+/// [`RngStream::index`] to be updated rather than silently compiling.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RngStream {
     /// Parser tie-breaking when candidate intents score equally.
@@ -31,8 +36,14 @@ pub enum RngStream {
 }
 
 impl RngStream {
+    /// Number of distinct streams. Must equal the variant count.
     pub const COUNT: usize = 6;
 
+    /// Fixed index into [`Rngs::streams`].
+    ///
+    /// An explicit match rather than `as usize`: casting depends on declaration
+    /// order, so reordering or inserting a variant would silently remap every
+    /// stream and invalidate every existing replay, with no compile error.
     const fn index(self) -> usize {
         match self {
             Self::Parser => 0,
@@ -53,6 +64,10 @@ pub struct Rngs {
 }
 
 impl Rngs {
+    /// Derive every stream from one master seed.
+    ///
+    /// The same seed always produces the same streams, on any platform and any
+    /// build. That property is what replay and offline/online parity rest on.
     #[must_use]
     pub fn from_seed(master_seed: u64) -> Self {
         let streams =
@@ -63,6 +78,8 @@ impl Rngs {
         }
     }
 
+    /// The seed every stream was derived from. Persisted in saves so a world can
+    /// be reconstructed exactly.
     #[must_use]
     pub const fn master_seed(&self) -> u64 {
         self.master_seed
@@ -74,10 +91,14 @@ impl Rngs {
     }
 }
 
-/// SplitMix64 — cheap, well-distributed mixing so adjacent stream indices do not
+/// `SplitMix64` — cheap, well-distributed mixing so adjacent stream indices do not
 /// produce correlated sequences.
 const fn derive_stream_seed(master: u64, index: usize) -> u64 {
-    let mut z = master.wrapping_add((index as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15));
+    // `as` rather than `u64::try_from`: this is a const fn, TryFrom is not const,
+    // and `index` is bounded by RngStream::COUNT.
+    #[allow(clippy::cast_possible_truncation)]
+    let index = index as u64;
+    let mut z = master.wrapping_add(index.wrapping_mul(0x9E37_79B9_7F4A_7C15));
     z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
     z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
     z ^ (z >> 31)

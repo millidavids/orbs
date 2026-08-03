@@ -10,3 +10,6 @@ authors.workspace = true
 [dependencies]
 orbs-sim = { path = "../orbs-sim" }
 orbs-render = { path = "../orbs-render" }
+
+[lints]
+workspace = true

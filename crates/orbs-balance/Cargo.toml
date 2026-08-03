@@ -9,3 +9,6 @@ authors.workspace = true
 
 [dependencies]
 orbs-sim = { path = "../orbs-sim" }
+
+[lints]
+workspace = true

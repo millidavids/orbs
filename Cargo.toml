@@ -5,9 +5,34 @@ members = ["crates/*"]
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
+# bevy_ecs 0.19 requires 1.95. Declaring it makes the resolver MSRV-aware and
+# turns "too old toolchain" into a clear error instead of a cryptic type failure.
+rust-version = "1.95"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/millidavids/orbs"
 authors = ["Blackhearth Studios"]
+
+# Lints are configured once here and inherited by every crate via
+# `[lints] workspace = true`. Per-crate lint config drifts.
+[workspace.lints.rust]
+missing_docs = "warn"
+unsafe_code = "deny"
+unexpected_cfgs = "warn"
+
+[workspace.lints.clippy]
+correctness = { level = "deny", priority = -1 }
+suspicious = { level = "warn", priority = -1 }
+complexity = { level = "warn", priority = -1 }
+perf = { level = "warn", priority = -1 }
+style = { level = "warn", priority = -1 }
+# Selective pedantic — the whole group is too noisy, these earn their keep.
+cast_precision_loss = "warn"
+cast_possible_truncation = "warn"
+cast_sign_loss = "warn"
+must_use_candidate = "warn"
+missing_panics_doc = "warn"
+doc_markdown = "warn"
+unwrap_used = "warn"
 
 [workspace.dependencies]
 # ECS — used standalone in orbs-sim. NEVER depend on `bevy` there. See CLAUDE.md.

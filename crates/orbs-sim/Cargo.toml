@@ -14,5 +14,6 @@ authors.workspace = true
 bevy_ecs = { workspace = true }
 rand = { workspace = true }
 rand_chacha = { workspace = true }
-thiserror = { workspace = true }
-tracing = { workspace = true }
+
+[lints]
+workspace = true

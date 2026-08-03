@@ -11,3 +11,6 @@ authors.workspace = true
 # frontends decide only HOW a cell is drawn. No backend deps belong here.
 # See CLAUDE.md, architectural rule 2.
 [dependencies]
+
+[lints]
+workspace = true

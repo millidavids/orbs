@@ -42,7 +42,7 @@ impl Sim {
 
     /// Advance the world by exactly one tick.
     ///
-    /// The clock advances *before* systems run, so a system observing `Tick(1)`
+    /// The clock advances *before* systems run, so a system observing `Tick::new(1)`
     /// is doing the work of the first tick rather than reporting the tick it just
     /// finished.
     pub fn step(&mut self) {
@@ -58,21 +58,29 @@ impl Sim {
         }
     }
 
+    /// The current world time.
     #[must_use]
     pub fn tick(&self) -> Tick {
         *self.world.resource::<Tick>()
     }
 
+    /// The master seed this world was built from.
     #[must_use]
     pub fn seed(&self) -> u64 {
         self.world.resource::<Rngs>().master_seed()
     }
 
+    /// Read-only access to the world, for frontends rendering current state.
     #[must_use]
     pub fn world(&self) -> &World {
         &self.world
     }
 
+    /// Mutable access to the world, for setup: inserting resources, spawning the
+    /// initial tower, applying a loaded save.
+    ///
+    /// This is a deliberate escape hatch. Mutating the world *between* steps is
+    /// fine; anything that makes two runs from the same seed diverge is not.
     pub fn world_mut(&mut self) -> &mut World {
         &mut self.world
     }
@@ -106,16 +114,16 @@ mod tests {
 
     #[test]
     fn starts_at_tick_zero() {
-        assert_eq!(Sim::new(1).tick(), Tick(0));
+        assert_eq!(Sim::new(1).tick(), Tick::new(0));
     }
 
     #[test]
     fn step_advances_the_clock() {
         let mut sim = Sim::new(1);
         sim.step();
-        assert_eq!(sim.tick(), Tick(1));
+        assert_eq!(sim.tick(), Tick::new(1));
         sim.step_n(9);
-        assert_eq!(sim.tick(), Tick(10));
+        assert_eq!(sim.tick(), Tick::new(10));
     }
 
     #[test]
