@@ -62,6 +62,10 @@ variants inside the codepage as a home for §8.1's sabotage tells, so the font
 *will* be edited. A licence with a rename requirement (OFL) or a share-alike
 clause (CC BY-SA) would have made that a recurring negotiation.
 
+The project ships under GPL-3.0-or-later. That does **not** discharge condition 2
+— combining BSD-2 material into a GPL work keeps the BSD notice requirement
+intact, so the notice still has to reach the shipped build.
+
 ## Why this file rather than the others
 
 The archive ships two 8×16 BDFs. This one is **indexed by codepage byte, 0–255,

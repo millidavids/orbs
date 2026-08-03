@@ -1,4 +1,11 @@
+# Pinned, not floating. `channel = "stable"` resolves to whatever stable happens
+# to be current on each machine and each CI run, which is a poor fit for a
+# project whose central architectural claim is bit-identical reproducibility:
+# two developers, or CI and a laptop, could be on different compilers with no
+# signal at all.
+#
+# Bump deliberately, and run the full gate when you do.
 [toolchain]
-channel = "stable"
+channel = "1.96.0"
 profile = "default"
 components = ["rustfmt", "clippy"]

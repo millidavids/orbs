@@ -1822,7 +1822,26 @@ domains are settled (brewing + archive), and the fragment trickle has a rate
 
 ## 19. Decisions log
 
-### Presentation gets a face — amends §3
+### Project licence — GPL-3.0-or-later
+
+| Question | Decision |
+|---|---|
+| Licence | **GPL-3.0-or-later.** Declared in the workspace manifest, full text at the repository root |
+| Dependency tree | **Audited and compatible.** Every crate in the tree is MIT, Apache-2.0, BSD-2/3, Zlib, ISC, Unicode-3.0, CC0, 0BSD, MIT-0, or Unlicense; all are FSF-listed as GPL-compatible. The only copyleft entry, `r-efi`, offers MIT/Apache-2.0 alternatives and does not build on our targets |
+| One-way constraint | Apache-2.0 is compatible with GPL-**3**.0 but **not** GPL-2.0. Bevy is `MIT OR Apache-2.0`, so 3.0-or-later works and 2.0 would not have |
+| Assets | Both font licences survive the combination. CC0 imposes nothing; Spleen's BSD-2 notice requirement **persists** and still has to reach the shipped build (Phase 5) |
+| Commercial release | Unaffected — §15's demo-then-1.0 Steam posture stands. Selling GPL software is permitted; the obligation is to offer source to those you distribute binaries to |
+
+### Parser corrections — post-review
+
+Found by an adversarial review of every commit, all confirmed by running the code.
+
+| Defect | Fix |
+|---|---|
+| The missing-argument prompt **rebuilt the argument list from scratch**, discarding slots that had already resolved. `sift march nowhere.log` offered `sift feed.log` — the pattern gone, the file sitting in the pattern's position, which any consumer zipping against the signature reads as the search term | `fill` now returns one entry **per signature slot**, positionally, and reports *which index* is empty. The enumeration writes the candidate into that slot and leaves the rest alone |
+| The enumeration filtered with `noun.kind != kind`, which **never honoured `NounKind::Any`** and could never match the synthetic `Pattern`/`Count` kinds. `purge`, `verify`, `rm`, `meditate`, `sift` and their synonyms all fell through to `Unresolved` — the orb answered *"I do not know that word"* and then suggested the exact word typed | `fillers()` honours `Any` and returns nothing for free-text kinds. New `Resolution::Incomplete` names what the slot wants instead of pretending the verb was unknown |
+| Unbounded input: 100k characters measured at **605 ms** in release, on a path §6 requires to be sub-millisecond and non-frame-blocking. The score arithmetic also overflowed `u32` | Input capped at 512 characters and 32 words; `fuzzy` refuses words over 64 characters; the score multiply saturates |
+| `NounKind::Pattern` was built from the **lowercased, punctuation-trimmed** token stream, so `sift ERROR feed.log` searched for `error` — contradicting its own documentation | Tokens carry `raw` and `matching` forms together as a `Word`, so filtering one cannot desynchronise it from the other. Quoted runs (`sift "march north" feed.log`) now hold together |
 
 **One typeface per `Presentation`.** `Plain` is `unscii-16`, `Eldritch` is
 `unscii-8-fantasy`, `Tampered` is `unscii-8-mcr` — three faces of one public-domain
@@ -1834,7 +1853,7 @@ family, sharing metrics and repertoire so a face swap can never move a cell.
 | `Plain` gets the native 8×16 | `unscii-16` is drawn at 8×16; the other two are 8×8 row-doubled. Plain carries the ~88k-word prose budget (§12) and §4 justifies the 1:2 cell partly on prose legibility, so the full-resolution face goes where nearly all the reading happens. The special registers appear in short bursts and can afford the doubling |
 | Fits rule 2 | The Frame carries the tag; the frontend decides only how the cell is drawn. `orbs-tui` renders all three identically and loses nothing, exactly as §8.1 already allows for the script-text tell |
 | Accessibility | No regression. Eldritch already carries an authored linear variant (§3) and tampering is `verify`-detectable on every frontend (§8.1). The face adds nothing a reader needs |
-| Licence | Public domain / CC0. **`unscii-16-full` is GPL** and is one word away in name; a test fails the build if it ever appears in `assets/` |
+| Licence | Public domain / CC0. **`unscii-16-full` merges GPL Unifont** and is one word away in name; a test fails the build if it ever appears in `assets/`. Since the project itself is GPL-3.0-or-later this is a *provenance* guard rather than a licence conflict — `PROVENANCE.md` records exactly which files ship, with checksums, and Unifont carries notice obligations nothing here tracks |
 
 **This amends §3's disjointness rule and the amendment is load-bearing.** §3
 assigns *glyph substitution* to sabotage and deliberately withholds a glyph
@@ -1871,7 +1890,7 @@ Two consequences worth remembering:
 | Question | Decision |
 |---|---|
 | Font | **Spleen 2.2.0, `cp437/spleen-8x16-ibm-437.bdf`.** In the repo at `assets/fonts/spleen/` with full provenance and checksums |
-| Licence | **BSD-2-Clause**, and **GPL-3.0-compatible** — the FSF lists the 2-clause BSD licence as *"compatible with the GNU GPL"*. Only the 4-clause form is incompatible, and Spleen has no advertising clause |
+| Licence | **BSD-2-Clause**, and **GPL-3.0-compatible** — the FSF lists the 2-clause BSD licence as *"compatible with the GNU GPL"*. Only the 4-clause form is incompatible, and Spleen has no advertising clause. Combining it into a GPL work does **not** discharge its notice requirement |
 | Obligation | Binary redistribution must reproduce the copyright notice *"in the documentation and/or other materials"*. The shipped build therefore carries a third-party notice — naturally a `grimoire licences` topic, since every screen is terminal content. **Phase 5 ship task**; the obligation only attaches on distribution |
 | Why this file | **Indexed by codepage byte, 0–255, complete.** `cp437_index()` already returns exactly that index, so there is no mapping layer between Frame and atlas. The Unicode-keyed build of the same font is *not* a substitute — it is missing `∟ ► ◄` against our repertoire |
 | Rejected | **int10h Px437** (most authentic, but CC BY-SA share-alike on adaptations, and its "raw bitmaps are uncopyrightable" defence is a US-centric interpretation, not settled law, on a product sold worldwide). **Terminus** (OFL's reserved-font-name clause forces a rename once we edit it). **unscii-16** (public domain and uniform 2px weight, but missing `∙ ⌂ ⌐ ☼`) |

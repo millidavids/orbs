@@ -8,7 +8,7 @@ edition = "2024"
 # bevy_ecs 0.19 requires 1.95. Declaring it makes the resolver MSRV-aware and
 # turns "too old toolchain" into a clear error instead of a cryptic type failure.
 rust-version = "1.95"
-license = "MIT OR Apache-2.0"
+license = "GPL-3.0-or-later"
 repository = "https://github.com/millidavids/orbs"
 authors = ["Blackhearth Studios"]
 

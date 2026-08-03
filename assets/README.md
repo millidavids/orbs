@@ -13,6 +13,11 @@ uncertain origin.
 | [`fonts/unscii/`](fonts/unscii/) | Public domain / CC0 | **None.** Attribution given anyway |
 | [`fonts/spleen/`](fonts/spleen/) | BSD-2-Clause | Reproduce the copyright notice and disclaimer in the shipped documentation |
 
+The project ships under **GPL-3.0-or-later** (see the root `LICENSE`). Both asset
+licences are GPL-compatible — CC0 imposes no conditions at all, and the FSF lists
+2-clause BSD as *"compatible with the GNU GPL"*. Spleen's notice requirement
+survives the combination and still has to reach the shipped build.
+
 ## Which font does what
 
 **`unscii/` is the shipping font** — three faces of one family, one per
@@ -28,9 +33,14 @@ channel that cannot disturb layout.
    crisp, already-vetted codepage to fall back to. Both are consumed by the same
    atlas builder, so the swap is cheap.
 
-> ⚠ **Never add `unscii-16-full`.** It is GPL, unlike the CC0 `unscii-16` we
-> ship, and its name differs by one word. `crates/orbs-render/tests/unscii.rs`
-> fails the build if it appears.
+> ⚠ **Never add `unscii-16-full`.** It merges GPL Unifont, unlike the CC0
+> `unscii-16` we ship, and its name differs by one word.
+>
+> The project itself is GPL-3.0-or-later, so this is no longer a licence
+> *conflict* — it is a **provenance** one. `PROVENANCE.md` records exactly which
+> files ship, with checksums; taking a different file silently makes that record
+> false, and Unifont carries its own notice and source obligations that nothing
+> here tracks. `crates/orbs/src/render/glyphs.rs` fails the build if it appears.
 
 ## Third-party notices
 
