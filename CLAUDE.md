@@ -55,16 +55,31 @@ crates/
 These are load-bearing. Each was arrived at through review and several were
 mistakes caught late.
 
-1. **`orbs-sim` has zero Bevy dependency.** It must compile and test headlessly.
-   Balance sweeps, replay, determinism, and accessibility all depend on this.
+1. **`orbs-sim` depends on `bevy_ecs` only — never on `bevy` the engine.** The
+   world model, components, and systems are ECS throughout; what is forbidden is
+   rendering, windowing, assets, and anything requiring a GPU. `orbs-sim` must
+   compile and test headlessly, in milliseconds, with no window. Balance sweeps,
+   replay, determinism, and accessibility all depend on it.
+
+   (`bevy_ecs` standalone is ~90 crates and adds no renderer; `bevy` is ~340 and
+   adds all of it. Depend on the former.)
 2. **`orbs-render` decides what appears and where; frontends decide only how a
    cell is drawn.** A frontend may add enrichment the other cannot reproduce (CRT,
    audio, fidelity tiers) **provided it carries no information absent from the
    Frame.**
-3. **Determinism is architected.** Seeded RNG with per-subsystem streams, and
-   `orbs-sim` advances through a single explicit `step(world, tick)` entry point
-   the frontends call — *not* as a set of Bevy systems. Offline simulation must
-   match online exactly.
+3. **Determinism is architected.** Three parts:
+   - Seeded RNG with **per-subsystem streams**, so adding an aberration roll
+     cannot perturb the parser's stream.
+   - `orbs-sim` owns its own `Schedule` and advances through a single explicit
+     `step(&mut World, tick)` entry point that frontends call. The Bevy *app* and
+     its plugin scheduler never drive the sim — a frontend is a caller, not a host.
+   - **The sim schedule runs single-threaded**
+     (`Schedule::set_executor(SingleThreadedExecutor::new())` — note
+     `ExecutorKind` was removed in 0.19). Bevy's multi-threaded executor does not
+     guarantee ordering between systems lacking explicit constraints, which is
+     fatal for a sim that must replay identically and match offline to online. At
+     1 Hz with this entity count, parallelism buys nothing and costs the property
+     the whole architecture rests on.
 4. **Structured records everywhere.** Commands emit records; presentation is a
    view over the record. Pipes, `sift`, the eldritch renderer, screen-reader
    linearisation, and the test harness all depend on this.

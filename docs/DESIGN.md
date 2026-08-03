@@ -1369,7 +1369,7 @@ so slippage is measurable rather than discovered in Phase 5.
 | **Language** | Rust, edition 2024 |
 | **Toolchain** | Pinned via `rust-toolchain.toml`; stable channel |
 | **Engine** | Bevy `=0.19.0` (exact pin — see §16 on version drift) |
-| **ECS** | `bevy_ecs`, via Bevy |
+| **ECS** | `bevy_ecs` — used standalone in `orbs-sim`, and via `bevy` in the frontend |
 | **Rendering** | Custom cell-grid text renderer + ported CRT post-process. **Not** `bevy_text`/`bevy_ui` |
 | **Serialisation** | `serde` + `toml` (readable saves, §7) |
 | **RNG** | `rand` 0.9, seeded, per-subsystem streams |
@@ -1396,9 +1396,15 @@ orbs/
 └── .github/workflows/
 ```
 
-`orbs-sim` must compile and test with **zero** Bevy dependency. That is what makes
-balance sweeps, replay, determinism, and accessibility cheap, and it is the single
-most important structural decision in the project.
+**`orbs-sim` depends on `bevy_ecs` only — never on `bevy` the engine.** The world
+model is ECS throughout; what is excluded is rendering, windowing, assets, and
+anything needing a GPU. Standalone `bevy_ecs` is ~90 crates and adds no renderer;
+`bevy` is ~340 and adds all of it.
+
+This is what makes balance sweeps, replay, determinism, and accessibility cheap,
+and it is the single most important structural decision in the project. It also
+means components and systems are shared vocabulary across the sim and the
+frontend, rather than two models that must be kept in sync.
 
 ### Pluggable frontends — Bevy first, terminal second
 
@@ -1558,11 +1564,17 @@ list.
   every parse to be reproducible:
   1. **Seeded RNG with per-subsystem streams**, so adding an aberration roll
      cannot perturb the parser's stream.
-  2. **`orbs-sim` advances through a single explicit `step(world, tick)` entry
-     point** that the Bevy shell calls, rather than existing as a set of Bevy
-     systems. Bevy's scheduler does not guarantee ordering without explicit
-     constraints; if the live game and the CLI harness diverge, we would not find
-     out until Phase 3.
+  2. **`orbs-sim` owns its own `Schedule` and advances through a single explicit
+     `step(&mut World, tick)` entry point** that frontends call. The Bevy app and
+     its plugin scheduler never drive the sim — a frontend is a caller, not a host.
+  3. **The sim schedule runs single-threaded** —
+     `Schedule::set_executor(SingleThreadedExecutor::new())` (`ExecutorKind` was
+     removed in 0.19). Bevy's multi-threaded executor does not guarantee ordering
+     between systems without explicit constraints, which is fatal for a sim that
+     must replay identically and match offline to online. At 1 Hz and this entity
+     count, parallelism buys nothing and costs the property everything else rests
+     on. If the live game and the CLI harness diverged, we would not find out
+     until Phase 3.
 - **Balance harness (Phase 1):** an `orbs-sim` CLI running a scripted synthetic
   player for N simulated hours, dumping §11.5's curves to CSV. Converts balance
   from vibes into sweeps.
@@ -1820,6 +1832,16 @@ domains are settled (brewing + archive), and the fragment trickle has a rate
 | Cost | Boundary is ~free. Dev-tool TUI absorbed in Phase 1. Ship-quality TUI sits in Phase 3b and is cuttable |
 | Dividend | If it ships, it is the cheapest route to screen-reader support — but §14 does not depend on it |
 | Distribution | If shipped, both binaries in the Steam depot as two launch options |
+
+### Sim architecture — settled (draft 8)
+
+| Question | Decision |
+|---|---|
+| `orbs-sim` world model | **`bevy_ecs`, used standalone.** ECS throughout — it is an ECS game |
+| Dependency boundary | `bevy_ecs` **only**, never `bevy`. Excluded: rendering, windowing, assets, GPU. (~90 crates vs ~340) |
+| Why not plain structs | Shared component/system vocabulary across sim and frontend, no second model to keep in sync; and the `ecs-architecture` skill applies directly |
+| Scheduling | `orbs-sim` owns its `Schedule`; frontends call `step(&mut World, tick)`. The Bevy app never drives the sim |
+| Executor | **Single-threaded** (`SingleThreadedExecutor::new()`; `ExecutorKind` removed in 0.19). Multi-threaded ordering is non-deterministic without explicit constraints, and determinism is load-bearing for replay, offline parity, and the balance harness |
 
 ### Tech stack — pinned (draft 8)
 
