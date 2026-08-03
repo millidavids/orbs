@@ -1,0 +1,18 @@
+[package]
+name = "orbs-sim"
+description = "O.R.B.S. simulation core — world model, parser, script engine. Headless."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+# NOTE: `bevy_ecs` only. Never add `bevy`, or anything pulling in rendering,
+# windowing, assets, or a GPU. This crate must compile and test headlessly.
+# See CLAUDE.md, architectural rule 1.
+[dependencies]
+bevy_ecs = { workspace = true }
+rand = { workspace = true }
+rand_chacha = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }

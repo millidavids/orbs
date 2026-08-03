@@ -1,0 +1,28 @@
+[package]
+name = "orbs"
+description = "O.R.B.S. — Bevy frontend. The Steam product."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+orbs-sim = { path = "../orbs-sim" }
+orbs-render = { path = "../orbs-render" }
+
+# No bevy_text / bevy_ui: every screen is terminal content drawn by our own
+# cell-grid renderer. See DESIGN.md §13.
+bevy = { version = "=0.19.0", default-features = false, features = [
+    "std", "async_executor", "multi_threaded",
+    "bevy_winit", "bevy_window", "bevy_input_focus",
+    "bevy_render", "bevy_core_pipeline", "bevy_sprite",
+    "bevy_mesh", "bevy_image", "bevy_camera", "bevy_color",
+    "bevy_asset", "bevy_state", "bevy_log",
+    "bevy_audio", "vorbis",
+    "png",
+    "serialize",
+] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+bevy = { version = "=0.19.0", default-features = false, features = ["x11", "wayland"] }

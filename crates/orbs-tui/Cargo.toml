@@ -1,0 +1,12 @@
+[package]
+name = "orbs-tui"
+description = "O.R.B.S. — terminal frontend. Second-class; the Bevy build never waits for it."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+orbs-sim = { path = "../orbs-sim" }
+orbs-render = { path = "../orbs-render" }

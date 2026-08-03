@@ -3,7 +3,7 @@
 **Status tracker. Derived from [DESIGN.md](DESIGN.md) §15, which is authoritative.**
 If the two disagree, DESIGN.md wins and this file is wrong.
 
-Last updated: 2026-08-03 · **Phase 0 not yet started**
+Last updated: 2026-08-03 · **Phase 0 in progress**
 
 ---
 
@@ -15,7 +15,7 @@ hide. Release posture: demo first, then full 1.0. No Early Access.
 
 | Phase | Months | Words | Status |
 |---|---|---|---|
-| 0. Vertical slice | 4 | ~3k | ⬜ Not started |
+| 0. Vertical slice | 4 | ~3k | 🟡 In progress |
 | 1. Core loop | 5 | ~15k | ⬜ |
 | 2. Siege | 4 | ~15k | ⬜ |
 | 3a. Breadth | 4 | ~18k | ⬜ |
@@ -42,8 +42,11 @@ hide. Release posture: demo first, then full 1.0. No Early Access.
 
 ### Work items
 
-- [ ] **Workspace + determinism spine** — five crates; `orbs-sim` with zero Bevy
-      dependency; seeded per-subsystem RNG; single `step(world, tick)` entry point
+- [x] **Workspace + determinism spine** — five crates; `orbs-sim` on `bevy_ecs`
+      standalone; ChaCha8 per-subsystem RNG streams; single-threaded `SimSchedule`;
+      `Sim::step()` as the sole entry point. 13 tests green, clippy clean at
+      `-D warnings`. Verified `bevy_ecs` unifies to one version across the
+      workspace, so types match across the sim/frontend boundary
 - [ ] **`orbs-render` Frame boundary** — cell buffer, semantic styling, layout.
       Cannot be retrofitted
 - [ ] **Parser + instrumentation** — the 16 slice commands (DESIGN.md §6.1) across

@@ -1,0 +1,13 @@
+[package]
+name = "orbs-render"
+description = "Frame / cell-buffer, layout, and semantic styling. Consumed by every frontend."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+# Deliberately near-dependency-free. This crate decides WHAT appears and WHERE;
+# frontends decide only HOW a cell is drawn. No backend deps belong here.
+# See CLAUDE.md, architectural rule 2.
+[dependencies]

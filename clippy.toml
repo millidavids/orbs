@@ -1,0 +1,2 @@
+# Bevy queries are legitimately verbose.
+type-complexity-threshold = 500

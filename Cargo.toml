@@ -1,0 +1,34 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/millidavids/orbs"
+authors = ["Blackhearth Studios"]
+
+[workspace.dependencies]
+# ECS — used standalone in orbs-sim. NEVER depend on `bevy` there. See CLAUDE.md.
+bevy_ecs = "0.19"
+
+# Determinism: ChaCha8 is reproducible across platforms and stable across
+# releases, which StdRng explicitly is not. Replay and offline/online parity
+# depend on this.
+rand = { version = "0.9", default-features = false, features = ["std"] }
+rand_chacha = "0.9"
+
+thiserror = "2.0"
+tracing = "0.1"
+
+[profile.dev]
+opt-level = 1
+debug = "line-tables-only"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
