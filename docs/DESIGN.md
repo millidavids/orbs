@@ -1822,6 +1822,109 @@ domains are settled (brewing + archive), and the fragment trickle has a rate
 
 ## 19. Decisions log
 
+### Presentation gets a face — amends §3
+
+**One typeface per `Presentation`.** `Plain` is `unscii-16`, `Eldritch` is
+`unscii-8-fantasy`, `Tampered` is `unscii-8-mcr` — three faces of one public-domain
+family, sharing metrics and repertoire so a face swap can never move a cell.
+
+| Question | Decision |
+|---|---|
+| Why | The renderer already carries `Presentation` in every `Cell` and had nothing to *do* with it. Three faces give the tonal register and the sabotage tell a real visual channel for the cost of two extra atlases |
+| `Plain` gets the native 8×16 | `unscii-16` is drawn at 8×16; the other two are 8×8 row-doubled. Plain carries the ~88k-word prose budget (§12) and §4 justifies the 1:2 cell partly on prose legibility, so the full-resolution face goes where nearly all the reading happens. The special registers appear in short bursts and can afford the doubling |
+| Fits rule 2 | The Frame carries the tag; the frontend decides only how the cell is drawn. `orbs-tui` renders all three identically and loses nothing, exactly as §8.1 already allows for the script-text tell |
+| Accessibility | No regression. Eldritch already carries an authored linear variant (§3) and tampering is `verify`-detectable on every frontend (§8.1). The face adds nothing a reader needs |
+| Licence | Public domain / CC0. **`unscii-16-full` is GPL** and is one word away in name; a test fails the build if it ever appears in `assets/` |
+
+**This amends §3's disjointness rule and the amendment is load-bearing.** §3
+assigns *glyph substitution* to sabotage and deliberately withholds a glyph
+channel from eldritch, because *"if both used glyph corruption and broken
+alignment, the tonal system would jam the diagnostic system at peak difficulty."*
+Giving eldritch a face hands it exactly that channel.
+
+It survives because §3 *also* makes script listings, schedule listings, and log
+output **corruption-exempt** — the renderer never applies eldritch presentation to
+them, and those are precisely the surfaces sabotage tells live on. The two can
+therefore never appear on the same line, and the jam cannot occur. **Disjointness
+is now preserved by surface separation rather than by channel separation.**
+
+That reasoning holds only while the corruption-exempt rule holds. **If a future
+change ever lets eldritch presentation reach a diagnostic surface, this amendment
+must be reverted, not patched** — at that point the tonal system really would be
+competing with the diagnostic system at peak threat, which is the failure §3 was
+written to prevent.
+
+Two consequences worth remembering:
+
+- The doubled faces carry half the vertical detail of a native 8×16. The Phase 0
+  worst-case legibility test (§4) is what decides whether that is acceptable for
+  the amount of eldritch and tampered text actually on screen at peak threat.
+  Spleen is retained in `assets/` as the fallback.
+- `unscii-16`'s box drawing does **not** match the doubled 8×8 forms — verticals
+  and solid blocks agree, horizontals and dither shades do not. Harmless for
+  borders, which are always `Plain`; where it shows is a tampered line containing
+  box drawing, and there it supplies §8.1's "malformed record boundaries" tell for
+  free.
+
+### Font asset — Spleen 8×16, retained as fallback and gap-filler
+
+| Question | Decision |
+|---|---|
+| Font | **Spleen 2.2.0, `cp437/spleen-8x16-ibm-437.bdf`.** In the repo at `assets/fonts/spleen/` with full provenance and checksums |
+| Licence | **BSD-2-Clause**, and **GPL-3.0-compatible** — the FSF lists the 2-clause BSD licence as *"compatible with the GNU GPL"*. Only the 4-clause form is incompatible, and Spleen has no advertising clause |
+| Obligation | Binary redistribution must reproduce the copyright notice *"in the documentation and/or other materials"*. The shipped build therefore carries a third-party notice — naturally a `grimoire licences` topic, since every screen is terminal content. **Phase 5 ship task**; the obligation only attaches on distribution |
+| Why this file | **Indexed by codepage byte, 0–255, complete.** `cp437_index()` already returns exactly that index, so there is no mapping layer between Frame and atlas. The Unicode-keyed build of the same font is *not* a substitute — it is missing `∟ ► ◄` against our repertoire |
+| Rejected | **int10h Px437** (most authentic, but CC BY-SA share-alike on adaptations, and its "raw bitmaps are uncopyrightable" defence is a US-centric interpretation, not settled law, on a product sold worldwide). **Terminus** (OFL's reserved-font-name clause forces a rename once we edit it). **unscii-16** (public domain and uniform 2px weight, but missing `∙ ⌂ ⌐ ☼`) |
+| Custom variants | Unrestricted. §4's custom glyph variants for §8.1 sabotage tells are a local edit BSD-2 permits outright — which is why a modify-friendly licence outranked a more authentic look |
+| Watch item | Stem weight is **2px vertical, 1px horizontal**. §4 names 1px stems under barrel distortion and the RGB mask as the top moiré hazard, so pane-border horizontals are the thing to check in the worst-case legibility test. Thickening them is a permitted local edit |
+| Guarded by | `crates/orbs-render/tests/font.rs` — asserts the asset exists, is 8×16, is a complete codepage, and that every character `cp437_index()` accepts has a non-blank glyph behind it |
+
+### Parser — implemented, Phase 0 item 3
+
+| Question | Decision |
+|---|---|
+| Tie-breaking | **No RNG.** §6 anticipated `RngStream::Parser` for exact ties, but ranking is now a *total* order — score, then the verb's position in `Verb::ALL`, then the canonical echo. A coin flip would make replay depend on how many times the parser had been called, and "the parser must explain itself" cannot be honoured when the explanation is a coin flip. The stream stays allocated and unused; removing it would renumber the others and invalidate saves |
+| Leading filler | Stripped **before** verb matching, while argument filler is stripped **after**. `to`, `for`, `of`, `do`, `it` are filler in an argument and load-bearing in a phrase (`go to`, `look for`, `get rid of`). Safe only because no synonym opens on a filler word, which a test asserts |
+| Missing arguments | A required slot with nothing to fill it expands into **one candidate per plausible filler**, so §6's worked example (`brew` → a numbered list of essences) falls out of the ordinary tie machinery instead of needing a special case |
+| Scoring weight | Verb counts double against argument. A confident verb with a shaky argument is the better guess, because the argument can be asked about and the verb cannot |
+| What is logged | **Every candidate, on every resolution — including successes.** A command that won by four points and one that won by four hundred are the same `Resolved` and very different data. §15 says act on failure *clustering*, and a near-miss is where clustering starts |
+| Export format | **TSV, one row per candidate.** No dependency, survives `grep`, pastes into a spreadsheet. Records carry no timing — wall-clock in a sim record would make two runs of one seed differ |
+| Argument categories | Slots are typed (`Place`, `File`, `Essence`, …), so `attend clarity` cannot resolve. `Pattern` and `Count` never touch the world; everything else resolves against the live scene, which is what stops the parser promising a brew the sim cannot perform |
+| Places answer to leaves | `attend alembic` reaches `/tower/alembic`. §7 says paths are places, and players say the place |
+
+### Frame boundary — implemented, Phase 0 item 2
+
+Decisions taken while building `orbs-render`, none of which contradict the
+design above; recorded because they are load-bearing and not obvious from §13.
+
+| Question | Decision |
+|---|---|
+| What a cell holds | A Unicode `char` plus a `Style` of **role / intensity / presentation**. Never a colour, never an ANSI index, never a codepage byte |
+| Glyph repertoire vs encoding | The **repertoire** (which glyphs may appear at all) belongs to `orbs-render` — it is the intersection of what both frontends can draw. The **encoding** belongs to the frontend: Bevy maps the `char` to a CP437 atlas index, the TUI writes it out. A glyph outside the repertoire is substituted, not dropped, so one authoring bug cannot shift a row |
+| Eldritch and sabotage are one field | `Presentation` is an **enum**, so a cell cannot be both eldritch and tampered. §3 requires the vocabularies stay disjoint; an enum makes the violation unrepresentable rather than a rule to remember |
+| Linearisation is always captured | Every frame builds its `Speech` stream whether or not a reader is attached. Gating it would mean the path is exercised only by the players least able to report that it broke. Cost is a memcpy into a reused arena |
+| Spoken text travels with drawn text | The paint API takes both at one call site. §3 requires every eldritch message carry an authored linear variant, and a separate "register the spoken form" call is exactly what gets forgotten on the lines that need it. A debug assertion fires on eldritch content with no variant |
+| Structure is silent, content speaks | Borders, fills, and padding write cells and no speech; spans, paragraphs, and progress bars write both; `announce` writes speech and no cells. A titled border announces its title, so a pane never loses its identity in the linear stream |
+| Truncation is visual only | A span clipped by a narrow pane is still recorded in full for the reader. A narrow pane is a visual constraint and must not become an informational one |
+| Progress is integer-only | Meters take `(done, total)` as integers, not a float fraction. Progress is elapsed ticks against a duration (§5.0), and keeping floats out of the render path keeps a deterministic sim rendering deterministically |
+| Layout is total, not fallible | A grid below the 80×22 floor lays out smaller rather than erroring. Sub-minimum grids are a normal runtime state — a window mid-drag, a terminal the user shrank — so refusing to run below the floor is frontend policy, not a panic in the layout code |
+| The sidebar yields, never the main window | When rows run short, minimised panes are dropped rather than main panes squeezed. §9 says main panes are "fully rendered and fully functional" and the sidebar is awareness only. At the 80×22 floor all seven panes still fit |
+| Tier formula | Largest integer scale whose grid still meets 80×22; Deep focus is one step finer. Reproduces all six numbers in §9's table exactly, and the four-pane layout reproduces its "roughly 60×15 each" |
+| Deep-focus default floor | **Provisional at 100×28**, pending §4's Phase 0 legibility test, which is what actually establishes the minimum window at which tier 2 is offered. Wide strip height (4 rows) is likewise a first-pass tuning constant |
+
+Two findings from actually rendering these screens rather than only testing them:
+
+- **In-game prose is restricted to CP437 and typographic punctuation is not in
+  it.** `—`, `’`, `“`, `…` all render as `?`. The boot header written in §4 above
+  fails this. `cp437::first_unrenderable` exists so the Phase 1 content pipeline
+  rejects offending lines at load time; against an ~88k-word budget (§12) written
+  in ordinary editors, catching this by eye is not a plan.
+- **A Wide-focus strip at the 80×22 floor has two content rows** — one focused
+  pane at 6 rows and three strips at 4, less two rows of border each. Information
+  parity holds because the linear stream is complete and strips scroll, but the
+  legibility test (§4) should treat "can a player triage from a two-row strip?"
+  as a question it is there to answer.
+
 ### Terminal frontend — pursued, second-class (draft 8)
 
 | Question | Decision |

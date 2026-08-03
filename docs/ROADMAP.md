@@ -47,10 +47,26 @@ hide. Release posture: demo first, then full 1.0. No Early Access.
       `Sim::step()` as the sole entry point. 13 tests green, clippy clean at
       `-D warnings`. Verified `bevy_ecs` unifies to one version across the
       workspace, so types match across the sim/frontend boundary
-- [ ] **`orbs-render` Frame boundary** — cell buffer, semantic styling, layout.
-      Cannot be retrofitted
-- [ ] **Parser + instrumentation** — the 16 slice commands (DESIGN.md §6.1) across
-      three registers; full input/resolution/candidate-score capture with export
+- [x] **`orbs-render` Frame boundary** — cell buffer, semantic styling, layout.
+      `Style` carries role/intensity/presentation and never a colour; every frame
+      carries a `Speech` linear stream captured at paint time; glyphs are bounded
+      to the CP437 repertoire; `Fidelity` reproduces §9's tier table exactly and
+      `ScreenLayout` reproduces its 60×15 four-pane figure. 100 tests green,
+      clippy clean at `-D warnings`, rustdoc clean at `-D warnings`.
+      `cargo run -p orbs-render --example screens` renders the §4 boot report and
+      a multiplexed siege for eyeballing
+- [x] **Bevy frontend skeleton** — window opens (Metal verified), `SimPlugin`
+      drives `Sim::step()` from `FixedUpdate` at 1 Hz per §5.0, `Screen` resolves
+      window pixels to a fidelity tier and grid. `orbs::shell::preview` logs the
+      painted Frame each tick as an interim stand-in until the cell renderer
+      lands. **`cargo build -p orbs` is now part of the gate at every step**
+- [x] **Parser + instrumentation** — the 16 slice commands (DESIGN.md §6.1) across
+      three registers; full input/resolution/candidate-score capture with export.
+      Deterministic NLU, no RNG: normalise → fuzzy match → resolve against the
+      live scene → score → disambiguate → suggest. `analyse()` keeps every scored
+      reading so the gate can cluster failures by cause; `ParseLog::to_tsv()`
+      exports one row per candidate. `cargo run -p orbs-sim --example parse -- -i`
+      to type at it. 180 workspace tests green
 - [ ] **Naming pass** for the slice's 16 commands — *done*, DESIGN.md §6.1
 - [ ] **Cell-grid text renderer** — glyph atlas + instanced quads, integer
       fidelity tiers
