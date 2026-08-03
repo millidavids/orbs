@@ -86,15 +86,50 @@ first, port fixes back into the skill, then update its `targets_bevy` and
 
 ## 3. Building
 
-*(Phase 0 creates the workspace; these are the intended commands.)*
-
 ```sh
 cargo check --workspace          # fast iteration
 cargo test -p orbs-sim           # headless sim tests — no GPU, no window
-cargo run -p orbs                # Bevy frontend
-cargo run -p orbs-tui            # terminal frontend
-cargo run -p orbs-balance -- ... # economy sweeps
+cargo run -p orbs                # Bevy frontend — opens a window, Esc to quit
+cargo run -p orbs-tui            # terminal frontend (stub until Phase 1)
+cargo run -p orbs-balance -- ... # economy sweeps (stub until Phase 1)
 ```
+
+### The gate — after every step
+
+```sh
+cargo fmt --all --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
+cargo build -p orbs              # must LINK, not merely check
+```
+
+**`cargo check` does not substitute for `cargo build -p orbs`.** `check` stops at
+metadata and will pass while the binary fails to link. Bevy is ~126 crates and is
+the likeliest thing to break across a toolchain or version change, so it gets
+exercised every step rather than at the end of a phase.
+
+Verified working on this toolchain: Metal backend, window creation, 1 Hz
+`FixedUpdate` sim driver, 9.5 MB debug binary.
+
+### Seeing it
+
+Compiling is not the same as looking at it.
+
+```sh
+cargo run -p orbs                            # the game
+cargo run -p orbs-render --example screens   # real Frames dumped as text
+```
+
+`screens` builds the §4 boot report and a multiplexed siege through the same
+public API both frontends use, prints them by walking `Frame::rows()` exactly as
+a rasteriser would, and prints the linearised (screen-reader) view beside them.
+It also asserts §9's Deep/Wide parity rule.
+
+**It has caught bugs the 98-test suite did not** — an em-dash in DESIGN.md's own
+boot text that CP437 cannot draw, and pane content overwriting a border because
+no sub-painter was established. Add a screen to it whenever a new surface is
+built.
 
 ### Dev iteration speed
 

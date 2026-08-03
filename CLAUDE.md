@@ -151,6 +151,39 @@ user-level `rust-skills` install.
 
 ## Working Practice
 
+### The gate — run this after every step, not every phase
+
+```bash
+cargo fmt --all --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
+cargo build -p orbs            # ← the game itself must LINK, not just check
+```
+
+**`cargo build -p orbs` is not optional and `cargo check` does not replace it.**
+`check` stops at metadata; it will happily pass while the binary fails to link.
+The Bevy dependency tree is ~126 crates and is the single most likely thing to
+break on a toolchain or version change, so it must be exercised at every step
+rather than discovered at the end of a phase.
+
+### Seeing it
+
+Work is not done when it compiles. It is done when it has been *looked at*.
+
+```bash
+cargo run -p orbs                        # the game — window, sim, log preview
+cargo run -p orbs-render --example screens   # real Frames dumped as text
+```
+
+The `screens` example renders the §4 boot report and a multiplexed siege through
+the same public API the frontends use. **It has already found bugs that the full
+test suite did not** — an em-dash in DESIGN.md's own boot text that CP437 cannot
+draw, and pane content eating a border because a sub-painter was not established.
+Add a screen to it whenever a new surface is built.
+
+### Other
+
 - **Plans get independently reviewed before being presented.** The design document
   went through four such reviews and each found load-bearing problems; the practice
   is cheap and worth keeping.
