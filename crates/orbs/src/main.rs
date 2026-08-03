@@ -11,6 +11,7 @@
 //!
 //! Escape leaves the orb.
 
+mod crt;
 mod render;
 mod shell;
 mod sim;
@@ -43,6 +44,7 @@ fn main() -> AppExit {
         .add_plugins((
             sim::SimPlugin { seed: 0x0B5 },
             render::RenderPlugin,
+            crt::CrtPlugin,
             shell::ShellPlugin,
         ))
         .run()

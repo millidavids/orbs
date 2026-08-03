@@ -1837,6 +1837,35 @@ domains are settled (brewing + archive), and the fragment trickle has a rate
 
 ## 19. Decisions log
 
+### CRT port — implemented, Phase 0 item 5
+
+§4 budgeted "2,638 lines of surrounding Rust across 15 files plus a 242-line
+shader" and warned that "the WGSL ports; the render-graph Rust is Bevy's most
+volatile surface". Both halves of that were right, and the second more than
+expected.
+
+| Question | Outcome |
+|---|---|
+| The shader | Ported nearly intact — barrel, scanlines, aperture grille, vignette, chromatic aberration, flicker, rounded corners, phosphor glow, desaturation, flash |
+| The surrounding Rust | **Did not survive at all, and did not need to.** Bevy 0.19 removed `bevy_render::render_graph` outright; a post-process is now an ordinary system in the `Core2d` schedule. `ViewNode`, `RenderGraphContext`, and `RenderLabel` have no 0.19 equivalent. The port is ~300 lines rather than ~2,100 |
+| Scanlines and grille | **Cell-derived, as §9 requires.** One scanline every eighth of a cell height, one grille stripe per glyph pixel (cell width ÷ 8). Both are integer fractions of a cell, so the pattern lands identically inside every glyph at every fidelity tier instead of beating against the stems. The 1080-line reference the original hardcoded is gone |
+| Dropped | The 16:9 letterbox (the grid fills the window) and the channel-change effect (not in §4's list, and a television retuning is the wrong metaphor for a scrying orb) |
+| Pipeline format | Keyed on the **view's** texture format rather than a default. 0.19 deprecated `TextureFormat::bevy_default` precisely because a view may or may not be HDR, and guessing is a draw-time validation error rather than a compile error |
+| Disableable | `CrtSettings::OFF` is one value and every field reaches zero, per §14. `PEAK_THREAT` — §4's "maximum flicker and vignette pulse" — is reachable on F3, because the legibility test needs the worst case to exist rather than merely be described |
+| Not yet wired | Vignette pulse on threat, flash on breach, desaturation on failure. The uniform carries all three; there is no threat system to drive them |
+
+**A bug worth recording**, because it is the kind that only a screenshot finds:
+the phosphor taps were placed a third of a cell apart, which at a 64-pixel cell
+is a 22-pixel offset — every line of text rendered a visible duplicate below
+itself. That is a double exposure, not a glow. The taps are now one glyph pixel
+out.
+
+**An interaction the legibility test must account for:** the palette's WCAG
+contrast ratios (§19, cell renderer) are computed on the *pre-CRT* image. The
+tube multiplies everything down — scanlines, grille, and vignette each darken —
+so the effective contrast on screen is lower than the palette tests assert. The
+worst-case test is what settles whether the defaults survive that.
+
 ### Cell renderer — implemented, Phase 0 item 4
 
 | Question | Decision |

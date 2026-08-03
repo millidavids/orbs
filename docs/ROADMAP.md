@@ -82,8 +82,14 @@ hide. Release posture: demo first, then full 1.0. No Early Access.
       colour. Camera fixed to *physical* pixels so integer scaling survives to
       the framebuffer. Three phosphor themes, contrast-solved rather than
       eyeballed. `ORBS_CAPTURE=1 cargo run -p orbs` screenshots it
-- [ ] **CRT port** — 2,638 lines + 242-line shader from `court_wizard`, Bevy
-      0.18.1 → 0.19, made cell-size-aware
+- [x] **CRT port** — barrel, scanlines, aperture grille, vignette, chromatic
+      aberration, flicker, rounded corners, phosphor glow, desaturation, flash.
+      **The shader ported; the surrounding Rust did not exist to port** — Bevy
+      0.19 removed `render_graph` entirely and a post-process is now a system in
+      the `Core2d` schedule, so ~2,100 lines became ~300. Scanline and grille
+      frequencies are cell-derived per §9, so a fidelity-tier change cannot beat
+      against the glyph stems. Fully disableable (§14) and §4's peak-threat state
+      is reachable on F3. Not yet wired to world state — DESIGN.md §19
 - [ ] **Structured-record output model** — linear, semantic, presentation separate
 - [ ] **Brewing + archive** — the two starting domains, both thin
 - [ ] **Log-poisoning sabotage** on brewing logs, via `peruse` / `sift` / `verify`

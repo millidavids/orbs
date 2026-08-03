@@ -1,0 +1,142 @@
+// The orb: a curved phosphor screen in a dark room.
+//
+// Ported from court_wizard's crt_effect.wgsl, with three changes the design
+// requires (DESIGN.md §4, §9):
+//
+//   * Scanline and aperture-grille frequencies derive from the **cell size**,
+//     not from a hardcoded 1080-line reference. §9: they "must re-derive against
+//     the active cell size, or the tier change produces exactly the moiré §4
+//     identifies as the top legibility hazard". Both are integer fractions of a
+//     cell, so the pattern lands on the same place in every glyph at every
+//     fidelity tier instead of beating against the stems.
+//   * No 16:9 letterbox. The grid fills the window; §4's aspect is whatever the
+//     player's monitor is.
+//   * No channel-change effect. §4's list does not include it, and a television
+//     retuning is the wrong metaphor for a scrying orb.
+//
+// Legibility is the product, not an aesthetic. Every term here is scaled by a
+// setting that can go to zero, and §14 requires the whole thing be disableable.
+
+#import bevy_core_pipeline::fullscreen_vertex_shader::FullscreenVertexOutput
+
+@group(0) @binding(0) var screen_texture: texture_2d<f32>;
+@group(0) @binding(1) var texture_sampler: sampler;
+
+struct CrtUniform {
+    barrel: f32,
+    scanline: f32,
+    mask: f32,
+    vignette: f32,
+    vignette_radius: f32,
+    aberration: f32,
+    glow: f32,
+    flicker: f32,
+    corner_radius: f32,
+    desaturation: f32,
+    flash_r: f32,
+    flash_g: f32,
+    flash_b: f32,
+    flash: f32,
+    time: f32,
+    // Physical pixels per cell. Everything periodic derives from these.
+    cell_width: f32,
+    cell_height: f32,
+    enabled: f32,
+}
+@group(0) @binding(2) var<uniform> crt: CrtUniform;
+
+/// Pincushion the image outward from the centre, as a curved tube does.
+fn barrel(uv: vec2<f32>, strength: f32) -> vec2<f32> {
+    let centred = uv - vec2<f32>(0.5);
+    let warp = centred * (1.0 + strength * dot(centred, centred));
+    return warp + vec2<f32>(0.5);
+}
+
+@fragment
+fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
+    // Every textureSample must happen before any non-uniform branch.
+    let curved = barrel(in.uv, crt.barrel);
+    let safe = clamp(curved, vec2<f32>(0.0), vec2<f32>(1.0));
+
+    // Chromatic aberration: red and blue drift apart towards the edges, as a
+    // real tube's convergence does.
+    let from_centre = safe - vec2<f32>(0.5);
+    let drift = from_centre * crt.aberration;
+    let sample_r = textureSample(screen_texture, texture_sampler, clamp(safe + drift, vec2<f32>(0.0), vec2<f32>(1.0)));
+    let sample_g = textureSample(screen_texture, texture_sampler, safe);
+    let sample_b = textureSample(screen_texture, texture_sampler, clamp(safe - drift, vec2<f32>(0.0), vec2<f32>(1.0)));
+
+    // Phosphor bloom: four cardinal taps a *glyph pixel* away — cell / 8 — so the
+    // halo grows with the fidelity tier but never becomes a second image. At a
+    // third of a cell this ghosted: every line of text had a visible duplicate
+    // below it, which is a double exposure, not a glow.
+    let dims = vec2<f32>(textureDimensions(screen_texture));
+    let spread = vec2<f32>(crt.cell_width, crt.cell_height) / (8.0 * dims);
+    let up = textureSample(screen_texture, texture_sampler, clamp(safe + vec2<f32>(0.0, spread.y), vec2<f32>(0.0), vec2<f32>(1.0)));
+    let down = textureSample(screen_texture, texture_sampler, clamp(safe - vec2<f32>(0.0, spread.y), vec2<f32>(0.0), vec2<f32>(1.0)));
+    let left = textureSample(screen_texture, texture_sampler, clamp(safe - vec2<f32>(spread.x, 0.0), vec2<f32>(0.0), vec2<f32>(1.0)));
+    let right = textureSample(screen_texture, texture_sampler, clamp(safe + vec2<f32>(spread.x, 0.0), vec2<f32>(0.0), vec2<f32>(1.0)));
+
+    // --- sampling done; branching is safe ---
+
+    if crt.enabled < 0.5 {
+        return sample_g;
+    }
+
+    // Beyond the curved edge there is no screen, only the dark room.
+    let edge_x = smoothstep(0.0, 0.004, curved.x) * smoothstep(0.0, 0.004, 1.0 - curved.x);
+    let edge_y = smoothstep(0.0, 0.004, curved.y) * smoothstep(0.0, 0.004, 1.0 - curved.y);
+    let inside = edge_x * edge_y;
+
+    var colour = vec3<f32>(sample_r.r, sample_g.g, sample_b.b) * inside;
+
+    // Phosphor glow, weighted by how bright the neighbourhood already is, so
+    // lit glyphs bloom and the background stays black.
+    let neighbours = (up.rgb + down.rgb + left.rgb + right.rgb) * 0.25;
+    let brightness = max(neighbours.r, max(neighbours.g, neighbours.b));
+    colour += neighbours * brightness * crt.glow * inside;
+
+    let pixel = curved * dims;
+
+    // Scanlines, one every eighth of a cell — an integer fraction, so the
+    // pattern sits identically inside every glyph at every fidelity tier.
+    let scan_period = max(crt.cell_height / 8.0, 2.0);
+    let scan_phase = sin(pixel.y * 6.28318 / scan_period);
+    colour *= 1.0 - crt.scanline * (0.5 + 0.5 * scan_phase);
+
+    // Aperture grille. One R, G, or B stripe per *glyph pixel* — cell_width / 8
+    // — so a stripe never straddles a stem edge, which is what produces moiré.
+    let stripe = max(crt.cell_width / 8.0, 1.0);
+    let triad = fract(pixel.x / (stripe * 3.0)) * 3.0;
+    let dim = 1.0 - crt.mask;
+    let grille = vec3<f32>(
+        select(dim, 1.0, triad < 1.0),
+        select(dim, 1.0, triad >= 1.0 && triad < 2.0),
+        select(dim, 1.0, triad >= 2.0),
+    );
+    colour *= grille;
+
+    // Mains hum.
+    colour *= 1.0 - crt.flicker * 0.5 * (1.0 + sin(crt.time * 120.0));
+
+    // Vignette, then the rounded bezel.
+    let radial = length(in.uv - vec2<f32>(0.5));
+    let vignette = smoothstep(crt.vignette_radius, crt.vignette_radius - 0.45, radial);
+    colour *= mix(1.0, vignette, crt.vignette);
+
+    let corner = abs(in.uv - vec2<f32>(0.5));
+    let quadrant = corner - (vec2<f32>(0.5) - vec2<f32>(crt.corner_radius));
+    let sdf = length(max(quadrant, vec2<f32>(0.0))) - crt.corner_radius;
+    colour *= 1.0 - smoothstep(0.0, 0.006, sdf);
+
+    // Wired to world state later: flash on breach, desaturate as things fail.
+    if crt.flash > 0.0 {
+        colour += vec3<f32>(crt.flash_r, crt.flash_g, crt.flash_b) * crt.flash * inside;
+    }
+    if crt.desaturation > 0.0 {
+        let luma = dot(colour, vec3<f32>(0.299, 0.587, 0.114));
+        colour = mix(colour, vec3<f32>(luma), crt.desaturation);
+    }
+
+    return vec4<f32>(colour, 1.0);
+}

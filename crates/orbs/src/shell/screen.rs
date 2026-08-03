@@ -38,7 +38,8 @@ impl Screen {
 
 /// The camera every frontend screen is drawn through.
 pub(crate) fn spawn_camera(mut commands: Commands) {
-    commands.spawn(Camera2d);
+    // The CRT is a property of the camera it curves (§4).
+    commands.spawn((Camera2d, crate::crt::CrtSettings::default()));
 }
 
 /// Recompute the grid whenever the window changes size.

@@ -11,6 +11,7 @@ use orbs_render::Frame;
 use super::atlas::{self, GlyphAtlas};
 use super::grid;
 use super::palette::{self, Phosphor};
+use crate::crt::CellSize;
 use crate::shell::Screen;
 use crate::sim::Tower;
 
@@ -45,6 +46,7 @@ impl Plugin for RenderPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Canvas>()
             .init_resource::<Theme>()
+            .init_resource::<CellSize>()
             .add_systems(PreStartup, build_atlas)
             .add_systems(Startup, spawn_grid.after(build_atlas))
             .add_systems(Startup, fit_camera.after(spawn_grid))
@@ -57,6 +59,8 @@ impl Plugin for RenderPlugin {
                     // The projection only needs revisiting when the window
                     // changes; every Update system carries a guard (CLAUDE.md).
                     fit_camera.run_if(on_message::<WindowResized>),
+                    // The background only moves when the theme does.
+                    tint_background.run_if(resource_changed::<Theme>),
                     redraw.run_if(atlas_ready),
                 )
                     .chain()
@@ -187,18 +191,21 @@ fn fit_camera(
     }
 }
 
+/// Keep the room behind the orb matching the active phosphor.
+fn tint_background(theme: Res<Theme>, mut clear: ResMut<ClearColor>) {
+    clear.0 = theme.0.background.into();
+}
+
 /// Repaint the Frame and rebuild the mesh.
 fn redraw(
     screen: Res<Screen>,
     theme: Res<Theme>,
     tower: Res<Tower>,
+    mut cell: ResMut<CellSize>,
     mut canvas: ResMut<Canvas>,
     mut meshes: ResMut<Assets<Mesh>>,
     grid_mesh: Option<Single<&Mesh2d, With<CellGrid>>>,
-    mut clear: ResMut<ClearColor>,
 ) {
-    clear.0 = theme.0.background.into();
-
     let Some(grid_mesh) = grid_mesh else {
         return;
     };
@@ -218,5 +225,14 @@ fn redraw(
     }
 
     let scale = screen.fidelity.map_or(1, |tier| u16::from(tier.scale()));
+
+    // §9: the CRT's scanline and grille frequencies re-derive against the active
+    // cell size. Publishing it here is what keeps them in step through a
+    // fidelity-tier change.
+    *cell = CellSize {
+        width: f32::from(orbs_render::CELL_WIDTH) * f32::from(scale),
+        height: f32::from(orbs_render::CELL_HEIGHT) * f32::from(scale),
+    };
+
     grid::build(frame, &theme.0, scale, &mut mesh);
 }
