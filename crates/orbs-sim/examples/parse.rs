@@ -54,6 +54,15 @@ const WALKTHROUGH: &[(&str, &str)] = &[
         "leading filler, shell verb, arcane echo",
     ),
     ("brew", "a missing argument becomes a numbered prompt"),
+    ("purge", "an Any slot enumerates every surface (§8.1)"),
+    (
+        "sift march nowhere.log",
+        "the pattern survives a missing file",
+    ),
+    (
+        "meditate",
+        "a free-text slot cannot be listed, so it is named",
+    ),
     ("xyzzy plugh", "nonsense is never a bare error"),
 ];
 
@@ -116,6 +125,16 @@ fn show(resolution: &Resolution, indent: &str) {
                 println!("{indent}  {}) {}", index + 1, candidate.intent.echo());
             }
         }
+        Resolution::Incomplete {
+            verb,
+            missing,
+            filled,
+            ..
+        } => {
+            let so_far: Vec<_> = filled.iter().map(|a| a.value.as_str()).collect();
+            println!("{indent}-> {} {}", verb.canonical(), so_far.join(" "));
+            println!("{indent}{} what? ({missing:?})", verb.canonical());
+        }
         Resolution::Unresolved { suggestions } => {
             let names: Vec<_> = suggestions.iter().map(|verb| verb.canonical()).collect();
             println!(
@@ -140,6 +159,9 @@ fn siege_contrast(scene: &Scene) {
             Resolution::Resolved { intent, confidence } => {
                 println!("  {label}  runs: {} ({confidence:?})", intent.echo());
             }
+            Resolution::Incomplete { verb, missing, .. } => {
+                println!("  {label}  needs a {missing:?} for {}", verb.canonical());
+            }
             Resolution::Unresolved { .. } => println!("  {label}  nothing"),
         }
     }
@@ -151,6 +173,7 @@ fn summary(log: &ParseLog) {
     println!("\nInstrumentation — {total} inputs\n");
     println!("  resolved    {}", log.resolved());
     println!("  ambiguous   {}", log.ambiguous());
+    println!("  incomplete  {}", log.incomplete());
     println!("  unresolved  {}", log.unresolved());
     println!("\n  Export with --tsv. One row per candidate, so failures can be");
     println!("  clustered by cause rather than only counted.\n");

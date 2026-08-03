@@ -9,7 +9,7 @@ use super::verb::{NounKind, Verb};
 use super::vocabulary::Register;
 
 /// One filled argument slot.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Argument {
     /// The category the slot wanted.
     pub kind: NounKind,
@@ -18,7 +18,7 @@ pub struct Argument {
 }
 
 /// A fully resolved command.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Intent {
     /// What to do.
     pub verb: Verb,
@@ -97,6 +97,23 @@ pub enum Resolution {
         /// The tied readings, best first.
         candidates: Vec<Candidate>,
     },
+    /// The verb is known but a required argument is not, and the parser cannot
+    /// offer a list because the slot takes free text or a number.
+    ///
+    /// §6 forbids a bare error, and the alternative here is worse than one: a
+    /// verb that matched at full score falling through to
+    /// [`Resolution::Unresolved`] makes the orb answer "I do not know that word"
+    /// and then suggest the word just typed.
+    Incomplete {
+        /// The verb that matched.
+        verb: Verb,
+        /// Which dialect the player reached for.
+        register: Register,
+        /// What the empty slot wants.
+        missing: NounKind,
+        /// Slots that did resolve, in signature order.
+        filled: Vec<Argument>,
+    },
     /// Nothing scored. Never a bare error (§6) — always something to try.
     Unresolved {
         /// Verbs worth suggesting, best first.
@@ -110,7 +127,7 @@ impl Resolution {
     pub fn intent(&self) -> Option<&Intent> {
         match self {
             Self::Resolved { intent, .. } => Some(intent),
-            Self::Ambiguous { .. } | Self::Unresolved { .. } => None,
+            Self::Ambiguous { .. } | Self::Incomplete { .. } | Self::Unresolved { .. } => None,
         }
     }
 

@@ -36,6 +36,8 @@ pub enum Outcome {
     Forced,
     /// The player was asked which of several readings they meant.
     Ambiguous,
+    /// The verb was understood but a free-text or numeric argument was absent.
+    Incomplete,
     /// Nothing scored; suggestions were offered.
     Unresolved,
 }
@@ -46,6 +48,7 @@ impl Outcome {
             Self::Resolved => "resolved",
             Self::Forced => "forced",
             Self::Ambiguous => "ambiguous",
+            Self::Incomplete => "incomplete",
             Self::Unresolved => "unresolved",
         }
     }
@@ -97,6 +100,23 @@ impl ParseRecord {
                 candidates.first().map(|c| c.intent.register),
                 Vec::new(),
             ),
+            Resolution::Incomplete {
+                verb,
+                register,
+                missing,
+                filled,
+            } => {
+                // The echo shows how far the parser got, so the gate can tell
+                // "did not know the verb" from "knew the verb, wanted an
+                // argument" — opposite fixes, identical in an aggregate.
+                let mut echo = String::from(verb.canonical());
+                for argument in filled {
+                    echo.push(' ');
+                    echo.push_str(&argument.value);
+                }
+                echo.push_str(&format!(" <{missing:?}?>"));
+                (Outcome::Incomplete, Some(echo), Some(*register), Vec::new())
+            }
             Resolution::Unresolved { suggestions } => {
                 (Outcome::Unresolved, None, None, suggestions.clone())
             }
@@ -166,6 +186,12 @@ impl ParseLog {
         self.count(Outcome::Ambiguous)
     }
 
+    /// How many inputs named a verb but left a free-text slot empty.
+    #[must_use]
+    pub fn incomplete(&self) -> usize {
+        self.count(Outcome::Incomplete)
+    }
+
     /// How many inputs scored nothing.
     #[must_use]
     pub fn unresolved(&self) -> usize {
@@ -196,7 +222,10 @@ impl ParseLog {
                 Mode::Calm => "calm",
                 Mode::Siege => "siege",
             };
-            let echo = record.echo.as_deref().unwrap_or("");
+            // Escaped like every other field: argument values come from scene
+            // noun names, which from Phase 1 are player-authored script and file
+            // names. One tab in one of those would add a column to the row.
+            let echo = escape(record.echo.as_deref().unwrap_or(""));
             let register = record.register.map_or("", register_label);
             let suggestions = record
                 .suggestions

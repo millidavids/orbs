@@ -1,6 +1,6 @@
-//! Step one of the pipeline: lowercase, strip filler.
+//! Step one of the pipeline: split, lowercase, strip filler.
 //!
-//! DESIGN.md §6. Two things make this less trivial than it sounds:
+//! DESIGN.md §6. Three things make this less trivial than it sounds:
 //!
 //! - **Filler cannot be stripped before the verb is matched.** `to`, `for`,
 //!   `of`, `do`, and `it` are all filler in an argument and all load-bearing in a
@@ -10,6 +10,14 @@
 //! - **Punctuation is not uniformly noise.** `?` is a synonym for `grimoire` and
 //!   `./` is one for `invoke`, while `feed.log` and `/tower/alembic` need their
 //!   separators intact.
+//! - **Lowercasing must not destroy the input.** [`NounKind::Pattern`] is free
+//!   text by definition, so `sift ERROR feed.log` has to search for `ERROR` and
+//!   not `error`. Every token therefore carries **both** forms: `raw` as typed,
+//!   and `matching` folded for comparison. They travel together as a [`Word`] so
+//!   that filtering filler out of one cannot desynchronise it from the other.
+//!
+//! Quoted runs are held together, so `sift "march north" feed.log` searches for
+//! a two-word phrase rather than for `"march`.
 
 /// Words that carry no meaning in an argument.
 ///
@@ -19,33 +27,97 @@ const FILLER: &[&str] = &[
     "with", "up", "it",
 ];
 
-/// Trailing punctuation to shed from a word.
+/// Trailing punctuation to shed from a word before matching it.
 const TRAILING: &[char] = &['.', ',', '!', ';', ':', '?'];
 
-/// Lowercase and tidy, preserving path and flag characters.
-#[must_use]
-pub fn normalise(input: &str) -> String {
-    input.trim().to_lowercase()
+/// The longest line the parser will consider.
+///
+/// Beyond this the input is not a command, and scoring it against every synonym
+/// and every noun in the tower is work §6 has no budget for.
+pub const MAX_INPUT: usize = 512;
+
+/// The most words a line may contain, for the same reason.
+pub const MAX_WORDS: usize = 32;
+
+/// One token, in both the form the player typed and the form we compare.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Word<'a> {
+    /// Exactly as typed, minus any surrounding quotes.
+    pub raw: &'a str,
+    /// Lowercased and stripped of trailing punctuation, for matching.
+    pub matching: &'a str,
 }
 
-/// Split normalised input into words, shedding trailing punctuation.
-///
-/// A word that is *entirely* punctuation is kept whole, so `?` and `./` survive
-/// as the synonyms they are.
-#[must_use]
-pub fn tokenise(normalised: &str) -> Vec<&str> {
-    normalised
-        .split_whitespace()
-        .map(|word| {
-            if word.chars().count() <= 1 || word.chars().all(|c| TRAILING.contains(&c) || c == '/')
-            {
-                word
+/// A tokenised line. Owns both forms; hand out [`Word`]s with [`Tokens::words`].
+#[derive(Debug, Default, Clone)]
+pub struct Tokens {
+    raw: Vec<String>,
+    matching: Vec<String>,
+}
+
+impl Tokens {
+    /// Split a line into tokens, capped at [`MAX_INPUT`] and [`MAX_WORDS`].
+    #[must_use]
+    pub fn split(input: &str) -> Self {
+        let trimmed: String = input.trim().chars().take(MAX_INPUT).collect();
+
+        let mut raw = Vec::new();
+        let mut rest = trimmed.as_str();
+        while let Some(start) = rest.find(|c: char| !c.is_whitespace()) {
+            rest = &rest[start..];
+            let (token, remainder) = if let Some(body) = rest.strip_prefix('"') {
+                match body.find('"') {
+                    // A quoted run is one token, however many spaces it holds.
+                    Some(end) => (&body[..end], &body[end + 1..]),
+                    None => (body, ""),
+                }
             } else {
-                word.trim_end_matches(TRAILING)
+                let end = rest.find(char::is_whitespace).unwrap_or(rest.len());
+                (&rest[..end], &rest[end..])
+            };
+            rest = remainder;
+
+            if token.is_empty() {
+                continue;
             }
-        })
-        .filter(|word| !word.is_empty())
-        .collect()
+            raw.push(token.to_owned());
+            if raw.len() == MAX_WORDS {
+                break;
+            }
+        }
+
+        let matching = raw.iter().map(|token| fold(token)).collect();
+        Self { raw, matching }
+    }
+
+    /// The tokens, in order.
+    #[must_use]
+    pub fn words(&self) -> Vec<Word<'_>> {
+        self.raw
+            .iter()
+            .zip(&self.matching)
+            .map(|(raw, matching)| Word {
+                raw: raw.as_str(),
+                matching: matching.as_str(),
+            })
+            .collect()
+    }
+}
+
+/// Lowercase and shed trailing punctuation, for comparison only.
+///
+/// A token that is *entirely* punctuation is kept whole, so `?` and `./` survive
+/// as the synonyms they are.
+fn fold(token: &str) -> String {
+    let lowered = token.to_lowercase();
+    if lowered.chars().count() <= 1
+        || lowered
+            .chars()
+            .all(|c| TRAILING.contains(&c) || c == '/' || c == '.')
+    {
+        return lowered;
+    }
+    lowered.trim_end_matches(TRAILING).to_owned()
 }
 
 /// Whether a word carries no meaning on its own.
@@ -63,20 +135,20 @@ pub fn is_filler(word: &str) -> bool {
 ///
 /// Returns 0 when everything is filler, so the input is never emptied.
 #[must_use]
-pub fn skip_leading_filler(words: &[&str]) -> usize {
+pub fn skip_leading_filler(words: &[Word<'_>]) -> usize {
     words
         .iter()
-        .position(|word| !is_filler(word))
+        .position(|word| !is_filler(word.matching))
         .unwrap_or_default()
 }
 
 /// Drop filler from an argument tail.
 #[must_use]
-pub fn strip_filler<'a>(words: &[&'a str]) -> Vec<&'a str> {
-    let stripped: Vec<&str> = words
+pub fn strip_filler<'a>(words: &[Word<'a>]) -> Vec<Word<'a>> {
+    let stripped: Vec<Word<'a>> = words
         .iter()
         .copied()
-        .filter(|word| !FILLER.contains(word))
+        .filter(|word| !is_filler(word.matching))
         .collect();
 
     // "attend the" should not become "attend". If filler was all there was, the
@@ -94,74 +166,127 @@ pub fn strip_filler<'a>(words: &[&'a str]) -> Vec<&'a str> {
 mod tests {
     use super::*;
 
-    fn words(input: &str) -> Vec<String> {
-        let normalised = normalise(input);
-        tokenise(&normalised)
-            .into_iter()
-            .map(str::to_owned)
+    fn matching(input: &str) -> Vec<String> {
+        Tokens::split(input)
+            .words()
+            .iter()
+            .map(|w| w.matching.to_owned())
+            .collect()
+    }
+
+    fn raw(input: &str) -> Vec<String> {
+        Tokens::split(input)
+            .words()
+            .iter()
+            .map(|w| w.raw.to_owned())
             .collect()
     }
 
     #[test]
-    fn case_and_surrounding_space_are_flattened() {
-        assert_eq!(words("  GO To The Gates  "), ["go", "to", "the", "gates"]);
+    fn case_and_surrounding_space_are_flattened_for_matching() {
+        assert_eq!(
+            matching("  GO To The Gates  "),
+            ["go", "to", "the", "gates"]
+        );
     }
 
     #[test]
-    fn trailing_punctuation_is_shed() {
-        assert_eq!(words("brew clarity."), ["brew", "clarity"]);
-        assert_eq!(words("how do i brew?"), ["how", "do", "i", "brew"]);
+    fn the_raw_form_survives_lowercasing() {
+        // `sift ERROR feed.log` must search for ERROR, not error.
+        assert_eq!(raw("sift ERROR feed.log"), ["sift", "ERROR", "feed.log"]);
+        assert_eq!(
+            matching("sift ERROR feed.log"),
+            ["sift", "error", "feed.log"]
+        );
+    }
+
+    #[test]
+    fn the_raw_form_keeps_trailing_punctuation() {
+        assert_eq!(raw("sift ok. feed.log"), ["sift", "ok.", "feed.log"]);
+        assert_eq!(matching("sift ok. feed.log"), ["sift", "ok", "feed.log"]);
+    }
+
+    #[test]
+    fn quoted_runs_stay_together() {
+        assert_eq!(
+            raw(r#"sift "march north" feed.log"#),
+            ["sift", "march north", "feed.log"]
+        );
+    }
+
+    #[test]
+    fn an_unterminated_quote_takes_the_rest_of_the_line() {
+        assert_eq!(raw(r#"sift "march north"#), ["sift", "march north"]);
+    }
+
+    #[test]
+    fn trailing_punctuation_is_shed_for_matching() {
+        assert_eq!(matching("brew clarity."), ["brew", "clarity"]);
+        assert_eq!(matching("how do i brew?"), ["how", "do", "i", "brew"]);
     }
 
     #[test]
     fn standalone_punctuation_synonyms_survive() {
         // `?` is grimoire and `./` is invoke (§6.1).
-        assert_eq!(words("?"), ["?"]);
-        assert_eq!(words("./ night_watch"), ["./", "night_watch"]);
+        assert_eq!(matching("?"), ["?"]);
+        assert_eq!(matching("./ night_watch"), ["./", "night_watch"]);
     }
 
     #[test]
     fn paths_and_filenames_keep_their_separators() {
-        assert_eq!(words("attend /tower/alembic"), ["attend", "/tower/alembic"]);
-        assert_eq!(words("peruse feed.log"), ["peruse", "feed.log"]);
-        assert_eq!(words("sift march feed.log"), ["sift", "march", "feed.log"]);
+        assert_eq!(
+            matching("attend /tower/alembic"),
+            ["attend", "/tower/alembic"]
+        );
+        assert_eq!(matching("peruse feed.log"), ["peruse", "feed.log"]);
     }
 
     #[test]
     fn apostrophes_survive_for_phrase_matching() {
-        // "what's here" is a survey synonym.
-        assert_eq!(words("what's here"), ["what's", "here"]);
-    }
-
-    #[test]
-    fn filler_is_dropped_from_arguments() {
-        assert_eq!(
-            strip_filler(&["a", "potion", "of", "clarity"]),
-            ["potion", "clarity"]
-        );
-        assert_eq!(
-            strip_filler(&["the", "castle", "gates"]),
-            ["castle", "gates"]
-        );
+        assert_eq!(matching("what's here"), ["what's", "here"]);
     }
 
     #[test]
     fn filler_words_that_are_also_phrase_words_survive_tokenising() {
-        // These must still be present when verb matching runs, or `go to`,
-        // `look for`, `get rid of`, and `take it back` all stop resolving.
-        assert_eq!(words("go to alembic"), ["go", "to", "alembic"]);
-        assert_eq!(words("get rid of sludge"), ["get", "rid", "of", "sludge"]);
-        assert_eq!(words("take it back"), ["take", "it", "back"]);
+        assert_eq!(matching("go to alembic"), ["go", "to", "alembic"]);
+        assert_eq!(
+            matching("get rid of sludge"),
+            ["get", "rid", "of", "sludge"]
+        );
+        assert_eq!(matching("take it back"), ["take", "it", "back"]);
+    }
+
+    #[test]
+    fn filler_is_dropped_from_arguments() {
+        let tokens = Tokens::split("a potion of clarity");
+        let kept: Vec<_> = strip_filler(&tokens.words())
+            .iter()
+            .map(|w| w.matching)
+            .collect();
+        assert_eq!(kept, ["potion", "clarity"]);
     }
 
     #[test]
     fn an_argument_of_pure_filler_is_kept_rather_than_emptied() {
-        assert_eq!(strip_filler(&["the"]), ["the"]);
+        let tokens = Tokens::split("the");
+        assert_eq!(strip_filler(&tokens.words()).len(), 1);
     }
 
     #[test]
     fn empty_input_yields_no_tokens() {
-        assert!(words("").is_empty());
-        assert!(words("   ").is_empty());
+        assert!(matching("").is_empty());
+        assert!(matching("   ").is_empty());
+    }
+
+    #[test]
+    fn absurd_input_is_capped_rather_than_parsed() {
+        // §6 has no budget for scoring a pasted paragraph against the whole
+        // vocabulary and every noun in the tower.
+        let long = "word ".repeat(1000);
+        assert!(Tokens::split(&long).words().len() <= MAX_WORDS);
+
+        let single = "a".repeat(10_000);
+        let tokens = Tokens::split(&single);
+        assert!(tokens.words()[0].raw.chars().count() <= MAX_INPUT);
     }
 }

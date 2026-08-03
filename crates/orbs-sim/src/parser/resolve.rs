@@ -17,10 +17,10 @@
 use super::arguments;
 use super::fuzzy::{self, MIN_SIMILARITY};
 use super::intent::{Candidate, Confidence, Intent, Mode, Resolution};
-use super::normalise;
+use super::normalise::{self, Word};
 use super::scene::Scene;
-use super::verb::Verb;
-use super::vocabulary::{LONGEST_PHRASE, SYNONYMS, Synonym};
+use super::verb::{NounKind, Verb};
+use super::vocabulary::{LONGEST_PHRASE, Register, SYNONYMS, Synonym};
 
 /// Below this, a reading is not offered at all.
 const MIN_ACCEPT: u32 = MIN_SIMILARITY;
@@ -66,8 +66,8 @@ pub fn resolve(input: &str, scene: &Scene, mode: Mode) -> Resolution {
 /// Resolve, keeping every scored reading for instrumentation.
 #[must_use]
 pub fn analyse(input: &str, scene: &Scene, mode: Mode) -> Analysis {
-    let normalised = normalise::normalise(input);
-    let all = normalise::tokenise(&normalised);
+    let tokens = normalise::Tokens::split(input);
+    let all = tokens.words();
 
     if all.is_empty() {
         return Analysis {
@@ -80,42 +80,52 @@ pub fn analyse(input: &str, scene: &Scene, mode: Mode) -> Analysis {
 
     // The verb matcher only looks at the head, so leading filler has to go
     // first — "please go to the alembic" opens on a word no phrase starts with.
+    // `skip_leading_filler` yields 0 when everything is filler, so this slice is
+    // never empty given `all` is not.
     let words = &all[normalise::skip_leading_filler(&all)..];
-    if words.is_empty() {
-        return Analysis {
-            resolution: Resolution::Unresolved {
-                suggestions: Vec::new(),
-            },
-            candidates: Vec::new(),
-        };
-    }
 
-    let mut candidates = collect(words, scene);
+    let (mut candidates, incomplete) = collect(words, scene);
+
+    // A verb matched but its slot takes free text or a number, so there is no
+    // list to offer. Saying so beats falling through to Unresolved, which used
+    // to answer "I do not know that word" and then suggest the word just typed.
+    let settle_incomplete = |candidates: Vec<Candidate>| {
+        incomplete.as_ref().map_or_else(
+            || Analysis {
+                resolution: Resolution::Unresolved {
+                    suggestions: suggest(words),
+                },
+                candidates: candidates.clone(),
+            },
+            |incomplete| Analysis {
+                resolution: Resolution::Incomplete {
+                    verb: incomplete.verb,
+                    register: incomplete.register,
+                    missing: incomplete.missing,
+                    filled: incomplete.filled.clone(),
+                },
+                candidates: candidates.clone(),
+            },
+        )
+    };
+
     if candidates.is_empty() {
-        return Analysis {
-            resolution: Resolution::Unresolved {
-                suggestions: suggest(words),
-            },
-            candidates,
-        };
+        return settle_incomplete(candidates);
     }
 
-    // Total order: best score first, then verb declaration order. No RNG.
+    // Total order: best score first, then verb declaration order, then the
+    // arguments themselves. Comparing rendered echoes here allocated two Strings
+    // per comparison on a path documented as sub-millisecond.
     candidates.sort_by(|a, b| {
         b.score
             .cmp(&a.score)
             .then_with(|| verb_order(a.intent.verb).cmp(&verb_order(b.intent.verb)))
-            .then_with(|| a.intent.echo().cmp(&b.intent.echo()))
+            .then_with(|| a.intent.arguments.cmp(&b.intent.arguments))
     });
 
     let best_score = candidates[0].score;
     if best_score < MIN_ACCEPT {
-        return Analysis {
-            resolution: Resolution::Unresolved {
-                suggestions: suggest(words),
-            },
-            candidates,
-        };
+        return settle_incomplete(candidates);
     }
 
     let tied = candidates
@@ -155,8 +165,9 @@ pub fn analyse(input: &str, scene: &Scene, mode: Mode) -> Analysis {
 }
 
 /// Every reading worth scoring.
-fn collect(words: &[&str], scene: &Scene) -> Vec<Candidate> {
+fn collect(words: &[Word<'_>], scene: &Scene) -> (Vec<Candidate>, Option<Incomplete>) {
     let mut candidates = Vec::new();
+    let mut incomplete = None;
 
     for synonym in SYNONYMS {
         let Some((verb_score, consumed)) = match_phrase(synonym, words) else {
@@ -170,34 +181,74 @@ fn collect(words: &[&str], scene: &Scene) -> Vec<Candidate> {
             // §6's worked example: "start potion" -> "brew --recipe=?" -> a
             // numbered list of what could fill it. One candidate per filler, so
             // the tie machinery produces the prompt rather than a special case.
-            Some(kind) => {
-                for noun in scene.nouns() {
-                    if noun.kind != kind {
-                        continue;
+            Some(missing) => {
+                for filler in fillers(missing.kind, scene) {
+                    // Into the empty slot, keeping every slot that resolved.
+                    // Rebuilding the list from scratch dropped `sift`'s pattern
+                    // and left the file sitting in the pattern's position.
+                    let mut slots = filled.slots.clone();
+                    if let Some(slot) = slots.get_mut(missing.index) {
+                        *slot = Some(filler);
                     }
                     let intent = Intent {
                         verb: synonym.verb,
                         register: synonym.register,
-                        arguments: vec![super::intent::Argument {
-                            kind: noun.kind,
-                            value: noun.name.clone(),
-                        }],
+                        arguments: slots.iter().flatten().cloned().collect(),
                     };
                     candidates.push(score(intent, verb_score, filled.score));
+                }
+
+                if fillers(missing.kind, scene).is_empty() {
+                    incomplete.get_or_insert(Incomplete {
+                        verb: synonym.verb,
+                        register: synonym.register,
+                        missing: missing.kind,
+                        filled: filled.arguments(),
+                    });
                 }
             }
             None => {
                 let intent = Intent {
                     verb: synonym.verb,
                     register: synonym.register,
-                    arguments: filled.arguments.clone(),
+                    arguments: filled.arguments(),
                 };
                 candidates.push(score(intent, verb_score, filled.score));
             }
         }
     }
 
-    dedupe(candidates)
+    (dedupe(candidates), incomplete)
+}
+
+/// A verb that matched but whose empty slot cannot be offered as a list.
+struct Incomplete {
+    verb: Verb,
+    register: Register,
+    missing: NounKind,
+    filled: Vec<super::intent::Argument>,
+}
+
+/// Everything in the scene that could fill a slot of `kind`.
+///
+/// [`NounKind::Any`] matches every noun — `verify` and `purge` reach all four
+/// sabotage surfaces (§8.1), and comparing kinds for equality silently excluded
+/// every one of them. [`NounKind::Pattern`] and [`NounKind::Count`] are free text
+/// and a number: nothing in the world enumerates them, so they yield no fillers
+/// and the caller reports [`Resolution::Incomplete`] instead.
+fn fillers(kind: NounKind, scene: &Scene) -> Vec<super::intent::Argument> {
+    if matches!(kind, NounKind::Pattern | NounKind::Count) {
+        return Vec::new();
+    }
+    scene
+        .nouns()
+        .iter()
+        .filter(|noun| kind == NounKind::Any || noun.kind == kind)
+        .map(|noun| super::intent::Argument {
+            kind: noun.kind,
+            value: noun.name.clone(),
+        })
+        .collect()
 }
 
 /// Combine the two halves into the number candidates are ranked by.
@@ -223,7 +274,7 @@ fn score(intent: Intent, verb_score: u32, argument_score: u32) -> Candidate {
 ///
 /// Returns its score and how many words it consumed. Longer phrases earn a bonus
 /// so `go to` outranks `go` on the same input.
-fn match_phrase(synonym: &Synonym, words: &[&str]) -> Option<(u32, usize)> {
+fn match_phrase(synonym: &Synonym, words: &[Word<'_>]) -> Option<(u32, usize)> {
     let span = synonym.words.len();
     if span > words.len() || span > LONGEST_PHRASE {
         return None;
@@ -231,7 +282,7 @@ fn match_phrase(synonym: &Synonym, words: &[&str]) -> Option<(u32, usize)> {
 
     let mut total = 0u32;
     for (expected, actual) in synonym.words.iter().zip(words) {
-        let score = fuzzy::similarity(actual, expected);
+        let score = fuzzy::similarity(actual.matching, expected);
         if score < MIN_SIMILARITY {
             return None;
         }
@@ -245,13 +296,19 @@ fn match_phrase(synonym: &Synonym, words: &[&str]) -> Option<(u32, usize)> {
 
 /// Collapse readings that would run the identical command, keeping the best.
 fn dedupe(mut candidates: Vec<Candidate>) -> Vec<Candidate> {
+    // Keyed on the intent itself rather than its rendered echo: identical echoes
+    // mean identical (verb, arguments), and building the String to find that out
+    // allocated twice per comparison.
     candidates.sort_by(|a, b| {
         a.intent
-            .echo()
-            .cmp(&b.intent.echo())
+            .verb
+            .cmp(&b.intent.verb)
+            .then_with(|| a.intent.arguments.cmp(&b.intent.arguments))
             .then(b.score.cmp(&a.score))
     });
-    candidates.dedup_by(|a, b| a.intent.echo() == b.intent.echo());
+    candidates.dedup_by(|a, b| {
+        a.intent.verb == b.intent.verb && a.intent.arguments == b.intent.arguments
+    });
     candidates
 }
 
@@ -259,14 +316,14 @@ fn dedupe(mut candidates: Vec<Candidate>) -> Vec<Candidate> {
 ///
 /// §6: never a bare error. Ranked by how close the first word came to each verb,
 /// so a wild miss still gets pointed somewhere sensible.
-fn suggest(words: &[&str]) -> Vec<Verb> {
+fn suggest(words: &[Word<'_>]) -> Vec<Verb> {
     let Some(first) = words.first() else {
         return Vec::new();
     };
 
     let mut scored: Vec<(u32, Verb)> = Verb::ALL
         .iter()
-        .map(|&verb| (fuzzy::similarity(first, verb.canonical()), verb))
+        .map(|&verb| (fuzzy::similarity(first.matching, verb.canonical()), verb))
         .collect();
 
     scored.sort_by(|a, b| {

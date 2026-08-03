@@ -24,6 +24,16 @@ pub const EXACT: u32 = 1000;
 /// unrelated word of the same length does not.
 pub const MIN_SIMILARITY: u32 = 600;
 
+/// Longest word this module will compare character by character.
+///
+/// [`distance`] is O(left x right) and runs once per synonym and once per scene
+/// noun, so an unbounded word makes one keystroke-completed line arbitrarily
+/// expensive — 100k characters measured at 605 ms in release, a visible freeze
+/// on the frame thread that §6 forbids outright. Nothing in the vocabulary or
+/// the tower is close to this long; anything longer cannot be a near-miss for
+/// something this short, so refusing to score it loses no resolution.
+pub const MAX_WORD: usize = 64;
+
 /// Shortest prefix that counts as an abbreviation rather than a coincidence.
 ///
 /// At two characters, `ca` would prefix-match `cast` and `cat` equally, which is
@@ -46,8 +56,13 @@ pub fn similarity(input: &str, target: &str) -> u32 {
         return 0;
     }
 
-    let input_len = input.chars().count();
-    let target_len = target.chars().count();
+    let input_len = input.chars().take(MAX_WORD + 1).count();
+    let target_len = target.chars().take(MAX_WORD + 1).count();
+
+    // Too long to be a typo for anything we know.
+    if input_len > MAX_WORD || target_len > MAX_WORD {
+        return 0;
+    }
 
     if input_len >= MIN_PREFIX && target.starts_with(input) {
         let coverage = PREFIX_RANGE * u32::try_from(input_len).unwrap_or(u32::MAX)
@@ -59,7 +74,10 @@ pub fn similarity(input: &str, target: &str) -> u32 {
         .unwrap_or(u32::MAX)
         .max(1);
     let distance = distance(input, target);
-    EXACT.saturating_sub(EXACT * distance / longest)
+    // Saturating: `EXACT * distance` overflows u32 once distance passes ~4.29M,
+    // which panics in debug builds. MAX_WORD makes that unreachable, but the
+    // arithmetic should not depend on a constant declared elsewhere.
+    EXACT.saturating_sub(EXACT.saturating_mul(distance) / longest)
 }
 
 /// Whether two words are close enough to be worth considering.
@@ -78,8 +96,9 @@ pub fn distance(left: &str, right: &str) -> u32 {
         return 0;
     }
 
-    let left: Vec<char> = left.chars().collect();
-    let right: Vec<char> = right.chars().collect();
+    // Bounded for the reason on [`MAX_WORD`]: this is the quadratic step.
+    let left: Vec<char> = left.chars().take(MAX_WORD).collect();
+    let right: Vec<char> = right.chars().take(MAX_WORD).collect();
 
     if left.is_empty() {
         return u32::try_from(right.len()).unwrap_or(u32::MAX);
@@ -207,6 +226,22 @@ mod tests {
     fn empty_input_matches_nothing() {
         assert_eq!(similarity("", "survey"), 0);
         assert_eq!(similarity("survey", ""), 0);
+    }
+
+    #[test]
+    fn absurdly_long_words_are_refused_rather_than_scored() {
+        // The cost guard. Without it a pasted paragraph is compared against
+        // every synonym and every noun in the tower.
+        let long = "a".repeat(MAX_WORD + 1);
+        assert_eq!(similarity(&long, "attend"), 0);
+        assert_eq!(similarity("attend", &long), 0);
+    }
+
+    #[test]
+    fn distance_is_bounded_by_the_word_limit() {
+        let long = "a".repeat(100_000);
+        // Would be ~100k without the cap, and would overflow the score maths.
+        assert!(distance(&long, "attend") <= u32::try_from(MAX_WORD).expect("small"));
     }
 
     #[test]
