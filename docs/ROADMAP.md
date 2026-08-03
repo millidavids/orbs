@@ -67,7 +67,13 @@ hide. Release posture: demo first, then full 1.0. No Early Access.
       reading so the gate can cluster failures by cause; `ParseLog::to_tsv()`
       exports one row per candidate. `cargo run -p orbs-sim --example parse -- -i`
       to type at it. 180 workspace tests green
-- [ ] **Naming pass** for the slice's 16 commands — *done*, DESIGN.md §6.1
+- [x] **Naming pass** for the slice's 16 commands — run against the implemented
+      vocabulary, not by eye. Found a canonical collision between the two core
+      brewing verbs (`decoct`/`decant`, 667), a `dec-` prefix shared three ways,
+      and four names over the length rule. `decant`→`siphon`, `decipher`→`divine`,
+      `inscribe`→`scribe`; old words kept as synonyms. Canonical collisions 1→0,
+      prefix ambiguity 1→0, synonym collisions 7→3 all claimed. Now enforced
+      continuously by `crates/orbs-sim/tests/naming.rs` — DESIGN.md §6.1, §19
 - [ ] **Cell-grid text renderer** — glyph atlas + instanced quads, integer
       fidelity tiers
 - [ ] **CRT port** — 2,638 lines + 242-line shader from `court_wizard`, Bevy

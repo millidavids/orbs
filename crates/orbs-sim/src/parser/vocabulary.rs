@@ -69,8 +69,9 @@ pub const SYNONYMS: &[Synonym] = &[
     syn(Verb::Peruse, Register::Plain, &["show"]),
     // sift — filter for matches
     syn(Verb::Sift, Register::Arcane, &["sift"]),
+    // No `find`: shell `find` locates files rather than searching their
+    // contents, and it reached `bind` at 750.
     syn(Verb::Sift, Register::Shell, &["grep"]),
-    syn(Verb::Sift, Register::Shell, &["find"]),
     syn(Verb::Sift, Register::Plain, &["look", "for"]),
     syn(Verb::Sift, Register::Plain, &["search"]),
     syn(Verb::Sift, Register::Plain, &["filter"]),
@@ -106,28 +107,38 @@ pub const SYNONYMS: &[Synonym] = &[
     syn(Verb::Decoct, Register::Plain, &["make"]),
     syn(Verb::Decoct, Register::Plain, &["mix"]),
     syn(Verb::Decoct, Register::Plain, &["distil"]),
-    // decant — collect a finished potion
-    syn(Verb::Decant, Register::Arcane, &["decant"]),
-    syn(Verb::Decant, Register::Plain, &["collect"]),
-    syn(Verb::Decant, Register::Plain, &["take"]),
-    syn(Verb::Decant, Register::Plain, &["pour"]),
+    // siphon — collect a finished potion
+    //
+    // Was `decant`, which sat two edits from `decoct` (667) while both are
+    // core brewing verbs in a Phase 0 domain. Bare `take` is gone with it: it
+    // collided with `make` (decoct) at 750 and "take it back" already means undo.
+    syn(Verb::Siphon, Register::Arcane, &["siphon"]),
+    syn(Verb::Siphon, Register::Plain, &["collect"]),
+    syn(Verb::Siphon, Register::Plain, &["decant"]),
+    syn(Verb::Siphon, Register::Plain, &["pour"]),
     // purge — destroy waste
     syn(Verb::Purge, Register::Arcane, &["purge"]),
     syn(Verb::Purge, Register::Shell, &["rm"]),
     syn(Verb::Purge, Register::Plain, &["get", "rid", "of"]),
     syn(Verb::Purge, Register::Plain, &["clean"]),
     syn(Verb::Purge, Register::Plain, &["dump"]),
-    // decipher — research a fragment
-    syn(Verb::Decipher, Register::Arcane, &["decipher"]),
-    syn(Verb::Decipher, Register::Plain, &["study"]),
-    syn(Verb::Decipher, Register::Plain, &["translate"]),
-    syn(Verb::Decipher, Register::Plain, &["decode"]),
-    // inscribe — author a script
-    syn(Verb::Inscribe, Register::Arcane, &["inscribe"]),
-    syn(Verb::Inscribe, Register::Shell, &["vi"]),
-    syn(Verb::Inscribe, Register::Shell, &["edit"]),
-    syn(Verb::Inscribe, Register::Plain, &["write"]),
-    syn(Verb::Inscribe, Register::Plain, &["author"]),
+    // divine — research a fragment
+    //
+    // Was `decipher`: eight characters, and the third member of a `dec-` prefix
+    // that `decoct` and `decant` already shared three ways. `decode` is gone
+    // with it — it reached `decoct` at 667 and `study`/`translate` cover it.
+    syn(Verb::Divine, Register::Arcane, &["divine"]),
+    syn(Verb::Divine, Register::Plain, &["decipher"]),
+    syn(Verb::Divine, Register::Plain, &["study"]),
+    syn(Verb::Divine, Register::Plain, &["translate"]),
+    // scribe — author a script
+    //
+    // Was `inscribe`: same root, same meaning, two characters shorter.
+    syn(Verb::Scribe, Register::Arcane, &["scribe"]),
+    syn(Verb::Scribe, Register::Shell, &["vi"]),
+    syn(Verb::Scribe, Register::Shell, &["edit"]),
+    syn(Verb::Scribe, Register::Plain, &["inscribe"]),
+    syn(Verb::Scribe, Register::Plain, &["author"]),
     // bind — attach a script to a trigger
     syn(Verb::Bind, Register::Arcane, &["bind"]),
     syn(Verb::Bind, Register::Shell, &["cron"]),

@@ -78,10 +78,10 @@ fn every_verb_is_reachable_from_plain_english() {
         ("take it back", Verb::Undo),
         ("rest 30", Verb::Meditate),
         ("brew clarity", Verb::Decoct),
-        ("collect alembic", Verb::Decant),
+        ("collect alembic", Verb::Siphon),
         ("get rid of sludge", Verb::Purge),
-        ("study sigil-iv", Verb::Decipher),
-        ("write night_watch", Verb::Inscribe),
+        ("study sigil-iv", Verb::Divine),
+        ("author night_watch", Verb::Scribe),
         ("schedule night_watch", Verb::Bind),
         ("cast night_watch", Verb::Invoke),
     ];

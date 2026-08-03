@@ -113,13 +113,13 @@ pub enum Verb {
     /// Brew a potion.
     Decoct,
     /// Collect a finished potion.
-    Decant,
+    Siphon,
     /// Destroy waste or spoilage.
     Purge,
     /// Research a fragment.
-    Decipher,
+    Divine,
     /// Author a script.
-    Inscribe,
+    Scribe,
     /// Attach a script to a trigger.
     Bind,
     /// Run a script or spell.
@@ -139,15 +139,22 @@ impl Verb {
         Self::Undo,
         Self::Meditate,
         Self::Decoct,
-        Self::Decant,
+        Self::Siphon,
         Self::Purge,
-        Self::Decipher,
-        Self::Inscribe,
+        Self::Divine,
+        Self::Scribe,
         Self::Bind,
         Self::Invoke,
     ];
 
-    /// The longest a canonical verb may be. §6.1's rule, enforced by test.
+    /// The longest a canonical verb may be.
+    ///
+    /// §6.1 wrote the rule as "one short word, ideally ≤7 characters". The
+    /// Phase 0 naming pass settled the "ideally" at **8**: `grimoire` and
+    /// `meditate` are the two most in-world names in the set and carry the
+    /// game's identity, abbreviation covers the typing cost (`grim`, `medit`),
+    /// and the two 8-character names that had *no* such defence — `decipher`
+    /// and `inscribe` — were shortened instead.
     pub const MAX_CANONICAL_LEN: usize = 8;
 
     /// The arcane name — what the echo shows and what experts type.
@@ -164,10 +171,10 @@ impl Verb {
             Self::Undo => "undo",
             Self::Meditate => "meditate",
             Self::Decoct => "decoct",
-            Self::Decant => "decant",
+            Self::Siphon => "siphon",
             Self::Purge => "purge",
-            Self::Decipher => "decipher",
-            Self::Inscribe => "inscribe",
+            Self::Divine => "divine",
+            Self::Scribe => "scribe",
             Self::Bind => "bind",
             Self::Invoke => "invoke",
         }
@@ -186,9 +193,9 @@ impl Verb {
             Self::Verify | Self::Purge => ANYTHING,
             Self::Meditate => COUNT,
             Self::Decoct => ESSENCE,
-            Self::Decant => VESSEL,
-            Self::Decipher => FRAGMENT,
-            Self::Inscribe | Self::Bind | Self::Invoke => SCRIPT,
+            Self::Siphon => VESSEL,
+            Self::Divine => FRAGMENT,
+            Self::Scribe | Self::Bind | Self::Invoke => SCRIPT,
         }
     }
 
@@ -211,9 +218,8 @@ mod tests {
 
     #[test]
     fn canonical_names_obey_the_length_rule() {
-        // §6.1: "canonical verbs are one short word, ideally <= 7 characters".
-        // `grimoire`, `meditate`, `decipher`, and `inscribe` sit at 8, which the
-        // design accepts; anything longer would break the mastery arc.
+        // §6.1: canonical verbs are one short word. The canonical form is what
+        // expert players type all day, so length is a real cost.
         for verb in Verb::ALL {
             let name = verb.canonical();
             assert!(

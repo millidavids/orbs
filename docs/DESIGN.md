@@ -525,21 +525,26 @@ The Phase 0 vocabulary (16 commands), canonical arcane with synonym registers:
 | `attend <path>` | Move to a place | `cd` | go, enter, "go to" |
 | `survey [path]` | List what is here | `ls`, `dir` | look, list, "what's here" |
 | `peruse <file>` | Read a file | `cat`, `less` | read, open, show |
-| `sift <pat> <src>` | Filter for matches | `grep`, `find` | search, filter, "look for" |
+| `sift <pat> <src>` | Filter for matches | `grep` | search, filter, "look for" |
 | `status` | Tower overview (the boot report) | — | overview, "how are things" |
 | `grimoire <topic>` | In-world manual | `man`, `help`, `?` | explain, "how do I" |
 | `verify <target>` | Detect tampering | `check` | inspect, audit |
 | `undo` | Revert the last command | — | revert, "take it back" |
 | `meditate <n>` | Fast-forward the clock | `wait`, `sleep` | rest, pass |
 | `decoct <essence>` | Brew a potion | — | brew, make, mix, distil |
-| `decant <vessel>` | Collect a finished potion | — | collect, take, pour |
+| `siphon <vessel>` | Collect a finished potion | — | collect, decant, pour |
 | `purge <target>` | Destroy waste or spoilage | `rm` | clean, dump, "get rid of" |
-| `decipher <frag>` | Research a fragment | — | study, translate, decode |
-| `inscribe <name>` | Author a script | `vi`, `edit` | write, author |
+| `divine <frag>` | Research a fragment | — | decipher, study, translate |
+| `scribe <name>` | Author a script | `vi`, `edit` | inscribe, author |
 | `bind <script>` | Attach a script to a trigger | `cron` | schedule, automate |
 | `invoke <script>` | Run a script or spell | `run`, `exec`, `./` | cast, do |
 
 Every row resolves from all three registers; the echo always shows column one.
+
+**Four names changed in the Phase 0 naming pass** (§19). The originals remain as
+plain-English synonyms, so nothing a player learned stops working — and in
+`decant`'s case the word *must* stay claimed, because releasing it would let it
+resolve to `decoct`.
 
 ### Disambiguation never blocks during a siege
 
@@ -1764,6 +1769,11 @@ siege, onboarding.
 The canonical command set is player-facing API and requires a dedicated in-world
 naming pass before Phase 1 freezes vocabulary.
 
+**The Phase 0 pass is done** (§19) and is now a test — `crates/orbs-sim/tests/
+naming.rs`. Phase 1 adds ~35 commands, which is exactly when a vocabulary drifts
+back into collision, so the rules are enforced continuously rather than
+re-audited by hand.
+
 ## 16. Risks
 
 | Risk | Severity | Mitigation |
@@ -1821,6 +1831,23 @@ domains are settled (brewing + archive), and the fragment trickle has a rate
    price-shop — Exapunks is $19.99.
 
 ## 19. Decisions log
+
+### Naming pass — Phase 0, done
+
+Run against the implemented vocabulary rather than by eye, which is what turned
+up defects the design table had carried since draft 4.
+
+| Finding | Decision |
+|---|---|
+| **`decoct` and `decant` collide.** Two edits apart, scoring 667 against a 600 threshold, and they are the two core verbs of brewing — a Phase 0 domain. In a siege §6 forbids a blocking prompt, so a near-typo would be resolved by the parser's best guess: brewing when the player meant to collect | **`decant` → `siphon`.** Alchemically exact, six characters, zero collisions. `decant` is **kept as a plain synonym** — releasing it would be worse than the collision, because an unclaimed `decant` resolves to `decoct` |
+| **`dec` prefixed three verbs** — `decoct`, `decant`, `decipher` — so the natural abbreviation for the brewing domain meant three different things | **`decipher` → `divine`.** Also clears a length violation. No three-character prefix now reaches more than one verb |
+| **Four canonical names exceeded the ≤7 rule**: `grimoire`, `meditate`, `decipher`, `inscribe` | **`inscribe` → `scribe`** (same root, same meaning, two characters shorter) and `decipher` → `divine` as above. **`grimoire` and `meditate` are kept**, and the ceiling is codified at **8**: they are the two most in-world names in the set, abbreviation covers the typing cost, and §6.1 already wrote the rule as "ideally" |
+| **Seven cross-verb synonym collisions.** `find`/`bind` at 750, `make`/`take` at 750, `decode`/`decoct` at 667, and others | Dropped `find` (shell `find` locates files rather than searching contents, so it was wrong as well as colliding), bare `take` (`take it back` already means undo), and `decode` (redundant with `study`/`translate`). **Three remain, all tolerated deliberately**: `cat`/`cast`, `audit`/`edit`, `decoct`/`decant`. Each spelling is *claimed* by a verb, and an exact match always outscores a near one, so the collision costs a prompt on a typo rather than a wrong command |
+| Result | Canonical collisions **1 → 0**. Three-character prefix ambiguity **1 → 0**. Cross-verb synonym collisions **7 → 3, all claimed**. Every renamed word still resolves |
+
+The rules are enforced by `crates/orbs-sim/tests/naming.rs`, including the
+tolerated-collision set as a pinned list — a new synonym that adds one has to say
+so there rather than slip in under a threshold.
 
 ### Project licence — GPL-3.0-or-later
 
