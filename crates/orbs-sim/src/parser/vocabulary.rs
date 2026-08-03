@@ -69,9 +69,13 @@ pub const SYNONYMS: &[Synonym] = &[
     syn(Verb::Peruse, Register::Plain, &["show"]),
     // sift — filter for matches
     syn(Verb::Sift, Register::Arcane, &["sift"]),
-    // No `find`: shell `find` locates files rather than searching their
-    // contents, and it reached `bind` at 750.
     syn(Verb::Sift, Register::Shell, &["grep"]),
+    // `find` is kept despite reaching `bind` at 750 — *because* it does. An
+    // unclaimed `find` resolves to `bind`, so dropping it does not remove the
+    // collision, it converts a prompt into a wrong command. Shell `find` locates
+    // files rather than searching contents, but this game has no file-finding
+    // verb, so search is the only thing a player can mean.
+    syn(Verb::Sift, Register::Shell, &["find"]),
     syn(Verb::Sift, Register::Plain, &["look", "for"]),
     syn(Verb::Sift, Register::Plain, &["search"]),
     syn(Verb::Sift, Register::Plain, &["filter"]),
@@ -109,12 +113,17 @@ pub const SYNONYMS: &[Synonym] = &[
     syn(Verb::Decoct, Register::Plain, &["distil"]),
     // siphon — collect a finished potion
     //
-    // Was `decant`, which sat two edits from `decoct` (667) while both are
-    // core brewing verbs in a Phase 0 domain. Bare `take` is gone with it: it
-    // collided with `make` (decoct) at 750 and "take it back" already means undo.
+    // Was `decant`, which sat two edits from `decoct` (667) while both are core
+    // brewing verbs in a Phase 0 domain. `decant` and `take` are both kept: an
+    // unclaimed `decant` resolves to `decoct` and an unclaimed `take` reaches it
+    // through `make` (750), so releasing either would brew when the player meant
+    // to collect. Claimed, they cost a prompt on a typo instead.
+    //
+    // "take it back" still reaches undo: three words beat one on longest match.
     syn(Verb::Siphon, Register::Arcane, &["siphon"]),
     syn(Verb::Siphon, Register::Plain, &["collect"]),
     syn(Verb::Siphon, Register::Plain, &["decant"]),
+    syn(Verb::Siphon, Register::Plain, &["take"]),
     syn(Verb::Siphon, Register::Plain, &["pour"]),
     // purge — destroy waste
     syn(Verb::Purge, Register::Arcane, &["purge"]),
@@ -124,20 +133,23 @@ pub const SYNONYMS: &[Synonym] = &[
     syn(Verb::Purge, Register::Plain, &["dump"]),
     // divine — research a fragment
     //
-    // Was `decipher`: eight characters, and the third member of a `dec-` prefix
-    // that `decoct` and `decant` already shared three ways. `decode` is gone
-    // with it — it reached `decoct` at 667 and `study`/`translate` cover it.
+    // Was `decipher`: eight characters, and the third member of a `dec-` prefix.
+    // `decipher` and `decode` are both kept — `decode` reaches `decoct` at 667,
+    // so releasing it would make "decode this fragment" brew a potion.
     syn(Verb::Divine, Register::Arcane, &["divine"]),
     syn(Verb::Divine, Register::Plain, &["decipher"]),
+    syn(Verb::Divine, Register::Plain, &["decode"]),
     syn(Verb::Divine, Register::Plain, &["study"]),
     syn(Verb::Divine, Register::Plain, &["translate"]),
     // scribe — author a script
     //
-    // Was `inscribe`: same root, same meaning, two characters shorter.
+    // Was `inscribe`: same root, same meaning, two characters shorter. `write`
+    // reaches `wait` (meditate) at exactly 600, so it stays claimed here.
     syn(Verb::Scribe, Register::Arcane, &["scribe"]),
     syn(Verb::Scribe, Register::Shell, &["vi"]),
     syn(Verb::Scribe, Register::Shell, &["edit"]),
     syn(Verb::Scribe, Register::Plain, &["inscribe"]),
+    syn(Verb::Scribe, Register::Plain, &["write"]),
     syn(Verb::Scribe, Register::Plain, &["author"]),
     // bind — attach a script to a trigger
     syn(Verb::Bind, Register::Arcane, &["bind"]),

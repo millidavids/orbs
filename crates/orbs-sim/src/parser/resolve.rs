@@ -113,12 +113,14 @@ pub fn analyse(input: &str, scene: &Scene, mode: Mode) -> Analysis {
         return settle_incomplete(candidates);
     }
 
-    // Total order: best score first, then verb declaration order, then the
-    // arguments themselves. Comparing rendered echoes here allocated two Strings
-    // per comparison on a path documented as sub-millisecond.
+    // Total order: exact verb matches first, then score, then verb declaration
+    // order, then the arguments themselves. Comparing rendered echoes here
+    // allocated two Strings per comparison on a path documented as
+    // sub-millisecond.
     candidates.sort_by(|a, b| {
-        b.score
-            .cmp(&a.score)
+        named_exactly(b)
+            .cmp(&named_exactly(a))
+            .then_with(|| b.score.cmp(&a.score))
             .then_with(|| verb_order(a.intent.verb).cmp(&verb_order(b.intent.verb)))
             .then_with(|| a.intent.arguments.cmp(&b.intent.arguments))
     });
@@ -128,9 +130,15 @@ pub fn analyse(input: &str, scene: &Scene, mode: Mode) -> Analysis {
         return settle_incomplete(candidates);
     }
 
+    // A tie is only a tie within one exactness tier: an approximate reading is
+    // never "close enough" to argue with a verb the player actually named.
+    let best_exact = named_exactly(&candidates[0]);
     let tied = candidates
         .iter()
-        .take_while(|candidate| best_score.saturating_sub(candidate.score) <= TIE_WINDOW)
+        .take_while(|candidate| {
+            named_exactly(candidate) == best_exact
+                && best_score.saturating_sub(candidate.score) <= TIE_WINDOW
+        })
         .count();
 
     if tied <= 1 {
@@ -335,6 +343,19 @@ fn suggest(words: &[Word<'_>]) -> Vec<Verb> {
         .take(MAX_SUGGESTIONS)
         .map(|(_, verb)| verb)
         .collect()
+}
+
+/// Whether the player's words *named* this verb rather than approximating it.
+///
+/// An exact phrase match outranks every approximate one, before score is even
+/// considered. Without this, a word that exactly names one verb could lose to a
+/// word that merely resembles another, on the strength of the argument: `take
+/// clarity` resolved to `decoct clarity` — brewing — because `take` reaches
+/// `make` at 750 and `clarity` is an essence, even though `take` *is* siphon.
+///
+/// Argument fit still decides between readings of equal exactness.
+fn named_exactly(candidate: &Candidate) -> bool {
+    candidate.verb_score >= fuzzy::EXACT
 }
 
 /// A verb's position in [`Verb::ALL`], for stable ordering.

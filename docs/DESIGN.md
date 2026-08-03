@@ -541,10 +541,11 @@ The Phase 0 vocabulary (16 commands), canonical arcane with synonym registers:
 
 Every row resolves from all three registers; the echo always shows column one.
 
-**Four names changed in the Phase 0 naming pass** (§19). The originals remain as
-plain-English synonyms, so nothing a player learned stops working — and in
-`decant`'s case the word *must* stay claimed, because releasing it would let it
-resolve to `decoct`.
+**Three canonical names changed in the Phase 0 naming pass** (§19) —
+`decant`→`siphon`, `decipher`→`divine`, `inscribe`→`scribe`. Every original stays
+in the table as a plain-English synonym, so nothing a player learned stops
+working. That is not courtesy: a released word does not stop resolving, it
+resolves to whatever it is nearest, and `decant` unclaimed lands on `decoct`.
 
 ### Disambiguation never blocks during a siege
 
@@ -1840,14 +1841,21 @@ up defects the design table had carried since draft 4.
 | Finding | Decision |
 |---|---|
 | **`decoct` and `decant` collide.** Two edits apart, scoring 667 against a 600 threshold, and they are the two core verbs of brewing — a Phase 0 domain. In a siege §6 forbids a blocking prompt, so a near-typo would be resolved by the parser's best guess: brewing when the player meant to collect | **`decant` → `siphon`.** Alchemically exact, six characters, zero collisions. `decant` is **kept as a plain synonym** — releasing it would be worse than the collision, because an unclaimed `decant` resolves to `decoct` |
-| **`dec` prefixed three verbs** — `decoct`, `decant`, `decipher` — so the natural abbreviation for the brewing domain meant three different things | **`decipher` → `divine`.** Also clears a length violation. No three-character prefix now reaches more than one verb |
+| **`dec` prefixed three verbs** — `decoct`, `decant`, `decipher` — so the natural abbreviation for the brewing domain meant three different things | **`decipher` → `divine`.** Also clears a length violation. No three-character prefix reaches more than one **canonical** name. Across *synonyms* `dec` still reaches three verbs, because the old words are deliberately kept; that prompts, which is the right answer for a genuinely ambiguous abbreviation. `aut` and `ins` are ambiguous for the same reason. All three are pinned by test |
 | **Four canonical names exceeded the ≤7 rule**: `grimoire`, `meditate`, `decipher`, `inscribe` | **`inscribe` → `scribe`** (same root, same meaning, two characters shorter) and `decipher` → `divine` as above. **`grimoire` and `meditate` are kept**, and the ceiling is codified at **8**: they are the two most in-world names in the set, abbreviation covers the typing cost, and §6.1 already wrote the rule as "ideally" |
-| **Seven cross-verb synonym collisions.** `find`/`bind` at 750, `make`/`take` at 750, `decode`/`decoct` at 667, and others | Dropped `find` (shell `find` locates files rather than searching contents, so it was wrong as well as colliding), bare `take` (`take it back` already means undo), and `decode` (redundant with `study`/`translate`). **Three remain, all tolerated deliberately**: `cat`/`cast`, `audit`/`edit`, `decoct`/`decant`. Each spelling is *claimed* by a verb, and an exact match always outscores a near one, so the collision costs a prompt on a typo rather than a wrong command |
-| Result | Canonical collisions **1 → 0**. Three-character prefix ambiguity **1 → 0**. Cross-verb synonym collisions **7 → 3, all claimed**. Every renamed word still resolves |
+| **Seven cross-verb synonym collisions.** `find`/`bind` at 750, `make`/`take` at 750, `decode`/`decoct` at 667, and others | **All kept and claimed.** Dropping them was the pass's own worst mistake and was caught in review: a released word does not stop resolving. Unclaimed, `find` resolved to `bind`, `take` and `decode` to `decoct`, and `write` — deleted by accident — to `meditate`, every one with `Clear` confidence and no prompt. `find`/`bind` at 750 is *worse* than the 667 that justified renaming a canonical verb |
+| **An exact verb match could lose to an approximate one.** `take clarity` resolved to `decoct clarity` — brewing — because `take` reaches `make` at 750 and `clarity` is an essence, even though `take` *names* siphon at 1000 | Ranking is now **exactness first, then score**. A word the player actually typed outranks one that merely resembles it; argument fit still decides between readings of equal exactness |
+| Result | Canonical collisions **1 → 0**. Canonical three-character prefix ambiguity **1 → 0**. Seven synonym collisions remain and are pinned — that is the correct number, because the fix for a collision is to *claim* both spellings, not to release one |
 
-The rules are enforced by `crates/orbs-sim/tests/naming.rs`, including the
-tolerated-collision set as a pinned list — a new synonym that adds one has to say
-so there rather than slip in under a threshold.
+The rules are enforced by `crates/orbs-sim/tests/naming.rs`. The load-bearing
+one is `every_phrase_reaches_the_verb_that_claims_it`: every phrase the
+vocabulary claims must, given a fitting argument, reach the verb that claims it.
+
+That test replaced one that compared the synonym list against a set built from
+the same synonym list, and was therefore always true. It passed while four words
+resolved to the wrong verb — which is the whole argument for review: the pass
+stated the right principle in §19 and then broke it four times in the same
+commit.
 
 ### Project licence — GPL-3.0-or-later
 

@@ -9,11 +9,41 @@
 //! the length rule. Phase 1 adds ~35 more commands, which is exactly when a
 //! vocabulary drifts back into collision — so the pass is a test, not an event.
 
-use std::collections::BTreeSet;
-
 use orbs_sim::parser::{
     MIN_SIMILARITY, Mode, NounKind, Register, SYNONYMS, Scene, Verb, resolve, similarity,
 };
+
+/// One noun of every kind, so any verb can be given a fitting argument.
+fn scene() -> Scene {
+    Scene::new()
+        .with(NounKind::Place, "/tower/alembic")
+        .with(NounKind::File, "feed.log")
+        .with(NounKind::Topic, "brewing")
+        .with(NounKind::Essence, "clarity")
+        .with(NounKind::Vessel, "alembic")
+        .with(NounKind::Fragment, "sigil-iv")
+        .with(NounKind::Script, "night_watch")
+        .with(NounKind::Any, "sludge")
+}
+
+/// An argument that satisfies `verb`'s signature.
+fn sample_argument(verb: Verb) -> &'static str {
+    let Some(slot) = verb.signature().first() else {
+        return "";
+    };
+    match slot.kind {
+        NounKind::Place => "/tower/alembic",
+        NounKind::File => "feed.log",
+        NounKind::Pattern => "march feed.log",
+        NounKind::Topic => "brewing",
+        NounKind::Essence => "clarity",
+        NounKind::Vessel => "alembic",
+        NounKind::Fragment => "sigil-iv",
+        NounKind::Script => "night_watch",
+        NounKind::Count => "30",
+        NounKind::Any => "sludge",
+    }
+}
 
 /// Single-word synonyms, with the verb that owns them.
 fn single_words() -> Vec<(&'static str, Verb)> {
@@ -65,12 +95,14 @@ fn no_two_canonical_names_fuzzy_match_each_other() {
     }
 }
 
-/// Abbreviations must name one verb.
+/// Canonical abbreviations must name one verb.
 ///
-/// `dec` used to prefix `decoct`, `decant`, and `decipher`, so the natural
-/// shorthand for the brewing domain meant three different things.
+/// `dec` used to prefix three *canonical* names — `decoct`, `decant`,
+/// `decipher` — so the natural shorthand for an expert meant three different
+/// things. Synonyms are a separate question, pinned by
+/// `ambiguous_synonym_prefixes_are_known`.
 #[test]
-fn three_character_prefixes_name_at_most_one_verb() {
+fn three_character_canonical_prefixes_name_at_most_one_verb() {
     for verb in Verb::ALL {
         let name = verb.canonical();
         if name.len() < 3 {
@@ -90,38 +122,115 @@ fn three_character_prefixes_name_at_most_one_verb() {
     }
 }
 
-/// Synonyms may collide only where both spellings are claimed.
+/// **The invariant the whole pass rests on.**
 ///
-/// An exact match always outscores a near one, so a collision between two words
-/// that each *own* a verb is a prompt on a typo — acceptable. A collision with a
-/// word nothing claims is worse than a collision: `decant` unclaimed would have
-/// resolved to `decoct`, silently brewing when the player meant to collect.
+/// Every phrase the vocabulary claims must, when typed with an argument that
+/// fits, reach the verb that claims it. A word outranked by some *other* verb's
+/// word is not a near miss — it is a wrong command with `Clear` confidence.
+///
+/// This replaces a check that compared the synonym list against a set built from
+/// the same synonym list, and was therefore always true. It passed while `find`
+/// resolved to `bind`, `take` and `decode` resolved to `decoct`, and `write`
+/// resolved to `meditate`.
 #[test]
-fn every_colliding_synonym_is_claimed_by_a_verb() {
-    let claimed: BTreeSet<&str> = single_words().into_iter().map(|(word, _)| word).collect();
-    let mut collisions = Vec::new();
+fn every_phrase_reaches_the_verb_that_claims_it() {
+    let scene = scene();
+    let mut wrong = Vec::new();
 
+    for entry in SYNONYMS {
+        let phrase = entry.words.join(" ");
+        let argument = sample_argument(entry.verb);
+        let input = format!("{phrase} {argument}");
+
+        let resolution = resolve(input.trim(), &scene, Mode::Siege);
+        let reached = resolution.intent().map(|intent| intent.verb);
+        if reached != Some(entry.verb) {
+            wrong.push(format!(
+                "{input:?} claims {} but reached {:?}",
+                entry.verb.canonical(),
+                reached.map(Verb::canonical)
+            ));
+        }
+    }
+
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// Colliding spellings must both be claimed, and the set is pinned.
+///
+/// An exact match outranks every approximate one, so a collision between two
+/// words that each *own* a verb costs a prompt on a typo. Releasing one is worse
+/// than the collision: an unclaimed `decant` resolved to `decoct` — silently
+/// brewing when the player meant to collect — which is exactly the defect that
+/// justified renaming a canonical verb.
+#[test]
+fn the_tolerated_collision_set_is_pinned() {
+    let mut collisions = Vec::new();
     for (word, verb) in single_words() {
         for (other, other_verb) in single_words() {
-            if verb >= other_verb {
-                continue;
-            }
-            if similarity(word, other) >= MIN_SIMILARITY {
+            if verb < other_verb && similarity(word, other) >= MIN_SIMILARITY {
                 collisions.push((word, other));
-                assert!(
-                    claimed.contains(word) && claimed.contains(other),
-                    "{word} and {other} collide but one is unclaimed"
-                );
             }
         }
     }
 
-    // Pinned, not merely bounded: a new entry that adds a collision should have
-    // to say so here rather than slipping in under a threshold.
+    // A new entry that adds a collision has to amend this list, which forces
+    // someone to check that both spellings are claimed by the right verbs.
     assert_eq!(
         collisions,
-        [("cat", "cast"), ("audit", "edit"), ("decoct", "decant")],
+        [
+            ("cat", "cast"),
+            ("find", "bind"),
+            ("audit", "edit"),
+            ("wait", "write"),
+            ("decoct", "decant"),
+            ("decoct", "decode"),
+            ("make", "take"),
+        ],
         "the set of tolerated synonym collisions changed"
+    );
+}
+
+/// Prefixes shared across *synonyms* are ambiguous on purpose, and pinned.
+///
+/// Keeping the pre-rename words claimed is what stops them resolving to the
+/// wrong verb, and the cost is that `dec` still reaches three verbs. That is
+/// correct behaviour — three legitimate words begin with it, so a prompt is the
+/// right answer — but it is not what the canonical rule guarantees, and the
+/// distinction is worth a test rather than a sentence.
+#[test]
+fn ambiguous_synonym_prefixes_are_known() {
+    let mut ambiguous = Vec::new();
+    for (word, _) in single_words() {
+        if word.len() < 3 {
+            continue;
+        }
+        let prefix = &word[..3];
+        let verbs: std::collections::BTreeSet<&str> = single_words()
+            .into_iter()
+            .filter(|(other, _)| other.starts_with(prefix))
+            .map(|(_, verb)| verb.canonical())
+            .collect();
+        if verbs.len() > 1 && !ambiguous.iter().any(|(p, _): &(&str, _)| *p == prefix) {
+            ambiguous.push((prefix, verbs.into_iter().collect::<Vec<_>>()));
+        }
+    }
+    ambiguous.sort_unstable();
+
+    // `aut`: automate (bind) vs author (scribe).
+    // `dec`: decoct vs decant (siphon) vs decipher/decode (divine).
+    // `ins`: inscribe (scribe) vs inspect (verify).
+    // Each prompts, which is the right answer — the abbreviation genuinely is
+    // ambiguous. What must never happen is one of them resolving silently, and
+    // `every_phrase_reaches_the_verb_that_claims_it` is what guards that.
+    assert_eq!(
+        ambiguous,
+        [
+            ("aut", vec!["bind", "scribe"]),
+            ("dec", vec!["decoct", "divine", "siphon"]),
+            ("ins", vec!["scribe", "verify"]),
+        ],
+        "the set of ambiguous synonym prefixes changed"
     );
 }
 
