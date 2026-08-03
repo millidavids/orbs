@@ -90,6 +90,21 @@ mistakes caught late.
    would make it unmanageable by month 20.
 7. **The Bevy frontend never waits for the terminal frontend.** Bevy is the Steam
    product.
+8. **No `async` in `orbs-sim`. Ever.** Async introduces non-deterministic
+   completion ordering and scheduler-dependent interleaving — precisely the two
+   things that break replay, offline/online parity, and the balance harness
+   matching the live game. `Sim::step()` taking `&mut self` makes re-entrancy and
+   cross-thread driving statically impossible; keep it that way.
+
+   Frontends may use whatever their backend requires — Bevy's task pools and
+   render threads, `crossterm`'s event loop — but **never to drive the sim.** The
+   sim is called from exactly one place, synchronously, per frame.
+
+   Corollaries: no `tokio` anywhere (there is no networking; court_wizard's
+   `tokio`/`iroh` are for its multiplayer). Long work goes on a worker thread, not
+   an async runtime — offline catch-up is ~29k `step()` calls, which is
+   milliseconds. File watching for `.spell` hot-reload uses `notify`'s background
+   thread and a channel, with reloads queued to the next tick boundary.
 
 ## Code Conventions
 

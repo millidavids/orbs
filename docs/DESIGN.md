@@ -1559,6 +1559,13 @@ list.
 - **Structured records everywhere.** Commands emit records; presentation is a view.
   Pipes, `sift`, the eldritch renderer, screen-reader linearisation, and the test
   harness all depend on this.
+- **No `async` in `orbs-sim`.** Async brings non-deterministic completion
+  ordering and scheduler-dependent interleaving — exactly what breaks replay,
+  offline/online parity, and harness-vs-live agreement. `Sim::step(&mut self)`
+  makes re-entrancy and cross-thread driving statically impossible. Frontends may
+  use their backend's concurrency (Bevy task pools, `crossterm`'s loop) but never
+  to drive the sim. No `tokio`: there is no networking. Long work goes to a worker
+  thread, not an async runtime.
 - **Determinism is architected, not assumed.** Two rules binding from Phase 0,
   because §5 requires offline simulation to match online exactly and §6 requires
   every parse to be reproducible:
