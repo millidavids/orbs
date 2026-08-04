@@ -1883,6 +1883,92 @@ domains are settled (brewing + archive), and the fragment trickle has a rate
 
 ## 19. Decisions log
 
+### Boot sequence, scaffold tutorial, and what looking at it cost
+
+§4 asks for a boot report that reflects **real world state**, and §15 asks for a
+throwaway scaffold tutorial so the gate *"measures the parser rather than the
+absence of onboarding"*. They are one screen: the report is built by walking the
+tower, and it ends by naming the vocabulary.
+
+| Question | Decision |
+|---|---|
+| **Walked, not written** | A boot report that could go stale is a lie the player reads first. Every row comes from the world — one per domain with what it holds and whether it is sound, plus §8.1's `bound` count so automation cannot be forgotten |
+| **`bound: 0` is printed, not omitted** | The script engine is Phase 1. An absent section leaves a player unable to tell *none* from *not shown*, and this is the line a Phase 1 script slots into |
+| **The tutorial names verbs that work, not verbs that exist** | Six of §6.1's sixteen only acknowledge in Phase 0. Offering them spends the gate's most important metric — the dead-end rate — on things nobody has built. `execute::is_live` is where "works" is written down, and a test drives all sixteen through a real `Sim` to keep it honest |
+| **Names, not sentences** | The same line §19 already drew: the parser's tables emit facts. §4's *"the orb warms to your touch"* is composed by a Phase 1 content file from exactly these records |
+
+**`bind` was worse than a dead end, and only the running game could show it.**
+Phase 0 has no scripts, so `bind`'s only slot is unfillable — and the deliberate
+`find`/`bind` collision in the vocabulary table then hands the line to `sift`
+unopposed. `bind night_watch` searches the session log and **reports success.**
+The resolution is correct and stops being reachable the moment Phase 1 puts a
+script in scope; what was wrong was a tutorial that would have taught it. Found
+by a test that types every verb, which existed only because the tutorial needed
+to know which verbs work.
+
+**A listing is a set, and sets tile.** Sixteen verbs stacked one per line pushed
+the boot report's own first row off an 80×22 screen before anyone had typed
+anything — using eighteen columns of eighty to do it. `RecordKind::tiles` now
+packs a run of listing rows across the pane, and exactly one kind tiles: `Entry`,
+whose rows are unordered. Log lines, script lines and schedule rows are read *in
+sequence* and tiling would scramble them; a status row wants its value column
+aligned with the one above it. A screen reader is unaffected — each record still
+speaks separately, in stream order, so the wrap is visual and nothing else.
+
+**The pane had to be taught to ask.** One row per record stopped being true, and
+the transcript's "show the tail" arithmetic still assumed it: every packed
+listing left that many blank rows at the bottom *while dropping the same number
+of records off the top*. `RecordView::height` shares its packing decision with
+the drawing code so the two cannot disagree, and the pane widens its window one
+record at a time until the next would overflow.
+
+### `ORBS_DUMP` — because a screenshot can lie
+
+CLAUDE.md's working practice is that work is done when it has been *looked at*,
+and `ORBS_CAPTURE=1` was how. That path needs a composited window. Run the binary
+from a detached shell, or with the display asleep, and it writes a valid PNG of a
+**black rectangle** — the renderer fine, the picture proving nothing. That is
+worse than no picture, because it looks like evidence, and it cost most of an
+afternoon before the same frame was checked another way and found to be correct.
+
+`ORBS_DUMP=1` draws the same frame the game draws — the real `paint`, the real
+`Sim`, the real `ScreenLayout` — into a `Frame` nobody rasterises, and prints it
+with its linear stream beneath. No `App`, no `DefaultPlugins`, no GPU, no window.
+`ORBS_DUMP="attend alembic; decoct clarity; meditate 25"` types a session first,
+through `submit` and a real `step`, so what prints is the world having actually
+run. `ORBS_GRID=160x44` picks the grid.
+
+What it cannot show is what rule 2 says is a frontend's alone: phosphor, the CRT
+curve, the blinking caret. Those still need eyes on a window — and rule 2 is
+exactly the promise that nothing *informational* is among them.
+
+### Worst-case legibility — prepared, not judged
+
+§15's hardest screen: tier 2 at the minimum supported window, four panes, siege
+in progress, peak-threat CRT, eldritch active, and a **single-character sabotage
+tell** to spot. The item also had to *establish* the minimum window at which
+tier 2 is offered, and that number is now derived rather than written down —
+§19's standing lesson from four failed attempts at the CRT overscan is *compute
+the constant, do not reason about it*.
+
+| | |
+|---|---|
+| Minimum window offering tier 2 | **1280×704** |
+| There, tier 1 | 2× cell → 80×22 |
+| There, tier 2 | 1× cell → **160×44** |
+| A one-character tell at tier 2 | **8 physical pixels wide** |
+
+Rendered by the last screen of `cargo run -p orbs-render --example screens`. The
+one-space tell survives to the Frame at that size, and the eldritch pane still
+speaks plainly — which is the property that makes a *visual* legibility failure
+survivable rather than exclusionary.
+
+**Two of the six conditions are not in a Frame and cannot be.** Peak-threat CRT
+and the phosphor are frontend enrichment under rule 2. The screen establishes
+that everything informational survives at the smallest glyph the game ever draws;
+the remaining judgement is a person sizing the window to 1280×704, pressing F4,
+F3 and F7, and reading a siege log through it. **That has not been done.**
+
 ### Brewing + archive — implemented, Phase 0 item 9
 
 The slice's two domains, and the first time the game has a world rather than a

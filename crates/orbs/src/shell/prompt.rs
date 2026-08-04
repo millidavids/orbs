@@ -140,10 +140,24 @@ pub(super) fn session(
     }
 
     let records = sim.scrollback().records();
+    let prompt = sim.prompt();
+    let view = RecordView::prompt(&prompt);
     // Only the tail fits. `iter().skip(n)` is O(1) here and stays `Clone`, which
     // is what `RecordView::draw` needs to measure and then draw.
-    let skipped = records.len().saturating_sub(usize::from(body.rows));
-    RecordView::prompt(&sim.prompt()).draw(&mut painter, body, records.iter().skip(skipped));
+    //
+    // One row per record is a *floor*, not the height: a listing packs across
+    // the pane, so this skip is a guess that always fits and usually wastes the
+    // difference. Widening it one record at a time until the next one would
+    // overflow is what puts real history in the rows tiling frees up — a session
+    // that had five blank rows and dropped its own opening now shows both.
+    //
+    // Bounded by the pane, so the cost is a pane's worth of measuring per frame
+    // rather than anything that grows with the scrollback.
+    let mut skipped = records.len().saturating_sub(usize::from(body.rows));
+    while skipped > 0 && view.height(body.cols, records.iter().skip(skipped - 1)) <= body.rows {
+        skipped -= 1;
+    }
+    view.draw(&mut painter, body, records.iter().skip(skipped));
 }
 
 /// A tick count as a meter value, saturating rather than wrapping.

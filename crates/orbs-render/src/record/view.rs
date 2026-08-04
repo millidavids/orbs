@@ -112,6 +112,47 @@ impl<'a> RecordView<'a> {
         }
     }
 
+    /// Rows `records` would need at `cols` wide, without drawing anything.
+    ///
+    /// A line view is no longer one row per record — a listing packs across the
+    /// pane — so a caller that wants the *newest* records has to ask rather than
+    /// count. Before this existed the transcript assumed one row each, and every
+    /// packed listing left that many blank rows at the bottom of the pane while
+    /// dropping the same number of records off the top.
+    ///
+    /// Unbounded in the record count, so a caller holding a long stream should
+    /// pass a window rather than the whole of it.
+    #[must_use]
+    pub fn height<'r>(&self, cols: u16, records: impl Iterator<Item = Record<'r>> + Clone) -> u16 {
+        let prompt = match self.mode {
+            // A table is one row per record plus the header, always.
+            Mode::Table { header, .. } => {
+                let rows = to_cols(records.count());
+                return if header { rows.saturating_add(1) } else { rows };
+            }
+            Mode::Lines => None,
+            Mode::Prompt { prompt } => Some(prompt),
+        };
+
+        let indent = indent_for(prompt);
+        let (mut rows, mut rest) = (0u16, records);
+        loop {
+            let run = rest.clone();
+            let Some(record) = rest.next() else { break };
+            if record.kind().tiles()
+                && let Some(plan) = Tiling::plan(cols, indent, run)
+            {
+                for _ in 1..plan.count {
+                    rest.next();
+                }
+                rows = rows.saturating_add(plan.rows());
+            } else {
+                rows = rows.saturating_add(1);
+            }
+        }
+        rows
+    }
+
     /// Draw `records` into `area`, returning the number of rows used.
     ///
     /// The iterator must be `Clone` because a table measures its columns in one
@@ -220,15 +261,33 @@ fn draw_table<'r>(
 fn draw_lines<'r>(
     painter: &mut Painter<'_>,
     area: Rect,
-    records: impl Iterator<Item = Record<'r>>,
+    records: impl Iterator<Item = Record<'r>> + Clone,
     prompt: Option<&str>,
 ) -> u16 {
     let (mut drawn, mut speech) = (String::new(), String::new());
     let mut row = area.row;
-    for record in records {
+    let mut rest = records;
+    loop {
         if row >= area.bottom() {
             break;
         }
+        // Cloned before the record is taken, so a tiling run can be measured
+        // from its own first row rather than needing a second pass over the
+        // stream or a `Vec` in the render path.
+        let run = rest.clone();
+        let Some(record) = rest.next() else { break };
+
+        if record.kind().tiles()
+            && let Some((rows, packed)) = draw_tiled(painter, Rect { row, ..area }, prompt, run)
+        {
+            // `record` was the first of them.
+            for _ in 1..packed {
+                rest.next();
+            }
+            row = row.saturating_add(rows);
+            continue;
+        }
+
         drawn.clear();
         // Content only: an annotation drawn as text would put an internal token
         // — `"resolved survey"` — on screen for a player to read.
@@ -267,6 +326,126 @@ fn draw_lines<'r>(
         row = row.saturating_add(1);
     }
     row.saturating_sub(area.row)
+}
+
+/// Cells a marked line's text is inset by, which a listing matches so a pane
+/// does not appear to change its left edge partway down.
+const fn indent_for(prompt: Option<&str>) -> u16 {
+    if prompt.is_some() { MARKER_WIDTH } else { 0 }
+}
+
+/// How a run of [tiling](RecordKind::tiles) records packs across a pane.
+///
+/// Split out from the drawing so [`RecordView::height`] and [`draw_tiled`]
+/// cannot disagree about it. They did not have to: a pane that measures one way
+/// and draws another leaves blank rows at the bottom while dropping history off
+/// the top, which is what the transcript did the first time this was looked at.
+#[derive(Debug, Clone, Copy)]
+struct Tiling {
+    indent: u16,
+    /// Cells from the start of one column to the start of the next.
+    stride: u16,
+    per_row: u16,
+    count: usize,
+}
+
+impl Tiling {
+    /// Plan the run beginning at `run`'s first record, or `None` to stack.
+    ///
+    /// The run ends at the first record that does not tile; `run` may continue
+    /// past it.
+    ///
+    /// # Why it can decline
+    ///
+    /// A tiled row has no room for a per-record [marker](Record::marker), and a
+    /// marker is information — the difference between a candidate and the
+    /// command that will run. Rather than drop it, a run carrying any marker
+    /// declines to tile and falls back to one record per line, where the marker
+    /// column exists. Nothing that reaches here today carries one; this is what
+    /// keeps that true by construction instead of by convention.
+    fn plan<'r>(
+        cols: u16,
+        indent: u16,
+        run: impl Iterator<Item = Record<'r>> + Clone,
+    ) -> Option<Self> {
+        let available = cols.saturating_sub(indent);
+        if available == 0 {
+            return None;
+        }
+
+        let (mut widest, mut count) = (0usize, 0usize);
+        let mut drawn = String::new();
+        for record in run.take_while(|record| record.kind().tiles()) {
+            if record.marker().is_some() {
+                return None;
+            }
+            drawn.clear();
+            record.write_line(&mut drawn);
+            widest = widest.max(drawn.chars().count());
+            count += 1;
+        }
+        // One name is not a listing, and packing it would only move it right.
+        if count < 2 || widest == 0 {
+            return None;
+        }
+
+        let stride = to_cols(widest.saturating_add(COLUMN_GAP));
+        let per_row = available / stride;
+        // Nothing gained, and stacking keeps the fallback in one place.
+        (per_row >= 2).then_some(Self {
+            indent,
+            stride,
+            per_row,
+            count,
+        })
+    }
+
+    /// Rows the whole run needs.
+    fn rows(self) -> u16 {
+        to_cols(self.count.div_ceil(usize::from(self.per_row)))
+    }
+}
+fn draw_tiled<'r>(
+    painter: &mut Painter<'_>,
+    area: Rect,
+    prompt: Option<&str>,
+    run: impl Iterator<Item = Record<'r>> + Clone,
+) -> Option<(u16, usize)> {
+    let plan = Tiling::plan(area.cols, indent_for(prompt), run.clone())?;
+    let (indent, stride, per_row) = (plan.indent, plan.stride, plan.per_row);
+    let tiling = run.take_while(|record| record.kind().tiles());
+
+    let (mut drawn, mut speech, mut placed) = (String::new(), String::new(), 0usize);
+    for record in tiling {
+        let row = area
+            .row
+            .saturating_add(to_cols(placed / usize::from(per_row)));
+        if row >= area.bottom() {
+            break;
+        }
+        let col = area
+            .col
+            .saturating_add(indent)
+            .saturating_add(to_cols(placed % usize::from(per_row)) * stride);
+
+        drawn.clear();
+        record.write_line(&mut drawn);
+        speech.clear();
+        record.speak(&mut speech);
+        // Spoken in stream order, one utterance per record, exactly as the
+        // stacked path does — so §14's linear form is unchanged by the wrap.
+        painter.span(
+            Pos::new(col, row),
+            &crate::span::Span::new(&drawn)
+                .with_style(record.style())
+                .with_kind(record.kind().utterance())
+                .with_spoken(&speech),
+        );
+        placed += 1;
+    }
+
+    let rows = placed.div_ceil(usize::from(per_row));
+    Some((to_cols(rows), placed))
 }
 
 /// Where column `index` begins, or `None` if it starts past the right edge.

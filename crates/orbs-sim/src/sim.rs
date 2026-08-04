@@ -37,6 +37,20 @@ impl Sim {
     ///
     /// The schedule is built here and never exposed afterwards, so systems cannot
     /// be added behind the sim's back at runtime.
+    ///
+    /// # A frontend must not call this
+    ///
+    /// It exists for tests that need to observe the schedule's ordering
+    /// guarantees from outside — see `tower::scene`, where a caller's system had
+    /// been running *before* the scene rebuild and the topsort was within its
+    /// rights to do it.
+    ///
+    /// Domain systems belong inside [`Sim::new`]. §13 is explicit about why: if
+    /// the Bevy build, `orbs-tui` and `orbs-balance` each registered their own,
+    /// they would be three different games, and *"if the live game and the CLI
+    /// harness diverged, we would not find out until Phase 3."* The seam is left
+    /// open because closing it would cost the ordering test its only handle, not
+    /// because a frontend may reach through it.
     #[must_use]
     pub fn with_schedule(seed: u64, build: impl FnOnce(&mut Schedule)) -> Self {
         let mut world = World::new();
@@ -82,6 +96,7 @@ impl Sim {
         // world to name.
         tower::raise(&mut world);
         tower::rebuild(&mut world);
+        tower::report(&mut world);
 
         Self {
             world,
@@ -240,6 +255,11 @@ impl Sim {
     #[must_use]
     pub fn scrollback(&self) -> &Scrollback {
         self.world.resource::<Scrollback>()
+    }
+
+    /// The same, for a command or a test to write into.
+    pub fn scrollback_mut(&mut self) -> Mut<'_, Scrollback> {
+        self.world.resource_mut::<Scrollback>()
     }
 
     /// What is in flight, if anything (§5.0).

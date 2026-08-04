@@ -118,9 +118,30 @@ Compiling is not the same as looking at it.
 
 ```sh
 cargo run -p orbs                            # the game
-ORBS_CAPTURE=1 cargo run -p orbs             # ...and screenshot it
+ORBS_DUMP=1 cargo run -p orbs                # ...its screen as text, no GPU
+ORBS_CAPTURE=1 cargo run -p orbs             # ...or as a screenshot
 cargo run -p orbs-render --example screens   # real Frames dumped as text
 ```
+
+**Prefer `ORBS_DUMP` and keep `ORBS_CAPTURE` for the things only pixels show.**
+The screenshot path needs a composited window: run the binary from a detached
+shell, or with the display asleep, and it writes a valid PNG of a black
+rectangle — the renderer fine, the picture proving nothing. That is worse than no
+picture, because it looks like evidence.
+
+`ORBS_DUMP` draws the same frame the game draws — the real `paint`, the real
+`Sim`, the real `ScreenLayout` — into a `Frame` nobody rasterises, and prints it
+with its linear stream beneath.
+
+```sh
+ORBS_DUMP="attend alembic; decoct clarity; meditate 25" cargo run -p orbs
+ORBS_DUMP=1 ORBS_GRID=160x44 cargo run -p orbs      # the worst-case grid
+```
+
+Each `;`-separated line goes through `submit` and a real `step`, so what prints
+is the world having actually run. What it cannot show is what rule 2 says is a
+frontend's alone — phosphor, the CRT curve, the blinking caret — and those are
+exactly what `ORBS_CAPTURE` and a real window are still for.
 
 `screens` builds the §4 boot report and a multiplexed siege through the same
 public API both frontends use, prints them by walking `Frame::rows()` exactly as

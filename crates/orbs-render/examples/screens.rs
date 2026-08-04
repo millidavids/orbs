@@ -51,6 +51,122 @@ fn main() {
     let prompt = prompt_screen(GridSize::new(80, 22), &session);
     show("The prompt — every outcome §6 can produce", &prompt);
     speak(&prompt);
+
+    worst_case();
+}
+
+// ---------------------------------------------------------------------------
+// §15's worst-case legibility test
+// ---------------------------------------------------------------------------
+
+/// The hardest screen the game can produce, and the window that produces it.
+///
+/// DESIGN.md §15 asks for *"tier 2 at minimum supported window, four panes,
+/// siege in progress, peak-threat CRT, eldritch active, tester must spot a
+/// single-character sabotage tell"* — and, in the same breath, for the item to
+/// **establish the minimum window at which tier 2 is offered**. That number is
+/// derived here rather than written down: §19's standing lesson from four failed
+/// attempts at the CRT overscan is *compute the constant, do not reason about
+/// it*.
+///
+/// Two of the six conditions are not in a [`Frame`] and cannot be. Peak-threat
+/// CRT and the phosphor are frontend enrichment — rule 2 — so they are read on
+/// the running game at this window with `F3`, and what this screen establishes
+/// is that everything *informational* survives at the smallest glyph the game
+/// ever draws. The final judgement is a human one; this prepares it and cannot
+/// make it.
+fn worst_case() {
+    let window = minimum_window_for_tier_two();
+    let one = Fidelity::tier_one(window).expect("the floor fits by construction");
+    let two = one.deep().expect("tier two by construction");
+    let grid = two.grid(window);
+    let (cell_width, cell_height) = two.cell_pixels();
+
+    println!("\nWorst-case legibility — DESIGN.md §15\n");
+    println!(
+        "  minimum window offering tier 2   {}x{}",
+        window.0, window.1
+    );
+    println!(
+        "    tier 1  {}x cell -> {:?}",
+        one.scale(),
+        one.grid(window)
+    );
+    println!(
+        "    tier 2  {two_scale}x cell -> {grid:?}",
+        two_scale = two.scale()
+    );
+    println!("  glyph at tier 2                  {cell_width}x{cell_height} physical pixels");
+    println!("  a one-character tell is          {cell_width} pixels wide\n");
+
+    let frame = siege(grid, DisplayMode::Deep);
+    show("Worst case — four panes, tier 2, siege, eldritch", &frame);
+
+    // §8.1's structural tell, at the smallest glyph the game draws. The forged
+    // line differs from the genuine one by a single space, which is the whole
+    // point: if it does not survive to the Frame here it survives nowhere.
+    let drawn = frame.to_text();
+    let genuine = drawn.contains("03:14 purge ok");
+    let forged = drawn.contains("03:14  purge ok");
+    println!(
+        "  the tell: genuine line {}, forged line {} — {}",
+        if genuine { "drawn" } else { "MISSING" },
+        if forged { "drawn" } else { "MISSING" },
+        if genuine && forged {
+            "one space apart, spot it"
+        } else {
+            "THE TEST CANNOT BE RUN"
+        },
+    );
+
+    // §14 and rule 2: whatever the eye has to work for, the linear stream says
+    // plainly. Peak-threat CRT and eldritch substitution both act on the drawn
+    // form only, so a reader loses nothing at this window that they had at any
+    // other — which is the property that makes the visual test safe to fail.
+    let spoken = frame
+        .speech()
+        .utterances()
+        .find(|utterance| utterance.text.contains("door"))
+        .map(|utterance| utterance.text);
+    println!(
+        "  eldritch pane speaks:            {}",
+        spoken.unwrap_or("MISSING"),
+    );
+    println!("\n  Remaining, and human: the CRT at peak threat over this grid.");
+    println!(
+        "  Size the window to {}x{}, F4 into Deep focus, F3 to peak threat, F7 for eldritch.",
+        window.0, window.1,
+    );
+}
+
+/// The smallest window at which §9's tier 2 exists at all.
+///
+/// Tier 2 is [`Fidelity::deep`] of tier 1, and `deep` is `None` at scale 1 —
+/// so the question is really "when does tier 1 stop being the finest scale",
+/// and the answer is a search rather than a constant anyone should retype.
+///
+/// Searched per axis. A grid's columns depend only on the window's width and its
+/// rows only on its height, so the smallest qualifying window is the pair of
+/// per-axis minima; searching both at once would be a slower way to the same
+/// number.
+fn minimum_window_for_tier_two() -> (u32, u32) {
+    /// Past any window a 2026 desktop will present, and small enough to search
+    /// exhaustively in microseconds.
+    const LIMIT: u32 = 8192;
+
+    let offers_tier_two = |window: (u32, u32)| {
+        Fidelity::tier_one(window)
+            .and_then(Fidelity::deep)
+            .is_some()
+    };
+
+    let width = (1..=LIMIT)
+        .find(|width| offers_tier_two((*width, LIMIT)))
+        .expect("some width offers tier 2");
+    let height = (1..=LIMIT)
+        .find(|height| offers_tier_two((LIMIT, *height)))
+        .expect("some height offers tier 2");
+    (width, height)
 }
 
 // ---------------------------------------------------------------------------

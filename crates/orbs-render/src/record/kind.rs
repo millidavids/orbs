@@ -92,6 +92,28 @@ impl RecordKind {
         }
     }
 
+    /// Whether a run of these packs across the pane instead of stacking down it.
+    ///
+    /// A listing is a **set**: the reader wants to find one name in it, and the
+    /// order between two of them carries nothing. Stacked one per line, ten
+    /// belongings eat ten rows of an 80-column pane to use eighteen of its
+    /// columns — and the boot report, which is sixteen such rows, pushed its own
+    /// first line off the top of the screen before anyone had typed anything.
+    ///
+    /// Every other kind is a **sequence**. A log line, a script line and a
+    /// schedule row are read in order and their neighbours are their context;
+    /// tiling those would scramble the thing being read. A status row is a
+    /// `label: value` pair that wants its column to line up with the pair above
+    /// it. So exactly one kind tiles, and it is the one whose rows are unordered.
+    ///
+    /// This costs a screen-reader nothing: [`RecordView`](super::RecordView)
+    /// speaks each record separately and in stream order, so the linear form is
+    /// identical whether or not the visual one wraps.
+    #[must_use]
+    pub const fn tiles(self) -> bool {
+        matches!(self, Self::Entry)
+    }
+
     /// The glyph a prompt draws in front of a record that named no
     /// [`Outcome`](super::Outcome).
     ///
@@ -172,6 +194,17 @@ mod tests {
         for kind in RecordKind::ALL {
             assert!(kind.allows(Presentation::Tampered), "{kind:?}");
             assert!(kind.allows(Presentation::Plain), "{kind:?}");
+        }
+    }
+
+    #[test]
+    fn only_unordered_rows_tile() {
+        // Tiling reorders rows across a line, so it is safe exactly where order
+        // carries nothing. The three diagnostic surfaces are read in sequence
+        // and a status row wants its value column aligned with the one above.
+        for kind in RecordKind::ALL {
+            assert_eq!(kind.tiles(), kind == RecordKind::Entry, "{kind:?}");
+            assert!(!(kind.tiles() && kind.is_diagnostic()), "{kind:?}");
         }
     }
 

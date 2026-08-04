@@ -1,9 +1,11 @@
+mod dump;
 mod input;
 mod linear;
 mod plugin;
 mod prompt;
 mod screen;
 
+pub(crate) use dump::run as dump;
 pub(crate) use input::Line;
 pub(crate) use linear::Linear;
 pub use plugin::ShellPlugin;

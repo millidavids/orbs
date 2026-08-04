@@ -303,13 +303,16 @@ mod tests {
     #[test]
     fn an_unresolved_line_queues_nothing() {
         let mut sim = Sim::new(1);
+        // The orb boots with a report (§4), so the transcript never starts
+        // empty — measure from where this line begins rather than from zero.
+        let before = sim.scrollback().records().len();
         sim.submit("xyzzy");
 
         assert!(sim.pending().is_empty());
         assert_eq!(
             sim.scrollback()
                 .records()
-                .get(1)
+                .get(before + 1)
                 .expect("the parser's answer")
                 .outcome(),
             Some(Outcome::Unresolved),
@@ -321,10 +324,16 @@ mod tests {
         // Every real shell redraws the prompt. `report` correctly refuses to be
         // silent at its own layer, so the filtering belongs here.
         let mut sim = Sim::new(1);
+        // Against the boot report, not against nothing (§4).
+        let before = sim.scrollback().records().len();
         for line in ["", "   ", "\t"] {
             sim.submit(line);
         }
-        assert!(sim.scrollback().records().is_empty());
+        assert_eq!(
+            sim.scrollback().records().len(),
+            before,
+            "a blank line spoke"
+        );
         assert!(sim.submissions().all().is_empty());
     }
 

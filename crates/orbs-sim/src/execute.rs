@@ -75,6 +75,51 @@ fn execute(intent: &Intent, world: &mut World) {
     }
 }
 
+/// Whether the orb does this verb's work yet, or only says it heard.
+///
+/// Lives beside `execute` rather than on [`Verb`] because this *is* the dispatch
+/// in that function, read as data — the parser knows the whole §6.1 vocabulary
+/// and should keep knowing it, while what the world can currently act on is a
+/// fact about this module and changes as phases land.
+///
+/// Written out rather than probed, because a match arm is not data. The
+/// disagreement it invites is caught by
+/// `a_dark_verb_only_acknowledges_and_a_live_one_does_not`, which drives all
+/// sixteen through a real [`Sim`](crate::Sim) and fails the moment the two drift
+/// apart.
+///
+/// # Why anything reads this
+///
+/// §15's scaffold tutorial names the vocabulary so the gate measures the parser
+/// rather than a tester's guesswork. Naming a verb that only acknowledges would
+/// walk that tester straight into a **dead end** — the metric §15 calls more
+/// important than the raw resolution rate — so the report names what works, and
+/// this is where "works" is written down.
+///
+/// One of the six is worse than a dead end. Phase 0 has no scripts in it, so
+/// `bind`'s only slot is unfillable, and the documented `find`/`bind` collision
+/// in the parser's vocabulary table then hands the line to `sift` unopposed:
+/// `bind night_watch` searches the session log and reports success.
+/// That resolution is correct — it stops being reachable the moment Phase 1 puts
+/// a script in scope — but a tutorial that offers `bind` today is teaching a line
+/// that silently runs a different command.
+#[must_use]
+pub const fn is_live(verb: Verb) -> bool {
+    matches!(
+        verb,
+        Verb::Attend
+            | Verb::Survey
+            | Verb::Meditate
+            | Verb::Status
+            | Verb::Peruse
+            | Verb::Sift
+            | Verb::Decoct
+            | Verb::Divine
+            | Verb::Purge
+            | Verb::Verify
+    )
+}
+
 /// Start something that takes time.
 ///
 /// §5.0: issuing is free and instant; the *action* occupies a slot for its
@@ -464,6 +509,102 @@ mod tests {
     }
 
     #[test]
+    fn a_dark_verb_only_acknowledges_and_a_live_one_does_not() {
+        // `is_live` is a hand-written restatement of `execute`'s match, and the
+        // scaffold tutorial in `tower::boot` believes it. So drive all sixteen
+        // through a real Sim and check both directions.
+        //
+        // A **live** verb must reach the world from typed input — not merely have
+        // a match arm. That is §15's playability gate as an assertion: the arm
+        // existing proves nothing if no line a player can type gets to it.
+        //
+        // A **dark** verb must do no work of its own. Three ways of being dark
+        // all count, because they are equally empty for a player and asserting
+        // one shape would be asserting which kind of unfinished a verb is:
+        // `siphon retort` resolves and acknowledges; `grimoire brewing` does not
+        // resolve at all, there being no Topic in the starting tower; and `bind
+        // night_watch` is taken by `sift` through the collision documented in
+        // `vocabulary`. So the check is on the verb's *own* name never appearing
+        // as a completion, which is the thing all three have in common.
+        for verb in Verb::ALL {
+            let mut sim = Sim::new(1);
+            // §7 makes a domain's belongings nameable only from inside it, so a
+            // test standing at the root would be measuring the scoping rule
+            // rather than the verb. Stand where the noun is first.
+            let (place, line) = sample(verb);
+            run(&mut sim, &format!("attend {place}"));
+
+            let before = sim.scrollback().records().len();
+            run(&mut sim, line);
+            // §5.0 makes issuing instant and the action slow, so `decoct` is
+            // legitimately silent for twenty ticks. Stepping rather than
+            // `meditate`-ing keeps this measuring one verb at a time.
+            for _ in 0..tower::DECOCT_TICKS.max(tower::DIVINE_TICKS) + 1 {
+                sim.step();
+            }
+
+            let after: Vec<_> = sim
+                .scrollback()
+                .records()
+                .iter()
+                .skip(before)
+                // The player's own line and the parser's restatement of it are
+                // both the front half of the loop. What is under test is whether
+                // the *world* answered.
+                .filter(|record| !matches!(record.kind(), RecordKind::Input | RecordKind::Echo))
+                .map(|record| (record.kind(), record.to_line()))
+                .collect();
+
+            let bare = [(RecordKind::Completion, verb.canonical().to_owned())];
+            if is_live(verb) {
+                assert!(!after.is_empty(), "{line} is called live and never ran");
+                assert_ne!(after, bare, "{line} is called live and only heard");
+            } else {
+                // Every command names itself in the leading `Name` field, so a
+                // completion opening with this verb's own word is that verb
+                // reporting — and anything past the bare word is it reporting
+                // work. Lines opening with a *different* verb are the hijack
+                // case, and they are not this verb doing anything.
+                let worked = after.iter().any(|(kind, drawn)| {
+                    *kind == RecordKind::Completion
+                        && drawn.starts_with(verb.canonical())
+                        && drawn != verb.canonical()
+                });
+                assert!(
+                    !worked,
+                    "{line} is called dark and did something: {after:?}"
+                );
+            }
+        }
+    }
+
+    /// Where to stand, and a whole command line that works from there.
+    ///
+    /// Written out per verb rather than generated from the signature, because
+    /// `sift` takes two slots and `attend` names a place it is not standing in —
+    /// a generator would have to grow those cases anyway, and less legibly.
+    fn sample(verb: Verb) -> (&'static str, &'static str) {
+        match verb {
+            Verb::Attend => ("tower", "attend archive"),
+            Verb::Survey => ("alembic", "survey alembic"),
+            Verb::Peruse => ("alembic", "peruse alembic.log"),
+            Verb::Sift => ("alembic", "sift decoct alembic.log"),
+            Verb::Status => ("tower", "status"),
+            Verb::Grimoire => ("tower", "grimoire brewing"),
+            Verb::Verify => ("alembic", "verify alembic.log"),
+            Verb::Undo => ("tower", "undo"),
+            Verb::Meditate => ("tower", "meditate 1"),
+            Verb::Decoct => ("alembic", "decoct clarity"),
+            Verb::Siphon => ("alembic", "siphon retort"),
+            Verb::Purge => ("alembic", "purge alembic.log"),
+            Verb::Divine => ("archive", "divine sigil-iv"),
+            Verb::Scribe => ("tower", "scribe night_watch"),
+            Verb::Bind => ("tower", "bind night_watch"),
+            Verb::Invoke => ("tower", "invoke night_watch"),
+        }
+    }
+
+    #[test]
     fn meditate_lets_the_world_clock_run() {
         // The determinism spine had no player-facing surface at all: the tick
         // advanced whether or not anyone was watching. This is the command that
@@ -501,12 +642,16 @@ mod tests {
     #[test]
     fn status_reports_the_world_as_records() {
         let mut sim = Sim::new(0xB5);
+        // The boot report (§4) is itself a run of `Status` rows, so this reads
+        // only what the command added rather than what the orb had already said.
+        let before = sim.scrollback().records().len();
         run(&mut sim, "status");
 
         let rows: Vec<_> = sim
             .scrollback()
             .records()
             .iter()
+            .skip(before)
             .filter(|record| record.kind() == RecordKind::Status)
             .map(|record| {
                 (

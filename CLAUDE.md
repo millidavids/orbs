@@ -202,7 +202,8 @@ DESIGN.md §15 and §19 record the correction and what it cost.
 
 ```bash
 cargo run -p orbs                        # the game — window, sim, cell renderer
-ORBS_CAPTURE=1 cargo run -p orbs         # ...and save a screenshot to check it
+ORBS_DUMP=1 cargo run -p orbs            # ...its screen as text, no window, no GPU
+ORBS_CAPTURE=1 cargo run -p orbs         # ...or as a screenshot
 cargo run -p orbs-render --example screens   # real Frames dumped as text
 ```
 
@@ -211,6 +212,22 @@ the same public API the frontends use. **It has already found bugs that the full
 test suite did not** — an em-dash in DESIGN.md's own boot text that CP437 cannot
 draw, and pane content eating a border because a sub-painter was not established.
 Add a screen to it whenever a new surface is built.
+
+**Reach for `ORBS_DUMP` first; keep `ORBS_CAPTURE` for what only pixels show.**
+The screenshot path needs a composited window, and without one it writes a valid
+PNG of a **black rectangle** — the renderer fine, the picture proving nothing.
+That is worse than no picture, because it looks like evidence. `ORBS_DUMP` draws
+the same frame through the real `paint`, `Sim` and `ScreenLayout` into a `Frame`
+nobody rasterises, then prints it with its linear stream beneath:
+
+```bash
+ORBS_DUMP="attend alembic; decoct clarity; meditate 25" cargo run -p orbs
+ORBS_DUMP=1 ORBS_GRID=160x44 cargo run -p orbs   # the worst-case grid
+```
+
+Each `;`-separated line goes through `submit` and a real `step`. Phosphor, the
+CRT curve and the blinking caret are frontend enrichment (rule 2) and are not in
+a Frame — those still need eyes on a window.
 
 ### Editing shaders
 

@@ -181,6 +181,19 @@ impl Verb {
     /// and `inscribe` — were shortened instead.
     pub const MAX_CANONICAL_LEN: usize = 8;
 
+    /// What this verb wants after it, as a single word.
+    ///
+    /// §6 forbids a bare error, and a listing owes the same courtesy: a verb
+    /// offered with no hint of what follows it is a word to guess at. Empty for
+    /// the verbs that take nothing.
+    #[must_use]
+    pub const fn signature_label(self) -> &'static str {
+        match self.signature() {
+            [] => "",
+            [slot, ..] => slot.kind.label(),
+        }
+    }
+
     /// The arcane name — what the echo shows and what experts type.
     #[must_use]
     pub const fn canonical(self) -> &'static str {

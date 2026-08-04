@@ -8,7 +8,7 @@ If the two disagree, DESIGN.md wins and this file is wrong.
 > game. An item without a See it line is not started; an item whose line does not
 > work is not finished, however green its tests are. DESIGN.md §15, §19.
 
-Last updated: 2026-08-03 · **Phase 0 in progress**
+Last updated: 2026-08-04 · **Phase 0 code-complete; the exit gate needs testers**
 
 ---
 
@@ -20,7 +20,7 @@ hide. Release posture: demo first, then full 1.0. No Early Access.
 
 | Phase | Months | Words | Status |
 |---|---|---|---|
-| 0. Vertical slice | 4 | ~3k | 🟡 In progress |
+| 0. Vertical slice | 4 | ~3k | 🟡 Code complete · gate blocked on testers |
 | 1. Core loop | 5 | ~15k | ⬜ |
 | 2. Siege | 4 | ~15k | ⬜ |
 | 3a. Breadth | 4 | ~18k | ⬜ |
@@ -52,8 +52,9 @@ reviewed, and green. Much of it the **game did not call**. This table is the
 scope of the retroactive gating pass, and it is what "verified" versus
 "asserted" looks like written down.
 
-The prompt closed three rows; the retroactive pass has closed four more.
-What is still ❌ or ⚠️ is what remains of it.
+The prompt closed three rows; the retroactive pass closed four more; brewing and
+sabotage have since closed two. What is still ❌ or ⚠️ is what remains of it —
+and every one of those now names a phase rather than an oversight.
 
 | Built | Reachable from the running game? | Gated by |
 |---|---|---|
@@ -74,16 +75,20 @@ What is still ❌ or ⚠️ is what remains of it.
 | Progress bars (`Painter::progress`) | ✅ a brew draws its meter | — |
 | Sidebar (`ScreenLayout::sidebar`) | ❌ example only | **Domain panes**, which the brewing plan review cut from this item — §9 opens with two domains at capacity 1, so one is minimised. Needs panes-per-domain to exist first |
 | 3- and 4-pane tiling | ❌ the game asks for at most 2 | **Phase 1+ progression.** Gated by *multiplex capacity*, not by domains: §11.5 starts the player at capacity **1** and reaches 3 at ~5 h. §9 keeps panes and capacity as separate unlocks that "must not be conflated" — drawing three panes at t=0 would delete the swap-or-let-it-burn trade the whole focus track is built on |
-| `Sim::with_schedule`'s build closure | ❌ the game never uses it | **Nothing** — domain systems belong inside `Sim::new`, or the Bevy build, `orbs-tui` and `orbs-balance` each register their own and diverge (§13). Delete it or mark it test-only |
+| `Sim::with_schedule`'s build closure | ⚠️ test-only, and now says so | **Nothing left** — domain systems belong inside `Sim::new`, or the Bevy build, `orbs-tui` and `orbs-balance` each register their own and diverge (§13). Kept because the boundary tests drive it; marked so no frontend reaches for it |
 | Replay log (`Sim::submissions`) | ⚠️ written, never read | **Phase 1** — needs a replay command to read it |
 | Destruction guard (§7's refusal) | ✅ `purge alembic` refuses; `purge residue-N` works | — |
-| Per-subsystem RNG streams | ❌ nothing rolls yet | **Phase 2** — honest deferral, see below |
+| Per-subsystem RNG streams | ⚠️ one of six rolls | **Phase 2 for the rest.** Log-poisoning drift rolls `RngStream::Threat`, so the seeded, per-stream machinery is now exercised by the running game rather than only by tests — and the same seed poisons the same log on the same tick. The other five wait for the subsystems that own them |
 
-**Where a gate is not yet possible, it says so.** Per-subsystem RNG streams
-cannot be *seen* until something rolls against them, and the first thing that
-does is aberrations in Phase 2. Inventing a debug affordance nobody will maintain
-would be worse than naming the phase that gates it — and the same is true of a
-progress bar with no duration action and a sidebar with nothing to minimise.
+**Where a gate is not yet possible, it says so.** A sidebar has nothing to
+minimise until domain panes exist, and three panes at t=0 would delete the
+capacity trade §11.5 spends five hours building. Inventing a debug affordance
+nobody will maintain would be worse than naming the phase that gates it.
+
+The RNG row is what that honesty is worth: it read *"❌ nothing rolls yet —
+Phase 2"* until log-poisoning shipped and rolled `RngStream::Threat`. A deferral
+that names its phase gets revisited when the phase arrives; one that says
+"later" does not.
 
 > **This table is derived from the code, not from the item list.** Its first
 > version was written by hand from the roadmap and missed five built-and-
@@ -283,22 +288,44 @@ progress bar with no duration action and a sidebar with nothing to minimise.
       **See it:** `attend alembic`, `make a potion of clarity` → `decoct clarity`
       with a meter; `divine sigil-iv` while it brews → refused, naming what holds
       the slot; `decoct nonsense` → a numbered prompt you answer with a digit
-- [ ] **Log-poisoning sabotage** on brewing logs, via `peruse` / `sift` / `verify`
-      **See it:** `peruse alembic.log` shows a tampered line you can spot by eye,
-      and `verify alembic.log` names it
-- [ ] **Boot sequence** — status report reflecting real world state, sticky skip
-      **See it:** launch the game and the §4 report is the first thing on screen,
-      reporting the world that actually exists
-- [ ] **Scaffold tutorial** — throwaway, exists so the gate measures the parser
-      rather than the absence of onboarding
-      **See it:** a cold launch walks you to your first successful command
-- [ ] **Worst-case legibility test** — tier 2 at minimum supported window, four
-      panes, siege in progress, peak-threat CRT, eldritch active, tester must spot
-      a single-character sabotage tell. Also establishes the minimum window at
-      which tier 2 is offered
-      **See it:** F3 to peak threat at the minimum window, and read a siege log
-      through it
-- [ ] **Run the gate**
+- [x] **Log-poisoning sabotage** on brewing logs, via `peruse` / `sift` / `verify`
+      — a seeded roll every `DRIFT_INTERVAL` ticks poisons a log; the tell is
+      §8.1's **structural** one, a record that lost its tick field, so it is
+      spotted by comparing two adjacent lines rather than by reading a warning
+      **See it:** ✅ `ORBS_DUMP="attend alembic; decoct clarity; meditate 25;
+      decoct warding; meditate 25; verify alembic.log; peruse alembic.log"` —
+      `verify` says `tampered`, and in the `peruse` below it line 1 has lost its
+      number while line 2 still has one
+- [x] **Boot sequence** — status report reflecting real world state. Built by
+      walking the tower, so it cannot go stale: one row per domain with what it
+      holds and whether it is sound, plus §8.1's `bound` count. `bound: 0` is
+      printed rather than omitted — a missing section leaves a player unable to
+      tell *none* from *not shown* — DESIGN.md §19
+      **See it:** ✅ `ORBS_DUMP=1 cargo run -p orbs`, or launch the game: the
+      report is what is on screen before anything is typed, and it reports the
+      tower that actually exists
+- [x] **Scaffold tutorial** — folded into the boot report, because §4 wants the
+      first screen to be the tower answering for itself and a separate onboarding
+      screen would be a second thing to skip. It names the verbs that **work**,
+      not the verbs that exist: six of §6.1's sixteen only acknowledge in Phase 0,
+      and one of them, `bind`, resolves to `sift` and reports success. Offering
+      those would spend the gate's most important metric on Phase 1 — DESIGN.md §19
+      **See it:** ✅ a cold launch lists ten verbs and what each one takes; every
+      one of them does something
+- [x] **Worst-case legibility test** — the minimum window offering tier 2 is
+      **1280×704**, derived rather than assumed; there tier 1 is 2× → 80×22 and
+      tier 2 is 1× → **160×44**, so a one-character tell is **8 physical pixels
+      wide**. The screen renders four panes, a siege, the eldritch register and
+      §8.1's one-space tell at that grid, and the tell survives to the Frame
+      while the eldritch pane still speaks plainly — DESIGN.md §19
+      **See it:** ✅ the last screen of `cargo run -p orbs-render --example screens`.
+      ⚠️ **The human read is outstanding**: peak-threat CRT is frontend
+      enrichment and is not in a Frame. Size the window to 1280×704, `F4` into
+      Deep focus, `F3` to peak threat, `F7` for eldritch, and read the log
+- [ ] **Run the gate** — ⛔ **blocked on people, not on code.** Needs ≥ 8 external
+      testers, at least half with no shell experience, over a 15-minute scripted
+      scenario with expected-intent ground truth. Everything it measures is
+      built and reachable; what is missing is the testers and the scenario script
       **See it:** eight external testers sit down and play. That *is* the gate
 
 ---

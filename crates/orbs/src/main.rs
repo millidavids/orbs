@@ -24,7 +24,16 @@ use bevy::window::WindowResolution;
 /// rather than only when someone thinks to test it.
 const INITIAL_WINDOW: (u32, u32) = (1280, 720);
 
+/// The seed the game starts from until saves exist.
+const SEED: u64 = 0x0B5;
+
 fn main() -> AppExit {
+    // Before the App, because the whole value of it is needing none of the App.
+    // See `shell::dump`.
+    if shell::dump(SEED, wizard()) {
+        return AppExit::Success;
+    }
+
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
@@ -43,7 +52,7 @@ fn main() -> AppExit {
         .insert_resource(ClearColor(Color::srgb(0.10, 0.06, 0.15)))
         .add_plugins((
             sim::SimPlugin {
-                seed: 0x0B5,
+                seed: SEED,
                 wizard: wizard(),
             },
             render::RenderPlugin,

@@ -599,3 +599,77 @@ fn the_register_cannot_corrupt_a_diagnostic_surface() {
         );
     }
 }
+
+#[test]
+fn a_listing_packs_across_the_pane_instead_of_reading_down_a_strip() {
+    // The failure this exists to prevent, found by looking at the game rather
+    // than by a test: the boot report's sixteen verbs stacked one per line and
+    // pushed the report's own first row off an 80x22 screen before anyone had
+    // typed. A listing is a set, and a set read down an 18-column strip of an
+    // 80-column pane wastes four fifths of it.
+    let mut records = Records::new();
+    for name in [
+        "attend", "survey", "peruse", "sift", "status", "verify", "meditate", "decoct", "divine",
+        "purge",
+    ] {
+        records
+            .push(RecordKind::Entry)
+            .text(FieldName::Name, name)
+            .finish();
+    }
+
+    let mut frame = frame_of(80, 8);
+    let area = frame.area();
+    let rows = RecordView::prompt("orbs $ ").draw(&mut frame.painter(area), area, records.iter());
+
+    assert!(rows < 4, "ten names took {rows} rows of an 80-cell pane");
+    let drawn = frame.to_text();
+    for name in ["attend", "purge"] {
+        assert!(drawn.contains(name), "{name} vanished:\n{drawn}");
+    }
+
+    // §14: the wrap is visual only. Every name still speaks, once, in order.
+    let spoken: Vec<_> = frame
+        .speech()
+        .utterances()
+        .map(|utterance| utterance.text)
+        .collect();
+    assert_eq!(spoken.len(), 10, "{spoken:?}");
+    // A one-field record speaks bare: there are no columns to reconstruct.
+    assert_eq!(spoken.first().copied(), Some("attend"));
+    assert_eq!(spoken.last().copied(), Some("purge"));
+}
+
+#[test]
+fn what_a_view_measures_is_what_it_draws() {
+    // The two used to be separate arithmetic, and a pane that measured one way
+    // and drew another left blank rows at the bottom while dropping history off
+    // the top. Mixed on purpose: a listing, a marked line that cannot tile, then
+    // a second listing, so the runs have to be found rather than assumed.
+    let mut records = Records::new();
+    for name in ["clarity", "warding", "haste"] {
+        records
+            .push(RecordKind::Entry)
+            .text(FieldName::Name, name)
+            .finish();
+    }
+    records
+        .push(RecordKind::Completion)
+        .text(FieldName::Name, "decoct")
+        .finish();
+    for name in ["retort", "crucible"] {
+        records
+            .push(RecordKind::Entry)
+            .text(FieldName::Name, name)
+            .finish();
+    }
+
+    for cols in [20, 30, 40, 80] {
+        let mut frame = frame_of(cols, 12);
+        let area = frame.area();
+        let view = RecordView::prompt("orbs $ ");
+        let measured = view.height(cols, records.iter());
+        let drawn = view.draw(&mut frame.painter(area), area, records.iter());
+        assert_eq!(measured, drawn, "at {cols} cells wide");
+    }
+}
