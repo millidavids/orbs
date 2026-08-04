@@ -64,7 +64,12 @@ impl Plugin for RenderPlugin {
                     redraw.run_if(atlas_ready),
                 )
                     .chain()
-                    .after(crate::shell::track_window),
+                    .after(crate::shell::track_window)
+                    // The frame that receives a keystroke is the frame that
+                    // draws it. Without this edge the paint is unordered against
+                    // the input systems, which is a one-frame lag nobody sees
+                    // and a screenshot nobody can reproduce.
+                    .after(crate::shell::ShellSystems::Input),
             );
 
         // Read once at startup rather than polling the environment sixty times a
@@ -201,6 +206,7 @@ fn redraw(
     screen: Res<Screen>,
     theme: Res<Theme>,
     tower: Res<Tower>,
+    line: Res<crate::shell::Line>,
     mut cell: ResMut<CellSize>,
     mut canvas: ResMut<Canvas>,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -216,7 +222,7 @@ fn redraw(
     frame.reset(screen.grid);
 
     if screen.is_hostable() {
-        crate::shell::paint(frame, tower.tick().get(), tower.seed());
+        crate::shell::paint(frame, tower.sim(), &line);
     } else {
         // `Screen::is_hostable` documents this as a real state to render, not a
         // reason to stop drawing. Blanking the mesh left the player looking at an

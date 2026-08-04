@@ -1901,6 +1901,48 @@ phase on being reachable from the running game.
 | **The counter-example worth copying** | The CRT was the one item player-gated on arrival: boot the game, press F3. It flashed, the flashing was obvious in ten seconds, and **two wrong diagnoses were falsified by looking rather than by reasoning.** No test in the suite would have caught it and none could have been written to |
 | **What does not change** | The slice is still brewing + archive, the numeric gate is unchanged, no phase boundary moves, and no scope is added. This is an ordering and acceptance-criteria change |
 
+### The tube was eating a column — found by looking
+
+The first screenshot of the working prompt read `rbs:~$`. The barrel warp pushes
+pixels outward by `1 + strength * dot(centred, centred)` — largest at the corners
+— and the input line sits in the bottom-left corner, so its first glyph was
+warped past the edge and masked away.
+
+**A rule 2 violation, not a cosmetic one.** A frontend may add enrichment the
+other cannot reproduce *provided it carries no information absent from the
+Frame*. A tube that swallows a column carries less, and the terminal build would
+have been playing a different game.
+
+It took four attempts. The three failures are worth recording because every one
+of them looked right, and two were *committed to a screenshot* that appeared to
+prove it. The last of them was reported by the player, not by the author.
+
+| Attempt | Outcome |
+|---|---|
+| **Shrink the pixel budget before choosing a tier** — a "safe area" of 92% | **Wrong, and shipped for an hour.** `Fidelity::tier_one` returns the *largest* scale that still fits 80×22, so the floor has zero headroom and trimming pixels drops a whole tier: 1280×720 fell from 2× to **1×**, meaning 8×16 physical-pixel glyphs. Smaller text everywhere is a worse defect than a lost column, and it put the game off §9's tier table. The test written alongside it asserted only pixel margins and passed happily |
+| **Normalise the warp by the corner's factor**, so the curved image exactly fills the screen | **Wrong, and it made things worse elsewhere.** A radial warp cannot map a rectangle onto a rectangle: whichever boundary point is made exact, the rest move the other way. Making the corners exact pulled the **edge midpoints in by 30.5 pixels** — a whole cell at tier 4 — so the pane's left and right borders were being cut off at mid-height. Traded a clipped glyph in one corner for a clipped column down both sides |
+| **Scale the picture *outward* instead of normalising it inward** — a single `OVERSCAN` constant | **The fix.** Normalising can only ever choose which boundary point is exact and which loses; scaling outward makes every one of them safe at once. The screen then runs out of texture near the edges and the mask paints the dark room, which costs nothing and is what a tube looks like anyway. The constant is also the margin control: `0.0` is the minimum safe value, `0.035` gives a 73px surround at 2560 wide. Tunable upward as taste, never downward — below zero it starts cutting cells again |
+| **A one-cell gutter on the input line**, charged to `ScreenLayout` | Kept. No longer load-bearing against hard clipping, but the bottom corners are where the warp, the vignette and the rounded bezel all compound, and content sitting flush in one is legible only by luck. *Where content may safely go* is a layout decision. `orbs-tui` pays a cell it does not need — an invisible gutter in a terminal beats divergent layouts between frontends |
+
+Two lessons, both already written down elsewhere and both re-learned here:
+
+- **The symptom leaving a measurement is not a diagnosis.** The safe area made
+  the screenshot look right while silently halving the glyph size. This is the
+  same error as blaming MSAA for the CRT flashing.
+- **Look at the pixels, not at the thumbnail.** After the second attempt the
+  downscaled screenshot looked fixed. Cropping the corner and scaling it up
+  showed the stroke still clipped. Verifying at the resolution the defect lives
+  at is part of looking, not an extra step.
+- **Compute the constant; do not reason about it.** Attempt three was chosen
+  because normalising for the corners *sounds* like the conservative option, and
+  it is the one that cuts content. Four lines of arithmetic printing what each
+  divisor costs at each boundary settled it immediately, and would have settled
+  it three attempts earlier.
+
+None of the three was reachable by a test. The Frame was correct throughout, the
+renderer was correct, and the loss happened in the post-process — which is the
+third time the tube has produced a defect only a human eye finds.
+
 ### The prompt — settled before implementation
 
 Decided from an independent review of the implementation plan, which

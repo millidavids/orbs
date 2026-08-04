@@ -6,14 +6,19 @@
 //! identical code path — and therefore producing identical results.
 
 use bevy_ecs::prelude::*;
+use orbs_render::RecordKind;
 
+use crate::parser::{Mode, Resolution, Scene, report, resolve};
 use crate::rng::Rngs;
 use crate::schedule::new_sim_schedule;
+use crate::session::{Pending, Scrollback, Submissions, run_pending};
 use crate::tick::Tick;
 
 /// A complete simulation: the world, its schedule, and its clock.
 pub struct Sim {
     world: World,
+    /// Commands the player queued, applied before the world moves.
+    commands: Schedule,
     schedule: Schedule,
 }
 
@@ -33,11 +38,28 @@ impl Sim {
         let mut world = World::new();
         world.insert_resource(Rngs::from_seed(seed));
         world.insert_resource(Tick::default());
+        world.init_resource::<Scene>();
+        world.init_resource::<Scrollback>();
+        world.init_resource::<Pending>();
+        world.init_resource::<Submissions>();
+
+        // Its **own** schedule, run before the caller's. Adding `run_pending`
+        // to the same schedule and relying on insertion order would be an
+        // ambiguity, not an ordering: Bevy makes no promise about systems with
+        // no constraint between them, and a domain system added through `build`
+        // could observe the queue either drained or not. A separate pass is
+        // unambiguous by construction and needs no set for callers to remember.
+        let mut commands = new_sim_schedule();
+        commands.add_systems(run_pending);
 
         let mut schedule = new_sim_schedule();
         build(&mut schedule);
 
-        Self { world, schedule }
+        Self {
+            world,
+            commands,
+            schedule,
+        }
     }
 
     /// Advance the world by exactly one tick.
@@ -48,6 +70,9 @@ impl Sim {
     pub fn step(&mut self) {
         let next = self.world.resource::<Tick>().next();
         self.world.insert_resource(next);
+        // What the player asked for, then what the world does about it. Two
+        // passes rather than two ordered systems — see `with_schedule`.
+        self.commands.run(&mut self.world);
         self.schedule.run(&mut self.world);
     }
 
@@ -56,6 +81,58 @@ impl Sim {
         for _ in 0..n {
             self.step();
         }
+    }
+
+    /// Take a line the player typed.
+    ///
+    /// The **second** entry point, and the only other one. Unlike
+    /// [`Sim::step`] it does not advance world time: it echoes immediately and
+    /// queues any resolved command for the next tick. See
+    /// [`session`](crate::session) for why the two clocks are split, and
+    /// DESIGN.md §19 for the rule it is measured against.
+    ///
+    /// A blank line does nothing at all, as in every shell. `report` is right to
+    /// refuse silence at its own layer — §6 forbids a bare error — but "the
+    /// player pressed Enter on an empty prompt" is not an error to report.
+    pub fn submit(&mut self, line: &str) {
+        if line.trim().is_empty() {
+            return;
+        }
+
+        let resolution = resolve(line, self.world.resource::<Scene>(), Mode::Calm);
+
+        let mut scrollback = self.world.resource_mut::<Scrollback>();
+        let records = scrollback.records_mut();
+        records
+            .push(RecordKind::Input)
+            .text(orbs_render::FieldName::Message, line)
+            .finish();
+        report(line, &resolution, records);
+
+        let tick = *self.world.resource::<Tick>();
+        self.world.resource_mut::<Submissions>().push(tick, line);
+        if let Resolution::Resolved { intent, .. } = resolution {
+            self.world.resource_mut::<Pending>().push(intent);
+        }
+    }
+
+    /// Everything the player has said and been told.
+    #[must_use]
+    pub fn scrollback(&self) -> &Scrollback {
+        self.world.resource::<Scrollback>()
+    }
+
+    /// Commands resolved but not yet run.
+    #[must_use]
+    pub fn pending(&self) -> &Pending {
+        self.world.resource::<Pending>()
+    }
+
+    /// Every line submitted, with the tick it landed on. A replay needs this and
+    /// the seed, and nothing else.
+    #[must_use]
+    pub fn submissions(&self) -> &Submissions {
+        self.world.resource::<Submissions>()
     }
 
     /// The current world time.

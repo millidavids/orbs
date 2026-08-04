@@ -101,6 +101,8 @@ pub use layout::{
 };
 pub use linear::{Speech, Utterance, UtteranceKind};
 pub use paint::Painter;
-pub use record::{FieldName, Record, RecordBuilder, RecordKind, RecordView, Records, Sift, Value};
+pub use record::{
+    FieldName, Outcome, PROMPT, Record, RecordBuilder, RecordKind, RecordView, Records, Sift, Value,
+};
 pub use span::Span;
 pub use style::{Intensity, Presentation, Role, Style};

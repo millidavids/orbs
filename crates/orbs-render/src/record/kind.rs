@@ -92,6 +92,28 @@ impl RecordKind {
         }
     }
 
+    /// The glyph a prompt draws in front of a record that named no
+    /// [`Outcome`](super::Outcome).
+    ///
+    /// Only a completion has one. A duration action finishing is the one event
+    /// the player did not just cause — §14 announces completions and suppresses
+    /// progress for the same reason — and without a mark it reads as another
+    /// line of echo rather than as the world answering.
+    #[must_use]
+    pub const fn marker(self) -> Option<char> {
+        match self {
+            Self::Completion => Some('√'),
+            Self::Entry
+            | Self::LogLine
+            | Self::ScriptLine
+            | Self::Schedule
+            | Self::Status
+            | Self::Message
+            | Self::Echo
+            | Self::Input => None,
+        }
+    }
+
     /// How this record enters the screen-reader stream.
     ///
     /// A total function rather than an argument at each emit site. Every record

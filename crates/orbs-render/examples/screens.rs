@@ -15,9 +15,9 @@
 //! less, the setting would become a difficulty choice."*
 
 use orbs_render::{
-    DisplayMode, Fidelity, FieldName, Frame, GridSize, Intensity, Painter, Pos, Presentation,
-    RecordKind, RecordView, Records, Rect, Role, ScreenLayout, ScreenRequest, Sift, Span, Style,
-    UtteranceKind,
+    DisplayMode, Fidelity, FieldName, Frame, GridSize, Intensity, Outcome, Painter, Pos,
+    Presentation, RecordKind, RecordView, Records, Rect, Role, ScreenLayout, ScreenRequest, Sift,
+    Span, Style, UtteranceKind,
 };
 
 fn main() {
@@ -42,6 +42,11 @@ fn main() {
     show("Records — one stream, three views (§7)", &views);
     speak(&views);
     exemption(&records);
+
+    let session = session();
+    let prompt = prompt_screen(GridSize::new(80, 22), &session);
+    show("The prompt — every outcome §6 can produce", &prompt);
+    speak(&prompt);
 }
 
 // ---------------------------------------------------------------------------
@@ -178,6 +183,86 @@ fn siege(grid: GridSize, mode: DisplayMode) -> Frame {
         &Span::new("orbs:~$ ward north").with_kind(UtteranceKind::Input),
     );
     frame.set_cursor(Some(Pos::new(input.col + 18, input.row)));
+    frame
+}
+
+/// A session at the prompt, as records.
+///
+/// Built by hand rather than by driving the parser, because this crate does not
+/// know the parser exists — which is the point. The view has to make these six
+/// outcomes distinguishable from the record alone.
+fn session() -> Records {
+    let mut records = Records::new();
+    let typed = |records: &mut Records, line: &str| {
+        records
+            .push(RecordKind::Input)
+            .text(FieldName::Message, line)
+            .finish();
+    };
+    let answer = |records: &mut Records, outcome: Outcome, message: &str| {
+        records
+            .push(RecordKind::Echo)
+            .outcome(outcome)
+            .text(FieldName::Message, message)
+            .finish();
+    };
+
+    typed(&mut records, "look around");
+    answer(&mut records, Outcome::Resolved, "survey");
+
+    typed(&mut records, "meditate");
+    records
+        .push(RecordKind::Echo)
+        .outcome(Outcome::Incomplete)
+        .text(FieldName::Message, "meditate")
+        .text(FieldName::Kind, "count")
+        .finish();
+
+    typed(&mut records, "brew clarity");
+    answer(&mut records, Outcome::Candidate, "decoct clarity");
+    answer(&mut records, Outcome::Candidate, "siphon clarity");
+
+    typed(&mut records, "xyzzy");
+    answer(&mut records, Outcome::Unresolved, "xyzzy");
+    answer(&mut records, Outcome::Suggestion, "survey");
+    answer(&mut records, Outcome::Suggestion, "scribe");
+
+    typed(&mut records, "ward the north wall");
+    answer(&mut records, Outcome::Forced, "ward north_gate");
+
+    records
+        .push(RecordKind::Completion)
+        .text(FieldName::Name, "survey")
+        .tick(FieldName::Tick, 1247)
+        .role(Role::Success)
+        .finish();
+
+    records
+}
+
+/// The command line: every outcome §6 can produce, on one screen.
+fn prompt_screen(grid: GridSize, records: &Records) -> Frame {
+    let mut frame = Frame::new(grid);
+    let layout = ScreenLayout::compute(&ScreenRequest::single(grid));
+    let pane = layout.main().first().copied().unwrap_or(Rect::EMPTY);
+
+    let mut painter = frame.painter(pane);
+    painter.border(pane, Some("O.R.B.S.  tick 1247  seed 0xc0ffee"), Style::DIM);
+    RecordView::prompt().draw(&mut painter, pane.inset(1), records.iter());
+
+    // The input line, mid-typing, with the caret where the frontend puts it.
+    let input = layout.input();
+    let mut painter = frame.painter(input);
+    let prompt = painter.glyphs(input.origin(), orbs_render::PROMPT, Style::DIM);
+    let typed = "sift march ";
+    painter.span(
+        Pos::new(input.col + prompt, input.row),
+        &Span::new(typed).with_kind(UtteranceKind::Input),
+    );
+    frame.set_cursor(Some(Pos::new(
+        input.col + prompt + u16::try_from(typed.len()).unwrap_or(0),
+        input.row,
+    )));
     frame
 }
 

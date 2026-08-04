@@ -10,6 +10,7 @@
 //! one.
 
 use crate::linear::UtteranceKind;
+use crate::record::Outcome;
 use crate::style::Style;
 
 /// A run of text with its semantic style and its spoken form.
@@ -19,6 +20,7 @@ pub struct Span<'a> {
     spoken: Option<&'a str>,
     style: Style,
     kind: UtteranceKind,
+    outcome: Option<Outcome>,
 }
 
 impl<'a> Span<'a> {
@@ -30,18 +32,14 @@ impl<'a> Span<'a> {
             spoken: None,
             style: Style::NORMAL,
             kind: UtteranceKind::Text,
+            outcome: None,
         }
     }
 
     /// This span with a semantic style.
     #[must_use]
     pub const fn with_style(self, style: Style) -> Self {
-        Self {
-            text: self.text,
-            spoken: self.spoken,
-            style,
-            kind: self.kind,
-        }
+        Self { style, ..self }
     }
 
     /// This span with an authored spoken form that differs from the drawn text.
@@ -52,22 +50,35 @@ impl<'a> Span<'a> {
     #[must_use]
     pub const fn with_spoken(self, spoken: &'a str) -> Self {
         Self {
-            text: self.text,
             spoken: Some(spoken),
-            style: self.style,
-            kind: self.kind,
+            ..self
         }
     }
 
     /// This span reclassified for the linear stream.
     #[must_use]
     pub const fn with_kind(self, kind: UtteranceKind) -> Self {
+        Self { kind, ..self }
+    }
+
+    /// This span tagged with how its command concluded.
+    ///
+    /// The prompt draws that as a marker glyph and a brightness. A listener has
+    /// neither channel, so it travels here too — the same coupling that makes
+    /// [`Span::with_spoken`] exist at the call site rather than as a second,
+    /// forgettable call.
+    #[must_use]
+    pub const fn with_outcome(self, outcome: Outcome) -> Self {
         Self {
-            text: self.text,
-            spoken: self.spoken,
-            style: self.style,
-            kind,
+            outcome: Some(outcome),
+            ..self
         }
+    }
+
+    /// How the command that produced this concluded, if it said.
+    #[must_use]
+    pub const fn outcome(&self) -> Option<Outcome> {
+        self.outcome
     }
 
     /// The text as drawn.

@@ -21,6 +21,7 @@
 //! so a `String` per node would be a few hundred allocations at 60 Hz for no
 //! reason.
 
+use crate::record::Outcome;
 use crate::style::Role;
 
 /// What a piece of linearised output *is*, so a reader can pace and filter it.
@@ -65,6 +66,16 @@ pub struct Utterance<'a> {
     /// carrier of meaning (§14) — a reader with no pixels still learns that a
     /// line reports a breach rather than a completion.
     pub role: Role,
+    /// How the command that produced this concluded, if it said.
+    ///
+    /// Carried for the same reason as [`Utterance::role`], and it is not
+    /// optional decoration: at the prompt the difference between "this is what
+    /// will run", "I do not know that word", and "you could try this" is
+    /// otherwise a **marker glyph and a brightness** — two channels a listener
+    /// has neither of. Without this, `xyzzy` linearises as three identical
+    /// lines and a screen-reader player cannot tell an error from an offer, nor
+    /// a selectable candidate from a command about to execute.
+    pub outcome: Option<Outcome>,
     /// The text to speak.
     ///
     /// For eldritch content this is the *authored linear variant*, not the
@@ -76,6 +87,7 @@ pub struct Utterance<'a> {
 struct Node {
     kind: UtteranceKind,
     role: Role,
+    outcome: Option<Outcome>,
     start: usize,
     end: usize,
 }
@@ -99,6 +111,7 @@ impl Speech {
         self.nodes.iter().map(|node| Utterance {
             kind: node.kind,
             role: node.role,
+            outcome: node.outcome,
             text: &self.text[node.start..node.end],
         })
     }
@@ -131,11 +144,23 @@ impl Speech {
 
     /// Append an utterance.
     pub(crate) fn push(&mut self, kind: UtteranceKind, role: Role, text: &str) {
+        self.push_with(kind, role, None, text);
+    }
+
+    /// Append an utterance carrying how its command concluded.
+    pub(crate) fn push_with(
+        &mut self,
+        kind: UtteranceKind,
+        role: Role,
+        outcome: Option<Outcome>,
+        text: &str,
+    ) {
         let start = self.text.len();
         self.text.push_str(text);
         self.nodes.push(Node {
             kind,
             role,
+            outcome,
             start,
             end: self.text.len(),
         });

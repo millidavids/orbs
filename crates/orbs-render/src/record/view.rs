@@ -22,6 +22,8 @@
 use crate::geometry::{Pos, Rect};
 use crate::paint::Painter;
 use crate::record::field::FieldName;
+use crate::record::kind::RecordKind;
+use crate::record::outcome::Outcome;
 use crate::record::stream::Record;
 use crate::style::Style;
 
@@ -41,6 +43,7 @@ enum Mode<'a> {
         header: bool,
     },
     Lines,
+    Prompt,
 }
 
 impl<'a> RecordView<'a> {
@@ -68,7 +71,7 @@ impl<'a> RecordView<'a> {
                     header: false,
                 },
             },
-            Mode::Lines => self,
+            Mode::Lines | Mode::Prompt => self,
         }
     }
 
@@ -79,6 +82,27 @@ impl<'a> RecordView<'a> {
     #[must_use]
     pub const fn lines() -> RecordView<'static> {
         RecordView { mode: Mode::Lines }
+    }
+
+    /// The command-line surface: a marker, then the line.
+    ///
+    /// [`RecordView::lines`] is not sufficient here. Every record the parser
+    /// emits carries one canonical command form, so through a line view an
+    /// unresolved input draws as a column of bare words and `meditate` draws as
+    /// `meditate count` — neither of which is the prompt DESIGN.md §6 describes.
+    ///
+    /// This view draws two extra channels, both derived from the record and
+    /// neither of them prose:
+    ///
+    /// - the [`Outcome`] marker glyph, so a suggestion cannot be mistaken for
+    ///   the command that will run;
+    /// - the player's own [`RecordKind::Input`] lines with the shell prompt in
+    ///   front of them, so the transcript reads as a session.
+    ///
+    /// Intensity comes from [`Record::style`], which derives it the same way.
+    #[must_use]
+    pub const fn prompt() -> RecordView<'static> {
+        RecordView { mode: Mode::Prompt }
     }
 
     /// Draw `records` into `area`, returning the number of rows used.
@@ -101,10 +125,20 @@ impl<'a> RecordView<'a> {
             Mode::Table { columns, header } => {
                 draw_table(&mut painter, area, columns, header, records)
             }
-            Mode::Lines => draw_lines(&mut painter, area, records),
+            Mode::Lines => draw_lines(&mut painter, area, records, false),
+            Mode::Prompt => draw_lines(&mut painter, area, records, true),
         }
     }
 }
+
+/// What the player's own typed lines are drawn behind.
+///
+/// Lives here rather than in a frontend because it is *what appears*, not how a
+/// cell is drawn (architectural rule 2). Both frontends show the same prompt.
+pub const PROMPT: &str = "orbs:~$ ";
+
+/// Cells reserved in front of a line for its marker.
+const MARKER_WIDTH: u16 = 2;
 
 fn draw_table<'r>(
     painter: &mut Painter<'_>,
@@ -186,6 +220,7 @@ fn draw_lines<'r>(
     painter: &mut Painter<'_>,
     area: Rect,
     records: impl Iterator<Item = Record<'r>>,
+    marked: bool,
 ) -> u16 {
     let (mut drawn, mut speech) = (String::new(), String::new());
     let mut row = area.row;
@@ -206,13 +241,38 @@ fn draw_lines<'r>(
         speech.clear();
         record.speak(&mut speech);
 
-        painter.span(
-            Pos::new(area.col, row),
-            &crate::span::Span::new(&drawn)
-                .with_style(record.style())
-                .with_kind(record.kind().utterance())
-                .with_spoken(&speech),
-        );
+        let style = record.style();
+        let mut col = area.col;
+        if marked {
+            // The marker and the prompt are drawn silently. Both restate what
+            // the linear stream already carries — an utterance's kind says it
+            // is `Input`, and a reader filtering by outcome reads the
+            // annotation — so speaking them would be saying it twice.
+            if record.kind() == RecordKind::Input {
+                col = col.saturating_add(painter.glyphs(Pos::new(col, row), PROMPT, style));
+            } else {
+                let marker = record
+                    .outcome()
+                    .map(Outcome::marker)
+                    .or_else(|| record.kind().marker());
+                if let Some(marker) = marker {
+                    painter.glyphs(Pos::new(col, row), marker.encode_utf8(&mut [0; 4]), style);
+                }
+                col = col.saturating_add(MARKER_WIDTH);
+            }
+        }
+
+        let mut span = crate::span::Span::new(&drawn)
+            .with_style(style)
+            .with_kind(record.kind().utterance())
+            .with_spoken(&speech);
+        // The marker and the intensity are both silent channels. Tagging the
+        // utterance is what stops `xyzzy` from linearising as three identical
+        // lines, with a listener unable to tell the error from the offers.
+        if let Some(outcome) = record.outcome() {
+            span = span.with_outcome(outcome);
+        }
+        painter.span(Pos::new(col, row), &span);
         row = row.saturating_add(1);
     }
     row.saturating_sub(area.row)

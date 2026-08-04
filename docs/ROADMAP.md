@@ -47,10 +47,12 @@ hide. Release posture: demo first, then full 1.0. No Early Access.
 
 ### Playability status of what is already built
 
-The six completed items below were built in architectural-layer order and are
-tested, reviewed, and green. Most of them the **game does not call**. This table
-is the scope of the retroactive gating pass, and it is what "verified" versus
+The items below were built in architectural-layer order and are tested,
+reviewed, and green. Much of it the **game did not call**. This table is the
+scope of the retroactive gating pass, and it is what "verified" versus
 "asserted" looks like written down.
+
+The prompt has since closed three rows. The remainder is the pass that follows.
 
 | Built | Reachable from the running game? | Gated by |
 |---|---|---|
@@ -59,9 +61,9 @@ is the scope of the retroactive gating pass, and it is what "verified" versus
 | CRT — all ten effects, peak-threat state | ✅ `F3` | — |
 | Determinism spine — seed, tick, `step()` | ⚠️ tick shows, in a stand-in pane | Retroactive pass |
 | Frame boundary — panes, layout | ⚠️ one pane, stand-in content | Retroactive pass |
-| Parser — 16 commands, 3 registers | ❌ **unreachable from the frontend** | The prompt |
-| Naming pass — synonyms, canonical echo | ❌ | The prompt |
-| Record model, `RecordView` | ❌ never drawn by the renderer built for it | The prompt |
+| Parser — 16 commands, 3 registers | ✅ type at it | — |
+| Naming pass — synonyms, canonical echo | ✅ the echo answers in canonical arcane | — |
+| Record model, `RecordView` | ✅ every line on screen is a record | — |
 | Fidelity tiers | ❌ | Retroactive pass |
 | `Speech` linear stream | ❌ captured 60×/s, never surfaced | Retroactive pass |
 | CP437 repertoire enforcement | ❌ offline lint only | Retroactive pass |
@@ -163,7 +165,7 @@ would be worse than naming the phase that gates it.
 > The first six items were built in layer order and left ~10,000 lines the binary
 > called under 40% of. **No item below is done until the "see it" line works.**
 
-- [ ] **The prompt** ← *next* — a real command line in the running game. Not a
+- [x] **The prompt** — a real command line in the running game. Not a
       feature in its own right: it is the instrument every item below is verified
       with, and the first thing to call the parser, the record model, and the
       views from the actual binary. Plan independently reviewed before starting;

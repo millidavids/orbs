@@ -10,7 +10,7 @@
 //! how fast the world moves.
 
 use bevy::prelude::*;
-use orbs_sim::{Sim, Tick};
+use orbs_sim::Sim;
 
 /// The simulated tower, owned by the frontend.
 #[derive(Resource)]
@@ -22,14 +22,18 @@ impl Tower {
         Self(Sim::new(seed))
     }
 
-    /// The current world time.
-    pub(crate) fn tick(&self) -> Tick {
-        self.0.tick()
+    /// Hand a finished line to the sim.
+    ///
+    /// The **only** other way the frontend touches the world, and it does not
+    /// advance it: `submit` echoes immediately and queues any resolved command
+    /// for the next `step()`. See `orbs_sim::session`.
+    pub(crate) fn submit(&mut self, line: &str) {
+        self.0.submit(line);
     }
 
-    /// The seed this world was built from.
-    pub(crate) fn seed(&self) -> u64 {
-        self.0.seed()
+    /// The world, for painting.
+    pub(crate) fn sim(&self) -> &Sim {
+        &self.0
     }
 }
 

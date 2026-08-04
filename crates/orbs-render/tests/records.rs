@@ -5,8 +5,8 @@
 //! four views checked against each other.
 
 use orbs_render::{
-    FieldName, Frame, GridSize, Presentation, RecordKind, RecordView, Records, Rect, Role, Sift,
-    Style, UtteranceKind, Value,
+    FieldName, Frame, GridSize, Outcome, Presentation, RecordKind, RecordView, Records, Rect, Role,
+    Sift, Style, UtteranceKind, Value,
 };
 
 /// The alembic, mid-brew. Two reagents and a spoiled one.
@@ -406,4 +406,67 @@ fn clearing_a_stream_keeps_its_allocations() {
     assert!(records.is_empty());
     assert_eq!(records.iter().count(), 0);
     assert!(records.get(0).is_none());
+}
+
+#[test]
+fn a_listener_can_tell_an_error_from_an_offer() {
+    // The prompt draws the difference as a marker glyph and a brightness. A
+    // screen-reader player has neither channel, so without the outcome on the
+    // utterance `xyzzy` linearises as three identical Echo lines and the error
+    // is indistinguishable from the suggestions under it (§14, rule 2).
+    let mut records = Records::new();
+    for (outcome, message) in [
+        (Outcome::Unresolved, "xyzzy"),
+        (Outcome::Suggestion, "survey"),
+        (Outcome::Suggestion, "scribe"),
+    ] {
+        records
+            .push(RecordKind::Echo)
+            .outcome(outcome)
+            .text(FieldName::Message, message)
+            .finish();
+    }
+
+    let mut frame = frame_of(40, 4);
+    let area = frame.area();
+    RecordView::prompt().draw(&mut frame.painter(area), area, records.iter());
+
+    let spoken: Vec<_> = frame.speech().utterances().collect();
+    assert_eq!(
+        spoken.iter().map(|u| u.outcome).collect::<Vec<_>>(),
+        [
+            Some(Outcome::Unresolved),
+            Some(Outcome::Suggestion),
+            Some(Outcome::Suggestion),
+        ],
+    );
+    // The text alone is not enough to tell them apart, which is the point.
+    assert_eq!(spoken[1].kind, spoken[0].kind);
+    assert_eq!(spoken[1].role, spoken[0].role);
+}
+
+#[test]
+fn a_selectable_candidate_is_distinguishable_by_ear() {
+    // §6 numbers tied readings and has the player pick one. A listener must be
+    // able to tell that prompt from a command about to run.
+    let mut records = Records::new();
+    for outcome in [Outcome::Resolved, Outcome::Candidate] {
+        records
+            .push(RecordKind::Echo)
+            .outcome(outcome)
+            .text(FieldName::Message, "survey")
+            .finish();
+    }
+
+    let mut frame = frame_of(40, 4);
+    let area = frame.area();
+    RecordView::prompt().draw(&mut frame.painter(area), area, records.iter());
+
+    let spoken: Vec<_> = frame.speech().utterances().collect();
+    assert_eq!(spoken[0].text, spoken[1].text, "identical as text");
+    assert_ne!(spoken[0].outcome, spoken[1].outcome, "and only as text");
+    assert!(
+        spoken[1].outcome.is_some_and(Outcome::is_selectable),
+        "the selectable one must say so",
+    );
 }

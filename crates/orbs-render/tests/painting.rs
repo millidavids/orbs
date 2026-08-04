@@ -347,7 +347,9 @@ fn a_full_screen_linearises_in_paint_order() {
         ]
     );
 
-    assert_eq!(frame.cursor(), Some(Pos::new(8, 32)));
+    // Column 9, not 8: the input line is inset one cell from the bottom-left
+    // corner, where a curved tube distorts most. See `ScreenLayout::compute`.
+    assert_eq!(frame.cursor(), Some(Pos::new(9, 32)));
     assert_eq!(frame.cell(Pos::ORIGIN), Some(&Cell::new('┌', Style::DIM)));
 }
 

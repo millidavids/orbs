@@ -98,7 +98,7 @@ mod tests {
         for _ in 0..frames {
             app.update();
         }
-        app.world().resource::<Tower>().tick().get()
+        app.world().resource::<Tower>().sim().tick().get()
     }
 
     /// Both plugin orders must work; one of them used to panic.
@@ -124,7 +124,7 @@ mod tests {
                 "{label}: the clock was not configured"
             );
             assert_eq!(
-                app.world().resource::<Tower>().tick().get(),
+                app.world().resource::<Tower>().sim().tick().get(),
                 2,
                 "{label}: ticks did not advance"
             );
@@ -239,7 +239,7 @@ mod tests {
         }
 
         assert_eq!(
-            app.world().resource::<Tower>().tick().get(),
+            app.world().resource::<Tower>().sim().tick().get(),
             elapsed.as_secs(),
             "variable frame pacing drifted from the wall clock"
         );

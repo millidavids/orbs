@@ -1,2 +1,8 @@
 # Bevy queries are legitimately verbose.
 type-complexity-threshold = 500
+
+# A Bevy system's parameters are its dependency declaration — that list is what
+# lets the scheduler know what the system touches, so shortening it by bundling
+# unrelated things into a struct hides information the engine uses rather than
+# simplifying anything. Raised rather than silenced per call site.
+too-many-arguments-threshold = 10

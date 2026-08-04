@@ -155,9 +155,22 @@ impl ScreenLayout {
             return layout;
         }
 
-        // One input line, always at the bottom (§9).
+        // One input line, always at the bottom (§9), inset one cell from each
+        // side.
+        //
+        // The gutter is a safe margin, not decoration. A curved tube distorts
+        // most at its corners, and the bottom row's ends are where the warp, the
+        // vignette and the rounded bezel all compound — content sitting flush in
+        // one is legible by luck. The Bevy frontend clipped the first glyph of
+        // `orbs:~$` clean off before this existed.
+        //
+        // *Where content may safely go* is a layout decision, which is why it is
+        // charged here rather than to the frontend that happens to curve. It
+        // costs one column of eighty. `orbs-tui` pays a cell it does not need,
+        // and that is the right trade: an invisible gutter in a terminal beats
+        // divergent layouts between frontends, which §9's parity rule forbids.
         let above_input = grid.rows - 1;
-        layout.input = Rect::new(0, above_input, grid.cols, 1);
+        layout.input = Rect::new(1, above_input, grid.cols.saturating_sub(2), 1);
 
         let main_panes = u16::from(request.main_panes).min(MAIN_CAP);
 
@@ -245,9 +258,36 @@ mod tests {
             for side in 0..=6u8 {
                 let req = request(80, 22, panes, side, DisplayMode::Deep);
                 let layout = ScreenLayout::compute(&req);
-                assert_eq!(layout.input(), Rect::new(0, 21, 80, 1));
+                assert_eq!(layout.input(), Rect::new(1, 21, 78, 1));
             }
         }
+    }
+
+    #[test]
+    fn the_input_line_keeps_clear_of_the_bottom_corners() {
+        // A curved tube distorts most at the corners, and the Bevy frontend's
+        // barrel warp clipped the first glyph of `orbs:~$` clean off — the tube
+        // carrying less than the Frame, which rule 2 forbids. The gutter is the
+        // layout's answer; see `compute`.
+        for cols in [MIN_GRID.cols, 100, 160] {
+            let layout = ScreenLayout::compute(&request(cols, 30, 2, 1, DisplayMode::Deep));
+            let input = layout.input();
+            assert!(input.col >= 1, "{cols}: flush against the left edge");
+            assert!(input.right() < cols, "{cols}: flush against the right edge",);
+        }
+    }
+
+    #[test]
+    fn a_grid_at_the_floor_still_has_an_input_line() {
+        // The gutter must not be able to consume the row it insets.
+        let layout = ScreenLayout::compute(&request(
+            MIN_GRID.cols,
+            MIN_GRID.rows,
+            1,
+            0,
+            DisplayMode::Wide,
+        ));
+        assert!(!layout.input().is_empty());
     }
 
     /// DESIGN.md §9: tier 2 at 1080p gives four panes at "roughly 60x15 each".

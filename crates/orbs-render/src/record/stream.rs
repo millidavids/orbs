@@ -21,6 +21,7 @@
 use crate::linear::UtteranceKind;
 use crate::record::field::{FieldName, Value};
 use crate::record::kind::RecordKind;
+use crate::record::outcome::Outcome;
 use crate::style::{Intensity, Presentation, Role, Style};
 
 /// A field, stored.
@@ -164,12 +165,33 @@ impl<'a> Record<'a> {
         }
     }
 
+    /// How the command that emitted this record concluded, if it said.
+    #[must_use]
+    pub fn outcome(&self) -> Option<Outcome> {
+        match self.field(FieldName::Outcome)? {
+            Value::Text(text) => Outcome::parse(text),
+            Value::Count(_) | Value::Tick(_) => None,
+        }
+    }
+
     /// The semantic style a view should draw this record in.
+    ///
+    /// Intensity is *derived*, never set at the emit site — from the outcome
+    /// where there is one, and from the kind otherwise. A record's weight on
+    /// screen is a property of what it is, and letting each call site choose
+    /// would make it a property of who wrote that line.
     #[must_use]
     pub fn style(&self) -> Style {
+        let intensity = match (self.outcome(), self.kind()) {
+            (Some(outcome), _) => outcome.intensity(),
+            // The player's own words, brightest: the one line on screen they
+            // are certain they authored.
+            (None, RecordKind::Input) => Intensity::Bright,
+            _ => Intensity::Normal,
+        };
         Style {
             role: self.role(),
-            intensity: Intensity::Normal,
+            intensity,
             presentation: self.presentation(),
         }
     }
@@ -326,6 +348,14 @@ impl RecordBuilder<'_> {
     pub const fn role(mut self, role: Role) -> Self {
         self.role = role;
         self
+    }
+
+    /// Record how the command concluded.
+    ///
+    /// Stored as an annotation, so it classifies the record for a view without
+    /// being spoken or drawn as text. See [`Outcome`].
+    pub fn outcome(self, outcome: Outcome) -> Self {
+        self.text(FieldName::Outcome, outcome.as_str())
     }
 
     /// Ask for a presentation treatment.

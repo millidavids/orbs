@@ -36,12 +36,14 @@
 
 mod field;
 mod kind;
+mod outcome;
 mod sift;
 mod stream;
 mod view;
 
 pub use field::{FieldName, Value};
 pub use kind::RecordKind;
+pub use outcome::Outcome;
 pub use sift::Sift;
 pub use stream::{Record, RecordBuilder, Records};
-pub use view::RecordView;
+pub use view::{PROMPT, RecordView};

@@ -84,9 +84,12 @@ impl<'a> Painter<'a> {
             "eldritch span with no authored spoken variant: {:?}",
             span.text()
         );
-        self.frame
-            .speech_mut()
-            .push(span.kind(), span.style().role, span.spoken_text());
+        self.frame.speech_mut().push_with(
+            span.kind(),
+            span.style().role,
+            span.outcome(),
+            span.spoken_text(),
+        );
         self.put_str(at, span.text(), span.style(), u16::MAX)
     }
 
@@ -104,9 +107,12 @@ impl<'a> Painter<'a> {
             "eldritch paragraph with no authored spoken variant: {:?}",
             span.text()
         );
-        self.frame
-            .speech_mut()
-            .push(span.kind(), span.style().role, span.spoken_text());
+        self.frame.speech_mut().push_with(
+            span.kind(),
+            span.style().role,
+            span.outcome(),
+            span.spoken_text(),
+        );
 
         let area = area.intersection(self.area);
         if area.is_empty() {

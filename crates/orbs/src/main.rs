@@ -9,7 +9,7 @@
 //! cargo run -p orbs --release
 //! ```
 //!
-//! Escape leaves the orb.
+//! F10 leaves the orb.
 
 mod crt;
 mod render;

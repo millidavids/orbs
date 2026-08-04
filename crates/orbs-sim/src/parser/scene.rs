@@ -9,6 +9,8 @@
 //! parser stays testable against a handful of nouns instead of requiring a fully
 //! built tower. The Phase 0 domains will populate it from real entities.
 
+use bevy_ecs::prelude::*;
+
 use super::fuzzy::{self, MIN_SIMILARITY};
 use super::verb::NounKind;
 
@@ -33,7 +35,12 @@ pub struct NounMatch {
 }
 
 /// The nameable surface of the world at the moment of a parse.
-#[derive(Debug, Default, Clone)]
+///
+/// A `Resource` because it *is* world state: what the player can refer to is
+/// what the tower currently contains, which is why resolution is grounded in the
+/// world rather than in a fixed command table. It is never a `Component` — a
+/// type cannot derive both as of Bevy 0.19.
+#[derive(Resource, Debug, Default, Clone)]
 pub struct Scene {
     nouns: Vec<Noun>,
 }

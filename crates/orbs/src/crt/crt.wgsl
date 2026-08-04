@@ -49,11 +49,45 @@ struct CrtUniform {
 /// the 3 Hz floor of the photosensitive band (§14).
 const HUM_ROLL_HZ: f32 = 0.22;
 
-/// Pincushion the image outward from the centre, as a curved tube does.
+/// How far inside the tube face the picture sits, as a fraction of the screen.
+///
+/// The dark surround a real tube keeps between the glass and the phosphor.
+/// Raising it insets the picture further and widens the surround. **Zero is the
+/// smallest safe value**; below zero it stops being taste and starts cutting
+/// cells off the edges. At a 2560-wide window:
+///
+/// | Value | Surround | Safe |
+/// |---|---|---|
+/// | `0.000` | 31px | yes — the minimum |
+/// | `0.020` | 50px | yes |
+/// | `0.080` | 124px | yes |
+///
+/// Tune freely upward. See [`barrel`] for why downward is a correctness matter.
+const OVERSCAN: f32 = 0.02;
+
+/// Pincushion the image outward from the centre as a curved tube does, and inset
+/// it far enough that the whole grid survives the curve.
+///
+/// **No cell may ever be lost.** Architectural rule 2 lets a frontend add
+/// enrichment the other cannot reproduce *provided it carries no information
+/// absent from the Frame* — a tube that swallows a column carries less. This
+/// arithmetic is therefore a correctness matter, and it was wrong twice before
+/// it was right (DESIGN.md §19).
+///
+/// A radial warp cannot map a rectangle onto a rectangle: whichever boundary
+/// point is made exact, every other one moves the other way. Normalising so the
+/// **corners** land exactly on the screen edge is the intuitive choice and it is
+/// the one that cuts content — it pulled the edge midpoints in by 30.5px, a
+/// whole cell at tier 4, slicing the left and right pane borders off at
+/// mid-height.
+///
+/// So the picture is scaled *outward* instead, past the screen on every side.
+/// The screen then runs out of texture near the edges and the mask below paints
+/// the dark room — which costs nothing, and is what a tube looks like anyway.
 fn barrel(uv: vec2<f32>, strength: f32) -> vec2<f32> {
     let centred = uv - vec2<f32>(0.5);
     let warp = centred * (1.0 + strength * dot(centred, centred));
-    return warp + vec2<f32>(0.5);
+    return warp * (1.0 + OVERSCAN) + vec2<f32>(0.5);
 }
 
 @fragment
@@ -92,8 +126,14 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     }
 
     // Beyond the curved edge there is no screen, only the dark room.
-    let edge_x = smoothstep(0.0, 0.004, curved.x) * smoothstep(0.0, 0.004, 1.0 - curved.x);
-    let edge_y = smoothstep(0.0, 0.004, curved.y) * smoothstep(0.0, 0.004, 1.0 - curved.y);
+    //
+    // The threshold is deliberately tiny. `barrel` now normalises, so a sample
+    // only lands outside [0,1] by a hair — but 0.004 of a 2560-wide window is
+    // ten pixels, a third of a cell at tier 4, which was enough to dim the first
+    // column of the input line to near-black even once the warp stopped pushing
+    // it off entirely.
+    let edge_x = smoothstep(0.0, 0.0005, curved.x) * smoothstep(0.0, 0.0005, 1.0 - curved.x);
+    let edge_y = smoothstep(0.0, 0.0005, curved.y) * smoothstep(0.0, 0.0005, 1.0 - curved.y);
     let inside = edge_x * edge_y;
 
     var colour = vec3<f32>(sample_r.r, sample_g.g, sample_b.b) * inside;

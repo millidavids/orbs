@@ -23,10 +23,10 @@
 //!
 //! | Resolution | Records | `Outcome` |
 //! |---|---|---|
-//! | `Resolved` | one — what will run | [`RESOLVED`], or [`FORCED`] under siege |
-//! | `Incomplete` | one — the command so far, plus the category of the empty slot | [`INCOMPLETE`] |
-//! | `Ambiguous` | one per tied reading, best first | [`CANDIDATE`] |
-//! | `Unresolved` | one naming the input, then one per suggestion | [`UNRESOLVED`], then [`SUGGESTION`] |
+//! | `Resolved` | one — what will run | [`Outcome::Resolved`], or [`Outcome::Forced`] under siege |
+//! | `Incomplete` | one — the command so far, plus the category of the empty slot | [`Outcome::Incomplete`] |
+//! | `Ambiguous` | one per tied reading, best first | [`Outcome::Candidate`] |
+//! | `Unresolved` | one naming the input, then one per suggestion | [`Outcome::Unresolved`], then [`Outcome::Suggestion`] |
 //!
 //! §6 makes the echo canonical *arcane* whatever register was typed, because the
 //! canonical form is the one players absorb. §14 requires it be tagged as
@@ -34,32 +34,9 @@
 //! [`RecordKind::Echo`] does, via
 //! [`UtteranceKind::Echo`](orbs_render::UtteranceKind).
 
-use orbs_render::{FieldName, RecordKind, Records};
+use orbs_render::{FieldName, Outcome, RecordKind, Records};
 
 use super::intent::{Confidence, Resolution};
-
-/// One reading won outright. This is what will run.
-pub const RESOLVED: &str = "resolved";
-
-/// A siege took the best of several close readings rather than blocking on a
-/// prompt (§6), so *"the echo must offer correction"*. Without the flag a forced
-/// reading is indistinguishable from one the parser was sure about.
-pub const FORCED: &str = "forced";
-
-/// The verb is known and a required slot is empty. [`FieldName::Kind`] names the
-/// category that would fill it.
-pub const INCOMPLETE: &str = "incomplete";
-
-/// One of several tied readings. §6 numbers these and the player picks one, so a
-/// view must be able to tell them from a suggestion list it cannot offer.
-pub const CANDIDATE: &str = "candidate";
-
-/// Nothing resolved. [`FieldName::Message`] carries what the player typed.
-pub const UNRESOLVED: &str = "unresolved";
-
-/// A verb worth trying. Not selectable — §6 forbids a bare error, so this is the
-/// orb offering somewhere to go, not a menu.
-pub const SUGGESTION: &str = "suggestion";
 
 /// Write `resolution` to `records`.
 ///
@@ -79,12 +56,12 @@ pub fn report(input: &str, resolution: &Resolution, records: &mut Records) {
     match resolution {
         Resolution::Resolved { intent, confidence } => {
             let outcome = match confidence {
-                Confidence::Clear => RESOLVED,
-                Confidence::Forced => FORCED,
+                Confidence::Clear => Outcome::Resolved,
+                Confidence::Forced => Outcome::Forced,
             };
             records
                 .push(RecordKind::Echo)
-                .text(FieldName::Outcome, outcome)
+                .outcome(outcome)
                 .text(FieldName::Message, &intent.echo())
                 .finish();
         }
@@ -104,7 +81,7 @@ pub fn report(input: &str, resolution: &Resolution, records: &mut Records) {
             }
             records
                 .push(RecordKind::Echo)
-                .text(FieldName::Outcome, INCOMPLETE)
+                .outcome(Outcome::Incomplete)
                 .text(FieldName::Message, &sofar)
                 .text(FieldName::Kind, missing.label())
                 .finish();
@@ -113,7 +90,7 @@ pub fn report(input: &str, resolution: &Resolution, records: &mut Records) {
             for candidate in candidates {
                 records
                     .push(RecordKind::Echo)
-                    .text(FieldName::Outcome, CANDIDATE)
+                    .outcome(Outcome::Candidate)
                     .text(FieldName::Message, &candidate.intent.echo())
                     .finish();
             }
@@ -128,7 +105,7 @@ pub fn report(input: &str, resolution: &Resolution, records: &mut Records) {
             for verb in suggestions {
                 records
                     .push(RecordKind::Echo)
-                    .text(FieldName::Outcome, SUGGESTION)
+                    .outcome(Outcome::Suggestion)
                     .text(FieldName::Message, verb.canonical())
                     .finish();
             }
@@ -140,7 +117,7 @@ pub fn report(input: &str, resolution: &Resolution, records: &mut Records) {
 fn unresolved(input: &str, records: &mut Records) {
     records
         .push(RecordKind::Echo)
-        .text(FieldName::Outcome, UNRESOLVED)
+        .outcome(Outcome::Unresolved)
         .text(FieldName::Message, input)
         .finish();
 }
@@ -183,7 +160,7 @@ mod tests {
         assert_eq!(records.get(0).expect("echo").kind(), RecordKind::Echo);
         assert_eq!(
             outcomes(&records),
-            [(RESOLVED.to_owned(), "survey".to_owned())],
+            [(Outcome::Resolved.as_str().to_owned(), "survey".to_owned())],
         );
     }
 
@@ -203,8 +180,10 @@ mod tests {
             arguments: Vec::new(),
         };
 
-        for (confidence, expected) in [(Confidence::Clear, RESOLVED), (Confidence::Forced, FORCED)]
-        {
+        for (confidence, expected) in [
+            (Confidence::Clear, Outcome::Resolved),
+            (Confidence::Forced, Outcome::Forced),
+        ] {
             let mut records = Records::new();
             report(
                 "look around",
@@ -216,7 +195,7 @@ mod tests {
             );
             assert_eq!(
                 outcomes(&records),
-                [(expected.to_owned(), "survey".to_owned())],
+                [(expected.as_str().to_owned(), "survey".to_owned())],
                 "{confidence:?}",
             );
         }
@@ -229,7 +208,10 @@ mod tests {
 
         assert_eq!(
             outcomes(&records),
-            [(INCOMPLETE.to_owned(), "meditate".to_owned())],
+            [(
+                Outcome::Incomplete.as_str().to_owned(),
+                "meditate".to_owned()
+            )],
         );
         assert_eq!(
             records.get(0).expect("echo").field(FieldName::Kind),
@@ -253,7 +235,7 @@ mod tests {
         );
         assert_eq!(
             bad.get(0).expect("echo").field(FieldName::Outcome),
-            Some(Value::Text(UNRESOLVED)),
+            Some(Value::Text(Outcome::Unresolved.as_str())),
         );
     }
 
@@ -264,12 +246,12 @@ mod tests {
         // would promise an interaction that does nothing.
         let records = records_for("xyzzy", &Scene::default());
         for (outcome, _) in outcomes(&records).iter().skip(1) {
-            assert_eq!(outcome, SUGGESTION);
+            assert_eq!(outcome, Outcome::Suggestion.as_str());
         }
         assert!(
             outcomes(&records)
                 .iter()
-                .all(|(outcome, _)| outcome != CANDIDATE),
+                .all(|(outcome, _)| outcome != Outcome::Candidate.as_str()),
         );
     }
 
@@ -298,8 +280,11 @@ mod tests {
         for input in ["look around", "meditate", "xyzzy"] {
             for record in records_for(input, &scene).iter() {
                 let spoken = record.to_speech();
-                for outcome in [RESOLVED, FORCED, INCOMPLETE, CANDIDATE, SUGGESTION] {
-                    assert!(!spoken.contains(outcome), "{input:?} spoke {outcome:?}");
+                for outcome in Outcome::ALL {
+                    assert!(
+                        !spoken.contains(outcome.as_str()),
+                        "{input:?} spoke {outcome:?}"
+                    );
                 }
                 assert!(!spoken.contains("outcome"), "{input:?}: {spoken:?}");
             }
