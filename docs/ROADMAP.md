@@ -92,7 +92,23 @@ hide. Release posture: demo first, then full 1.0. No Early Access.
       is reachable on F3. The pass registers `.in_set(Core2dSystems::PostProcess)`;
       an ordering edge alone leaves it unordered against the main pass and the
       blit, which made it flash. Not yet wired to world state — DESIGN.md §19
-- [ ] **Structured-record output model** — linear, semantic, presentation separate
+- [x] **Structured-record output model** — linear, semantic, presentation separate.
+      `Records` is an arena stream; a `Record` is a borrowed view carrying a kind,
+      a role, and named fields whose numbers stay numbers. Four consumers read it
+      and none is privileged: `RecordView` draws it, `Record::speak` linearises
+      it, `Records::sift` filters it, the harness measures it. §3's corruption
+      exemption is enforced by construction — the only presentation accessor is
+      already filtered, so eldritch cannot reach a log line and a sabotage tell
+      still can. The model lives in `orbs-render` because it is the *interface*
+      between the crates; `orbs-sim` gained the dependency and
+      `crates/orbs-sim/tests/boundaries.rs` now holds it to rules 1, 2, and 8.
+      Fields split into content and annotation, so a machine tag can classify a
+      record for a view without being read aloud or drawn. The parser is the
+      first producer, and every record it emits says which outcome it is — a
+      selectable candidate is not a suggestion, and a forced echo is not a clear
+      one. 292 workspace tests green; the third screen of
+      `cargo run -p orbs-render --example screens` is one stream drawn three
+      ways — DESIGN.md §7, §19
 - [ ] **Brewing + archive** — the two starting domains, both thin
 - [ ] **Log-poisoning sabotage** on brewing logs, via `peruse` / `sift` / `verify`
 - [ ] **Boot sequence** — status report reflecting real world state, sticky skip

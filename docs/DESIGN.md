@@ -1837,6 +1837,46 @@ domains are settled (brewing + archive), and the fragment trickle has a rate
 
 ## 19. Decisions log
 
+### Structured-record output model — implemented, Phase 0 item 6
+
+§7 makes this binding on §13 and lists what depends on it: pipes, `sift`, the
+eldritch renderer, screen-reader linearisation, and the test harness. All five
+now read one stream, and none of them is privileged.
+
+| Question | Decision |
+|---|---|
+| **Which crate owns the model** | **`orbs-render`.** A record is the *interface* between the two crates, and an interface belongs to whichever side both can depend on. `orbs-render` has no dependencies at all, so `orbs-sim` takes it on for milliseconds of compile time; the reverse would drag the world model, parser, and script engine into the crate whose tests must stay pure presentation. It also already owns the vocabulary a record must carry — `Role`, `Presentation`, `UtteranceKind` |
+| **The cost of that direction** | `orbs-sim` can now *name* `Painter`. Rule 2 forbids it from using one, so `crates/orbs-sim/tests/boundaries.rs` reads the crate's own source and fails the build on `Painter`, `Frame`, `ScreenLayout`, `Fidelity`, `async fn`, `.await`, `tokio`, or `bevy` the engine. Same instrument §16 already specifies for keeping `unscii-16-full` out of `assets/` |
+| **Numbers stay numbers** | A `Value` is `Text`, `Count`, or `Tick` — never a pre-rendered string. A quantity rendered at emit time cannot be right-aligned by a table, compared by a future `sift --above`, or summed by the harness without being parsed back out of its own presentation, which is the exact inversion rule 4 exists to prevent. Right-aligned numeric columns fall out of this for free |
+| **Field names are a closed enum** | Ten names, each with a lower-case label. §6 already fuzzy-resolves player input against closed vocabularies, and a field name becomes one the moment `sift` can be pointed at a column. A closed set also makes a missed case a compile error in every view |
+| **§3's corruption exemption is enforced, not documented** | `Record::presentation()` is the *only* presentation accessor and returns the value already filtered through `RecordKind::allows`. There is no unfiltered path, so no call site can forget. Asking for `Eldritch` on a log line is allowed and silently answered `Plain` |
+| **The exemption is asymmetric** | `Eldritch` is refused on the three diagnostic surfaces §3 names; `Tampered` is refused nowhere. §3's clause is *"trustworthy as renderings, even when their contents are not"* — the tonal register must not make a player doubt their eyes, but §8.1's structural tell **is** the sabotage on that surface and suppressing it would delete the signal. This asymmetry is what §3 buys by requiring the two vocabularies be disjoint |
+| **Linearised tables are correct by construction** | `Record::speak` emits `label: value` from the record's own labels, so §14's *"a reader must never have to reconstruct columns from spacing"* cannot be violated by a view forgetting to pass headers. A single-field record speaks as itself, so prose reads as prose |
+| **A missing field draws as a gap** | §8.1 names malformed record boundaries as a structural sabotage signature. No special case implements it: a record short a field simply leaves a hole in its row |
+| **`sift` matches field values only** | Never padding, never a truncated tail, never eldritch corruption, and never the authored spoken variant. §7 calls records *"the only model that survives the eldritch renderer corrupting output"* — search over rendered text would go blind exactly when threat is highest. A test proves `sift shade` still finds `nightshade` in a pane too narrow to draw it |
+| **`ls` is not a diagnostic surface** | §3 names three — script listings, schedule listings, log output — and only those three are exempt here. Extending the exemption to directory listings is a design decision for this log, not an inference to make in a match arm |
+| **The parser is the first producer** | Every arm of `Resolution` reduces to the same record: a canonical echo. `Resolved` emits one, `Ambiguous` one per tied reading (§6's numbered prompt is a list of echoes), `Incomplete` one plus the category of the empty slot, `Unresolved` one per suggestion. Zero authored prose crosses into Rust — rule 6 and §12's second mitigation put the sentence around these facts in a content file in Phase 1 |
+
+**Open question, deliberately not decided.** §3 exempts log, script, and schedule
+listings from eldritch corruption but says nothing about the **echo**. Corrupting
+it would damage §6's pedagogy — the echo is how players learn the canonical form
+— but adding a fourth exempt surface is a design change, so `RecordKind::Echo` is
+currently corruptible. Decide before the eldritch renderer ships in Phase 2.
+
+#### Corrections — post-review
+
+The container was built well and then barely used. Every finding was a variation
+on one mistake: **facts that a view needs were left implicit in text.**
+
+| Defect | Fix |
+|---|---|
+| `Resolved`, `Ambiguous` and `Unresolved` all emitted a bare `Echo{Message}`, byte-identical. No view could tell a command that will run from a total parse failure, or a **selectable** numbered prompt (§6 has the player answer it with a number) from a suggestion list that is not selectable. A string in a box — the exact thing records exist to replace | `FieldName::Outcome` carries `resolved` / `forced` / `incomplete` / `candidate` / `unresolved` / `suggestion`. Absence no longer means anything, so a clear echo is positively marked rather than inferred from a missing flag |
+| `speak()` decided whether to say labels by **counting fields**, so adding a machine flag flipped prose into recital: a forced echo spoke *"message: survey, state: forced"* | The **kind** decides. §14 requires labels specifically for tables — "a reader must never have to reconstruct columns from spacing" — so `UtteranceKind::TableRow` speaks `label: value` and everything else speaks values alone. The field-count special case is gone |
+| Nothing distinguished a field written for a player from one written for a machine, which is what made the defect above possible at all | `FieldName::is_annotation()` — the same content/structure split `Painter` already draws one layer up. `speak()` and the line view use content; `fields()`, `field()` and `sift` see everything, because a view that names an annotation as a column has asked for it |
+| The line view joined **every** field, so an echo would have drawn as `"resolved survey"` — an internal token on screen for a player to read. Found while testing the fix above, not by the review | Line views default to content. Only an explicitly named column can draw an annotation |
+| `Unresolved` with no suggestions emitted **zero records**, contradicting §6's "never a bare error" — silence is worse than one | `report()` takes the raw input and always emits at least one record. `Resolution::Unresolved` does not carry the input, and the orb cannot say *"I do not know that word"* without naming the word; an empty `Ambiguous` (a parser defect) falls to the same floor rather than inventing a seventh outcome |
+| The `screens` example bordered all three panes before drawing any content, so the linear stream was three headings then fourteen unattributed rows — the `sift` results indistinguishable from the listing they were filtered out of | Each pane borders immediately before its own content. §14's parity is an **ordering** property, not only a completeness one, and the example's other screens already did this |
+
 ### CRT port — implemented, Phase 0 item 5
 
 §4 budgeted "2,638 lines of surrounding Rust across 15 files plus a 242-line

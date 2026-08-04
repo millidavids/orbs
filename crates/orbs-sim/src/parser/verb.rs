@@ -40,6 +40,30 @@ pub enum NounKind {
     Any,
 }
 
+impl NounKind {
+    /// The word for this category, as output names it.
+    ///
+    /// §6 forbids a bare error: when a slot is empty the orb has to say what
+    /// would fill it, and it cannot say `Fragment`. Kept to one lower-case word
+    /// so it drops into a sentence a content file composes later (§12) without
+    /// the file having to case-fold or re-word it.
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Place => "place",
+            Self::File => "file",
+            Self::Pattern => "pattern",
+            Self::Topic => "topic",
+            Self::Essence => "essence",
+            Self::Vessel => "vessel",
+            Self::Fragment => "fragment",
+            Self::Script => "script",
+            Self::Count => "count",
+            Self::Any => "name",
+        }
+    }
+}
+
 /// One argument position in a command's signature.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Slot {

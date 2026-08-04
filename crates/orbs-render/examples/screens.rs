@@ -15,8 +15,9 @@
 //! less, the setting would become a difficulty choice."*
 
 use orbs_render::{
-    DisplayMode, Fidelity, Frame, GridSize, Intensity, Painter, Pos, Presentation, Rect, Role,
-    ScreenLayout, ScreenRequest, Span, Style, UtteranceKind,
+    DisplayMode, Fidelity, FieldName, Frame, GridSize, Intensity, Painter, Pos, Presentation,
+    RecordKind, RecordView, Records, Rect, Role, ScreenLayout, ScreenRequest, Sift, Span, Style,
+    UtteranceKind,
 };
 
 fn main() {
@@ -35,6 +36,12 @@ fn main() {
     speak(&wide);
 
     parity(&deep, &wide);
+
+    let records = brewing_log();
+    let views = records_screen(GridSize::new(80, 22), &records);
+    show("Records — one stream, three views (§7)", &views);
+    speak(&views);
+    exemption(&records);
 }
 
 // ---------------------------------------------------------------------------
@@ -172,6 +179,168 @@ fn siege(grid: GridSize, mode: DisplayMode) -> Frame {
     );
     frame.set_cursor(Some(Pos::new(input.col + 18, input.row)));
     frame
+}
+
+/// A few minutes of the alembic's life, as records.
+///
+/// One stream holds the directory listing, the log, and the orb speaking.
+/// DESIGN.md §3 forbids unlogged output, so this *is* the log — the same rows a
+/// pane draws, a reader hears, and a pipe stage filters.
+fn brewing_log() -> Records {
+    let mut records = Records::new();
+
+    for (name, state, quantity) in [
+        ("sage", "ready", 12u64),
+        ("nightshade", "spoiled", 3),
+        ("moonwater", "ready", 40),
+        ("ash-of-vigil", "brewing", 1),
+    ] {
+        let role = if state == "spoiled" {
+            Role::Danger
+        } else {
+            Role::Normal
+        };
+        records
+            .push(RecordKind::Entry)
+            .text(FieldName::Name, name)
+            .text(FieldName::State, state)
+            .count(FieldName::Quantity, quantity)
+            .role(role)
+            .finish();
+    }
+
+    for (tick, source, message, role) in [
+        (
+            1247u64,
+            "alembic",
+            "decoction of clarity begun",
+            Role::Normal,
+        ),
+        (
+            1249,
+            "alembic",
+            "nightshade spoiled in vessel 2",
+            Role::Danger,
+        ),
+        (1251, "lens", "ley-line draw steady at 4", Role::Normal),
+        (1254, "alembic", "clarity decanted", Role::Success),
+    ] {
+        records
+            .push(RecordKind::LogLine)
+            .tick(FieldName::Tick, tick)
+            .text(FieldName::Source, source)
+            .text(FieldName::Message, message)
+            .role(role)
+            // Asked for on every log line, and refused on every one: §3 keeps
+            // the diagnostic surfaces trustworthy as renderings. See the note
+            // printed under this screen.
+            .presentation(Presentation::Eldritch)
+            .finish();
+    }
+
+    records
+        .push(RecordKind::Message)
+        .text(
+            FieldName::Message,
+            "s o m e t h i n g   i s   c o u n t i n g",
+        )
+        .presentation(Presentation::Eldritch)
+        .spoken("something is counting")
+        .finish();
+
+    records
+}
+
+/// The same stream, drawn three ways.
+fn records_screen(grid: GridSize, records: &Records) -> Frame {
+    let mut frame = Frame::new(grid);
+    let layout = ScreenLayout::compute(&ScreenRequest::single(grid));
+    let area = layout.main().first().copied().unwrap_or(Rect::EMPTY);
+    let mut painter = frame.painter(area);
+
+    let third = area.rows / 3;
+    let panes = [
+        (Rect::new(area.col, area.row, area.cols, third), "ls"),
+        (
+            Rect::new(area.col, area.row + third, area.cols, third),
+            "peruse alembic.log",
+        ),
+        (
+            Rect::new(
+                area.col,
+                area.row + third * 2,
+                area.cols,
+                area.rows - third * 2,
+            ),
+            "peruse alembic.log | sift spoil",
+        ),
+    ];
+    let inner = |pane: Rect| {
+        Rect::new(
+            pane.col + 2,
+            pane.row + 1,
+            pane.cols.saturating_sub(4),
+            pane.rows.saturating_sub(2),
+        )
+    };
+
+    // Each pane's border is drawn immediately before its own content, never all
+    // three up front. The linear stream is captured in paint order, so bordering
+    // everything first would give a reader three headings and then fourteen
+    // unattributed rows — the `sift` results indistinguishable from the listing
+    // they were filtered out of. §14's parity is an ordering property, not just
+    // a completeness one.
+    let spoiled = Sift::new("spoil");
+    for (index, (pane, title)) in panes.into_iter().enumerate() {
+        painter.border(pane, Some(title), Style::DIM);
+        let inner = inner(pane);
+        match index {
+            // A table: the view picks columns and alignment. It cannot invent a
+            // value, and it cannot keep one out of the linear stream.
+            0 => RecordView::table(&[FieldName::Name, FieldName::State, FieldName::Quantity]).draw(
+                &mut painter,
+                inner,
+                records
+                    .iter()
+                    .filter(|record| record.kind() == RecordKind::Entry),
+            ),
+            // Lines: same stream, no columns.
+            1 => RecordView::lines().draw(
+                &mut painter,
+                inner,
+                records
+                    .iter()
+                    .filter(|record| record.kind() != RecordKind::Entry),
+            ),
+            // A pipe stage. Matching runs over field values, never over anything
+            // either pane above put on the screen.
+            _ => RecordView::lines().draw(&mut painter, inner, records.sift(&spoiled)),
+        };
+    }
+
+    frame
+}
+
+/// Print §3's corruption exemption, as the model actually resolves it.
+fn exemption(records: &Records) {
+    println!("\n  §3 — what each record above asked the renderer for, and got:\n");
+    for record in records.iter() {
+        let allowed = record.presentation();
+        let note = match record.kind() {
+            RecordKind::LogLine => "asked eldritch; diagnostic surface: refused",
+            RecordKind::Message => "asked eldritch; tonal register: granted",
+            _ => "asked nothing",
+        };
+        // Formatted first: a derived `Debug` ignores width specifiers, so
+        // `{:<10?}` would silently print unpadded.
+        let (kind, allowed) = (format!("{:?}", record.kind()), format!("{allowed:?}"));
+        println!("    {kind:<9} -> {allowed:<9} {note}");
+    }
+    println!(
+        "\n  A sabotage tell would survive that refusal. §8.1's structural signature\n  \
+         lives on exactly the surfaces a player inspects, so suppressing it there\n  \
+         would delete the signal; only the tonal register is exempt.\n"
+    );
 }
 
 /// A duration-action in flight, with its meter.

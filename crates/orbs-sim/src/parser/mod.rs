@@ -24,6 +24,7 @@ mod arguments;
 mod fuzzy;
 mod intent;
 mod normalise;
+mod report;
 mod resolve;
 mod scene;
 mod trace;
@@ -32,6 +33,7 @@ mod vocabulary;
 
 pub use fuzzy::{EXACT, MIN_SIMILARITY, distance, is_near, similarity};
 pub use intent::{Argument, Candidate, Confidence, Intent, Mode, Resolution};
+pub use report::{CANDIDATE, FORCED, INCOMPLETE, RESOLVED, SUGGESTION, UNRESOLVED, report};
 pub use resolve::{Analysis, analyse, resolve};
 pub use scene::{Noun, NounMatch, Scene};
 pub use trace::{Outcome, ParseLog, ParseRecord};

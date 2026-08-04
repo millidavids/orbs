@@ -12,6 +12,11 @@ authors.workspace = true
 # See CLAUDE.md, architectural rule 1.
 [dependencies]
 bevy_ecs = { workspace = true }
+# The record model — the output vocabulary this crate emits into, not a
+# renderer. `orbs-render` has no dependencies of its own, so this stays headless
+# and costs milliseconds. Rule 2 still forbids reaching for `Painter` or `Frame`
+# from here; `tests/boundaries.rs` is what enforces it.
+orbs-render = { path = "../orbs-render" }
 rand = { workspace = true }
 rand_chacha = { workspace = true }
 
