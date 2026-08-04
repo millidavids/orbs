@@ -168,8 +168,8 @@ that names its phase gets revisited when the phase arrives; one that says
       cell-index-texture alternative is not needed. No custom shader: the atlas
       carries coverage in alpha and stock `ColorMaterial` multiplies by vertex
       colour. Camera fixed to *physical* pixels so integer scaling survives to
-      the framebuffer. Three phosphor themes, contrast-solved rather than
-      eyeballed. `ORBS_CAPTURE=1 cargo run -p orbs` screenshots it
+      the framebuffer. Four themes — amber (default), green, muted violet and a
+      monochrome light-grey — contrast-solved rather than eyeballed. `ORBS_CAPTURE=1 cargo run -p orbs` screenshots it
       **See it:** ✅ it is what you look at. `F2` cycles themes; drag the window
       and the tier and grid in the border change
 - [x] **CRT port** — barrel, scanlines, aperture grille, vignette, chromatic

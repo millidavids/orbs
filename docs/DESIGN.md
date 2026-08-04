@@ -101,7 +101,10 @@ artless game read as intentional rather than cheap.
 **Curated phosphor themes, selectable in settings** — each a hand-tuned harmony,
 not a hue slider.
 
-- **Default: muted violet.** Distinctive, reads arcane rather than computer.
+- **Default: amber.** Warm, classic, and the tube a scrying orb ought to be.
+  Muted violet was the original default and remains an option — see §19; it is
+  the one theme nobody mistakes for a real terminal, which is a reason to keep it
+  and a reason not to open on it.
 - *(Bevy frontend only — the terminal frontend inherits the user's terminal theme
   via indexed ANSI, §13.)*
 - **Amber** — warm, classic, second default.
@@ -1994,6 +1997,33 @@ magnitude in hand rather than a value tuned to sit just inside the limit.
 persisted.** `F3` works in-session; settings and the health warning §14 records
 this product inheriting arrive together in Phase 5.
 
+#### Amber is the default, and there is a fourth theme
+
+§4 opened on muted violet because it *"reads arcane rather than computer."* On a
+finished screen that turned out to be the argument against it as a default: amber
+is what a real phosphor terminal looked like when it was not green, it is warmer
+than either alternative, and a thing a wizard stares into by candlelight should
+look warm. Violet stays on the list — it is the one theme nobody mistakes for a
+real terminal, which is a reason to keep it and a reason not to open on it.
+
+`Theme::default()` is now `ALL[0]` rather than a constant by name, because the
+list's order is what `F2` cycles and a default outside that order makes the first
+keypress do nothing visible.
+
+**A fourth theme, monochrome**, and it earns its place on accessibility rather
+than taste. Every other theme is one hue at three weights, which is what a real
+tube did; this one is neutral text with the accents carrying all the colour there
+is. It is the highest contrast the game offers and the only theme where a player
+with a colour vision deficiency loses nothing from the base ramp — there is no
+hue in it to lose.
+
+Its values are **solved, not picked**, and the first attempt failed: a light base
+leaves very little luminance headroom above it, and `success` landed 1.22:1 from
+body text — inside the greyscale-separation margin §14's tests demand. Darkening
+it made it *worse*, because body sat between the two. Lowering the **base** to
+0.74 is what bought the accents room. That is the same lesson §19 already records
+from the first palette pass and from the CRT overscan: compute the constant.
+
 #### The sequence is paced to be read
 
 4.4 s for the whole thing, first time out. The two stages that actually animate —
@@ -2462,7 +2492,7 @@ worst-case test is what settles whether the defaults survive that.
 | No custom shader | Each vertex carries its colour and Bevy's stock `ColorMaterial` multiplies the sampled texel by it. The atlas stores **white RGB with coverage in alpha**, so `(1,1,1,coverage) × (r,g,b,1)` is "this glyph in this cell's colour" with no WGSL of ours. An `R8Unorm` atlas would have sampled as `(coverage,0,0,1)` and tinted the screen red |
 | Blank cells | **Emit nothing.** A space is the commonest glyph on screen by a wide margin, and a quad sampling a fully transparent texel is pure cost |
 | Camera | `ScalingMode::Fixed` at the window's **physical** size, so one world unit is one physical pixel. Bevy's default 2D projection works in logical pixels, which on a 2× display stretches every glyph across four physical pixels — a blurred bitmap font, which §4 names as the thing legibility cannot survive |
-| Palette | Three phosphor themes, `(Role, Intensity) → Color`. `Presentation` deliberately has **no** entry: it selects a face in the atlas, and a tonal register that existed only as a hue would be exactly what §14 forbids |
+| Palette | Four themes, `(Role, Intensity) → Color`. `Presentation` deliberately has **no** entry: it selects a face in the atlas, and a tonal register that existed only as a hue would be exactly what §14 forbids |
 | Colours are solved, not chosen | The first pass was picked by eye and **failed its own accessibility tests** — muted violet's cost and success accents were 1.19:1 apart, which is the same colour in greyscale. The shipped values satisfy every constraint the tests assert: body ≥4.5:1 on background, dim ≥3:1, a monotonic intensity ramp, and every accent pair ≥1.25:1 from each other and from body text |
 | Verifying it draws | `ORBS_CAPTURE=1 cargo run -p orbs` saves a screenshot after 30 frames. A renderer that cannot be checked without a human at the keyboard is one nobody checks |
 

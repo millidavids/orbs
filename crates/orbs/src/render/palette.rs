@@ -8,8 +8,8 @@
 //! DESIGN.md §4:
 //!
 //! - **Curated themes, not a hue slider.** Each is a hand-tuned harmony.
-//! - **Muted violet by default** — distinctive, and reads arcane rather than
-//!   computer.
+//! - **Amber by default** — warm, classic, and the tube a scrying orb ought to
+//!   be. Muted violet was the original default and is still on the list.
 //! - **The base hue carries all ordinary text through intensity alone.**
 //! - **A small accent set is reserved strictly for meaning**, and every theme
 //!   defines its own triad so contrast holds against its own base.
@@ -50,7 +50,10 @@ const fn rgb(red: f32, green: f32, blue: f32) -> Srgba {
     Srgba::new(red, green, blue, 1.0)
 }
 
-/// **The default.** Distinctive, and reads arcane rather than computer.
+/// Distinctive, and reads arcane rather than computer.
+///
+/// §4's original default, and now one of four. It stayed on the list because it
+/// is the one theme nobody mistakes for a real terminal.
 pub(crate) const MUTED_VIOLET: Phosphor = Phosphor {
     name: "muted violet",
     base: [
@@ -64,7 +67,11 @@ pub(crate) const MUTED_VIOLET: Phosphor = Phosphor {
     background: rgb(0.055, 0.035, 0.075),
 };
 
-/// Warm, classic. §4's second default.
+/// **The default.** Warm, classic, and the tube a scrying orb ought to be.
+///
+/// Amber is what a real phosphor terminal looked like when it was not green, and
+/// it is warmer than either alternative — which suits a thing a wizard stares
+/// into by candlelight better than violet does.
 pub(crate) const AMBER: Phosphor = Phosphor {
     name: "amber",
     base: [
@@ -92,8 +99,42 @@ pub(crate) const GREEN: Phosphor = Phosphor {
     background: rgb(0.020, 0.055, 0.030),
 };
 
+/// Light grey on black — the one theme that is not a phosphor.
+///
+/// Every other theme is a single hue at three weights, which is what a real tube
+/// did and what §4 asks for. This is a modern terminal instead: neutral text,
+/// and the accents carrying all of the colour there is.
+///
+/// It earns its place on accessibility rather than taste. A monochrome base is
+/// the highest contrast the game can offer, and it is the only theme where a
+/// player with a colour vision deficiency loses nothing at all — the base ramp
+/// has no hue to lose, and §14's accent triad is separable by luminance anyway.
+///
+/// The values are **solved, not picked.** A light base leaves very little
+/// luminance headroom above it, and the first attempt put `success` 1.22:1 from
+/// body text — inside the greyscale-separation margin the tests below demand.
+/// Lowering the base to 0.74 is what bought the accents room to be accents.
+pub(crate) const MONOCHROME: Phosphor = Phosphor {
+    name: "monochrome",
+    base: [
+        rgb(0.38, 0.38, 0.41),
+        rgb(0.74, 0.74, 0.78),
+        rgb(1.00, 1.00, 1.00),
+    ],
+    danger: rgb(0.95, 0.25, 0.24),
+    cost: rgb(0.30, 0.62, 1.00),
+    success: rgb(0.62, 1.00, 0.60),
+    // Cooler and darker than the phosphors', because there is no warm hue in the
+    // text to sit against. Still not pure black — §4, and `main.rs`: a dead
+    // screen and an idle one must not look the same.
+    background: rgb(0.020, 0.020, 0.025),
+};
+
 /// Every theme, in the order the settings screen offers them.
-pub(crate) const ALL: [Phosphor; 3] = [GREEN, AMBER, MUTED_VIOLET];
+///
+/// The default comes first, so `F2` starts by showing what the alternatives are
+/// alternatives *to*.
+pub(crate) const ALL: [Phosphor; 4] = [AMBER, GREEN, MUTED_VIOLET, MONOCHROME];
 
 impl Phosphor {
     /// The colour a cell of this style is drawn in.
@@ -112,7 +153,7 @@ impl Phosphor {
 
     /// The hue the tube glows when it strikes.
     ///
-    /// The theme's brightest base tone, so all three phosphors strike in their
+    /// The theme's brightest base tone, so every theme strikes in its
     /// own colour. A hardcoded white would belong to none of them — §4 makes the
     /// palettes art direction rather than decoration, and a violet tube that
     /// flashes white is a different machine for a fifth of a second.
@@ -184,6 +225,35 @@ mod tests {
                 ratio >= 3.0,
                 "{}: dim text contrasts only {ratio:.1}:1",
                 theme.name
+            );
+        }
+    }
+
+    #[test]
+    fn the_tube_comes_up_amber() {
+        // The default is `ALL[0]` by construction, so this is really an
+        // assertion about the *order* — `F2` cycles the list, and a default that
+        // is not where the cycle starts makes the first keypress do nothing.
+        assert_eq!(ALL[0].name, "amber");
+        assert_eq!(crate::render::Theme::default().0.name, "amber");
+    }
+
+    #[test]
+    fn the_monochrome_theme_has_no_hue_in_its_base() {
+        // What makes it the accessible one rather than a fourth colour: a player
+        // who cannot separate hues loses nothing from the base ramp, because
+        // there is nothing there to lose. An "almost grey" base would be a
+        // colour theme wearing the name.
+        for weight in MONOCHROME.base {
+            let spread = [weight.red, weight.green, weight.blue];
+            let (low, high) = (
+                spread.iter().copied().fold(f32::MAX, f32::min),
+                spread.iter().copied().fold(f32::MIN, f32::max),
+            );
+            assert!(
+                high - low <= 0.05,
+                "monochrome's base has {:.2} of hue in it",
+                high - low,
             );
         }
     }

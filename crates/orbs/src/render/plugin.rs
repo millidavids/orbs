@@ -36,7 +36,10 @@ pub(crate) struct Theme(pub(crate) Phosphor);
 
 impl Default for Theme {
     fn default() -> Self {
-        Self(palette::MUTED_VIOLET)
+        // Deliberately `ALL[0]` rather than the constant by name: the list's
+        // order is what `F2` cycles, and a default that is not the thing the
+        // cycle starts from makes the first keypress do nothing visible.
+        Self(palette::ALL[0])
     }
 }
 
