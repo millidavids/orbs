@@ -26,7 +26,10 @@ pub(crate) struct CrtSettings {
     pub(crate) aberration: f32,
     /// Phosphor bloom around lit glyphs.
     pub(crate) glow: f32,
-    /// Mains hum.
+    /// Depth of the slow hum band that rolls down the tube.
+    ///
+    /// Not a blink: see `crt.wgsl`. Whole-screen modulation at CRT frequencies
+    /// lands in the photosensitive band, so the hum is spatial and slow.
     pub(crate) flicker: f32,
     /// Rounded bezel, in UV.
     pub(crate) corner_radius: f32,
@@ -67,7 +70,7 @@ impl CrtSettings {
         vignette_radius: 0.90,
         aberration: 0.0015,
         glow: 0.85,
-        flicker: 0.02,
+        flicker: 0.10,
         corner_radius: 0.028,
         desaturation: 0.0,
         flash: LinearRgba::NONE,
@@ -79,7 +82,7 @@ impl CrtSettings {
     /// has to spot a one-character sabotage tell.
     pub(crate) const PEAK_THREAT: Self = Self {
         vignette: 0.85,
-        flicker: 0.10,
+        flicker: 0.22,
         aberration: 0.0035,
         desaturation: 0.25,
         ..Self::DEFAULT

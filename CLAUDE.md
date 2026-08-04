@@ -185,6 +185,14 @@ test suite did not** — an em-dash in DESIGN.md's own boot text that CP437 cann
 draw, and pane content eating a border because a sub-painter was not established.
 Add a screen to it whenever a new surface is built.
 
+### Editing shaders
+
+**`embedded_asset!` does not make cargo rebuild when the `.wgsl` changes.** Edit
+a shader on its own and the binary keeps the old one, silently — a change that
+appears to do nothing, and a diagnostic that appears to prove the opposite of
+what is true. Touch a `.rs` file in the same crate, or `touch
+crates/orbs/src/crt/plugin.rs`, to force the re-embed.
+
 ### Other
 
 - **Plans get independently reviewed before being presented.** The design document

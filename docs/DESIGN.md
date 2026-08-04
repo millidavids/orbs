@@ -1854,7 +1854,28 @@ expected.
 | Disableable | `CrtSettings::OFF` is one value and every field reaches zero, per §14. `PEAK_THREAT` — §4's "maximum flicker and vignette pulse" — is reachable on F3, because the legibility test needs the worst case to exist rather than merely be described |
 | Not yet wired | Vignette pulse on threat, flash on breach, desaturation on failure. The uniform carries all three; there is no threat system to drive them |
 
-**A bug worth recording**, because it is the kind that only a screenshot finds:
+**Two bugs worth recording**, both found by measuring frames rather than by
+reading code:
+
+- **The CRT flashed on and off, and MSAA was why.** Roughly 8% of frames
+  bypassed the pass entirely — the picture alternated between curved and flat
+  many times a second. Multisampling inserts a resolve between the grid and the
+  post-process, and it intermittently won the race with
+  `post_process_write`. **MSAA is now off**, which is correct on its own merits:
+  every edge on screen is a bitmap glyph on an integer-scaled grid, so
+  multisampling has nothing to antialias that is not meant to be hard, and could
+  only soften the font §4 says legibility depends on.
+- **The flicker term was a 19 Hz strobe.** The original modulated whole-screen
+  brightness by `sin(time * 120.0)` and commented it "60Hz-ish". It is neither:
+  120 rad/s is **19.1 Hz**, in the middle of the 3–30 Hz band that provokes
+  photosensitive reactions, on a product that already ships a health warning
+  (§14). There is no correct frequency to substitute either — anything fast
+  enough to pass for mains hum is above a 60 Hz display's Nyquist limit and
+  aliases into noise. The hum is now **spatial**: a faint band rolling down the
+  tube at 0.22 Hz, which is what a camera actually catches off a CRT and is far
+  below the photosensitive floor.
+
+And one that only a screenshot finds:
 the phosphor taps were placed a third of a cell apart, which at a 64-pixel cell
 is a 22-pixel offset — every line of text rendered a visible duplicate below
 itself. That is a double exposure, not a glow. The taps are now one glyph pixel

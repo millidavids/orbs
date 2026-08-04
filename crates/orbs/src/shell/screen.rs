@@ -39,7 +39,12 @@ impl Screen {
 /// The camera every frontend screen is drawn through.
 pub(crate) fn spawn_camera(mut commands: Commands) {
     // The CRT is a property of the camera it curves (§4).
-    commands.spawn((Camera2d, crate::crt::CrtSettings::default()));
+    //
+    // MSAA is off deliberately. Every edge on screen is a bitmap glyph on an
+    // integer-scaled grid, so there is nothing to antialias that is not supposed
+    // to be hard — multisampling can only soften the font §4 says legibility
+    // depends on. It also puts a resolve between the grid and the CRT pass.
+    commands.spawn((Camera2d, Msaa::Off, crate::crt::CrtSettings::default()));
 }
 
 /// Recompute the grid whenever the window changes size.

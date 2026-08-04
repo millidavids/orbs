@@ -136,6 +136,7 @@ pub(super) fn crt_pass(
     let view_target = view.into_inner();
 
     let id = pipeline.for_format(view_target.main_texture_format(), &pipeline_cache);
+    // Both are absent only on the first frames, while the pipeline compiles.
     let Some(render_pipeline) = pipeline_cache.get_render_pipeline(id) else {
         return;
     };

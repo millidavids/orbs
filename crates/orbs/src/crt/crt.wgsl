@@ -45,6 +45,10 @@ struct CrtUniform {
 }
 @group(0) @binding(2) var<uniform> crt: CrtUniform;
 
+/// How often the hum band crosses the screen, in hertz. Deliberately far below
+/// the 3 Hz floor of the photosensitive band (§14).
+const HUM_ROLL_HZ: f32 = 0.22;
+
 /// Pincushion the image outward from the centre, as a curved tube does.
 fn barrel(uv: vec2<f32>, strength: f32) -> vec2<f32> {
     let centred = uv - vec2<f32>(0.5);
@@ -116,8 +120,23 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     );
     colour *= grille;
 
-    // Mains hum.
-    colour *= 1.0 - crt.flicker * 0.5 * (1.0 + sin(crt.time * 120.0));
+    // Mains hum — as a slowly rolling band, not a blink.
+    //
+    // The original modulated whole-screen brightness by `sin(time * 120.0)`,
+    // commented as "60Hz-ish". It is neither: 120 rad/s is **19.1 Hz**, which
+    // sits in the middle of the 3–30 Hz band that provokes photosensitive
+    // reactions, and on a dark screen it reads as the whole picture blinking.
+    // Nor is there a correct frequency to substitute — anything fast enough to
+    // pass for mains hum is above a 60 Hz display's Nyquist limit and aliases
+    // into noise.
+    //
+    // So the hum rolls instead. A faint band drifting down the tube once every
+    // few seconds is what a camera actually catches off a CRT, it carries the
+    // same "this is a live phosphor screen" reading, and its temporal frequency
+    // at any given pixel is well under 1 Hz.
+    let roll = fract(curved.y - crt.time * HUM_ROLL_HZ);
+    let band = smoothstep(0.0, 0.25, roll) * smoothstep(0.5, 0.25, roll);
+    colour *= 1.0 - crt.flicker * band;
 
     // Vignette, then the rounded bezel.
     let radial = length(in.uv - vec2<f32>(0.5));
