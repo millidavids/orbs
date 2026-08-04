@@ -61,16 +61,20 @@ impl Stage {
 
     /// How long this stage lasts.
     ///
-    /// [`Stage::Strike`]'s 0.9 s is a **safety constraint, not a taste one** —
-    /// see `crt::strike`, which spends two general flashes inside it and must
-    /// stay under three per second.
+    /// **Paced to be read, not to be got past.** The first version ran the whole
+    /// sequence in 4.4 s and the parts that animate — the frame drawing itself,
+    /// the dependencies reporting — went by faster than anyone could follow
+    /// them. Four times slower is the difference between a flicker and a screen.
+    ///
+    /// It is also long, which is what the skip is for: any key, and `ORBS_BOOT=0`
+    /// for a session that never wants it.
     pub(crate) const fn duration(self) -> Duration {
         Duration::from_millis(match self {
-            Self::Dark => 400,
-            Self::Strike => 900,
-            Self::Prompt => 300,
-            Self::Frame => 800,
-            Self::Post => 2000,
+            Self::Dark => 1600,
+            Self::Strike => 3600,
+            Self::Prompt => 1200,
+            Self::Frame => 3200,
+            Self::Post => 8000,
             Self::Live => 0,
         })
     }
@@ -185,11 +189,15 @@ impl Boot {
 mod tests {
     use super::*;
 
+    /// How long the whole sequence lasts.
+    fn total() -> Duration {
+        Stage::SEQUENCE.iter().map(|stage| stage.duration()).sum()
+    }
+
     #[test]
     fn it_reaches_the_game_on_its_own() {
         let mut boot = Boot::new();
-        let total: Duration = Stage::SEQUENCE.iter().map(|stage| stage.duration()).sum();
-        boot.advance(total);
+        boot.advance(total());
         assert!(boot.is_live(), "the sequence never finished");
     }
 
@@ -197,8 +205,14 @@ mod tests {
     fn it_passes_through_every_stage_in_order() {
         let mut boot = Boot::new();
         let mut seen = vec![boot.stage()];
-        for _ in 0..200 {
-            boot.advance(Duration::from_millis(50));
+        // Run against the sequence's own length rather than a fixed step count,
+        // so retiming a stage cannot silently stop this reaching the end.
+        let step = Duration::from_millis(50);
+        let limit = total().saturating_add(step);
+        let mut elapsed = Duration::ZERO;
+        while elapsed <= limit {
+            boot.advance(step);
+            elapsed = elapsed.saturating_add(step);
             if seen.last() != Some(&boot.stage()) {
                 seen.push(boot.stage());
             }
@@ -246,11 +260,27 @@ mod tests {
     fn the_strike_is_long_enough_for_what_it_spends() {
         // Cross-checked against `crt::strike`'s flash budget, which is where the
         // arithmetic lives. Stated here too because this is the number someone
-        // would shorten to make the boot feel snappier, and it is the one number
-        // in the sequence that is not a taste call.
+        // would shorten to make the boot feel snappier, and shortening it is the
+        // one change in this file that is a safety question rather than a taste
+        // one. One flash pair over a third of a second is the WCAG limit; the
+        // floor here leaves an order of magnitude in hand.
         assert!(
-            Stage::Strike.duration() >= Duration::from_millis(900),
+            Stage::Strike.duration() >= Duration::from_millis(340),
             "the strike is shorter than its flash budget allows",
         );
+    }
+
+    #[test]
+    fn the_animated_stages_are_slow_enough_to_follow() {
+        // The reason for the pacing: at 4.4 s for the whole sequence, the frame
+        // drawing itself and the dependencies reporting were both over before
+        // they could be read. A stage that animates needs to be seconds, not
+        // fractions of one.
+        for stage in [Stage::Frame, Stage::Post] {
+            assert!(
+                stage.duration() >= Duration::from_secs(3),
+                "{stage:?} is too quick to read",
+            );
+        }
     }
 }

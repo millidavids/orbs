@@ -384,7 +384,9 @@ defects — DESIGN.md §19.
       across then down. Any keystroke completes it instantly
 - [x] **A real boot sequence** — dark, strike, prompt, the pane border drawing
       itself a cell at a time, a POST naming Rust, Bevy and Blackhearth Games,
-      then the game. ~4.4 s, any key skips. The POST is a centred title card
+      then the game. **17.6 s, any key skips** — paced to be read rather than to
+      be got past: at the first pass's 4.4 s the two stages that animate were
+      over before they could be followed. The POST is a centred title card
       rather than a table, so it cannot be mistaken for §4's tower report
       arriving twice. **The world does not tick during it** — `tower::drift`
       rolls once per tick, so the same seed would otherwise build a different
@@ -392,11 +394,12 @@ defects — DESIGN.md §19.
       **See it:** ✅ `cargo run -p orbs`. Or as text:
       `ORBS_DUMP=1 ORBS_BOOT=post cargo run -p orbs`, and `dark`/`strike`/
       `prompt`/`frame` for the rest. `ORBS_BOOT=0` skips it
-- [x] **The tube strikes** — one flash then one sweep, in the active phosphor
-      rather than white. **The stage is 0.9 s because of the flash budget and for
-      no other reason**: on a near-black background both effects are general
-      flashes, two pairs over 0.6 s is 3.33/s and over WCAG 2.3.1's limit, over
-      0.9 s it is 2.22/s and inside it — DESIGN.md §19
+- [x] **The tube strikes** — one soft flash with a long decay, in the active
+      phosphor rather than white. A sweeping band shipped alongside it and was
+      **cut on looking at it**: it read as a fault rather than as a tube coming
+      on, and it was also the second general flash that had forced the strike
+      stage to be long enough to stay under WCAG 2.3.1. One pair over a stage
+      measured in seconds is under a quarter of a flash per second — DESIGN.md §19
       **See it:** ✅ launch the game and watch the tube come on.
       ⚠️ **Not yet persisted**: `F3` turns the CRT off for the session only, so
       the effect is inside the limit *by construction* rather than behind a

@@ -61,17 +61,6 @@ pub(crate) struct CrtSettings {
     pub(crate) desaturation: f32,
     /// Additive flash colour. Reserved for world state — flash on breach.
     pub(crate) flash: LinearRgba,
-    /// Where the vsync-loss band sits, 0 → 1 down the tube. Zero is no band.
-    ///
-    /// The boot strike's second half, and nothing else — see `crt::strike` for
-    /// the flash budget it shares with [`flash`](Self::flash) and why the two
-    /// are separated in time.
-    ///
-    /// Named `sweep` rather than `roll` on purpose: `crt.wgsl` already has a
-    /// local called `roll` for the slow hum band, and two different things
-    /// under one name in one shader is a mistake waiting for whoever edits it
-    /// next.
-    pub(crate) sweep: f32,
 }
 
 impl CrtSettings {
@@ -94,7 +83,6 @@ impl CrtSettings {
         corner_radius: 0.0,
         desaturation: 0.0,
         flash: LinearRgba::NONE,
-        sweep: 0.0,
     };
 
     /// A tube in a dark room, tuned so text stays readable.
@@ -116,7 +104,6 @@ impl CrtSettings {
         corner_radius: 0.028,
         desaturation: 0.0,
         flash: LinearRgba::NONE,
-        sweep: 0.0,
     };
 
     /// Peak threat: what the legibility test must be run against (§4).
@@ -155,7 +142,6 @@ pub(crate) struct CrtUniform {
     pub(crate) flash_g: f32,
     pub(crate) flash_b: f32,
     pub(crate) flash: f32,
-    pub(crate) sweep: f32,
     pub(crate) time: f32,
     /// Physical pixels per cell. Everything periodic in the shader divides
     /// these, so the pattern lands identically inside every glyph at every
@@ -182,7 +168,6 @@ impl CrtUniform {
             flash_g: settings.flash.green,
             flash_b: settings.flash.blue,
             flash: settings.flash.alpha,
-            sweep: settings.sweep,
             time,
             cell_width: cell.0,
             cell_height: cell.1,

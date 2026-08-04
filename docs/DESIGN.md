@@ -1961,29 +1961,49 @@ below a half-arrived line walks down the pane; a half-arrived record is silent,
 because §14's stream is whole records in order; and **any keystroke completes
 it**, which is what keeps it from ever being a cost.
 
-#### The strike, and the number that is not a taste call
+#### The strike — one soft flash, and a sweep that was cut
+
+Shipped first as a flash **and** a bright band sweeping down the tube. On a
+near-black background both are *general flashes* — the band is a rise and a fall
+at every pixel it crosses — so the pair cost:
 
 | | |
 |---|---|
-| The flash — up, then down | 1 pair |
-| The sweep — a band crossing, so up-then-down at every pixel | 1 pair |
-| Over 0.6 s | **3.33/s — over WCAG 2.3.1's limit** |
-| Over **0.9 s** | **2.22/s — inside it** |
+| Flash | 1 pair |
+| Sweep | 1 pair |
+| Over 0.6 s | **3.33/s — over WCAG 2.3.1's three-per-second limit** |
+| Over 0.9 s | 2.22/s — inside it |
 
-The stage is 0.9 s because of this table and for no other reason. The two effects
-are separated in time within it, so no pixel sees both inside the ~200 ms that
-would make them read as one pair at twice the rate.
+**The first draft analysed the two separately and was wrong to.** That is
+precisely how the 19.1 Hz strobe recorded below got through: two constants that
+each looked fine on its own.
 
-**The first draft analysed the flash and the sweep separately and was wrong to.**
-That is precisely how the 19.1 Hz strobe recorded below got through: two
-constants that each looked fine. The test counts transitions across the whole
-stage.
+**The sweep is now cut**, on looking at it — it read as a fault rather than as a
+tube striking, which is a different thing from being unsafe and a better reason
+to remove it. What remains is one pair with a long decay, and the flash's
+amplitude came down from 0.75 to 0.30: additive on a near-black screen, so that
+number *is* how bright the tube gets, and the original whited it out.
 
-**The off switch is not the safety mechanism, because it is not persisted.** `F3`
-works in-session; settings and the health warning §14 records this product
-inheriting arrive together in Phase 5. Until then the effect is inside the limit
-by construction, which is the whole adjustment and not a reason to soften the
-numbers later.
+With one pair over a stage now measured in seconds, the rate is under a quarter
+of a flash per second and **the stage length has stopped being a safety
+constraint at all.** That is worth stating because the previous entry said the
+opposite, and the test that guards it now asserts a floor with an order of
+magnitude in hand rather than a value tuned to sit just inside the limit.
+
+**The off switch is still not the safety mechanism, because it is not
+persisted.** `F3` works in-session; settings and the health warning §14 records
+this product inheriting arrive together in Phase 5.
+
+#### The sequence is paced to be read
+
+4.4 s for the whole thing, first time out. The two stages that actually animate —
+the frame drawing itself, the dependencies reporting — were over before they
+could be followed, which made them decoration rather than a sequence.
+
+**Four times slower: 17.6 s.** That is long, and it is meant to be skippable
+rather than short: any key, plus `ORBS_BOOT=0` for a session that never wants it.
+The judgement being recorded is that a boot sequence nobody can read is worse
+than one they skip, because the second at least works the first time.
 
 #### An accessibility switch something else could flip
 
