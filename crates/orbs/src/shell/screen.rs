@@ -40,10 +40,15 @@ impl Screen {
 pub(crate) fn spawn_camera(mut commands: Commands) {
     // The CRT is a property of the camera it curves (§4).
     //
-    // MSAA is off deliberately. Every edge on screen is a bitmap glyph on an
+    // MSAA is off deliberately: every edge on screen is a bitmap glyph on an
     // integer-scaled grid, so there is nothing to antialias that is not supposed
-    // to be hard — multisampling can only soften the font §4 says legibility
-    // depends on. It also puts a resolve between the grid and the CRT pass.
+    // to be hard, and multisampling can only soften the font §4 says legibility
+    // depends on.
+    //
+    // It is *not* why the CRT used to flash — that was the pass missing its
+    // system set (see `crt::plugin`). Turning MSAA off changed the odds enough
+    // to look like a fix under screenshot sampling, which is a good reminder
+    // that "the symptom went away in my measurement" is not a diagnosis.
     commands.spawn((Camera2d, Msaa::Off, crate::crt::CrtSettings::default()));
 }
 

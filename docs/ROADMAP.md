@@ -89,8 +89,9 @@ hide. Release posture: demo first, then full 1.0. No Early Access.
       the `Core2d` schedule, so ~2,100 lines became ~300. Scanline and grille
       frequencies are cell-derived per §9, so a fidelity-tier change cannot beat
       against the glyph stems. Fully disableable (§14) and §4's peak-threat state
-      is reachable on F3. MSAA off — it was intermittently bypassing the pass,
-      and it can only soften a bitmap font. Not yet wired to world state — §19
+      is reachable on F3. The pass registers `.in_set(Core2dSystems::PostProcess)`;
+      an ordering edge alone leaves it unordered against the main pass and the
+      blit, which made it flash. Not yet wired to world state — DESIGN.md §19
 - [ ] **Structured-record output model** — linear, semantic, presentation separate
 - [ ] **Brewing + archive** — the two starting domains, both thin
 - [ ] **Log-poisoning sabotage** on brewing logs, via `peruse` / `sift` / `verify`

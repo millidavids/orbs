@@ -1,8 +1,8 @@
 //! Registration for the CRT.
 
 use bevy::asset::embedded_asset;
-use bevy::core_pipeline::Core2d;
 use bevy::core_pipeline::tonemapping::tonemapping;
+use bevy::core_pipeline::{Core2d, Core2dSystems};
 use bevy::input::common_conditions::input_just_pressed;
 use bevy::prelude::*;
 use bevy::render::extract_component::ExtractComponentPlugin;
@@ -30,7 +30,21 @@ impl Plugin for CrtPlugin {
             .add_systems(ExtractSchedule, extract)
             .add_systems(RenderStartup, init_pipeline)
             .add_systems(Render, prepare.in_set(RenderSystems::Prepare))
-            .add_systems(Core2d, crt_pass.after(tonemapping));
+            // `in_set` is load-bearing, not decoration. `Core2dSystems` chains
+            // Prepass -> MainPass -> EarlyPostProcess -> PostProcess, and
+            // `upscaling` runs `.after(PostProcess)`. A system that only says
+            // `.after(tonemapping)` has an edge to tonemapping and to nothing
+            // else — it is unordered against `main_pass_2d` and against
+            // `upscaling`, so it lands at a different point every frame. That is
+            // what made the tube flash: some frames it curved the grid, some it
+            // ran before the grid was drawn, some after the blit to the
+            // swapchain had already happened.
+            .add_systems(
+                Core2d,
+                crt_pass
+                    .in_set(Core2dSystems::PostProcess)
+                    .after(tonemapping),
+            );
     }
 }
 

@@ -1857,14 +1857,25 @@ expected.
 **Two bugs worth recording**, both found by measuring frames rather than by
 reading code:
 
-- **The CRT flashed on and off, and MSAA was why.** Roughly 8% of frames
-  bypassed the pass entirely — the picture alternated between curved and flat
-  many times a second. Multisampling inserts a resolve between the grid and the
-  post-process, and it intermittently won the race with
-  `post_process_write`. **MSAA is now off**, which is correct on its own merits:
-  every edge on screen is a bitmap glyph on an integer-scaled grid, so
-  multisampling has nothing to antialias that is not meant to be hard, and could
-  only soften the font §4 says legibility depends on.
+- **The CRT flashed on and off, because the pass had no system set.** 0.19's
+  `Core2dSystems` chains `Prepass → MainPass → EarlyPostProcess → PostProcess`,
+  and `upscaling` runs `.after(PostProcess)`. Registering the pass with only
+  `.after(tonemapping)` creates one ordering edge and leaves it **unordered
+  against `main_pass_2d` and against `upscaling`** — so it landed at a different
+  point every frame: sometimes curving the grid, sometimes running before the
+  grid was drawn, sometimes after the blit to the swapchain. The fix is
+  `.in_set(Core2dSystems::PostProcess)`, which is how every built-in effect
+  registers (`bloom`, `tonemapping`, `msaa_writeback`).
+
+  **Set membership is not decoration in this schedule.** An ordering constraint
+  against one system says nothing about the rest, and the render schedule will
+  happily run an unconstrained system anywhere.
+
+  MSAA was blamed first and was not the cause. It stays off on its own merits —
+  every edge is a bitmap glyph on an integer grid, so multisampling can only
+  soften the font — but disabling it merely changed the odds enough to look
+  like a fix under screenshot sampling. Worth recording as a method failure:
+  *the symptom disappearing from a measurement is not a diagnosis.*
 - **The flicker term was a 19 Hz strobe.** The original modulated whole-screen
   brightness by `sin(time * 120.0)` and commented it "60Hz-ish". It is neither:
   120 rad/s is **19.1 Hz**, in the middle of the 3–30 Hz band that provokes
