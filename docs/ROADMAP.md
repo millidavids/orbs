@@ -66,7 +66,7 @@ What is still ❌ or ⚠️ is what remains of it.
 | Naming pass — synonyms, canonical echo | ✅ the echo answers in canonical arcane | — |
 | Record model, `RecordView` | ✅ every line on screen is a record | — |
 | Fidelity tiers | ✅ tier and grid in the border; drag the window | — |
-| `Speech` linear stream | ❌ captured 60×/s, never surfaced | Retroactive pass |
+| `Speech` linear stream | ✅ `F5` shows the session pane as a reader hears it | — |
 | CP437 repertoire enforcement | ✅ the prompt refuses what it cannot draw | — |
 | Parse instrumentation (`ParseLog`, TSV) | ❌ | Retroactive pass |
 | `sift` / record filtering | ✅ `sift <pattern> orb.log` | — |
@@ -97,8 +97,8 @@ would be worse than naming the phase that gates it.
       a multiplexed siege for eyeballing
       **See it:** ✅ the game draws two panes from a real `ScreenLayout`, and
       `F4` switches Deep ↔ Wide — which raises fidelity a step and visibly
-      changes both the glyph size and the pane count. ⚠️ the linear stream is
-      still unsurfaced
+      changes both the glyph size and the pane count. `F5` swaps the session
+      pane for what it says, so §14's parity is a keypress rather than a claim
 - [x] **Bevy frontend skeleton** — window opens (Metal verified), `SimPlugin`
       drives `Sim::step()` from `FixedUpdate` at 1 Hz per §5.0, `Screen` resolves
       window pixels to a fidelity tier and grid. `orbs::shell::preview` logs the

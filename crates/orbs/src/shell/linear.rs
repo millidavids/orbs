@@ -1,0 +1,218 @@
+//! The session pane, as a screen reader receives it.
+//!
+//! DESIGN.md §14 makes the linear stream a first-class view of the frame rather
+//! than a debugging aid, and `orbs-render` captures one on **every** frame
+//! whether or not a reader is attached — deliberately, so the path is exercised
+//! by everyone rather than only by the players least able to report it broke.
+//!
+//! Nothing had ever displayed it. It was asserted by tests and printed by an
+//! example, which is how a stream that is subtly wrong stays subtly wrong: the
+//! failure mode is not a crash, it is a frame that describes itself *almost*
+//! correctly, and only a person reading both can tell.
+//!
+//! `F5` swaps the session pane for what that pane says. The same rectangle, so
+//! the comparison is one keypress rather than a squint, and it works at every
+//! window size instead of only above the Deep-focus floor.
+//!
+//! # The pane is painted twice
+//!
+//! Reading the live frame's stream does not work, and the reason is worth
+//! keeping: the mirror *replaces* the session pane, so by the time it is drawn
+//! the frame no longer contains what it is supposed to be describing. The first
+//! attempt showed a single empty `in` utterance and nothing else.
+//!
+//! So the session is painted into a scratch [`Frame`] that is never rasterised,
+//! purely to capture its [`Speech`], and the utterances go on screen instead.
+//! It costs one extra paint of one pane, only while the view is open, and it
+//! buys the thing that matters: what appears is the stream of the pane it
+//! replaced, not of the frame it is part of.
+
+use bevy::prelude::*;
+use orbs_render::{Frame, Pos, Rect, Speech, Style, UtteranceKind};
+use orbs_sim::Sim;
+
+use super::screen::Screen;
+
+/// Whether the linear view is showing, and the frame it measures with.
+#[derive(Resource, Debug, Default)]
+pub(crate) struct Linear {
+    showing: bool,
+    /// Painted into and never drawn. Kept between frames so opening the view
+    /// does not allocate a grid every time it is up.
+    scratch: Frame,
+}
+
+impl Linear {
+    /// Whether the session pane is currently showing speech instead of cells.
+    pub(crate) const fn showing(&self) -> bool {
+        self.showing
+    }
+}
+
+/// Show or hide the linear view.
+pub(crate) fn toggle(mut linear: ResMut<Linear>) {
+    linear.showing = !linear.showing;
+    if !linear.showing {
+        // Return the grid rather than hold one for a pane nobody has open.
+        linear.scratch = Frame::default();
+    }
+    info!("linear view: {}", linear.showing);
+}
+
+/// Draw what the session pane says, in the session pane's place.
+pub(crate) fn paint(
+    linear: &mut Linear,
+    frame: &mut Frame,
+    sim: &Sim,
+    screen: &Screen,
+    pane: Rect,
+    carry_readings: bool,
+) {
+    if pane.is_empty() {
+        return;
+    }
+
+    // Paint the pane it is replacing, off screen, purely for its speech.
+    linear.scratch.reset(frame.size());
+    super::prompt::session(&mut linear.scratch, sim, screen, pane, carry_readings);
+
+    let mut painter = frame.painter(pane);
+    // Untitled, then labelled with `glyphs`. `Painter::border` *announces* a
+    // title as a heading — correct for every other pane and wrong for this one:
+    // a mirror that spoke would put "linear" into the very stream it displays.
+    // Caught by a test rather than by reading the code.
+    painter.border(pane, None, Style::DIM);
+    painter.glyphs(
+        Pos::new(pane.col.saturating_add(1), pane.row),
+        " linear  F5 back ",
+        Style::DIM,
+    );
+
+    let body = pane.inset(1);
+    let stream: &Speech = linear.scratch.speech();
+    // The tail, matching what the session pane does with records — a reader
+    // hears the end of a session, not the start of it.
+    let skipped = stream.len().saturating_sub(usize::from(body.rows));
+
+    for (row, utterance) in stream
+        .utterances()
+        .skip(skipped)
+        .take(usize::from(body.rows))
+        .enumerate()
+    {
+        let Ok(offset) = u16::try_from(row) else {
+            break;
+        };
+        let at = Pos::new(body.col, body.row.saturating_add(offset));
+
+        // `glyphs` throughout: silent, for the reason above.
+        let written = painter.glyphs(at, kind_label(utterance.kind), Style::DIM);
+        painter.glyphs(
+            Pos::new(at.col.saturating_add(written).saturating_add(1), at.row),
+            utterance.text,
+            Style::NORMAL.with_role(utterance.role),
+        );
+    }
+}
+
+/// A fixed-width tag, so the text starts in the same column on every row.
+const fn kind_label(kind: UtteranceKind) -> &'static str {
+    match kind {
+        UtteranceKind::Heading => "head",
+        UtteranceKind::Text => "text",
+        UtteranceKind::TableRow => "row ",
+        UtteranceKind::Progress => "prog",
+        UtteranceKind::Echo => "echo",
+        UtteranceKind::Input => "in  ",
+        UtteranceKind::Completion => "done",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use orbs_render::GridSize;
+
+    fn session_with(lines: &[&str]) -> (Sim, Screen, Frame, Rect) {
+        let mut sim = Sim::new(1);
+        for line in lines {
+            sim.submit(line);
+            sim.step();
+        }
+        let grid = GridSize::new(80, 22);
+        let frame = Frame::new(grid);
+        let screen = Screen::default();
+        (sim, screen, frame, Rect::new(0, 0, 80, 20))
+    }
+
+    #[test]
+    fn every_tag_is_the_same_width() {
+        // The text column must not jitter row to row, or the pane reads as
+        // ragged noise rather than as a transcript.
+        let widths: Vec<usize> = [
+            UtteranceKind::Heading,
+            UtteranceKind::Text,
+            UtteranceKind::TableRow,
+            UtteranceKind::Progress,
+            UtteranceKind::Echo,
+            UtteranceKind::Input,
+            UtteranceKind::Completion,
+        ]
+        .into_iter()
+        .map(|kind| kind_label(kind).chars().count())
+        .collect();
+        assert!(
+            widths.iter().all(|width| *width == widths[0]),
+            "ragged tags: {widths:?}",
+        );
+    }
+
+    #[test]
+    fn it_shows_what_the_pane_it_replaced_says() {
+        // The defect this shape exists for: reading the live frame's stream
+        // showed one empty `in` utterance, because the mirror had already
+        // replaced the pane it was supposed to be describing.
+        let (sim, screen, mut frame, pane) = session_with(&["look around", "xyzzy"]);
+        let mut linear = Linear::default();
+
+        paint(&mut linear, &mut frame, &sim, &screen, pane, true);
+
+        let drawn = frame.to_text();
+        assert!(drawn.contains("look around"), "{drawn}");
+        assert!(drawn.contains("survey"), "{drawn}");
+        assert!(drawn.contains("xyzzy"), "{drawn}");
+        assert!(drawn.contains("echo"), "utterance kinds are not tagged");
+    }
+
+    #[test]
+    fn the_mirror_never_speaks() {
+        // Anything it said would land in the stream it is displaying.
+        let (sim, screen, mut frame, pane) = session_with(&["look around"]);
+        let mut linear = Linear::default();
+
+        paint(&mut linear, &mut frame, &sim, &screen, pane, true);
+
+        assert!(
+            frame.speech().is_empty(),
+            "the mirror spoke: {:?}",
+            frame.speech().to_transcript(),
+        );
+    }
+
+    #[test]
+    fn closing_it_gives_the_grid_back() {
+        let mut linear = Linear {
+            showing: true,
+            ..Default::default()
+        };
+        linear.scratch.reset(GridSize::new(160, 45));
+
+        let mut app = App::new();
+        app.insert_resource(linear);
+        app.world_mut().run_system_cached(toggle).expect("toggle");
+
+        let linear = app.world().resource::<Linear>();
+        assert!(!linear.showing);
+        assert_eq!(linear.scratch.size(), GridSize::default());
+    }
+}

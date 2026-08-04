@@ -1,9 +1,11 @@
 mod input;
+mod linear;
 mod plugin;
 mod prompt;
 mod screen;
 
 pub(crate) use input::Line;
+pub(crate) use linear::Linear;
 pub use plugin::ShellPlugin;
 pub(crate) use plugin::ShellSystems;
 pub(crate) use prompt::{paint, paint_too_small};

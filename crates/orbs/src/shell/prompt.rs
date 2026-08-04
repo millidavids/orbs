@@ -18,6 +18,7 @@ use orbs_render::{
 use orbs_sim::Sim;
 
 use super::input::Line;
+use super::linear::Linear;
 use super::screen::Screen;
 
 /// Columns the telemetry pane shows.
@@ -35,7 +36,13 @@ const TELEMETRY: [FieldName; 3] = [FieldName::Name, FieldName::Quantity, FieldNa
 /// Deep versus Wide focus — existed only in an example. Asking the layout for two
 /// panes is what makes it something the binary exercises (§15's retroactive
 /// gate), and it is also just the right screen: a session and a dashboard.
-pub(crate) fn paint(frame: &mut Frame, sim: &Sim, line: &Line, screen: &Screen) {
+pub(crate) fn paint(
+    frame: &mut Frame,
+    sim: &Sim,
+    line: &Line,
+    screen: &Screen,
+    linear: &mut Linear,
+) {
     let grid = frame.size();
     // A second pane only where there is room for one. At the 80×22 floor a
     // secondary pane is a four-row strip (§9) — a border, a header and one row —
@@ -52,13 +59,15 @@ pub(crate) fn paint(frame: &mut Frame, sim: &Sim, line: &Line, screen: &Screen) 
     });
 
     let main = layout.main();
-    session(
-        frame,
-        sim,
-        screen,
-        main.first().copied().unwrap_or(Rect::EMPTY),
-        panes == 1,
-    );
+    let first = main.first().copied().unwrap_or(Rect::EMPTY);
+    // The same rectangle, not a second pane: the point of §14's stream is that
+    // it says the same thing as the cells, and a comparison you make by pressing
+    // one key is a comparison you actually make.
+    if linear.showing() {
+        super::linear::paint(linear, frame, sim, screen, first, panes == 1);
+    } else {
+        session(frame, sim, screen, first, panes == 1);
+    }
     telemetry(
         frame,
         sim,
@@ -69,7 +78,13 @@ pub(crate) fn paint(frame: &mut Frame, sim: &Sim, line: &Line, screen: &Screen) 
 }
 
 /// The transcript: what was typed and what came back.
-fn session(frame: &mut Frame, sim: &Sim, screen: &Screen, pane: Rect, carry_readings: bool) {
+pub(super) fn session(
+    frame: &mut Frame,
+    sim: &Sim,
+    screen: &Screen,
+    pane: Rect,
+    carry_readings: bool,
+) {
     if pane.is_empty() {
         return;
     }

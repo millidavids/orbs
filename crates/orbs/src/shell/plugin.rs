@@ -7,6 +7,7 @@ use bevy::prelude::*;
 use bevy::window::WindowResized;
 
 use super::input::{Line, SubmittedMessage, type_into_line};
+use super::linear::Linear;
 use super::screen::{Screen, cycle_mode, spawn_camera, track_window};
 use crate::sim::Tower;
 
@@ -30,6 +31,7 @@ impl Plugin for ShellPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Screen>()
             .init_resource::<Line>()
+            .init_resource::<Linear>()
             .add_message::<SubmittedMessage>()
             .add_systems(Startup, (spawn_camera, track_window).chain())
             .add_systems(
@@ -49,6 +51,10 @@ impl Plugin for ShellPlugin {
                     // including mid-siege, so it is a key rather than a
                     // heuristic the player has to fight.
                     cycle_mode.run_if(input_just_pressed(KeyCode::F4)),
+                    // §14 makes the linear stream a first-class view of the
+                    // frame. Nothing had ever shown it, which is how a stream
+                    // that is subtly wrong stays that way.
+                    super::linear::toggle.run_if(input_just_pressed(KeyCode::F5)),
                     // F10, not Escape: the moment there is a text field, Escape
                     // is "clear the line" muscle memory, and quitting the game
                     // mid-sentence is not a recoverable surprise.
