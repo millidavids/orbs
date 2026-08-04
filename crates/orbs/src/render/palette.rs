@@ -93,7 +93,7 @@ pub(crate) const GREEN: Phosphor = Phosphor {
 };
 
 /// Every theme, in the order the settings screen offers them.
-pub(crate) const ALL: [Phosphor; 3] = [MUTED_VIOLET, AMBER, GREEN];
+pub(crate) const ALL: [Phosphor; 3] = [GREEN, AMBER, MUTED_VIOLET];
 
 impl Phosphor {
     /// The colour a cell of this style is drawn in.

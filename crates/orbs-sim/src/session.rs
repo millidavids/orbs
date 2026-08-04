@@ -142,6 +142,49 @@ impl Wizard {
     }
 }
 
+/// The readings the orb is waiting for the player to pick between.
+///
+/// §6: when several readings score alike in calm mode the orb asks, numbering
+/// them, and the player answers with a digit. Without somewhere to hold the list
+/// the question is rhetorical — the prompt appears, the digit resolves against
+/// the verb vocabulary as a miss, and the player is in a **dead end**. §15's gate
+/// calls the dead-end metric more important than the raw resolution rate.
+///
+/// Emptied the moment anything else is typed: §6 forbids a modal prompt, so
+/// walking away from the question by asking a different one has to be free.
+#[derive(Resource, Debug, Default)]
+pub struct Choices(Vec<Intent>);
+
+impl Choices {
+    /// Offer these readings, best first.
+    pub fn offer(&mut self, readings: Vec<Intent>) {
+        self.0 = readings;
+    }
+
+    /// Forget the question.
+    pub fn clear(&mut self) {
+        self.0.clear();
+    }
+
+    /// How many are on offer.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    /// Whether the orb is waiting on an answer.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// The reading `choice` names, counting from **one** as the prompt shows.
+    #[must_use]
+    pub fn pick(&self, choice: usize) -> Option<&Intent> {
+        self.0.get(choice.checked_sub(1)?)
+    }
+}
+
 /// Ticks a command asked the world to pass through.
 ///
 /// `meditate 30` cannot advance the clock where it runs — it *is* running inside
@@ -317,6 +360,88 @@ mod tests {
         }
         assert_eq!(messages(&a), messages(&b));
         assert_eq!(a.submissions().all(), b.submissions().all());
+    }
+
+    /// Ask something the orb cannot settle, in the alembic where the essences are.
+    fn asked(seed: u64) -> Sim {
+        let mut sim = Sim::new(seed);
+        sim.submit("attend alembic");
+        sim.step();
+        sim.submit("decoct nonsense");
+        sim.step();
+        sim
+    }
+
+    #[test]
+    fn a_number_answers_the_numbered_prompt() {
+        // §6 numbers the tied readings and the player answers with a digit.
+        // Without this the prompt is rhetorical: the digit resolves against the
+        // verb vocabulary as a miss and the player is stuck.
+        let mut sim = asked(1);
+        assert_eq!(sim.choices().len(), 3, "the orb asked nothing");
+
+        sim.submit("2");
+        assert_eq!(sim.pending().len(), 1, "the answer ran nothing");
+        assert!(sim.choices().is_empty(), "the question outlived its answer");
+
+        sim.step();
+        assert!(
+            messages(&sim).iter().any(|line| line == "decoct haste"),
+            "{:?}",
+            messages(&sim),
+        );
+    }
+
+    #[test]
+    fn a_number_outside_the_list_leaves_the_question_standing() {
+        // §15's gate weighs "zero dead ends" above the raw resolution rate, so a
+        // mistyped answer must not throw the question away with it.
+        let mut sim = asked(1);
+        sim.submit("9");
+        sim.step();
+
+        assert!(sim.pending().is_empty(), "an unlisted number ran something");
+        assert_eq!(sim.choices().len(), 3, "the question was dropped");
+
+        sim.submit("1");
+        sim.step();
+        assert!(messages(&sim).iter().any(|line| line == "decoct clarity"));
+    }
+
+    #[test]
+    fn asking_something_else_walks_away_from_the_question() {
+        // §6 forbids a modal prompt, so leaving one unanswered costs nothing.
+        let mut sim = asked(1);
+        sim.submit("look around");
+        assert!(sim.choices().is_empty(), "the prompt was modal");
+    }
+
+    #[test]
+    fn a_digit_is_only_an_answer_when_something_was_asked() {
+        // No verb takes a bare number as its whole input, so there is nothing to
+        // collide with — but a digit typed out of the blue must still go through
+        // the parser rather than being swallowed.
+        let mut sim = Sim::new(1);
+        sim.submit("7");
+        sim.step();
+        assert!(sim.pending().is_empty());
+        assert_eq!(
+            sim.parse_log().records().len(),
+            1,
+            "the digit went untraced"
+        );
+    }
+
+    #[test]
+    fn answering_is_not_counted_as_a_phrasing() {
+        // A digit is not a test of the parser. Counting it would dilute §15's
+        // first metric with inputs that were never phrasing attempts; what the
+        // gate wants is the original ambiguous line reaching its intended
+        // action, and the selection is the evidence for that.
+        let mut sim = asked(1);
+        let before = sim.parse_log().records().len();
+        sim.submit("2");
+        assert_eq!(sim.parse_log().records().len(), before);
     }
 
     #[test]

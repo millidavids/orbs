@@ -23,7 +23,6 @@ use crate::geometry::{Pos, Rect};
 use crate::paint::Painter;
 use crate::record::field::FieldName;
 use crate::record::kind::RecordKind;
-use crate::record::outcome::Outcome;
 use crate::record::stream::Record;
 use crate::style::Style;
 
@@ -96,7 +95,7 @@ impl<'a> RecordView<'a> {
     /// This view draws two extra channels, both derived from the record and
     /// neither of them prose:
     ///
-    /// - the [`Outcome`] marker glyph, so a suggestion cannot be mistaken for
+    /// - the [`Record::marker`] glyph, so a suggestion cannot be mistaken for
     ///   the command that will run;
     /// - the player's own [`RecordKind::Input`] lines with the shell prompt in
     ///   front of them, so the transcript reads as a session.
@@ -247,11 +246,7 @@ fn draw_lines<'r>(
             if record.kind() == RecordKind::Input {
                 col = col.saturating_add(painter.glyphs(Pos::new(col, row), prompt, style));
             } else {
-                let marker = record
-                    .outcome()
-                    .map(Outcome::marker)
-                    .or_else(|| record.kind().marker());
-                if let Some(marker) = marker {
+                if let Some(marker) = record.marker() {
                     painter.glyphs(Pos::new(col, row), marker.encode_utf8(&mut [0; 4]), style);
                 }
                 col = col.saturating_add(MARKER_WIDTH);

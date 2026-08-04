@@ -71,12 +71,12 @@ What is still ❌ or ⚠️ is what remains of it.
 | Parse instrumentation (`ParseLog`, TSV) | ✅ every line traced; `F6` exports | — |
 | `sift` / record filtering | ✅ `sift <pattern> orb.log` | — |
 | Eldritch + tampered presentation | ✅ `F7` cycles the register; all three faces draw | — |
-| Progress bars (`Painter::progress`) | ❌ example only | **Brewing + archive** — nothing has a duration yet |
-| Sidebar (`ScreenLayout::sidebar`) | ❌ example only | **Brewing + archive** — §9 opens with two domains at capacity 1, so one is minimised |
+| Progress bars (`Painter::progress`) | ✅ a brew draws its meter | — |
+| Sidebar (`ScreenLayout::sidebar`) | ❌ example only | **Domain panes**, which the brewing plan review cut from this item — §9 opens with two domains at capacity 1, so one is minimised. Needs panes-per-domain to exist first |
 | 3- and 4-pane tiling | ❌ the game asks for at most 2 | **Phase 1+ progression.** Gated by *multiplex capacity*, not by domains: §11.5 starts the player at capacity **1** and reaches 3 at ~5 h. §9 keeps panes and capacity as separate unlocks that "must not be conflated" — drawing three panes at t=0 would delete the swap-or-let-it-burn trade the whole focus track is built on |
 | `Sim::with_schedule`'s build closure | ❌ the game never uses it | **Nothing** — domain systems belong inside `Sim::new`, or the Bevy build, `orbs-tui` and `orbs-balance` each register their own and diverge (§13). Delete it or mark it test-only |
 | Replay log (`Sim::submissions`) | ⚠️ written, never read | **Phase 1** — needs a replay command to read it |
-| Destruction guard (`Verb::is_destructive`) | ❌ | **Brewing + archive** — `purge` has nothing to destroy |
+| Destruction guard (§7's refusal) | ✅ `purge alembic` refuses; `purge residue-N` works | — |
 | Per-subsystem RNG streams | ❌ nothing rolls yet | **Phase 2** — honest deferral, see below |
 
 **Where a gate is not yet possible, it says so.** Per-subsystem RNG streams
@@ -271,9 +271,18 @@ progress bar with no duration action and a sidebar with nothing to minimise.
       Numbers and the Linux/Windows caveat in [SETUP.md](SETUP.md)
       **See it:** ✅ `touch crates/orbs/src/shell/prompt.rs && time cargo build -p orbs`
       — under a second, so the typing loop was never waiting on the compiler
-- [ ] **Brewing + archive** — the two starting domains, both thin
-      **See it:** `cd /alembic`, `ls`, `decoct clarity` — real files, real state,
-      records drawn by the pane rather than by an example
+- [x] **Brewing + archive** — the two starting domains, both thin. The tower is
+      ECS with stable `NodeId`s; a domain's belongings are nameable only from
+      inside it (§7), so `decoct` works in the alembic and nowhere else. One
+      production slot tower-wide per §11.5's opening capacity of 1, work stored
+      as an interval rather than a countdown, and durations deliberately at
+      §11.5's routine end because §15's gate is a fifteen-minute scenario —
+      DESIGN.md §19. Numbered candidate selection shipped with them, since
+      adding nouns is what makes ambiguity reachable and the gate weighs zero
+      dead ends above the resolution rate
+      **See it:** `attend alembic`, `make a potion of clarity` → `decoct clarity`
+      with a meter; `divine sigil-iv` while it brews → refused, naming what holds
+      the slot; `decoct nonsense` → a numbered prompt you answer with a digit
 - [ ] **Log-poisoning sabotage** on brewing logs, via `peruse` / `sift` / `verify`
       **See it:** `peruse alembic.log` shows a tampered line you can spot by eye,
       and `verify alembic.log` names it

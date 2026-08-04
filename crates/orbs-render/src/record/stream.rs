@@ -207,6 +207,25 @@ impl<'a> Record<'a> {
         }
     }
 
+    /// The glyph a prompt draws in front of this line.
+    ///
+    /// Derived from all three channels the record carries, because any one alone
+    /// is a lie somewhere: a refusal is a [`RecordKind::Completion`] — the work
+    /// *concluded* — so on kind alone it wore the same tick as a success, and
+    /// "you cannot brew and decipher at once" was reported with a `√`.
+    #[must_use]
+    pub fn marker(&self) -> Option<char> {
+        if let Some(outcome) = self.outcome() {
+            return Some(outcome.marker());
+        }
+        match (self.kind(), self.role()) {
+            // §5.0's refusals cost the player something they wanted, and §4
+            // reserves the accent triad for exactly that.
+            (RecordKind::Completion, Role::Cost | Role::Danger) => Some('¬'),
+            (kind, _) => kind.marker(),
+        }
+    }
+
     /// The semantic style a view should draw this record in.
     ///
     /// Intensity is *derived*, never set at the emit site — from the outcome

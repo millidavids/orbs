@@ -67,7 +67,80 @@ fn execute(intent: &Intent, world: &mut World) {
         Verb::Status => status(world),
         Verb::Peruse => peruse(intent, world),
         Verb::Sift => sift(intent, world),
+        Verb::Decoct => work(intent, world, tower::DECOCT_TICKS),
+        Verb::Divine => work(intent, world, tower::DIVINE_TICKS),
+        Verb::Purge => purge(intent, world),
         _ => acknowledge(intent.verb, world),
+    }
+}
+
+/// Start something that takes time.
+///
+/// §5.0: issuing is free and instant; the *action* occupies a slot for its
+/// duration, and that concurrency is the whole economy. The subject must be
+/// where the player is standing — §7 puts the essences in the alembic, which is
+/// why `decoct` resolves there and nowhere else.
+fn work(intent: &Intent, world: &mut World, ticks: u64) {
+    let Some(target) = intent
+        .arguments
+        .first()
+        .map(|argument| argument.value.clone())
+    else {
+        acknowledge(intent.verb, world);
+        return;
+    };
+
+    let cwd = world.resource::<Cwd>().0;
+    let Some(subject) = tower::children_of(world, cwd)
+        .into_iter()
+        .find(|node| {
+            world
+                .get::<tower::Name>(*node)
+                .is_some_and(|n| n.0 == target)
+        })
+        .and_then(|node| world.get::<tower::NodeId>(node).copied())
+    else {
+        missing(intent.verb, &target, world);
+        return;
+    };
+
+    tower::begin(world, cwd, intent.verb, subject, ticks);
+}
+
+/// Destroy something where you stand.
+///
+/// §7 makes destruction *"useful, everyday, and scriptable"* rather than a trap,
+/// and §9's per-pane **triage** slot is why it still runs during a brew: short
+/// work is not what the production slot is for.
+fn purge(intent: &Intent, world: &mut World) {
+    let Some(target) = intent
+        .arguments
+        .first()
+        .map(|argument| argument.value.clone())
+    else {
+        acknowledge(Verb::Purge, world);
+        return;
+    };
+
+    let cwd = world.resource::<Cwd>().0;
+    let found = tower::children_of(world, cwd).into_iter().find(|node| {
+        world
+            .get::<tower::Name>(*node)
+            .is_some_and(|n| n.0 == target)
+    });
+
+    // `purge` takes `NounKind::Any`, so it reaches **places** too — and it has
+    // to, or §7's guard never fires: aiming at a live domain reported "no such
+    // thing" instead of the orb refusing, and those are very different answers
+    // to give someone.
+    let found = found.or_else(|| {
+        let root = root(world);
+        find_place(world, root, &target)
+    });
+
+    match found {
+        Some(node) => tower::purge(world, node),
+        None => missing(Verb::Purge, &target, world),
     }
 }
 

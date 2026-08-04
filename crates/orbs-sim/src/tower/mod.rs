@@ -3,7 +3,9 @@
 mod build;
 mod node;
 mod scene;
+mod work;
 
 pub use build::raise;
 pub use node::{Cwd, Name, Nameable, NodeId, NodeIds, Protected, children_of, path_of};
 pub use scene::rebuild;
+pub use work::{CAPACITY, DECOCT_TICKS, DIVINE_TICKS, Working, begin, finish, occupied, purge};

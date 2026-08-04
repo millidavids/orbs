@@ -18,10 +18,11 @@ fn main() {
         // Fragment and Place slots were unfillable and half the sixteen-verb
         // vocabulary could not be exercised at all.
         "attend alembic",
-        "survey archive",
         "make a potion of clarity",
-        "peruse alembic.log",
-        "peruse orb.log",
+        "meditate 25",
+        "look around",
+        "purge residue-9",
+        "purge alembic",
     ];
 
     for line in script {
@@ -34,11 +35,7 @@ fn main() {
             sim.tick().get()
         );
         for record in sim.scrollback().records().iter().skip(before + 1) {
-            let marker = record
-                .outcome()
-                .map(orbs_render::Outcome::marker)
-                .or_else(|| record.kind().marker())
-                .unwrap_or(' ');
+            let marker = record.marker().unwrap_or(' ');
             println!("    {marker} {}", record.to_speech());
         }
     }

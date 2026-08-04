@@ -39,11 +39,22 @@ pub enum FieldName {
     /// The one **annotation** field: written for views and machines, never for a
     /// reader. See [`FieldName::is_annotation`].
     Outcome,
+    /// Which numbered option this is, when the orb is asking the player to pick.
+    ///
+    /// DESIGN.md §6's disambiguation prompt is numbered and the player answers
+    /// with a digit, so the number is a *fact about the option* rather than a
+    /// position a view invents — a view cannot count reliably anyway, because it
+    /// draws a window onto a scrollback and may not hold the whole list.
+    ///
+    /// Not [`FieldName::Quantity`]: an ordinal is not an amount, and a `qty`
+    /// column reading `1` for the first of two would be a lie the closed field
+    /// set exists to prevent.
+    Choice,
 }
 
 impl FieldName {
     /// Every field name, in declaration order.
-    pub const ALL: [Self; 11] = [
+    pub const ALL: [Self; 12] = [
         Self::Name,
         Self::Path,
         Self::Kind,
@@ -55,6 +66,7 @@ impl FieldName {
         Self::Message,
         Self::Detail,
         Self::Outcome,
+        Self::Choice,
     ];
 
     /// The word a player sees as a column header and hears in a linearised row.
@@ -75,6 +87,7 @@ impl FieldName {
             Self::Message => "message",
             Self::Detail => "detail",
             Self::Outcome => "outcome",
+            Self::Choice => "choice",
         }
     }
 

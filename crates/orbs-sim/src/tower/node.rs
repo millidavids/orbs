@@ -35,6 +35,12 @@ impl NodeId {
     pub const fn get(self) -> u64 {
         self.0
     }
+
+    /// An identity from its number, for tests and for loading a save.
+    #[must_use]
+    pub const fn from_raw(id: u64) -> Self {
+        Self(id)
+    }
 }
 
 /// Hands out [`NodeId`]s in a deterministic sequence.

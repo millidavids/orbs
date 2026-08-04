@@ -6,13 +6,13 @@
 //! identical code path — and therefore producing identical results.
 
 use bevy_ecs::prelude::*;
-use orbs_render::{Presentation, RecordKind};
+use orbs_render::{Outcome, Presentation, RecordKind};
 
 use crate::execute::run_pending;
 use crate::parser::{Mode, ParseLog, ParseRecord, Resolution, Scene, analyse, report};
 use crate::rng::Rngs;
 use crate::schedule::new_sim_schedule;
-use crate::session::{Pending, Scrollback, Skip, Submissions, Wizard};
+use crate::session::{Choices, Pending, Scrollback, Skip, Submissions, Wizard};
 use crate::tick::Tick;
 use crate::tower::{self, NodeIds};
 
@@ -50,6 +50,7 @@ impl Sim {
         world.init_resource::<Skip>();
         world.init_resource::<ParseLog>();
         world.init_resource::<Wizard>();
+        world.init_resource::<Choices>();
 
         // Its **own** schedule, run before the caller's. Adding `run_pending`
         // to the same schedule and relying on insertion order would be an
@@ -61,6 +62,7 @@ impl Sim {
         commands.add_systems(run_pending);
 
         let mut schedule = new_sim_schedule();
+        schedule.add_systems(tower::finish);
         build(&mut schedule);
 
         // A **third** pass, for the same reason `commands` is a first one:
@@ -140,6 +142,21 @@ impl Sim {
             return;
         }
 
+        // A bare digit answers a numbered prompt (§6). Checked before parsing
+        // because a digit is not a command and no verb takes one as its whole
+        // input, so there is nothing to collide with — and without this the
+        // prompt is rhetorical: it asks a question, the answer resolves as a
+        // miss, and the player is in the dead end §15's gate weighs most.
+        if !self.world.resource::<Choices>().is_empty()
+            && let Ok(choice) = line.trim().parse::<usize>()
+        {
+            self.choose(line, choice);
+            return;
+        }
+        // Anything else walks away from the question. §6 forbids a modal
+        // prompt, so leaving one unanswered must cost nothing.
+        self.world.resource_mut::<Choices>().clear();
+
         // `analyse` rather than `resolve`: it keeps every scored reading, which
         // is what §6's *"the parser must explain itself"* means in practice and
         // what the Phase 0 gate needs to cluster failures by cause rather than
@@ -164,15 +181,82 @@ impl Sim {
         report(line, &resolution, records);
 
         self.world.resource_mut::<Submissions>().push(tick, line);
-        if let Resolution::Resolved { intent, .. } = resolution {
-            self.world.resource_mut::<Pending>().push(intent);
+        match resolution {
+            Resolution::Resolved { intent, .. } => {
+                self.world.resource_mut::<Pending>().push(intent);
+            }
+            // Hold the readings so the numbers the player just saw mean
+            // something when they type one.
+            Resolution::Ambiguous { candidates } => {
+                let readings = candidates.into_iter().map(|c| c.intent).collect();
+                self.world.resource_mut::<Choices>().offer(readings);
+            }
+            Resolution::Incomplete { .. } | Resolution::Unresolved { .. } => {}
         }
+    }
+
+    /// Answer a numbered prompt.
+    ///
+    /// Recorded in the scrollback but **not** in the parse trace: a digit is not
+    /// a phrasing, and counting it as one would dilute §15's first metric with
+    /// inputs that were never a test of the parser. What the gate wants is the
+    /// *original* ambiguous line reaching its intended action, which the
+    /// following selection is the evidence for.
+    fn choose(&mut self, line: &str, choice: usize) {
+        let picked = self.world.resource::<Choices>().pick(choice).cloned();
+
+        let mut scrollback = self.world.resource_mut::<Scrollback>();
+        let records = scrollback.records_mut();
+        records
+            .push(RecordKind::Input)
+            .text(orbs_render::FieldName::Message, line)
+            .finish();
+
+        let Some(intent) = picked else {
+            // A number outside the list. §6 forbids a dead end, so the question
+            // stands rather than being silently dropped — the player can try
+            // another number.
+            records
+                .push(RecordKind::Echo)
+                .outcome(Outcome::Unresolved)
+                .text(orbs_render::FieldName::Message, line)
+                .finish();
+            return;
+        };
+
+        records
+            .push(RecordKind::Echo)
+            .outcome(Outcome::Resolved)
+            .text(orbs_render::FieldName::Message, &intent.echo())
+            .finish();
+
+        let tick = *self.world.resource::<Tick>();
+        self.world.resource_mut::<Submissions>().push(tick, line);
+        self.world.resource_mut::<Choices>().clear();
+        self.world.resource_mut::<Pending>().push(intent);
     }
 
     /// Everything the player has said and been told.
     #[must_use]
     pub fn scrollback(&self) -> &Scrollback {
         self.world.resource::<Scrollback>()
+    }
+
+    /// What is in flight, if anything (§5.0).
+    ///
+    /// One at a time: §11.5 opens at multiplex capacity 1 and §9's fourth
+    /// invariant reserves that slot for the action's whole duration.
+    #[must_use]
+    pub fn working(&self) -> Option<tower::Working> {
+        self.world
+            .iter_entities()
+            .find_map(|entity| entity.get::<tower::Working>().copied())
+    }
+
+    /// The readings the orb is waiting for the player to pick between (§6).
+    #[must_use]
+    pub fn choices(&self) -> &Choices {
+        self.world.resource::<Choices>()
     }
 
     /// Commands resolved but not yet run.

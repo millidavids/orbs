@@ -20,7 +20,7 @@ mod tick;
 pub use execute::{LOG, MAX_MEDITATE};
 pub use rng::{RngStream, Rngs};
 pub use schedule::{SimSchedule, new_sim_schedule};
-pub use session::{DEFAULT_WIZARD, Pending, Scrollback, Skip, Submissions, Wizard};
+pub use session::{Choices, DEFAULT_WIZARD, Pending, Scrollback, Skip, Submissions, Wizard};
 pub use sim::Sim;
 pub use tick::Tick;
 pub use tower::{Cwd, NodeId};

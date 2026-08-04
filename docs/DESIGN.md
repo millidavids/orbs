@@ -1883,6 +1883,46 @@ domains are settled (brewing + archive), and the fragment trickle has a rate
 
 ## 19. Decisions log
 
+### Brewing + archive — implemented, Phase 0 item 9
+
+The slice's two domains, and the first time the game has a world rather than a
+parser with nothing to parse against.
+
+| Question | Decision |
+|---|---|
+| **The tree is ECS** | Rule 1 makes the world model ECS throughout, and a second representation would be a thing `Scene`, durations and Phase 1's script referents all have to bridge. Nodes carry a **stable `NodeId`**, not an `Entity`: §8 resolves bound references by stable id and writes them into script files as `north_gate#7f2a`, and `Entity` is a generational index that means nothing across a save |
+| **You can only name what is where you are** | §7 makes the tree the tower and navigation diegetic, so `decoct clarity` works in `/tower/alembic` and nowhere else. Places stay nameable everywhere — gating movement on being somewhere would be a lock whose key is behind it. This is the base state §19's **pane addressing** later relaxes in Phase 2: acting at a distance has to *become* possible |
+| **The scene walks `Children`, never a query** | §6 breaks scoring ties by registration order, so registration order *is* the parse. Archetype order is not insertion order and an entity moves tables whenever a component is added — so starting a brew would have reordered the noun list, flipped a tie, and changed what a phrase resolves to. Replay would diverge with no test seeing it |
+| **Rebuilt per tick, in its own schedule pass** | On-change is a cache-invalidation bug waiting for the first system that mutates without setting a marker. And sharing a pass with whatever a frontend adds through `with_schedule` is an ambiguity rather than an ordering — Bevy's topsort was in fact running the caller's systems first |
+| **One production slot, tower-wide** | §11.5 opens at multiplex capacity **1** and §9's fourth invariant reserves it for the action's whole duration, so brewing occupies the tower and you are not also deciphering. A slot per domain would delete the trade the focus track is built on *and* be more code — a counter per domain where the design needs one |
+| **Work is an interval, not a countdown** | §8 wants in-flight actions serialisable with start and completion ticks. Comparing against the clock is idempotent, survives `meditate` running hundreds of ticks inside one `step`, and makes the progress fraction a pure function of the tick |
+| **Names are not prose** | §19 already set the line: the parser's own tables emit facts, never sentences. `build.rs` names things and contains no sentence. The moment a fragment needs deciphered *text*, that text belongs in Phase 1's content file — and needing it is the signal Phase 1 has been imported early |
+
+**Durations are deliberately short, and this is the number to attack.** §11.5 puts
+production actions at 3–10 minutes, which at 1 Hz is 180–600 ticks. §15's gate is
+a **fifteen-minute** scripted scenario, so one design-faithful brew would consume
+a fifth to two thirds of a tester's whole session — measuring their patience
+rather than the parser. Phase 0 therefore sits at §11.5's routine end:
+
+| Action | Ticks | Why |
+|---|---|---|
+| `decoct` | 20 | Long enough that the slot is felt, short enough to fit a scenario twice |
+| `divine` | 12 | §10 makes archive the domain played most and returned to between other work |
+
+These are the **first constants `orbs-balance` will sweep** (§11.5, Phase 1). They
+are placeholders with a reason, not measurements.
+
+**Numbered candidate selection shipped with the domains, not after them.** Adding
+nouns is what makes ambiguity reachable — with one noun in the scene it was
+nearly impossible — and §15's gate weighs *"zero dead ends"* above the raw
+resolution rate. A numbered prompt that ignores numbers is the worst possible
+shape for that metric. An out-of-range answer leaves the question standing;
+anything else walks away from it free, because §6 forbids a modal prompt.
+
+**`Record::marker` derives from all three channels.** Kind alone was a lie: a
+refusal is a `Completion` — the work *concluded* — so "you cannot brew and
+decipher at once" was reported with a success tick until role was folded in.
+
 ### Dev ergonomics — measured, and mostly declined
 
 §15 listed `bevy/dynamic_linking` and a fast linker as a Phase 0 item on the

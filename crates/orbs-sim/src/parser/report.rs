@@ -87,10 +87,16 @@ pub fn report(input: &str, resolution: &Resolution, records: &mut Records) {
                 .finish();
         }
         Resolution::Ambiguous { candidates } if !candidates.is_empty() => {
-            for candidate in candidates {
+            // Numbered from one, because §6's prompt is numbered and the player
+            // answers with a digit. The number is a fact about the option rather
+            // than a position a view invents: a view draws a window onto the
+            // scrollback and may not be holding the whole list.
+            for (index, candidate) in candidates.iter().enumerate() {
+                let choice = u64::try_from(index + 1).unwrap_or(u64::MAX);
                 records
                     .push(RecordKind::Echo)
                     .outcome(Outcome::Candidate)
+                    .count(FieldName::Choice, choice)
                     .text(FieldName::Message, &candidate.intent.echo())
                     .finish();
             }

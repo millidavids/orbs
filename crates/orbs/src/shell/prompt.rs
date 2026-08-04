@@ -120,12 +120,35 @@ pub(super) fn session(
     };
     painter.border(pane, Some(&title), Style::DIM);
 
-    let body = pane.inset(1);
+    let mut body = pane.inset(1);
+
+    // §5.0's economy, made visible: an action occupies its slot for a duration,
+    // and a meter is the only thing on screen that says how much of it is left.
+    // §14 names progress bars specifically, and `Painter::progress` had lived in
+    // an example since the Frame boundary landed because nothing had a duration
+    // to show.
+    if let Some(working) = sim.working() {
+        let (done, total) = working.progress(sim.tick());
+        let row = Rect::new(body.col, body.bottom().saturating_sub(1), body.cols, 1);
+        body = Rect::new(body.col, body.row, body.cols, body.rows.saturating_sub(1));
+
+        // The meter is drawn; the *sentence* is what a reader hears. §14 wants a
+        // description rather than a row of block glyphs, and `progress` takes
+        // both at the same call site so one cannot be written without the other.
+        let spoken = format!("{} {} of {} ticks", working.verb.canonical(), done, total,);
+        painter.progress(row, to_u32(done), to_u32(total), Style::COST, &spoken);
+    }
+
     let records = sim.scrollback().records();
     // Only the tail fits. `iter().skip(n)` is O(1) here and stays `Clone`, which
     // is what `RecordView::draw` needs to measure and then draw.
     let skipped = records.len().saturating_sub(usize::from(body.rows));
     RecordView::prompt(&sim.prompt()).draw(&mut painter, body, records.iter().skip(skipped));
+}
+
+/// A tick count as a meter value, saturating rather than wrapping.
+fn to_u32(ticks: u64) -> u32 {
+    u32::try_from(ticks).unwrap_or(u32::MAX)
 }
 
 /// What the orb and the tube are currently doing.
