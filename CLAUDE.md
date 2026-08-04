@@ -223,11 +223,30 @@ nobody rasterises, then prints it with its linear stream beneath:
 ```bash
 ORBS_DUMP="attend alembic; decoct clarity; meditate 25" cargo run -p orbs
 ORBS_DUMP=1 ORBS_GRID=160x44 cargo run -p orbs   # the worst-case grid
+ORBS_DUMP=1 ORBS_BOOT=post cargo run -p orbs     # a boot stage as text
+ORBS_BOOT=0 cargo run -p orbs                    # skip the boot sequence
 ```
 
 Each `;`-separated line goes through `submit` and a real `step`. Phosphor, the
 CRT curve and the blinking caret are frontend enrichment (rule 2) and are not in
 a Frame — those still need eyes on a window.
+
+`ORBS_BOOT` takes `dark`, `strike`, `prompt`, `frame` or `post` for the dump, and
+`0` to skip the sequence in the running game. Boot happens once per launch, so
+without the latter every "see it" pass on anything else costs a four-second wait.
+
+### Read the log, not only the screen
+
+**The gate can be entirely green while the game prints 250 GPU errors a second.**
+That is not hypothetical: the boot sequence was the first thing to hold a blank
+screen for more than one frame, Bevy 0.19 answers a zero-vertex mesh with
+`use-after-free`, and `cargo test`, `clippy`, `rustdoc` and `cargo build` all
+passed throughout. §15's "work is done when it has been looked at" includes
+looking at stderr.
+
+```bash
+cargo run -p orbs 2>&1 | grep -iE "error|panic|warn"
+```
 
 ### Editing shaders
 

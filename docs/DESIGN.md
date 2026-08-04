@@ -1883,6 +1883,138 @@ domains are settled (brewing + archive), and the fragment trickle has a rate
 
 ## 19. Decisions log
 
+### Phase 0.5 — the orb becomes a machine that moves
+
+Three aesthetic items, requested between the vertical slice closing and Phase 1
+opening. Every one of them turned out to have a rule already pointing at it.
+
+#### The boot sequence — two screens, and why that is not a duplicate
+
+§4 already makes *the tower's* boot a status report reflecting real world state,
+and that report is built. What Phase 0.5 adds is the **machine** waking up in
+front of it: dark tube, strike, prompt, the pane border drawing itself, then a
+POST naming what the orb is made of.
+
+| Question | Decision |
+|---|---|
+| **Sequential, not merged** | The POST is the machine; §4's report is the tower. To stop them reading as one screen twice, the POST is a **centred title card** — no pane, no `name qty state` columns — and the border does not exist until the stage that draws it |
+| **The versions are real** | `tower/boot.rs` exists because *"a report that could go stale is a lie the player reads first."* A POST printing invented numbers is the same lie one screen earlier. Bevy's is the exact pin, held to `Cargo.toml` by a test; Rust's comes from a build script |
+| **The world does not tick during it** | `tower::drift` rolls once per tick, so ticking through a wall-clock animation advances the RNG stream by an amount depending on how long boot took and whether anyone skipped. **The same seed would build a different world.** A correctness fix, not polish |
+| **Skip is a keypress, and §4 asked for sticky** | Sticky needs persistence, which does not exist and arrives with §15's Phase 5 settings screen. The keypress is the honest half-measure; the roadmap names the phase that closes it rather than claiming the requirement is met |
+| **Any key, including the bound ones** | `F10` quits. A player reaching for it during boot means *skip*, and without the guard they would skip and quit in one keystroke. Every keyed system is gated, typing included, so the skipping keystroke is not also the first letter of a command |
+
+**Three Rust versions existed and two were wrong.**
+`env!("CARGO_PKG_RUST_VERSION")` is **empty** in `crates/orbs` — it does not
+inherit `rust-version`. The workspace's `1.95` is a floor, not the compiler in
+use. `rust-toolchain.toml` pins a third. A build script capturing `rustc -vV` is
+the only one that is true, and this is recorded because the first draft of the
+plan confidently proposed the empty one.
+
+#### Panes arrive over time
+
+A pane appearing between one frame and the next reads as a glitch.
+`ScreenLayout::transition` interpolates; the frontend owns the clock. Two
+defects the tests caught before the screen did:
+
+- **`Rect::EMPTY` is `(0, 0, 0, 0)`,** so a pane lerped from it grows diagonally
+  out of the top-left at half height, through the pane beside it. Panes are born
+  from an explicit **edge** rectangle instead, which differs per mode: Deep
+  slides in from the right, Wide unrolls downward, because §9 puts extra panes in
+  different places.
+- **Rounding an origin and its extent independently** lets both round up at the
+  same instant — `col 147.5, cols 12.5` becomes `col 148, cols 13`, whose right
+  edge is a cell past *either* endpoint. The far edges are interpolated and
+  subtracted instead.
+
+Transitional layouts **suspend tiling's no-gap, no-overlap and no-zero-area
+guarantees** by design; `compute` keeps all of them. What holds instead is
+weaker and sufficient: no pane leaves the span of its own two endpoints.
+
+**`F4` adopts the target grid instantly and animates only the split.** Deep focus
+raises fidelity a step, so it resizes the whole grid; interpolating between
+layouts computed against two different grids is not a meaningful operation, and
+animating a grid resize is a different and much larger feature.
+
+#### Output arrives a character at a time — and must never be a mechanic
+
+Requested with a stated motive: *"one of the detriments to running stuff manually
+versus scripting it."* The motive is sound and the implementation must not honour
+it, because a **modelled** waiting cost would mean:
+
+- `orbs-balance` simulating typewriter delays to stay in step with the live game,
+  which is the divergence §13 exists to prevent;
+- offline catch-up — ~29k `step()` calls — owing animation time;
+- **§9's parity rule inverting.** *"If strips ever showed less, the setting would
+  become a difficulty choice, and a player who needs large text would be paying
+  for it in capability."* Make waiting a cost and turning the animation off
+  becomes a competitive **advantage**, aimed at exactly the players §14 exists
+  for. §14's *"no mechanic requiring fast typing"* points the same way.
+
+So it is pure presentation, and the detriment lands anyway: it costs seconds of
+attention, and a player who automates stops spending them. That arrives in Phase
+1, when a bound script running twenty commands is not a person watching twenty
+reveals. **The payoff cannot be felt in 0.5** — there is nothing to script yet.
+
+Constraints that shaped it: §19's echo-immediacy decision still holds, so the
+first character lands on the frame the record does; rows never change, so nothing
+below a half-arrived line walks down the pane; a half-arrived record is silent,
+because §14's stream is whole records in order; and **any keystroke completes
+it**, which is what keeps it from ever being a cost.
+
+#### The strike, and the number that is not a taste call
+
+| | |
+|---|---|
+| The flash — up, then down | 1 pair |
+| The sweep — a band crossing, so up-then-down at every pixel | 1 pair |
+| Over 0.6 s | **3.33/s — over WCAG 2.3.1's limit** |
+| Over **0.9 s** | **2.22/s — inside it** |
+
+The stage is 0.9 s because of this table and for no other reason. The two effects
+are separated in time within it, so no pixel sees both inside the ~200 ms that
+would make them read as one pair at twice the rate.
+
+**The first draft analysed the flash and the sweep separately and was wrong to.**
+That is precisely how the 19.1 Hz strobe recorded below got through: two
+constants that each looked fine. The test counts transitions across the whole
+stage.
+
+**The off switch is not the safety mechanism, because it is not persisted.** `F3`
+works in-session; settings and the health warning §14 records this product
+inheriting arrive together in Phase 5. Until then the effect is inside the limit
+by construction, which is the whole adjustment and not a reason to soften the
+numbers later.
+
+#### An accessibility switch something else could flip
+
+`CrtSettings::enabled` was derived as `settings != OFF`. Both `flash` and
+`desaturation` are documented in that same struct as *reserved for world state*,
+so the moment anything drove one — a breach flash, threat desaturation, this
+phase's boot strike — the settings stopped equalling `OFF` and **barrel,
+scanlines, grille and vignette all came back for a player who had turned them off
+for motion sickness.**
+
+Now explicit state. The lesson generalises: a switch inferred from the absence of
+something is not a switch, because anything that adds that something turns it
+back on.
+
+#### A blank screen was uploading an empty mesh sixty times a second
+
+Found by running the game, not by any test. Bevy 0.19's slab allocator answers a
+zero-vertex mesh with `use-after-free: attempted to copy element data for an
+unallocated key`, and **the boot sequence is the first thing in this game to hold
+a blank screen for more than one frame** — ~250 errors in 1.3 seconds, none of
+them present one commit earlier.
+
+`Assets::get_mut` marks an asset changed whether or not anything is written, so
+the fix has two halves: skip the rebuild entirely when there is nothing to draw,
+and start the grid with one degenerate transparent triangle rather than nothing.
+
+**The general point.** The gate is `cargo test`, `clippy`, `rustdoc` and
+`cargo build` — and all four were green with 250 GPU errors a second scrolling
+past. §15's *"work is done when it has been looked at"* covers reading the log,
+not only the screen.
+
 ### Boot sequence, scaffold tutorial, and what looking at it cost
 
 §4 asks for a boot report that reflects **real world state**, and §15 asks for a

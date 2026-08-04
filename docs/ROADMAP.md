@@ -8,7 +8,7 @@ If the two disagree, DESIGN.md wins and this file is wrong.
 > game. An item without a See it line is not started; an item whose line does not
 > work is not finished, however green its tests are. DESIGN.md §15, §19.
 
-Last updated: 2026-08-04 · **Phase 0 closed. Phase 0.5 next; the §15 gate is deferred, not passed**
+Last updated: 2026-08-04 · **Phase 0 and 0.5 closed. Phase 1 next; the §15 gate is deferred, not passed**
 
 ---
 
@@ -21,7 +21,7 @@ hide. Release posture: demo first, then full 1.0. No Early Access.
 | Phase | Months | Words | Status |
 |---|---|---|---|
 | 0. Vertical slice | 4 | ~3k | ✅ Closed · numeric gate **deferred** |
-| 0.5. Interlude | — | — | 🟡 In progress |
+| 0.5. Interlude | — | — | ✅ Closed · settings deferred to 5 |
 | 1. Core loop | 5 | ~15k | ⬜ |
 | 2. Siege | 4 | ~15k | ⬜ |
 | 3a. Breadth | 4 | ~18k | ⬜ |
@@ -343,6 +343,70 @@ that names its phase gets revisited when the phase arrives; one that says
       non-terminal players in front of the game regardless, so that is where this
       belongs rather than stalling here
       **See it:** eight external testers sit down and play. That *is* the gate
+
+---
+
+## Phase 0.5 — Interlude
+
+**Aesthetic, and none of it turned out to be only aesthetic.** An interlude
+between the closed vertical slice and the core loop: the orb becomes a machine
+that moves. Every item found a rule already pointing at it, and two found live
+defects — DESIGN.md §19.
+
+- [x] **The CRT's off switch could be flipped back on by something else** —
+      `enabled` was derived as `settings != OFF`, and both `flash` and
+      `desaturation` are reserved for world state, so driving either resurrected
+      barrel, scanlines, grille and vignette for a player who had turned them off
+      for motion sickness (§14). Explicit state now, with tests that write the
+      fields directly rather than pressing the key
+      **See it:** ✅ `F3` to off and it stays off — including through the boot
+      strike, which drives `flash` every frame
+- [x] **Panes arrive over time** — `ScreenLayout::transition` interpolates and
+      the frontend owns the clock. Panes are born from an explicit edge
+      rectangle, per mode: Deep slides in from the right, Wide unrolls downward.
+      Transitional layouts suspend tiling's no-gap/no-overlap guarantees by
+      design; `compute` keeps all of them. `F4` adopts the target grid instantly
+      and animates only the split, because interpolating between layouts computed
+      against two different grids is not a meaningful operation
+      **See it:** ✅ `cargo run -p orbs`, press `F4` — the second pane grows in
+      from the right instead of appearing. Drag the window across 100×28 and it
+      grows and shrinks without strobing, because retargeting reverses rather
+      than restarts
+- [x] **Command output arrives a character at a time** — the echo, a `sift`
+      result and a `peruse` dump print the way a terminal attached to something
+      slow prints. 420 chars/second with a 1.4 s ceiling per burst. **Pure
+      presentation, deliberately**: a modelled waiting cost would make
+      `orbs-balance` simulate typewriter delays and would invert §9's parity rule,
+      turning an accessibility setting into a competitive advantage. The
+      detriment lands anyway, in Phase 1, when a bound script running twenty
+      commands is not a person watching twenty reveals
+      **See it:** ✅ type `survey` in the alembic and watch the listing fill
+      across then down. Any keystroke completes it instantly
+- [x] **A real boot sequence** — dark, strike, prompt, the pane border drawing
+      itself a cell at a time, a POST naming Rust, Bevy and Blackhearth Games,
+      then the game. ~4.4 s, any key skips. The POST is a centred title card
+      rather than a table, so it cannot be mistaken for §4's tower report
+      arriving twice. **The world does not tick during it** — `tower::drift`
+      rolls once per tick, so the same seed would otherwise build a different
+      world depending on how long boot ran
+      **See it:** ✅ `cargo run -p orbs`. Or as text:
+      `ORBS_DUMP=1 ORBS_BOOT=post cargo run -p orbs`, and `dark`/`strike`/
+      `prompt`/`frame` for the rest. `ORBS_BOOT=0` skips it
+- [x] **The tube strikes** — one flash then one sweep, in the active phosphor
+      rather than white. **The stage is 0.9 s because of the flash budget and for
+      no other reason**: on a near-black background both effects are general
+      flashes, two pairs over 0.6 s is 3.33/s and over WCAG 2.3.1's limit, over
+      0.9 s it is 2.22/s and inside it — DESIGN.md §19
+      **See it:** ✅ launch the game and watch the tube come on.
+      ⚠️ **Not yet persisted**: `F3` turns the CRT off for the session only, so
+      the effect is inside the limit *by construction* rather than behind a
+      switch. The persisted setting and §14's health warning are Phase 5
+- [ ] **Sticky skip, persisted CRT-off, reduce-motion, health warning** —
+      ⏸ **Phase 5**, with §15's settings screen. §4 asks for skip to be *"a
+      sticky setting, not a per-launch keypress"*; the keypress is the honest
+      half-measure until there is anywhere to persist a setting. No `serde`, no
+      `toml`, nothing in the workspace serialises anything yet
+      **See it:** turn the tube off, relaunch, and it is still off
 
 ---
 
