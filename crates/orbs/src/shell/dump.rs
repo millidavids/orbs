@@ -27,6 +27,7 @@ use orbs_sim::Sim;
 use super::input::Line;
 use super::linear::Linear;
 use super::screen::Screen;
+use super::transition::PaneTransition;
 
 /// The variable that asks for a dump, and optionally what to type first.
 const DUMP: &str = "ORBS_DUMP";
@@ -84,12 +85,20 @@ pub(crate) fn run(seed: u64, wizard: Option<String>) -> bool {
     // a tool documented as drawing the same frame the game draws has to draw that
     // one too. `ORBS_GRID=40x10` is how anyone would ever look at it.
     if screen.is_hostable() {
+        // Settled: a dump is a still, and a still of a pane halfway in would be
+        // a picture of a moment rather than of the screen.
+        let panes = PaneTransition::settled(if grid.fits(orbs_render::DEEP_FOCUS_FLOOR) {
+            2
+        } else {
+            1
+        });
         super::prompt::paint(
             &mut frame,
             &sim,
             &Line::default(),
             &screen,
             &mut Linear::default(),
+            &panes,
         );
     } else {
         super::prompt::paint_too_small(&mut frame);

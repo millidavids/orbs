@@ -88,6 +88,7 @@ mod paint;
 mod span;
 mod style;
 mod tiling;
+mod tween;
 mod wrap;
 
 pub use cell::Cell;

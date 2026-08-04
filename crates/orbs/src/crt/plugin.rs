@@ -57,15 +57,25 @@ fn cycle(settings: Option<Single<&mut CrtSettings>>) {
     let Some(mut settings) = settings else {
         return;
     };
-    let (next, name) = if **settings == CrtSettings::DEFAULT {
+    let (next, name) = after(**settings);
+    **settings = next;
+    info!("crt: {name}");
+}
+
+/// The tube state `current` steps to, and what to call it.
+///
+/// Split from the system so the one property that matters can be asserted:
+/// **pressing F3 enough times reaches off.** §14 makes that an accessibility
+/// requirement rather than a convenience, and a `Single<&mut ...>` system is not
+/// something a unit test can drive.
+fn after(current: CrtSettings) -> (CrtSettings, &'static str) {
+    if current == CrtSettings::DEFAULT {
         (CrtSettings::PEAK_THREAT, "peak threat")
-    } else if **settings == CrtSettings::PEAK_THREAT {
+    } else if current == CrtSettings::PEAK_THREAT {
         (CrtSettings::OFF, "off")
     } else {
         (CrtSettings::DEFAULT, "default")
-    };
-    **settings = next;
-    info!("crt: {name}");
+    }
 }
 
 /// Copy the settings across to the render world once per frame.
@@ -98,5 +108,38 @@ impl Default for CellSize {
             width: f32::from(orbs_render::CELL_WIDTH),
             height: f32::from(orbs_render::CELL_HEIGHT),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pressing_f3_reaches_off_and_comes_back() {
+        // §14 requires the tube be disableable. That is a property of the
+        // *cycle*, not of `CrtSettings::OFF` existing — a key that never arrives
+        // at off is the same as no key at all.
+        let mut state = CrtSettings::DEFAULT;
+        let mut seen = Vec::new();
+        for _ in 0..3 {
+            let (next, name) = after(state);
+            state = next;
+            seen.push(name);
+        }
+        assert_eq!(seen, ["peak threat", "off", "default"]);
+        assert_eq!(state, CrtSettings::DEFAULT, "the cycle did not close");
+    }
+
+    #[test]
+    fn an_unrecognised_state_lands_somewhere_the_player_can_see() {
+        // The fallback arm. Something world-driven will eventually leave the
+        // settings equal to no preset — §4 wires vignette to threat and flash to
+        // breach — and the wrong answer would be to leave the key doing nothing.
+        let odd = CrtSettings {
+            vignette: 0.61,
+            ..CrtSettings::DEFAULT
+        };
+        assert_eq!(after(odd).0, CrtSettings::DEFAULT);
     }
 }

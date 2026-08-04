@@ -8,7 +8,7 @@ If the two disagree, DESIGN.md wins and this file is wrong.
 > game. An item without a See it line is not started; an item whose line does not
 > work is not finished, however green its tests are. DESIGN.md §15, §19.
 
-Last updated: 2026-08-04 · **Phase 0 code-complete; the exit gate needs testers**
+Last updated: 2026-08-04 · **Phase 0 closed. Phase 0.5 next; the §15 gate is deferred, not passed**
 
 ---
 
@@ -20,7 +20,8 @@ hide. Release posture: demo first, then full 1.0. No Early Access.
 
 | Phase | Months | Words | Status |
 |---|---|---|---|
-| 0. Vertical slice | 4 | ~3k | 🟡 Code complete · gate blocked on testers |
+| 0. Vertical slice | 4 | ~3k | ✅ Closed · numeric gate **deferred** |
+| 0.5. Interlude | — | — | 🟡 In progress |
 | 1. Core loop | 5 | ~15k | ⬜ |
 | 2. Siege | 4 | ~15k | ⬜ |
 | 3a. Breadth | 4 | ~18k | ⬜ |
@@ -44,6 +45,18 @@ hide. Release posture: demo first, then full 1.0. No Early Access.
 >
 > Act on the per-input failure *clustering*, not the aggregate — 8 testers over 15
 > minutes has wide confidence intervals, so 84% vs 86% is noise.
+
+**Status: every work item is closed. The gate above has not run, and is deferred
+rather than passed.** There are no external testers yet, and the author cannot
+stand in for one — the gate measures whether a person's *own* phrasing reaches
+the action they meant, and someone who knows the canonical vocabulary is
+measuring their memory. A number that looks like this one but was produced
+in-house would be worse than no number.
+
+This is written down rather than left as a status colour because it is the one
+Phase 0 claim that is **not** evidenced. Deferred to Phase 4, which is where
+onboarding and the demo put non-terminal players in front of the game anyway —
+and where the scripted scenario it needs will have to be written.
 
 ### Playability status of what is already built
 
@@ -322,10 +335,13 @@ that names its phase gets revisited when the phase arrives; one that says
       ⚠️ **The human read is outstanding**: peak-threat CRT is frontend
       enrichment and is not in a Frame. Size the window to 1280×704, `F4` into
       Deep focus, `F3` to peak threat, `F7` for eldritch, and read the log
-- [ ] **Run the gate** — ⛔ **blocked on people, not on code.** Needs ≥ 8 external
-      testers, at least half with no shell experience, over a 15-minute scripted
-      scenario with expected-intent ground truth. Everything it measures is
-      built and reachable; what is missing is the testers and the scenario script
+- [ ] **Run the gate** — ⏸ **deferred to Phase 4, not passed.** Blocked on people,
+      not on code: it needs ≥ 8 external testers, at least half with no shell
+      experience, over a 15-minute scripted scenario with expected-intent ground
+      truth. Everything it measures is built and reachable; what is missing is the
+      testers and the script. Phase 4 is onboarding and the demo, which puts
+      non-terminal players in front of the game regardless, so that is where this
+      belongs rather than stalling here
       **See it:** eight external testers sit down and play. That *is* the gate
 
 ---

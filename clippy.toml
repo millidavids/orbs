@@ -5,4 +5,9 @@ type-complexity-threshold = 500
 # lets the scheduler know what the system touches, so shortening it by bundling
 # unrelated things into a struct hides information the engine uses rather than
 # simplifying anything. Raised rather than silenced per call site.
-too-many-arguments-threshold = 10
+#
+# 12 is `render::redraw`, which paints the whole screen and therefore genuinely
+# reads the whole screen's worth of state. Raising this is the intended answer
+# only while every parameter is a real dependency; the moment one of them is a
+# bag of unrelated things, split the system instead.
+too-many-arguments-threshold = 12

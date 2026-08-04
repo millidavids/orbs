@@ -202,6 +202,32 @@ impl ScreenLayout {
         layout
     }
 
+    /// A layout partway between two others.
+    ///
+    /// `t` runs 0 → 1 and is the caller's to own: nothing in `orbs-render` knows
+    /// what a second is, and a frontend that wants no animation simply never
+    /// calls this. Where a pane arrives *from* is geometry, though, which is why
+    /// this is here rather than in whichever frontend is doing the animating.
+    ///
+    /// **A transitional layout is not a tiled one.** The tilers behind
+    /// [`compute`](Self::compute) promise no gaps, no overlap and no zero-area
+    /// panes; a layout returned
+    /// from here suspends all three, because a pane arriving *is* a zero-area
+    /// rectangle for one frame and a pane leaving *is* a gap closing. What holds
+    /// instead is weaker and sufficient: **no pane leaves the span of its own two
+    /// endpoints**, so nothing escapes a grid that both endpoints fitted.
+    /// [`compute`](Self::compute) keeps every guarantee it ever had.
+    ///
+    /// The sidebar and the input line are taken from `to` untouched. §9 puts one
+    /// input line below however many panes are open, so it does not move; the
+    /// sidebar animating would be a second feature.
+    #[must_use]
+    pub fn transition(from: &Self, to: &Self, mode: DisplayMode, t: f32) -> Self {
+        let mut layout = *to;
+        layout.main_len = crate::tween::panes(from.main(), to.main(), mode, t, &mut layout.main);
+        layout
+    }
+
     /// Fully rendered panes, in order.
     #[must_use]
     pub fn main(&self) -> &[Rect] {

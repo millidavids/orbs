@@ -6,9 +6,12 @@ use bevy::input::keyboard::KeyboardInput;
 use bevy::prelude::*;
 use bevy::window::WindowResized;
 
+use orbs_render::DEEP_FOCUS_FLOOR;
+
 use super::input::{Line, SubmittedMessage, type_into_line};
 use super::linear::Linear;
 use super::screen::{Screen, cycle_mode, spawn_camera, track_window};
+use super::transition::PaneTransition;
 use crate::sim::Tower;
 
 /// Ordering within `Update`, so the frame that draws a keystroke is the frame
@@ -32,6 +35,7 @@ impl Plugin for ShellPlugin {
         app.init_resource::<Screen>()
             .init_resource::<Line>()
             .init_resource::<Linear>()
+            .init_resource::<PaneTransition>()
             .add_message::<SubmittedMessage>()
             .add_systems(Startup, (spawn_camera, track_window).chain())
             .add_systems(
@@ -65,9 +69,29 @@ impl Plugin for ShellPlugin {
                     // is "clear the line" muscle memory, and quitting the game
                     // mid-sentence is not a recoverable surprise.
                     quit.run_if(input_just_pressed(KeyCode::F10)),
+                    // Unconditional: a transition has to keep moving on the
+                    // frames where nothing happened, which is most of them.
+                    drive_panes,
                 ),
             );
     }
+}
+
+/// Aim the pane transition at what the current grid asks for, and let it move.
+///
+/// The pane count was derived inside `paint` every frame, which is why a pane
+/// used to appear between one frame and the next. It is decided here instead so
+/// that a *change* in it is something with a beginning.
+fn drive_panes(screen: Res<Screen>, time: Res<Time>, mut panes: ResMut<PaneTransition>) {
+    // A second pane only where there is room for one. At the 80×22 floor a
+    // secondary pane is a four-row strip (§9) — a border, a header and one row —
+    // which is why §9 sets `DEEP_FOCUS_FLOOR` in the first place.
+    panes.retarget(if screen.grid.fits(DEEP_FOCUS_FLOOR) {
+        2
+    } else {
+        1
+    });
+    panes.advance(time.delta_secs());
 }
 
 /// Hand a finished line to the sim.

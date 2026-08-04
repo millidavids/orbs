@@ -12,6 +12,22 @@ use bevy::render::render_resource::ShaderType;
 /// Put this on the camera to curve the picture.
 #[derive(Component, ExtractComponent, Debug, Clone, Copy, PartialEq)]
 pub(crate) struct CrtSettings {
+    /// Whether the tube is on at all.
+    ///
+    /// **Explicit, and deliberately not inferred from "are all the effects
+    /// zero".** §14 makes this the accessibility switch, and a switch that
+    /// something else can flip back on is not a switch.
+    ///
+    /// `enabled` used to be derived as `settings != OFF`. Both [`flash`] and
+    /// [`desaturation`] are documented right here as *reserved for world state*,
+    /// so the moment anything drove one — a breach flash, threat desaturation,
+    /// the Phase 0.5 boot strike — the settings stopped equalling `OFF`, and
+    /// barrel, scanlines, grille and vignette all came back for a player who had
+    /// turned them off for motion sickness.
+    ///
+    /// [`flash`]: Self::flash
+    /// [`desaturation`]: Self::desaturation
+    pub(crate) on: bool,
     /// How far the tube bulges. 0 is a flat panel.
     pub(crate) barrel: f32,
     /// Depth of the dark line between scan rows.
@@ -50,7 +66,12 @@ pub(crate) struct CrtSettings {
 impl CrtSettings {
     /// Everything off. What §14's accessibility toggle selects, and the
     /// baseline the Phase 0 legibility test compares against.
+    ///
+    /// Belt and braces: `on: false` alone would do it, since the shader returns
+    /// the untouched sample before reading another field. The zeros stay so that
+    /// a future path which forgets to check `on` still draws nothing.
     pub(crate) const OFF: Self = Self {
+        on: false,
         barrel: 0.0,
         scanline: 0.0,
         mask: 0.0,
@@ -71,6 +92,7 @@ impl CrtSettings {
     /// siege log through. The Phase 0 worst-case legibility test is what settles
     /// these, so treat them as a starting point rather than a result.
     pub(crate) const DEFAULT: Self = Self {
+        on: true,
         barrel: 0.10,
         scanline: 0.32,
         mask: 0.10,
@@ -149,7 +171,7 @@ impl CrtUniform {
             time,
             cell_width: cell.0,
             cell_height: cell.1,
-            enabled: f32::from(u8::from(settings != CrtSettings::OFF)),
+            enabled: f32::from(u8::from(settings.on)),
         }
     }
 }
@@ -178,6 +200,49 @@ mod tests {
         ] {
             assert_eq!(value, 0.0);
         }
+    }
+
+    #[test]
+    fn nothing_world_driven_can_switch_a_disabled_tube_back_on() {
+        // The defect this replaced: `enabled` was `settings != OFF`, and both
+        // `flash` and `desaturation` are documented as world-driven. Driving
+        // either made the settings unequal to `OFF`, so `enabled` flipped to 1.0
+        // and the whole tube — barrel, scanlines, grille, vignette — came back
+        // for a player who had turned it off for motion sickness (§14).
+        //
+        // Checked field by field rather than through the toggle, because the
+        // failure was never that someone pressed the wrong key. It was that
+        // something else wrote a field.
+        for lit in [
+            CrtSettings {
+                flash: LinearRgba::rgb(1.0, 1.0, 1.0),
+                ..CrtSettings::OFF
+            },
+            CrtSettings {
+                desaturation: 0.9,
+                ..CrtSettings::OFF
+            },
+            CrtSettings {
+                vignette: 0.85,
+                ..CrtSettings::OFF
+            },
+        ] {
+            assert_ne!(lit, CrtSettings::OFF, "the test is not testing anything");
+            let uniform = CrtUniform::new(lit, 0.0, (8.0, 16.0));
+            assert_eq!(uniform.enabled, 0.0, "{lit:?} switched the tube on");
+        }
+    }
+
+    #[test]
+    fn being_on_is_stated_rather_than_inferred_from_the_effects() {
+        // A tube whose every effect happens to sit at zero is still *on* — it is
+        // simply a flat, quiet one. Conflating the two is what let a single
+        // written field resurrect the whole picture.
+        let quiet = CrtSettings {
+            on: true,
+            ..CrtSettings::OFF
+        };
+        assert_eq!(CrtUniform::new(quiet, 0.0, (8.0, 16.0)).enabled, 1.0);
     }
 
     #[test]

@@ -12,14 +12,15 @@
 //! the log a player will `peruse`.
 
 use orbs_render::{
-    DEEP_FOCUS_FLOOR, DisplayMode, FieldName, Frame, Pos, RecordKind, RecordView, Records, Rect,
-    ScreenLayout, ScreenRequest, Span, Style, UtteranceKind,
+    DisplayMode, FieldName, Frame, Pos, RecordKind, RecordView, Records, Rect, Span, Style,
+    UtteranceKind,
 };
 use orbs_sim::Sim;
 
 use super::input::Line;
 use super::linear::Linear;
 use super::screen::Screen;
+use super::transition::PaneTransition;
 
 /// Columns the telemetry pane shows.
 ///
@@ -31,49 +32,49 @@ const TELEMETRY: [FieldName; 3] = [FieldName::Name, FieldName::Quantity, FieldNa
 
 /// Paint the session into `frame`.
 ///
-/// **Two panes, from a real [`ScreenLayout`].** The game drew a single hand-built
+/// **Two panes, from a real `ScreenLayout`.** The game drew a single hand-built
 /// rectangle until now, so §9's whole layout system — pane tiling, the sidebar,
 /// Deep versus Wide focus — existed only in an example. Asking the layout for two
 /// panes is what makes it something the binary exercises (§15's retroactive
 /// gate), and it is also just the right screen: a session and a dashboard.
+///
+/// The layout arrives already interpolated: a pane appearing or leaving does so
+/// over a fraction of a second (see [`PaneTransition`]), and every rectangle here
+/// is wherever that motion has reached this frame.
 pub(crate) fn paint(
     frame: &mut Frame,
     sim: &Sim,
     line: &Line,
     screen: &Screen,
     linear: &mut Linear,
+    panes: &PaneTransition,
 ) {
     let grid = frame.size();
-    // A second pane only where there is room for one. At the 80×22 floor a
-    // secondary pane is a four-row strip (§9) — a border, a header and one row —
-    // which is why §9 sets `DEEP_FOCUS_FLOOR` in the first place. Below it the
-    // readings live in the session's border title instead, so nothing is lost;
-    // above it they get a real table. Drag the window across that line and watch
-    // the pane appear.
-    let panes = if grid.fits(DEEP_FOCUS_FLOOR) { 2 } else { 1 };
-    let layout = ScreenLayout::compute(&ScreenRequest {
-        grid,
-        main_panes: panes,
-        sidebar_panes: 0,
-        mode: screen.mode,
-    });
-
+    let layout = panes.layout(grid, screen.mode);
     let main = layout.main();
     let first = main.first().copied().unwrap_or(Rect::EMPTY);
+
+    // **The target's pane count, not the interpolated one.** Below
+    // `DEEP_FOCUS_FLOOR` the readings live in the session's border title; above
+    // it they get a real telemetry pane. Deciding that from where the animation
+    // has *reached* would pop the title from its long form to its short one
+    // partway through the motion. Switching once, when the motion starts, reads
+    // as part of the same movement — and for the quarter-second a pane is
+    // leaving, the readings are briefly in both places, which is the harmless
+    // direction to be wrong in.
+    let carry_readings = panes.panes() == 1;
+
     // The same rectangle, not a second pane: the point of §14's stream is that
     // it says the same thing as the cells, and a comparison you make by pressing
     // one key is a comparison you actually make.
     if linear.showing() {
-        super::linear::paint(linear, frame, sim, screen, first, panes == 1);
+        super::linear::paint(linear, frame, sim, screen, first, carry_readings);
     } else {
-        session(frame, sim, screen, first, panes == 1);
+        session(frame, sim, screen, first, carry_readings);
     }
-    telemetry(
-        frame,
-        sim,
-        screen,
-        main.get(1).copied().unwrap_or(Rect::EMPTY),
-    );
+    if let Some(second) = main.get(1) {
+        telemetry(frame, sim, screen, *second);
+    }
     input_line(frame, layout.input(), line, &sim.prompt());
 }
 
