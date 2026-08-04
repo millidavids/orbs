@@ -62,7 +62,7 @@ impl Sim {
         commands.add_systems(run_pending);
 
         let mut schedule = new_sim_schedule();
-        schedule.add_systems(tower::finish);
+        schedule.add_systems((tower::finish, tower::drift));
         build(&mut schedule);
 
         // A **third** pass, for the same reason `commands` is a first one:

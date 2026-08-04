@@ -84,7 +84,10 @@ pub fn raise(world: &mut World) {
 
         for holding in branch.holds {
             for name in holding.names {
-                spawn(world, Some(at), name, holding.kind);
+                let node = spawn(world, Some(at), name, holding.kind);
+                if name.ends_with(".log") {
+                    world.entity_mut(node).insert(super::sabotage::Log);
+                }
             }
         }
     }

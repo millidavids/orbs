@@ -150,12 +150,18 @@ pub fn finish(world: &mut World) {
     for (place, working) in landed {
         world.entity_mut(place).remove::<Working>();
         let subject = name_of(world, working.subject);
+        // `Source` is what makes a domain log a log: §3 keeps one stream, and
+        // `peruse alembic.log` is that stream filtered by who wrote each line.
+        let source = world
+            .get::<Name>(place)
+            .map_or_else(String::new, |name| name.0.clone());
         world
             .resource_mut::<Scrollback>()
             .records_mut()
             .push(RecordKind::Completion)
             .text(FieldName::Name, working.verb.canonical())
             .text(FieldName::Detail, &subject)
+            .text(FieldName::Source, &source)
             .role(Role::Success)
             .finish();
 
@@ -191,6 +197,26 @@ pub fn purge(world: &mut World, target: Entity) {
     let name = world
         .get::<Name>(target)
         .map_or_else(String::new, |name| name.0.clone());
+
+    // Purging a *poisoned* surface clears the interference rather than
+    // destroying the surface. §7 makes destruction maintenance, and the loop
+    // that gives sabotage its point is notice → `verify` → `purge`: finding
+    // tampering you cannot do anything about is its own dead end.
+    if super::sabotage::poisoned(world, target) {
+        world
+            .entity_mut(target)
+            .remove::<super::sabotage::Poisoned>();
+        world
+            .resource_mut::<Scrollback>()
+            .records_mut()
+            .push(RecordKind::Completion)
+            .text(FieldName::Name, Verb::Purge.canonical())
+            .text(FieldName::Detail, &name)
+            .text(FieldName::State, "cleansed")
+            .role(Role::Success)
+            .finish();
+        return;
+    }
 
     if world.get::<Protected>(target).is_some() {
         world

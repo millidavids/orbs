@@ -70,6 +70,7 @@ fn execute(intent: &Intent, world: &mut World) {
         Verb::Decoct => work(intent, world, tower::DECOCT_TICKS),
         Verb::Divine => work(intent, world, tower::DIVINE_TICKS),
         Verb::Purge => purge(intent, world),
+        Verb::Verify => verify(intent, world),
         _ => acknowledge(intent.verb, world),
     }
 }
@@ -306,30 +307,29 @@ fn status(world: &mut World) {
 
 /// Read a file.
 ///
-/// The domain logs are real [`NounKind::File`] nouns and hold nothing yet, so
-/// they read back empty — a count of zero, which is a true answer.
+/// `orb.log` is the whole stream — §3: unlogged output is forbidden, so the
+/// record stream *is* the log. A **domain** log is that same stream filtered by
+/// who wrote each line, which is what `FieldName::Source` is for: one stream
+/// read several ways rather than several streams that can disagree.
 ///
-/// They used to fall through to [`acknowledge`] and report **success having read
-/// nothing**, which is worse than an error: §6 forbids a bare error precisely so
-/// a player is never left guessing, and a cheerful completion over an unread
-/// file leaves them guessing with false confidence. The branch was unreachable
-/// until the tower gave the scene a second `File`.
+/// A file with nothing in it reads back as a count of zero, which is a true
+/// answer. It used to report success having read nothing, which is worse than an
+/// error — §6 forbids a bare error so a player is never left guessing, and a
+/// cheerful completion over an unread file leaves them guessing anyway.
 fn peruse(intent: &Intent, world: &mut World) {
     // Snapshot first: the stream being read is the stream being written to.
-    let lines = if names_the_log(intent) {
-        messages(world, None)
-    } else {
-        Vec::new()
-    };
-    emit(world, Verb::Peruse, &lines);
+    let tampered = tampered_source(world, intent);
+    let lines = read_file(world, intent, None);
+    emit(world, Verb::Peruse, &lines, tampered);
 }
 
-/// Filter the log.
+/// Filter a file.
 ///
 /// The first pipe stage, on real records. §7 calls this *"the only model that
 /// survives the eldritch renderer corrupting output"* — matching runs over field
 /// values, never over anything a view put on screen, so a narrow window cannot
-/// change what a search returns.
+/// change what a search returns, and a **poisoned** log still yields its text
+/// because §3 damages only the rendering.
 fn sift(intent: &Intent, world: &mut World) {
     let Some(pattern) = intent
         .arguments
@@ -339,54 +339,97 @@ fn sift(intent: &Intent, world: &mut World) {
         acknowledge(Verb::Sift, world);
         return;
     };
-    // A file with nothing in it matches nothing. Zero hits, honestly reported —
-    // see [`peruse`] for why this is not an acknowledgement.
-    let lines = if names_the_log(intent) {
-        messages(world, Some(&pattern))
-    } else {
-        Vec::new()
-    };
-    emit(world, Verb::Sift, &lines);
+    let tampered = tampered_source(world, intent);
+    let lines = read_file(world, intent, Some(&pattern));
+    emit(world, Verb::Sift, &lines, tampered);
 }
 
-/// Whether any argument names the log.
-fn names_the_log(intent: &Intent) -> bool {
+/// Report whether a surface has been interfered with (§8.1).
+///
+/// The command-detectable half of every tell. It is what makes the visual
+/// signature a *speed bonus for observant players rather than a requirement* —
+/// and what makes sabotage playable at all without sight.
+fn verify(intent: &Intent, world: &mut World) {
+    let Some(target) = intent
+        .arguments
+        .first()
+        .map(|argument| argument.value.clone())
+    else {
+        acknowledge(Verb::Verify, world);
+        return;
+    };
+    match here_or_place(world, &target) {
+        Some(node) => tower::verify(world, node),
+        None => missing(Verb::Verify, &target, world),
+    }
+}
+
+/// The node `target` names: something where the player stands, or a place.
+fn here_or_place(world: &mut World, target: &str) -> Option<Entity> {
+    let cwd = world.resource::<Cwd>().0;
+    tower::children_of(world, cwd)
+        .into_iter()
+        .find(|node| {
+            world
+                .get::<tower::Name>(*node)
+                .is_some_and(|n| n.0 == target)
+        })
+        .or_else(|| {
+            let root = root(world);
+            find_place(world, root, target)
+        })
+}
+
+/// Which file an intent names, if any.
+fn named_file(intent: &Intent) -> Option<&str> {
     intent
         .arguments
         .iter()
-        .any(|argument| argument.value == LOG)
+        .map(|argument| argument.value.as_str())
+        .find(|value| value == &LOG || value.ends_with(".log"))
 }
 
-/// The log's lines, optionally filtered, as owned text.
+/// Whether the named file has been poisoned (§8.1).
+fn tampered_source(world: &mut World, intent: &Intent) -> bool {
+    named_file(intent).is_some_and(|file| {
+        here_or_place(world, file).is_some_and(|node| tower::poisoned(world, node))
+    })
+}
+
+/// The lines a file holds, optionally filtered.
 ///
 /// Owned because the borrow has to end before anything can be written back into
-/// the same stream — reading and writing one log is the normal case here, not an
-/// edge one.
-fn messages(world: &World, pattern: Option<&str>) -> Vec<String> {
+/// the same stream — reading and writing one log is the normal case here.
+fn read_file(world: &World, intent: &Intent, pattern: Option<&str>) -> Vec<String> {
+    let Some(file) = named_file(intent) else {
+        return Vec::new();
+    };
+    // A domain log is the stream filtered by who wrote it.
+    let source = (file != LOG).then(|| file.trim_end_matches(".log").to_owned());
     let sift = pattern.map(Sift::new);
+
     world
         .resource::<Scrollback>()
         .records()
         .iter()
-        .filter(|record| sift.as_ref().is_none_or(|sift| record.matches(sift)))
+        // Never its own output, or each run would match everything the last one
+        // emitted and the stream would double every time.
         .filter(|record| record.kind() != RecordKind::LogLine)
+        .filter(|record| match &source {
+            Some(source) => {
+                record.field(FieldName::Source) == Some(orbs_render::Value::Text(source))
+            }
+            None => true,
+        })
+        .filter(|record| sift.as_ref().is_none_or(|sift| record.matches(sift)))
         .map(|record| record.to_line())
         .collect()
 }
 
-/// Write `lines` back as log output, under the verb that produced them.
-fn emit(world: &mut World, verb: Verb, lines: &[String]) {
+/// Write `lines` back as log output, damaged if the source was poisoned.
+fn emit(world: &mut World, verb: Verb, lines: &[String], tampered: bool) {
     let mut scrollback = world.resource_mut::<Scrollback>();
-    let rows = scrollback.records_mut();
-    rows.push(RecordKind::Completion)
-        .text(FieldName::Name, verb.canonical())
-        .count(FieldName::Quantity, quantity(lines.len()))
-        .finish();
-    for line in lines {
-        rows.push(RecordKind::LogLine)
-            .text(FieldName::Message, line)
-            .finish();
-    }
+    tower::emit_lines(scrollback.records_mut(), verb, lines, tampered);
 }
 
 /// The orb understood, and has nothing to do about it yet.
