@@ -229,15 +229,9 @@ fn draw_lines<'r>(
             break;
         }
         drawn.clear();
-        // Content only. A line view names no columns, so an annotation would
-        // otherwise be drawn as text — `"resolved survey"` — putting an internal
-        // token on screen for a player to read.
-        for (index, (_, value)) in record.content().enumerate() {
-            if index > 0 {
-                drawn.push(' ');
-            }
-            value.write(&mut drawn);
-        }
+        // Content only: an annotation drawn as text would put an internal token
+        // — `"resolved survey"` — on screen for a player to read.
+        record.write_line(&mut drawn);
         speech.clear();
         record.speak(&mut speech);
 

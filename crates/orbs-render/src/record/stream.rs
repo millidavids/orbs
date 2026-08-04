@@ -274,7 +274,12 @@ impl<'a> Record<'a> {
             out.push_str(spoken);
             return;
         }
-        let labelled = self.kind().utterance() == UtteranceKind::TableRow;
+        // Labels are for reconstructing columns (§14). A row with one field has
+        // no columns, so `message: tick 33` is pure noise — the kind decides
+        // whether this *can* be a table, and the field count decides whether it
+        // is one.
+        let labelled =
+            self.kind().utterance() == UtteranceKind::TableRow && self.content().count() > 1;
         for (index, (name, value)) in self.content().enumerate() {
             if index > 0 {
                 out.push_str(", ");
@@ -285,6 +290,29 @@ impl<'a> Record<'a> {
             }
             value.write(out);
         }
+    }
+
+    /// Append the record's drawn form: content values, space separated.
+    ///
+    /// What a line view puts on screen, and what a command re-emitting a record
+    /// into the log should carry. Storing [`Record::speak`] there instead would
+    /// nest one record's linearisation inside another's field, which reads back
+    /// as `message: name: seed, qty: 12648430`.
+    pub fn write_line(&self, out: &mut String) {
+        for (index, (_, value)) in self.content().enumerate() {
+            if index > 0 {
+                out.push(' ');
+            }
+            value.write(out);
+        }
+    }
+
+    /// The record's drawn form, as an owned string.
+    #[must_use]
+    pub fn to_line(&self) -> String {
+        let mut out = String::new();
+        self.write_line(&mut out);
+        out
     }
 
     /// What a screen reader should hear, as an owned string.

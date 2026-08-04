@@ -8,6 +8,7 @@
 
 pub mod parser;
 
+pub mod execute;
 pub mod session;
 
 mod rng;
@@ -15,8 +16,9 @@ mod schedule;
 mod sim;
 mod tick;
 
+pub use execute::{LOG, MAX_MEDITATE};
 pub use rng::{RngStream, Rngs};
 pub use schedule::{SimSchedule, new_sim_schedule};
-pub use session::{Pending, Scrollback, Submissions};
+pub use session::{Pending, Scrollback, Skip, Submissions};
 pub use sim::Sim;
 pub use tick::Tick;

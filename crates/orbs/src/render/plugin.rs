@@ -222,7 +222,7 @@ fn redraw(
     frame.reset(screen.grid);
 
     if screen.is_hostable() {
-        crate::shell::paint(frame, tower.sim(), &line);
+        crate::shell::paint(frame, tower.sim(), &line, &screen);
     } else {
         // `Screen::is_hostable` documents this as a real state to render, not a
         // reason to stop drawing. Blanking the mesh left the player looking at an

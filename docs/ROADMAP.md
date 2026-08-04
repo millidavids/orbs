@@ -52,23 +52,24 @@ reviewed, and green. Much of it the **game did not call**. This table is the
 scope of the retroactive gating pass, and it is what "verified" versus
 "asserted" looks like written down.
 
-The prompt has since closed three rows. The remainder is the pass that follows.
+The prompt closed three rows; the retroactive pass has closed four more.
+What is still ❌ or ⚠️ is what remains of it.
 
 | Built | Reachable from the running game? | Gated by |
 |---|---|---|
 | Cell renderer, glyph atlas | ✅ it is what you look at | — |
 | Phosphor themes | ✅ `F2` | — |
 | CRT — all ten effects, peak-threat state | ✅ `F3` | — |
-| Determinism spine — seed, tick, `step()` | ⚠️ tick shows, in a stand-in pane | Retroactive pass |
+| Determinism spine — seed, tick, `step()` | ✅ `meditate <n>`, `status`, live in the border | — |
 | Frame boundary — panes, layout | ⚠️ one pane, stand-in content | Retroactive pass |
 | Parser — 16 commands, 3 registers | ✅ type at it | — |
 | Naming pass — synonyms, canonical echo | ✅ the echo answers in canonical arcane | — |
 | Record model, `RecordView` | ✅ every line on screen is a record | — |
-| Fidelity tiers | ❌ | Retroactive pass |
+| Fidelity tiers | ✅ tier and grid in the border; drag the window | — |
 | `Speech` linear stream | ❌ captured 60×/s, never surfaced | Retroactive pass |
-| CP437 repertoire enforcement | ❌ offline lint only | Retroactive pass |
+| CP437 repertoire enforcement | ✅ the prompt refuses what it cannot draw | — |
 | Parse instrumentation (`ParseLog`, TSV) | ❌ | Retroactive pass |
-| `sift` / record filtering | ❌ | Retroactive pass |
+| `sift` / record filtering | ✅ `sift <pattern> orb.log` | — |
 | Eldritch + tampered presentation | ❌ | Retroactive pass |
 | Per-subsystem RNG streams | ❌ nothing rolls yet | **Phase 2** — honest deferral, see below |
 
@@ -84,8 +85,8 @@ would be worse than naming the phase that gates it.
       `Sim::step()` as the sole entry point. 13 tests green, clippy clean at
       `-D warnings`. Verified `bevy_ecs` unifies to one version across the
       workspace, so types match across the sim/frontend boundary
-      **See it:** ⚠️ tick advances in a stand-in pane. `meditate <n>` and a
-      seed/tick readout come in the retroactive pass
+      **See it:** ✅ `meditate 30` and watch the tick jump; `status` reports the
+      seed; the border carries both live
 - [x] **`orbs-render` Frame boundary** — cell buffer, semantic styling, layout.
       `Style` carries role/intensity/presentation and never a colour; every frame
       carries a `Speech` linear stream captured at paint time; glyphs are bounded
@@ -109,8 +110,8 @@ would be worse than naming the phase that gates it.
       reading so the gate can cluster failures by cause; `ParseLog::to_tsv()`
       exports one row per candidate. `cargo run -p orbs-sim --example parse -- -i`
       to type at it. 180 workspace tests green
-      **See it:** ❌ unreachable from the frontend. Gated by **the prompt**;
-      instrumentation export by the retroactive pass
+      **See it:** ✅ type at it. ⚠️ the instrumentation export is still gated by
+      the retroactive pass
 - [x] **Naming pass** for the slice's 16 commands — run against the implemented
       vocabulary, not by eye. Found a canonical collision between the two core
       brewing verbs (`decoct`/`decant`, 667), a `dec-` prefix shared three ways,
@@ -118,8 +119,8 @@ would be worse than naming the phase that gates it.
       `inscribe`→`scribe`; old words kept as synonyms. Canonical collisions 1→0,
       prefix ambiguity 1→0, synonym collisions 7→3 all claimed. Now enforced
       continuously by `crates/orbs-sim/tests/naming.rs` — DESIGN.md §6.1, §19
-      **See it:** ❌ gated by **the prompt** — type each register and read the
-      canonical echo come back
+      **See it:** ✅ type any register at the prompt and read the canonical echo
+      come back
 - [x] **Cell-grid text renderer** — glyph atlas + single-mesh quads, integer
       fidelity tiers. One draw call at any grid size; **227 µs to rebuild the
       worst-case 160×45 grid in release**, 1.4% of a 60 Hz frame, so §4's
@@ -128,8 +129,8 @@ would be worse than naming the phase that gates it.
       colour. Camera fixed to *physical* pixels so integer scaling survives to
       the framebuffer. Three phosphor themes, contrast-solved rather than
       eyeballed. `ORBS_CAPTURE=1 cargo run -p orbs` screenshots it
-      **See it:** ✅ it is what you look at. `F2` cycles themes. ⚠️ fidelity
-      tiers are not yet reachable — retroactive pass
+      **See it:** ✅ it is what you look at. `F2` cycles themes; drag the window
+      and the tier and grid in the border change
 - [x] **CRT port** — barrel, scanlines, aperture grille, vignette, chromatic
       aberration, flicker, rounded corners, phosphor glow, desaturation, flash.
       **The shader ported; the surrounding Rust did not exist to port** — Bevy
@@ -159,8 +160,8 @@ would be worse than naming the phase that gates it.
       one. 292 workspace tests green; the third screen of
       `cargo run -p orbs-render --example screens` is one stream drawn three
       ways — DESIGN.md §7, §19
-      **See it:** ❌ never drawn by the renderer built for it. Gated by **the
-      prompt**; `sift` and the presentations by the retroactive pass
+      **See it:** ✅ every line on screen is a record. `sift <pattern> orb.log`
+      filters them. ⚠️ the eldritch/tampered presentations remain
 > **Everything below is ordered by playability, not by layer** — DESIGN.md §15.
 > The first six items were built in layer order and left ~10,000 lines the binary
 > called under 40% of. **No item below is done until the "see it" line works.**

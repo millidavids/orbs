@@ -164,9 +164,11 @@ fn a_table_still_draws_an_annotation_a_caller_asked_for() {
         .draw(&mut frame.painter(area), area, records.iter());
 
     assert!(frame.to_text().contains("survey  forced"));
+    // Spoken without its label: the annotation is skipped, leaving one content
+    // field, and one field has no columns to reconstruct.
     assert_eq!(
         frame.speech().utterances().next().expect("row").text,
-        "name: survey",
+        "survey",
     );
 }
 
@@ -469,4 +471,44 @@ fn a_selectable_candidate_is_distinguishable_by_ear() {
         spoken[1].outcome.is_some_and(Outcome::is_selectable),
         "the selectable one must say so",
     );
+}
+
+#[test]
+fn one_column_is_not_a_table_worth_labelling() {
+    // §14 wants labels so a listener never reconstructs columns from spacing.
+    // A row with a single field has no columns, so `message: tick 33` is noise —
+    // which is exactly what a re-emitted log line sounded like before this.
+    let mut records = Records::new();
+    records
+        .push(RecordKind::LogLine)
+        .text(FieldName::Message, "tick 33")
+        .finish();
+    records
+        .push(RecordKind::LogLine)
+        .tick(FieldName::Tick, 1247)
+        .text(FieldName::Message, "east ward holding")
+        .finish();
+
+    assert_eq!(records.get(0).expect("one field").to_speech(), "tick 33");
+    assert_eq!(
+        records.get(1).expect("two fields").to_speech(),
+        "tick: 1247, message: east ward holding",
+    );
+}
+
+#[test]
+fn a_records_drawn_form_never_nests_another_records_speech() {
+    // A command re-emitting a record into the log stores its *drawn* form. With
+    // the spoken form the label came too, and reading the log back gave
+    // `message: name: seed, qty: 12648430`.
+    let mut records = Records::new();
+    records
+        .push(RecordKind::Status)
+        .text(FieldName::Name, "seed")
+        .count(FieldName::Quantity, 12_648_430)
+        .finish();
+
+    let source = records.get(0).expect("record");
+    assert_eq!(source.to_line(), "seed 12648430");
+    assert_eq!(source.to_speech(), "name: seed, qty: 12648430");
 }

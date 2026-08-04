@@ -17,22 +17,38 @@ use orbs_render::{
 use orbs_sim::Sim;
 
 use super::input::Line;
+use super::screen::Screen;
 
 /// Paint the session into `frame`.
-pub(crate) fn paint(frame: &mut Frame, sim: &Sim, line: &Line) {
+pub(crate) fn paint(frame: &mut Frame, sim: &Sim, line: &Line, screen: &Screen) {
     let grid = frame.size();
     let layout = ScreenLayout::compute(&ScreenRequest::single(grid));
     let pane = layout.main().first().copied().unwrap_or(Rect::EMPTY);
 
-    // The tick and seed live in the border title. `Painter::border` announces a
-    // title as a heading, so world time reaches the linear stream without
-    // spending a row — and a changing tick here is the visible proof that the
-    // sim is running at all.
-    let title = format!(
-        "O.R.B.S.  tick {}  seed {:#x}",
-        sim.tick().get(),
-        sim.seed(),
-    );
+    // Everything the tube itself is doing, in the border title. `Painter::border`
+    // announces a title as a heading, so all of it reaches the linear stream
+    // without spending a row.
+    //
+    // This is the retroactive playability gate for two subsystems that had no
+    // surface at all (§15): a changing **tick** is the only visible proof the
+    // sim is running, and the **tier and grid** make §9's fidelity table
+    // something you can walk through by dragging a window edge rather than
+    // something you read in a document.
+    let title = match screen.fidelity {
+        Some(tier) => format!(
+            "O.R.B.S.  tick {}  seed {:#x}  tier {}x  grid {}x{}",
+            sim.tick().get(),
+            sim.seed(),
+            tier.scale(),
+            screen.grid.cols,
+            screen.grid.rows,
+        ),
+        None => format!(
+            "O.R.B.S.  tick {}  seed {:#x}",
+            sim.tick().get(),
+            sim.seed()
+        ),
+    };
     let mut painter = frame.painter(pane);
     painter.border(pane, Some(&title), Style::DIM);
 

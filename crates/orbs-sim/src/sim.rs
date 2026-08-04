@@ -8,10 +8,11 @@
 use bevy_ecs::prelude::*;
 use orbs_render::RecordKind;
 
-use crate::parser::{Mode, Resolution, Scene, report, resolve};
+use crate::execute::run_pending;
+use crate::parser::{Mode, NounKind, Resolution, Scene, report, resolve};
 use crate::rng::Rngs;
 use crate::schedule::new_sim_schedule;
-use crate::session::{Pending, Scrollback, Submissions, run_pending};
+use crate::session::{Pending, Scrollback, Skip, Submissions};
 use crate::tick::Tick;
 
 /// A complete simulation: the world, its schedule, and its clock.
@@ -38,10 +39,14 @@ impl Sim {
         let mut world = World::new();
         world.insert_resource(Rngs::from_seed(seed));
         world.insert_resource(Tick::default());
-        world.init_resource::<Scene>();
+        // §3's log, nameable from the moment the game starts: the record
+        // stream *is* the log, so `peruse orb.log` and `sift <pattern> orb.log`
+        // are real commands rather than debug affordances.
+        world.insert_resource(Scene::new().with(NounKind::File, crate::execute::LOG));
         world.init_resource::<Scrollback>();
         world.init_resource::<Pending>();
         world.init_resource::<Submissions>();
+        world.init_resource::<Skip>();
 
         // Its **own** schedule, run before the caller's. Adding `run_pending`
         // to the same schedule and relying on insertion order would be an
@@ -68,6 +73,18 @@ impl Sim {
     /// is doing the work of the first tick rather than reporting the tick it just
     /// finished.
     pub fn step(&mut self) {
+        self.advance();
+        // A command may have asked for time to pass — `meditate 30`. Running it
+        // out here rather than in the caller is what keeps the Bevy build, the
+        // terminal build and the balance harness passing time identically.
+        // `Skip` is capped where it is requested, so this terminates.
+        while self.world.resource_mut::<Skip>().take() {
+            self.advance();
+        }
+    }
+
+    /// One tick, exactly.
+    fn advance(&mut self) {
         let next = self.world.resource::<Tick>().next();
         self.world.insert_resource(next);
         // What the player asked for, then what the world does about it. Two

@@ -30,9 +30,9 @@
 //! all a replay needs — and is also what §6's command-anchored `undo` will want.
 
 use bevy_ecs::prelude::*;
-use orbs_render::{FieldName, RecordKind, Records, Role};
+use orbs_render::Records;
 
-use crate::parser::{Intent, Verb};
+use crate::parser::Intent;
 use crate::tick::Tick;
 
 /// Everything the player has said and been told.
@@ -54,7 +54,7 @@ impl Scrollback {
 
 /// Commands resolved but not yet run.
 ///
-/// Drained by [`run_pending`] at the start of every tick, which is what keeps
+/// Drained by [`run_pending`](crate::execute::run_pending) at the start of every tick, which is what keeps
 /// "the player typed it" and "the world did it" on opposite sides of a tick
 /// boundary.
 #[derive(Resource, Debug, Default)]
@@ -76,6 +76,43 @@ impl Pending {
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
+    }
+
+    /// Take everything waiting.
+    pub fn drain(&mut self) -> Vec<Intent> {
+        std::mem::take(&mut self.0)
+    }
+}
+
+/// Ticks a command asked the world to pass through.
+///
+/// `meditate 30` cannot advance the clock where it runs — it *is* running inside
+/// a tick — so it leaves a request here and [`Sim::step`](crate::Sim::step) runs
+/// it out before returning. Keeping the loop inside `step` rather than in the
+/// caller is what makes the Bevy build, the terminal build and the balance
+/// harness pass time identically.
+#[derive(Resource, Debug, Default)]
+pub struct Skip(u64);
+
+impl Skip {
+    /// Ask for `ticks` more.
+    pub fn request(&mut self, ticks: u64) {
+        self.0 = self.0.saturating_add(ticks);
+    }
+
+    /// Take one, if any are owed.
+    pub(crate) fn take(&mut self) -> bool {
+        if self.0 == 0 {
+            return false;
+        }
+        self.0 -= 1;
+        true
+    }
+
+    /// How many ticks are still owed.
+    #[must_use]
+    pub fn owed(&self) -> u64 {
+        self.0
     }
 }
 
@@ -101,38 +138,11 @@ impl Submissions {
     }
 }
 
-/// Run everything the player queued since the last tick.
-///
-/// Nothing executes yet — the domains that give verbs effects are the next
-/// roadmap item. Until then this emits one [`RecordKind::Completion`] per
-/// intent, which is not a placeholder: it is what makes the tick boundary
-/// *visible*. Type a command, see the echo instantly, watch the completion
-/// arrive up to a second later. That is the architecture, on screen.
-pub fn run_pending(mut pending: ResMut<Pending>, mut scrollback: ResMut<Scrollback>) {
-    if pending.0.is_empty() {
-        return;
-    }
-    let queued: Vec<Verb> = pending.0.drain(..).map(|intent| intent.verb).collect();
-    let records = scrollback.records_mut();
-    for verb in queued {
-        // No tick field. A line view joins every content value, so carrying one
-        // here drew — and spoke — `√ survey 3`: a bare unlabelled integer beside
-        // a verb. The scrollback is ordered and the border already reports world
-        // time; when a completion genuinely needs a timestamp it will be a
-        // `LogLine` in a table that labels its columns.
-        records
-            .push(RecordKind::Completion)
-            .text(FieldName::Name, verb.canonical())
-            .role(Role::Success)
-            .finish();
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::Sim;
-    use orbs_render::{Outcome, Value};
+    use orbs_render::{FieldName, Outcome, RecordKind, Value};
 
     fn messages(sim: &Sim) -> Vec<String> {
         sim.scrollback()
