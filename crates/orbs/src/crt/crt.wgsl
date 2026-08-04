@@ -70,12 +70,16 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let sample_g = textureSample(screen_texture, texture_sampler, safe);
     let sample_b = textureSample(screen_texture, texture_sampler, clamp(safe - drift, vec2<f32>(0.0), vec2<f32>(1.0)));
 
-    // Phosphor bloom: four cardinal taps a *glyph pixel* away — cell / 8 — so the
-    // halo grows with the fidelity tier but never becomes a second image. At a
-    // third of a cell this ghosted: every line of text had a visible duplicate
-    // below it, which is a double exposure, not a glow.
+    // Phosphor bloom: four cardinal taps *half* a glyph pixel away, so the halo
+    // hugs the stroke instead of spreading into a haze the eye has to look
+    // through. It still scales with the fidelity tier.
+    //
+    // Two earlier values were wrong in the same direction. A third of a cell
+    // ghosted outright — every line of text had a visible duplicate below it. A
+    // whole glyph pixel stopped ghosting but left the text soft, which §4 does
+    // not permit: legibility is the product.
     let dims = vec2<f32>(textureDimensions(screen_texture));
-    let spread = vec2<f32>(crt.cell_width, crt.cell_height) / (8.0 * dims);
+    let spread = vec2<f32>(crt.cell_width, crt.cell_height) / (16.0 * dims);
     let up = textureSample(screen_texture, texture_sampler, clamp(safe + vec2<f32>(0.0, spread.y), vec2<f32>(0.0), vec2<f32>(1.0)));
     let down = textureSample(screen_texture, texture_sampler, clamp(safe - vec2<f32>(0.0, spread.y), vec2<f32>(0.0), vec2<f32>(1.0)));
     let left = textureSample(screen_texture, texture_sampler, clamp(safe - vec2<f32>(spread.x, 0.0), vec2<f32>(0.0), vec2<f32>(1.0)));

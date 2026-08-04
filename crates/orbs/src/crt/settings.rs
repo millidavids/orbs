@@ -23,8 +23,16 @@ pub(crate) struct CrtSettings {
     /// Where the fall-off begins, as a fraction of the half-diagonal.
     pub(crate) vignette_radius: f32,
     /// Convergence error towards the edges.
+    ///
+    /// Kept very low. This is the effect that most directly costs legibility —
+    /// it puts a coloured fringe on every stroke — and a tube reads as a tube
+    /// long before the fringe becomes something the eye has to work past.
     pub(crate) aberration: f32,
     /// Phosphor bloom around lit glyphs.
+    ///
+    /// Restrained on purpose: glow is haze, and haze is the thing a reader has
+    /// to look *through*. A tight, dim halo says phosphor; a wide bright one
+    /// just says out of focus.
     pub(crate) glow: f32,
     /// Depth of the slow hum band that rolls down the tube.
     ///
@@ -68,8 +76,8 @@ impl CrtSettings {
         mask: 0.10,
         vignette: 0.45,
         vignette_radius: 0.90,
-        aberration: 0.0015,
-        glow: 0.85,
+        aberration: 0.0005,
+        glow: 0.30,
         flicker: 0.10,
         corner_radius: 0.028,
         desaturation: 0.0,
@@ -83,7 +91,7 @@ impl CrtSettings {
     pub(crate) const PEAK_THREAT: Self = Self {
         vignette: 0.85,
         flicker: 0.22,
-        aberration: 0.0035,
+        aberration: 0.0012,
         desaturation: 0.25,
         ..Self::DEFAULT
     };
