@@ -20,7 +20,14 @@ impl Plugin for CrtPlugin {
         embedded_asset!(app, "crt.wgsl");
 
         app.add_plugins(ExtractComponentPlugin::<CrtSettings>::default())
-            .add_systems(Update, cycle.run_if(input_just_pressed(KeyCode::F3)));
+            // Guarded on boot like every other key: during the sequence, a
+            // keystroke means skip. See `boot::plugin::skip`.
+            .add_systems(
+                Update,
+                cycle
+                    .run_if(input_just_pressed(KeyCode::F3))
+                    .run_if(crate::boot::booted),
+            );
 
         let Some(render_app) = app.get_sub_app_mut(RenderApp) else {
             return;

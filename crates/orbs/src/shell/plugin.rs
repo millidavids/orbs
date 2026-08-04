@@ -51,7 +51,12 @@ impl Plugin for ShellPlugin {
                     submit.run_if(on_message::<SubmittedMessage>),
                 )
                     .chain()
-                    .in_set(ShellSystems::Input),
+                    .in_set(ShellSystems::Input)
+                    // Nothing typed reaches the line until the game is up. The
+                    // keystroke that skips the boot sequence is a skip and not
+                    // input, so it must not also be the first letter of a
+                    // command — see `boot::plugin::skip`.
+                    .run_if(crate::boot::booted),
             )
             .add_systems(
                 Update,
@@ -79,7 +84,11 @@ impl Plugin for ShellPlugin {
                     // frames where nothing happened, which is most of them.
                     drive_panes,
                     drive_reveal,
-                ),
+                )
+                    // Every key here is guarded, `F10` most of all: a player
+                    // reaching for it during boot means *skip*, and without this
+                    // they would skip and quit in the same keystroke.
+                    .run_if(crate::boot::booted),
             );
     }
 }

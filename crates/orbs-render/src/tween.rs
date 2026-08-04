@@ -98,6 +98,12 @@ fn lerp(a: Rect, b: Rect, t: f32) -> Rect {
 
 /// One coordinate, interpolated and rounded back to whole cells.
 ///
+/// Crate-visible because it is the **only** `f32`-to-integer conversion in
+/// `orbs-render`, and keeping it that way means the justification below is
+/// written once rather than at every call site that needs a fraction of a cell
+/// count. [`Painter::border_revealed`](crate::Painter::border_revealed) uses it
+/// as `mix(0, total, t)`.
+///
 /// `f32` carries 24 bits of mantissa and a grid is bounded by `u16`, so every
 /// value here converts exactly on the way in; rounding is the only lossy step,
 /// and it is the one [`lerp`] is careful about.
@@ -110,7 +116,7 @@ fn lerp(a: Rect, b: Rect, t: f32) -> Rect {
     clippy::cast_sign_loss,
     reason = "rounded and clamped into u16's range on the line above the cast"
 )]
-fn mix(a: u16, b: u16, t: f32) -> u16 {
+pub(crate) fn mix(a: u16, b: u16, t: f32) -> u16 {
     let value = f32::from(a) + (f32::from(b) - f32::from(a)) * t;
     if value.is_nan() {
         return a;

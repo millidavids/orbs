@@ -12,8 +12,8 @@
 //! the log a player will `peruse`.
 
 use orbs_render::{
-    DisplayMode, FieldName, Frame, Pos, RecordKind, RecordView, Records, Rect, Span, Style,
-    UtteranceKind,
+    DisplayMode, FieldName, Frame, Pos, RecordKind, RecordView, Records, Rect, ScreenLayout,
+    ScreenRequest, Span, Style, UtteranceKind,
 };
 use orbs_sim::Sim;
 
@@ -78,6 +78,45 @@ pub(crate) fn paint(
         telemetry(frame, sim, screen, *second);
     }
     input_line(frame, layout.input(), line, &sim.prompt());
+}
+
+/// Paint the screen as it exists partway through the boot sequence.
+///
+/// Draws only what has arrived: `Dark` and `Strike` paint nothing at all, so the
+/// tube really is dark and the strike lands on an empty screen. The pane border
+/// then draws itself a cell at a time, and the POST card follows.
+///
+/// Takes no Bevy resources, because `shell::dump` builds no `App` (§19).
+pub(crate) fn paint_booting(
+    frame: &mut Frame,
+    sim: &Sim,
+    screen: &Screen,
+    stage: crate::boot::Stage,
+    progress: f32,
+) {
+    let grid = frame.size();
+    let layout = ScreenLayout::compute(&ScreenRequest::single(grid));
+    let pane = layout.main().first().copied().unwrap_or(Rect::EMPTY);
+
+    if stage.has_frame() {
+        let mut painter = frame.painter(pane);
+        // **Untitled.** `Painter::border` announces its title as a heading, and
+        // a border drawing itself one cell at a time would speak a pane that is
+        // not there yet. The title arrives with the game.
+        let revealed = if matches!(stage, crate::boot::Stage::Frame) {
+            progress
+        } else {
+            1.0
+        };
+        painter.border_revealed(pane, Style::DIM, revealed);
+    }
+
+    crate::boot::paint(frame, stage, progress);
+
+    if stage.has_prompt() {
+        input_line(frame, layout.input(), &Line::default(), &sim.prompt());
+    }
+    let _ = screen;
 }
 
 /// The transcript: what was typed and what came back.

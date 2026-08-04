@@ -55,8 +55,14 @@ impl Plugin for RenderPlugin {
             .add_systems(
                 Update,
                 (
-                    cycle_theme.run_if(input_just_pressed(KeyCode::F2)),
-                    capture.run_if(input_just_pressed(KeyCode::F12)),
+                    // The two keys are guarded on boot; the automatic capture is
+                    // not, so a scripted screenshot can still catch the sequence.
+                    cycle_theme
+                        .run_if(input_just_pressed(KeyCode::F2))
+                        .run_if(crate::boot::booted),
+                    capture
+                        .run_if(input_just_pressed(KeyCode::F12))
+                        .run_if(crate::boot::booted),
                     auto_capture.run_if(resource_exists::<AutoCapture>),
                     // The projection only needs revisiting when the window
                     // changes; every Update system carries a guard (CLAUDE.md).
@@ -65,9 +71,17 @@ impl Plugin for RenderPlugin {
                     tint_background.run_if(resource_changed::<Theme>),
                     blink::tick,
                     // Typing must not hide what is being typed: a caret caught
-                    // mid-blink when a key lands reads as dropped input.
-                    blink::wake.run_if(on_message::<bevy::input::keyboard::KeyboardInput>),
-                    redraw.run_if(atlas_ready),
+                    // mid-blink when a key lands reads as dropped input. Guarded
+                    // like every other keyed system — during boot a keystroke is
+                    // a skip, and waking a caret that is not on screen yet is at
+                    // best pointless.
+                    blink::wake
+                        .run_if(on_message::<bevy::input::keyboard::KeyboardInput>)
+                        .run_if(crate::boot::booted),
+                    // Chained below, so the mesh is always built from the frame
+                    // this frame painted rather than the previous one's.
+                    repaint.run_if(atlas_ready),
+                    rasterise.run_if(atlas_ready),
                 )
                     .chain()
                     .after(crate::shell::track_window)
@@ -207,31 +221,34 @@ fn tint_background(theme: Res<Theme>, mut clear: ResMut<ClearColor>) {
     clear.0 = theme.0.background.into();
 }
 
-/// Repaint the Frame and rebuild the mesh.
-fn redraw(
+/// Paint the screen into the `Frame`.
+///
+/// Split from [`rasterise`] rather than being one `redraw`, because they are two
+/// jobs meeting at the Frame boundary and sharing only the [`Canvas`]: this one
+/// decides *what the screen says* and reads the world to do it; that one turns
+/// cells into triangles and reads nothing but the frame, the theme and the
+/// caret. `clippy.toml`'s argument threshold is what forced the question, and
+/// the answer it wanted — a system whose parameters had stopped being one
+/// dependency list.
+fn repaint(
     screen: Res<Screen>,
-    theme: Res<Theme>,
     tower: Res<Tower>,
     line: Res<crate::shell::Line>,
-    blink: Res<Blink>,
     panes: Res<crate::shell::PaneTransition>,
     reveal: Res<crate::shell::Reveal>,
+    boot: Option<Res<crate::boot::Boot>>,
     mut linear: ResMut<crate::shell::Linear>,
-    mut cell: ResMut<CellSize>,
     mut canvas: ResMut<Canvas>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    grid_mesh: Option<Single<&Mesh2d, With<CellGrid>>>,
 ) {
-    let Some(grid_mesh) = grid_mesh else {
-        return;
-    };
-    let Some(mut mesh) = meshes.get_mut(&grid_mesh.0) else {
-        return;
-    };
     let frame = &mut canvas.frame;
     frame.reset(screen.grid);
 
-    if screen.is_hostable() {
+    let booting = boot.filter(|boot| !boot.is_live());
+    if let Some(boot) = booting {
+        // The orb waking up. It paints the parts of the screen that exist yet
+        // and nothing else, so `Dark` really is dark — see `boot::stage`.
+        crate::shell::paint_booting(frame, tower.sim(), &screen, boot.stage(), boot.progress());
+    } else if screen.is_hostable() {
         crate::shell::paint(
             frame,
             tower.sim(),
@@ -247,6 +264,24 @@ fn redraw(
         // empty rectangle with no idea why.
         crate::shell::paint_too_small(frame);
     }
+}
+
+/// Turn the `Frame`'s cells into the one mesh that draws them.
+fn rasterise(
+    screen: Res<Screen>,
+    theme: Res<Theme>,
+    blink: Res<Blink>,
+    canvas: Res<Canvas>,
+    mut cell: ResMut<CellSize>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    grid_mesh: Option<Single<&Mesh2d, With<CellGrid>>>,
+) {
+    let Some(grid_mesh) = grid_mesh else {
+        return;
+    };
+    let Some(mut mesh) = meshes.get_mut(&grid_mesh.0) else {
+        return;
+    };
 
     let scale = screen.fidelity.map_or(1, |tier| u16::from(tier.scale()));
 
@@ -258,5 +293,5 @@ fn redraw(
         height: f32::from(orbs_render::CELL_HEIGHT) * f32::from(scale),
     };
 
-    grid::build(frame, &theme.0, scale, blink.showing(), &mut mesh);
+    grid::build(&canvas.frame, &theme.0, scale, blink.showing(), &mut mesh);
 }

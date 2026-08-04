@@ -11,6 +11,7 @@
 //!
 //! F10 leaves the orb.
 
+mod boot;
 mod crt;
 mod render;
 mod shell;
@@ -58,6 +59,7 @@ fn main() -> AppExit {
             render::RenderPlugin,
             crt::CrtPlugin,
             shell::ShellPlugin,
+            boot::BootPlugin,
         ))
         .run()
 }

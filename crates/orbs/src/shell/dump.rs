@@ -28,12 +28,16 @@ use super::input::Line;
 use super::linear::Linear;
 use super::screen::Screen;
 use super::transition::PaneTransition;
+use crate::boot::Stage;
 
 /// The variable that asks for a dump, and optionally what to type first.
 const DUMP: &str = "ORBS_DUMP";
 
 /// The variable that overrides the grid, as `COLSxROWS`.
 const GRID: &str = "ORBS_GRID";
+
+/// The variable that picks a boot stage to dump.
+const BOOT: &str = "ORBS_BOOT";
 
 /// Commands are separated by this, so one shell word can drive a session.
 const SEPARATOR: char = ';';
@@ -80,6 +84,15 @@ pub(crate) fn run(seed: u64, wizard: Option<String>) -> bool {
     };
 
     let mut frame = Frame::new(grid);
+    // `ORBS_BOOT=frame` dumps that stage instead of the game. Boot runs once per
+    // launch and the window will not composite in a detached shell, so without
+    // this the sequence could only be checked by a person sitting in front of it
+    // — which is exactly the position `ORBS_DUMP` exists to get out of.
+    if let Some((stage, progress)) = requested_stage() {
+        super::prompt::paint_booting(&mut frame, &sim, &screen, stage, progress);
+        print(&frame);
+        return true;
+    }
     // The same branch `render::redraw` takes, and for the same reason: below the
     // floor the game draws a "too small" screen rather than a mangled layout, and
     // a tool documented as drawing the same frame the game draws has to draw that
@@ -107,6 +120,12 @@ pub(crate) fn run(seed: u64, wizard: Option<String>) -> bool {
         super::prompt::paint_too_small(&mut frame);
     }
 
+    print(&frame);
+    true
+}
+
+/// The frame, then what it says.
+fn print(frame: &Frame) {
     println!("{}", frame.to_text());
     println!("-- linearised (DESIGN.md §14) --");
     for utterance in frame.speech().utterances() {
@@ -116,7 +135,25 @@ pub(crate) fn run(seed: u64, wizard: Option<String>) -> bool {
             utterance.text
         );
     }
-    true
+}
+
+/// The boot stage `ORBS_BOOT` asked for, and how far through it.
+///
+/// `ORBS_BOOT=frame` is halfway through that stage — halfway is the only
+/// interesting point for a stage that animates, and naming a fraction as well
+/// would be a switch with two knobs nobody turns. `ORBS_BOOT=0` is the
+/// skip-it-entirely case and belongs to the running game, not here.
+fn requested_stage() -> Option<(Stage, f32)> {
+    let request = std::env::var(BOOT).ok()?;
+    let stage = match request.as_str() {
+        "dark" => Stage::Dark,
+        "strike" => Stage::Strike,
+        "prompt" => Stage::Prompt,
+        "frame" => Stage::Frame,
+        "post" => Stage::Post,
+        _ => return None,
+    };
+    Some((stage, 0.5))
 }
 
 /// The grid to draw into, from `ORBS_GRID` or §4's floor.

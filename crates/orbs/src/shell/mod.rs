@@ -12,7 +12,7 @@ pub(crate) use input::Line;
 pub(crate) use linear::Linear;
 pub use plugin::ShellPlugin;
 pub(crate) use plugin::ShellSystems;
-pub(crate) use prompt::{paint, paint_too_small};
+pub(crate) use prompt::{paint, paint_booting, paint_too_small};
 pub(crate) use reveal::Reveal;
 pub(crate) use screen::{Screen, track_window};
 pub(crate) use transition::PaneTransition;

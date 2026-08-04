@@ -33,7 +33,13 @@ impl Plugin for SimPlugin {
         // Update, so world speed is independent of frame rate — see `clock`.
         app.insert_resource(tower)
             .insert_resource(Time::<Fixed>::from_hz(1.0))
-            .add_systems(FixedUpdate, advance);
+            // Gated on the boot sequence being over. Not cosmetic: `tower::drift`
+            // rolls once per tick, so ticking through a wall-clock animation
+            // would advance the RNG stream by an amount that depends on how long
+            // boot took and whether anyone skipped it — the same seed would build
+            // a different world. A `run_if` on a `FixedUpdate` system is
+            // evaluated per fixed step, so no catch-up burst accrues at the end.
+            .add_systems(FixedUpdate, advance.run_if(crate::boot::booted));
 
         // Bevy's virtual clock discards any frame delta beyond max_delta, and
         // its 250 ms default would silently cost the tower time on an ordinary
