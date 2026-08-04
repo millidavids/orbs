@@ -83,6 +83,19 @@ impl Frame {
         self.cells.chunks_exact(usize::from(self.grid.cols).max(1))
     }
 
+    /// Whether every cell is blank.
+    ///
+    /// A frontend uploading geometry per frame wants this: a screen with nothing
+    /// on it produces no geometry, and re-uploading an empty buffer every frame
+    /// is at best wasted work — and on Bevy 0.19 it is worse than that, which is
+    /// why this exists. Says nothing about the cursor; a caller that draws one
+    /// checks it separately.
+    #[must_use]
+    pub fn is_blank(&self) -> bool {
+        self.rows()
+            .all(|row| row.iter().all(|cell| cell.is_blank()))
+    }
+
     /// Where the caret sits, if it is shown.
     ///
     /// Kept out of [`Cell`] because the terminal frontend must position the

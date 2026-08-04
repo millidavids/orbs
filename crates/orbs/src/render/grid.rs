@@ -188,16 +188,27 @@ pub(crate) fn build(frame: &Frame, theme: &Phosphor, scale: u16, showing: bool, 
     geometry.commit(mesh);
 }
 
-/// An empty mesh with the attributes [`build`] fills.
+/// The mesh the grid starts with, before anything has been drawn.
+///
+/// **Not zero-vertex.** Bevy 0.19's slab allocator answers a zero-length vertex
+/// buffer with `use-after-free: attempted to copy element data for an
+/// unallocated key`, and until the boot sequence existed nothing ever held an
+/// empty screen long enough for one to reach the GPU — the first frame always
+/// had the tower's report on it. It carries one degenerate triangle instead:
+/// three coincident vertices at the origin, fully transparent, which rasterises
+/// to no pixels and keeps the buffer allocated.
+///
+/// See `render::plugin::rasterise` for the other half — a blank screen must not
+/// rebuild the mesh at all, or this happens sixty times a second.
 pub(crate) fn empty_mesh() -> Mesh {
     let mut mesh = Mesh::new(
         PrimitiveTopology::TriangleList,
         RenderAssetUsages::RENDER_WORLD | RenderAssetUsages::MAIN_WORLD,
     );
-    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, Vec::<[f32; 3]>::new());
-    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, Vec::<[f32; 2]>::new());
-    mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, Vec::<[f32; 4]>::new());
-    mesh.insert_indices(Indices::U32(Vec::new()));
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, vec![[0.0, 0.0, 0.0]; 3]);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, vec![[0.0, 0.0]; 3]);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, vec![[0.0, 0.0, 0.0, 0.0]; 3]);
+    mesh.insert_indices(Indices::U32(vec![0, 1, 2]));
     mesh
 }
 

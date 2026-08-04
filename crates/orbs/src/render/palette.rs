@@ -109,6 +109,16 @@ impl Phosphor {
         };
         srgba.into()
     }
+
+    /// The hue the tube glows when it strikes.
+    ///
+    /// The theme's brightest base tone, so all three phosphors strike in their
+    /// own colour. A hardcoded white would belong to none of them — §4 makes the
+    /// palettes art direction rather than decoration, and a violet tube that
+    /// flashes white is a different machine for a fifth of a second.
+    pub(crate) fn glow(&self) -> LinearRgba {
+        self.base[weight(Intensity::Bright)].into()
+    }
 }
 
 const fn weight(intensity: Intensity) -> usize {

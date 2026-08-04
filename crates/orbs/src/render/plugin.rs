@@ -275,10 +275,29 @@ fn rasterise(
     mut cell: ResMut<CellSize>,
     mut meshes: ResMut<Assets<Mesh>>,
     grid_mesh: Option<Single<&Mesh2d, With<CellGrid>>>,
+    mut drew_something: Local<bool>,
 ) {
     let Some(grid_mesh) = grid_mesh else {
         return;
     };
+
+    // **An empty screen must not rebuild the mesh.** `Assets::get_mut` marks the
+    // asset changed whether or not anything is written, so a blank frame
+    // re-uploaded a zero-vertex mesh every frame — and Bevy 0.19's slab
+    // allocator answers that with a stream of `use-after-free: attempted to copy
+    // element data for an unallocated key`. The boot sequence is the first thing
+    // in this game to hold a blank screen for more than one frame, and it
+    // produced ~250 of them in 1.3 seconds.
+    //
+    // The `Local` is what keeps this correct rather than merely quiet: the
+    // transition *into* blank still writes once, so a screen that empties really
+    // does clear instead of leaving the last mesh on the tube.
+    let nothing = canvas.frame.is_blank() && canvas.frame.cursor().is_none();
+    if nothing && !*drew_something {
+        return;
+    }
+    *drew_something = !nothing;
+
     let Some(mut mesh) = meshes.get_mut(&grid_mesh.0) else {
         return;
     };

@@ -37,6 +37,7 @@ struct CrtUniform {
     flash_g: f32,
     flash_b: f32,
     flash: f32,
+    sweep: f32,
     time: f32,
     // Physical pixels per cell. Everything periodic derives from these.
     cell_width: f32,
@@ -48,6 +49,16 @@ struct CrtUniform {
 /// How often the hum band crosses the screen, in hertz. Deliberately far below
 /// the 3 Hz floor of the photosensitive band (§14).
 const HUM_ROLL_HZ: f32 = 0.22;
+
+/// How tall the boot strike's sweep band is, as a fraction of the tube.
+///
+/// Wide enough to read as a band rather than a scratch, narrow enough that most
+/// of the screen is unlit at any instant — which is what keeps one pass one
+/// flash pair per pixel rather than a whole-screen brightening.
+const SWEEP_WIDTH: f32 = 0.08;
+
+/// How much the sweep band adds where it is brightest.
+const SWEEP_GAIN: f32 = 0.55;
 
 /// How far inside the tube face the picture sits, as a fraction of the screen.
 ///
@@ -195,6 +206,20 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     // Wired to world state later: flash on breach, desaturate as things fail.
     if crt.flash > 0.0 {
         colour += vec3<f32>(crt.flash_r, crt.flash_g, crt.flash_b) * crt.flash * inside;
+    }
+
+    // The boot strike's second half: vsync loss, one band crossing the tube
+    // once. Note this is NOT the `roll` local above — that is the slow hum band
+    // at HUM_ROLL_HZ, which is always running. This is a single sweep during
+    // `Stage::Strike` and nothing else drives it. See `crt::strike` for the
+    // flash budget the two halves of the strike share.
+    if crt.sweep > 0.0 {
+        let distance = abs(curved.y - crt.sweep);
+        let band = smoothstep(SWEEP_WIDTH, 0.0, distance);
+        colour += vec3<f32>(crt.flash_r, crt.flash_g, crt.flash_b) * band * SWEEP_GAIN * inside;
+        // The tear a tube shows as it loses lock: rows near the band shift
+        // sideways. Costs nothing on a screen of text and reads unmistakably.
+        colour *= 1.0 - band * 0.25;
     }
     if crt.desaturation > 0.0 {
         let luma = dot(colour, vec3<f32>(0.299, 0.587, 0.114));
