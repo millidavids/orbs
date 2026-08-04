@@ -61,17 +61,25 @@ impl Stage {
 
     /// How long this stage lasts.
     ///
-    /// **Paced to be read, not to be got past.** The first version ran the whole
-    /// sequence in 4.4 s and the parts that animate — the frame drawing itself,
-    /// the dependencies reporting — went by faster than anyone could follow
-    /// them. Four times slower is the difference between a flicker and a screen.
+    /// **Paced to be read, not to be got past** — except the strike, which is
+    /// paced to be *seen*.
     ///
-    /// It is also long, which is what the skip is for: any key, and `ORBS_BOOT=0`
-    /// for a session that never wants it.
+    /// The first version ran the whole sequence in 4.4 s and the stages that
+    /// animate — the frame drawing itself, the dependencies reporting — went by
+    /// faster than anyone could follow. Four times slower is the difference
+    /// between a flicker and a screen.
+    ///
+    /// [`Stage::Strike`] is the exception and stays where it was. It is a tube
+    /// coming on, and a tube coming on is *fast*: stretched to match the rest it
+    /// stopped reading as a strike and started reading as a slow fade up, which
+    /// is a different and much less interesting thing.
+    ///
+    /// The total is long, which is what the skip is for: any key, and
+    /// `ORBS_BOOT=0` for a session that never wants it.
     pub(crate) const fn duration(self) -> Duration {
         Duration::from_millis(match self {
             Self::Dark => 1600,
-            Self::Strike => 3600,
+            Self::Strike => 900,
             Self::Prompt => 1200,
             Self::Frame => 3200,
             Self::Post => 8000,

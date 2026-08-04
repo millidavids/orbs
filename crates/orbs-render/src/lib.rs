@@ -107,3 +107,22 @@ pub use record::{
 };
 pub use span::Span;
 pub use style::{Intensity, Presentation, Role, Style};
+
+/// The first `cells` characters of `text` — what has arrived, if it is arriving.
+///
+/// The one place text is cut mid-reveal, so the cut is made the same way
+/// everywhere: **on a character boundary**. Frame text is bounded to the CP437
+/// repertoire but is still UTF-8, and slicing by byte could split a multi-byte
+/// glyph into something that is not a `str` and panic.
+///
+/// [`RecordView::revealing`] uses it for command output; the Bevy frontend's boot
+/// sequence uses it for the POST card. Nothing here knows what a second is — a
+/// caller owns the clock and passes a count.
+#[must_use]
+pub fn arriving(text: &str, cells: u32) -> &str {
+    let taken = usize::try_from(cells).unwrap_or(usize::MAX);
+    match text.char_indices().nth(taken) {
+        Some((end, _)) => &text[..end],
+        None => text,
+    }
+}

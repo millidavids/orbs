@@ -114,7 +114,26 @@ pub(crate) fn paint_booting(
     crate::boot::paint(frame, stage, progress);
 
     if stage.has_prompt() {
-        input_line(frame, layout.input(), &Line::default(), &sim.prompt());
+        // The prompt types itself too, the same as everything else on this
+        // screen — a name appearing whole beside a card that is still arriving
+        // would be the one thing that had not booted.
+        let prompt = sim.prompt();
+        let typed = if matches!(stage, crate::boot::Stage::Prompt) {
+            orbs_render::arriving(&prompt, crate::boot::arrived(&prompt, progress))
+        } else {
+            &prompt
+        };
+        let input = layout.input();
+        let mut painter = frame.painter(input);
+        let written = painter.span(
+            Pos::new(input.col, input.row),
+            &Span::new(typed)
+                .with_style(Style::NORMAL)
+                .with_kind(UtteranceKind::Input),
+        );
+        // The caret trails the text it is typing, which is what a terminal does
+        // and what makes this read as input rather than as a label.
+        frame.set_cursor(Some(Pos::new(input.col.saturating_add(written), input.row)));
     }
     let _ = screen;
 }

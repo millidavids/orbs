@@ -59,90 +59,113 @@ const PARTS: [Part; 3] = [
 /// exactly as live as it needs to be.
 const BEVY: &str = "0.19.0";
 
-/// How much of the ellipsis has arrived, in dots.
-const DOTS: usize = 3;
-
 /// Paint the boot screen for `stage`, `progress` of the way through it.
 ///
 /// Takes no Bevy resources on purpose: `shell::dump` builds no `App`, so a screen
 /// that needed one could never be dumped as text.
+///
+/// # It types itself
+///
+/// Every line arrives a character at a time, on one budget shared across the
+/// whole card — the same shape as command output (`shell::reveal`), because the
+/// two are the same idea: a machine printing to a terminal, not a screen being
+/// switched on. The budget runs left to right and top to bottom, so the card
+/// fills the way a page does.
 pub(crate) fn paint(frame: &mut Frame, stage: Stage, progress: f32) {
     if !matches!(stage, Stage::Post) {
         return;
     }
 
     let area = frame.area();
-    let mut painter = frame.painter(area);
 
     // Centred, and with no pane around it. §4's tower report is a table inside a
     // border; this must not read as the same screen arriving twice, so it is
     // shaped like a title card instead.
-    let rows = to_row(PARTS.len()).saturating_add(2);
+    let lines = card();
+    let rows = to_row(lines.len()).saturating_add(1);
     let top = area.rows.saturating_sub(rows) / 2;
 
-    painter.span(
-        centred(area, "O.R.B.S.", top),
-        &Span::new("O.R.B.S.")
-            .with_style(Style::BRIGHT)
-            .with_kind(UtteranceKind::Heading),
-    );
-    painter.span(
-        centred(area, STUDIO, top.saturating_add(1)),
-        &Span::new(STUDIO)
-            .with_style(Style::DIM)
-            .with_kind(UtteranceKind::Text),
-    );
+    // Every character on the card, so the reveal is paced by how much there is
+    // to say rather than by how many lines it happens to occupy.
+    let total: usize = lines.iter().map(|(text, _)| text.chars().count()).sum();
+    let mut budget = arrived_cells(progress, total);
 
-    // Each part reports in turn, so the list fills rather than appearing whole.
-    let arrived = arrived(progress, PARTS.len());
-    for (index, part) in PARTS.iter().enumerate().take(arrived) {
-        let last = index + 1 == arrived;
-        let row = top.saturating_add(3).saturating_add(to_row(index));
-        let line = if last && progress < 1.0 {
-            format!("{} {} {}", part.name, part.version, ellipsis(progress))
-        } else {
-            format!("{} {} ok", part.name, part.version)
-        };
+    let mut painter = frame.painter(area);
+    for (index, (text, style)) in lines.iter().enumerate() {
+        // A spacer costs no characters and must not end the reveal — an empty
+        // line is not an exhausted budget, and conflating them stopped the card
+        // at the blank row above the parts.
+        if text.is_empty() {
+            continue;
+        }
+        if budget == 0 {
+            break;
+        }
+        let visible = orbs_render::arriving(text, budget);
+        budget = budget.saturating_sub(to_cells(visible.chars().count()));
+
+        // Positioned by the *finished* line, not the visible one, so a line
+        // types out from where it will end up rather than sliding left as it
+        // grows. A centred line that re-centres per character is unreadable.
+        let at = centred(area, text, top.saturating_add(to_row(index)));
         painter.span(
-            centred(area, &line, row),
-            &Span::new(&line)
-                .with_style(if last && progress < 1.0 {
-                    Style::DIM
+            at,
+            &Span::new(visible)
+                .with_style(*style)
+                .with_kind(if index == 0 {
+                    UtteranceKind::Heading
                 } else {
-                    Style::NORMAL
-                })
-                .with_kind(UtteranceKind::TableRow),
+                    UtteranceKind::Text
+                }),
         );
     }
 }
 
-/// How many parts have reported by `progress`.
+/// The card's lines, in the order they arrive.
 ///
-/// At least one immediately: a POST that shows nothing for its first third looks
-/// like a hang rather than a boot.
+/// A blank line between the studio and the parts, which is a line of the card
+/// rather than a gap in the layout — it costs no characters, so the reveal does
+/// not pause on it.
+fn card() -> Vec<(String, Style)> {
+    let mut lines = vec![
+        ("O.R.B.S.".to_owned(), Style::BRIGHT),
+        (STUDIO.to_owned(), Style::DIM),
+        (String::new(), Style::DIM),
+    ];
+    lines.extend(
+        PARTS
+            .iter()
+            .map(|part| (format!("{} {} ok", part.name, part.version), Style::NORMAL)),
+    );
+    lines
+}
+
+/// How many characters of the card have arrived by `progress`.
 ///
 /// Counted by comparison rather than by rounding a product, which keeps every
 /// number here an integer — `orbs-render` confines its one float-to-integer
 /// conversion to a single justified function, and a splash screen is not the
 /// place to open a second front.
-fn arrived(progress: f32, parts: usize) -> usize {
-    let total = f32::from(to_row(parts));
-    let reached = progress.clamp(0.0, 1.0) * total;
-    (1..=parts)
-        .filter(|index| reached > f32::from(to_row(index - 1)))
-        .count()
-        .clamp(1, parts)
+fn arrived_cells(progress: f32, total: usize) -> u32 {
+    let progress = progress.clamp(0.0, 1.0);
+    let reached = progress * f32::from(to_row(total));
+    to_cells(
+        (1..=total)
+            .filter(|index| reached >= f32::from(to_row(*index)))
+            .count(),
+    )
 }
 
-/// The animated ellipsis, cycling within the current part.
-fn ellipsis(progress: f32) -> &'static str {
-    const DOTTED: [&str; DOTS + 1] = ["", ".", "..", "..."];
-    /// Ellipsis steps across the whole stage: three full cycles of four.
-    const STEPS: u16 = 12;
+/// How many characters of `text` have arrived by `progress`.
+///
+/// For a caller with one string rather than a card of them — the input line
+/// during [`Stage::Prompt`].
+pub(crate) fn arrived(text: &str, progress: f32) -> u32 {
+    arrived_cells(progress, text.chars().count())
+}
 
-    let scaled = progress.clamp(0.0, 1.0) * f32::from(STEPS);
-    let phase = (1..STEPS).filter(|step| scaled >= f32::from(*step)).count();
-    DOTTED[phase % DOTTED.len()]
+fn to_cells(count: usize) -> u32 {
+    u32::try_from(count).unwrap_or(u32::MAX)
 }
 
 /// Where `text` starts if it is centred on `row`.
@@ -213,10 +236,45 @@ mod tests {
     }
 
     #[test]
-    fn something_is_reporting_from_the_first_frame() {
-        // A POST that shows nothing for its first third reads as a hang.
-        assert_eq!(arrived(0.0, 3), 1);
-        assert_eq!(arrived(1.0, 3), 3);
+    fn the_card_types_itself_from_nothing_to_all_of_it() {
+        // The reveal's endpoints. Starting at zero is right here where it would
+        // be wrong for command output — the card has a whole stage to fill and
+        // the tube has only just struck, so there is nothing to look like a hang
+        // *yet*.
+        assert_eq!(arrived_cells(0.0, 40), 0);
+        assert_eq!(arrived_cells(1.0, 40), 40);
+        assert_eq!(arrived_cells(0.5, 40), 20);
+    }
+
+    #[test]
+    fn every_character_of_the_card_arrives_by_the_end() {
+        // The budget is shared across all the lines, so a miscount would leave
+        // the last one permanently short — and it is the game's own version.
+        let lines = card();
+        let total: usize = lines.iter().map(|(text, _)| text.chars().count()).sum();
+        let mut budget = arrived_cells(1.0, total);
+        for (text, _) in &lines {
+            let visible = orbs_render::arriving(text, budget);
+            assert_eq!(visible, text, "{text:?} never finished arriving");
+            budget = budget.saturating_sub(to_cells(visible.chars().count()));
+        }
+    }
+
+    #[test]
+    fn a_line_types_out_from_where_it_will_end_up() {
+        // Centred on the finished text, not the visible prefix. Re-centring per
+        // character makes a line slide leftwards as it grows, which is
+        // unreadable and looks like a fault.
+        let area = Rect::new(0, 0, 80, 22);
+        let settled = centred(area, STUDIO, 4);
+        for cells in 1..STUDIO.len() {
+            let partial = orbs_render::arriving(STUDIO, to_cells(cells));
+            assert_eq!(
+                centred(area, STUDIO, 4).col,
+                settled.col,
+                "the line moved at {partial:?}",
+            );
+        }
     }
 
     #[test]

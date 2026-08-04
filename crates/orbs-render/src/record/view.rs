@@ -257,14 +257,13 @@ impl Arrival {
         match self {
             Self::Whole => (text, 0),
             Self::Partial(cells) => {
-                let taken = usize::try_from(cells).unwrap_or(usize::MAX);
-                match text.char_indices().nth(taken) {
-                    // Cut on a character boundary: `text` is CP437-bounded but
-                    // still UTF-8, and a byte slice could split a multi-byte
-                    // glyph into something that is not a `str`.
-                    Some((end, _)) => (&text[..end], cells),
-                    None => (text, to_cells(text.chars().count())),
-                }
+                let visible = crate::arriving(text, cells);
+                let used = if visible.len() == text.len() {
+                    to_cells(text.chars().count())
+                } else {
+                    cells
+                };
+                (visible, used)
             }
         }
     }
