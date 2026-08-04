@@ -33,6 +33,20 @@ const COLUMN_GAP: usize = 2;
 #[derive(Debug, Clone, Copy)]
 pub struct RecordView<'a> {
     mode: Mode<'a>,
+    reveal: Option<Reveal>,
+}
+
+/// How much of the newest output has arrived.
+///
+/// See [`RecordView::revealing`]. Counted in **characters of content**, so the
+/// marker and the prompt do not consume the budget — they are drawn as soon as
+/// any of their record is.
+#[derive(Debug, Clone, Copy)]
+struct Reveal {
+    /// Records before this index in the drawn run are already whole.
+    after: usize,
+    /// Characters still to arrive.
+    cells: u32,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -59,6 +73,7 @@ impl<'a> RecordView<'a> {
                 columns,
                 header: true,
             },
+            reveal: None,
         }
     }
 
@@ -71,8 +86,40 @@ impl<'a> RecordView<'a> {
                     columns,
                     header: false,
                 },
+                reveal: self.reveal,
             },
             Mode::Lines | Mode::Prompt { .. } => self,
+        }
+    }
+
+    /// Draw only the first `cells` characters of everything after record
+    /// `after`, as if it were arriving over a wire.
+    ///
+    /// Records before `after` are drawn whole; from there on the budget runs out
+    /// mid-line and the rest of the run is blank. **Rows are unaffected** — a
+    /// record still occupies exactly the height it will occupy when it finishes,
+    /// so nothing below it moves as it arrives. A reveal that reflowed the pane
+    /// would fight the caller's own arithmetic for which records fit.
+    ///
+    /// # It costs the sim nothing, and must not
+    ///
+    /// This is presentation: the records are all already there, and a caller
+    /// that never calls this sees the finished screen. The reason that matters
+    /// is that waiting on output is meant to be a reason to automate, and the
+    /// moment it were a *modelled* cost the balance harness would have to
+    /// simulate typewriter delays, offline catch-up would owe animation time,
+    /// and a player who turns the animation off for motion or attention reasons
+    /// would gain a competitive advantage — the inversion of §9's parity rule,
+    /// where a setting must never become a difficulty choice.
+    ///
+    /// Speech is unaffected in a different way: a record announces only once it
+    /// is **whole**, so a listener hears complete records in stream order and
+    /// never half of one.
+    #[must_use]
+    pub const fn revealing(self, after: usize, cells: u32) -> Self {
+        Self {
+            reveal: Some(Reveal { after, cells }),
+            ..self
         }
     }
 
@@ -82,7 +129,10 @@ impl<'a> RecordView<'a> {
     /// their structure in their wording, not in their columns.
     #[must_use]
     pub const fn lines() -> RecordView<'static> {
-        RecordView { mode: Mode::Lines }
+        RecordView {
+            mode: Mode::Lines,
+            reveal: None,
+        }
     }
 
     /// The command-line surface: a marker, then the line.
@@ -109,6 +159,7 @@ impl<'a> RecordView<'a> {
     pub const fn prompt(prompt: &str) -> RecordView<'_> {
         RecordView {
             mode: Mode::Prompt { prompt },
+            reveal: None,
         }
     }
 
@@ -177,13 +228,51 @@ impl<'a> RecordView<'a> {
             return 0;
         }
         match self.mode {
+            // A table has no reveal. Its rows are a readout of state rather than
+            // output arriving, and a half-drawn column of numbers reads as a bug.
             Mode::Table { columns, header } => {
                 draw_table(&mut painter, area, columns, header, records)
             }
-            Mode::Lines => draw_lines(&mut painter, area, records, None),
-            Mode::Prompt { prompt } => draw_lines(&mut painter, area, records, Some(prompt)),
+            Mode::Lines => draw_lines(&mut painter, area, records, None, self.reveal),
+            Mode::Prompt { prompt } => {
+                draw_lines(&mut painter, area, records, Some(prompt), self.reveal)
+            }
         }
     }
+}
+
+/// How much of a record may be drawn on this pass.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Arrival {
+    /// All of it, and it may speak.
+    Whole,
+    /// The first `n` characters, and it stays silent until it is whole.
+    Partial(u32),
+}
+
+impl Arrival {
+    /// What is left of `text` under this budget, and how much of the budget it
+    /// used.
+    fn clip(self, text: &str) -> (&str, u32) {
+        match self {
+            Self::Whole => (text, 0),
+            Self::Partial(cells) => {
+                let taken = usize::try_from(cells).unwrap_or(usize::MAX);
+                match text.char_indices().nth(taken) {
+                    // Cut on a character boundary: `text` is CP437-bounded but
+                    // still UTF-8, and a byte slice could split a multi-byte
+                    // glyph into something that is not a `str`.
+                    Some((end, _)) => (&text[..end], cells),
+                    None => (text, to_cells(text.chars().count())),
+                }
+            }
+        }
+    }
+}
+
+/// A character count as a reveal budget, saturating rather than wrapping.
+fn to_cells(count: usize) -> u32 {
+    u32::try_from(count).unwrap_or(u32::MAX)
 }
 
 /// Cells reserved in front of a line for its marker.
@@ -270,6 +359,7 @@ fn draw_lines<'r>(
     area: Rect,
     records: impl Iterator<Item = Record<'r>> + Clone,
     prompt: Option<&str>,
+    reveal: Option<Reveal>,
 ) -> u16 {
     let (mut drawn, mut speech) = (String::new(), String::new());
     let mut row = area.row;
@@ -277,10 +367,18 @@ fn draw_lines<'r>(
     // See `RecordView::height`: a declined run must not be re-planned at each of
     // its records, or the measuring is quadratic in the run's length.
     let mut at_run_start = true;
+    let (mut index, mut budget) = (0usize, reveal.map(|reveal| reveal.cells));
     loop {
         if row >= area.bottom() {
             break;
         }
+        // Everything before the reveal's starting record is already on screen;
+        // from there on, whatever budget is left. Rows are unaffected either
+        // way — see `RecordView::revealing`.
+        let arrival = match (reveal, budget) {
+            (Some(reveal), Some(left)) if index >= reveal.after => Arrival::Partial(left),
+            _ => Arrival::Whole,
+        };
         // Cloned before the record is taken, so a tiling run can be measured
         // from its own first row rather than needing a second pass over the
         // stream or a `Vec` in the render path.
@@ -299,16 +397,22 @@ fn draw_lines<'r>(
         };
         if at_run_start
             && record.kind().tiles()
-            && let Some((rows, packed)) = draw_tiled(painter, remaining, prompt, run)
+            && let Some((rows, packed, spent)) =
+                draw_tiled(painter, remaining, prompt, run, arrival)
         {
             // `record` was the first of them.
             for _ in 1..packed {
                 rest.next();
             }
             row = row.saturating_add(rows);
+            index += packed;
+            if let Some(left) = budget.as_mut() {
+                *left = left.saturating_sub(spent);
+            }
             continue;
         }
         at_run_start = !record.kind().tiles();
+        index += 1;
 
         drawn.clear();
         // Content only: an annotation drawn as text would put an internal token
@@ -316,6 +420,22 @@ fn draw_lines<'r>(
         record.write_line(&mut drawn);
         speech.clear();
         record.speak(&mut speech);
+
+        let (visible, spent) = arrival.clip(&drawn);
+        if let Some(left) = budget.as_mut() {
+            *left = left.saturating_sub(spent);
+        }
+        // Whether *this record* finished, not whether a reveal is running: a
+        // budget large enough to cover the line leaves it as complete as no
+        // budget at all, and it must speak like one.
+        let complete = visible.len() == drawn.len();
+        // The row is still consumed. A record that has not started arriving
+        // occupies the space it will fill, so nothing below it shifts as it
+        // does — and the caller's arithmetic for which records fit stays true.
+        if !complete && visible.is_empty() {
+            row = row.saturating_add(1);
+            continue;
+        }
 
         let style = record.style();
         let mut col = area.col;
@@ -334,17 +454,26 @@ fn draw_lines<'r>(
             }
         }
 
-        let mut span = crate::span::Span::new(&drawn)
-            .with_style(style)
-            .with_kind(record.kind().utterance())
-            .with_spoken(&speech);
-        // The marker and the intensity are both silent channels. Tagging the
-        // utterance is what stops `xyzzy` from linearising as three identical
-        // lines, with a listener unable to tell the error from the offers.
-        if let Some(outcome) = record.outcome() {
-            span = span.with_outcome(outcome);
+        if complete {
+            let mut span = crate::span::Span::new(visible)
+                .with_style(style)
+                .with_kind(record.kind().utterance())
+                .with_spoken(&speech);
+            // The marker and the intensity are both silent channels. Tagging the
+            // utterance is what stops `xyzzy` from linearising as three identical
+            // lines, with a listener unable to tell the error from the offers.
+            if let Some(outcome) = record.outcome() {
+                span = span.with_outcome(outcome);
+            }
+            painter.span(Pos::new(col, row), &span);
+        } else {
+            // `glyphs` rather than a `Span` with empty speech: an empty override
+            // means *no override*, so the span would announce its visible text
+            // and a listener would hear a prefix that grows every frame. §14's
+            // stream is whole records in stream order — a record announces when
+            // it finishes arriving, and stays silent until then.
+            painter.glyphs(Pos::new(col, row), visible, style);
         }
-        painter.span(Pos::new(col, row), &span);
         row = row.saturating_add(1);
     }
     row.saturating_sub(area.row)
@@ -427,17 +556,29 @@ impl Tiling {
         to_cols(self.count.div_ceil(usize::from(self.per_row)))
     }
 }
+
+/// Draw a tiling run, returning the rows used, the records drawn, and how much
+/// of `arrival`'s reveal budget it spent.
 fn draw_tiled<'r>(
     painter: &mut Painter<'_>,
     area: Rect,
     prompt: Option<&str>,
     run: impl Iterator<Item = Record<'r>> + Clone,
-) -> Option<(u16, usize)> {
+    arrival: Arrival,
+) -> Option<(u16, usize, u32)> {
     let plan = Tiling::plan(area.cols, indent_for(prompt), run.clone())?;
     let (indent, stride, per_row) = (plan.indent, plan.stride, plan.per_row);
     let tiling = run.take_while(|record| record.kind().tiles());
 
-    let (mut drawn, mut speech, mut placed) = (String::new(), String::new(), 0usize);
+    let (mut drawn, mut speech) = (String::new(), String::new());
+    let (mut placed, mut spent, mut left) = (
+        0usize,
+        0u32,
+        match arrival {
+            Arrival::Whole => None,
+            Arrival::Partial(cells) => Some(cells),
+        },
+    );
     for record in tiling {
         let row = area
             .row
@@ -454,20 +595,36 @@ fn draw_tiled<'r>(
         record.write_line(&mut drawn);
         speech.clear();
         record.speak(&mut speech);
-        // Spoken in stream order, one utterance per record, exactly as the
-        // stacked path does — so §14's linear form is unchanged by the wrap.
-        painter.span(
-            Pos::new(col, row),
-            &crate::span::Span::new(&drawn)
-                .with_style(record.style())
-                .with_kind(record.kind().utterance())
-                .with_spoken(&speech),
-        );
+
+        // Row-major, the order the run is drawn in, so a listing fills across
+        // and then down exactly as a terminal would print it.
+        let here = left.map_or(Arrival::Whole, Arrival::Partial);
+        let (visible, used) = here.clip(&drawn);
+        if let Some(left) = left.as_mut() {
+            *left = left.saturating_sub(used);
+        }
+        spent = spent.saturating_add(used);
+        let complete = visible.len() == drawn.len();
+
+        if complete {
+            // Spoken in stream order, one utterance per record, exactly as the
+            // stacked path does — so §14's linear form is unchanged by the wrap.
+            painter.span(
+                Pos::new(col, row),
+                &crate::span::Span::new(visible)
+                    .with_style(record.style())
+                    .with_kind(record.kind().utterance())
+                    .with_spoken(&speech),
+            );
+        } else if !visible.is_empty() {
+            // Silent until whole — see the stacked path for why this is `glyphs`.
+            painter.glyphs(Pos::new(col, row), visible, record.style());
+        }
         placed += 1;
     }
 
     let rows = placed.div_ceil(usize::from(per_row));
-    Some((to_cols(rows), placed))
+    Some((to_cols(rows), placed, spent))
 }
 
 /// Where column `index` begins, or `None` if it starts past the right edge.

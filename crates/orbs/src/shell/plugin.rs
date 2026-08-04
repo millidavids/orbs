@@ -10,6 +10,7 @@ use orbs_render::DEEP_FOCUS_FLOOR;
 
 use super::input::{Line, SubmittedMessage, type_into_line};
 use super::linear::Linear;
+use super::reveal::Reveal;
 use super::screen::{Screen, cycle_mode, spawn_camera, track_window};
 use super::transition::PaneTransition;
 use crate::sim::Tower;
@@ -36,12 +37,17 @@ impl Plugin for ShellPlugin {
             .init_resource::<Line>()
             .init_resource::<Linear>()
             .init_resource::<PaneTransition>()
+            .init_resource::<Reveal>()
             .add_message::<SubmittedMessage>()
             .add_systems(Startup, (spawn_camera, track_window).chain())
             .add_systems(
                 Update,
                 (
                     type_into_line.run_if(on_message::<KeyboardInput>),
+                    // Before `submit`, so a keystroke completes the output that
+                    // is already on screen rather than the output its own line
+                    // is about to produce.
+                    finish_reveal.run_if(on_message::<KeyboardInput>),
                     submit.run_if(on_message::<SubmittedMessage>),
                 )
                     .chain()
@@ -69,12 +75,47 @@ impl Plugin for ShellPlugin {
                     // is "clear the line" muscle memory, and quitting the game
                     // mid-sentence is not a recoverable surprise.
                     quit.run_if(input_just_pressed(KeyCode::F10)),
-                    // Unconditional: a transition has to keep moving on the
+                    // Unconditional: both of these have to keep moving on the
                     // frames where nothing happened, which is most of them.
                     drive_panes,
+                    drive_reveal,
                 ),
             );
     }
+}
+
+/// Let the newest output arrive, a character at a time.
+///
+/// Reads the scrollback rather than listening for a message: output is produced
+/// by the sim on a tick, and the frontend is a *caller* of the sim rather than
+/// something it can notify (rule 3). The record count growing is the signal.
+fn drive_reveal(tower: Res<Tower>, time: Res<Time>, mut reveal: ResMut<Reveal>) {
+    let records = tower.sim().scrollback().records();
+    let cells = tail_cells(records, reveal.settled_len());
+    reveal.observe(records.len(), cells);
+    reveal.advance(time.delta_secs());
+}
+
+/// Characters in the records added since `from`.
+///
+/// Measured through `to_line`, which is what the view draws, so the budget and
+/// the drawing agree about what a character is.
+fn tail_cells(records: &orbs_render::Records, from: usize) -> u16 {
+    let counted: usize = records
+        .iter()
+        .skip(from)
+        .map(|record| record.to_line().chars().count())
+        .sum();
+    u16::try_from(counted).unwrap_or(u16::MAX)
+}
+
+/// Any keystroke puts the whole of the output on screen at once.
+///
+/// §9's parity rule in practice: waiting must never be something a player is
+/// made to do, or the animation stops being flavour and starts being a cost that
+/// an accessibility setting could buy its way out of.
+fn finish_reveal(mut reveal: ResMut<Reveal>) {
+    reveal.finish();
 }
 
 /// Aim the pane transition at what the current grid asks for, and let it move.

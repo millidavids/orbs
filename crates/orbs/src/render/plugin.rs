@@ -215,6 +215,7 @@ fn redraw(
     line: Res<crate::shell::Line>,
     blink: Res<Blink>,
     panes: Res<crate::shell::PaneTransition>,
+    reveal: Res<crate::shell::Reveal>,
     mut linear: ResMut<crate::shell::Linear>,
     mut cell: ResMut<CellSize>,
     mut canvas: ResMut<Canvas>,
@@ -231,7 +232,15 @@ fn redraw(
     frame.reset(screen.grid);
 
     if screen.is_hostable() {
-        crate::shell::paint(frame, tower.sim(), &line, &screen, &mut linear, &panes);
+        crate::shell::paint(
+            frame,
+            tower.sim(),
+            &line,
+            &screen,
+            &mut linear,
+            &panes,
+            &reveal,
+        );
     } else {
         // `Screen::is_hostable` documents this as a real state to render, not a
         // reason to stop drawing. Blanking the mesh left the player looking at an

@@ -19,6 +19,7 @@ use orbs_sim::Sim;
 
 use super::input::Line;
 use super::linear::Linear;
+use super::reveal::Reveal;
 use super::screen::Screen;
 use super::transition::PaneTransition;
 
@@ -48,6 +49,7 @@ pub(crate) fn paint(
     screen: &Screen,
     linear: &mut Linear,
     panes: &PaneTransition,
+    reveal: &Reveal,
 ) {
     let grid = frame.size();
     let layout = panes.layout(grid, screen.mode);
@@ -70,7 +72,7 @@ pub(crate) fn paint(
     if linear.showing() {
         super::linear::paint(linear, frame, sim, screen, first, carry_readings);
     } else {
-        session(frame, sim, screen, first, carry_readings);
+        session(frame, sim, screen, first, carry_readings, reveal);
     }
     if let Some(second) = main.get(1) {
         telemetry(frame, sim, screen, *second);
@@ -85,6 +87,7 @@ pub(super) fn session(
     screen: &Screen,
     pane: Rect,
     carry_readings: bool,
+    reveal: &Reveal,
 ) {
     if pane.is_empty() {
         return;
@@ -142,7 +145,7 @@ pub(super) fn session(
 
     let records = sim.scrollback().records();
     let prompt = sim.prompt();
-    let view = RecordView::prompt(&prompt);
+    let mut view = RecordView::prompt(&prompt);
     // Only the tail fits. `iter().skip(n)` is O(1) here and stays `Clone`, which
     // is what `RecordView::draw` needs to measure and then draw.
     //
@@ -165,6 +168,12 @@ pub(super) fn session(
         } else {
             narrowest = candidate + 1;
         }
+    }
+    // Measured *before* the reveal is applied, so the tail that fits is the one
+    // the finished output will need. Sizing the pane against half-arrived text
+    // would make it reflow as the rest turned up.
+    if let Some((after, cells)) = reveal.budget(narrowest) {
+        view = view.revealing(after, cells);
     }
     view.draw(&mut painter, body, records.iter().skip(narrowest));
 }

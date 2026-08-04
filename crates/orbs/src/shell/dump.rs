@@ -99,6 +99,9 @@ pub(crate) fn run(seed: u64, wizard: Option<String>) -> bool {
             &screen,
             &mut Linear::default(),
             &panes,
+            // A dump is a still. `Reveal::default()` has nothing in flight, so
+            // the output it prints is the output that finished arriving.
+            &super::reveal::Reveal::default(),
         );
     } else {
         super::prompt::paint_too_small(&mut frame);

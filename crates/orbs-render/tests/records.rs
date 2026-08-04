@@ -713,3 +713,168 @@ fn a_listing_never_speaks_a_row_it_could_not_draw() {
         );
     }
 }
+
+#[test]
+fn output_arrives_a_character_at_a_time_without_moving_what_is_below_it() {
+    // The reveal must not reflow. A record that has not finished arriving still
+    // occupies the height it will occupy, or every line below it walks down the
+    // pane as the text lands — and the caller's arithmetic for which records fit
+    // stops being true partway through.
+    let mut records = Records::new();
+    records
+        .push(RecordKind::Input)
+        .text(FieldName::Message, "survey")
+        .finish();
+    for name in ["clarity", "warding", "haste"] {
+        records
+            .push(RecordKind::Entry)
+            .text(FieldName::Name, name)
+            .finish();
+    }
+
+    let view = RecordView::prompt("orbs $ ");
+    let settled = {
+        let mut frame = frame_of(40, 6);
+        let area = frame.area();
+        view.draw(&mut frame.painter(area), area, records.iter())
+    };
+
+    for cells in 0..=24 {
+        let mut frame = frame_of(40, 6);
+        let area = frame.area();
+        let rows = view
+            .revealing(1, cells)
+            .draw(&mut frame.painter(area), area, records.iter());
+        assert_eq!(rows, settled, "the pane reflowed at {cells} characters");
+    }
+}
+
+#[test]
+fn a_half_arrived_record_stays_silent() {
+    // §14's stream is whole records in stream order. A prefix that grows every
+    // frame would be read out over and over, which is worse than useless.
+    let mut records = Records::new();
+    records
+        .push(RecordKind::Message)
+        .text(FieldName::Message, "the east ward has failed")
+        .finish();
+
+    let mut frame = frame_of(40, 3);
+    let area = frame.area();
+    RecordView::prompt("orbs $ ").revealing(0, 5).draw(
+        &mut frame.painter(area),
+        area,
+        records.iter(),
+    );
+
+    assert!(frame.to_text().contains("the e"), "nothing was drawn");
+    assert!(
+        !frame.to_text().contains("failed"),
+        "it drew the whole line"
+    );
+    assert_eq!(
+        frame.speech().utterances().count(),
+        0,
+        "a partial record spoke",
+    );
+}
+
+#[test]
+fn a_finished_reveal_is_indistinguishable_from_no_reveal() {
+    let mut records = Records::new();
+    for name in ["clarity", "warding", "haste", "retort"] {
+        records
+            .push(RecordKind::Entry)
+            .text(FieldName::Name, name)
+            .finish();
+    }
+
+    let view = RecordView::prompt("orbs $ ");
+    let mut plain = frame_of(40, 6);
+    let area = plain.area();
+    view.draw(&mut plain.painter(area), area, records.iter());
+
+    let mut revealed = frame_of(40, 6);
+    view.revealing(0, u32::MAX)
+        .draw(&mut revealed.painter(area), area, records.iter());
+
+    assert_eq!(plain.to_text(), revealed.to_text());
+    assert_eq!(
+        plain.speech().utterances().count(),
+        revealed.speech().utterances().count(),
+    );
+}
+
+#[test]
+fn a_listing_fills_across_before_it_fills_down() {
+    // Row-major, the order a terminal prints in. Column-major would fill the
+    // left column top to bottom and read as two unrelated lists growing at once.
+    //
+    // Written after watching it: at 30 characters the first tiled row is partly
+    // there and the second has not started.
+    let mut records = Records::new();
+    for name in ["clarity", "warding", "haste", "retort", "crucible"] {
+        records
+            .push(RecordKind::Entry)
+            .text(FieldName::Name, name)
+            .text(FieldName::Kind, "essence")
+            .finish();
+    }
+
+    let mut frame = frame_of(52, 6);
+    let area = frame.area();
+    RecordView::prompt("orbs $ ").revealing(0, 30).draw(
+        &mut frame.painter(area),
+        area,
+        records.iter(),
+    );
+
+    let rows: Vec<String> = frame
+        .to_text()
+        .lines()
+        .map(|line| line.trim_end().to_owned())
+        .collect();
+    assert!(!rows[0].is_empty(), "the first row had not started");
+    assert!(
+        rows[1].is_empty(),
+        "the second row started before the first finished: {rows:?}",
+    );
+}
+
+/// Not an assertion — a look. Run with `--nocapture` to watch output arrive.
+#[test]
+fn watch_output_arrive() {
+    let mut records = Records::new();
+    records
+        .push(RecordKind::Input)
+        .text(FieldName::Message, "survey")
+        .finish();
+    records
+        .push(RecordKind::Echo)
+        .text(FieldName::Message, "survey")
+        .finish();
+    for (name, kind) in [
+        ("clarity", "essence"),
+        ("warding", "essence"),
+        ("haste", "essence"),
+        ("retort", "vessel"),
+    ] {
+        records
+            .push(RecordKind::Entry)
+            .text(FieldName::Name, name)
+            .text(FieldName::Kind, kind)
+            .finish();
+    }
+
+    for cells in [0, 4, 12, 30, 60, 200] {
+        let mut frame = frame_of(52, 6);
+        let area = frame.area();
+        RecordView::prompt("orbs $ ").revealing(1, cells).draw(
+            &mut frame.painter(area),
+            area,
+            records.iter(),
+        );
+        println!("--- {cells} characters in");
+        println!("{}", frame.to_text());
+    }
+}

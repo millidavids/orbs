@@ -73,8 +73,20 @@ pub(crate) fn paint(
     }
 
     // Paint the pane it is replacing, off screen, purely for its speech.
+    //
+    // With nothing revealing: this mirror exists so a sighted player and a
+    // reader can be compared, and a half-arrived line has no speech at all by
+    // design. Mirroring mid-reveal would show a stream with holes in it and
+    // invite the conclusion that the stream is broken.
     linear.scratch.reset(frame.size());
-    super::prompt::session(&mut linear.scratch, sim, screen, pane, carry_readings);
+    super::prompt::session(
+        &mut linear.scratch,
+        sim,
+        screen,
+        pane,
+        carry_readings,
+        &super::reveal::Reveal::default(),
+    );
 
     let mut painter = frame.painter(pane);
     // Untitled, then labelled with `glyphs`. `Painter::border` *announces* a
