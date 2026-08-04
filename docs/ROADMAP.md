@@ -249,9 +249,20 @@ progress bar with no duration action and a sidebar with nothing to minimise.
         screen; relaunching with the same seed reproduces the same world
       **See it:** every row of the status table above reads ✅, or names the phase
       that gates it
-- [ ] **Dev ergonomics** — `bevy/dynamic_linking`, fast linker (lld/mold). Moved
-      up: it is now paid back every time the prompt is exercised by hand
-      **See it:** the edit → `cargo run -p orbs` → typing loop gets visibly faster
+- [x] **Dev ergonomics** — measured, and the premise did not hold. The item
+      assumed *"Bevy's compile time is the main friction"*, which is advice
+      written for slower machines and older linkers than this project has. On an
+      M4 Pro with Xcode `ld-1267`, a rebuild after touching a leaf file is
+      **0.7 s** and the whole gate is about **nine seconds**.
+
+      `bevy/dynamic_linking` is available behind `--features fast-compile` and
+      is **off by default**: it saves roughly a tenth of a second, inside the
+      noise, and costs a flag to remember plus a dev binary laid out differently
+      from the one that ships. No fast linker is installed and none is wanted —
+      installing LLVM for `lld` would cost more disk than it saves in seconds.
+      Numbers and the Linux/Windows caveat in [SETUP.md](SETUP.md)
+      **See it:** ✅ `touch crates/orbs/src/shell/prompt.rs && time cargo build -p orbs`
+      — under a second, so the typing loop was never waiting on the compiler
 - [ ] **Brewing + archive** — the two starting domains, both thin
       **See it:** `cd /alembic`, `ls`, `decoct clarity` — real files, real state,
       records drawn by the pane rather than by an example

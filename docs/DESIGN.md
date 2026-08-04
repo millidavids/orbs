@@ -1883,6 +1883,29 @@ domains are settled (brewing + archive), and the fragment trickle has a rate
 
 ## 19. Decisions log
 
+### Dev ergonomics — measured, and mostly declined
+
+§15 listed `bevy/dynamic_linking` and a fast linker as a Phase 0 item on the
+premise that *"Bevy's compile time is the main friction."* Measured on the
+development machine, it is not: a rebuild after touching a leaf file is **0.7 s**
+and the entire gate — build, clippy, test, doc — is about **nine seconds**.
+
+| Question | Decision |
+|---|---|
+| `bevy/dynamic_linking` | **Available, off by default**, behind `--features fast-compile`. It saves ~0.1 s on a 0.7–1.1 s loop, which is inside the noise, against a flag to remember and a dev binary laid out differently from the one that ships. Kept rather than deleted because the measurement is machine-specific and Linux or Windows may answer differently |
+| A fast linker | **Declined.** None is installed, and Apple's `ld` has been substantially rewritten since the advice was current. Installing LLVM to obtain `lld` would cost more disk than it saves in seconds |
+| Why the item existed | It is standard Bevy advice, and standard Bevy advice is written for the slowest machine that might read it. That is the right way to write advice and the wrong way to accept it |
+
+**The rule this establishes.** Performance items are a measurement before they
+are a task. This one took four minutes to measure and would have taken an hour
+to implement — and implementing it would have left permanent complexity paying
+for a tenth of a second. Where a roadmap item asserts a cost, check the cost
+first; the item may already be done, or may never have been needed.
+
+That is the same discipline §4's cell-renderer decision used — 227 µs measured
+before choosing single-mesh over a cell-index texture — applied to the build
+rather than to the frame.
+
 ### The retroactive playability pass — done
 
 Every subsystem built before the gate existed is now reachable from the running

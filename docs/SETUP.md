@@ -134,10 +134,34 @@ built.
 
 ### Dev iteration speed
 
-Bevy's compile time is the main friction. Set both up early:
+**Measure before changing anything here.** The received advice — dynamic linking
+and a faster linker — was written for slower machines and older linkers than
+this project has, and on the development machine neither helps.
 
-- `bevy/dynamic_linking` in the dev profile
-- A fast linker — `lld` or `mold`
+Measured on an Apple M4 Pro, Xcode `ld-1267`, toolchain 1.96:
+
+| Loop | Default | `--features fast-compile` |
+|---|---|---|
+| Touch a leaf file in `orbs` | **0.7 s** | 0.6–1.0 s |
+| Touch `orbs-render` (rebuilds `orbs` too) | **1.1 s** | 0.9 s |
+| Touch `orbs-sim` | **0.9 s** | 0.8 s |
+| `cargo test --workspace` | **6.2 s** | — |
+| `cargo clippy --workspace --all-targets` | **1.4 s** | — |
+
+So the whole gate is about nine seconds and a rebuild is about one. Dynamic
+linking saves roughly a tenth of a second, which is inside the noise, and costs
+a flag to remember plus a dev binary laid out differently from the one that
+ships. **It is not on by default and should not be turned on without a
+measurement showing it helps on your machine.**
+
+```sh
+cargo run -p orbs --features fast-compile   # only if you measured a win
+```
+
+No fast linker is installed and none is wanted here: Apple's `ld` has been
+substantially rewritten since the advice above was current, and installing LLVM
+to obtain `lld` would cost more disk than it saves in seconds. On Linux or
+Windows the answer may differ — measure there rather than assuming either way.
 
 Build profiles are specified in DESIGN.md §13 (dev `opt-level = 1`, release
 `lto = "fat"`, `codegen-units = 1`, `panic = "abort"`, `strip = "symbols"`).
