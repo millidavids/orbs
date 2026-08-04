@@ -59,6 +59,8 @@ impl Plugin for ShellPlugin {
                     // gate acts on failure *clustering*. Every reading is kept
                     // as it happens; this is what gets it out to a spreadsheet.
                     export_trace.run_if(input_just_pressed(KeyCode::F6)),
+                    // §3's tonal register, until Phase 2 drives it from threat.
+                    cycle_register.run_if(input_just_pressed(KeyCode::F7)),
                     // F10, not Escape: the moment there is a text field, Escape
                     // is "clear the line" muscle memory, and quitting the game
                     // mid-sentence is not a recoverable surprise.
@@ -103,6 +105,17 @@ fn export_trace(tower: Res<Tower>) {
         // whose run it was recording is still playing.
         Err(error) => warn!("parse trace -> {TRACE_PATH} failed: {error}"),
     }
+}
+
+/// Step the orb's tonal register.
+///
+/// Type a command with the register on and the echo comes back in a different
+/// face; then `peruse orb.log` and the log lines come back **plain**, because §3
+/// exempts the diagnostic surfaces from the eldritch treatment and only from
+/// that one. A sabotage tell is not exempt anywhere, which is the asymmetry the
+/// whole disjointness rule buys.
+fn cycle_register(mut tower: ResMut<Tower>) {
+    info!("register: {:?}", tower.cycle_register());
 }
 
 /// Leave the orb.

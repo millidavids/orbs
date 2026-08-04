@@ -57,6 +57,7 @@ pub struct Records {
     text: String,
     fields: Vec<StoredField>,
     records: Vec<StoredRecord>,
+    register: Presentation,
 }
 
 impl Records {
@@ -64,6 +65,34 @@ impl Records {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// The register everything emitted from now on is spoken in.
+    ///
+    /// DESIGN.md §3 puts the eldritch treatment on *messages*, not on call
+    /// sites: it is a property of how the orb is currently speaking, which in
+    /// Phase 2 is driven by threat. Setting it once here rather than at every
+    /// emit site is what keeps a register change from being a hundred-line diff
+    /// that misses four of them.
+    ///
+    /// Two things still hold, and neither is this function's to override:
+    ///
+    /// - §3's corruption exemption. A [`RecordKind::LogLine`] refuses eldritch
+    ///   however the register is set, so the diagnostic surfaces stay
+    ///   trustworthy *as renderings* — see [`RecordKind::allows`].
+    /// - The text stays faithful. §3: *"the renderer corrupts it; the model
+    ///   records it faithfully."* The register changes the face a frontend
+    ///   draws with, never the characters, which is why a register-set record
+    ///   needs no separately authored spoken variant — the drawn text already
+    ///   is one.
+    pub const fn set_register(&mut self, register: Presentation) {
+        self.register = register;
+    }
+
+    /// The register new records inherit.
+    #[must_use]
+    pub const fn register(&self) -> Presentation {
+        self.register
     }
 
     /// How many records the stream holds.
@@ -107,14 +136,18 @@ impl Records {
     }
 
     /// Begin a record. Nothing is stored until [`RecordBuilder::finish`].
+    ///
+    /// The record inherits the stream's [`register`](Records::set_register).
     pub fn push(&mut self, kind: RecordKind) -> RecordBuilder<'_> {
         let first = self.fields.len();
+        let presentation = self.register;
         RecordBuilder {
             stream: self,
             first,
             kind,
             role: Role::Normal,
-            presentation: Presentation::Plain,
+            presentation,
+            faithful: true,
             spoken: None,
         }
     }
@@ -340,6 +373,11 @@ pub struct RecordBuilder<'a> {
     kind: RecordKind,
     role: Role,
     presentation: Presentation,
+    /// Whether the drawn text is undamaged, so the spoken form is the drawn one.
+    ///
+    /// True for a register-inherited treatment and false the moment a caller
+    /// asks for one explicitly — see [`RecordBuilder::finish`].
+    faithful: bool,
     spoken: Option<(usize, usize)>,
 }
 
@@ -386,12 +424,18 @@ impl RecordBuilder<'_> {
         self.text(FieldName::Outcome, outcome.as_str())
     }
 
-    /// Ask for a presentation treatment.
+    /// Ask for a presentation treatment on this record alone.
     ///
     /// *Ask*, not set: §3's exemption may deny it, and
     /// [`Record::presentation`] is what reports the answer.
+    ///
+    /// Asking explicitly means the drawn text may itself be damaged — that is
+    /// the case the authored spoken variant exists for — so this record now owes
+    /// one. Inheriting the stream's [register](Records::set_register) does not,
+    /// because a register never alters the characters.
     pub const fn presentation(mut self, presentation: Presentation) -> Self {
         self.presentation = presentation;
+        self.faithful = false;
         self
     }
 
@@ -418,8 +462,8 @@ impl RecordBuilder<'_> {
             Presentation::Plain
         };
         debug_assert!(
-            effective != Presentation::Eldritch || self.spoken.is_some(),
-            "eldritch {:?} record with no authored spoken variant",
+            effective != Presentation::Eldritch || self.faithful || self.spoken.is_some(),
+            "eldritch {:?} record with damaged text and no authored spoken variant",
             self.kind,
         );
 

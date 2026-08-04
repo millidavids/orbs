@@ -6,7 +6,7 @@
 //! identical code path — and therefore producing identical results.
 
 use bevy_ecs::prelude::*;
-use orbs_render::RecordKind;
+use orbs_render::{Presentation, RecordKind};
 
 use crate::execute::run_pending;
 use crate::parser::{Mode, NounKind, ParseLog, ParseRecord, Resolution, Scene, analyse, report};
@@ -156,6 +156,30 @@ impl Sim {
     #[must_use]
     pub fn pending(&self) -> &Pending {
         self.world.resource::<Pending>()
+    }
+
+    /// The register the orb is currently speaking in.
+    #[must_use]
+    pub fn register(&self) -> Presentation {
+        self.world.resource::<Scrollback>().records().register()
+    }
+
+    /// Change the register everything said from now on is spoken in.
+    ///
+    /// DESIGN.md §3's high-threat tonal register. In Phase 2 this is driven by
+    /// threat rather than set by hand; until the threat system exists it is
+    /// reachable directly, which is what makes the three typefaces and §3's
+    /// corruption exemption something a person can see rather than something an
+    /// example prints.
+    ///
+    /// Nothing about the *content* changes — §3: *"the renderer corrupts it; the
+    /// model records it faithfully."* Only the face a frontend draws with does,
+    /// and log lines refuse the eldritch one however this is set.
+    pub fn set_register(&mut self, register: Presentation) {
+        self.world
+            .resource_mut::<Scrollback>()
+            .records_mut()
+            .set_register(register);
     }
 
     /// Every reading the parser scored this session.

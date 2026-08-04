@@ -1883,6 +1883,57 @@ domains are settled (brewing + archive), and the fragment trickle has a rate
 
 ## 19. Decisions log
 
+### The retroactive playability pass — done
+
+Every subsystem built before the gate existed is now reachable from the running
+game. What the pass cost was small; what it found was not.
+
+| Was unreachable | Now |
+|---|---|
+| Determinism spine | `meditate <n>` passes time; `status` reports tick and seed; both live in the pane furniture |
+| Fidelity tiers | tier and grid on screen — drag the window and §9's table moves |
+| Frame boundary, layout | two panes from a real `ScreenLayout`; `F4` switches Deep ↔ Wide |
+| `Speech` linear stream | `F5` shows the session pane as a reader hears it |
+| CP437 repertoire | the prompt refuses what it cannot draw |
+| Parse instrumentation | every line traced with its losing candidates; `F6` exports TSV |
+| `sift`, records | `sift <pattern> orb.log` — the scrollback *is* the log (§3), so it has a name |
+| Eldritch, tampered | `F7` cycles the register; all three faces draw, and §3's exemption holds where you can see it |
+
+**Two defects surfaced that no test could have caught**, both by building a
+surface and looking at it:
+
+- `Fidelity::deep` was built, tested, documented — and never called. Deep focus
+  was therefore unreachable at every window size, so the layout could never host
+  a second pane and §9's multiplexing was dead code. Its unit tests passed
+  throughout; they proved the function did what it was written to do.
+- The linear view's first shape read the live frame's stream and showed a single
+  empty utterance, because the mirror had already replaced the pane it was
+  meant to describe.
+
+Neither is a coding error. Both are the specific failure §15 names: code that is
+correct, tested, and *not called*.
+
+**Six rows are deliberately still open**, and finding five of them is the more
+useful result. The first status table was written by hand from the roadmap's item
+list, and confirming it against the code — sweeping the public API of both
+library crates for anything the shipping path never calls — turned up subsystems
+no roadmap item had ever named:
+
+| Built and unreachable | Gated by |
+|---|---|
+| `Painter::progress` — §14 names progress bars specifically | brewing + archive: nothing has a duration yet |
+| `ScreenLayout::sidebar` — §9's minimised panes | brewing + archive: nothing to minimise with two panes |
+| 3- and 4-pane tiling | brewing + archive |
+| `Sim::submissions` — the replay log is written and never read | Phase 1: needs a replay command |
+| `Verb::is_destructive` — §7's destruction guard | brewing + archive: `purge` has nothing to destroy |
+| Per-subsystem RNG streams | Phase 2: nothing rolls yet |
+
+Every one is gated by content that does not exist rather than by the pass having
+been careless, so none of them changes what the pass should have done. What it
+changes is **how the table is maintained**: derived from the API, not recalled
+from the plan. A checklist assembled from memory measures the memory, which is
+the same error one layer up as §15's original layer-ordered item list.
+
 ### Deep focus was unreachable — found by the retroactive pass
 
 `Fidelity::deep` was built in the Frame-boundary item, tested, documented as

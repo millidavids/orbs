@@ -10,6 +10,7 @@
 //! how fast the world moves.
 
 use bevy::prelude::*;
+use orbs_render::Presentation;
 use orbs_sim::Sim;
 
 /// The simulated tower, owned by the frontend.
@@ -34,6 +35,22 @@ impl Tower {
     /// The world, for painting.
     pub(crate) fn sim(&self) -> &Sim {
         &self.0
+    }
+
+    /// Step the tonal register through its three treatments.
+    ///
+    /// A preview of §3's eldritch register, which Phase 2 drives from threat.
+    /// It is here now because the three typefaces and §3's corruption exemption
+    /// had no player-facing surface at all — they were proven by a `println!` in
+    /// an example, which is not the same as having been looked at.
+    pub(crate) fn cycle_register(&mut self) -> Presentation {
+        let next = match self.0.register() {
+            Presentation::Plain => Presentation::Eldritch,
+            Presentation::Eldritch => Presentation::Tampered,
+            Presentation::Tampered => Presentation::Plain,
+        };
+        self.0.set_register(next);
+        next
     }
 }
 

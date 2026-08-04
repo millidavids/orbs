@@ -512,3 +512,90 @@ fn a_records_drawn_form_never_nests_another_records_speech() {
     assert_eq!(source.to_line(), "seed 12648430");
     assert_eq!(source.to_speech(), "name: seed, qty: 12648430");
 }
+
+#[test]
+fn a_register_reaches_every_record_emitted_after_it() {
+    // §3 puts the eldritch treatment on messages, not on call sites: it is how
+    // the orb is currently speaking. Setting it once is what stops a register
+    // change from being a diff that misses four emit sites.
+    let mut records = Records::new();
+    records
+        .push(RecordKind::Message)
+        .text(FieldName::Message, "before")
+        .finish();
+
+    records.set_register(Presentation::Eldritch);
+    records
+        .push(RecordKind::Message)
+        .text(FieldName::Message, "during")
+        .finish();
+
+    records.set_register(Presentation::Plain);
+    records
+        .push(RecordKind::Message)
+        .text(FieldName::Message, "after")
+        .finish();
+
+    let treatments: Vec<_> = records.iter().map(|record| record.presentation()).collect();
+    assert_eq!(
+        treatments,
+        [
+            Presentation::Plain,
+            Presentation::Eldritch,
+            Presentation::Plain,
+        ],
+    );
+}
+
+#[test]
+fn a_register_never_alters_what_was_said() {
+    // §3: "the renderer corrupts it; the model records it faithfully." The
+    // register changes the face a frontend draws with, never the characters —
+    // which is why a register-set record needs no separately authored spoken
+    // variant, and why `sift` still finds it.
+    let mut records = Records::new();
+    records.set_register(Presentation::Eldritch);
+    records
+        .push(RecordKind::Message)
+        .text(FieldName::Message, "the door is open")
+        .finish();
+
+    let record = records.get(0).expect("record");
+    assert_eq!(record.presentation(), Presentation::Eldritch);
+    assert_eq!(record.to_speech(), "the door is open");
+    assert_eq!(records.sift(&Sift::new("door")).count(), 1);
+}
+
+#[test]
+fn the_register_cannot_corrupt_a_diagnostic_surface() {
+    // The asymmetry §3 buys by requiring the two vocabularies be disjoint: with
+    // the whole stream set to eldritch, a log line still renders plain, so the
+    // surface a player inspects stays trustworthy *as a rendering* — while a
+    // sabotage tell on that same surface is refused nowhere.
+    for (register, expected) in [
+        (Presentation::Eldritch, Presentation::Plain),
+        (Presentation::Tampered, Presentation::Tampered),
+    ] {
+        let mut records = Records::new();
+        records.set_register(register);
+        records
+            .push(RecordKind::LogLine)
+            .text(FieldName::Message, "east ward holding")
+            .finish();
+        records
+            .push(RecordKind::Message)
+            .text(FieldName::Message, "something is counting")
+            .finish();
+
+        assert_eq!(
+            records.get(0).expect("log line").presentation(),
+            expected,
+            "{register:?} on a log line",
+        );
+        assert_eq!(
+            records.get(1).expect("message").presentation(),
+            register,
+            "{register:?} on a message",
+        );
+    }
+}

@@ -70,13 +70,26 @@ What is still ❌ or ⚠️ is what remains of it.
 | CP437 repertoire enforcement | ✅ the prompt refuses what it cannot draw | — |
 | Parse instrumentation (`ParseLog`, TSV) | ✅ every line traced; `F6` exports | — |
 | `sift` / record filtering | ✅ `sift <pattern> orb.log` | — |
-| Eldritch + tampered presentation | ❌ | Retroactive pass |
+| Eldritch + tampered presentation | ✅ `F7` cycles the register; all three faces draw | — |
+| Progress bars (`Painter::progress`) | ❌ example only | **Brewing + archive** — nothing has a duration yet |
+| Sidebar (`ScreenLayout::sidebar`) | ❌ example only | **Brewing + archive** — nothing to minimise with 2 panes |
+| 3- and 4-pane tiling | ❌ the game asks for at most 2 | **Brewing + archive** |
+| Replay log (`Sim::submissions`) | ⚠️ written, never read | **Phase 1** — needs a replay command to read it |
+| Destruction guard (`Verb::is_destructive`) | ❌ | **Brewing + archive** — `purge` has nothing to destroy |
 | Per-subsystem RNG streams | ❌ nothing rolls yet | **Phase 2** — honest deferral, see below |
 
 **Where a gate is not yet possible, it says so.** Per-subsystem RNG streams
 cannot be *seen* until something rolls against them, and the first thing that
 does is aberrations in Phase 2. Inventing a debug affordance nobody will maintain
-would be worse than naming the phase that gates it.
+would be worse than naming the phase that gates it — and the same is true of a
+progress bar with no duration action and a sidebar with nothing to minimise.
+
+> **This table is derived from the code, not from the item list.** Its first
+> version was written by hand from the roadmap and missed five built-and-
+> unreachable subsystems outright, because no roadmap item mentioned them. Audit
+> it by sweeping the public API of `orbs-render` and `orbs-sim` for anything the
+> shipping path never calls, then justifying each miss. A table assembled from
+> memory measures the memory.
 
 ### Work items
 
@@ -163,7 +176,8 @@ would be worse than naming the phase that gates it.
       `cargo run -p orbs-render --example screens` is one stream drawn three
       ways — DESIGN.md §7, §19
       **See it:** ✅ every line on screen is a record. `sift <pattern> orb.log`
-      filters them. ⚠️ the eldritch/tampered presentations remain
+      filters them. `F7` cycles the tonal register through all three typefaces,
+      and `peruse orb.log` under it shows §3's exemption holding
 > **Everything below is ordered by playability, not by layer** — DESIGN.md §15.
 > The first six items were built in layer order and left ~10,000 lines the binary
 > called under 40% of. **No item below is done until the "see it" line works.**
@@ -197,10 +211,17 @@ would be worse than naming the phase that gates it.
         left/right editing, paste, IME, line wrapping in the scrollback
       **See it:** `cargo run -p orbs`, type `look around` → `survey` comes back on
       the tube; type `xyzzy` → suggestions; type `meditate` → it asks for a count
-- [ ] **Retroactive playability pass** ← *immediately after the prompt, before any
-      new Phase 0 work.* Everything in the status table above marked ⚠️ or ❌ gets
-      a hand. Not a cleanup task: until each of these runs, the code behind it has
-      been asserted rather than verified — DESIGN.md §15, §19
+- [x] **Retroactive playability pass** — everything in the status table above
+      that was ⚠️ or ❌ now has a hand on it. Not a cleanup task: until each of
+      these ran, the code behind it had been asserted rather than verified —
+      DESIGN.md §15, §19.
+
+      **It found two defects no test could have.** `Fidelity::deep` was built,
+      tested and never called, so Deep focus was unreachable at any window size
+      and the layout could never host a second pane. And the linear view's first
+      shape described a frame it had already replaced. Both surfaced from
+      building a surface and looking at it — which is the entire argument for
+      the gate
   - **Fidelity tiers** — resize the window and watch the grid re-derive. A
         readout of tier, cell scale, and grid size on screen, so §9's table is
         something you can walk through with a mouse instead of read
