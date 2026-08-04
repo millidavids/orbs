@@ -61,7 +61,7 @@ What is still ❌ or ⚠️ is what remains of it.
 | Phosphor themes | ✅ `F2` | — |
 | CRT — all ten effects, peak-threat state | ✅ `F3` | — |
 | Determinism spine — seed, tick, `step()` | ✅ `meditate <n>`, `status`, live in the border | — |
-| Frame boundary — panes, layout | ⚠️ one pane, stand-in content | Retroactive pass |
+| Frame boundary — panes, layout | ✅ two panes from `ScreenLayout`; `F4` switches focus | — |
 | Parser — 16 commands, 3 registers | ✅ type at it | — |
 | Naming pass — synonyms, canonical echo | ✅ the echo answers in canonical arcane | — |
 | Record model, `RecordView` | ✅ every line on screen is a record | — |
@@ -95,8 +95,10 @@ would be worse than naming the phase that gates it.
       clippy clean at `-D warnings`, rustdoc clean at `-D warnings`.
       `cargo run -p orbs-render --example screens` renders the §4 boot report and
       a multiplexed siege for eyeballing
-      **See it:** ⚠️ example only. Multi-pane layout, the Deep/Wide switch, and
-      the linear stream reach the game in the retroactive pass
+      **See it:** ✅ the game draws two panes from a real `ScreenLayout`, and
+      `F4` switches Deep ↔ Wide — which raises fidelity a step and visibly
+      changes both the glyph size and the pane count. ⚠️ the linear stream is
+      still unsurfaced
 - [x] **Bevy frontend skeleton** — window opens (Metal verified), `SimPlugin`
       drives `Sim::step()` from `FixedUpdate` at 1 Hz per §5.0, `Screen` resolves
       window pixels to a fidelity tier and grid. `orbs::shell::preview` logs the

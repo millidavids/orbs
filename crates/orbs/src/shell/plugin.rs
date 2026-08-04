@@ -7,7 +7,7 @@ use bevy::prelude::*;
 use bevy::window::WindowResized;
 
 use super::input::{Line, SubmittedMessage, type_into_line};
-use super::screen::{Screen, spawn_camera, track_window};
+use super::screen::{Screen, cycle_mode, spawn_camera, track_window};
 use crate::sim::Tower;
 
 /// Ordering within `Update`, so the frame that draws a keystroke is the frame
@@ -45,6 +45,10 @@ impl Plugin for ShellPlugin {
                 Update,
                 (
                     track_window.run_if(on_message::<WindowResized>),
+                    // §9 requires the focus mode be overridable at any time,
+                    // including mid-siege, so it is a key rather than a
+                    // heuristic the player has to fight.
+                    cycle_mode.run_if(input_just_pressed(KeyCode::F4)),
                     // F10, not Escape: the moment there is a text field, Escape
                     // is "clear the line" muscle memory, and quitting the game
                     // mid-sentence is not a recoverable surprise.
@@ -236,5 +240,77 @@ mod tests {
         let mut app = app();
         type_line(&mut app, "look around");
         assert_eq!(app.world().resource::<Tower>().sim().pending().len(), 1);
+    }
+
+    /// Press a key the way winit does.
+    ///
+    /// Setting `ButtonInput` directly does not work: `keyboard_input_system`
+    /// clears it at the start of `PreUpdate` and rebuilds it from the message
+    /// stream, so a hand-set press is gone before any `input_just_pressed`
+    /// condition runs. Writing the message is the only path that behaves like
+    /// the real thing.
+    fn press_key(app: &mut App, key_code: KeyCode, logical_key: Key) {
+        app.world_mut().write_message(KeyboardInput {
+            key_code,
+            logical_key,
+            state: ButtonState::Pressed,
+            text: None,
+            repeat: false,
+            window: Entity::PLACEHOLDER,
+        });
+        app.update();
+    }
+
+    #[test]
+    fn f4_switches_focus_and_buys_the_cells_a_second_pane_needs() {
+        // §9 requires the focus mode be overridable at any time. The switch is
+        // also the only way to reach a second pane at all — `tier_one` sizes the
+        // grid to ~80×22 at every window size, so Deep focus stepping fidelity
+        // finer is where the cells come from.
+        let mut app = App::new();
+        app.add_plugins((
+            MinimalPlugins,
+            bevy::input::InputPlugin,
+            bevy::window::WindowPlugin {
+                primary_window: Some(Window {
+                    resolution: bevy::window::WindowResolution::new(2560, 1440),
+                    ..default()
+                }),
+                ..default()
+            },
+            ShellPlugin,
+        ))
+        .insert_resource(Tower::new(1));
+        app.update();
+
+        let before = *app.world().resource::<Screen>();
+        assert!(before.is_hostable(), "the test window must host the floor");
+
+        press_key(&mut app, KeyCode::F4, Key::F4);
+
+        let after = *app.world().resource::<Screen>();
+        assert_ne!(after.mode, before.mode, "F4 did not reach `cycle_mode`");
+        assert!(
+            after.grid.cols > before.grid.cols,
+            "focus switched without buying cells: {:?} -> {:?}",
+            before.grid,
+            after.grid,
+        );
+        assert!(
+            after.grid.fits(orbs_render::DEEP_FOCUS_FLOOR),
+            "deep focus still cannot host a second pane: {:?}",
+            after.grid,
+        );
+    }
+
+    #[test]
+    fn typing_never_reaches_the_focus_key() {
+        // F4 must not also land in the line buffer. `text` is `None` for a
+        // function key, which is what keeps the two apart.
+        let mut app = app();
+        press(&mut app, Key::F4, None);
+        press(&mut app, Key::Enter, Some("\r"));
+        app.update();
+        assert!(messages(&app).is_empty(), "a function key was typed");
     }
 }

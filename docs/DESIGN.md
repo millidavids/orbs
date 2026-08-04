@@ -1883,6 +1883,31 @@ domains are settled (brewing + archive), and the fragment trickle has a rate
 
 ## 19. Decisions log
 
+### Deep focus was unreachable — found by the retroactive pass
+
+`Fidelity::deep` was built in the Frame-boundary item, tested, documented as
+*"one step finer — the tier Deep-focus multiplexing engages (§9)"* — and **never
+called by the game**. The consequence was not cosmetic: Deep focus could not be
+reached at any window size, so the layout never had the cells for a second pane.
+
+The mechanism is easy to miss and load-bearing. `Fidelity::tier_one` returns the
+largest scale that still fits 80×22, so **a bigger window buys a bigger glyph,
+not more cells** — the grid sits near 80×22 at every window size by design (§4).
+Multiplexing needs cells, and §9 says where they come from: *"fidelity rises one
+step; every pane is drawn at full size in a grid."* Deep focus **is** the tier
+step. Without it, `DEEP_FOCUS_FLOOR` at 100×28 was unreachable on any display.
+
+| Question | Decision |
+|---|---|
+| **Where the switch lives** | `F4`. §9 requires the mode be overridable *"at any time, including mid-siege"*, so a heuristic the player has to fight would be wrong. Window size only picks the default |
+| **What survives a resize** | The player's choice. Re-deriving the mode on every window change would silently undo it |
+| **At the finest scale** | `deep()` is `None` — there is no smaller whole-pixel step — so Deep focus is unavailable and Wide serves instead, which is what its own documentation already said |
+| **Panes at the floor** | Two panes only above `DEEP_FOCUS_FLOOR`. At 80×22 a secondary pane is a four-row strip: a border, a header and one row. Below the floor the readings live in the session's border title instead, so nothing is lost |
+
+Found by building the telemetry pane and looking at the result, not by any test.
+The unit tests for `deep()` passed throughout — they proved the function did what
+it was written to do, which is exactly the limit §15 records.
+
 ### The playability gate — added to every phase
 
 **Supersedes: the original per-phase item lists, which had no player-facing
