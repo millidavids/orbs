@@ -1661,6 +1661,52 @@ primitives, not the full scrying domain. That covers the "siege is empty" Critic
 risk in Phase 0 while keeping the slice at two domains. Scrying becomes the
 player's first discovery and lands in Phase 1.
 
+### The playability gate — every step, every phase
+
+> **No work item in any phase is complete until a person can reach it from the
+> running game.** Every item carries a **See it** line naming the keystrokes that
+> demonstrate it. An item without one is not started; an item whose line does not
+> work is not finished, however green its tests are.
+
+This has the same standing as the build gate in `CLAUDE.md`, and applies for the
+rest of the project — not as a Phase 0 correction. Phases 1 through 5 add
+systems whose failure modes are *felt* rather than asserted: a script that runs
+but feels arbitrary, a siege that is correct but not tense, an economy that
+balances but bores. Those are invisible to a test suite by construction, and the
+only instrument that finds them is a hand on the keyboard.
+
+**Ordering follows from the gate.** Where a phase's items can be sequenced so
+that earlier ones become the instrument for later ones, they are. In Phase 0 that
+means **the prompt comes before everything else that remains** — a real command
+line, with the parser behind it and its output on the tube, is not a milestone in
+its own right but the thing domains, sabotage, boot, and the tutorial are all
+built *into*.
+
+**Retroactive gating is a work item, not a cleanup.** Anything already built
+without a gate gets one before new work continues past the prompt. Code the game
+does not call is not verified by being tested; it is only asserted.
+
+#### What this cost, and why the rule exists
+
+Recorded in §19. Phase 0's first six items ran in architectural-layer order —
+determinism spine, Frame boundary, parser, cell renderer, CRT port, record model.
+Every one was completed, tested, and reviewed. After six of them the binary
+answered four keys, **none of them a letter**: ~10,000 lines of Rust, of which
+the game called under 40%. A sixteen-command parser with ninety-odd tests had
+never received a keystroke, and a record model built to be drawn had never been
+drawn.
+
+Nothing there was wrong, and that is the point worth keeping. **Tests prove code
+does what it was written to do; they cannot prove it is the code worth writing.**
+An API with no callers is unshaped — `report()` needed a parameter no test wanted
+and no design document predicted, surfaced by review rather than by use, which is
+luck rather than method.
+
+The counter-example is the CRT, the one item that *was* player-gated on arrival:
+boot the game, press F3. It flashed, the flashing was visible in ten seconds, and
+two wrong diagnoses were falsified by looking rather than by reasoning. No test
+in the suite would have caught it, and none was ever written that could have.
+
 ### Commercial
 
 - **Price: $4 (provisional).** Deliberately impulse-tier for a premise that is
@@ -1679,7 +1725,7 @@ player's first discovery and lands in Phase 1.
 
 | Phase | Goal | Words | Cal. | Exit criterion |
 |---|---|---|---|---|
-| **0. Vertical slice** | Parser + instrumentation, **brewing + archive (the two starting domains)**, **`orbs-render` Frame boundary**, **log-poisoning sabotage on brewing logs**, cell-grid renderer + fidelity tiers, worst-case CRT legibility test, structured-record output model, seeded-RNG + `step()` determinism spine, boot, scaffold tutorial | ~3k | 4 mo | Numeric gate below |
+| **0. Vertical slice** | Parser + instrumentation, **the prompt — an interactive command line, built before the domains and used to verify them**, **brewing + archive (the two starting domains)**, **`orbs-render` Frame boundary**, **log-poisoning sabotage on brewing logs**, cell-grid renderer + fidelity tiers, worst-case CRT legibility test, structured-record output model, seeded-RNG + `step()` determinism spine, boot, scaffold tutorial | ~3k | 4 mo | Numeric gate below |
 | **1. Core loop** | World clock, script engine + attention pool + failure taxonomy, remaining sabotage surfaces, 3 domains, minimal apprenticeship, content data format, balance CLI **sweeping §11.5's first-pass numbers**, **scrappy internal `orbs-tui` as a dev tool** | ~15k | 5 mo | A player automates a duty and feels clever; non-terminal testers in the loop |
 | **2. Siege** | Autobattler, trait composition, adversarial aberrations, escrow economy, **unattended-siege backlog + dispersal**, pane addressing, one siege type, drift stub, synergy template | ~15k | 4 mo | Sieges are tense and scripts visibly matter |
 | **3a. Breadth** | All 7 domains, discovery/research, full drift, **offline progression + its unlock**, shared-engine extraction | ~18k | 4 mo | Every domain playable |
@@ -1836,6 +1882,56 @@ domains are settled (brewing + archive), and the fragment trickle has a rate
    price-shop — Exapunks is $19.99.
 
 ## 19. Decisions log
+
+### The playability gate — added to every phase
+
+**Supersedes: the original per-phase item lists, which had no player-facing
+completion criterion at the step level.** §15 now gates every work item in every
+phase on being reachable from the running game.
+
+| Question | Decision |
+|---|---|
+| **What went wrong** | Phase 0's first six items were completed in layer order — determinism spine, Frame boundary, parser, cell renderer, CRT port, record model — each tested, reviewed, and correct. The result was **~10,000 lines of Rust that the game binary called under 40% of.** `cargo run -p orbs` answered `Escape`, `F2`, `F3` and `F12`, and no letter key at all. The parser was unreachable from the frontend; the record model had never been drawn by the renderer built to draw it |
+| **Whose error** | Not a judgment call made and lost — **the lists themselves were the defect.** Every item was phrased "build this subsystem", so following one faithfully could not produce something playable until it ended. A correct process executed against a badly ordered list |
+| **Why tests did not catch it** | They were not capable of it. Tests prove code does what it was written to do; they cannot prove it is the code worth writing. Untouched code is *unshaped* code — `report()` needed an `input` parameter no test wanted and no design document predicted, and it surfaced from an adversarial review rather than from a caller. That is luck, not method |
+| **Why this is not a Phase 0 rule** | Later phases need it more, not less. Phase 1 asks whether a player *feels clever*; Phase 2 whether a siege is *tense*; Phase 4 whether a non-terminal player reaches hour two unaided. None of those is assertable, all of them are felt, and the phase exit criteria were already written in exactly those terms — the step-level lists simply did not inherit it |
+| **The rule** | **No work item in any phase is complete until a person can reach it from the running game.** Every item carries a *See it* line naming the keystrokes. Same standing as the build gate in CLAUDE.md |
+| **Retroactive gating is a work item** | Everything already built without a gate gets one, immediately after the prompt and before any new Phase 0 work. Not a cleanup task and not optional: code the game does not call has been asserted, not verified |
+| **Where a gate is not yet possible** | Some built code has no honest player surface until later content exists — per-subsystem RNG streams cannot be *seen* until something rolls against them, which is aberrations in Phase 2. Those items name the phase that gates them rather than inventing a debug affordance nobody will maintain |
+| **The counter-example worth copying** | The CRT was the one item player-gated on arrival: boot the game, press F3. It flashed, the flashing was obvious in ten seconds, and **two wrong diagnoses were falsified by looking rather than by reasoning.** No test in the suite would have caught it and none could have been written to |
+| **What does not change** | The slice is still brewing + archive, the numeric gate is unchanged, no phase boundary moves, and no scope is added. This is an ordering and acceptance-criteria change |
+
+### The prompt — settled before implementation
+
+Decided from an independent review of the implementation plan, which
+compile-verified every API claim against the pinned Bevy rather than recalling
+it. Four of these are load-bearing.
+
+| Question | Decision |
+|---|---|
+| **Where the scrollback lives** | **In `orbs-sim`, not the frontend.** The record stream *is* the log — the scrollback, the file a player `peruse`s, the pipe source, and the harness transcript are one stream read four ways. A frontend-owned scrollback means the very next item has to move it, and until then there are two streams that can disagree. This is the mistake the record model exists to prevent, one layer up |
+| **A second entry point: `Sim::submit()`** | Rule 3 says the sim *advances* only through `step()`. `submit(&mut self, line)` does not advance world time: it pushes the input record, resolves against the sim's own `Scene`, reports the echo, and **queues the `Intent` for the next `step()`**. Effects stay tick-aligned; the echo does not. Recorded here rather than left to be inferred from a diff |
+| **Why the echo cannot wait for the tick** | Ticks are 1 Hz. Resolving inside `step()` would put up to a full second between Enter and the echo, and a terminal that takes a second to answer reads as broken. §6 makes the echo the teaching mechanism, so it must be immediate |
+| **Determinism is preserved, and why** | Bevy runs `FixedUpdate` **before** `Update` in a frame, so a line submitted in frame F always resolves against world state as of the last completed tick in F. Replay therefore needs only `(seed, [(tick, line)])` — which is also what §6's command-anchored `undo` will need, so the pairing is recorded from the start |
+| **The starting world is empty, deliberately** | `Scene::default()`. A hardcoded scene would be a second source of truth for nouns that brewing + archive then deletes, and it would mask the property that makes this a *world*-grounded parser rather than a command parser. §6's "never a bare error" already holds with nothing in the world: `peruse feed.log` answers `Incomplete{missing: File}` — *"peruse needs a file"* — rather than dead-ending |
+| **`Speech` is the live screen; `Records` is the history** | Painting only the scrollback tail keeps a reader and a sighted player exactly level, which is rule 2 in both directions. Scrollback history is `Records`'s job and always was. Noted so that nobody later "fixes" `Speech` into a scrollback and breaks parity to do it |
+| **No scrollback trimming yet** | Nothing in Phase 0 emits a record without a keystroke behind it; unattended logging arrives with the script engine in Phase 1. A `retain_last(n)` would have to re-base every stored index in the one type four consumers read — a speculative API of exactly the unshaped kind §19 already warns about. If a cap is ever needed, rebuild through the public builder rather than rewriting indices |
+
+**`RecordView::lines()` is not sufficient for this surface.** Drawn through it,
+`meditate` renders as `meditate count` and an unresolved input renders as four
+bare words in a column — neither of which is the prompt §6 describes, and the
+`Outcome` annotation added in the corrections pass above is unreachable by the
+only view that would use it. The prompt therefore needs an **outcome-aware line
+view in `orbs-render`**: a marker glyph from the CP437 repertoire plus an
+intensity, both derived from the record. Glyphs are not prose, so this does not
+touch rule 6; and it belongs in `orbs-render` rather than the frontend because
+deciding *what appears* is not a frontend's decision (rule 2).
+
+**Selecting an ambiguous candidate is out of scope for this item.** §6's numbered
+prompt (`[1/2]: _`) needs input handling that resolves a number against a pending
+list rather than against the verb vocabulary. The marker work above must still
+make candidates visually distinct from suggestions, or the first ambiguous input
+a tester meets looks like the parser malfunctioning.
 
 ### Structured-record output model — implemented, Phase 0 item 6
 

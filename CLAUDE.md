@@ -173,6 +173,33 @@ rather than discovered at the end of a phase.
 
 Work is not done when it compiles. It is done when it has been *looked at*.
 
+**Every roadmap item, in every phase, carries a "See it" line, and it has the same
+standing as the gate above.** No item is done until a person can reach it from the
+running game. An item without a See it line is not started; an item whose line
+does not work is not finished, however green its tests are.
+
+This rule exists because the first six Phase 0 items were built in
+architectural-layer order and left ~10,000 lines that the binary called under 40%
+of — a sixteen-command parser that had never received a keystroke. **Tests prove
+code does what it was written to do; they cannot prove it is the code worth
+writing**, and an API with no callers is unshaped.
+
+The counter-example is the CRT, the one item player-gated on arrival: boot the
+game, press F3. It flashed, that was obvious in ten seconds, and two wrong
+diagnoses were falsified by *looking* rather than by reasoning. No test in the
+suite would have caught it.
+
+Corollaries:
+
+- **Build the instrument before the thing it measures.** Where items can be
+  ordered so earlier ones verify later ones, order them that way.
+- **Anything already built without a gate gets one before new work continues.**
+  Retroactive gating is a work item, not a cleanup.
+- **Where a gate is genuinely impossible yet, name the phase that provides it**
+  rather than inventing a debug affordance nobody will maintain.
+
+DESIGN.md §15 and §19 record the correction and what it cost.
+
 ```bash
 cargo run -p orbs                        # the game — window, sim, cell renderer
 ORBS_CAPTURE=1 cargo run -p orbs         # ...and save a screenshot to check it
