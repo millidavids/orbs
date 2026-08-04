@@ -20,6 +20,10 @@ use orbs_render::{
     Span, Style, UtteranceKind,
 };
 
+/// The wizard's name is world state (`orbs_sim::Wizard`), which this crate does
+/// not know about — so a stand-in stands in.
+const DEMO_PROMPT: &str = "orbs $ ";
+
 fn main() {
     tier_table();
     lint_prose();
@@ -248,12 +252,12 @@ fn prompt_screen(grid: GridSize, records: &Records) -> Frame {
 
     let mut painter = frame.painter(pane);
     painter.border(pane, Some("O.R.B.S.  tick 1247  seed 0xc0ffee"), Style::DIM);
-    RecordView::prompt().draw(&mut painter, pane.inset(1), records.iter());
+    RecordView::prompt(DEMO_PROMPT).draw(&mut painter, pane.inset(1), records.iter());
 
     // The input line, mid-typing, with the caret where the frontend puts it.
     let input = layout.input();
     let mut painter = frame.painter(input);
-    let prompt = painter.glyphs(input.origin(), orbs_render::PROMPT, Style::DIM);
+    let prompt = painter.glyphs(input.origin(), DEMO_PROMPT, Style::DIM);
     let typed = "sift march ";
     painter.span(
         Pos::new(input.col + prompt, input.row),

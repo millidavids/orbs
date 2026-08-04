@@ -46,4 +46,4 @@ pub use kind::RecordKind;
 pub use outcome::Outcome;
 pub use sift::Sift;
 pub use stream::{Record, RecordBuilder, Records};
-pub use view::{PROMPT, RecordView};
+pub use view::RecordView;

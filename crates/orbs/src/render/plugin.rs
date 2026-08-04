@@ -9,6 +9,7 @@ use bevy::window::WindowResized;
 use orbs_render::Frame;
 
 use super::atlas::{self, GlyphAtlas};
+use super::blink::{self, Blink};
 use super::grid;
 use super::palette::{self, Phosphor};
 use crate::crt::CellSize;
@@ -47,6 +48,7 @@ impl Plugin for RenderPlugin {
         app.init_resource::<Canvas>()
             .init_resource::<Theme>()
             .init_resource::<CellSize>()
+            .init_resource::<Blink>()
             .add_systems(PreStartup, build_atlas)
             .add_systems(Startup, spawn_grid.after(build_atlas))
             .add_systems(Startup, fit_camera.after(spawn_grid))
@@ -61,6 +63,10 @@ impl Plugin for RenderPlugin {
                     fit_camera.run_if(on_message::<WindowResized>),
                     // The background only moves when the theme does.
                     tint_background.run_if(resource_changed::<Theme>),
+                    blink::tick,
+                    // Typing must not hide what is being typed: a caret caught
+                    // mid-blink when a key lands reads as dropped input.
+                    blink::wake.run_if(on_message::<bevy::input::keyboard::KeyboardInput>),
                     redraw.run_if(atlas_ready),
                 )
                     .chain()
@@ -207,6 +213,7 @@ fn redraw(
     theme: Res<Theme>,
     tower: Res<Tower>,
     line: Res<crate::shell::Line>,
+    blink: Res<Blink>,
     mut linear: ResMut<crate::shell::Linear>,
     mut cell: ResMut<CellSize>,
     mut canvas: ResMut<Canvas>,
@@ -241,5 +248,5 @@ fn redraw(
         height: f32::from(orbs_render::CELL_HEIGHT) * f32::from(scale),
     };
 
-    grid::build(frame, &theme.0, scale, &mut mesh);
+    grid::build(frame, &theme.0, scale, blink.showing(), &mut mesh);
 }

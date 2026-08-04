@@ -91,7 +91,10 @@ mod tests {
     fn ticks_after(frames: u32, frame_time: Duration) -> u64 {
         let mut app = App::new();
         app.add_plugins(TimePlugin)
-            .add_plugins(SimPlugin { seed: 1 })
+            .add_plugins(SimPlugin {
+                seed: 1,
+                wizard: None,
+            })
             .insert_resource(TimeUpdateStrategy::ManualDuration(frame_time));
 
         app.update();
@@ -107,11 +110,16 @@ mod tests {
         for label in ["sim first", "time first"] {
             let mut app = App::new();
             if label == "sim first" {
-                app.add_plugins(SimPlugin { seed: 1 })
-                    .add_plugins(TimePlugin);
+                app.add_plugins(SimPlugin {
+                    seed: 1,
+                    wizard: None,
+                })
+                .add_plugins(TimePlugin);
             } else {
-                app.add_plugins(TimePlugin)
-                    .add_plugins(SimPlugin { seed: 1 });
+                app.add_plugins(TimePlugin).add_plugins(SimPlugin {
+                    seed: 1,
+                    wizard: None,
+                });
             }
             app.insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs(1)));
             app.update();
@@ -222,8 +230,10 @@ mod tests {
         // Frame times in the real world are not uniform. Ten seconds delivered
         // as a mix of fast and slow frames must still be ten ticks.
         let mut app = App::new();
-        app.add_plugins(TimePlugin)
-            .add_plugins(SimPlugin { seed: 1 });
+        app.add_plugins(TimePlugin).add_plugins(SimPlugin {
+            seed: 1,
+            wizard: None,
+        });
         app.insert_resource(TimeUpdateStrategy::ManualDuration(Duration::ZERO));
         app.update();
 

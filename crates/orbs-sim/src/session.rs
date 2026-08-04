@@ -84,6 +84,64 @@ impl Pending {
     }
 }
 
+/// Who is at the orb.
+///
+/// §4's framing is *"always inside"* — the player never sees the wizard, because
+/// the player **is** the wizard. So the name at the prompt is world state rather
+/// than a display setting: it belongs in a save, it is the same in every
+/// frontend, and it is one of the few places the game says the player's own word
+/// back to them.
+///
+/// Lives here rather than in `orbs-render` because a name is content, and
+/// `orbs-render` decides *where* things appear rather than what they are called.
+///
+/// # It is world state, so a save outranks the environment
+///
+/// A frontend seeds this from the environment when it builds a **new** world.
+/// That is the only moment it may: once a save exists it carries its own name,
+/// and loading it must overwrite this rather than have the current machine's
+/// login quietly rename someone else's wizard. Nothing in the sim reads the name
+/// — it feeds the prompt and nothing else — so it cannot make two runs from one
+/// seed diverge, and this note is here to keep it that way.
+#[derive(Resource, Debug, Clone)]
+pub struct Wizard {
+    name: String,
+}
+
+impl Default for Wizard {
+    fn default() -> Self {
+        Self {
+            name: DEFAULT_WIZARD.to_owned(),
+        }
+    }
+}
+
+/// The name the orb answers to before anyone has given it another.
+///
+/// Not a placeholder to be replaced by lore: §4 keeps the wizard unnamed and
+/// unseen, so until a player says otherwise the machine's own name is the honest
+/// thing to show.
+pub const DEFAULT_WIZARD: &str = "orbs";
+
+impl Wizard {
+    /// The name as it appears at the prompt.
+    #[must_use]
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Rename the wizard.
+    ///
+    /// Blank names are refused rather than accepted and rendered as an empty
+    /// prompt — a prompt with nothing in front of the `$` reads as a bug.
+    pub fn rename(&mut self, name: &str) {
+        let name = name.trim();
+        if !name.is_empty() {
+            self.name = name.to_owned();
+        }
+    }
+}
+
 /// Ticks a command asked the world to pass through.
 ///
 /// `meditate 30` cannot advance the clock where it runs — it *is* running inside
@@ -166,9 +224,19 @@ mod tests {
 
     #[test]
     fn the_effect_waits_for_the_tick_boundary() {
+        // `attend` rather than `survey`: a listing verb now emits `Entry` rows
+        // for what it found, and a completion is what a verb that *changed*
+        // something reports.
         let mut sim = Sim::new(1);
-        sim.submit("look around");
+        sim.submit("attend alembic");
         assert_eq!(sim.pending().len(), 1);
+        assert!(
+            sim.scrollback()
+                .records()
+                .iter()
+                .all(|record| record.kind() != RecordKind::Completion),
+            "the effect landed before its tick",
+        );
 
         sim.step();
         assert!(sim.pending().is_empty(), "the queue must drain");
@@ -181,12 +249,12 @@ mod tests {
             .expect("a completion");
         assert_eq!(
             completion.field(FieldName::Name),
-            Some(Value::Text("survey"))
+            Some(Value::Text("attend"))
         );
         // No bare timestamp: a line view joins every content value, so a tick
-        // here drew and spoke `survey 1`.
+        // here would draw and speak `attend /tower/alembic 1`.
         assert_eq!(completion.field(FieldName::Tick), None);
-        assert_eq!(completion.to_speech(), "survey");
+        assert_eq!(completion.to_speech(), "attend, /tower/alembic");
     }
 
     #[test]

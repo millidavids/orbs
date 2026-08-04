@@ -129,7 +129,9 @@ impl Geometry {
 ///
 /// Blank cells contribute nothing: a space is the commonest glyph on screen by a
 /// wide margin, and a quad that samples a fully transparent texel is pure cost.
-pub(crate) fn build(frame: &Frame, theme: &Phosphor, scale: u16, mesh: &mut Mesh) {
+///
+/// `showing` is the caret's blink phase — see [`Blink`](super::blink::Blink).
+pub(crate) fn build(frame: &Frame, theme: &Phosphor, scale: u16, showing: bool, mesh: &mut Mesh) {
     let mut geometry = Geometry::reclaim(mesh);
 
     let grid = frame.size();
@@ -163,7 +165,13 @@ pub(crate) fn build(frame: &Frame, theme: &Phosphor, scale: u16, mesh: &mut Mesh
     // The caret. `Frame` carries it, so a frontend that dropped it would show a
     // different screen from one that did not — which is the disagreement
     // architectural rule 2 exists to prevent.
-    if let Some(caret) = frame.cursor()
+    //
+    // `showing` is the blink phase, and blinking is legitimate frontend
+    // enrichment: the caret's *position* is in the Frame, and a blink adds no
+    // information a static block does not already carry. `orbs-tui` gets the
+    // terminal's own cursor and is none the poorer.
+    if showing
+        && let Some(caret) = frame.cursor()
         && let Some(index) = cp437::cp437_index(CARET)
     {
         let (x, y) = position(f32::from(caret.col), f32::from(caret.row));
@@ -241,7 +249,7 @@ mod tests {
 
     fn built(frame: &Frame, scale: u16) -> Mesh {
         let mut mesh = empty_mesh();
-        build(frame, &MUTED_VIOLET, scale, &mut mesh);
+        build(frame, &MUTED_VIOLET, scale, true, &mut mesh);
         mesh
     }
 
@@ -342,7 +350,7 @@ mod tests {
         let mut mesh = empty_mesh();
         let frame = frame_with("something reasonably long", 40, 1);
 
-        build(&frame, &MUTED_VIOLET, 1, &mut mesh);
+        build(&frame, &MUTED_VIOLET, 1, true, &mut mesh);
         let capacity = match mesh.attribute(Mesh::ATTRIBUTE_POSITION) {
             Some(VertexAttributeValues::Float32x3(values)) => values.capacity(),
             _ => 0,
@@ -350,7 +358,7 @@ mod tests {
         assert!(capacity > 0);
 
         for _ in 0..8 {
-            build(&frame, &MUTED_VIOLET, 1, &mut mesh);
+            build(&frame, &MUTED_VIOLET, 1, true, &mut mesh);
         }
 
         let after = match mesh.attribute(Mesh::ATTRIBUTE_POSITION) {
@@ -393,13 +401,13 @@ mod tests {
 
         let mut mesh = empty_mesh();
         // Warm the allocations, as a running frame would have them.
-        build(&frame, &MUTED_VIOLET, 1, &mut mesh);
+        build(&frame, &MUTED_VIOLET, 1, true, &mut mesh);
         assert_eq!(quads(&mesh), 160 * 45);
 
         let rounds = 20;
         let start = std::time::Instant::now();
         for _ in 0..rounds {
-            build(&frame, &MUTED_VIOLET, 1, &mut mesh);
+            build(&frame, &MUTED_VIOLET, 1, true, &mut mesh);
         }
         let each = start.elapsed() / rounds;
 

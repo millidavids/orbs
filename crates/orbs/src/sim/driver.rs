@@ -37,6 +37,11 @@ impl Tower {
         &self.0
     }
 
+    /// Name the wizard at the orb.
+    pub(crate) fn rename(&mut self, name: &str) {
+        self.0.rename(name);
+    }
+
     /// Step the tonal register through its three treatments.
     ///
     /// A preview of §3's eldritch register, which Phase 2 drives from threat.

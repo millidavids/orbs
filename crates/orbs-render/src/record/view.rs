@@ -43,7 +43,9 @@ enum Mode<'a> {
         header: bool,
     },
     Lines,
-    Prompt,
+    Prompt {
+        prompt: &'a str,
+    },
 }
 
 impl<'a> RecordView<'a> {
@@ -71,7 +73,7 @@ impl<'a> RecordView<'a> {
                     header: false,
                 },
             },
-            Mode::Lines | Mode::Prompt => self,
+            Mode::Lines | Mode::Prompt { .. } => self,
         }
     }
 
@@ -100,9 +102,15 @@ impl<'a> RecordView<'a> {
     ///   front of them, so the transcript reads as a session.
     ///
     /// Intensity comes from [`Record::style`], which derives it the same way.
+    ///
+    /// `prompt` is what the player's own lines are drawn behind — the wizard's
+    /// name, which is world state rather than a rendering choice, so it arrives
+    /// as an argument instead of living here as a constant.
     #[must_use]
-    pub const fn prompt() -> RecordView<'static> {
-        RecordView { mode: Mode::Prompt }
+    pub const fn prompt(prompt: &str) -> RecordView<'_> {
+        RecordView {
+            mode: Mode::Prompt { prompt },
+        }
     }
 
     /// Draw `records` into `area`, returning the number of rows used.
@@ -125,17 +133,11 @@ impl<'a> RecordView<'a> {
             Mode::Table { columns, header } => {
                 draw_table(&mut painter, area, columns, header, records)
             }
-            Mode::Lines => draw_lines(&mut painter, area, records, false),
-            Mode::Prompt => draw_lines(&mut painter, area, records, true),
+            Mode::Lines => draw_lines(&mut painter, area, records, None),
+            Mode::Prompt { prompt } => draw_lines(&mut painter, area, records, Some(prompt)),
         }
     }
 }
-
-/// What the player's own typed lines are drawn behind.
-///
-/// Lives here rather than in a frontend because it is *what appears*, not how a
-/// cell is drawn (architectural rule 2). Both frontends show the same prompt.
-pub const PROMPT: &str = "orbs:~$ ";
 
 /// Cells reserved in front of a line for its marker.
 const MARKER_WIDTH: u16 = 2;
@@ -220,7 +222,7 @@ fn draw_lines<'r>(
     painter: &mut Painter<'_>,
     area: Rect,
     records: impl Iterator<Item = Record<'r>>,
-    marked: bool,
+    prompt: Option<&str>,
 ) -> u16 {
     let (mut drawn, mut speech) = (String::new(), String::new());
     let mut row = area.row;
@@ -237,13 +239,13 @@ fn draw_lines<'r>(
 
         let style = record.style();
         let mut col = area.col;
-        if marked {
+        if let Some(prompt) = prompt {
             // The marker and the prompt are drawn silently. Both restate what
             // the linear stream already carries — an utterance's kind says it
             // is `Input`, and a reader filtering by outcome reads the
             // annotation — so speaking them would be saying it twice.
             if record.kind() == RecordKind::Input {
-                col = col.saturating_add(painter.glyphs(Pos::new(col, row), PROMPT, style));
+                col = col.saturating_add(painter.glyphs(Pos::new(col, row), prompt, style));
             } else {
                 let marker = record
                     .outcome()

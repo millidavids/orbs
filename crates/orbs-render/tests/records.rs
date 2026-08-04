@@ -431,7 +431,7 @@ fn a_listener_can_tell_an_error_from_an_offer() {
 
     let mut frame = frame_of(40, 4);
     let area = frame.area();
-    RecordView::prompt().draw(&mut frame.painter(area), area, records.iter());
+    RecordView::prompt("orbs $ ").draw(&mut frame.painter(area), area, records.iter());
 
     let spoken: Vec<_> = frame.speech().utterances().collect();
     assert_eq!(
@@ -462,7 +462,7 @@ fn a_selectable_candidate_is_distinguishable_by_ear() {
 
     let mut frame = frame_of(40, 4);
     let area = frame.area();
-    RecordView::prompt().draw(&mut frame.painter(area), area, records.iter());
+    RecordView::prompt("orbs $ ").draw(&mut frame.painter(area), area, records.iter());
 
     let spoken: Vec<_> = frame.speech().utterances().collect();
     assert_eq!(spoken[0].text, spoken[1].text, "identical as text");

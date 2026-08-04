@@ -1,4 +1,5 @@
 mod atlas;
+mod blink;
 mod glyphs;
 mod grid;
 mod palette;

@@ -10,6 +10,7 @@ pub mod parser;
 
 pub mod execute;
 pub mod session;
+pub mod tower;
 
 mod rng;
 mod schedule;
@@ -19,6 +20,7 @@ mod tick;
 pub use execute::{LOG, MAX_MEDITATE};
 pub use rng::{RngStream, Rngs};
 pub use schedule::{SimSchedule, new_sim_schedule};
-pub use session::{Pending, Scrollback, Skip, Submissions};
+pub use session::{DEFAULT_WIZARD, Pending, Scrollback, Skip, Submissions, Wizard};
 pub use sim::Sim;
 pub use tick::Tick;
+pub use tower::{Cwd, NodeId};

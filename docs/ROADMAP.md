@@ -72,8 +72,9 @@ What is still ❌ or ⚠️ is what remains of it.
 | `sift` / record filtering | ✅ `sift <pattern> orb.log` | — |
 | Eldritch + tampered presentation | ✅ `F7` cycles the register; all three faces draw | — |
 | Progress bars (`Painter::progress`) | ❌ example only | **Brewing + archive** — nothing has a duration yet |
-| Sidebar (`ScreenLayout::sidebar`) | ❌ example only | **Brewing + archive** — nothing to minimise with 2 panes |
-| 3- and 4-pane tiling | ❌ the game asks for at most 2 | **Brewing + archive** |
+| Sidebar (`ScreenLayout::sidebar`) | ❌ example only | **Brewing + archive** — §9 opens with two domains at capacity 1, so one is minimised |
+| 3- and 4-pane tiling | ❌ the game asks for at most 2 | **Phase 1+ progression.** Gated by *multiplex capacity*, not by domains: §11.5 starts the player at capacity **1** and reaches 3 at ~5 h. §9 keeps panes and capacity as separate unlocks that "must not be conflated" — drawing three panes at t=0 would delete the swap-or-let-it-burn trade the whole focus track is built on |
+| `Sim::with_schedule`'s build closure | ❌ the game never uses it | **Nothing** — domain systems belong inside `Sim::new`, or the Bevy build, `orbs-tui` and `orbs-balance` each register their own and diverge (§13). Delete it or mark it test-only |
 | Replay log (`Sim::submissions`) | ⚠️ written, never read | **Phase 1** — needs a replay command to read it |
 | Destruction guard (`Verb::is_destructive`) | ❌ | **Brewing + archive** — `purge` has nothing to destroy |
 | Per-subsystem RNG streams | ❌ nothing rolls yet | **Phase 2** — honest deferral, see below |
@@ -90,6 +91,13 @@ progress bar with no duration action and a sidebar with nothing to minimise.
 > it by sweeping the public API of `orbs-render` and `orbs-sim` for anything the
 > shipping path never calls, then justifying each miss. A table assembled from
 > memory measures the memory.
+>
+> **And do not let it choose scope.** A row here says a subsystem is unreachable;
+> it does not say the game should be changed to reach it. The brewing plan's
+> first draft proposed three main panes at t=0 — contradicting §9's capacity-1
+> opening — with the stated motivation *"both rows close."* Two of these rows are
+> gated by progression that does not exist yet, and the right fix was to correct
+> the rows. **A checklist is not a design.**
 
 ### Work items
 

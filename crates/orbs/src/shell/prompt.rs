@@ -12,8 +12,8 @@
 //! the log a player will `peruse`.
 
 use orbs_render::{
-    DEEP_FOCUS_FLOOR, DisplayMode, FieldName, Frame, PROMPT, Pos, RecordKind, RecordView, Records,
-    Rect, ScreenLayout, ScreenRequest, Span, Style, UtteranceKind,
+    DEEP_FOCUS_FLOOR, DisplayMode, FieldName, Frame, Pos, RecordKind, RecordView, Records, Rect,
+    ScreenLayout, ScreenRequest, Span, Style, UtteranceKind,
 };
 use orbs_sim::Sim;
 
@@ -74,7 +74,7 @@ pub(crate) fn paint(
         screen,
         main.get(1).copied().unwrap_or(Rect::EMPTY),
     );
-    input_line(frame, layout.input(), line);
+    input_line(frame, layout.input(), line, &sim.prompt());
 }
 
 /// The transcript: what was typed and what came back.
@@ -89,31 +89,34 @@ pub(super) fn session(
         return;
     }
     let mut painter = frame.painter(pane);
-    // The hint is here because this is the state a player gets stuck in: below
-    // `DEEP_FOCUS_FLOOR` there is only one pane, and nothing on screen would
-    // otherwise say that a second one exists or how to reach it. A key with no
+    // **The pane says where you are**, because the pane is the thing that shows
+    // a place (§7: paths are places). The prompt below cannot: §9 puts one input
+    // line beneath however many panes are open, so it serves all of them and can
+    // claim to be standing in none.
+    //
+    // This is also the only thing on screen that tells a player *which commands
+    // will work* — the essences live in `/tower/alembic`, so that is where
+    // `decoct` resolves. See `orbs_sim::tower::rebuild`.
+    //
+    // The `F4` hint rides along because below `DEEP_FOCUS_FLOOR` there is only
+    // one pane and nothing would otherwise say a second exists. A key with no
     // affordance is a key nobody presses.
+    let switch = match screen.mode {
+        DisplayMode::Deep => "wide",
+        DisplayMode::Wide => "deep",
+    };
     let title = if carry_readings {
         format!(
-            "session  tick {}  tier {}  {}x{}  {}  F4 {}",
+            "{}  tick {}  tier {}  {}x{}  {}  F4 {switch}",
+            sim.location(),
             sim.tick().get(),
             screen.fidelity.map_or(0, |tier| tier.scale()),
             screen.grid.cols,
             screen.grid.rows,
             focus(screen),
-            match screen.mode {
-                DisplayMode::Deep => "wide",
-                DisplayMode::Wide => "deep",
-            },
         )
     } else {
-        format!(
-            "session  F4 {}",
-            match screen.mode {
-                DisplayMode::Deep => "wide",
-                DisplayMode::Wide => "deep",
-            }
-        )
+        format!("{}  F4 {switch}", sim.location())
     };
     painter.border(pane, Some(&title), Style::DIM);
 
@@ -122,7 +125,7 @@ pub(super) fn session(
     // Only the tail fits. `iter().skip(n)` is O(1) here and stays `Clone`, which
     // is what `RecordView::draw` needs to measure and then draw.
     let skipped = records.len().saturating_sub(usize::from(body.rows));
-    RecordView::prompt().draw(&mut painter, body, records.iter().skip(skipped));
+    RecordView::prompt(&sim.prompt()).draw(&mut painter, body, records.iter().skip(skipped));
 }
 
 /// What the orb and the tube are currently doing.
@@ -186,12 +189,12 @@ fn quantity(count: usize) -> u64 {
 }
 
 /// Draw the prompt and what is being typed into it.
-fn input_line(frame: &mut Frame, area: Rect, line: &Line) {
+fn input_line(frame: &mut Frame, area: Rect, line: &Line, prompt: &str) {
     if area.is_empty() {
         return;
     }
     let mut painter = frame.painter(area);
-    let prompt = painter.glyphs(area.origin(), PROMPT, Style::DIM);
+    let prompt = painter.glyphs(area.origin(), prompt, Style::DIM);
 
     let (visible, caret) = line.viewport(area.cols.saturating_sub(prompt));
     // One span for the whole line rather than a glyph run: the linear stream

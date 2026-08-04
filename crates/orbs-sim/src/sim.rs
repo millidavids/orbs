@@ -9,11 +9,12 @@ use bevy_ecs::prelude::*;
 use orbs_render::{Presentation, RecordKind};
 
 use crate::execute::run_pending;
-use crate::parser::{Mode, NounKind, ParseLog, ParseRecord, Resolution, Scene, analyse, report};
+use crate::parser::{Mode, ParseLog, ParseRecord, Resolution, Scene, analyse, report};
 use crate::rng::Rngs;
 use crate::schedule::new_sim_schedule;
-use crate::session::{Pending, Scrollback, Skip, Submissions};
+use crate::session::{Pending, Scrollback, Skip, Submissions, Wizard};
 use crate::tick::Tick;
+use crate::tower::{self, NodeIds};
 
 /// A complete simulation: the world, its schedule, and its clock.
 pub struct Sim {
@@ -21,6 +22,8 @@ pub struct Sim {
     /// Commands the player queued, applied before the world moves.
     commands: Schedule,
     schedule: Schedule,
+    /// What the player can name, rebuilt after the world has moved.
+    scene: Schedule,
 }
 
 impl Sim {
@@ -39,15 +42,14 @@ impl Sim {
         let mut world = World::new();
         world.insert_resource(Rngs::from_seed(seed));
         world.insert_resource(Tick::default());
-        // §3's log, nameable from the moment the game starts: the record
-        // stream *is* the log, so `peruse orb.log` and `sift <pattern> orb.log`
-        // are real commands rather than debug affordances.
-        world.insert_resource(Scene::new().with(NounKind::File, crate::execute::LOG));
+        world.init_resource::<Scene>();
+        world.init_resource::<NodeIds>();
         world.init_resource::<Scrollback>();
         world.init_resource::<Pending>();
         world.init_resource::<Submissions>();
         world.init_resource::<Skip>();
         world.init_resource::<ParseLog>();
+        world.init_resource::<Wizard>();
 
         // Its **own** schedule, run before the caller's. Adding `run_pending`
         // to the same schedule and relying on insertion order would be an
@@ -61,10 +63,29 @@ impl Sim {
         let mut schedule = new_sim_schedule();
         build(&mut schedule);
 
+        // A **third** pass, for the same reason `commands` is a first one:
+        // putting `rebuild` in the same schedule as whatever `build` adds is an
+        // ambiguity rather than an ordering, and Bevy's topsort was in fact
+        // running the caller's systems first despite `rebuild` being inserted
+        // first. If that flipped, the scene would go a tick stale — and since
+        // every frontend passes a different `build` closure, the two graphs
+        // could flip differently, which is exactly the game/harness divergence
+        // §13 exists to prevent.
+        //
+        // Last, so the scene names the world as the tick left it.
+        let mut scene = new_sim_schedule();
+        scene.add_systems(tower::rebuild);
+
+        // The tower is raised before the first tick, so tick 0 already has a
+        // world to name.
+        tower::raise(&mut world);
+        tower::rebuild(&mut world);
+
         Self {
             world,
             commands,
             schedule,
+            scene,
         }
     }
 
@@ -88,10 +109,12 @@ impl Sim {
     fn advance(&mut self) {
         let next = self.world.resource::<Tick>().next();
         self.world.insert_resource(next);
-        // What the player asked for, then what the world does about it. Two
-        // passes rather than two ordered systems — see `with_schedule`.
+        // What the player asked for, what the world does about it, then what
+        // the player can name afterwards. Three passes rather than ordered
+        // systems in one — see `with_schedule`.
         self.commands.run(&mut self.world);
         self.schedule.run(&mut self.world);
+        self.scene.run(&mut self.world);
     }
 
     /// Advance by `n` ticks.
@@ -180,6 +203,42 @@ impl Sim {
             .resource_mut::<Scrollback>()
             .records_mut()
             .set_register(register);
+    }
+
+    /// What the prompt reads, before the caret.
+    ///
+    /// `<name> $ `. Composed here rather than in a view because the name is
+    /// world state — see [`Wizard`](crate::session::Wizard) — and because both
+    /// frontends must show the same one.
+    #[must_use]
+    pub fn prompt(&self) -> String {
+        format!("{} $ ", self.world.resource::<Wizard>().name())
+    }
+
+    /// Rename the wizard at the orb.
+    pub fn rename(&mut self, name: &str) {
+        self.world.resource_mut::<Wizard>().rename(name);
+    }
+
+    /// Where the player is standing, as a path (§7).
+    ///
+    /// What the prompt shows, and therefore what tells a player which commands
+    /// will resolve: the essences are in `/tower/alembic`, so that is where
+    /// `decoct` works.
+    #[must_use]
+    pub fn location(&self) -> String {
+        self.world
+            .get_resource::<tower::Cwd>()
+            .map_or_else(String::new, |cwd| tower::path_of(&self.world, cwd.0))
+    }
+
+    /// Everything the player can currently name (§6).
+    ///
+    /// Rebuilt every tick from the tower, so it is the world as it is rather
+    /// than as it was when a command table was written.
+    #[must_use]
+    pub fn scene(&self) -> &Scene {
+        self.world.resource::<Scene>()
     }
 
     /// Every reading the parser scored this session.

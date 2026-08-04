@@ -13,12 +13,15 @@ use orbs_sim::Sim;
 fn main() {
     let mut sim = Sim::new(0xC0FFEE);
     let script = [
-        "look around",
-        "meditate 30",
-        "status",
-        "sift seed orb.log",
-        "xyzzy",
-        "meditate",
+        // Every one of these names something the tower actually holds — which is
+        // the point of the domains item. Before it, the Essence, Vessel,
+        // Fragment and Place slots were unfillable and half the sixteen-verb
+        // vocabulary could not be exercised at all.
+        "attend alembic",
+        "survey archive",
+        "make a potion of clarity",
+        "peruse alembic.log",
+        "peruse orb.log",
     ];
 
     for line in script {
