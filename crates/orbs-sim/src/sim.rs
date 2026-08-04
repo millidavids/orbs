@@ -9,7 +9,7 @@ use bevy_ecs::prelude::*;
 use orbs_render::RecordKind;
 
 use crate::execute::run_pending;
-use crate::parser::{Mode, NounKind, Resolution, Scene, report, resolve};
+use crate::parser::{Mode, NounKind, ParseLog, ParseRecord, Resolution, Scene, analyse, report};
 use crate::rng::Rngs;
 use crate::schedule::new_sim_schedule;
 use crate::session::{Pending, Scrollback, Skip, Submissions};
@@ -47,6 +47,7 @@ impl Sim {
         world.init_resource::<Pending>();
         world.init_resource::<Submissions>();
         world.init_resource::<Skip>();
+        world.init_resource::<ParseLog>();
 
         // Its **own** schedule, run before the caller's. Adding `run_pending`
         // to the same schedule and relying on insertion order would be an
@@ -116,7 +117,20 @@ impl Sim {
             return;
         }
 
-        let resolution = resolve(line, self.world.resource::<Scene>(), Mode::Calm);
+        // `analyse` rather than `resolve`: it keeps every scored reading, which
+        // is what §6's *"the parser must explain itself"* means in practice and
+        // what the Phase 0 gate needs to cluster failures by cause rather than
+        // count them. Deterministic and identical work — `resolve` is `analyse`
+        // with the candidates dropped.
+        let tick = *self.world.resource::<Tick>();
+        let analysis = analyse(line, self.world.resource::<Scene>(), Mode::Calm);
+        self.world.resource_mut::<ParseLog>().push(ParseRecord::new(
+            tick.get(),
+            line,
+            Mode::Calm,
+            &analysis,
+        ));
+        let resolution = analysis.resolution;
 
         let mut scrollback = self.world.resource_mut::<Scrollback>();
         let records = scrollback.records_mut();
@@ -126,7 +140,6 @@ impl Sim {
             .finish();
         report(line, &resolution, records);
 
-        let tick = *self.world.resource::<Tick>();
         self.world.resource_mut::<Submissions>().push(tick, line);
         if let Resolution::Resolved { intent, .. } = resolution {
             self.world.resource_mut::<Pending>().push(intent);
@@ -143,6 +156,17 @@ impl Sim {
     #[must_use]
     pub fn pending(&self) -> &Pending {
         self.world.resource::<Pending>()
+    }
+
+    /// Every reading the parser scored this session.
+    ///
+    /// §6: *"the parser must explain itself."* This is the raw material for the
+    /// Phase 0 gate, which acts on the clustering of failures by cause rather
+    /// than on the aggregate — 8 testers over 15 minutes has wide confidence
+    /// intervals, so 84% against 86% is noise and *which* readings lost is not.
+    #[must_use]
+    pub fn parse_log(&self) -> &ParseLog {
+        self.world.resource::<ParseLog>()
     }
 
     /// Every line submitted, with the tick it landed on. A replay needs this and

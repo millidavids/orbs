@@ -22,6 +22,8 @@
 
 use core::fmt::Write as _;
 
+use bevy_ecs::prelude::*;
+
 use super::intent::{Candidate, Mode, Resolution};
 use super::resolve::Analysis;
 use super::verb::Verb;
@@ -137,7 +139,13 @@ impl ParseRecord {
 }
 
 /// Every resolution this session, in order.
-#[derive(Debug, Default, Clone)]
+///
+/// A `Resource` because it is world-adjacent bookkeeping the sim owns: §6 makes
+/// explaining itself part of the parser's contract, and the Phase 0 gate acts on
+/// the *clustering* of failures rather than on the aggregate, which means every
+/// scored reading has to be kept as it happens. Reconstructing it afterwards
+/// from the scrollback is not possible — the losing candidates are gone.
+#[derive(Resource, Debug, Default, Clone)]
 pub struct ParseLog {
     records: Vec<ParseRecord>,
 }

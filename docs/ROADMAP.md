@@ -68,7 +68,7 @@ What is still ❌ or ⚠️ is what remains of it.
 | Fidelity tiers | ✅ tier and grid in the border; drag the window | — |
 | `Speech` linear stream | ✅ `F5` shows the session pane as a reader hears it | — |
 | CP437 repertoire enforcement | ✅ the prompt refuses what it cannot draw | — |
-| Parse instrumentation (`ParseLog`, TSV) | ❌ | Retroactive pass |
+| Parse instrumentation (`ParseLog`, TSV) | ✅ every line traced; `F6` exports | — |
 | `sift` / record filtering | ✅ `sift <pattern> orb.log` | — |
 | Eldritch + tampered presentation | ❌ | Retroactive pass |
 | Per-subsystem RNG streams | ❌ nothing rolls yet | **Phase 2** — honest deferral, see below |
@@ -112,8 +112,8 @@ would be worse than naming the phase that gates it.
       reading so the gate can cluster failures by cause; `ParseLog::to_tsv()`
       exports one row per candidate. `cargo run -p orbs-sim --example parse -- -i`
       to type at it. 180 workspace tests green
-      **See it:** ✅ type at it. ⚠️ the instrumentation export is still gated by
-      the retroactive pass
+      **See it:** ✅ type at it, then `F6` to write `orbs-parse.tsv` — one row
+      per candidate, with the verb and argument scores the gate clusters on
 - [x] **Naming pass** for the slice's 16 commands — run against the implemented
       vocabulary, not by eye. Found a canonical collision between the two core
       brewing verbs (`decoct`/`decant`, 667), a `dec-` prefix shared three ways,

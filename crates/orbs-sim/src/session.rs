@@ -250,4 +250,55 @@ mod tests {
         assert_eq!(messages(&a), messages(&b));
         assert_eq!(a.submissions().all(), b.submissions().all());
     }
+
+    #[test]
+    fn every_line_typed_is_traced_with_the_readings_that_lost() {
+        // §6: "the parser must explain itself." The Phase 0 gate acts on the
+        // *clustering* of failures by cause, so knowing a line failed is not
+        // enough — the losing candidates are what say whether the miss was the
+        // verb or the argument, and they are unrecoverable after the fact.
+        let mut sim = Sim::new(1);
+        for line in ["look around", "meditate", "xyzzy"] {
+            sim.submit(line);
+            sim.step();
+        }
+
+        let log = sim.parse_log();
+        assert_eq!(log.records().len(), 3, "a line went untraced");
+        assert_eq!(log.resolved(), 1);
+        assert_eq!(log.incomplete(), 1);
+        assert_eq!(log.unresolved(), 1);
+
+        // The scores are the point. An aggregate pass rate cannot say whether a
+        // miss was the verb or the argument; these columns can, which is what
+        // makes the gate's clustering requirement actionable.
+        let tsv = log.to_tsv();
+        let header = tsv.lines().next().expect("a header");
+        for column in ["verb_score", "arg_score", "suggestions", "outcome"] {
+            assert!(header.contains(column), "{column} missing from {header}");
+        }
+
+        let resolved = tsv
+            .lines()
+            .find(|line| line.contains("look around"))
+            .expect("the resolved line");
+        let fields: Vec<&str> = resolved.split('\t').collect();
+        let scores = header.split('\t').zip(&fields);
+        for (column, value) in scores {
+            if column == "verb_score" || column == "arg_score" {
+                assert!(
+                    value.parse::<u32>().is_ok_and(|score| score > 0),
+                    "{column} was {value:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_blank_line_is_not_traced_either() {
+        // It is not an input the gate should count against the parser.
+        let mut sim = Sim::new(1);
+        sim.submit("   ");
+        assert!(sim.parse_log().records().is_empty());
+    }
 }

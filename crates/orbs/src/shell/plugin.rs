@@ -55,6 +55,10 @@ impl Plugin for ShellPlugin {
                     // frame. Nothing had ever shown it, which is how a stream
                     // that is subtly wrong stays that way.
                     super::linear::toggle.run_if(input_just_pressed(KeyCode::F5)),
+                    // §6 requires the parser explain itself, and the Phase 0
+                    // gate acts on failure *clustering*. Every reading is kept
+                    // as it happens; this is what gets it out to a spreadsheet.
+                    export_trace.run_if(input_just_pressed(KeyCode::F6)),
                     // F10, not Escape: the moment there is a text field, Escape
                     // is "clear the line" muscle memory, and quitting the game
                     // mid-sentence is not a recoverable surprise.
@@ -71,6 +75,33 @@ impl Plugin for ShellPlugin {
 fn submit(mut lines: MessageReader<SubmittedMessage>, mut tower: ResMut<Tower>) {
     for submitted in lines.read() {
         tower.submit(&submitted.line);
+    }
+}
+
+/// Where the parse trace is written.
+///
+/// TSV beside the binary, per §19: no dependency, survives `grep`, pastes into a
+/// spreadsheet. One row per *candidate*, not per input, because the gate needs
+/// to know whether a miss was the verb or the argument.
+const TRACE_PATH: &str = "orbs-parse.tsv";
+
+/// Write the parse trace to disk.
+fn export_trace(tower: Res<Tower>) {
+    let log = tower.sim().parse_log();
+    match std::fs::write(TRACE_PATH, log.to_tsv()) {
+        Ok(()) => info!(
+            "parse trace -> {TRACE_PATH}: {} inputs, {} resolved, {} forced, {} ambiguous, \
+             {} incomplete, {} unresolved",
+            log.records().len(),
+            log.resolved(),
+            log.forced(),
+            log.ambiguous(),
+            log.incomplete(),
+            log.unresolved(),
+        ),
+        // A failed export must not take the session down with it — the tester
+        // whose run it was recording is still playing.
+        Err(error) => warn!("parse trace -> {TRACE_PATH} failed: {error}"),
     }
 }
 
