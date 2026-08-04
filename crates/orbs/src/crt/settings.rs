@@ -72,12 +72,12 @@ impl CrtSettings {
     /// these, so treat them as a starting point rather than a result.
     pub(crate) const DEFAULT: Self = Self {
         barrel: 0.10,
-        scanline: 0.16,
+        scanline: 0.32,
         mask: 0.10,
         vignette: 0.45,
         vignette_radius: 0.90,
         aberration: 0.0005,
-        glow: 0.30,
+        glow: 0.5,
         flicker: 0.10,
         corner_radius: 0.028,
         desaturation: 0.0,
