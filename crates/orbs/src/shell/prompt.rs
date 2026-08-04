@@ -146,18 +146,26 @@ pub(super) fn session(
     // is what `RecordView::draw` needs to measure and then draw.
     //
     // One row per record is a *floor*, not the height: a listing packs across
-    // the pane, so this skip is a guess that always fits and usually wastes the
-    // difference. Widening it one record at a time until the next one would
-    // overflow is what puts real history in the rows tiling frees up — a session
-    // that had five blank rows and dropped its own opening now shows both.
+    // the pane, so this skip always fits and usually wastes the difference.
+    // Widening it is what puts real history in the rows tiling frees up — a
+    // session that had five blank rows and dropped its own opening shows both.
     //
-    // Bounded by the pane, so the cost is a pane's worth of measuring per frame
-    // rather than anything that grows with the scrollback.
-    let mut skipped = records.len().saturating_sub(usize::from(body.rows));
-    while skipped > 0 && view.height(body.cols, records.iter().skip(skipped - 1)) <= body.rows {
-        skipped -= 1;
+    // Binary search rather than a walk. `height` is **non-increasing** in the
+    // skip — restoring an older record adds to a run's count and can only widen
+    // its columns, so it can only cost rows — which makes "the smallest skip
+    // that still fits" a monotone predicate. Walking it re-measured the whole
+    // tail per step, which is quadratic in a per-frame path; this is about five
+    // measurements at the 80×22 floor.
+    let (mut narrowest, mut widest) = (0, records.len().saturating_sub(usize::from(body.rows)));
+    while narrowest < widest {
+        let candidate = narrowest + (widest - narrowest) / 2;
+        if view.height(body.cols, records.iter().skip(candidate)) <= body.rows {
+            widest = candidate;
+        } else {
+            narrowest = candidate + 1;
+        }
     }
-    view.draw(&mut painter, body, records.iter().skip(skipped));
+    view.draw(&mut painter, body, records.iter().skip(narrowest));
 }
 
 /// A tick count as a meter value, saturating rather than wrapping.

@@ -79,13 +79,21 @@ pub(crate) fn run(seed: u64, wizard: Option<String>) -> bool {
     };
 
     let mut frame = Frame::new(grid);
-    super::prompt::paint(
-        &mut frame,
-        &sim,
-        &Line::default(),
-        &screen,
-        &mut Linear::default(),
-    );
+    // The same branch `render::redraw` takes, and for the same reason: below the
+    // floor the game draws a "too small" screen rather than a mangled layout, and
+    // a tool documented as drawing the same frame the game draws has to draw that
+    // one too. `ORBS_GRID=40x10` is how anyone would ever look at it.
+    if screen.is_hostable() {
+        super::prompt::paint(
+            &mut frame,
+            &sim,
+            &Line::default(),
+            &screen,
+            &mut Linear::default(),
+        );
+    } else {
+        super::prompt::paint_too_small(&mut frame);
+    }
 
     println!("{}", frame.to_text());
     println!("-- linearised (DESIGN.md §14) --");

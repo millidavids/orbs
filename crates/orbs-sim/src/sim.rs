@@ -257,10 +257,14 @@ impl Sim {
         self.world.resource::<Scrollback>()
     }
 
-    /// The same, for a command or a test to write into.
-    pub fn scrollback_mut(&mut self) -> Mut<'_, Scrollback> {
-        self.world.resource_mut::<Scrollback>()
-    }
+    // There is deliberately no `scrollback_mut`. §3 makes this stream *the* log —
+    // the transcript, the file a player `peruse`s, and what `orbs-balance`
+    // replays — so a frontend writing a line into it directly would produce a
+    // session that replaying `(seed, submissions)` cannot reproduce, which is
+    // what §13 exists to stop. Commands write through
+    // [`run_pending`](crate::execute::run_pending) on a tick boundary or they do
+    // not write, and a test that needs to reach past that says so by going
+    // through [`Sim::world_mut`] and its escape-hatch contract.
 
     /// What is in flight, if anything (§5.0).
     ///

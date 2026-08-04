@@ -136,19 +136,26 @@ impl<'a> RecordView<'a> {
 
         let indent = indent_for(prompt);
         let (mut rows, mut rest) = (0u16, records);
+        let mut at_run_start = true;
         loop {
             let run = rest.clone();
             let Some(record) = rest.next() else { break };
-            if record.kind().tiles()
+            // Only ever planned at a run's first record. A run that declines
+            // declines for its whole length, and re-asking at each of its records
+            // would walk the remainder every time — quadratic in the run, on a
+            // path that runs per frame.
+            if at_run_start
+                && record.kind().tiles()
                 && let Some(plan) = Tiling::plan(cols, indent, run)
             {
                 for _ in 1..plan.count {
                     rest.next();
                 }
                 rows = rows.saturating_add(plan.rows());
-            } else {
-                rows = rows.saturating_add(1);
+                continue;
             }
+            at_run_start = !record.kind().tiles();
+            rows = rows.saturating_add(1);
         }
         rows
     }
@@ -267,6 +274,9 @@ fn draw_lines<'r>(
     let (mut drawn, mut speech) = (String::new(), String::new());
     let mut row = area.row;
     let mut rest = records;
+    // See `RecordView::height`: a declined run must not be re-planned at each of
+    // its records, or the measuring is quadratic in the run's length.
+    let mut at_run_start = true;
     loop {
         if row >= area.bottom() {
             break;
@@ -277,8 +287,19 @@ fn draw_lines<'r>(
         let run = rest.clone();
         let Some(record) = rest.next() else { break };
 
-        if record.kind().tiles()
-            && let Some((rows, packed)) = draw_tiled(painter, Rect { row, ..area }, prompt, run)
+        // The sub-area is what is *left* of the pane, not the pane moved down.
+        // `Rect { row, ..area }` keeps the full row count, so `bottom()` slides
+        // with the run and a listing starting partway down draws past the pane —
+        // where `Painter` clips the cells but not the speech, and a reader hears
+        // rows nobody can see.
+        let remaining = Rect {
+            row,
+            rows: area.bottom().saturating_sub(row),
+            ..area
+        };
+        if at_run_start
+            && record.kind().tiles()
+            && let Some((rows, packed)) = draw_tiled(painter, remaining, prompt, run)
         {
             // `record` was the first of them.
             for _ in 1..packed {
@@ -287,6 +308,7 @@ fn draw_lines<'r>(
             row = row.saturating_add(rows);
             continue;
         }
+        at_run_start = !record.kind().tiles();
 
         drawn.clear();
         // Content only: an annotation drawn as text would put an internal token

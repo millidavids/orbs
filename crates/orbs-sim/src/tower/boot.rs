@@ -176,7 +176,10 @@ mod tests {
         let log = children_of(sim.world(), alembic)[5];
         super::super::sabotage::poison(sim.world_mut(), log);
 
-        sim.scrollback_mut().records_mut().clear();
+        sim.world_mut()
+            .resource_mut::<Scrollback>()
+            .records_mut()
+            .clear();
         report(sim.world_mut());
 
         assert!(

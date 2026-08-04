@@ -673,3 +673,43 @@ fn what_a_view_measures_is_what_it_draws() {
         assert_eq!(measured, drawn, "at {cols} cells wide");
     }
 }
+
+#[test]
+fn a_listing_never_speaks_a_row_it_could_not_draw() {
+    // Rule 2 in the direction nobody checks. `Speech` is a per-frame description
+    // of the *screen*, so a record clipped off the bottom must not be announced
+    // — a reader would hear names a sighted player cannot see, which is exactly
+    // the asymmetry `shell::prompt` is written to avoid.
+    //
+    // The tiling path got this wrong by passing its sub-area the pane's full
+    // row count, so `bottom()` slid down the pane as the run started lower.
+    // `Painter` clips cells; it does not clip speech.
+    //
+    // The echo is load-bearing: it pushes the run off the pane's first row,
+    // which is the only way the slid `bottom()` differs from the real one.
+    let mut records = Records::new();
+    records
+        .push(RecordKind::Echo)
+        .text(FieldName::Message, "survey")
+        .finish();
+    for index in 0..40 {
+        records
+            .push(RecordKind::Entry)
+            .text(FieldName::Name, &format!("name{index:02}"))
+            .finish();
+    }
+
+    let mut frame = frame_of(40, 5);
+    let area = frame.area();
+    let rows = RecordView::prompt("orbs $ ").draw(&mut frame.painter(area), area, records.iter());
+
+    assert!(rows <= area.rows, "{rows} rows used of {}", area.rows);
+    let drawn = frame.to_text();
+    for utterance in frame.speech().utterances() {
+        assert!(
+            drawn.contains(utterance.text),
+            "spoke {:?}, which is not on screen:\n{drawn}",
+            utterance.text,
+        );
+    }
+}
