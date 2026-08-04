@@ -1964,6 +1964,31 @@ below a half-arrived line walks down the pane; a half-arrived record is silent,
 because §14's stream is whole records in order; and **any keystroke completes
 it**, which is what keeps it from ever being a cost.
 
+#### The flash limit is per window, not per second of effect
+
+The strike's arithmetic was wrong twice, in opposite directions, and both cost
+something.
+
+First it analysed the flash and the sweep **separately** — the mistake §19 already
+records from the 19.1 Hz strobe, two constants each looking fine alone.
+
+Then, having combined them, it divided the flash count by the stage's length and
+called the result a rate. **That is not what WCAG 2.3.1 bounds.** The limit is
+three general flashes occurring *within* any one-second window, and a single
+non-repeating flash is **one flash in that window however briefly it lasts.** A
+0.25 s strike and a 0.9 s strike are both 1.
+
+Treating it as a rate made short strikes look unsafe — 1 pair over 0.3 s
+"computes" to 3.33/s — and that was the stated reason the stage stayed long
+enough to stop reading as a tube striking at all. **Being wrong in the cautious
+direction is still being wrong**, and here it was the thing making the effect
+bad.
+
+The stage length is now a taste decision (250 ms). The safety property is a
+different one and is what the test asserts: the flash rises **once**, falls once,
+and does not recur — checked over the curve, because a second rise is the change
+that would matter.
+
 #### The strike — one soft flash, and a sweep that was cut
 
 Shipped first as a flash **and** a bright band sweeping down the tube. On a
@@ -2023,6 +2048,24 @@ body text — inside the greyscale-separation margin §14's tests demand. Darken
 it made it *worse*, because body sat between the two. Lowering the **base** to
 0.74 is what bought the accents room. That is the same lesson §19 already records
 from the first palette pass and from the CRT overscan: compute the constant.
+
+#### The POST is a logo and three checks
+
+The card names the game in **block glyphs** — CP437 has a full block and the
+double box-drawing set, which is what the letterforms are built from, so the
+repertoire test covers it like any other text. Centred as a *block* on the widest
+row: the rows are not all the same length, and centring each on its own width
+shears the letterforms apart by a column.
+
+**The words do not type; the dots do.** Each line is `label ..... ok`, the label
+landing whole, its leader dots filling the way a progress indicator fills, and
+`ok` snapping in behind them — then a pause before the next line. A name arriving
+one letter at a time reads as a *slow machine*; a leader filling reads as
+*something being checked*, which is what a POST line is. The labels are padded to
+a common width so every `ok` lands in one column.
+
+The game's own version is not on the card. The logo is the game saying its name,
+and a version line under a six-row letterform would be the only small text there.
 
 #### The sequence is paced to be read
 

@@ -69,20 +69,25 @@ impl Stage {
     /// faster than anyone could follow. Four times slower is the difference
     /// between a flicker and a screen.
     ///
-    /// [`Stage::Strike`] is the exception and stays where it was. It is a tube
-    /// coming on, and a tube coming on is *fast*: stretched to match the rest it
-    /// stopped reading as a strike and started reading as a slow fade up, which
-    /// is a different and much less interesting thing.
+    /// [`Stage::Strike`] is the exception and is **quick**. A tube coming on is
+    /// a bloom and a settle, not a fade; anything long enough to watch reads as
+    /// the screen slowly brightening, which is a different and much duller
+    /// event. It was 900 ms and is now 250, which is roughly how long a real
+    /// tube takes to stop being interesting.
+    ///
+    /// That is a taste decision and not a safety one — see `crt::strike`, which
+    /// had the arithmetic wrong in the cautious direction and was the stated
+    /// reason this number stayed high.
     ///
     /// The total is long, which is what the skip is for: any key, and
     /// `ORBS_BOOT=0` for a session that never wants it.
     pub(crate) const fn duration(self) -> Duration {
         Duration::from_millis(match self {
             Self::Dark => 1600,
-            Self::Strike => 900,
+            Self::Strike => 250,
             Self::Prompt => 1200,
             Self::Frame => 3200,
-            Self::Post => 8000,
+            Self::Post => 9000,
             Self::Live => 0,
         })
     }
@@ -265,16 +270,16 @@ mod tests {
     }
 
     #[test]
-    fn the_strike_is_long_enough_for_what_it_spends() {
-        // Cross-checked against `crt::strike`'s flash budget, which is where the
-        // arithmetic lives. Stated here too because this is the number someone
-        // would shorten to make the boot feel snappier, and shortening it is the
-        // one change in this file that is a safety question rather than a taste
-        // one. One flash pair over a third of a second is the WCAG limit; the
-        // floor here leaves an order of magnitude in hand.
+    fn the_strike_is_quick() {
+        // The opposite of the assertion this replaced, which required the strike
+        // to be *long* — on arithmetic `crt::strike` had wrong. WCAG bounds how
+        // many flashes a one-second window contains, and one non-repeating flash
+        // is one however brief it is, so the only thing left to guard is that
+        // the strike stays short enough to read as a tube coming on rather than
+        // as the screen slowly brightening.
         assert!(
-            Stage::Strike.duration() >= Duration::from_millis(340),
-            "the strike is shorter than its flash budget allows",
+            Stage::Strike.duration() <= Duration::from_millis(400),
+            "the strike is a fade, not a strike",
         );
     }
 

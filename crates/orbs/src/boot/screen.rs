@@ -30,26 +30,48 @@ use super::stage::Stage;
 /// actually know them — see the module docs.
 const STUDIO: &str = "blackhearth games";
 
-/// One dependency, as the POST reports it.
-struct Part {
-    name: &'static str,
-    version: &'static str,
+/// The game's own name, in the block glyphs CP437 has for exactly this.
+///
+/// Every character is in the repertoire — full block plus the double box-drawing
+/// set — which `nothing_it_draws_is_outside_the_font` holds it to. 45 cells wide,
+/// so it fits §4's 80-column floor with sixteen columns either side.
+const ART: [&str; 6] = [
+    r" ██████╗    ██████╗    ██████╗    ███████╗",
+    r"██╔═══██╗   ██╔══██╗   ██╔══██╗   ██╔════╝",
+    r"██║   ██║   ██████╔╝   ██████╔╝   ███████╗",
+    r"██║   ██║   ██╔══██╗   ██╔══██╗   ╚════██║",
+    r"╚██████╔╝██╗██║  ██║██╗██████╔╝██╗███████║██╗",
+    r" ╚═════╝ ╚═╝╚═╝  ╚═╝╚═╝╚═════╝ ╚═╝╚══════╝╚═╝",
+];
+
+/// What the POST reports, in the order it reports them.
+///
+/// The studio first, then what the orb is built out of. The game's own version
+/// is not among them: [`ART`] is the game saying its name, and a version line
+/// under a six-row logo would be the only small text on the card.
+fn reported() -> [String; 3] {
+    [
+        STUDIO.to_owned(),
+        format!("rust {}", env!("ORBS_RUSTC")),
+        format!("bevy {BEVY}"),
+    ]
 }
 
-const PARTS: [Part; 3] = [
-    Part {
-        name: "rust",
-        version: env!("ORBS_RUSTC"),
-    },
-    Part {
-        name: "bevy",
-        version: BEVY,
-    },
-    Part {
-        name: "orbs",
-        version: env!("CARGO_PKG_VERSION"),
-    },
-];
+/// Leader dots between a label and its `ok`.
+///
+/// The part that types. Five is enough to read as waiting and few enough that
+/// the line does not become mostly punctuation.
+const DOTS: usize = 5;
+
+/// What each line ends with once its dots have finished.
+const DONE: &str = "ok";
+
+/// How much of a line's slot is spent typing its dots.
+///
+/// The rest is the pause after `ok` appears — *"a slight pause between each
+/// line"*, which is what stops three lines reading as one paragraph that
+/// happens to arrive in pieces.
+const TYPING_SHARE: f32 = 0.6;
 
 /// The exact Bevy pin, held to `Cargo.toml` by a test.
 ///
@@ -64,80 +86,106 @@ const BEVY: &str = "0.19.0";
 /// Takes no Bevy resources on purpose: `shell::dump` builds no `App`, so a screen
 /// that needed one could never be dumped as text.
 ///
-/// # It types itself
+/// # What types and what does not
 ///
-/// Every line arrives a character at a time, on one budget shared across the
-/// whole card — the same shape as command output (`shell::reveal`), because the
-/// two are the same idea: a machine printing to a terminal, not a screen being
-/// switched on. The budget runs left to right and top to bottom, so the card
-/// fills the way a page does.
+/// **The words do not type; the dots do.** A name arriving one letter at a time
+/// reads as a slow machine, which is the opposite of the point — a POST line
+/// should read as *this thing is being checked*. So the label lands whole, its
+/// leader dots fill the way a progress indicator fills, and `ok` snaps in behind
+/// them. Then a pause, and the next line.
+///
+/// The logo lands whole too, at the top, for the same reason and because a
+/// six-row block letterform typed a cell at a time is unreadable while it is
+/// happening.
 pub(crate) fn paint(frame: &mut Frame, stage: Stage, progress: f32) {
     if !matches!(stage, Stage::Post) {
         return;
     }
 
     let area = frame.area();
-
-    // Centred, and with no pane around it. §4's tower report is a table inside a
-    // border; this must not read as the same screen arriving twice, so it is
-    // shaped like a title card instead.
-    let lines = card();
-    let rows = to_row(lines.len()).saturating_add(1);
-    let top = area.rows.saturating_sub(rows) / 2;
-
-    // Every character on the card, so the reveal is paced by how much there is
-    // to say rather than by how many lines it happens to occupy.
-    let total: usize = lines.iter().map(|(text, _)| text.chars().count()).sum();
-    let mut budget = arrived_cells(progress, total);
+    let lines = reported();
+    // Logo, a blank row, then the report. Centred as a block, with no pane
+    // around it: §4's tower report is a table inside a border, and this must not
+    // read as the same screen arriving twice.
+    let height = to_row(ART.len() + lines.len() + 1);
+    let top = area.rows.saturating_sub(height) / 2;
 
     let mut painter = frame.painter(area);
-    for (index, (text, style)) in lines.iter().enumerate() {
-        // A spacer costs no characters and must not end the reveal — an empty
-        // line is not an exhausted budget, and conflating them stopped the card
-        // at the blank row above the parts.
-        if text.is_empty() {
-            continue;
-        }
-        if budget == 0 {
-            break;
-        }
-        let visible = orbs_render::arriving(text, budget);
-        budget = budget.saturating_sub(to_cells(visible.chars().count()));
+    // Centred as a **block**, on the widest row. The rows are not all the same
+    // length — the descender under `S` makes the last two longer — so centring
+    // each one on its own width shears the letterforms apart by a column.
+    let logo_width = ART.iter().map(|row| row.chars().count()).max().unwrap_or(0);
+    let logo_col = area
+        .col
+        .saturating_add(area.cols.saturating_sub(to_row(logo_width)) / 2);
+    for (index, row) in ART.iter().enumerate() {
+        painter.glyphs(
+            Pos::new(logo_col, top.saturating_add(to_row(index))),
+            row,
+            Style::BRIGHT,
+        );
+    }
+    // The logo is one utterance, not six rows of block glyphs. §14: what a
+    // reader hears is what the screen says, and what it says here is a name.
+    painter.announce(UtteranceKind::Heading, Style::BRIGHT.role, "O.R.B.S.");
 
-        // Positioned by the *finished* line, not the visible one, so a line
-        // types out from where it will end up rather than sliding left as it
-        // grows. A centred line that re-centres per character is unreadable.
-        let at = centred(area, text, top.saturating_add(to_row(index)));
+    // Labels padded to a common width so every `ok` lands in one column — the
+    // shape a POST has, and the reason the dots read as a leader rather than as
+    // punctuation somebody typed.
+    let widest = lines
+        .iter()
+        .map(|line| line.chars().count())
+        .max()
+        .unwrap_or(0);
+    let first = top.saturating_add(to_row(ART.len() + 1));
+
+    for (index, label) in lines.iter().enumerate() {
+        let Some(state) = line_at(progress, index, lines.len()) else {
+            break;
+        };
+        let text = format!(
+            "{label:widest$} {dots:<DOTS$} {done}",
+            dots = ".".repeat(state.dots),
+            done = if state.finished { DONE } else { "" },
+        );
+        // Positioned by the *finished* width, not the visible one, so a line
+        // fills from where it will end up rather than sliding as it grows.
+        let at = centred(area, &text, first.saturating_add(to_row(index)));
         painter.span(
             at,
-            &Span::new(visible)
-                .with_style(*style)
-                .with_kind(if index == 0 {
-                    UtteranceKind::Heading
-                } else {
-                    UtteranceKind::Text
-                }),
+            &Span::new(text.trim_end())
+                .with_style(Style::NORMAL)
+                .with_kind(UtteranceKind::TableRow),
         );
     }
 }
 
-/// The card's lines, in the order they arrive.
+/// How far line `index` of `count` has got at `progress`.
 ///
-/// A blank line between the studio and the parts, which is a line of the card
-/// rather than a gap in the layout — it costs no characters, so the reveal does
-/// not pause on it.
-fn card() -> Vec<(String, Style)> {
-    let mut lines = vec![
-        ("O.R.B.S.".to_owned(), Style::BRIGHT),
-        (STUDIO.to_owned(), Style::DIM),
-        (String::new(), Style::DIM),
-    ];
-    lines.extend(
-        PARTS
-            .iter()
-            .map(|part| (format!("{} {} ok", part.name, part.version), Style::NORMAL)),
-    );
-    lines
+/// `None` before the line's turn. Each line owns an equal share of the stage:
+/// [`TYPING_SHARE`] of it filling the dots, the rest holding `ok` on screen
+/// before the next one starts.
+fn line_at(progress: f32, index: usize, count: usize) -> Option<Line> {
+    let span = 1.0 / f32::from(to_row(count).max(1));
+    let start = f32::from(to_row(index)) * span;
+    if progress.clamp(0.0, 1.0) < start {
+        return None;
+    }
+    let local = ((progress.clamp(0.0, 1.0) - start) / span).clamp(0.0, 1.0);
+    let typing = (local / TYPING_SHARE).clamp(0.0, 1.0);
+    Some(Line {
+        dots: usize::try_from(arrived_cells(typing, DOTS)).unwrap_or(DOTS),
+        // `ok` lands the instant the dots do, not gradually — the line has
+        // finished being checked, and a two-letter word fading in would be the
+        // only thing on the card that was still arriving.
+        finished: typing >= 1.0,
+    })
+}
+
+/// One report line, mid-flight.
+struct Line {
+    dots: usize,
+    finished: bool,
 }
 
 /// How many characters of the card have arrived by `progress`.
@@ -190,16 +238,12 @@ mod tests {
         // built by walking the world so it cannot go stale, and a POST in front
         // of it printing invented numbers would be the same lie one screen
         // earlier.
-        for part in &PARTS {
-            assert!(!part.version.is_empty(), "{} has no version", part.name);
+        for line in reported().iter().skip(1) {
+            let version = line.split_whitespace().nth(1).unwrap_or("");
+            assert!(!version.is_empty(), "{line:?} has no version");
             assert!(
-                part.version
-                    .chars()
-                    .next()
-                    .is_some_and(|c| c.is_ascii_digit()),
-                "{} reports {:?}, which is not a version",
-                part.name,
-                part.version,
+                version.chars().next().is_some_and(|c| c.is_ascii_digit()),
+                "{line:?} reports {version:?}, which is not a version",
             );
         }
     }
@@ -221,11 +265,7 @@ mod tests {
         // §4 bounds every glyph to CP437, and a character the atlas has no cell
         // for occupies a column and draws nothing. The `screens` example already
         // found an em-dash this way in DESIGN.md's own boot text.
-        for text in [STUDIO, "O.R.B.S."]
-            .into_iter()
-            .chain(PARTS.iter().map(|part| part.name))
-            .chain(PARTS.iter().map(|part| part.version))
-        {
+        for text in ART.iter().map(|row| (*row).to_string()).chain(reported()) {
             for glyph in text.chars() {
                 assert!(
                     is_renderable(glyph),
@@ -236,45 +276,60 @@ mod tests {
     }
 
     #[test]
-    fn the_card_types_itself_from_nothing_to_all_of_it() {
-        // The reveal's endpoints. Starting at zero is right here where it would
-        // be wrong for command output — the card has a whole stage to fill and
-        // the tube has only just struck, so there is nothing to look like a hang
-        // *yet*.
-        assert_eq!(arrived_cells(0.0, 40), 0);
-        assert_eq!(arrived_cells(1.0, 40), 40);
-        assert_eq!(arrived_cells(0.5, 40), 20);
+    fn the_logo_fits_the_floor_with_room_to_spare() {
+        // §4's floor is 80 columns. A logo that clipped there would clip on the
+        // window the game *opens* at, which is the one grid it is guaranteed to
+        // be looked at on.
+        let widest = ART.iter().map(|row| row.chars().count()).max().unwrap_or(0);
+        assert!(widest <= 72, "the logo is {widest} cells wide");
     }
 
     #[test]
-    fn every_character_of_the_card_arrives_by_the_end() {
-        // The budget is shared across all the lines, so a miscount would leave
-        // the last one permanently short — and it is the game's own version.
-        let lines = card();
-        let total: usize = lines.iter().map(|(text, _)| text.chars().count()).sum();
-        let mut budget = arrived_cells(1.0, total);
-        for (text, _) in &lines {
-            let visible = orbs_render::arriving(text, budget);
-            assert_eq!(visible, text, "{text:?} never finished arriving");
-            budget = budget.saturating_sub(to_cells(visible.chars().count()));
+    fn the_words_land_whole_and_only_the_dots_fill() {
+        // The shape of the whole card: a POST line reads as *this is being
+        // checked*, and a name arriving one letter at a time reads as a slow
+        // machine instead. The label is never partial at any point in the run.
+        for step in 0..=60u16 {
+            let progress = f32::from(step) / 60.0;
+            for index in 0..reported().len() {
+                let Some(line) = line_at(progress, index, reported().len()) else {
+                    continue;
+                };
+                assert!(line.dots <= DOTS, "more dots than the line has");
+                assert!(
+                    !line.finished || line.dots == DOTS,
+                    "ok landed before the dots finished",
+                );
+            }
         }
     }
 
     #[test]
-    fn a_line_types_out_from_where_it_will_end_up() {
-        // Centred on the finished text, not the visible prefix. Re-centring per
-        // character makes a line slide leftwards as it grows, which is
-        // unreadable and looks like a fault.
-        let area = Rect::new(0, 0, 80, 22);
-        let settled = centred(area, STUDIO, 4);
-        for cells in 1..STUDIO.len() {
-            let partial = orbs_render::arriving(STUDIO, to_cells(cells));
-            assert_eq!(
-                centred(area, STUDIO, 4).col,
-                settled.col,
-                "the line moved at {partial:?}",
-            );
+    fn each_line_waits_its_turn_and_finishes_by_the_end() {
+        let count = reported().len();
+        assert!(line_at(0.0, 1, count).is_none(), "line 2 started at once");
+        assert!(line_at(0.0, 0, count).is_some(), "line 1 never started");
+        for index in 0..count {
+            let line = line_at(1.0, index, count).expect("every line runs");
+            assert_eq!(line.dots, DOTS, "line {index} never filled");
+            assert!(line.finished, "line {index} never reported ok");
         }
+    }
+
+    #[test]
+    fn there_is_a_pause_after_a_line_finishes() {
+        // "A slight pause between each line" — without it three lines read as
+        // one paragraph that happens to arrive in pieces.
+        let count = reported().len();
+        let span = 1.0 / f32::from(to_row(count));
+        let finished_at = span * TYPING_SHARE;
+        let line = line_at(finished_at + 0.001, 0, count).expect("line one");
+        assert!(line.finished, "the first line had not finished");
+        // Still on line one — the next has not begun.
+        assert!(
+            line_at(finished_at + 0.001, 1, count).is_none(),
+            "the next line started with no pause",
+        );
     }
 
     #[test]
@@ -292,14 +347,33 @@ mod tests {
     }
 
     #[test]
-    fn the_card_is_centred_and_names_the_studio() {
+    fn the_finished_card_names_the_studio_and_everything_it_is_built_from() {
         let mut frame = Frame::new(GridSize::new(80, 22));
         paint(&mut frame, Stage::Post, 1.0);
         let drawn = frame.to_text();
-        assert!(drawn.contains("O.R.B.S."));
-        assert!(drawn.contains(STUDIO));
-        for part in &PARTS {
-            assert!(drawn.contains(part.name), "{} did not report", part.name);
+        for line in reported() {
+            let label = line.split_whitespace().next().unwrap_or("");
+            assert!(drawn.contains(label), "{label} did not report");
         }
+        assert!(drawn.contains(DONE), "nothing reported ok");
+        assert!(
+            drawn.contains(&".".repeat(DOTS)),
+            "the leaders never filled"
+        );
+    }
+
+    #[test]
+    fn the_logo_speaks_as_a_name_rather_than_as_block_glyphs() {
+        // §14: what a reader hears is what the screen says, and what it says
+        // here is the game's name — not six rows of full-block characters.
+        let mut frame = Frame::new(GridSize::new(80, 22));
+        paint(&mut frame, Stage::Post, 1.0);
+        assert!(
+            frame
+                .speech()
+                .utterances()
+                .any(|utterance| utterance.text == "O.R.B.S."),
+            "the logo did not say its own name",
+        );
     }
 }

@@ -295,7 +295,14 @@ fn rasterise(
     // The `Local` is what keeps this correct rather than merely quiet: the
     // transition *into* blank still writes once, so a screen that empties really
     // does clear instead of leaving the last mesh on the tube.
-    let nothing = canvas.frame.is_blank() && canvas.frame.cursor().is_none();
+    // "Nothing to draw" has to mean *no geometry*, which includes the caret —
+    // and the caret is only geometry on the half of its blink where it is
+    // showing. Checking `cursor().is_some()` alone let a screen with no glyphs
+    // yet rebuild an empty mesh on every off-phase, which is the same
+    // `use-after-free` from the other direction and is exactly what the boot
+    // sequence's typing prompt does for its first second.
+    let caret = blink.showing() && canvas.frame.cursor().is_some();
+    let nothing = canvas.frame.is_blank() && !caret;
     if nothing && !*drew_something {
         return;
     }

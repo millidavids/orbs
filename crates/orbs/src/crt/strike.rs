@@ -12,15 +12,26 @@
 //!
 //! The background is near-black (`palette`, relative luminance ≈ 0.003), so a
 //! full-screen brightening is unambiguously a *general flash*. This spends
-//! **one pair — one rise and one fall — across the whole of
-//! [`Stage::Strike`](crate::boot::Stage)**, which at that stage's length is well
-//! under a quarter of a flash per second.
+//! **exactly one — one rise, one fall, once per launch.**
 //!
-//! An earlier version also swept a bright band down the tube, which was a second
-//! pair at every pixel it crossed and took the strike to 2.22/s — inside the
-//! limit, but only because the stage had been lengthened to make it so. The
-//! sweep is gone, and with it the only reason the stage length was a safety
-//! constraint rather than a taste one.
+//! # The limit is per window, not per second of effect
+//!
+//! An earlier version of this file divided the flash count by the stage's length
+//! and called the result a rate, which made a short strike look unsafe: one pair
+//! over 0.3 s "computes" to 3.33/s and appears to breach the ceiling. **That is
+//! the wrong arithmetic.** WCAG counts flashes occurring *within* any one-second
+//! window, and a single non-repeating flash is one flash in that window however
+//! briefly it lasts. A 0.25 s strike and a 0.9 s strike are both 1.
+//!
+//! So the stage's length is a **taste** decision, and the safety property is a
+//! different one: the flash must rise once, fall once, and not recur. That is
+//! what [`flash_at`]'s monotone decay gives and what the test below asserts.
+//! Getting this wrong in the cautious direction still cost something — it was
+//! the stated reason the strike had been slowed until it stopped reading as a
+//! tube striking at all.
+//!
+//! An earlier version also swept a bright band down the tube, which *was* a
+//! second flash at every pixel it crossed. That one is gone.
 //!
 //! # There is no persisted way to turn this off yet
 //!
@@ -97,25 +108,46 @@ fn flash_at(progress: f32) -> f32 {
 mod tests {
     use super::*;
 
-    /// Luminance transitions the strike produces at one pixel, per second.
+    /// The most general flashes any one-second window of the strike contains.
     ///
-    /// The number the whole module exists to keep under three. Counted as
-    /// *pairs* — a rise and its matching fall — because that is what WCAG 2.3.1
-    /// counts.
-    fn flashes_per_second() -> f32 {
-        const PAIRS: f32 = 1.0;
-        PAIRS / Stage::Strike.duration().as_secs_f32()
+    /// This is what WCAG 2.3.1 actually bounds. Because the curve is monotone
+    /// and runs once, the answer is one for every window that overlaps it and
+    /// zero for every window that does not — **independent of how long the stage
+    /// is**, which is the correction the module docs describe.
+    fn flashes_in_the_worst_second() -> usize {
+        let steps = 200u16;
+        let stage = Stage::Strike.duration().as_secs_f32();
+        let mut rises = 0usize;
+        let mut previous = 0.0;
+        for step in 0..=steps {
+            let alpha = flash_at(f32::from(step) / f32::from(steps));
+            if alpha > previous {
+                rises += 1;
+            }
+            previous = alpha;
+        }
+        // Every rise is one flash; the whole stage fits inside a window whenever
+        // it is under a second, and is only ever more spread out if it is not.
+        let _ = stage;
+        rises
     }
 
     #[test]
-    fn the_strike_stays_well_under_the_flash_limit() {
-        // WCAG 2.3.1: no more than three general flashes in any one second. On a
-        // near-black background a full-screen brightening is a general flash, so
-        // this counts every source of one — analysing two effects separately is
-        // exactly how §19's 19.1 Hz strobe got through, split across two
-        // constants that each looked fine.
-        let rate = flashes_per_second();
-        assert!(rate <= 3.0, "{rate} general flashes per second");
+    fn the_strike_is_one_flash_and_stays_one_however_fast_it_runs() {
+        // WCAG 2.3.1: no more than three general flashes in any one-second
+        // window. On a near-black background a full-screen brightening is a
+        // general flash, so what has to be bounded is how many of them a window
+        // can contain — not how much of a second the effect occupies.
+        //
+        // Asserted over the curve rather than over a constant, because the thing
+        // that would make this unsafe is the curve gaining a second rise. §19
+        // records the 19.1 Hz strobe that got through by being split across two
+        // constants that each looked fine on its own.
+        assert!(
+            flashes_in_the_worst_second() <= 3,
+            "the strike flashes more than three times in a second",
+        );
+        assert_eq!(flashes_in_the_worst_second(), 1, "it should be exactly one");
     }
 
     #[test]
