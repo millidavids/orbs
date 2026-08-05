@@ -20,7 +20,7 @@
 //! `rust-toolchain.toml` pins to something else again. Three numbers, only one
 //! of them true.
 
-use orbs_render::{Frame, Pos, Rect, Span, Style, UtteranceKind};
+use orbs_render::{Frame, Pos, Span, Style, UtteranceKind};
 
 use super::stage::Stage;
 
@@ -83,12 +83,6 @@ fn reported() -> [String; 3] {
         format!("bevy {BEVY}"),
     ]
 }
-
-/// Leader dots between a label and its `ok`.
-///
-/// The part that types. Five is enough to read as waiting and few enough that
-/// the line does not become mostly punctuation.
-const DOTS: usize = 5;
 
 /// What each line ends with once its dots have finished.
 const DONE: &str = "ok";
@@ -182,35 +176,56 @@ pub(crate) fn paint(frame: &mut Frame, stage: Stage, progress: f32) {
         );
     }
 
-    // Labels padded to a common width so every `ok` lands in one column — the
-    // shape a POST has, and the reason the dots read as a leader rather than as
-    // punctuation somebody typed.
-    let widest = lines
-        .iter()
-        .map(|line| line.chars().count())
-        .max()
-        .unwrap_or(0);
+    // **Every line spans the logo, edge to edge.** The label sits under the
+    // logo's left edge and `ok` ends flush with its right, with the leader
+    // filling whatever is between.
+    //
+    // Not centred, which is what this replaced and what made the card twitch:
+    // a centred line is positioned by its own width, and its width grows by two
+    // the moment `ok` lands, so the whole row shunted sideways at the end of
+    // every check. Anchoring both ends to something that is not moving means
+    // nothing moves but the dots.
     let first = top.saturating_add(to_row(ART.len() + 1));
+    let done_col = logo_col.saturating_add(to_row(logo_width.saturating_sub(DONE.len())));
 
     for (index, label) in lines.iter().enumerate() {
-        let Some(state) = line_at(progress, index, lines.len()) else {
+        let Some(state) = line_at(progress, index, lines.len(), leader(label, logo_width)) else {
             break;
         };
-        let text = format!(
-            "{label:widest$} {dots:<DOTS$} {done}",
-            dots = ".".repeat(state.dots),
-            done = if state.finished { DONE } else { "" },
-        );
-        // Positioned by the *finished* width, not the visible one, so a line
-        // fills from where it will end up rather than sliding as it grows.
-        let at = centred(area, &text, first.saturating_add(to_row(index)));
-        painter.span(
-            at,
-            &Span::new(text.trim_end())
-                .with_style(Style::NORMAL)
-                .with_kind(UtteranceKind::TableRow),
-        );
+        let row = first.saturating_add(to_row(index));
+        let dots_col = logo_col.saturating_add(to_row(label.chars().count() + 1));
+
+        // The leader is structure, not content — drawn silently, exactly as
+        // `screens`' own `label ....... [ status ]` rows are. The row speaks
+        // once, as a whole, and only once it has something to report.
+        painter.glyphs(Pos::new(dots_col, row), &".".repeat(state.dots), Style::DIM);
+        if state.finished {
+            painter.glyphs(Pos::new(done_col, row), DONE, Style::NORMAL);
+            painter.span(
+                Pos::new(logo_col, row),
+                &Span::new(label)
+                    .with_style(Style::NORMAL)
+                    .with_kind(UtteranceKind::TableRow)
+                    .with_spoken(&format!("{label}: {DONE}")),
+            );
+        } else {
+            // Silent while it is still being checked, for the same reason a
+            // half-arrived record is: §14's stream is whole facts, and "this is
+            // partly done" is not one.
+            painter.glyphs(Pos::new(logo_col, row), label, Style::NORMAL);
+        }
     }
+}
+
+/// How many leader dots fit between `label` and the `ok` column.
+///
+/// One space either side of the run, so the dots never touch the words. Varies
+/// per line, which is what a leader *is* — the run is however long the gap is.
+fn leader(label: &str, width: usize) -> usize {
+    width
+        .saturating_sub(label.chars().count())
+        .saturating_sub(DONE.len())
+        .saturating_sub(2)
 }
 
 /// The columns `start..start + width` of `row`, by character.
@@ -237,7 +252,7 @@ fn columns(row: &str, start: usize, width: usize) -> &str {
 /// printing, and each line owns an equal share of what is left:
 /// [`TYPING_SHARE`] of it filling the dots, the rest holding `ok` on screen
 /// before the next one starts.
-fn line_at(progress: f32, index: usize, count: usize) -> Option<Line> {
+fn line_at(progress: f32, index: usize, count: usize, dots: usize) -> Option<Line> {
     let after_logo = ((progress.clamp(0.0, 1.0) - LOGO_SHARE) / (1.0 - LOGO_SHARE)).clamp(0.0, 1.0);
     if progress.clamp(0.0, 1.0) < LOGO_SHARE {
         return None;
@@ -250,7 +265,11 @@ fn line_at(progress: f32, index: usize, count: usize) -> Option<Line> {
     let local = ((after_logo - start) / span).clamp(0.0, 1.0);
     let typing = (local / TYPING_SHARE).clamp(0.0, 1.0);
     Some(Line {
-        dots: usize::try_from(arrived_cells(typing, DOTS)).unwrap_or(DOTS),
+        // Each line fills its own leader in the same time, so a short label's
+        // longer run of dots simply moves a little faster. The alternative — a
+        // fixed rate — would make the lines finish at different moments and turn
+        // "a slight pause between each" into three different pauses.
+        dots: usize::try_from(arrived_cells(typing, dots)).unwrap_or(dots),
         // `ok` lands the instant the dots do, not gradually — the line has
         // finished being checked, and a two-letter word fading in would be the
         // only thing on the card that was still arriving.
@@ -290,13 +309,6 @@ pub(crate) fn arrived(text: &str, progress: f32) -> u32 {
 
 fn to_cells(count: usize) -> u32 {
     u32::try_from(count).unwrap_or(u32::MAX)
-}
-
-/// Where `text` starts if it is centred on `row`.
-fn centred(area: Rect, text: &str, row: u16) -> Pos {
-    let width = to_row(text.chars().count());
-    let col = area.cols.saturating_sub(width) / 2;
-    Pos::new(area.col.saturating_add(col), area.row.saturating_add(row))
 }
 
 fn to_row(value: usize) -> u16 {
@@ -415,12 +427,13 @@ mod tests {
         // Otherwise the card is two things happening at once, which is the one
         // shape a POST never has.
         let count = reported().len();
+        let dots = leader(&reported()[0], span());
         assert!(
-            line_at(LOGO_SHARE - 0.01, 0, count).is_none(),
+            line_at(LOGO_SHARE - 0.01, 0, count, dots).is_none(),
             "the first line started while the logo was still printing",
         );
         assert!(
-            line_at(LOGO_SHARE + 0.01, 0, count).is_some(),
+            line_at(LOGO_SHARE + 0.01, 0, count, dots).is_some(),
             "the report never started",
         );
     }
@@ -434,23 +447,48 @@ mod tests {
         assert!(widest <= 72, "the logo is {widest} cells wide");
     }
 
+    /// The logo's width, which every report line spans.
+    fn span() -> usize {
+        ART.iter().map(|row| row.chars().count()).max().unwrap_or(0)
+    }
+
     #[test]
     fn the_words_land_whole_and_only_the_dots_fill() {
         // The shape of the whole card: a POST line reads as *this is being
         // checked*, and a name arriving one letter at a time reads as a slow
         // machine instead. The label is never partial at any point in the run.
+        let lines = reported();
         for step in 0..=60u16 {
             let progress = f32::from(step) / 60.0;
-            for index in 0..reported().len() {
-                let Some(line) = line_at(progress, index, reported().len()) else {
+            for (index, label) in lines.iter().enumerate() {
+                let dots = leader(label, span());
+                let Some(line) = line_at(progress, index, lines.len(), dots) else {
                     continue;
                 };
-                assert!(line.dots <= DOTS, "more dots than the line has");
+                assert!(line.dots <= dots, "more dots than the line has room for");
                 assert!(
-                    !line.finished || line.dots == DOTS,
+                    !line.finished || line.dots == dots,
                     "ok landed before the dots finished",
                 );
             }
+        }
+    }
+
+    #[test]
+    fn a_line_reaches_from_one_edge_of_the_logo_to_the_other() {
+        // What stopped the card twitching. A centred line is positioned by its
+        // own width, and its width grows by two the moment `ok` lands, so every
+        // row shunted sideways at the end of every check. Anchored to the logo's
+        // edges, the only thing that moves is the leader.
+        for label in reported() {
+            let dots = leader(&label, span());
+            // label + space + dots + space + ok == the logo's width, exactly.
+            assert_eq!(
+                label.chars().count() + 1 + dots + 1 + DONE.len(),
+                span(),
+                "{label:?} does not span the logo",
+            );
+            assert!(dots > 0, "{label:?} left no room for a leader");
         }
     }
 
@@ -462,18 +500,21 @@ mod tests {
 
     #[test]
     fn each_line_waits_its_turn_and_finishes_by_the_end() {
-        let count = reported().len();
+        let lines = reported();
+        let count = lines.len();
+        let dots = leader(&lines[0], span());
         assert!(
-            line_at(into_report(0.0), 1, count).is_none(),
+            line_at(into_report(0.0), 1, count, dots).is_none(),
             "line 2 started at once",
         );
         assert!(
-            line_at(into_report(0.0), 0, count).is_some(),
+            line_at(into_report(0.0), 0, count, dots).is_some(),
             "line 1 never started",
         );
-        for index in 0..count {
-            let line = line_at(1.0, index, count).expect("every line runs");
-            assert_eq!(line.dots, DOTS, "line {index} never filled");
+        for (index, label) in lines.iter().enumerate() {
+            let dots = leader(label, span());
+            let line = line_at(1.0, index, count, dots).expect("every line runs");
+            assert_eq!(line.dots, dots, "line {index} never filled");
             assert!(line.finished, "line {index} never reported ok");
         }
     }
@@ -483,13 +524,14 @@ mod tests {
         // "A slight pause between each line" — without it three lines read as
         // one paragraph that happens to arrive in pieces.
         let count = reported().len();
-        let span = 1.0 / f32::from(to_row(count));
-        let just_after = into_report(span * TYPING_SHARE + 0.001);
-        let line = line_at(just_after, 0, count).expect("line one");
+        let dots = leader(&reported()[0], span());
+        let slot = 1.0 / f32::from(to_row(count));
+        let just_after = into_report(slot * TYPING_SHARE + 0.001);
+        let line = line_at(just_after, 0, count, dots).expect("line one");
         assert!(line.finished, "the first line had not finished");
         // Still on line one — the next has not begun.
         assert!(
-            line_at(just_after, 1, count).is_none(),
+            line_at(just_after, 1, count, dots).is_none(),
             "the next line started with no pause",
         );
     }
@@ -518,10 +560,13 @@ mod tests {
             assert!(drawn.contains(label), "{label} did not report");
         }
         assert!(drawn.contains(DONE), "nothing reported ok");
-        assert!(
-            drawn.contains(&".".repeat(DOTS)),
-            "the leaders never filled"
-        );
+        for label in reported() {
+            let dots = leader(&label, span());
+            assert!(
+                drawn.contains(&".".repeat(dots)),
+                "{label:?}'s leader never filled its {dots} columns",
+            );
+        }
     }
 
     #[test]

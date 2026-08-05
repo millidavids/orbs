@@ -2070,12 +2070,23 @@ at all.
 The logo also **speaks only as much of the name as is on screen**. §14: what a
 reader hears is what the screen says, which during the print is `O.R`.
 
-**The words do not type; the dots do.** Each line is `label ..... ok`, the label
-landing whole, its leader dots filling the way a progress indicator fills, and
-`ok` snapping in behind them — then a pause before the next line. A name arriving
+**The words do not type; the dots do.** Each line is `label ....... ok`, the
+label landing whole, its leader filling the way a progress indicator fills, and
+`ok` snapping in behind it — then a pause before the next line. A name arriving
 one letter at a time reads as a *slow machine*; a leader filling reads as
-*something being checked*, which is what a POST line is. The labels are padded to
-a common width so every `ok` lands in one column.
+*something being checked*, which is what a POST line is.
+
+**Every line spans the logo, edge to edge.** The label sits under the logo's left
+edge, `ok` ends flush with its right, and the leader is however long the gap
+between them happens to be — so the run varies per line, which is what a leader
+*is*.
+
+That replaced centring, which made the card twitch: a centred line is positioned
+by its own width, and its width grows by two the moment `ok` lands, so every row
+shunted sideways at the end of every check. **Anchoring both ends to something
+that is not moving is what makes nothing move.** The general form of the mistake
+is worth keeping — *centring anything that grows will move it* — and the fix is
+always to anchor rather than to compensate.
 
 The game's own version is not on the card. The logo is the game saying its name,
 and a version line under a six-row letterform would be the only small text there.
