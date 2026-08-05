@@ -1051,9 +1051,21 @@ Seven at launch, with tiered depth to survive solo scale.
 | **Summoning** | `menagerie/` | Resource allocation → autonomous siege units | Derived |
 | **Enchanting** | `forge/` | Sequence + resource cost → persistent buffs | Derived |
 
+**These forms are a table, not a design.** Phase 0 built brewing and archive as
+commands with a duration and no decision content, which is what the column
+exists to prevent. **Brewing is fleshed out at the head of Phase 1** and is the
+worked example the remaining six are cut from — including the rule that decides
+what a minigame here may be: outcome follows *what the player chooses given
+readable state*, never how fast or precisely they act. §19 has the reasoning and
+what it cost to find.
+
 **Archive is bespoke, not derived** — it gates all discovery, is played most, and
 stales fastest. Budget fallback: decipherment becomes mostly a resource sink with
-occasional authored set-pieces.
+occasional authored set-pieces. **That fallback is the plan of record until Phase
+3a**: the archive's minigame was considered for the head of Phase 1 and
+deliberately left where discovery is, because its own "see it" line — gaining a
+verb — *is* the discovery loop, and because what the puzzle should feel like
+depends on what it unlocks (§19).
 
 **Scrying is elevated by the aberration model.** Log-parsing is how sabotage is
 found. Build it early, alongside the siege prototype.
@@ -1866,25 +1878,142 @@ domains are settled (brewing + archive), and the fragment trickle has a rate
    following §6.1's ≤7-character rule.
 3. Hidden-directory authoring plan — ~80 fragments' worth, placed to pace the
    first ten hours.
+4. **What the brewing recipe puzzle actually is.** §10 says *"sequence/recipe
+   puzzle with timing"*, §19 fixes the rule it must obey — decisions, never
+   execution — and §11.5 specifies the reagents, vessels and potions the domain
+   is still missing. The shape itself is unwritten, and it is the worked example
+   the other six domains are cut from.
+5. **Nuisance aberrations are unscheduled in every phase.** §5.1 calls them *"the
+   core of manual play"* and Phase 2 lists only the adversarial ones; Phase 0
+   shipped log-poisoning drift and nothing else, and `RngStream::Aberration` has
+   never been rolled. Found while planning the brewing item, which wanted them as
+   its hook and discovered there was nothing to hook to. A gap, not a deferral.
 
 **Blocking Phase 2**
 
-4. The 21-pair synergy template: which mechanical parameters it exposes, and the
+6. The 21-pair synergy template: which mechanical parameters it exposes, and the
    per-pair tuning values.
-5. Siege type definitions, their failure conditions, **and how completion fraction
+7. Siege type definitions, their failure conditions, **and how completion fraction
    is computed for each.** Elapsed/target works for survival timers; objective
    defence, integrity collapse, and cascading failure each need an explicit
    definition or escrow cannot settle.
-6. Difficulty-tier definitions within the progression-gated range.
+8. Difficulty-tier definitions within the progression-gated range.
 
 **Commercial, before Phase 4**
 
-7. Wishlist target, and whether $4 survives contact with actual content volume.
+9. Wishlist target, and whether $4 survives contact with actual content volume.
    Note that $4 forfeits discount room (a 50% sale is $2) and may read as a
    smallness signal to the Zachtronics-adjacent audience, which does not
    price-shop — Exapunks is $19.99.
 
 ## 19. Decisions log
+
+### The inactivity grace — what §5.0 means, and where it is ambiguous
+
+Implemented as: **the clock runs while the window is open; sixty seconds without
+a keystroke stops it; any keystroke resumes it.** A pending prompt is not a
+keystroke.
+
+**The grace is not a free-thinking window.** A thirty-second pause costs thirty
+ticks. That reading is tempting — §5.0 says the grace exists *"so pausing to
+think is never punished"* — but the sentence immediately after it is what
+actually carries that promise: *"Drift and decay rates are slow **per tick**; the
+clock itself is not."* Thirty ticks of drift is nothing. An hour of it is not,
+and that is what the grace is for.
+
+Two other lines confirm the polarity. §5 requires *"drift and aberrations are
+damped identically whether the window is open and idle or closed"* — only true if
+an idle window stops ticking. And **stopping is what keeps quitting neutral**: if
+an idle open window aged the tower, closing the game would be strictly better,
+which is the inversion §5 spends a section preventing.
+
+**Stirred by keystrokes rather than submitted lines**, because §5.0 requires that
+*"a fast typist gains nothing over a slow one"* and charging the clock for time
+spent composing a long command is that penalty wearing a different hat.
+
+#### The one clause that does not fit, recorded rather than smoothed over
+
+§5.0: *"The grace timer is **not** reset by a pending disambiguation prompt —
+otherwise a player could freeze the tower indefinitely by leaving one open."*
+
+Under the implementation above, a prompt that *did* reset the timer would keep
+the tower **running** while the player was away, not freeze it. The stated
+consequence fits the opposite mechanism — one where the clock is stopped during
+the grace and resumes after it — which in turn cannot be reconciled with *"the
+tower clock advances on wall-clock while the window is open"*, since under it the
+clock would be stopped through most of ordinary play.
+
+The clause's **operational content is unambiguous either way**: a pending prompt
+must not let a player game the clock, so it does not count as activity. That is
+what is built and what the test asserts. The wording is flagged here because the
+polarity is worth confirming rather than inheriting silently, and because the
+alternative reading would change how the whole calm layer feels.
+
+### Brewing is gamified at the head of Phase 1; the archive's minigame is not
+
+§10 gives every domain a minigame form and Phase 0 built two of them as
+**commands with a duration and no decision content** — `decoct clarity` holds the
+slot for twenty ticks and finishes. That is the thing a player would call a
+chore, and §5.1's whole model assumes the opposite: manual play is *incident
+response*, and a siege drags the player back to it under pressure.
+
+**Why before the script engine.** §8's engine models *a script performing an
+action*. If `decoct` later gains stages and decisions, what a script **is**
+changes — replay a sequence, make the decisions, or delegate them. Building the
+engine against a two-line action is guessing at the thing it operates on.
+
+**Why brewing and not both.** Fleshing out the archive was considered for the
+same slot and cut, on three findings:
+
+| | |
+|---|---|
+| Its "see it" line is **already Phase 3a's** | *"`divine` a fragment and gain a verb you did not have."* That needs `Verb::ALL` to stop being a fixed sixteen, the synonym table to stop being `const`, `is_live` to stop being a `const fn`, and the boot tutorial to read all three dynamically — plus §18's unstarted naming pass. That is the discovery loop pulled forward two phases, not a minigame |
+| §10 **pre-authorises the cheap version** | *"decipherment becomes mostly a resource sink with occasional authored set-pieces"* — and §7's only depiction of the verb is exactly that. A bespoke puzzle is an ambition increase, not a debt being paid |
+| It is better bought later | The archive gates all discovery. What the puzzle should feel like depends on what it unlocks, and nothing is unlockable yet |
+
+**The domain has to be finished before it can be deepened.** `siphon` is dark,
+there are no potions, no reagent consumption and no vessel mechanic;
+`retort`/`crucible` are nouns nothing reads, and a completed brew yields a node
+called `residue-N`. §11.5's Resources table specifies the missing half. A
+"quality gradient" was proposed before this was noticed and had **no object to
+carry the quality**.
+
+#### Decisions, not execution — which is what keeps the harness working
+
+The open question was whether hand-played brewing should beat scripted brewing.
+§8 invariant 3 only says a script *completes faster*, so a quality edge is
+compatible with its letter — but §8:710 also says the three mechanisms
+*"guarantee automation dominates for a present player — which draft 3 failed to
+deliver"*, and §11.5 says *"not automating is never ruinous, only slower."*
+
+The distinction that dissolves it:
+
+| Outcome depends on | Harness | Verdict |
+|---|---|---|
+| **What the player chooses**, given readable state | A script encodes a policy; `orbs-balance` sweeps policy against state | ✅ |
+| **How well the player executes** — speed, precision | The harness has no player, so it cannot sweep anything | ❌ |
+
+The second is the shape §19's Phase 0.5 entry already refused, for the same
+reason: a modelled player-time cost would mean *"`orbs-balance` simulating
+typewriter delays"*, which is the divergence §13 exists to prevent. It is also
+backwards — §8 gives **scripts** the timing precision a human cannot hit.
+
+So a script is never worse at brewing; it is worse at *noticing*. A fixed policy
+meets a tower state its author did not anticipate, and a present player does not.
+That is the honest version of "manual matters sometimes", it costs the harness
+nothing, and it is the same argument §5.1 already makes for nuisances.
+
+#### Two things this surfaced that no phase owns
+
+- **Nuisance aberrations have no roadmap item in any phase.** Phase 2 lists only
+  the adversarial ones; Phase 0 shipped log-poisoning drift alone, and
+  `RngStream::Aberration` is unrolled. §5.1 calls nuisances *"the core of manual
+  play"*, so this is a gap rather than a deferral.
+- **The world clock's ~60 s inactivity grace is unbuilt.** §5.0 specifies it and
+  fixes the rule that makes it safe — the grace is not reset by a pending prompt,
+  *"otherwise a player could freeze the tower indefinitely by leaving one open"*.
+  A brewing decision window **is** a pending prompt, so the clock item lands
+  first.
 
 ### Phase 0.5 — the orb becomes a machine that moves
 

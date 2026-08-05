@@ -335,7 +335,7 @@ that names its phase gets revisited when the phase arrives; one that says
       ⚠️ **The human read is outstanding**: peak-threat CRT is frontend
       enrichment and is not in a Frame. Size the window to 1280×704, `F4` into
       Deep focus, `F3` to peak threat, `F7` for eldritch, and read the log
-- [ ] **Run the gate** — ⏸ **deferred to Phase 4, not passed.** Blocked on people,
+- [x] **Run the gate** — ⏸ **deferred to Phase 4, not passed.** Blocked on people,
       not on code: it needs ≥ 8 external testers, at least half with no shell
       experience, over a 15-minute scripted scenario with expected-intent ground
       truth. Everything it measures is built and reachable; what is missing is the
@@ -422,8 +422,64 @@ defects — DESIGN.md §19.
 **Exit:** a player automates a duty and feels clever; non-terminal testers are in
 the loop.
 
-- [ ] World-clock implementation per DESIGN.md §5.0
-      **See it:** `meditate 30` and watch duration actions land on the right ticks
+- [x] **World clock** per DESIGN.md §5.0 — the wall-clock mapping and catch-up
+      clamp shipped in Phase 0; this adds the **~60 s inactivity grace**.
+      Past it the tower stops keeping time, which is what makes an idle open
+      window equivalent to a closed one — §5 requires exactly that (*"drift and
+      aberrations are damped identically whether the window is open and idle or
+      closed"*) and it is what keeps quitting **neutral** rather than optimal.
+
+      **The grace is not a free-thinking window**, and reading it as one is the
+      easy mistake: a thirty-second pause costs thirty ticks. §5.0's next
+      sentence is what makes that fine — *"drift and decay rates are slow per
+      tick; the clock itself is not"* — DESIGN.md §19.
+
+      Stirred by **keystrokes, not submitted lines**, so a slow typist is not
+      charged for being slow (§5.0, §14). A pending prompt is not input and
+      therefore cannot renew the grace, which §5.0 writes as a hard rule and
+      which now has a test driving a real numbered prompt through it
+      **See it:** ✅ launch, touch nothing, and watch `tick` in the border climb
+      to 60 and stop; press a key and watch it resume. `meditate 30` still lands
+      duration actions on the right ticks
+- [ ] **Brewing, gamified** — §10 gives the domain a minigame form
+      (*"sequence/recipe puzzle with timing"*) and Phase 0 built a command
+      instead: `decoct clarity` holds the slot for twenty ticks and finishes.
+      This is the item that makes manual play *interesting* rather than a chore
+      — which matters most in a siege, where §5.1's incident-response loop pulls
+      the player back to it under pressure — DESIGN.md §10, §19.
+
+      **Finish the domain before deepening it.** `siphon` is a dark verb, there
+      are no potions, no reagent consumption and no vessel mechanic;
+      `retort`/`crucible` are nameable nouns nothing reads, and a completed
+      `decoct` produces a node called `residue-N`. §11.5's Resources table
+      already specifies the missing half. A recipe puzzle cannot be designed over
+      a domain with no output to vary.
+  - **Decisions, not execution.** The outcome may depend on *what the player
+        chooses given the tower's state*; it must never depend on how fast or
+        precisely they act. §5.1 mechanises "triage bandwidth, not typing speed",
+        §14 forbids any mechanic requiring fast typing, and §8 gives *scripts*
+        the timing precision a human cannot hit. A choice is also something a
+        script can encode and `orbs-balance` can sweep — an execution-quality
+        mechanic is not, and §19's Phase 0.5 entry already refused that shape
+        once for the same reason
+  - **Timing means windows at 1 Hz** — *when* to advance a stage against
+        everything else wanting the slot — never a reflex
+  - **`meditate` idempotence must survive stages.** §19 chose an interval over
+        a countdown so hundreds of ticks inside one `step()` behave identically
+        to being watched. A staged action must also resolve with **no player
+        present**, which is what §5.0's offline catch-up requires
+  - Durations stay placeholders. §19 records `DECOCT_TICKS = 20` as one, and
+        the balance CLI later in this phase is what sweeps it — do not hand-tune
+  - Out of scope, stated: the archive's minigame (deferred, below), adversarial
+        aberrations (siege-only, §5.1), nuisance aberrations (unscheduled in
+        every phase — a separate finding, not this item's job)
+
+      **Exit criterion:** the same recipe, in two different tower states, has two
+      different right answers — and the difference is **readable from the records
+      before you act**. Not "the second playthrough differs", which a coin flip
+      satisfies; the point is that it is still interesting on the twentieth brew
+      **See it:** brew the same essence twice in different tower states, make
+      different calls, and get different results — with `ORBS_DUMP` showing why
 - [ ] Script engine — bind-time canonicalisation, ID-anchored referents, execution
       budget, failure taxonomy, Attention pool
       **See it:** write a `.spell`, `bind` it, walk away, come back to work done
@@ -484,7 +540,19 @@ the loop.
 
 - [ ] All 7 domains
       **See it:** run a tower where every branch of the tree does something
-- [ ] Discovery / research loop
+- [ ] Discovery / research loop — **and the archive's minigame with it.** §10
+      makes decipherment bespoke, and it was considered for the head of Phase 1
+      alongside brewing and **deliberately left here** — DESIGN.md §19:
+  - Its "see it" line *is* this item. Gaining a verb needs `Verb::ALL` to
+        stop being a fixed sixteen, the synonym table to stop being `const`,
+        `execute::is_live` to stop being a `const fn`, and the boot tutorial to
+        read all three dynamically — plus §18's unstarted naming pass to have
+        named the verb that arrives
+  - §10 pre-authorises the cheap version — *"decipherment becomes mostly a
+        resource sink with occasional authored set-pieces"* — and §7's only
+        depiction of the verb is exactly that: read the fragment, learn `grep`,
+        the grimoire grows. A bespoke puzzle is an ambition **increase**, not a
+        debt, and it is better bought when it is known what it gates
       **See it:** `divine` a fragment and gain a verb you did not have
 - [ ] Full drift
       **See it:** return after a long absence to scripts that have gone subtly wrong
