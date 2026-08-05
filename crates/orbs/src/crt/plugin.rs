@@ -24,16 +24,9 @@ impl Plugin for CrtPlugin {
             // keystroke means skip. See `boot::plugin::skip`.
             .add_systems(
                 Update,
-                (
-                    cycle
-                        .run_if(input_just_pressed(KeyCode::F3))
-                        .run_if(crate::boot::booted),
-                    // Not guarded — it *is* the boot sequence. Runs before
-                    // `cycle` so a skip lands on a settled tube rather than one
-                    // frozen mid-strike.
-                    super::strike::drive.run_if(resource_exists::<crate::boot::Boot>),
-                )
-                    .chain(),
+                cycle
+                    .run_if(input_just_pressed(KeyCode::F3))
+                    .run_if(crate::boot::booted),
             );
 
         let Some(render_app) = app.get_sub_app_mut(RenderApp) else {

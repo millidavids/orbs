@@ -150,16 +150,6 @@ impl Phosphor {
         };
         srgba.into()
     }
-
-    /// The hue the tube glows when it strikes.
-    ///
-    /// The theme's brightest base tone, so every theme strikes in its
-    /// own colour. A hardcoded white would belong to none of them — §4 makes the
-    /// palettes art direction rather than decoration, and a violet tube that
-    /// flashes white is a different machine for a fifth of a second.
-    pub(crate) fn glow(&self) -> LinearRgba {
-        self.base[weight(Intensity::Bright)].into()
-    }
 }
 
 const fn weight(intensity: Intensity) -> usize {
@@ -235,7 +225,7 @@ mod tests {
         // assertion about the *order* — `F2` cycles the list, and a default that
         // is not where the cycle starts makes the first keypress do nothing.
         assert_eq!(ALL[0].name, "amber");
-        assert_eq!(crate::render::Theme::default().0.name, "amber");
+        assert_eq!(super::super::plugin::Theme::default().0.name, "amber");
     }
 
     #[test]

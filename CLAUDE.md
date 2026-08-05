@@ -231,9 +231,10 @@ Each `;`-separated line goes through `submit` and a real `step`. Phosphor, the
 CRT curve and the blinking caret are frontend enrichment (rule 2) and are not in
 a Frame — those still need eyes on a window.
 
-`ORBS_BOOT` takes `dark`, `strike`, `prompt`, `frame` or `post` for the dump, and
-`0` to skip the sequence in the running game. Boot happens once per launch, so
-without the latter every "see it" pass on anything else costs a four-second wait.
+`ORBS_BOOT` takes `dark`, `prompt`, `frame` or `post` for the dump, and `0` to
+skip the sequence in the running game. Boot happens once per launch and runs for
+fourteen seconds, so without the latter every "see it" pass on anything else
+costs that wait.
 
 ### Read the log, not only the screen
 

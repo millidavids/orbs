@@ -147,7 +147,6 @@ fn requested_stage() -> Option<(Stage, f32)> {
     let request = std::env::var(BOOT).ok()?;
     let stage = match request.as_str() {
         "dark" => Stage::Dark,
-        "strike" => Stage::Strike,
         "prompt" => Stage::Prompt,
         "frame" => Stage::Frame,
         "post" => Stage::Post,

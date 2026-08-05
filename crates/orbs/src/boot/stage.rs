@@ -2,8 +2,13 @@
 //!
 //! DESIGN.md §4 makes *the tower's* boot a status report reflecting real world
 //! state, and that report is built and shipped (`orbs_sim::tower::boot`). This
-//! is the **machine** waking up in front of it: the tube striking, the frame
+//! is the **machine** waking up in front of it: the prompt appearing, the frame
 //! drawing itself, and the dependencies the game is made of reporting in.
+//!
+//! It opens on **black and nothing else**. A CRT strike shipped here first — a
+//! flash and a sweeping band, then a flash alone — and neither survived being
+//! looked at: the game is a wizard finding a computer inside a scrying orb, and
+//! an orb does not power on like a monitor.
 //!
 //! Two screens, deliberately, and they must not read as one thing twice. The
 //! split is visual as well as sequential — the POST is a centred title card with
@@ -31,14 +36,18 @@ use bevy::prelude::Resource;
 
 /// The stages, in order, with how long each lasts.
 ///
-/// Roughly four seconds all told. That is long for a fifth relaunch, which is
+/// About fourteen seconds all told. That is long for a fifth relaunch, which is
 /// what the skip is for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) enum Stage {
     /// A dark tube. Nothing has happened yet.
+    ///
+    /// **The screen simply opens black.** A flash-and-strike shipped here first,
+    /// then a flash alone, and neither earned its place: the game is a wizard
+    /// looking into a scrying orb, and an orb does not power on like a monitor.
+    /// What is left is a beat of dark before the prompt, which reads as the orb
+    /// being *found* rather than switched on.
     Dark,
-    /// The strike: one flash, then one roll pass. See `crt::strike`.
-    Strike,
     /// The prompt appears, with its caret.
     Prompt,
     /// The pane border draws itself, one cell at a time.
@@ -51,40 +60,25 @@ pub(crate) enum Stage {
 
 impl Stage {
     /// Every stage before [`Stage::Live`], in order.
-    pub(crate) const SEQUENCE: [Self; 5] = [
-        Self::Dark,
-        Self::Strike,
-        Self::Prompt,
-        Self::Frame,
-        Self::Post,
-    ];
+    pub(crate) const SEQUENCE: [Self; 4] = [Self::Dark, Self::Prompt, Self::Frame, Self::Post];
 
     /// How long this stage lasts.
     ///
-    /// **Paced to be read, not to be got past** — except the strike, which is
-    /// paced to be *seen*.
+    /// **Paced to be read, not to be got past.** The first version ran the whole
+    /// sequence in 4.4 s and the stages that animate — the frame drawing itself,
+    /// the dependencies reporting — went by faster than anyone could follow.
+    /// Four times slower is the difference between a flicker and a screen.
     ///
-    /// The first version ran the whole sequence in 4.4 s and the stages that
-    /// animate — the frame drawing itself, the dependencies reporting — went by
-    /// faster than anyone could follow. Four times slower is the difference
-    /// between a flicker and a screen.
+    /// [`Stage::Dark`] is the exception and is *short*: it was 1.6 s when a
+    /// flash punctuated the end of it, and with the flash gone it is a screen
+    /// that does nothing, which is indistinguishable from a slow launch. Long
+    /// enough to be a beat, not long enough to be a wait.
     ///
-    /// [`Stage::Strike`] is the exception and is **quick**. A tube coming on is
-    /// a bloom and a settle, not a fade; anything long enough to watch reads as
-    /// the screen slowly brightening, which is a different and much duller
-    /// event. It was 900 ms and is now 250, which is roughly how long a real
-    /// tube takes to stop being interesting.
-    ///
-    /// That is a taste decision and not a safety one — see `crt::strike`, which
-    /// had the arithmetic wrong in the cautious direction and was the stated
-    /// reason this number stayed high.
-    ///
-    /// The total is long, which is what the skip is for: any key, and
+    /// The total is still long, which is what the skip is for: any key, and
     /// `ORBS_BOOT=0` for a session that never wants it.
     pub(crate) const fn duration(self) -> Duration {
         Duration::from_millis(match self {
-            Self::Dark => 1600,
-            Self::Strike => 250,
+            Self::Dark => 600,
             Self::Prompt => 1200,
             Self::Frame => 3200,
             Self::Post => 9000,
@@ -95,8 +89,7 @@ impl Stage {
     /// The stage after this one.
     pub(crate) const fn next(self) -> Self {
         match self {
-            Self::Dark => Self::Strike,
-            Self::Strike => Self::Prompt,
+            Self::Dark => Self::Prompt,
             Self::Prompt => Self::Frame,
             Self::Frame => Self::Post,
             Self::Post | Self::Live => Self::Live,
@@ -122,7 +115,7 @@ impl Stage {
 
     /// Whether the input line is on screen yet.
     pub(crate) const fn has_prompt(self) -> bool {
-        !matches!(self, Self::Dark | Self::Strike)
+        !matches!(self, Self::Dark)
     }
 }
 
@@ -270,17 +263,28 @@ mod tests {
     }
 
     #[test]
-    fn the_strike_is_quick() {
-        // The opposite of the assertion this replaced, which required the strike
-        // to be *long* — on arithmetic `crt::strike` had wrong. WCAG bounds how
-        // many flashes a one-second window contains, and one non-repeating flash
-        // is one however brief it is, so the only thing left to guard is that
-        // the strike stays short enough to read as a tube coming on rather than
-        // as the screen slowly brightening.
+    fn the_screen_opens_black_and_does_not_dwell_there() {
+        // Nothing flashes any more, so `Dark` is a screen doing nothing — and a
+        // screen doing nothing for long enough is indistinguishable from a slow
+        // launch. A beat, not a wait.
         assert!(
-            Stage::Strike.duration() <= Duration::from_millis(400),
-            "the strike is a fade, not a strike",
+            Stage::Dark.duration() <= Duration::from_millis(900),
+            "the black screen outstays a beat",
         );
+        assert!(
+            Stage::Dark.duration() >= Duration::from_millis(200),
+            "there is no beat at all",
+        );
+    }
+
+    #[test]
+    fn nothing_is_drawn_before_the_prompt() {
+        // The whole of "just open to black": the first stage puts nothing on
+        // screen, and the sequence starts by *appearing* rather than by an
+        // effect announcing it.
+        assert!(!Stage::Dark.has_prompt());
+        assert!(!Stage::Dark.has_frame());
+        assert!(Stage::Prompt.has_prompt());
     }
 
     #[test]

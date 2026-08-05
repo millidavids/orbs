@@ -82,9 +82,9 @@ pub(crate) fn paint(
 
 /// Paint the screen as it exists partway through the boot sequence.
 ///
-/// Draws only what has arrived: `Dark` and `Strike` paint nothing at all, so the
-/// tube really is dark and the strike lands on an empty screen. The pane border
-/// then draws itself a cell at a time, and the POST card follows.
+/// Draws only what has arrived: `Dark` paints nothing at all, so the screen
+/// really does open black. The prompt types itself, the pane border then draws
+/// itself a cell at a time, and the POST card follows.
 ///
 /// Takes no Bevy resources, because `shell::dump` builds no `App` (§19).
 pub(crate) fn paint_booting(

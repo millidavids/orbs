@@ -540,7 +540,7 @@ mod tests {
     fn it_draws_nothing_before_its_own_stage() {
         // The tube is dark and the frame is still drawing itself; a splash that
         // painted through those would be on screen before the screen was.
-        for stage in [Stage::Dark, Stage::Strike, Stage::Prompt, Stage::Frame] {
+        for stage in [Stage::Dark, Stage::Prompt, Stage::Frame] {
             let mut frame = Frame::new(GridSize::new(80, 22));
             paint(&mut frame, stage, 0.5);
             assert!(

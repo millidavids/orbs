@@ -1964,6 +1964,27 @@ below a half-arrived line walks down the pane; a half-arrived record is silent,
 because §14's stream is whole records in order; and **any keystroke completes
 it**, which is what keeps it from ever being a cost.
 
+#### The strike was cut, and nothing in the game flashes
+
+It shipped as a flash plus a bright band sweeping down the tube; the band went
+first, for reading as a *fault* rather than as a tube coming on; then the flash
+went too. **The screen opens black and the prompt types itself.**
+
+The reason is not safety, it is fiction. The game is a wizard who finds a
+computer inside a scrying orb — an orb is *found*, not switched on, and a CRT
+power-up beat was borrowing an idea from the wrong object. Nothing that arrived
+after it needed it either: the prompt appearing out of black is a better opening
+than the prompt appearing after a bang.
+
+**The consequence worth recording: no part of this game flashes any more.** The
+only photosensitivity exposure Phase 0.5 ever created is retired, which is also
+why §14's health warning stops being urgent — it lands with the Phase 5 settings
+screen alongside the persisted CRT toggle rather than ahead of it.
+
+The two entries below are kept because the **reasoning** was wrong twice, in
+opposite directions, and that is the part worth not repeating. `CrtSettings`
+keeps its `flash` field: §4 reserves it for *flash on breach*, which is Phase 2.
+
 #### The flash limit is per window, not per second of effect
 
 The strike's arithmetic was wrong twice, in opposite directions, and both cost

@@ -359,8 +359,9 @@ defects — DESIGN.md §19.
       barrel, scanlines, grille and vignette for a player who had turned them off
       for motion sickness (§14). Explicit state now, with tests that write the
       fields directly rather than pressing the key
-      **See it:** ✅ `F3` to off and it stays off — including through the boot
-      strike, which drives `flash` every frame
+      **See it:** ✅ `F3` to off and it stays off. The defect was latent when it
+      was fixed and is latent again now the boot strike is gone — §4's *flash on
+      breach* is what will drive `flash` next, in Phase 2
 - [x] **Panes arrive over time** — `ScreenLayout::transition` interpolates and
       the frontend owns the clock. Panes are born from an explicit edge
       rectangle, per mode: Deep slides in from the right, Wide unrolls downward.
@@ -382,33 +383,36 @@ defects — DESIGN.md §19.
       commands is not a person watching twenty reveals
       **See it:** ✅ type `survey` in the alembic and watch the listing fill
       across then down. Any keystroke completes it instantly
-- [x] **A real boot sequence** — dark, strike, prompt, the pane border drawing
-      itself a cell at a time, a POST naming Rust, Bevy and Blackhearth Games,
-      then the game. **17.6 s, any key skips** — paced to be read rather than to
-      be got past: at the first pass's 4.4 s the two stages that animate were
-      over before they could be followed. The POST is a centred title card
+- [x] **A real boot sequence** — opens on black, then the prompt types itself,
+      the pane border draws itself a cell at a time, and a POST card prints
+      `O.R.B.S.` in block glyphs a character at a time before checking off
+      Blackhearth Games, Rust and Bevy. **14 s, any key skips** — paced to be
+      read rather than to be got past: at the first pass's 4.4 s the stages that
+      animate were over before they could be followed. The POST is a title card
       rather than a table, so it cannot be mistaken for §4's tower report
       arriving twice. **The world does not tick during it** — `tower::drift`
       rolls once per tick, so the same seed would otherwise build a different
       world depending on how long boot ran
       **See it:** ✅ `cargo run -p orbs`. Or as text:
-      `ORBS_DUMP=1 ORBS_BOOT=post cargo run -p orbs`, and `dark`/`strike`/
-      `prompt`/`frame` for the rest. `ORBS_BOOT=0` skips it
-- [x] **The tube strikes** — one soft flash with a long decay, in the active
-      phosphor rather than white. A sweeping band shipped alongside it and was
-      **cut on looking at it**: it read as a fault rather than as a tube coming
-      on, and it was also the second general flash that had forced the strike
-      stage to be long enough to stay under WCAG 2.3.1. One pair over a stage
-      measured in seconds is under a quarter of a flash per second — DESIGN.md §19
-      **See it:** ✅ launch the game and watch the tube come on.
-      ⚠️ **Not yet persisted**: `F3` turns the CRT off for the session only, so
-      the effect is inside the limit *by construction* rather than behind a
-      switch. The persisted setting and §14's health warning are Phase 5
-- [ ] **Sticky skip, persisted CRT-off, reduce-motion, health warning** —
-      ⏸ **Phase 5**, with §15's settings screen. §4 asks for skip to be *"a
-      sticky setting, not a per-launch keypress"*; the keypress is the honest
-      half-measure until there is anywhere to persist a setting. No `serde`, no
-      `toml`, nothing in the workspace serialises anything yet
+      `ORBS_DUMP=1 ORBS_BOOT=post cargo run -p orbs`, and `dark`/`prompt`/`frame`
+      for the rest. `ORBS_BOOT=0` skips it
+- [x] **The tube strike — built, then cut** — a flash and a sweeping band first,
+      then the band alone was dropped for reading as a fault, then the flash too.
+      It never earned its place: the game is a wizard finding a computer inside a
+      scrying orb, and an orb does not power on like a monitor. The screen opens
+      black. **Nothing in the game flashes now**, which retires the only
+      photosensitivity exposure Phase 0.5 created — DESIGN.md §19 keeps the
+      arithmetic, because the *reasoning* was wrong twice and that is worth not
+      repeating
+      **See it:** ✅ launch the game — it opens black and the prompt types itself
+- [ ] **Sticky skip, persisted CRT-off, reduce-motion** — ⏸ **Phase 5**, with
+      §15's settings screen. §4 asks for skip to be *"a sticky setting, not a
+      per-launch keypress"*; the keypress is the honest half-measure until there
+      is anywhere to persist a setting. No `serde`, no `toml`, nothing in the
+      workspace serialises anything yet.
+
+      §14's health warning goes with them, and is no longer urgent: with the
+      strike cut, nothing in the game flashes at all
       **See it:** turn the tube off, relaunch, and it is still off
 
 ---

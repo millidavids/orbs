@@ -6,4 +6,3 @@ mod palette;
 mod plugin;
 
 pub use plugin::RenderPlugin;
-pub(crate) use plugin::Theme;

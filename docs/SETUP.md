@@ -140,9 +140,9 @@ ORBS_DUMP=1 ORBS_BOOT=post cargo run -p orbs        # one boot stage as text
 ORBS_BOOT=0 cargo run -p orbs                       # skip the boot sequence
 ```
 
-`ORBS_BOOT` takes `dark`, `strike`, `prompt`, `frame` or `post` for a dump, and
-`0` to skip the sequence in the running game — boot runs once per launch, so
-without it every pass over anything else costs a four-second wait.
+`ORBS_BOOT` takes `dark`, `prompt`, `frame` or `post` for a dump, and `0` to skip
+the sequence in the running game — boot runs once per launch and lasts fourteen
+seconds, so without it every pass over anything else costs that wait.
 
 Each `;`-separated line goes through `submit` and a real `step`, so what prints
 is the world having actually run. What it cannot show is what rule 2 says is a
