@@ -2057,6 +2057,19 @@ repertoire test covers it like any other text. Centred as a *block* on the wides
 row: the rows are not all the same length, and centring each on its own width
 shears the letterforms apart by a column.
 
+**The logo prints a character at a time too**, six rows at once — `O`, then the
+full stop, then `R`. That is only possible because the letterforms are
+**column-separable**: no glyph shares a column with its neighbour. The column
+ranges were *measured* rather than counted by eye, and they are irregular (`O` is
+nine cells, the other letters eight, the full stops three), so they live in a
+table that a test holds to covering the art exactly — no gap, no overlap, one
+entry per character of the name. A hand-written table that drifted from the art
+would fail silently, drawing a glyph a column off or leaving a sliver never drawn
+at all.
+
+The logo also **speaks only as much of the name as is on screen**. §14: what a
+reader hears is what the screen says, which during the print is `O.R`.
+
 **The words do not type; the dots do.** Each line is `label ..... ok`, the label
 landing whole, its leader dots filling the way a progress indicator fills, and
 `ok` snapping in behind them — then a pause before the next line. A name arriving
