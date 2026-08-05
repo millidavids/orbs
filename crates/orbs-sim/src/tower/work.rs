@@ -14,7 +14,7 @@
 //!
 //! §11.5 starts the player at **multiplex capacity 1**, and §9's fourth
 //! invariant reserves that slot for an in-flight manual action for its whole
-//! duration. So brewing occupies the tower, not merely the alembic: start a
+//! duration. So brewing occupies the tower, not merely the laboratory: start a
 //! decoction and you are not also deciphering. That is the trade the whole focus
 //! track is built on, and giving each domain its own slot would delete it while
 //! being *more* code — a counter per domain where the design needs one.
@@ -104,7 +104,7 @@ pub fn occupied(world: &mut World) -> Option<(Verb, Entity)> {
 /// Begin work at `place`, on `subject`.
 ///
 /// Refuses when the production slot is taken, naming what holds it — §5.0's
-/// *"repairing the rats occupies the alembic pane for its duration, during which
+/// *"repairing the rats occupies the laboratory pane for its duration, during which
 /// you are not brewing"* only bites if the refusal says so.
 pub fn begin(world: &mut World, place: Entity, verb: Verb, subject: NodeId, ticks: u64) -> bool {
     if let Some((holder, at)) = occupied(world) {
@@ -151,7 +151,7 @@ pub fn finish(world: &mut World) {
         world.entity_mut(place).remove::<Working>();
         let subject = name_of(world, working.subject);
         // `Source` is what makes a domain log a log: §3 keeps one stream, and
-        // `peruse alembic.log` is that stream filtered by who wrote each line.
+        // `peruse laboratory.log` is that stream filtered by who wrote each line.
         let source = world
             .get::<Name>(place)
             .map_or_else(String::new, |name| name.0.clone());
@@ -165,7 +165,7 @@ pub fn finish(world: &mut World) {
             .role(Role::Success)
             .finish();
 
-        // §7: *"Alchemical byproduct accumulates in `/alembic` and must be
+        // §7: *"Alchemical byproduct accumulates in `/laboratory` and must be
         // purged manually or by a bound cleanup script."* Waste is an idle
         // mechanic and a nuisance source, and it is what gives `purge` — a
         // destructive verb — something **useful, everyday and scriptable** to
@@ -259,7 +259,7 @@ mod tests {
     #[test]
     fn a_brew_takes_time_and_lands_by_itself() {
         let mut sim = Sim::new(1);
-        sim.submit("attend alembic");
+        sim.submit("attend laboratory");
         sim.step();
         sim.submit("decoct clarity");
         sim.step();
@@ -278,7 +278,7 @@ mod tests {
         // for the whole duration, so brewing occupies the *tower*. A slot per
         // domain would delete the trade the focus track is built on.
         let mut sim = Sim::new(1);
-        sim.submit("attend alembic");
+        sim.submit("attend laboratory");
         sim.step();
         sim.submit("decoct clarity");
         sim.step();
@@ -315,7 +315,7 @@ mod tests {
     #[test]
     fn meditating_through_a_brew_lands_it_exactly_once() {
         let mut sim = Sim::new(1);
-        sim.submit("attend alembic");
+        sim.submit("attend laboratory");
         sim.step();
         sim.submit("decoct clarity");
         sim.step();

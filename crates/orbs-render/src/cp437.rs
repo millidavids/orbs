@@ -228,7 +228,7 @@ mod tests {
         for line in [
             "O.R.B.S. v0.9.3  --  cold start",
             "east_wall integrity 34% [ DEGRADED ]",
-            "┌ alembic ─────┐",
+            "┌ laboratory ─────┐",
             "",
         ] {
             assert_eq!(first_unrenderable(line), None, "{line:?} was rejected");

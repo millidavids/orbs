@@ -271,7 +271,7 @@ mod tests {
         // for what it found, and a completion is what a verb that *changed*
         // something reports.
         let mut sim = Sim::new(1);
-        sim.submit("attend alembic");
+        sim.submit("attend laboratory");
         assert_eq!(sim.pending().len(), 1);
         assert!(
             sim.scrollback()
@@ -295,9 +295,9 @@ mod tests {
             Some(Value::Text("attend"))
         );
         // No bare timestamp: a line view joins every content value, so a tick
-        // here would draw and speak `attend /tower/alembic 1`.
+        // here would draw and speak `attend /tower/laboratory 1`.
         assert_eq!(completion.field(FieldName::Tick), None);
-        assert_eq!(completion.to_speech(), "attend, /tower/alembic");
+        assert_eq!(completion.to_speech(), "attend, /tower/laboratory");
     }
 
     #[test]
@@ -371,10 +371,10 @@ mod tests {
         assert_eq!(a.submissions().all(), b.submissions().all());
     }
 
-    /// Ask something the orb cannot settle, in the alembic where the essences are.
+    /// Ask something the orb cannot settle, in the laboratory where the essences are.
     fn asked(seed: u64) -> Sim {
         let mut sim = Sim::new(seed);
-        sim.submit("attend alembic");
+        sim.submit("attend laboratory");
         sim.step();
         sim.submit("decoct nonsense");
         sim.step();

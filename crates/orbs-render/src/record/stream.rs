@@ -4,7 +4,7 @@
 //!
 //! One `String` arena, one `Vec` of fields, one `Vec` of record headers — the
 //! same shape as [`Speech`](crate::Speech), and for the same reason. `ls` on a
-//! full `/alembic` is a few hundred records of a few fields each; a `String` per
+//! full `/laboratory` is a few hundred records of a few fields each; a `String` per
 //! field would be a thousand allocations to draw one directory.
 //!
 //! A [`Record`] is therefore a borrowed view — an index and a reference, `Copy`

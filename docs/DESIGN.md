@@ -25,7 +25,7 @@ computer terminal.
 
 O.R.B.S. is a text-only game played entirely through a fantasy command line. You
 tend a wizard's tower by navigating a filesystem that *is* your duties — brewing
-in `/alembic`, warding in `/battlements`, spying in `/lens` — and you progress by
+in `/laboratory`, warding in `/battlements`, spying in `/lens` — and you progress by
 writing scripts that let the orb perform your work without you. When you are
 ready, you descend into a siege, where an intelligent enemy attacks the
 automation you built and you must diagnose and repair it under pressure.
@@ -192,7 +192,7 @@ O.R.B.S. v0.9.3  —  cold start
 scrying lens ................ [ ok ]
 ley-line uplink ............. [ ok ]
 grimoire index .............. [ 2841 ]
-alembic ..................... [ ok ]
+laboratory ..................... [ ok ]
 battlements ................. [ DEGRADED ]
   east_wall integrity 34%
 menagerie ................... [ not found ]
@@ -249,7 +249,7 @@ system rather than two bolted together.
 This gives every downstream claim its teeth without a currency:
 
 - **Nuisances have real decision content.** Repairing the rats occupies the
-  alembic pane for its duration, during which you are not brewing. "Handle when
+  laboratory pane for its duration, during which you are not brewing. "Handle when
   convenient" is a genuine trade-off.
 - **Automation wins** because script actions occupy Attention rather than Focus,
   and because of script-only capabilities and the speed advantage (§8).
@@ -347,14 +347,14 @@ reality periodically violates its assumptions; you diagnose and repair.
 | | **Nuisance (idle)** | **Adversarial (siege)** |
 |---|---|---|
 | Source | Environmental, random | An intelligent enemy |
-| Example | Rats infest the alembic; byproduct accumulates; a reagent spoils | Reagents swapped, triggers retimed, glyphs corrupted, logs poisoned |
+| Example | Rats infest the laboratory; byproduct accumulates; a reagent spoils | Reagents swapped, triggers retimed, glyphs corrupted, logs poisoned |
 | Effect | Slows production | Compounds toward failure |
 | Surfaces touched | Environmental only — never scripts, schedules, or logs | All four surfaces (§8.1) |
 | Response | Repair occupies a pane for a duration | Diagnose and repair under pressure |
 | Ignoring | Reduced throughput | Loss |
 
 **Nuisances have real decision content because repairs occupy a pane.** Fixing the
-rats blocks the alembic for its duration, so it trades directly against brewing.
+rats blocks the laboratory for its duration, so it trades directly against brewing.
 "Handle when convenient" is a genuine prioritisation choice, not a chore list.
 
 **Adversarial aberrations are siege-only.** Trace (§5.3) raises the *rate* of
@@ -593,7 +593,7 @@ The directory tree *is* the tower. Navigation is diegetic; paths are places.
 ```
 /tower
 ├── battlements/     defense — walls, gates, wards
-├── alembic/         brewing — reagents, recipes, potions
+├── laboratory/         brewing — reagents, recipes, potions
 ├── lens/            scrying — feeds, logs, intelligence, observed/
 ├── grimoire/        spellcraft — spell composition
 ├── menagerie/       summoning — familiars and constructs
@@ -663,7 +663,7 @@ display off the compatibility surface. Binding on §13.
 ### Destruction is maintenance
 
 Destructive verbs exist because they are **useful, everyday, and scriptable**.
-Alchemical byproduct accumulates in `/alembic` and must be purged manually or by a
+Alchemical byproduct accumulates in `/laboratory` and must be purged manually or by a
 bound cleanup script; spoiled reagents, corrupted glyphs, and dead summons need
 disposal. Waste management is an idle mechanic and a nuisance-aberration source.
 
@@ -964,13 +964,13 @@ itself is a first-class effect — atmospheric, never nauseating, and disableabl
 per §14.
 
 **Commands route by domain name within the focused set.** `decoct haste` reaches
-the alembic pane, `ward north` reaches the battlements pane, with no switching
+the laboratory pane, `ward north` reaches the battlements pane, with no switching
 between them — because commands are discrete, one input line serves any number of
 focused panes.
 
 **This is what multiplexing actually buys.** At capacity 1, a disaster in the
 alchemy lab while you are commanding the battlements forces a choice: swap the
-alembic into the main window (losing direct command of the defence) or let it
+laboratory into the main window (losing direct command of the defence) or let it
 burn. Higher capacity lets you hold both and command both. Splitting your mind
 converts an either/or into an and.
 
@@ -987,7 +987,7 @@ risk. With it, **manual concurrency equals multiplex capacity**, pane count is
 breadth, and capacity is depth.
 
 **A pane holds one production slot and one triage slot.** That is what "partially
-locks" means precisely: a 6-minute brew occupies the alembic's production slot
+locks" means precisely: a 6-minute brew occupies the laboratory's production slot
 while a 20-second purge can still run in its triage slot. Only the production slot
 consumes Focus.
 
@@ -1048,7 +1048,7 @@ Seven at launch, with tiered depth to survive solo scale.
 | **Defense** | `battlements/` | Command pressure at 1 Hz, ward placement | Bespoke |
 | **Scrying** | `lens/` | Deduction — parse noisy logs to find truth | Bespoke |
 | **Spellcraft** | `grimoire/` | Composition — build spells from components | Bespoke |
-| **Brewing** | `alembic/` | Sequence/recipe puzzle with timing | Bespoke |
+| **Brewing** | `laboratory/` | Sequence/recipe puzzle with timing | Bespoke |
 | **Archive** | `archive/` | Decipherment; powers all discovery | Bespoke |
 | **Summoning** | `menagerie/` | Resource allocation → autonomous siege units | Derived |
 | **Enchanting** | `forge/` | Sequence + resource cost → persistent buffs | Derived |
@@ -1140,7 +1140,7 @@ because automation is *non-blocking*.
 ### Blocking, and why automation wins
 
 - **A manual duration-action partially locks its pane** — brewing occupies the
-  alembic's brewing functions while inspection, reading, and purging stay
+  laboratory's brewing functions while inspection, reading, and purging stay
   available. A player at capacity 1 is never fully stuck, which matters most in
   the first hour when they have nowhere to switch to.
 - **Script actions lock nothing.** This is automation's headline benefit and it
@@ -1467,7 +1467,7 @@ keeps the terminal build a *possibility* rather than a rewrite.
 Steam installer, `htop`, or the Debian installer. It takes over the alternate
 screen buffer and draws the whole grid itself. It does **not** shell out, does not
 touch the real filesystem, and does not interoperate with the host shell —
-`attend /tower/alembic` navigates the simulated tower exactly as it does under
+`attend /tower/laboratory` navigates the simulated tower exactly as it does under
 Bevy. Same sim, same commands, same world; only the rasteriser differs.
 
 **Input is a strength, not a compromise.** O.R.B.S. is a typed command line plus a
@@ -2341,7 +2341,7 @@ afternoon before the same frame was checked another way and found to be correct.
 `ORBS_DUMP=1` draws the same frame the game draws — the real `paint`, the real
 `Sim`, the real `ScreenLayout` — into a `Frame` nobody rasterises, and prints it
 with its linear stream beneath. No `App`, no `DefaultPlugins`, no GPU, no window.
-`ORBS_DUMP="attend alembic; decoct clarity; meditate 25"` types a session first,
+`ORBS_DUMP="attend laboratory; decoct clarity; meditate 25"` types a session first,
 through `submit` and a real `step`, so what prints is the world having actually
 run. `ORBS_GRID=160x44` picks the grid.
 
@@ -2384,7 +2384,7 @@ parser with nothing to parse against.
 | Question | Decision |
 |---|---|
 | **The tree is ECS** | Rule 1 makes the world model ECS throughout, and a second representation would be a thing `Scene`, durations and Phase 1's script referents all have to bridge. Nodes carry a **stable `NodeId`**, not an `Entity`: §8 resolves bound references by stable id and writes them into script files as `north_gate#7f2a`, and `Entity` is a generational index that means nothing across a save |
-| **You can only name what is where you are** | §7 makes the tree the tower and navigation diegetic, so `decoct clarity` works in `/tower/alembic` and nowhere else. Places stay nameable everywhere — gating movement on being somewhere would be a lock whose key is behind it. This is the base state §19's **pane addressing** later relaxes in Phase 2: acting at a distance has to *become* possible |
+| **You can only name what is where you are** | §7 makes the tree the tower and navigation diegetic, so `decoct clarity` works in `/tower/laboratory` and nowhere else. Places stay nameable everywhere — gating movement on being somewhere would be a lock whose key is behind it. This is the base state §19's **pane addressing** later relaxes in Phase 2: acting at a distance has to *become* possible |
 | **The scene walks `Children`, never a query** | §6 breaks scoring ties by registration order, so registration order *is* the parse. Archetype order is not insertion order and an entity moves tables whenever a component is added — so starting a brew would have reordered the noun list, flipped a tie, and changed what a phrase resolves to. Replay would diverge with no test seeing it |
 | **Rebuilt per tick, in its own schedule pass** | On-change is a cache-invalidation bug waiting for the first system that mutates without setting a marker. And sharing a pass with whatever a frontend adds through `with_schedule` is an ambiguity rather than an ordering — Bevy's topsort was in fact running the caller's systems first |
 | **One production slot, tower-wide** | §11.5 opens at multiplex capacity **1** and §9's fourth invariant reserves it for the action's whole duration, so brewing occupies the tower and you are not also deciphering. A slot per domain would delete the trade the focus track is built on *and* be more code — a counter per domain where the design needs one |
@@ -2832,7 +2832,7 @@ Two consequences worth remembering:
 | What is logged | **Every candidate, on every resolution — including successes.** A command that won by four points and one that won by four hundred are the same `Resolved` and very different data. §15 says act on failure *clustering*, and a near-miss is where clustering starts |
 | Export format | **TSV, one row per candidate.** No dependency, survives `grep`, pastes into a spreadsheet. Records carry no timing — wall-clock in a sim record would make two runs of one seed differ |
 | Argument categories | Slots are typed (`Place`, `File`, `Essence`, …), so `attend clarity` cannot resolve. `Pattern` and `Count` never touch the world; everything else resolves against the live scene, which is what stops the parser promising a brew the sim cannot perform |
-| Places answer to leaves | `attend alembic` reaches `/tower/alembic`. §7 says paths are places, and players say the place |
+| Places answer to leaves | `attend laboratory` reaches `/tower/laboratory`. §7 says paths are places, and players say the place |
 
 ### Frame boundary — implemented, Phase 0 item 2
 

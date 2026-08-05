@@ -78,7 +78,7 @@ impl Record<'_> {
     ///
     /// Case-insensitive over ASCII. §6's whole posture is that phrasing should
     /// not be a puzzle, and a player who types `sift SPOILED` and is told the
-    /// alembic is clean has been lied to by a technicality. Case folding is
+    /// laboratory is clean has been lied to by a technicality. Case folding is
     /// limited to ASCII on purpose: the CP437 repertoire's accented glyphs have
     /// no single correct fold, and guessing would make matches depend on which
     /// glyph an author reached for.

@@ -79,7 +79,7 @@ pub fn analyse(input: &str, scene: &Scene, mode: Mode) -> Analysis {
     }
 
     // The verb matcher only looks at the head, so leading filler has to go
-    // first — "please go to the alembic" opens on a word no phrase starts with.
+    // first — "please go to the laboratory" opens on a word no phrase starts with.
     // `skip_leading_filler` yields 0 when everything is filler, so this slice is
     // never empty given `all` is not.
     let words = &all[normalise::skip_leading_filler(&all)..];

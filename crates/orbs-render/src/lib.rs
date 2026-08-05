@@ -51,7 +51,7 @@
 //! });
 //!
 //! let mut frame = Frame::new(grid);
-//! for (pane, title) in layout.main().iter().zip(["alembic", "battlements"]) {
+//! for (pane, title) in layout.main().iter().zip(["laboratory", "battlements"]) {
 //!     let mut painter = frame.painter(*pane);
 //!     painter.border(*pane, Some(title), Style::DIM);
 //!     painter.span(
@@ -68,7 +68,7 @@
 //!
 //! // The same frame, with no pixels at all.
 //! let spoken: Vec<_> = frame.speech().utterances().map(|u| u.text).collect();
-//! assert_eq!(spoken[0], "alembic");
+//! assert_eq!(spoken[0], "laboratory");
 //! assert_eq!(spoken[1], "east wall breached");
 //! ```
 

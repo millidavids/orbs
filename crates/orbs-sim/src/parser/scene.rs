@@ -17,7 +17,7 @@ use super::verb::NounKind;
 /// Something the player can refer to by name.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Noun {
-    /// Canonical name — `/tower/alembic`, `feed.log`, `clarity`.
+    /// Canonical name — `/tower/laboratory`, `feed.log`, `clarity`.
     pub name: String,
     /// What category it belongs to.
     pub kind: NounKind,
@@ -115,7 +115,7 @@ impl Scene {
 /// How well one phrase names one noun.
 ///
 /// A [`NounKind::Place`] also answers to its last path segment, so `attend
-/// alembic` reaches `/tower/alembic` — paths are places (§7), and players say
+/// laboratory` reaches `/tower/laboratory` — paths are places (§7), and players say
 /// the place, not the path.
 fn score_against(noun: &Noun, phrase: &str) -> u32 {
     let direct = fuzzy::similarity(phrase, &noun.name);
@@ -133,7 +133,7 @@ mod tests {
 
     fn tower() -> Scene {
         Scene::new()
-            .with(NounKind::Place, "/tower/alembic")
+            .with(NounKind::Place, "/tower/laboratory")
             .with(NounKind::Place, "/tower/battlements")
             .with(NounKind::Place, "/tower/archive")
             .with(NounKind::File, "feed.log")
@@ -156,9 +156,9 @@ mod tests {
     fn a_place_answers_to_its_last_segment() {
         // §7: paths are places, and players say the place.
         let found = tower()
-            .best_match(NounKind::Place, &["alembic"])
-            .expect("alembic exists");
-        assert_eq!(found.name, "/tower/alembic");
+            .best_match(NounKind::Place, &["laboratory"])
+            .expect("laboratory exists");
+        assert_eq!(found.name, "/tower/laboratory");
     }
 
     #[test]
@@ -176,7 +176,7 @@ mod tests {
         assert!(tower().best_match(NounKind::Place, &["clarity"]).is_none());
         assert!(
             tower()
-                .best_match(NounKind::Essence, &["alembic"])
+                .best_match(NounKind::Essence, &["laboratory"])
                 .is_none()
         );
     }

@@ -331,7 +331,7 @@ impl Sim {
     /// Where the player is standing, as a path (§7).
     ///
     /// What the prompt shows, and therefore what tells a player which commands
-    /// will resolve: the essences are in `/tower/alembic`, so that is where
+    /// will resolve: the essences are in `/tower/laboratory`, so that is where
     /// `decoct` works.
     #[must_use]
     pub fn location(&self) -> String {

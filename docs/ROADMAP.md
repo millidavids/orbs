@@ -90,7 +90,7 @@ and every one of those now names a phase rather than an oversight.
 | 3- and 4-pane tiling | ❌ the game asks for at most 2 | **Phase 1+ progression.** Gated by *multiplex capacity*, not by domains: §11.5 starts the player at capacity **1** and reaches 3 at ~5 h. §9 keeps panes and capacity as separate unlocks that "must not be conflated" — drawing three panes at t=0 would delete the swap-or-let-it-burn trade the whole focus track is built on |
 | `Sim::with_schedule`'s build closure | ⚠️ test-only, and now says so | **Nothing left** — domain systems belong inside `Sim::new`, or the Bevy build, `orbs-tui` and `orbs-balance` each register their own and diverge (§13). Kept because the boundary tests drive it; marked so no frontend reaches for it |
 | Replay log (`Sim::submissions`) | ⚠️ written, never read | **Phase 1** — needs a replay command to read it |
-| Destruction guard (§7's refusal) | ✅ `purge alembic` refuses; `purge residue-N` works | — |
+| Destruction guard (§7's refusal) | ✅ `purge laboratory` refuses; `purge residue-N` works | — |
 | Per-subsystem RNG streams | ⚠️ one of six rolls | **Phase 2 for the rest.** Log-poisoning drift rolls `RngStream::Threat`, so the seeded, per-stream machinery is now exercised by the running game rather than only by tests — and the same seed poisons the same log on the same tick. The other five wait for the subsystems that own them |
 
 **Where a gate is not yet possible, it says so.** A sidebar has nothing to
@@ -291,22 +291,22 @@ that names its phase gets revisited when the phase arrives; one that says
       — under a second, so the typing loop was never waiting on the compiler
 - [x] **Brewing + archive** — the two starting domains, both thin. The tower is
       ECS with stable `NodeId`s; a domain's belongings are nameable only from
-      inside it (§7), so `decoct` works in the alembic and nowhere else. One
+      inside it (§7), so `decoct` works in the laboratory and nowhere else. One
       production slot tower-wide per §11.5's opening capacity of 1, work stored
       as an interval rather than a countdown, and durations deliberately at
       §11.5's routine end because §15's gate is a fifteen-minute scenario —
       DESIGN.md §19. Numbered candidate selection shipped with them, since
       adding nouns is what makes ambiguity reachable and the gate weighs zero
       dead ends above the resolution rate
-      **See it:** `attend alembic`, `make a potion of clarity` → `decoct clarity`
+      **See it:** `attend laboratory`, `make a potion of clarity` → `decoct clarity`
       with a meter; `divine sigil-iv` while it brews → refused, naming what holds
       the slot; `decoct nonsense` → a numbered prompt you answer with a digit
 - [x] **Log-poisoning sabotage** on brewing logs, via `peruse` / `sift` / `verify`
       — a seeded roll every `DRIFT_INTERVAL` ticks poisons a log; the tell is
       §8.1's **structural** one, a record that lost its tick field, so it is
       spotted by comparing two adjacent lines rather than by reading a warning
-      **See it:** ✅ `ORBS_DUMP="attend alembic; decoct clarity; meditate 25;
-      decoct warding; meditate 25; verify alembic.log; peruse alembic.log"` —
+      **See it:** ✅ `ORBS_DUMP="attend laboratory; decoct clarity; meditate 25;
+      decoct warding; meditate 25; verify laboratory.log; peruse laboratory.log"` —
       `verify` says `tampered`, and in the `peruse` below it line 1 has lost its
       number while line 2 still has one
 - [x] **Boot sequence** — status report reflecting real world state. Built by
@@ -381,7 +381,7 @@ defects — DESIGN.md §19.
       turning an accessibility setting into a competitive advantage. The
       detriment lands anyway, in Phase 1, when a bound script running twenty
       commands is not a person watching twenty reveals
-      **See it:** ✅ type `survey` in the alembic and watch the listing fill
+      **See it:** ✅ type `survey` in the laboratory and watch the listing fill
       across then down. Any keystroke completes it instantly
 - [x] **A real boot sequence** — opens on black, then the prompt types itself,
       the pane border draws itself a cell at a time, and a POST card prints

@@ -9,7 +9,7 @@ use orbs_sim::parser::{Confidence, Mode, NounKind, Register, Resolution, Scene, 
 /// The slice's world: two starting domains, thin (DESIGN.md §15).
 fn tower() -> Scene {
     Scene::new()
-        .with(NounKind::Place, "/tower/alembic")
+        .with(NounKind::Place, "/tower/laboratory")
         .with(NounKind::Place, "/tower/archive")
         .with(NounKind::Place, "/tower/battlements")
         .with(NounKind::File, "feed.log")
@@ -46,8 +46,8 @@ fn all_three_registers_reach_the_same_canonical_command() {
     for input in ["survey", "ls", "look"] {
         assert_eq!(echo(input), "survey", "{input:?}");
     }
-    for input in ["attend alembic", "cd alembic", "go to the alembic"] {
-        assert_eq!(echo(input), "attend /tower/alembic", "{input:?}");
+    for input in ["attend laboratory", "cd laboratory", "go to the laboratory"] {
+        assert_eq!(echo(input), "attend /tower/laboratory", "{input:?}");
     }
     for input in ["peruse feed.log", "cat feed.log", "read the feed.log"] {
         assert_eq!(echo(input), "peruse feed.log", "{input:?}");
@@ -68,7 +68,7 @@ fn the_echo_is_always_arcane() {
 fn every_verb_is_reachable_from_plain_english() {
     // Half the Phase 0 gate's testers self-report no shell experience.
     let plain = [
-        ("go to alembic", Verb::Attend),
+        ("go to laboratory", Verb::Attend),
         ("look", Verb::Survey),
         ("read feed.log", Verb::Peruse),
         ("search march feed.log", Verb::Sift),
@@ -132,14 +132,17 @@ fn abbreviations_resolve() {
 
 #[test]
 fn filler_is_ignored() {
-    assert_eq!(echo("please go to the alembic"), "attend /tower/alembic");
+    assert_eq!(
+        echo("please go to the laboratory"),
+        "attend /tower/laboratory"
+    );
     assert_eq!(echo("brew me a potion of warding"), "decoct warding");
 }
 
 #[test]
 fn a_place_can_be_named_by_its_leaf_or_its_path() {
-    assert_eq!(echo("attend alembic"), "attend /tower/alembic");
-    assert_eq!(echo("attend /tower/alembic"), "attend /tower/alembic");
+    assert_eq!(echo("attend laboratory"), "attend /tower/laboratory");
+    assert_eq!(echo("attend /tower/laboratory"), "attend /tower/laboratory");
 }
 
 // ---------------------------------------------------------------------------
@@ -235,7 +238,7 @@ fn resolution_is_deterministic() {
         "brew",
         "xyzzy",
         "grep march feed.log",
-        "go to the alembic",
+        "go to the laboratory",
     ];
     for input in inputs {
         let first = resolve(input, &tower(), Mode::Calm);

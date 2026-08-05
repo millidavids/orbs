@@ -49,7 +49,7 @@ impl Line {
     /// leaves 72 cells, past which `put_str` clips silently *and*
     /// [`Frame::set_cursor`](orbs_render::Frame::set_cursor) refuses an off-grid
     /// position — so the player types into a dead line with no caret and no
-    /// explanation. `sift "march north" /tower/alembic/feed.log` is 44
+    /// explanation. `sift "march north" /tower/laboratory/feed.log` is 44
     /// characters, so 72 is not a theoretical limit.
     ///
     /// One cell is always reserved for the caret, which is what makes the line

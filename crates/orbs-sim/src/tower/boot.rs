@@ -139,7 +139,7 @@ mod tests {
         // the player reads first.
         let sim = Sim::new(1);
         let named = rows(&sim, RecordKind::Status);
-        assert!(named.iter().any(|name| name == "alembic"));
+        assert!(named.iter().any(|name| name == "laboratory"));
         assert!(named.iter().any(|name| name == "archive"));
         assert!(named.iter().any(|name| name == "bound"));
     }
@@ -172,8 +172,8 @@ mod tests {
         // §8.1's forgotten-automation defence, one surface up: the first thing a
         // player sees names the surface worth inspecting.
         let mut sim = Sim::new(1);
-        let alembic = children_of(sim.world(), sim.world().resource::<Cwd>().0)[0];
-        let log = children_of(sim.world(), alembic)[5];
+        let laboratory = children_of(sim.world(), sim.world().resource::<Cwd>().0)[0];
+        let log = children_of(sim.world(), laboratory)[5];
         super::super::sabotage::poison(sim.world_mut(), log);
 
         sim.world_mut()

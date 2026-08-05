@@ -37,7 +37,7 @@ use crate::parser::{NounKind, Scene};
 ///
 /// §7 makes the tree the tower and navigation diegetic — *"paths are places"* —
 /// so a domain's contents are nameable **only while the player is standing in
-/// that domain**. `decoct clarity` works in `/tower/alembic` and nowhere else.
+/// that domain**. `decoct clarity` works in `/tower/laboratory` and nowhere else.
 ///
 /// That is the base state, not a limitation: §19 settles **pane addressing** —
 /// *"named by domain, routed within the focused set"* — as a **Phase 2** item,
@@ -63,8 +63,8 @@ pub fn rebuild(world: &mut World) {
     for node in walk(world, root_of(world, cwd.0)) {
         if world.get::<Nameable>(node).map(|n| n.0) == Some(NounKind::Place) {
             // A place answers to its full path; §6's matcher also accepts the
-            // last segment, which is what makes `attend alembic` reach
-            // `/tower/alembic` (§7: players say the place, not the path).
+            // last segment, which is what makes `attend laboratory` reach
+            // `/tower/laboratory` (§7: players say the place, not the path).
             scene = scene.with(NounKind::Place, &path_of(world, node));
         }
     }
@@ -134,13 +134,13 @@ mod tests {
     fn the_order_is_the_order_things_were_spawned() {
         // §6 breaks scoring ties by registration order, so this *is* the parse.
         let mut sim = Sim::new(1);
-        sim.submit("attend alembic");
+        sim.submit("attend laboratory");
         sim.step();
         let found = names(&sim);
 
         let place = |want: &str| found.iter().position(|n| n == want);
         assert!(
-            place("/tower/alembic") < place("/tower/archive"),
+            place("/tower/laboratory") < place("/tower/archive"),
             "branches keep their declared order",
         );
         assert!(
@@ -176,14 +176,14 @@ mod tests {
     #[test]
     fn a_domains_belongings_are_nameable_only_from_inside_it() {
         // §7: the tree is the tower and navigation is diegetic. Brewing happens
-        // in the alembic because that is where the essences are, which is also
+        // in the laboratory because that is where the essences are, which is also
         // what gives §19's Phase 2 pane addressing something to be an unlock
         // *from* — acting at a distance has to become possible.
         let mut sim = Sim::new(1);
         sim.step();
         assert!(!names(&sim).iter().any(|name| name == "clarity"));
 
-        sim.submit("attend alembic");
+        sim.submit("attend laboratory");
         sim.step();
         assert!(names(&sim).iter().any(|name| name == "clarity"));
         assert!(!names(&sim).iter().any(|name| name == "sigil-iv"));
@@ -199,11 +199,11 @@ mod tests {
         // Gating movement on being somewhere would be a lock whose key is
         // behind it.
         let mut sim = Sim::new(1);
-        for step in ["attend alembic", "attend archive", "attend tower"] {
+        for step in ["attend laboratory", "attend archive", "attend tower"] {
             sim.submit(step);
             sim.step();
             let found = names(&sim);
-            for place in ["/tower", "/tower/alembic", "/tower/archive"] {
+            for place in ["/tower", "/tower/laboratory", "/tower/archive"] {
                 assert!(found.iter().any(|name| name == place), "{step}: {place}");
             }
         }
@@ -213,7 +213,7 @@ mod tests {
     fn the_log_is_readable_from_anywhere() {
         // §3's stream is not a node in the tree and belongs to no domain.
         let mut sim = Sim::new(1);
-        sim.submit("attend alembic");
+        sim.submit("attend laboratory");
         sim.step();
         assert!(names(&sim).iter().any(|name| name == LOG));
     }
@@ -247,7 +247,7 @@ mod tests {
         }
         *done = true;
         let _ = cwd;
-        if let Some(mut name) = names.iter_mut().find(|name| name.0 == "alembic") {
+        if let Some(mut name) = names.iter_mut().find(|name| name.0 == "laboratory") {
             name.0 = "renamed".to_owned();
         }
     }

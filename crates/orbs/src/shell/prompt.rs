@@ -157,7 +157,7 @@ pub(super) fn session(
     // claim to be standing in none.
     //
     // This is also the only thing on screen that tells a player *which commands
-    // will work* — the essences live in `/tower/alembic`, so that is where
+    // will work* — the essences live in `/tower/laboratory`, so that is where
     // `decoct` resolves. See `orbs_sim::tower::rebuild`.
     //
     // The `F4` hint rides along because below `DEEP_FOCUS_FLOOR` there is only

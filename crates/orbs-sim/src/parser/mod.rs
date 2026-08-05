@@ -10,7 +10,7 @@
 //! use orbs_sim::parser::{Mode, NounKind, Scene, resolve};
 //!
 //! let scene = Scene::new()
-//!     .with(NounKind::Place, "/tower/alembic")
+//!     .with(NounKind::Place, "/tower/laboratory")
 //!     .with(NounKind::Essence, "clarity");
 //!
 //! // All three registers reach the same canonical command.

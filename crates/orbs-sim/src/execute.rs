@@ -124,7 +124,7 @@ pub const fn is_live(verb: Verb) -> bool {
 ///
 /// §5.0: issuing is free and instant; the *action* occupies a slot for its
 /// duration, and that concurrency is the whole economy. The subject must be
-/// where the player is standing — §7 puts the essences in the alembic, which is
+/// where the player is standing — §7 puts the essences in the laboratory, which is
 /// why `decoct` resolves there and nowhere else.
 fn work(intent: &Intent, world: &mut World, ticks: u64) {
     let Some(target) = intent
@@ -224,7 +224,7 @@ fn attend(intent: &Intent, world: &mut World) {
 ///
 /// `Verb::Survey` takes an **optional** place, and dropping it made the echo and
 /// the listing disagree: `survey archive` restated `/tower/archive` and then
-/// showed the alembic. §6 makes the echo the thing players learn the vocabulary
+/// showed the laboratory. §6 makes the echo the thing players learn the vocabulary
 /// from, so an echo that describes a different command than the one that ran is
 /// worse than no echo at all.
 fn survey(intent: &Intent, world: &mut World) {
@@ -586,17 +586,17 @@ mod tests {
     fn sample(verb: Verb) -> (&'static str, &'static str) {
         match verb {
             Verb::Attend => ("tower", "attend archive"),
-            Verb::Survey => ("alembic", "survey alembic"),
-            Verb::Peruse => ("alembic", "peruse alembic.log"),
-            Verb::Sift => ("alembic", "sift decoct alembic.log"),
+            Verb::Survey => ("laboratory", "survey laboratory"),
+            Verb::Peruse => ("laboratory", "peruse laboratory.log"),
+            Verb::Sift => ("laboratory", "sift decoct laboratory.log"),
             Verb::Status => ("tower", "status"),
             Verb::Grimoire => ("tower", "grimoire brewing"),
-            Verb::Verify => ("alembic", "verify alembic.log"),
+            Verb::Verify => ("laboratory", "verify laboratory.log"),
             Verb::Undo => ("tower", "undo"),
             Verb::Meditate => ("tower", "meditate 1"),
-            Verb::Decoct => ("alembic", "decoct clarity"),
-            Verb::Siphon => ("alembic", "siphon retort"),
-            Verb::Purge => ("alembic", "purge alembic.log"),
+            Verb::Decoct => ("laboratory", "decoct clarity"),
+            Verb::Siphon => ("laboratory", "siphon retort"),
+            Verb::Purge => ("laboratory", "purge laboratory.log"),
             Verb::Divine => ("archive", "divine sigil-iv"),
             Verb::Scribe => ("tower", "scribe night_watch"),
             Verb::Bind => ("tower", "bind night_watch"),
@@ -723,10 +723,10 @@ mod tests {
     fn survey_lists_the_place_it_echoed() {
         // The echo and the listing must describe the same command. `survey`
         // dropped its optional place, so `survey archive` restated
-        // `/tower/archive` and then showed the alembic — and §6 makes the echo
+        // `/tower/archive` and then showed the laboratory — and §6 makes the echo
         // the thing players learn the vocabulary from.
         let mut sim = Sim::new(1);
-        run(&mut sim, "attend alembic");
+        run(&mut sim, "attend laboratory");
         let before = sim.scrollback().records().len();
         run(&mut sim, "survey archive");
 
@@ -747,7 +747,7 @@ mod tests {
     #[test]
     fn survey_with_no_place_still_lists_where_you_are() {
         let mut sim = Sim::new(1);
-        run(&mut sim, "attend alembic");
+        run(&mut sim, "attend laboratory");
         let before = sim.scrollback().records().len();
         run(&mut sim, "look around");
 
@@ -771,9 +771,9 @@ mod tests {
         // guessing anyway. Unreachable until the tower gave the scene a second
         // `File`.
         let mut sim = Sim::new(1);
-        run(&mut sim, "attend alembic");
+        run(&mut sim, "attend laboratory");
         let before = sim.scrollback().records().len();
-        run(&mut sim, "peruse alembic.log");
+        run(&mut sim, "peruse laboratory.log");
 
         let completion = sim
             .scrollback()

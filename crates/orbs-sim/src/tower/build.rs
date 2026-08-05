@@ -31,11 +31,11 @@ const ROOT: &str = "tower";
 /// [`node`](super::node).
 const BRANCHES: &[Branch] = &[
     Branch {
-        name: "alembic",
+        name: "laboratory",
         holds: &[
             Holding::new(NounKind::Essence, &["clarity", "warding", "haste"]),
             Holding::new(NounKind::Vessel, &["retort", "crucible"]),
-            Holding::new(NounKind::File, &["alembic.log"]),
+            Holding::new(NounKind::File, &["laboratory.log"]),
         ],
     },
     Branch {
@@ -124,7 +124,7 @@ mod tests {
         // `tower::scene`.
         let mut sim = Sim::new(1);
         let mut seen = Vec::new();
-        for domain in ["tower", "alembic", "archive"] {
+        for domain in ["tower", "laboratory", "archive"] {
             sim.submit(&format!("attend {domain}"));
             sim.step();
             seen.extend(sim.scene().nouns().iter().map(|noun| noun.kind));
@@ -152,7 +152,7 @@ mod tests {
             .into_iter()
             .filter_map(|child| world.get::<Name>(child).map(|name| name.0.clone()))
             .collect();
-        assert_eq!(branches, ["alembic", "archive"]);
+        assert_eq!(branches, ["laboratory", "archive"]);
     }
 
     #[test]
@@ -160,11 +160,11 @@ mod tests {
         let sim = Sim::new(1);
         let world = sim.world();
         let root = world.resource::<Cwd>().0;
-        let alembic = children_of(world, root)[0];
+        let laboratory = children_of(world, root)[0];
 
-        assert_eq!(path_of(world, alembic), "/tower/alembic");
-        let first = children_of(world, alembic)[0];
-        assert_eq!(path_of(world, first), "/tower/alembic/clarity");
+        assert_eq!(path_of(world, laboratory), "/tower/laboratory");
+        let first = children_of(world, laboratory)[0];
+        assert_eq!(path_of(world, first), "/tower/laboratory/clarity");
     }
 
     #[test]

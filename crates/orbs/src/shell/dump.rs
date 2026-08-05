@@ -17,7 +17,7 @@
 //!
 //! ```text
 //! ORBS_DUMP=1 cargo run -p orbs
-//! ORBS_DUMP="attend alembic; decoct clarity; meditate 25" cargo run -p orbs
+//! ORBS_DUMP="attend laboratory; decoct clarity; meditate 25" cargo run -p orbs
 //! ORBS_DUMP=1 ORBS_GRID=120x33 cargo run -p orbs
 //! ```
 

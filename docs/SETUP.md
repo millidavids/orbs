@@ -134,7 +134,7 @@ picture, because it looks like evidence.
 with its linear stream beneath.
 
 ```sh
-ORBS_DUMP="attend alembic; decoct clarity; meditate 25" cargo run -p orbs
+ORBS_DUMP="attend laboratory; decoct clarity; meditate 25" cargo run -p orbs
 ORBS_DUMP=1 ORBS_GRID=160x44 cargo run -p orbs      # the worst-case grid
 ORBS_DUMP=1 ORBS_BOOT=post cargo run -p orbs        # one boot stage as text
 ORBS_BOOT=0 cargo run -p orbs                       # skip the boot sequence

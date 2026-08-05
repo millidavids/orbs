@@ -101,8 +101,8 @@ mod tests {
     #[test]
     fn breaks_at_spaces() {
         assert_eq!(
-            wrap("the alembic seethes and will not settle", 12),
-            ["the alembic", "seethes and", "will not", "settle"]
+            wrap("the athanor seethes and will not settle", 12),
+            ["the athanor", "seethes and", "will not", "settle"]
         );
     }
 

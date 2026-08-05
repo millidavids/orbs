@@ -253,7 +253,7 @@ mod tests {
     #[test]
     fn no_synonym_starts_with_a_filler_word() {
         // Leading filler is stripped *before* the verb is matched, so that
-        // "please go to the alembic" finds `go to`. That is only safe while no
+        // "please go to the laboratory" finds `go to`. That is only safe while no
         // phrase opens on a word the stripper would eat.
         for entry in SYNONYMS {
             let first = entry.words[0];

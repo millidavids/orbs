@@ -9,8 +9,8 @@ use orbs_render::{
     Sift, Style, UtteranceKind, Value,
 };
 
-/// The alembic, mid-brew. Two reagents and a spoiled one.
-fn alembic() -> Records {
+/// The laboratory, mid-brew. Two reagents and a spoiled one.
+fn laboratory() -> Records {
     let mut records = Records::new();
     records
         .push(RecordKind::Entry)
@@ -38,7 +38,7 @@ fn frame_of(cols: u16, rows: u16) -> Frame {
 
 #[test]
 fn fields_come_back_named_and_typed() {
-    let records = alembic();
+    let records = laboratory();
     let sage = records.get(0).expect("first record");
 
     assert_eq!(sage.kind(), RecordKind::Entry);
@@ -75,7 +75,7 @@ fn a_single_field_speaks_as_itself() {
 fn many_fields_speak_as_label_value_pairs() {
     // §14: a reader must never have to reconstruct columns from spacing.
     assert_eq!(
-        alembic().get(1).expect("record").to_speech(),
+        laboratory().get(1).expect("record").to_speech(),
         "name: nightshade, state: spoiled, qty: 120",
     );
 }
@@ -237,7 +237,7 @@ fn sift_finds_what_the_screen_truncated_away() {
     // eight-cell pane, so the drawn form stops at `nightsh` — and a search for
     // `shade` must still find the record, or a narrow window would silently
     // change what a pipeline returns.
-    let records = alembic();
+    let records = laboratory();
     let mut frame = frame_of(8, 4);
     let area = frame.area();
     RecordView::table(&[FieldName::Name]).draw(&mut frame.painter(area), area, records.iter());
@@ -254,14 +254,14 @@ fn sift_finds_what_the_screen_truncated_away() {
 fn sift_never_matches_the_padding_a_view_added() {
     // Columns are separated by two spaces in the drawn form. Searching for
     // "ready   " must find nothing: the gap belongs to the table, not the record.
-    let records = alembic();
+    let records = laboratory();
     assert_eq!(records.sift(&Sift::new("ready  ")).count(), 0);
     assert_eq!(records.sift(&Sift::new("ready")).count(), 1);
 }
 
 #[test]
 fn sift_folds_case_and_can_be_restricted_to_a_field() {
-    let records = alembic();
+    let records = laboratory();
     assert_eq!(records.sift(&Sift::new("SPOILED")).count(), 1);
 
     // "sage" is a name, never a state. Restricting proves the match ran against
@@ -284,7 +284,7 @@ fn sift_folds_case_and_can_be_restricted_to_a_field() {
 fn a_table_speaks_every_row_in_full_however_narrow_the_pane() {
     // Truncation is a visual constraint and must never become an informational
     // one — the same contract `Painter::span` keeps.
-    let records = alembic();
+    let records = laboratory();
     let mut frame = frame_of(8, 4);
     let area = frame.area();
     RecordView::table(&[FieldName::Name, FieldName::State, FieldName::Quantity]).draw(
@@ -303,7 +303,7 @@ fn a_table_speaks_every_row_in_full_however_narrow_the_pane() {
 
 #[test]
 fn numbers_right_align_because_the_record_kept_them_numbers() {
-    let records = alembic();
+    let records = laboratory();
     let mut frame = frame_of(40, 4);
     let area = frame.area();
     RecordView::table(&[FieldName::Name, FieldName::Quantity]).draw(
@@ -331,7 +331,7 @@ fn a_missing_field_leaves_the_gap_that_is_the_tell() {
     records
         .push(RecordKind::LogLine)
         .tick(FieldName::Tick, 1247)
-        .text(FieldName::Source, "alembic")
+        .text(FieldName::Source, "laboratory")
         .finish();
     records
         .push(RecordKind::LogLine)
@@ -348,7 +348,7 @@ fn a_missing_field_leaves_the_gap_that_is_the_tell() {
         .rows()
         .map(|row| row.iter().map(|cell| cell.glyph).collect())
         .collect();
-    assert_eq!(rows[0].trim_end(), "1247  alembic");
+    assert_eq!(rows[0].trim_end(), "1247  laboratory");
     assert_eq!(rows[1].trim_end(), "1248");
 }
 
@@ -378,11 +378,11 @@ fn the_line_view_carries_style_and_speech_together() {
 fn a_view_never_paints_outside_the_area_it_was_given() {
     // The bug the `screens` example caught once already: content eating a
     // border because no sub-painter was established.
-    let records = alembic();
+    let records = laboratory();
     let mut frame = frame_of(40, 6);
     let area = frame.area();
     let mut painter = frame.painter(area);
-    painter.border(area, Some("alembic"), Style::DIM);
+    painter.border(area, Some("laboratory"), Style::DIM);
 
     let inner = Rect::new(area.col + 1, area.row + 1, area.cols - 2, area.rows - 2);
     RecordView::table(&[FieldName::Name, FieldName::State]).draw(
@@ -402,7 +402,7 @@ fn a_view_never_paints_outside_the_area_it_was_given() {
 
 #[test]
 fn clearing_a_stream_keeps_its_allocations() {
-    let mut records = alembic();
+    let mut records = laboratory();
     assert_eq!(records.len(), 2);
     records.clear();
     assert!(records.is_empty());

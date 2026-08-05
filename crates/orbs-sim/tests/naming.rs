@@ -16,7 +16,7 @@ use orbs_sim::parser::{
 /// One noun of every kind, so any verb can be given a fitting argument.
 fn scene() -> Scene {
     Scene::new()
-        .with(NounKind::Place, "/tower/alembic")
+        .with(NounKind::Place, "/tower/laboratory")
         .with(NounKind::File, "feed.log")
         .with(NounKind::Topic, "brewing")
         .with(NounKind::Essence, "clarity")
@@ -32,12 +32,12 @@ fn sample_argument(verb: Verb) -> &'static str {
         return "";
     };
     match slot.kind {
-        NounKind::Place => "/tower/alembic",
+        NounKind::Place => "/tower/laboratory",
         NounKind::File => "feed.log",
         NounKind::Pattern => "march feed.log",
         NounKind::Topic => "brewing",
         NounKind::Essence => "clarity",
-        NounKind::Vessel => "alembic",
+        NounKind::Vessel => "laboratory",
         NounKind::Fragment => "sigil-iv",
         NounKind::Script => "night_watch",
         NounKind::Count => "30",

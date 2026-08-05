@@ -16,7 +16,7 @@
 pub enum FieldName {
     /// What the thing is called. `nightshade`, `feed.log`, `north_gate`.
     Name,
-    /// Where it lives. `/alembic/reagents/nightshade`.
+    /// Where it lives. `/laboratory/reagents/nightshade`.
     Path,
     /// What sort of thing it is. `reagent`, `potion`, `script`, `directory`.
     Kind,
@@ -28,7 +28,7 @@ pub enum FieldName {
     Tick,
     /// Ticks left on a duration action.
     Remaining,
-    /// Which subsystem produced this. `alembic`, `battlements`, `lens`.
+    /// Which subsystem produced this. `laboratory`, `battlements`, `lens`.
     Source,
     /// Free prose — a log line's text, the orb speaking.
     Message,

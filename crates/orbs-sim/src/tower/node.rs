@@ -89,7 +89,7 @@ pub struct Cwd(pub Entity);
 
 /// The canonical path of `node`, walking up to the root.
 ///
-/// Returns `/`-joined segments with a leading slash — `/tower/alembic`.
+/// Returns `/`-joined segments with a leading slash — `/tower/laboratory`.
 #[must_use]
 pub fn path_of(world: &World, node: Entity) -> String {
     let mut segments = Vec::new();

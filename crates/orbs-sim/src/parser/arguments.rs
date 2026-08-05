@@ -61,7 +61,7 @@ pub(super) fn fill(verb: Verb, words: &[Word<'_>], scene: &Scene) -> Filled {
     let signature = verb.signature();
     if signature.is_empty() {
         // A verb that takes nothing still pays for words it cannot explain, so
-        // `status alembic` does not outrank a reading that uses "alembic".
+        // `status laboratory` does not outrank a reading that uses "laboratory".
         return Filled {
             slots: Vec::new(),
             score: penalise(EXACT, words.len()),
@@ -185,7 +185,7 @@ mod tests {
 
     fn tower() -> Scene {
         Scene::new()
-            .with(NounKind::Place, "/tower/alembic")
+            .with(NounKind::Place, "/tower/laboratory")
             .with(NounKind::File, "feed.log")
             .with(NounKind::Essence, "clarity")
             .with(NounKind::Script, "night_watch")
@@ -193,9 +193,9 @@ mod tests {
 
     #[test]
     fn a_single_slot_takes_every_remaining_word() {
-        let filled = fill(Verb::Attend, &words(&["alembic"]), &tower());
+        let filled = fill(Verb::Attend, &words(&["laboratory"]), &tower());
         assert_eq!(filled.arguments().len(), 1);
-        assert_eq!(filled.arguments()[0].value, "/tower/alembic");
+        assert_eq!(filled.arguments()[0].value, "/tower/laboratory");
         assert_eq!(filled.score, EXACT);
         assert!(filled.missing.is_none());
     }
@@ -260,7 +260,7 @@ mod tests {
     fn words_a_verb_cannot_explain_cost_it() {
         // `status` takes nothing, so trailing words are evidence against it.
         let clean = fill(Verb::Status, &words(&[]), &tower());
-        let noisy = fill(Verb::Status, &words(&["the", "alembic"]), &tower());
+        let noisy = fill(Verb::Status, &words(&["the", "laboratory"]), &tower());
         assert!(noisy.score < clean.score);
     }
 

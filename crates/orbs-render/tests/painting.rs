@@ -84,7 +84,7 @@ fn structure_is_silent_and_content_speaks() {
 
     painter.clear();
     painter.fill(Rect::new(0, 4, 20, 1), '─', Style::DIM);
-    painter.border(area, Some("alembic"), Style::DIM);
+    painter.border(area, Some("laboratory"), Style::DIM);
     painter.span(Pos::new(2, 2), &Span::new("the brew settles"));
 
     // The border, the rule, and the blanking contribute nothing to speak; the
@@ -92,7 +92,11 @@ fn structure_is_silent_and_content_speaks() {
     assert_eq!(
         spoken(&frame),
         [
-            (UtteranceKind::Heading, Role::Normal, "alembic".to_owned()),
+            (
+                UtteranceKind::Heading,
+                Role::Normal,
+                "laboratory".to_owned()
+            ),
             (
                 UtteranceKind::Text,
                 Role::Normal,
@@ -306,12 +310,12 @@ fn a_full_screen_linearises_in_paint_order() {
 
     let mut frame = Frame::new(grid);
 
-    for (pane, title) in layout.main().iter().zip(["alembic", "battlements"]) {
+    for (pane, title) in layout.main().iter().zip(["laboratory", "battlements"]) {
         let mut painter = frame.painter(*pane);
         painter.border(*pane, Some(title), Style::DIM);
         painter.paragraph(
             pane.inset(1),
-            &Span::new("the alembic seethes and will not settle"),
+            &Span::new("the laboratory seethes and will not settle"),
         );
     }
 
@@ -337,10 +341,10 @@ fn a_full_screen_linearises_in_paint_order() {
     assert_eq!(
         texts,
         [
-            "alembic",
-            "the alembic seethes and will not settle",
+            "laboratory",
+            "the laboratory seethes and will not settle",
             "battlements",
-            "the alembic seethes and will not settle",
+            "the laboratory seethes and will not settle",
             "archive",
             "menagerie",
             "orbs:~$ ",

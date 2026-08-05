@@ -8,7 +8,7 @@
 //!   So [`tokenise`] keeps everything and [`strip_filler`] runs afterwards, on
 //!   the argument tail only.
 //! - **Punctuation is not uniformly noise.** `?` is a synonym for `grimoire` and
-//!   `./` is one for `invoke`, while `feed.log` and `/tower/alembic` need their
+//!   `./` is one for `invoke`, while `feed.log` and `/tower/laboratory` need their
 //!   separators intact.
 //! - **Lowercasing must not destroy the input.** [`NounKind::Pattern`] is free
 //!   text by definition, so `sift ERROR feed.log` has to search for `ERROR` and
@@ -128,7 +128,7 @@ pub fn is_filler(word: &str) -> bool {
 
 /// How many leading words to skip before looking for a verb.
 ///
-/// `please go to the alembic` opens with filler, and the verb matcher only looks
+/// `please go to the laboratory` opens with filler, and the verb matcher only looks
 /// at the head of the input — so this runs *before* matching while
 /// [`strip_filler`] runs *after*. Safe because no synonym phrase begins with a
 /// filler word, which `no_synonym_starts_with_filler` asserts.
@@ -235,8 +235,8 @@ mod tests {
     #[test]
     fn paths_and_filenames_keep_their_separators() {
         assert_eq!(
-            matching("attend /tower/alembic"),
-            ["attend", "/tower/alembic"]
+            matching("attend /tower/laboratory"),
+            ["attend", "/tower/laboratory"]
         );
         assert_eq!(matching("peruse feed.log"), ["peruse", "feed.log"]);
     }
@@ -248,7 +248,7 @@ mod tests {
 
     #[test]
     fn filler_words_that_are_also_phrase_words_survive_tokenising() {
-        assert_eq!(matching("go to alembic"), ["go", "to", "alembic"]);
+        assert_eq!(matching("go to laboratory"), ["go", "to", "laboratory"]);
         assert_eq!(
             matching("get rid of sludge"),
             ["get", "rid", "of", "sludge"]

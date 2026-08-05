@@ -191,7 +191,7 @@ fn boot_report(grid: GridSize) -> Frame {
         ("scrying lens", "ok", Role::Success, None),
         ("ley-line uplink", "ok", Role::Success, None),
         ("grimoire index", "2841", Role::Normal, None),
-        ("alembic", "ok", Role::Success, None),
+        ("laboratory", "ok", Role::Success, None),
         (
             "battlements",
             "DEGRADED",
@@ -262,7 +262,7 @@ fn siege(grid: GridSize, mode: DisplayMode) -> Frame {
 
     let mut frame = Frame::new(grid);
     let panes: [(&str, fn(&mut Painter<'_>, Rect)); 4] = [
-        ("alembic", alembic),
+        ("laboratory", laboratory),
         ("battlements", battlements),
         ("archive", archive),
         ("scrying", scrying),
@@ -386,7 +386,7 @@ fn prompt_screen(grid: GridSize, records: &Records) -> Frame {
     frame
 }
 
-/// A few minutes of the alembic's life, as records.
+/// A few minutes of the laboratory's life, as records.
 ///
 /// One stream holds the directory listing, the log, and the orb speaking.
 /// DESIGN.md §3 forbids unlogged output, so this *is* the log — the same rows a
@@ -417,18 +417,18 @@ fn brewing_log() -> Records {
     for (tick, source, message, role) in [
         (
             1247u64,
-            "alembic",
+            "laboratory",
             "decoction of clarity begun",
             Role::Normal,
         ),
         (
             1249,
-            "alembic",
+            "laboratory",
             "nightshade spoiled in vessel 2",
             Role::Danger,
         ),
         (1251, "lens", "ley-line draw steady at 4", Role::Normal),
-        (1254, "alembic", "clarity decanted", Role::Success),
+        (1254, "laboratory", "clarity decanted", Role::Success),
     ] {
         records
             .push(RecordKind::LogLine)
@@ -468,7 +468,7 @@ fn records_screen(grid: GridSize, records: &Records) -> Frame {
         (Rect::new(area.col, area.row, area.cols, third), "ls"),
         (
             Rect::new(area.col, area.row + third, area.cols, third),
-            "peruse alembic.log",
+            "peruse laboratory.log",
         ),
         (
             Rect::new(
@@ -477,7 +477,7 @@ fn records_screen(grid: GridSize, records: &Records) -> Frame {
                 area.cols,
                 area.rows - third * 2,
             ),
-            "peruse alembic.log | sift spoil",
+            "peruse laboratory.log | sift spoil",
         ),
     ];
     let inner = |pane: Rect| {
@@ -549,7 +549,7 @@ fn exemption(records: &Records) {
 }
 
 /// A duration-action in flight, with its meter.
-fn alembic(painter: &mut Painter<'_>, area: Rect) {
+fn laboratory(painter: &mut Painter<'_>, area: Rect) {
     painter.span(area.origin(), &Span::new("decoct haste"));
     painter.progress(
         Rect::new(area.col, area.row + 1, area.cols.min(20), 1),
@@ -652,7 +652,7 @@ fn lint_prose() {
     println!("\nProse lint — CP437 repertoire (DESIGN.md §4, §13)\n");
     let samples = [
         "O.R.B.S. v0.9.3  —  cold start",
-        "the wizard's alembic — untouched",
+        "the wizard's laboratory — untouched",
         "O.R.B.S. v0.9.3  --  cold start",
         "east_wall integrity 34% [ DEGRADED ]",
     ];

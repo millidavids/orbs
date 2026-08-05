@@ -179,7 +179,7 @@ mod tests {
 
     fn sample() -> Speech {
         let mut speech = Speech::new();
-        speech.push(UtteranceKind::Heading, Role::Normal, "alembic");
+        speech.push(UtteranceKind::Heading, Role::Normal, "laboratory");
         speech.push(UtteranceKind::Text, Role::Danger, "the ward has failed");
         speech.push(UtteranceKind::Completion, Role::Success, "haste decocted");
         speech
@@ -189,7 +189,10 @@ mod tests {
     fn utterances_come_back_in_paint_order() {
         let speech = sample();
         let texts: Vec<_> = speech.utterances().map(|u| u.text).collect();
-        assert_eq!(texts, ["alembic", "the ward has failed", "haste decocted"]);
+        assert_eq!(
+            texts,
+            ["laboratory", "the ward has failed", "haste decocted"]
+        );
     }
 
     #[test]

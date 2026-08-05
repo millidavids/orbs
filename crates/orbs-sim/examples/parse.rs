@@ -19,7 +19,7 @@ use orbs_sim::parser::{
 /// The slice's world: brewing and archive, both thin (DESIGN.md §15).
 fn tower() -> Scene {
     Scene::new()
-        .with(NounKind::Place, "/tower/alembic")
+        .with(NounKind::Place, "/tower/laboratory")
         .with(NounKind::Place, "/tower/archive")
         .with(NounKind::Place, "/tower/battlements")
         .with(NounKind::File, "feed.log")
@@ -39,7 +39,7 @@ const WALKTHROUGH: &[(&str, &str)] = &[
     ("ls", "shell muscle memory reaches the same command"),
     ("what's here", "and so does plain English"),
     (
-        "go to the alembic",
+        "go to the laboratory",
         "a multi-word phrase, filler, and a leaf name",
     ),
     ("make a potion of clarity", "DESIGN.md §6's own example"),

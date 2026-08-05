@@ -18,7 +18,7 @@
 /// argument in the wrong category.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum NounKind {
-    /// A location in the tower. `attend /tower/alembic`.
+    /// A location in the tower. `attend /tower/laboratory`.
     Place,
     /// A readable file. `peruse feed.log`.
     File,
@@ -28,7 +28,7 @@ pub enum NounKind {
     Topic,
     /// An essence that can be brewed. `decoct clarity`.
     Essence,
-    /// A vessel holding a finished brew. `decant alembic`.
+    /// A vessel holding a finished brew. `decant laboratory`.
     Vessel,
     /// A researchable fragment. `decipher sigil-iv`.
     Fragment,
