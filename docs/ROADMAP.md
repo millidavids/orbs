@@ -422,25 +422,24 @@ defects — DESIGN.md §19.
 **Exit:** a player automates a duty and feels clever; non-terminal testers are in
 the loop.
 
-- [x] **World clock** per DESIGN.md §5.0 — the wall-clock mapping and catch-up
-      clamp shipped in Phase 0; this adds the **~60 s inactivity grace**.
-      Past it the tower stops keeping time, which is what makes an idle open
-      window equivalent to a closed one — §5 requires exactly that (*"drift and
-      aberrations are damped identically whether the window is open and idle or
-      closed"*) and it is what keeps quitting **neutral** rather than optimal.
+- [x] **World clock** per DESIGN.md §5.0 — **already correct; the grace was
+      removed instead.** The wall-clock mapping and the catch-up clamp shipped in
+      Phase 0 and needed nothing. What §5.0 additionally called for was a ~60 s
+      inactivity grace; it was built, examined and struck, and §5.0 struck with
+      it — DESIGN.md §19.
 
-      **The grace is not a free-thinking window**, and reading it as one is the
-      easy mistake: a thirty-second pause costs thirty ticks. §5.0's next
-      sentence is what makes that fine — *"drift and decay rates are slow per
-      tick; the clock itself is not"* — DESIGN.md §19.
+      The short version: §5.0 already answers *"pausing to think is never
+      punished"* in its next sentence — *"drift and decay rates are slow **per
+      tick**; the clock itself is not"* — so the grace was a second solution to a
+      solved problem. It cost three things: it undercut duration-as-scarcity (a
+      clock that pauses while you deliberate makes a brew cost "twenty seconds of
+      not thinking"), it created the exploit its own pending-prompt clause
+      existed to guard, and it made "is the tower running right now?" a question
+      a player could ask.
 
-      Stirred by **keystrokes, not submitted lines**, so a slow typist is not
-      charged for being slow (§5.0, §14). A pending prompt is not input and
-      therefore cannot renew the grace, which §5.0 writes as a hard rule and
-      which now has a test driving a real numbered prompt through it
-      **See it:** ✅ launch, touch nothing, and watch `tick` in the border climb
-      to 60 and stop; press a key and watch it resume. `meditate 30` still lands
-      duration actions on the right ticks
+      **The clock runs whenever the window is open. One rule, no exceptions.**
+      **See it:** ✅ launch, touch nothing, and watch `tick` in the border keep
+      climbing; `meditate 30` still lands duration actions on the right ticks
 - [ ] **Brewing, gamified** — §10 gives the domain a minigame form
       (*"sequence/recipe puzzle with timing"*) and Phase 0 built a command
       instead: `decoct clarity` holds the slot for twenty ticks and finishes.

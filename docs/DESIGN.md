@@ -225,13 +225,15 @@ tick pool, nothing to run out of, and no energy meter.
   and what a per-command tick charge would have quietly violated.
 - **A failed or ambiguous parse changes nothing at all.**
 - **The tower clock advances on wall-clock while the window is open** at 1 tick
-  per second (§11.5), with a **~60s inactivity grace** so pausing to think is
-  never punished. Drift and decay rates are slow *per tick*; the clock itself is
-  not.
-  The grace timer is **not** reset by a pending disambiguation prompt — otherwise
-  a player could freeze the tower indefinitely by leaving one open.
+  per second (§11.5) — **always, with no pause and no grace.** Pausing to think
+  is not punished because **drift and decay rates are slow *per tick***; the
+  clock itself is not. That is the whole protection, and it is sufficient.
+
+  An inactivity grace was specified here, built, and **removed** — it was a
+  second mechanism for a problem the slow rates already solve, and it cost an
+  exploit surface, a special case, and a clock the player could not predict
+  (§19).
 - **`wait` / `meditate N` fast-forwards** the clock. It is not a time source.
-- **In a siege, ticks advance on wall-clock** without grace.
 
 ### Scarcity comes from duration, not from currency
 
@@ -1908,46 +1910,52 @@ domains are settled (brewing + archive), and the fragment trickle has a rate
 
 ## 19. Decisions log
 
-### The inactivity grace — what §5.0 means, and where it is ambiguous
+### The inactivity grace — specified, built, and removed
 
-Implemented as: **the clock runs while the window is open; sixty seconds without
-a keystroke stops it; any keystroke resumes it.** A pending prompt is not a
-keystroke.
+§5.0 called for a *"~60s inactivity grace so pausing to think is never
+punished"*, plus a rule that a pending disambiguation prompt must not reset it
+*"otherwise a player could freeze the tower indefinitely by leaving one open"*.
+Both are struck. **The clock now runs whenever the window is open, with no
+exceptions.**
 
-**The grace is not a free-thinking window.** A thirty-second pause costs thirty
-ticks. That reading is tempting — §5.0 says the grace exists *"so pausing to
-think is never punished"* — but the sentence immediately after it is what
-actually carries that promise: *"Drift and decay rates are slow **per tick**; the
-clock itself is not."* Thirty ticks of drift is nothing. An hour of it is not,
-and that is what the grace is for.
+It was implemented first, which is how the trouble became visible. Two readings
+of the grace exist and neither survives:
 
-Two other lines confirm the polarity. §5 requires *"drift and aberrations are
-damped identically whether the window is open and idle or closed"* — only true if
-an idle window stops ticking. And **stopping is what keeps quitting neutral**: if
-an idle open window aged the tower, closing the game would be strictly better,
-which is the inversion §5 spends a section preventing.
+| Reading | Fails on |
+|---|---|
+| Idleness **stops** the clock | Deletes the baseline idle loop. §5 makes offline accrual an *unlockable* precisely because until then *"the tower ticks only while the window is open"* — an open window that stops ticking means Phase A accrues nothing at all |
+| Idleness **pauses** the clock, resuming after 60 s | Cannot be reconciled with *"advances on wall-clock while the window is open"*, since the clock would be paused through most of ordinary play |
 
-**Stirred by keystrokes rather than submitted lines**, because §5.0 requires that
-*"a fast typist gains nothing over a slow one"* and charging the clock for time
-spent composing a long command is that penalty wearing a different hat.
+The second reading is the one the "freeze the tower" clause describes, and the
+first is the one that sentence contradicts. That the clause only fits the reading
+the rest of §5.0 rules out is the tell that the mechanism was the problem.
 
-#### The one clause that does not fit, recorded rather than smoothed over
+**Why nothing is lost by removing it.** §5.0 already answers *"pausing to think
+is never punished"* in its very next sentence — *"drift and decay rates are slow
+per tick; the clock itself is not."* Thirty seconds of thinking costs thirty
+ticks, and thirty ticks of drift is nothing. Long absence is answered elsewhere
+again, by §5.3's cap on aberration arrival and by damping. The grace was a second
+solution to a problem with two solutions already.
 
-§5.0: *"The grace timer is **not** reset by a pending disambiguation prompt —
-otherwise a player could freeze the tower indefinitely by leaving one open."*
+**What it cost.** Three things, and they are the general lesson:
 
-Under the implementation above, a prompt that *did* reset the timer would keep
-the tower **running** while the player was away, not freeze it. The stated
-consequence fits the opposite mechanism — one where the clock is stopped during
-the grace and resumes after it — which in turn cannot be reconciled with *"the
-tower clock advances on wall-clock while the window is open"*, since under it the
-clock would be stopped through most of ordinary play.
+1. **It undercut duration-as-scarcity.** §5.0's economy is *"actions take time to
+   complete… attention is the real scarcity, expressed as concurrency."* A clock
+   that pauses while you deliberate makes a brew cost "twenty seconds of not
+   thinking", which is not a cost anyone can reason about.
+2. **It created the exploit it then needed a rule for.** The pending-prompt
+   clause exists *only* because the grace opens a way to game the clock. Remove
+   the grace and the clause has nothing to guard.
+3. **It made the clock unpredictable.** "Is the tower running right now?" should
+   never be a question in a game whose texture is a world keeping its own time
+   while you work.
 
-The clause's **operational content is unambiguous either way**: a pending prompt
-must not let a player game the clock, so it does not count as activity. That is
-what is built and what the test asserts. The wording is flagged here because the
-polarity is worth confirming rather than inheriting silently, and because the
-alternative reading would change how the whole calm layer feels.
+Typist fairness survives untouched: §5.0 gets *"a fast typist gains nothing over
+a slow one"* from there being **no per-command tick cost**, which a wall clock
+does not have.
+
+The siege line went with it — *"in a siege, ticks advance on wall-clock without
+grace"* has nothing left to distinguish itself from.
 
 ### Brewing is gamified at the head of Phase 1; the archive's minigame is not
 
@@ -2009,11 +2017,11 @@ nothing, and it is the same argument §5.1 already makes for nuisances.
   the adversarial ones; Phase 0 shipped log-poisoning drift alone, and
   `RngStream::Aberration` is unrolled. §5.1 calls nuisances *"the core of manual
   play"*, so this is a gap rather than a deferral.
-- **The world clock's ~60 s inactivity grace is unbuilt.** §5.0 specifies it and
-  fixes the rule that makes it safe — the grace is not reset by a pending prompt,
-  *"otherwise a player could freeze the tower indefinitely by leaving one open"*.
-  A brewing decision window **is** a pending prompt, so the clock item lands
-  first.
+- **The world clock's inactivity grace was unbuilt** — and stayed that way. It
+  was built next, examined, and removed; see the entry above. A brewing decision
+  window would have been a pending prompt, which is exactly the case the grace
+  needed a special rule for, and is part of why there is no longer a grace to
+  need one.
 
 ### Phase 0.5 — the orb becomes a machine that moves
 

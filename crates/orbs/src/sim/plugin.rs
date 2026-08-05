@@ -33,25 +33,13 @@ impl Plugin for SimPlugin {
         // Update, so world speed is independent of frame rate — see `clock`.
         app.insert_resource(tower)
             .insert_resource(Time::<Fixed>::from_hz(1.0))
-            .init_resource::<clock::Idle>()
-            // Both conditions skip the *step*, not the fixed loop, so no catch-up
-            // burst accrues when either lifts — a `run_if` on a `FixedUpdate`
-            // system is evaluated per fixed step.
-            //
-            // **Boot** is not cosmetic: `tower::drift` rolls once per tick, so
-            // ticking through a wall-clock animation would advance the RNG stream
-            // by an amount depending on how long boot took and whether anyone
-            // skipped it, and the same seed would build a different world.
-            //
-            // **Attendance** is §5.0's inactivity grace: past a minute with
-            // nobody at the orb, the tower stops keeping time. See `clock`.
-            .add_systems(
-                FixedUpdate,
-                advance.run_if(crate::boot::booted).run_if(clock::attending),
-            )
-            // `age` then `stir`, so a frame carrying a keystroke ends at zero
-            // rather than at one frame's worth of idleness.
-            .add_systems(Update, (clock::age, clock::stir).chain());
+            // Gated on the boot sequence being over. Not cosmetic: `tower::drift`
+            // rolls once per tick, so ticking through a wall-clock animation
+            // would advance the RNG stream by an amount that depends on how long
+            // boot took and whether anyone skipped it — the same seed would build
+            // a different world. A `run_if` on a `FixedUpdate` system is
+            // evaluated per fixed step, so no catch-up burst accrues at the end.
+            .add_systems(FixedUpdate, advance.run_if(crate::boot::booted));
 
         // Bevy's virtual clock discards any frame delta beyond max_delta, and
         // its 250 ms default would silently cost the tower time on an ordinary
