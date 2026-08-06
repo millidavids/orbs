@@ -56,7 +56,7 @@ struct StoredRecord {
 pub struct Records {
     text: String,
     fields: Vec<StoredField>,
-    records: Vec<StoredRecord>,
+    entries: Vec<StoredRecord>,
     register: Presentation,
 }
 
@@ -97,27 +97,27 @@ impl Records {
 
     /// How many records the stream holds.
     #[must_use]
-    pub fn len(&self) -> usize {
-        self.records.len()
+    pub const fn len(&self) -> usize {
+        self.entries.len()
     }
 
     /// Whether nothing has been emitted.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.records.is_empty()
+    pub const fn is_empty(&self) -> bool {
+        self.entries.is_empty()
     }
 
     /// Empty the stream, keeping every allocation for the next command.
     pub fn clear(&mut self) {
         self.text.clear();
         self.fields.clear();
-        self.records.clear();
+        self.entries.clear();
     }
 
     /// The record at `index`.
     #[must_use]
     pub fn get(&self, index: usize) -> Option<Record<'_>> {
-        (index < self.records.len()).then_some(Record {
+        (index < self.entries.len()).then_some(Record {
             stream: self,
             index,
         })
@@ -129,7 +129,7 @@ impl Records {
     /// columns in one pass and draws them in a second, and cloning the iterator
     /// is what lets it do that without collecting into a `Vec` every frame.
     pub fn iter(&self) -> impl Iterator<Item = Record<'_>> + Clone {
-        (0..self.records.len()).map(|index| Record {
+        (0..self.entries.len()).map(|index| Record {
             stream: self,
             index,
         })
@@ -138,7 +138,7 @@ impl Records {
     /// Begin a record. Nothing is stored until [`RecordBuilder::finish`].
     ///
     /// The record inherits the stream's [`register`](Records::set_register).
-    pub fn push(&mut self, kind: RecordKind) -> RecordBuilder<'_> {
+    pub const fn push(&mut self, kind: RecordKind) -> RecordBuilder<'_> {
         let first = self.fields.len();
         let presentation = self.register;
         RecordBuilder {
@@ -168,7 +168,7 @@ pub struct Record<'a> {
 
 impl<'a> Record<'a> {
     fn stored(&self) -> &'a StoredRecord {
-        &self.stream.records[self.index]
+        &self.stream.entries[self.index]
     }
 
     /// What this record is.
@@ -332,7 +332,8 @@ impl<'a> Record<'a> {
         // is one.
         let labelled =
             self.kind().utterance() == UtteranceKind::TableRow && self.content().count() > 1;
-        for (index, (name, value)) in self.content().enumerate() {
+        let prose = self.is_prose();
+        for (index, (name, value)) in self.presented(prose).enumerate() {
             if index > 0 {
                 out.push_str(", ");
             }
@@ -351,7 +352,8 @@ impl<'a> Record<'a> {
     /// nest one record's linearisation inside another's field, which reads back
     /// as `message: name: seed, qty: 12648430`.
     pub fn write_line(&self, out: &mut String) {
-        for (index, (_, value)) in self.content().enumerate() {
+        let prose = self.is_prose();
+        for (index, (_, value)) in self.presented(prose).enumerate() {
             if index > 0 {
                 out.push(' ');
             }
@@ -359,11 +361,65 @@ impl<'a> Record<'a> {
         }
     }
 
+    /// Whether this record carries authored prose that speaks *for* its facts.
+    ///
+    /// The presentation half of rule 4. A record may carry both: a refusal holds
+    /// `name`, `state` and `source` so `sift` and a pipe can filter it, **and** a
+    /// `message` authored in a content file so a player reads a sentence. Drawing
+    /// both would put the sentence next to the three bare values it was written
+    /// to explain — which is what `decoct decoct laboratory the laboratory is
+    /// busy…` looked like, and why this exists.
+    ///
+    /// A `TableRow` is excluded by construction: it *is* columns, and §14
+    /// requires their labels, so letting prose win there would delete the columns
+    /// a listener needs to reconstruct the row.
+    fn is_prose(&self) -> bool {
+        self.kind().utterance() != UtteranceKind::TableRow
+            && self.field(FieldName::Message).is_some()
+    }
+
+    /// The fields a view should show, given whether this record is prose.
+    ///
+    /// Facts stay on the record either way — this narrows what is *drawn and
+    /// spoken*, never what is stored or searched. `sift` matches a field's own
+    /// value and never comes through here (see [`sift`](super::sift)).
+    fn presented(&self, prose: bool) -> impl Iterator<Item = (FieldName, Value<'a>)> + Clone {
+        self.content().filter(move |(name, _)| {
+            !prose || matches!(name, FieldName::Message | FieldName::Detail)
+        })
+    }
+
     /// The record's drawn form, as an owned string.
     #[must_use]
     pub fn to_line(&self) -> String {
         let mut out = String::new();
         self.write_line(&mut out);
+        out
+    }
+
+    /// Every field, prose or not — a **search result**, not a drawn line.
+    ///
+    /// [`matches`](Self::matches) deliberately runs over all field values and
+    /// never over rendered text (rule 4, §7: *"the only model that survives the
+    /// eldritch renderer corrupting output"*). But [`to_line`](Self::to_line)
+    /// draws a prose record as its sentence alone, so `sift wield orb.log`
+    /// returned rows that matched on `Name = "wield"` and drew as *"the
+    /// `balneum_mariae` is empty"* — a filter that looks broken because the term is
+    /// nowhere in the result.
+    ///
+    /// Keeping the two in step by narrowing `matches` would be the wrong repair:
+    /// it would make what a pipe can find depend on what a view chose to show,
+    /// which is the coupling rule 4 exists to forbid. So the *result* widens
+    /// instead, and only for search.
+    #[must_use]
+    pub fn to_line_verbatim(&self) -> String {
+        let mut out = String::new();
+        for (index, (_, value)) in self.presented(false).enumerate() {
+            if index > 0 {
+                out.push(' ');
+            }
+            value.write(&mut out);
+        }
         out
     }
 
@@ -487,7 +543,7 @@ impl RecordBuilder<'_> {
         );
 
         let first = self.first;
-        self.stream.records.push(StoredRecord {
+        self.stream.entries.push(StoredRecord {
             kind: self.kind,
             role: self.role,
             presentation: self.presentation,

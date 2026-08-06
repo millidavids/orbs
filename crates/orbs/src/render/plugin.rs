@@ -92,7 +92,11 @@ impl Plugin for RenderPlugin {
                     // draws it. Without this edge the paint is unordered against
                     // the input systems, which is a one-frame lag nobody sees
                     // and a screenshot nobody can reproduce.
-                    .after(crate::shell::ShellSystems::Input),
+                    .after(crate::shell::ShellSystems::Input)
+                    // ...and after the animations, or a burst of output can draw
+                    // complete and then rewind on the following frame. See
+                    // `ShellSystems::Drive`.
+                    .after(crate::shell::ShellSystems::Drive),
             );
 
         // Read once at startup rather than polling the environment sixty times a
@@ -184,7 +188,7 @@ fn capture(mut commands: Commands) {
 }
 
 /// A frame drawn before the atlas exists would be a screen of holes.
-fn atlas_ready(atlas: Option<Res<GlyphAtlas>>) -> bool {
+const fn atlas_ready(atlas: Option<Res<GlyphAtlas>>) -> bool {
     atlas.is_some()
 }
 
@@ -237,6 +241,10 @@ fn repaint(
     screen: Res<Screen>,
     tower: Res<Tower>,
     line: Res<crate::shell::Line>,
+    offered: Res<crate::shell::Offered>,
+    ghost: Res<crate::shell::Ghost>,
+    panel: Res<crate::shell::Panel>,
+    scroll: Res<crate::shell::Scroll>,
     panes: Res<crate::shell::PaneTransition>,
     reveal: Res<crate::shell::Reveal>,
     boot: Option<Res<crate::boot::Boot>>,
@@ -250,22 +258,28 @@ fn repaint(
     if let Some(boot) = booting {
         // The orb waking up. It paints the parts of the screen that exist yet
         // and nothing else, so `Dark` really is dark — see `boot::stage`.
-        crate::shell::paint_booting(frame, tower.sim(), &screen, boot.stage(), boot.progress());
+        crate::shell::paint_booting(frame, &screen, boot.stage(), boot.progress());
     } else if screen.is_hostable() {
         crate::shell::paint(
             frame,
-            tower.sim(),
-            &line,
-            &screen,
             &mut linear,
-            &panes,
-            &reveal,
+            &crate::shell::View {
+                sim: tower.sim(),
+                line: &line,
+                screen: &screen,
+                panes: &panes,
+                reveal: &reveal,
+                offered: &offered,
+                ghost: &ghost.0,
+                panel: &panel,
+                scroll: &scroll,
+            },
         );
     } else {
         // `Screen::is_hostable` documents this as a real state to render, not a
         // reason to stop drawing. Blanking the mesh left the player looking at an
         // empty rectangle with no idea why.
-        crate::shell::paint_too_small(frame);
+        crate::shell::paint_too_small(frame, tower.sim());
     }
 }
 

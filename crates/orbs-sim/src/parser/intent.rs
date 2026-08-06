@@ -15,6 +15,28 @@ pub struct Argument {
     pub kind: NounKind,
     /// The canonical name it resolved to, or the raw text for a free-text slot.
     pub value: String,
+    /// Which signature slot this filled — see [`Intent::slot`].
+    pub slot: usize,
+}
+
+impl Argument {
+    /// The value as the echo shows it.
+    ///
+    /// **Only a place is shortened.** Applying [`leaf`] to every argument
+    /// truncated free text at a slash: `sift march/north laboratory.log` echoed
+    /// `sift north laboratory.log`, teaching a command that searches for a
+    /// different string than the one that ran. `arguments.rs` states the
+    /// invariant this broke — *"free text: whatever was typed, in the case and
+    /// punctuation they typed it in"* — and the echo is what §6 says players
+    /// learn the vocabulary from.
+    #[must_use]
+    pub fn display(&self) -> &str {
+        if self.kind == NounKind::Place {
+            leaf(&self.value)
+        } else {
+            &self.value
+        }
+    }
 }
 
 /// A fully resolved command.
@@ -26,10 +48,33 @@ pub struct Intent {
     /// number that says whether the three-register bet paid off.
     pub register: Register,
     /// Filled slots, in signature order.
+    ///
+    /// **Compacted**, so an unfilled optional slot leaves no gap — read a
+    /// specific slot with [`slot`](Self::slot) rather than by index.
     pub arguments: Vec<Argument>,
 }
 
 impl Intent {
+    /// The argument that filled signature slot `index`, if any.
+    ///
+    /// `arguments` drops the `None`s that `Filled::slots` deliberately keeps —
+    /// *"positional rather than compacted, so a later slot resolving while an
+    /// earlier one does not cannot silently renumber the arguments"* — and
+    /// `execute::carry` then rebuilt the mapping by matching on **slice length**:
+    /// two arguments meant the source was skipped, three meant it was named.
+    ///
+    /// That reintroduced the renumbering hazard one layer up, and it held only by
+    /// accident: `move` is the sole signature with an optional slot, and it
+    /// happens to sit between two required ones. The next verb with an optional
+    /// argument would inherit an arity match that is not equivalent to a
+    /// positional read, and the mis-mapping is silent — `move` would hand the
+    /// destination to the source.
+    #[must_use]
+    pub fn slot(&self, index: usize) -> Option<&Argument> {
+        self.arguments
+            .iter()
+            .find(|argument| argument.slot == index)
+    }
     /// The canonical arcane form, as the echo shows it.
     ///
     /// §6: whichever register is canonical is the one players absorb, so the
@@ -39,10 +84,34 @@ impl Intent {
         let mut out = String::from(self.verb.canonical());
         for argument in &self.arguments {
             out.push(' ');
-            out.push_str(&argument.value);
+            out.push_str(argument.display());
         }
         out
     }
+}
+
+/// A place argument as its last segment.
+///
+/// Places resolve to full paths, so a three-argument `move` echoed
+/// `move charcoal /tower/laboratory/dispensary /tower/laboratory/athanor` — 74
+/// characters against the ~60 a pane gives at the 80×22 floor, and the
+/// destination was simply **clipped off** the one line whose job is saying where
+/// a thing went.
+///
+/// The leaf is also what the player typed and what §7 says they say: *"a place
+/// answers to its full path; §6's matcher also accepts the last segment, which
+/// is what makes `attend laboratory` reach `/tower/laboratory` — players say the
+/// place, not the path."*
+///
+/// **Only the last segment**, never a middle one. `score_against`
+/// (`super::scene`) matches a phrase against the full name or the leaf and
+/// nothing between, so echoing `laboratory/alembic` would teach a form the
+/// parser rejects — and the echo teaching a typeable command is the single thing
+/// §6 asks of it. Leaves staying unique is enforced by
+/// `every_place_leaf_is_unique`, not hoped for.
+#[must_use]
+pub fn leaf(value: &str) -> &str {
+    value.rsplit('/').next().unwrap_or(value)
 }
 
 /// How certain the parser is about what it chose.
@@ -114,6 +183,17 @@ pub enum Resolution {
         /// Slots that did resolve, in signature order.
         filled: Vec<Argument>,
     },
+    /// A real verb, but not one this place answers to.
+    ///
+    /// §7 scopes an instrument's verb to where the instrument is, so `mix` in
+    /// the archive resolves to nothing — and *"I do not know that word"* would be
+    /// a lie about a word the game taught the player in the room next door.
+    /// §6 forbids a bare error and this is the same rule one step further in:
+    /// the useful answer names the verb and says where it is not.
+    Elsewhere {
+        /// The verb they meant.
+        verb: Verb,
+    },
     /// Nothing scored. Never a bare error (§6) — always something to try.
     Unresolved {
         /// Verbs worth suggesting, best first.
@@ -124,16 +204,19 @@ pub enum Resolution {
 impl Resolution {
     /// The intent, if there is one to run.
     #[must_use]
-    pub fn intent(&self) -> Option<&Intent> {
+    pub const fn intent(&self) -> Option<&Intent> {
         match self {
             Self::Resolved { intent, .. } => Some(intent),
-            Self::Ambiguous { .. } | Self::Incomplete { .. } | Self::Unresolved { .. } => None,
+            Self::Ambiguous { .. }
+            | Self::Incomplete { .. }
+            | Self::Elsewhere { .. }
+            | Self::Unresolved { .. } => None,
         }
     }
 
     /// Whether this resolution produced something to execute.
     #[must_use]
-    pub fn is_resolved(&self) -> bool {
+    pub const fn is_resolved(&self) -> bool {
         matches!(self, Self::Resolved { .. })
     }
 }
@@ -148,8 +231,10 @@ mod tests {
             register,
             arguments: values
                 .iter()
-                .map(|(kind, value)| Argument {
+                .enumerate()
+                .map(|(slot, (kind, value))| Argument {
                     kind: *kind,
+                    slot,
                     value: (*value).to_owned(),
                 })
                 .collect(),
@@ -158,12 +243,12 @@ mod tests {
 
     #[test]
     fn the_echo_is_arcane_whatever_was_typed() {
-        // §6: "you type 'make a potion of clarity', the orb answers
-        // 'decoct --essence=clarity', and months later you are typing 'decoct'."
+        // §6: "you type 'grind the sage', the orb answers
+        // 'wield mortar_and_pestle', and months later you are typing 'wield'."
         let plain = intent(
-            Verb::Decoct,
+            Verb::Wield,
             Register::Plain,
-            &[(NounKind::Essence, "clarity")],
+            &[(NounKind::Place, "mortar_and_pestle")],
         );
         let shell = intent(
             Verb::Sift,
@@ -171,7 +256,7 @@ mod tests {
             &[(NounKind::Pattern, "march"), (NounKind::File, "feed.log")],
         );
 
-        assert_eq!(plain.echo(), "decoct clarity");
+        assert_eq!(plain.echo(), "wield mortar_and_pestle");
         assert_eq!(shell.echo(), "sift march feed.log");
     }
 

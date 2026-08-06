@@ -86,7 +86,7 @@ impl Rngs {
     }
 
     /// Mutable access to one stream. All randomness in the sim goes through here.
-    pub fn stream(&mut self, stream: RngStream) -> &mut ChaCha8Rng {
+    pub const fn stream(&mut self, stream: RngStream) -> &mut ChaCha8Rng {
         &mut self.streams[stream.index()]
     }
 }

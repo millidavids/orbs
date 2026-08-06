@@ -52,7 +52,7 @@ pub struct NodeIds(u64);
 
 impl NodeIds {
     /// The next identity.
-    pub fn issue(&mut self) -> NodeId {
+    pub const fn issue(&mut self) -> NodeId {
         let id = NodeId(self.0);
         self.0 += 1;
         id
@@ -78,6 +78,57 @@ pub struct Nameable(pub NounKind);
 /// sentence is composed from it by a content file in Phase 1 (rule 6, §12).
 #[derive(Component, Debug, Clone, Copy)]
 pub struct Protected;
+
+/// A place that is furniture in a room rather than somewhere you travel to.
+///
+/// §10.1's instruments. A fixture is a real place — `attend alembic` and
+/// `survey alembic` both work — but its **contents are nameable from the room it
+/// stands in**, because someone in the laboratory can plainly reach the sage in
+/// the mortar. That is what makes the pipeline typable: `move husks from alembic
+/// to dispensary` has to be able to name `husks`.
+///
+/// It does not weaken §19's *"you can only name what is where you are"*. That
+/// rule stops you acting on another **domain** at a distance, and a domain is
+/// never a fixture — the marker is exactly the line between the two.
+#[derive(Component, Debug, Clone, Copy)]
+pub struct Fixture;
+
+/// The fixture that burns fuel for the ones that need heat — §10.1's athanor.
+///
+/// **A marker, not `name == ATHANOR`.** Six sites compared a `Name` against a
+/// `&'static str` to decide whether a fixture behaves like the rest, with nothing
+/// binding them together: no test, no type. §10 puts five more domains in Phase
+/// 3a, and the day a second room gets a forge, `wield forge` starts an ordinary
+/// run with no recipe instead of lighting it. That is six edits the compiler
+/// never asks for; this is one component it does.
+#[derive(Component, Debug, Clone, Copy)]
+pub struct HeatSource;
+
+/// The operation an instrument performs, named as its own verb.
+///
+/// §10.1's loop is four commands a stage, and the two in the middle — charge it,
+/// start it — are the ones a player types most. `grind sage` collapses them by
+/// naming the *operation* instead of the tool, which is also how the domain
+/// talks: you grind sage, you do not move sage into a mortar and then operate
+/// the mortar.
+///
+/// **A component, not a table of names.** The alternative is a
+/// `match verb { Grind => "mortar_and_pestle", … }` somewhere in the executor,
+/// which is the same name-string dispatch the athanor and the dispensary were
+/// just moved off — six sites branching on a `&'static str` with nothing binding
+/// them together. Here the instrument declares what it does, in the one place
+/// instruments are declared, and §10's five further domains can coin their own
+/// verbs without touching the executor at all.
+#[derive(Component, Debug, Clone, Copy)]
+pub struct Operation(pub crate::parser::Verb);
+
+/// A shelf of stock rather than an instrument — §10.1's dispensary.
+///
+/// Two things read it: `reachable` searches it **last** (stock is the fallback),
+/// and the panel leaves it out, because a row that reads `charged` from the first
+/// tick to the last teaches the eye to skip the panel.
+#[derive(Component, Debug, Clone, Copy)]
+pub struct Store;
 
 /// Where the player is standing.
 ///

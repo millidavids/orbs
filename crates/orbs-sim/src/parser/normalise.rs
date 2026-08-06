@@ -22,9 +22,28 @@
 /// Words that carry no meaning in an argument.
 ///
 /// Applied only after a verb phrase has been consumed, never before.
+/// `from` is here for §10.1's `move <reagent> from <source> to <destination>`.
+/// `to` was already filler, and leaving `from` out meant it landed in a slot and
+/// broke the phrasing the verb was named for.
+///
+/// The cost, which is real: an unquoted `sift from feed.log` now searches for
+/// nothing, because filler is stripped before slots are filled. That was already
+/// true of `to`, `in`, `on` and `of`; quoting is the answer, and the pattern slot
+/// keeps what the player typed.
+/// Words dropped before matching, because they carry no slot.
+///
+/// **`and` is here, and it is the conjunction.** `mix sage-tincture and
+/// ground-salt` fills `Mix`'s two reagent slots *positionally* once `and` is
+/// gone — which is precisely the mechanism `move sage to mortar_and_pestle` has
+/// always used, `to` and `from` being on this list for the same reason. A
+/// separate conjunction node in the parser would be a second way to say what
+/// slot order already says.
+///
+/// It cannot swallow part of a name: `mortar_and_pestle` and `flask_and_rod` are
+/// single whitespace-delimited tokens, and this runs on tokens.
 const FILLER: &[&str] = &[
-    "the", "a", "an", "some", "my", "please", "that", "this", "of", "to", "for", "at", "in", "on",
-    "with", "up", "it",
+    "the", "a", "an", "some", "my", "please", "that", "this", "of", "to", "from", "for", "at",
+    "in", "on", "with", "up", "it", "and",
 ];
 
 /// Trailing punctuation to shed from a word before matching it.

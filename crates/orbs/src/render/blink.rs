@@ -58,15 +58,36 @@ impl Blink {
         self.elapsed = 0.0;
         self.showing = true;
     }
+
+    /// Carry the phase forward by `seconds`.
+    ///
+    /// **Divided, not looped.** Draining whole half-cycles with
+    /// `while elapsed >= HALF_CYCLE { elapsed -= HALF_CYCLE; … }` iterates once
+    /// per half-cycle of elapsed time, so a frame arriving after a long stall — a
+    /// breakpoint, a laptop lid, `Time`'s `max_delta` raised as `sim::clock` does
+    /// — spins proportionally to the stall to reach a phase two arithmetic
+    /// operations give directly. Repeated float subtraction also accumulates the
+    /// error a single remainder does not.
+    ///
+    /// Separate from [`tick`] so it is testable without an `App`: the test that
+    /// covered this used to re-run the loop inline and would have passed whatever
+    /// the system did.
+    pub(crate) fn advance(&mut self, seconds: f32) {
+        self.elapsed += seconds;
+        let cycles = (self.elapsed / HALF_CYCLE).floor();
+        if cycles >= 1.0 {
+            self.elapsed -= cycles * HALF_CYCLE;
+            // Only the parity matters: two flips are no flip.
+            if (cycles / 2.0).fract() != 0.0 {
+                self.showing = !self.showing;
+            }
+        }
+    }
 }
 
-/// Advance the blink.
+/// Advance the blink. See [`Blink::advance`].
 pub(crate) fn tick(time: Res<Time>, mut blink: ResMut<Blink>) {
-    blink.elapsed += time.delta_secs();
-    while blink.elapsed >= HALF_CYCLE {
-        blink.elapsed -= HALF_CYCLE;
-        blink.showing = !blink.showing;
-    }
+    blink.advance(time.delta_secs());
 }
 
 /// Keep the caret solid while the player is typing.
@@ -101,17 +122,35 @@ mod tests {
     fn a_long_frame_does_not_desynchronise_the_phase() {
         // A stall must not leave the caret stuck: the phase is caught up in
         // whole half-cycles rather than clamped to one flip per frame.
-        let mut blink = Blink {
-            elapsed: HALF_CYCLE * 4.5,
-            ..Default::default()
-        };
-        let mut flips = 0;
-        while blink.elapsed >= HALF_CYCLE {
-            blink.elapsed -= HALF_CYCLE;
-            blink.showing = !blink.showing;
-            flips += 1;
+        //
+        // This calls `advance` now. It used to re-run the drain loop *inline*,
+        // which meant it asserted its own copy of the arithmetic and would have
+        // passed whatever the real code did.
+        let mut blink = Blink::default();
+        assert!(blink.showing());
+
+        // Four whole half-cycles and a bit: an even number of flips, so the
+        // caret is back where it started, with the remainder carried.
+        blink.advance(HALF_CYCLE * 4.5);
+        assert!(blink.showing(), "four flips should land back on solid");
+        assert!(blink.elapsed < HALF_CYCLE, "the remainder was not carried");
+
+        // One more takes it to five: odd, so it flips.
+        blink.advance(HALF_CYCLE);
+        assert!(!blink.showing(), "the fifth half-cycle did not flip it");
+    }
+
+    #[test]
+    fn one_half_cycle_at_a_time_and_all_at_once_agree() {
+        // The property the divide replaced a loop to keep: catching up in one
+        // call must land on the same phase as arriving there a frame at a time.
+        let mut stepped = Blink::default();
+        for _ in 0..7 {
+            stepped.advance(HALF_CYCLE);
         }
-        assert_eq!(flips, 4);
-        assert!(blink.elapsed < HALF_CYCLE);
+        let mut jumped = Blink::default();
+        jumped.advance(HALF_CYCLE * 7.0);
+
+        assert_eq!(stepped.showing(), jumped.showing());
     }
 }

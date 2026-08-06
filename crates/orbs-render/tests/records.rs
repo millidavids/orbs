@@ -675,6 +675,69 @@ fn what_a_view_measures_is_what_it_draws() {
 }
 
 #[test]
+fn a_long_line_wraps_rather_than_losing_its_end() {
+    // A line view used to draw one row per record and **cut** whatever did not
+    // fit, which is silent data loss on §14's primary surface. `grimoire`'s own
+    // instructions were the case that found it: a pane gives about 46 cells once
+    // its border and §10.1's panel are out, and a two-input step is longer than
+    // that — so the one command whose job is telling you what to type lost the
+    // thing to type.
+    let mut records = Records::new();
+    let long = "sage-tincture + ground-salt -> clarified-draught + dregs";
+    records
+        .push(RecordKind::Message)
+        .text(FieldName::Message, long)
+        .finish();
+
+    let mut frame = frame_of(40, 8);
+    let area = frame.area();
+    RecordView::prompt("orbs $ ").draw(&mut frame.painter(area), area, records.iter());
+
+    // Every word survives somewhere on the screen, in order.
+    let drawn = frame.to_text().replace('\n', " ");
+    let mut at = 0;
+    for word in long.split_whitespace() {
+        let found = drawn[at..]
+            .find(word)
+            .unwrap_or_else(|| panic!("{word:?} was clipped away:\n{drawn}"));
+        at += found + word.len();
+    }
+}
+
+#[test]
+fn a_wrapped_line_is_measured_as_the_rows_it_draws() {
+    // The invariant the whole transcript rests on. `shell::prompt` binary
+    // searches for the smallest skip whose `height` fits the pane, so a `height`
+    // that disagrees with `draw` scrolls the pane by a row a frame — and an
+    // `Input` record starts after the *prompt* while everything else starts after
+    // the marker, which is the width the two most easily disagree about.
+    let mut records = Records::new();
+    records
+        .push(RecordKind::Input)
+        .text(
+            FieldName::Message,
+            "move sage-tincture from mortar_and_pestle to balneum_mariae",
+        )
+        .finish();
+    records
+        .push(RecordKind::Message)
+        .text(
+            FieldName::Message,
+            "the balneum_mariae yields sage-tincture, and leaves sediment",
+        )
+        .finish();
+
+    for cols in [24, 32, 40, 60, 80] {
+        let mut frame = frame_of(cols, 24);
+        let area = frame.area();
+        let view = RecordView::prompt("orbs $ ");
+        let measured = view.height(cols, records.iter());
+        let drawn = view.draw(&mut frame.painter(area), area, records.iter());
+        assert_eq!(measured, drawn, "at {cols} cells wide");
+    }
+}
+
+#[test]
 fn a_listing_never_speaks_a_row_it_could_not_draw() {
     // Rule 2 in the direction nobody checks. `Speech` is a per-frame description
     // of the *screen*, so a record clipped off the bottom must not be announced

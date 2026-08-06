@@ -67,6 +67,8 @@ pub(crate) fn paint(
     screen: &Screen,
     pane: Rect,
     carry_readings: bool,
+    panel: &super::input::Panel,
+    scroll: &super::input::Scroll,
 ) {
     if pane.is_empty() {
         return;
@@ -86,6 +88,8 @@ pub(crate) fn paint(
         pane,
         carry_readings,
         &super::reveal::Reveal::default(),
+        panel,
+        scroll,
     );
 
     let mut painter = frame.painter(pane);
@@ -136,6 +140,7 @@ const fn kind_label(kind: UtteranceKind) -> &'static str {
         UtteranceKind::Progress => "prog",
         UtteranceKind::Echo => "echo",
         UtteranceKind::Input => "in  ",
+        UtteranceKind::Hint => "hint",
         UtteranceKind::Completion => "done",
     }
 }
@@ -187,7 +192,16 @@ mod tests {
         let (sim, screen, mut frame, pane) = session_with(&["look around", "xyzzy"]);
         let mut linear = Linear::default();
 
-        paint(&mut linear, &mut frame, &sim, &screen, pane, true);
+        paint(
+            &mut linear,
+            &mut frame,
+            &sim,
+            &screen,
+            pane,
+            true,
+            &crate::shell::Panel::default(),
+            &crate::shell::Scroll::default(),
+        );
 
         let drawn = frame.to_text();
         assert!(drawn.contains("look around"), "{drawn}");
@@ -202,7 +216,16 @@ mod tests {
         let (sim, screen, mut frame, pane) = session_with(&["look around"]);
         let mut linear = Linear::default();
 
-        paint(&mut linear, &mut frame, &sim, &screen, pane, true);
+        paint(
+            &mut linear,
+            &mut frame,
+            &sim,
+            &screen,
+            pane,
+            true,
+            &crate::shell::Panel::default(),
+            &crate::shell::Scroll::default(),
+        );
 
         assert!(
             frame.speech().is_empty(),

@@ -29,7 +29,18 @@ pub enum FieldName {
     /// Ticks left on a duration action.
     Remaining,
     /// Which subsystem produced this. `laboratory`, `battlements`, `lens`.
+    ///
+    /// **A domain, not a place.** `read_file` filters a domain's log by this, so
+    /// putting a *room* in it silently drops the record from the log of the
+    /// domain it happened in. Where a thing came from is [`FieldName::Origin`].
     Source,
+    /// Where a thing was before it moved. `dispensary`, `mortar_and_pestle`.
+    ///
+    /// Distinct from [`FieldName::Source`] precisely because that one is
+    /// load-bearing for log filtering. §10.1's `move` needs to name both ends,
+    /// and a record about the laboratory must still appear in the laboratory's
+    /// log while saying it came from the dispensary.
+    Origin,
     /// Free prose — a log line's text, the orb speaking.
     Message,
     /// Secondary prose, subordinate to [`FieldName::Message`].
@@ -54,7 +65,7 @@ pub enum FieldName {
 
 impl FieldName {
     /// Every field name, in declaration order.
-    pub const ALL: [Self; 12] = [
+    pub const ALL: [Self; 13] = [
         Self::Name,
         Self::Path,
         Self::Kind,
@@ -63,6 +74,7 @@ impl FieldName {
         Self::Tick,
         Self::Remaining,
         Self::Source,
+        Self::Origin,
         Self::Message,
         Self::Detail,
         Self::Outcome,
@@ -84,6 +96,7 @@ impl FieldName {
             Self::Tick => "tick",
             Self::Remaining => "left",
             Self::Source => "source",
+            Self::Origin => "from",
             Self::Message => "message",
             Self::Detail => "detail",
             Self::Outcome => "outcome",

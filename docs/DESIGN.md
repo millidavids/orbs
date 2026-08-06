@@ -498,16 +498,31 @@ rather than prose.
 **The canonical form — what the echo shows — is arcane.** Because echo is the
 teaching mechanism, whichever register is canonical is the one players absorb.
 Making it arcane means the mastery arc is literally learning to speak as a wizard:
-you type "make a potion of clarity", the orb answers `decoct --essence=clarity`,
-and months later you are typing `decoct` by reflex. The interface teaches magic.
+you type "grind the sage", the orb answers `wield mortar_and_pestle`, and months
+later you are typing `wield` by reflex. The interface teaches magic.
 
 ```
-orbs:~$ make a potion of clarity
-  → decoct --essence=clarity
+orbs:~$ grind the sage
+  → wield mortar_and_pestle
 
 orbs:~$ grep march feed.log
   → sift march feed.log
 ```
+
+**"make a potion of clarity" resolves to the recipe, not to a potion** (§10.1,
+§19). There is no single command that brews one — brewing is a pipeline you run,
+or a script you wrote. So the newcomer's most natural sentence answers the
+question they actually asked:
+
+```
+orbs:~$ make a potion of clarity
+  → grimoire clarity
+```
+
+That is deliberately the *tutorial entry point* rather than a refusal. §15 chose
+brewing as the parser-gate subject because *"a shell-naive tester immediately
+understands 'make a potion'"* — which requires the phrase to resolve somewhere
+useful, not that a verb exist to satisfy it.
 
 **The canonical command set is player-facing API.** Naming is a design task
 scheduled before the Phase 1 vocabulary freeze.
@@ -536,7 +551,7 @@ The Phase 0 vocabulary (16 commands), canonical arcane with synonym registers:
 | `verify <target>` | Detect tampering | `check` | inspect, audit |
 | `undo` | Revert the last command | — | revert, "take it back" |
 | `meditate <n>` | Fast-forward the clock | `wait`, `sleep` | rest, pass |
-| `decoct <essence>` | Brew a potion | — | brew, make, mix, distil |
+| `decoct <essence>` | Brew a potion — **retired in Phase 1, see below** | — | brew, make, mix, distil |
 | `siphon <vessel>` | Collect a finished potion | — | collect, decant, pour |
 | `purge <target>` | Destroy waste or spoilage | `rm` | clean, dump, "get rid of" |
 | `divine <frag>` | Research a fragment | — | decipher, study, translate |
@@ -551,6 +566,41 @@ Every row resolves from all three registers; the echo always shows column one.
 in the table as a plain-English synonym, so nothing a player learned stops
 working. That is not courtesy: a released word does not stop resolving, it
 resolves to whatever it is nearest, and `decant` unclaimed lands on `decoct`.
+
+**Phase 1 adds three and retires one, taking the vocabulary to 18.** The brewing
+pipeline (§10.1, §19) needs a way to move a thing, start a tool, and cancel one:
+
+| Canonical | Does | Shell synonyms | Plain synonyms |
+|---|---|---|---|
+| `move <thing> from <src> to <dst>` | Move a thing between places | `mv` | transfer, transport, relocate |
+| `wield <tool>` | Start a tool working | — | use, begin, kindle |
+| `stop <tool>` | Cancel a tool, refunding inputs | — | cancel, halt, damp |
+
+**`decoct` is retired.** It meant *"brew a potion"* when brewing was one command
+holding a slot for twenty ticks. It is now a pipeline — grind, digest, combine,
+distil — and a verb claiming to do all four in one word would be teaching the
+player something false, which is exactly what §6's echo mechanism must not do.
+
+**The only single command that brews a potion is a script you wrote.** That is
+the design's whole thesis about automation (§8), and a built-in shortcut would
+have been the orb doing for free the thing the player is meant to build.
+
+**Its words stay claimed, pointed at `grimoire`.** `decoct`, `brew`, `make`,
+`mix` and `distil` all resolve to a recipe lookup, so *"make a potion of
+clarity"* answers with how. This is not courtesy — the Phase 0 naming pass
+established that **a released word does not stop resolving, it resolves to
+whatever it is nearest**, and an unclaimed `decoct` would land on some other
+verb silently. Recipes are registered as `Topic` nouns alongside their `Essence`
+so the lookup has something to name.
+
+**`move` is the first verb whose slots are not independent.** Its first slot
+resolves against the *contents of its second* — `move charcoal from dispensary
+to athanor` looks `charcoal` up inside `dispensary`. This is what makes `from`
+load-bearing rather than decorative, and it does **not** relax §19's *"you can
+only name what is where you are"* for anything else: `purge charcoal` from the
+laboratory still fails, and Phase 2's pane addressing is still what relaxes the
+rule generally. The two-argument short form `move <thing> <dst>` infers the
+source from the current place and needs none of this.
 
 ### Disambiguation never blocks during a siege
 
@@ -678,7 +728,7 @@ orbs:~/grimoire$ cat night_watch.spell
 # runs each dusk
 
 ward --upon north_gate --strength 3
-brew --recipe=clarity --qty 2
+invoke brew_clarity --qty 2
 purge --byproduct --above 60%
 
 if scry --enemy --within 2leagues; then
@@ -689,6 +739,19 @@ fi
 orbs:~/grimoire$ bind night_watch.spell --to dusk
 Bound. The orb will remember.
 ```
+
+**`brew_clarity` is a spell the player wrote, not a command the game ships.**
+Earlier drafts of this section had `brew --recipe=clarity --qty 2` here, which
+quietly assumed a built-in that brews a whole potion — the exact thing §10.1's
+pipeline replaced, and the exact thing the player is supposed to build. There is
+no such command. `brew_clarity.spell` holds the twelve-odd lines that clear the
+instruments, move the reagents, wield each in turn and siphon the result, and
+`night_watch` calls it.
+
+That makes this example better rather than poorer: it shows **scripts composing
+scripts**, which is the progression beat between "I automated one chore" and "my
+tower runs itself" — and it is the honest picture of why automation wins, since
+every line it saves is a line the player once typed.
 
 ### Why automation beats doing it by hand
 
@@ -925,13 +988,27 @@ required anyway, since bitmap fonts must scale by whole pixels to stay crisp:
 
 | Window | Tier 1 (default) | Tier 2 (multiplexed) |
 |---|---|---|
-| 1920×1080 | 3× → 80×22 | 2× → 120×33 |
-| 2560×1440 | 4× → 80×22 | 3× → 106×30 |
-| 1280×720 | 2× → 80×22 | 1× → 160×45 |
+| 1920×1080 | 2× → 120×33 | 1× → 240×67 |
+| 2560×1440 | 3× → 106×30 | 2× → 160×45 |
+| 1280×720 | 1× → 160×45 | — (already finest) |
 
-Tier 1 lands near 80×22 on every common window. Tier 2 at 1080p gives four panes
-at roughly **60×15 each** — workable for the dense log scanning a siege demands,
-against the ~28×8 a fixed-grid 2×2 layout would have produced.
+**Tier 1 aims at ~100×28, not at the 80×22 floor.** The table sat one step
+coarser and pinned every window to the floor exactly: a 4K display showed the
+same amount of text as a 720p one, in 48×96-pixel glyphs. The floor is a *floor*
+— what a window must clear to host the game at all — and using it as the target
+made "a bigger window buys a bigger glyph" mean "a bigger window buys nothing
+else". A bigger window still buys a bigger glyph; the whole table simply sits one
+step down, and the aim is [`DEEP_FOCUS_FLOOR`] so a default window can host §9's
+two-pane focus without being resized first.
+
+**At 1280×720 there is no tier 2, and that is fine.** Scale 1 is the finest whole
+pixel step, so Deep focus engages at the same fidelity — and it does not need a
+finer one, because 160×45 already carries four panes. Tier 2 exists to *buy
+cells*; a window that has them already needs nothing bought.
+
+Tier 2 at 1080p gives four panes at roughly **60×16 each** — workable for the
+dense log scanning a siege demands, against the ~28×8 a fixed-grid 2×2 layout
+would have produced.
 
 Only one fidelity step is needed; four panes is the cap.
 
@@ -963,7 +1040,7 @@ the CRT port dynamic rather than statically configured, and the zoom transition
 itself is a first-class effect — atmospheric, never nauseating, and disableable
 per §14.
 
-**Commands route by domain name within the focused set.** `decoct haste` reaches
+**Commands route by domain name within the focused set.** `wield alembic` reaches
 the laboratory pane, `ward north` reaches the battlements pane, with no switching
 between them — because commands are discrete, one input line serves any number of
 focused panes.
@@ -991,6 +1068,15 @@ locks" means precisely: a 6-minute brew occupies the laboratory's production slo
 while a 20-second purge can still run in its triage slot. Only the production slot
 consumes Focus.
 
+**Amended in Phase 1: a pane may hold as many production slots as it has
+instruments.** The laboratory has four tools (§10), so it can hold four — drawn
+from the **same tower-wide pool**, never granted free. §19's *"one production
+slot, tower-wide"* is unchanged: the counter stays global, and at capacity 1 you
+run one tool and are not deciphering. What changes is only the per-pane cap.
+
+This is a **balance change, not a wording fix**, and it required moving the
+counterweight — see below.
+
 ### Progression
 
 The player begins with two domain panes and capacity 1. Multiplexing is researched
@@ -1016,9 +1102,23 @@ rate.** Synergies grow O(n²) in open panes (three hold three pairs, four hold s
 so the counterweight must keep pace — but nuisance rate is hard-capped
 (invariant 5), so at endgame, where max multiplex meets max trace and max drift,
 a rate-based counterweight would stop counterweighting at exactly the point it was
-designed for. Upkeep is uncapped and scales cleanly: **each open pane holds a
-fraction of the Attention pool**, so multiplexing trades directly against
-automation capacity.
+designed for. Upkeep is uncapped and scales cleanly: **each concurrent production
+action holds a fraction of the Attention pool**, so multiplexing trades directly
+against automation capacity.
+
+**Amended in Phase 1: upkeep is charged per concurrent action, not per open
+pane.** Panes were a proxy for concurrency, and the proxy broke the moment one
+pane could hold four production slots (above) — a player would have bought
+depth 4 at one pane's upkeep, decoupling depth from exposure, which is the trade
+this whole section builds. Charging the thing itself rather than its container is
+*more* faithful to the reasoning above, since concurrency is what upkeep was
+always pricing.
+
+It also protects a progression track from the cut line. Under the per-pane rule,
+cut-line item 7 (*"multiplexing capped at two panes"*, §15) would silently cap
+usable capacity at 2, stranding §11.5's 3-at-5h and 4-at-10h unlocks behind a
+rendering decision — precisely what the paragraph below warns against. Per-action
+upkeep keeps capacity 4 meaningful if that cut is ever taken.
 
 **Attention is decoupled from multiplex capacity as a progression track.** The
 pool grows via ley-line upgrades and grimoire rank, so capping multiplexing for
@@ -1048,7 +1148,7 @@ Seven at launch, with tiered depth to survive solo scale.
 | **Defense** | `battlements/` | Command pressure at 1 Hz, ward placement | Bespoke |
 | **Scrying** | `lens/` | Deduction — parse noisy logs to find truth | Bespoke |
 | **Spellcraft** | `grimoire/` | Composition — build spells from components | Bespoke |
-| **Brewing** | `laboratory/` | Sequence/recipe puzzle with timing | Bespoke |
+| **Brewing** | `laboratory/` | Sequence/recipe puzzle with timing — **see §10.1** | Bespoke |
 | **Archive** | `archive/` | Decipherment; powers all discovery | Bespoke |
 | **Summoning** | `menagerie/` | Resource allocation → autonomous siege units | Derived |
 | **Enchanting** | `forge/` | Sequence + resource cost → persistent buffs | Derived |
@@ -1071,6 +1171,105 @@ depends on what it unlocks (§19).
 
 **Scrying is elevated by the aberration model.** Log-parsing is how sabotage is
 found. Build it early, alongside the siege prototype.
+
+### 10.1 Brewing — the worked example
+
+**The laboratory holds five instruments, four of which take Focus.** Brewing is
+moving materials through them; each is a place you can `survey`, and the
+laboratory's pane draws them as a permanent instrument panel.
+
+| Stage | Instrument | Needs heat | Focus | Leaves behind |
+|---|---|---|---|---|
+| preprocess | `mortar_and_pestle/` | — | ✅ | husks |
+| process | `balneum_mariae/` | **athanor** | ✅ | sediment |
+| combine | `flask_and_rod/` | — | ✅ | dregs |
+| distil | `alembic/` | **athanor** | ✅ | phlegm |
+| *(heat)* | `athanor/` | — | ❌ | ash |
+
+Plus `dispensary/`, a holding area for materials between instruments.
+
+**Four Focus-consuming tools; §11.5's capacity track tops out at four.** The
+athanor is infrastructure rather than a stage, which is what makes the arithmetic
+exact instead of argued.
+
+**The loop, per tool:** clear it (`purge`), load it (`move`), start it (`wield`),
+collect (`siphon`). A running tool is locked — `stop` cancels with a refund, or
+you wait. That lock is what makes different recipes need different scripts.
+
+**There is no command that brews a potion.** `decoct` is retired (§6.1): the only
+way one line makes a potion is a spell the player wrote, which is §8's whole
+argument for automation and would be given away by any built-in shortcut.
+*"make a potion of clarity"* resolves to `grimoire clarity` — the recipe — which
+is the tutorial entry point rather than a refusal.
+
+**The athanor is a shared, depleting resource.** It takes fuel (charcoal), burns
+at a **constant rate while lit**, and heats whichever of the `balneum_mariae` or
+`alembic` is working. Fuel is an interval, not a countdown —
+`remaining = fuel_at_lighting − (now − lit_at) × RATE`, a pure function of the
+tick, per §19. A load-varying rate is forbidden: it would require integrating
+over which tools were mounted when.
+
+**Heat is checked when an operation starts, and the run then completes.** The
+timing pressure comes from the burn being *time-based*, not from spoilage risk:
+the athanor consumes fuel per lit tick whether or not anything is mounted, so
+idle lit time is pure waste. Light it once, get both heated stages done inside
+that window, damp it. This is a **window at 1 Hz**, never a reflex — and the cost
+is fuel, never progress, so §11.5's *"not automating is never ruinous, only
+slower"* holds.
+
+**It is also the cleanest argument for automation in the design.** A manual
+player walks away with the athanor lit and wastes fuel; a script ends its loop
+with `stop athanor` and does not. §8's claim that automation beats doing it by
+hand becomes mechanical rather than asserted.
+
+**Damping banks what has not burnt, and that makes a mid-brew move available.**
+The two heated stages are *not adjacent* — the unheated `flask_and_rod` sits
+between the bath and the still — so burning through the combination is waste.
+The efficient play is **light → digest → damp → combine → relight → distil**.
+
+That was not designed. It fell out of the durations and was found when the fire
+died in the middle of the end-to-end test. It is the best argument yet that
+`stop athanor` is a real move rather than an end-of-script tidy, and it is
+exactly the shape of decision ROADMAP asked for in *"timing means windows at
+1 Hz — when to advance a stage against everything else wanting the slot, never a
+reflex."*
+
+**A charcoal outlasts a brew by a wide margin, deliberately.** The first pass
+made one barely cover a single brew, which turned that move from an optimisation
+into a tax: damping mid-brew was not a good idea, it was the only idea, and the
+fire wanted watching like a third instrument. The pressure is unchanged in kind
+and much gentler in degree — idle lit time is still pure waste, so batching and
+damping still save fuel. It is now something an **attentive player takes and a
+careless one merely pays for in fuel**, never in progress, which is §11.5's
+*"not automating is never ruinous, only slower"* holding at the scale of a
+single decision. The script that damps is meaningfully ahead over a session
+rather than trivially ahead over one brew, and that is the better argument for
+writing it.
+
+**Ash accrues at burn-out, not per tick.** Per-tick accrual would spawn nodes
+into `Children`, and §19 makes insertion order *the parse* — a live-watched burn
+and a `meditate`-collapsed burn must issue identical ids in identical order. A
+single spawn at exhaustion is trivially order-identical.
+
+**Variance comes from byproducts, under one rule: every byproduct has at least
+one use.** A tool fouled by the last brew must be cleared before use, and a
+byproduct that is an *input* to another recipe makes the laboratory's current
+state change what is optimal now. A byproduct that is only ever litter would make
+`purge` into tidying — the exact feeling this item exists to remove.
+
+**Recipes live one file per instrument** (rule 6), each with a single shape:
+ingredient→material, material→material, material+material→material,
+material→potion, and the athanor's fuel table. The instrument is implied by which
+file a recipe lives in, and a material's **state** decides which recipes can fire
+— so the material suggests the next operation rather than the player memorising a
+sequence. That is what gives the puzzle repeat-tolerance.
+
+**Capacity 1 is the form that ships.** §11.5 reaches capacity 4 at ~10 h and
+capacity is researched, which is Phase 3a — so for Phases 1 and 2 the four stages
+are sequential and the decision is *when to light the athanor* and whether both
+heated stages fit one window. Capacity 4 is where the laboratory becomes a
+pipeline, with the mortar grinding the next brew while the alembic distils this
+one.
 
 **On shared engines — build concrete first, extract later.** Draft 3 mandated
 generic-engine-first; that is the classic route to the wrong abstraction, because
@@ -1910,6 +2109,336 @@ domains are settled (brewing + archive), and the fragment trickle has a rate
 
 ## 19. Decisions log
 
+### Per-instrument verbs, scoped to their domain — built
+
+§10.1's loop was four commands a stage — `move`, `wield`, `siphon`, `purge` — and
+the two in the middle are the ones a player types most. Naming the **operation**
+instead of the tool collapses them, and reads as the domain's own language: you
+grind sage, you do not move sage into a mortar and then operate the mortar.
+
+```
+move sage to mortar_and_pestle          grind sage
+wield mortar_and_pestle
+```
+
+Five verbs, one per instrument: `grind`, `digest`, `mix`, `distil`, and the
+athanor's `kindle`. The athanor is the odd one — lighting a fire is not a *run*,
+so it takes no Focus slot and produces nothing to transmute — but it charges and
+starts exactly like the others, which is why it belongs with them rather than
+under `wield`. `kindle charcoal` is `move charcoal to athanor` and `wield
+athanor`; bare `kindle` relights what was banked, which is the last line of every
+script loop. `Verb::transmutes()` excludes it explicitly, since `start` returns
+at its `HeatSource` branch before a run is ever begun.
+
+**`and` is filler, not a conjunction node.** `mix sage-tincture and ground-salt`
+fills `Mix`'s two reagent slots positionally once `and` is dropped — which is
+exactly the mechanism `move sage to mortar_and_pestle` has always used, `to` and
+`from` being on the same list. A second way to express slot order would be a
+second thing to keep in step with the first.
+
+**The verbs are scoped to the domain whose tools they name.** §7 already says you
+can only name what is where you are; an instrument's verb is the same claim said
+the other way round, and `mix` in the archive means nothing because there is no
+flask there. The instrument declares its own verb (`Operation`, a component in
+the one place instruments are declared), the scene collects them from the
+fixtures present, and the parser skips the rest.
+
+That is not tidiness. It is what keeps the vocabulary safe to grow: §10 puts five
+further domains in Phase 3a, each coining the verbs its tools need, and **none of
+them can capture another's typo** because they are never candidates at the same
+time. Without it, every domain added would widen the collision surface for every
+other — the failure the Phase 0 naming pass exists to prevent, arriving by
+accretion instead of all at once.
+
+Three things had to be true for the scoping to be an improvement rather than a
+trap, and only the first was obvious:
+
+| | |
+|---|---|
+| **It must still answer.** A scoped-out verb resolving to nothing would have the orb say *"I do not know that word"* about a word the game taught in the room next door. `Resolution::Elsewhere` says `there is nothing here to mix with` |
+| **It must beat a fuzzy rival.** `grind` is two edits from `find`, which `sift` claims — so scoping alone made `grind sage` in the archive offer `sift sage archive.log`. Scoping would have *created* the silent misreading it exists to prevent. An exactly-typed out-of-scope verb now outranks any fuzzy reading of an in-scope one |
+| **Where you are is evidence.** `grind` shares a prefix with `grimoire` and sits at exactly `MIN_SIMILARITY` from `bind`. In the laboratory — the only room where `grind` is a word — the tool in front of you is the better guess, so an in-domain verb carries a `DOMAIN_BONUS` sized like `PHRASE_BONUS`: enough to settle a tie, never enough to overturn a real difference |
+
+`grind` was kept over the collision-free `crush` on that last point. It costs two
+pinned collisions and one shared abbreviation, all three confined to a single
+room and all three disambiguated by argument kind as well as by place.
+
+**`wield` and `move` both stay.** `wield` is the general form, it is what a script
+writes when the instrument is the variable, and it is the only way to work a tool
+no verb has been coined for. `move` is still how you put something down without
+starting anything.
+
+**`empty` is the counterpart of `purge`**, and the pair is §10.1's byproduct rule
+made typeable: `purge` destroys what you did not mean to make, `empty` turns the
+instrument out into the store and keeps it. Husks are the mortar's leavings *and*
+the water bath's input, so a loop that can only clear by destroying is a loop that
+never finds the second route to a draught — the thing the exit criterion is about.
+
+It is **instant**, unlike `purge`'s four ticks in §9's triage slot. That is not an
+oversight: the ticks are the price of *destroying*, and the loop's opening move
+being non-free is what §11.5 puts `purge` in the Triage band for. Paying them to
+put something on a shelf would be a toll rather than a cost, and `move husks to
+dispensary` — which `empty` is the bulk form of — was always instant. What `empty`
+buys is not speed but not having to name what is in there.
+
+`clear` was refused as a synonym: one edit from `clean`, which `purge` claims, and
+confusing *put this somewhere safe* with *destroy it* is the collision this domain
+can least afford — the reasoning that kept `damp` out.
+
+Two smaller things fell out. `Verb::transmutes()` replaced `verb == Wield` in
+`finish` — a completed `grind` was releasing the slot, saying nothing, and leaving
+the sage whole in the mortar. And `missing` gained an authored line: the
+commonest refusal in the game drew as two bare field values, `mix sage`, which
+names what was wanted and never says it was refused.
+
+### The idiom pass, and the lints kept from it
+
+A sweep of the whole workspace against `clippy::pedantic` and `clippy::nursery`,
+plus the Bevy 0.19 checklist. The outcome that matters is not the fixes — it is
+that **the useful lints are now in `Cargo.toml`**, so the standard is enforced
+rather than re-derived by hand next time.
+
+Three of the findings were real defects rather than style:
+
+| Defect | Cost |
+|---|---|
+| `ends_with(".log")` decided which files carry §8.1's sabotage marker — a **byte** comparison, so a `FEED.LOG` added to the content file would spawn silently immune to poisoning, with no symptom until a siege failed to land a tell | `case_sensitive_file_extension_comparisons` |
+| `get_or_insert` built the whole `Incomplete` — including a `Vec` allocation — once per vocabulary entry per keystroke, then discarded it because the slot was already filled | `or_fun_call` |
+| Six helpers in `execute/` demanded `&mut World` to *read*, which makes them uncallable from anywhere holding a shared borrow for no reason their bodies can point at | `needless_pass_by_ref_mut` |
+
+**Four lints were considered and refused**, which is the more useful half of the
+record:
+
+- **`redundant_pub_crate`** fights this project's own visibility rule, which asks
+  for `pub(crate)` on shared items regardless of the enclosing module.
+- **`unreadable_literal`** would rewrite `0xC0FFEE`, which is a hex *word* and is
+  less readable with separators in it.
+- **`match_same_arms`** would merge `Verb::signature`'s three `PLACE` arms. Each
+  carries its own reasoning for why that verb takes a place — `Siphon`'s records
+  that it was a `Vessel` until §10.1 moved the product into the instrument — and
+  the comments are worth more than the three saved lines.
+- **`suboptimal_flops`** suggests `mul_add`, which changes rounding in the render
+  maths for no measured gain.
+
+**Bevy 0.19 came out clean.** No bundles, no `Event` where `Message` is meant, no
+`delta_seconds`, no `Parent`, `Single` used with `Option` everywhere exactly one
+match is expected, every `Update` system guarded, and `default-features = false`
+with a curated feature list. The one note worth leaving is on `Sim::working`,
+which walks `iter_entities` because it takes `&self` and a query would need
+`&mut`: 0.19 made resources into components on their own entities, so that walk
+is now wider than it reads. It is still correct — nothing there carries
+`Working` — but the next broad walk that filters on something a resource *could*
+have will not be.
+
+### Recipes read as instructions; Tab cycles; the transcript scrolls — built
+
+Three things asked for after playing the laboratory, and one defect the first of
+them uncovered.
+
+**The grimoire was a table pretending to be a manual.** It printed `walk_back`'s
+raw breadth-first walk: five unlabelled values a row, tiled across the pane,
+**in reverse** — the goal's own step first, so a player reading top-down got the
+recipe backwards. Four changes, in order of how much each was worth:
+
+| Change | Why |
+|---|---|
+| **Doing order** | The walk is post-order over the recipe graph now, so a step's inputs are emitted before the step that consumes them and reading top-down is the order you type |
+| **Stop at stock** | It expanded every route to everything, including three ways to make the `rock-salt` sitting in the dispensary. The manual is for what you cannot simply pick up |
+| **One authored sentence a step** (rule 6) instead of five bare columns, with the byproduct, the instrument, the tick cost and a **heat marker** — forgetting to light the athanor is the commonest way a stage refuses |
+| **Alternatives marked**, with any step only they need. Two rows producing `clarified-draught` were previously indistinguishable from two sequential steps |
+
+The primary route is the content file's **first** entry for each output, which
+makes `recipes.toml`'s order the designer's recommendation rather than an
+accident.
+
+**A line view clipped rather than wrapped.** Found while fitting the above: the
+transcript drew one row per record and cut whatever ran past the pane, which is
+silent data loss on the surface §14 calls the game's primary output. A pane gives
+about 46 cells once its border and §10.1's instrument panel are out, and
+`sage-tincture + ground-salt -> clarified-draught` is 47. Wrapping went into
+`RecordView` rather than into the recipe text, so every long refusal benefits.
+
+Two things that had to be got right with it: `height` and `draw` **wrap from the
+same iterator at the same width**, or the transcript's tail search scrolls the
+pane by a row a frame; and an `Input` record starts after the *whole prompt*
+while everything else starts after the marker, so the width is per record rather
+than one indent for all. A record still **speaks once**, on its first row — a
+listener must not hear a different number of things depending on how wide the
+window happens to be.
+
+**Tab cycles.** First press extends to the longest common prefix and, when there
+is nothing left to extend, lists **without touching the line** — bash's default,
+and the least surprising answer to someone who pressed Tab to ask a question.
+Every press after that puts the next candidate in, wrapping: readline's
+`menu-complete`, and what makes the list an answer rather than a dead end the
+player types their way out of. The list marks where the cycle has reached, and
+says so aloud.
+
+The cycle holds its own candidate list rather than recomputing per press, so a
+tick landing mid-cycle cannot reorder what the player is walking; and it checks
+the line still says what it last wrote before overwriting, so a forgotten
+cancellation restarts the cycle instead of splicing a candidate into a word.
+
+**The transcript scrolls**, on PageUp/PageDown. Up and Down stay history — a
+shell where Up sometimes scrolls and sometimes recalls is one you cannot type in
+without looking. Decisions worth recording:
+
+- **In records, not rows.** The tail search already finds the smallest *record*
+  skip that fits; rows would need a second, different measure of the same stream.
+- **New output does not yank the view back.** The orb answers on its own clock,
+  so a completion can land while the player reads history; jumping would lose
+  their place, and the record is still in the stream when they return. The border
+  says the view is held instead — in the *title*, because `Painter::border`
+  announces one as a heading, which is what makes a reader hear it too.
+- **Submitting returns to the bottom.** You acted; what you want is the result.
+  This is the one place terminal convention is wrong here.
+- `ORBS_SCROLL` exists for the same reason `ORBS_LINE` does: the feature is a
+  keypress, a dump presses no keys, and §15 asks that it be reachable as text.
+
+### The ten-angle review, and what it found — applied
+
+Ten independent context-free reviews over the brewing + command-line work, each
+given only the diff. They found **eleven live bugs**, four of which a player
+would hit in the first session, plus a fidelity regression that had made the
+default window two tiers finer than the tier table says. Every finding below was
+verified against the running game before it was acted on; two were checked and
+**rejected**, and are recorded as such.
+
+The pattern worth keeping: the reviews were most valuable where a *test asserted
+the bug*. Four of the eleven had green tests over them, and in three cases the
+test had been written to pin the very behaviour that was broken.
+
+**Live bugs, in the order a player meets them**
+
+| Bug | Why nothing caught it |
+|---|---|
+| **`purge dispensary` made the tower unwinnable** — one command despawned `sage`, `rock-salt` and `charcoal`, and no recipe produces sage or charcoal, so the athanor could never be lit again. Against §7's *"destruction is a tool, not a trap"* and §11.5's *"not automating is never ruinous, only slower"*. The dispensary is now `Store + Protected` | Three tests used `purge dispensary` as their *example of a working purge*. It was the canonical demonstration |
+| **A `move` could raid an instrument being scoured** — the lock covered `Working` and not `Triaging`, so a reagent could be carried into an instrument four ticks before a purge despawned everything in it. Reagent gone, nothing produced, Focus slot spent, not a word said. `busy()` now returns both | Nothing tested the interleaving. `Triaging` was added later than `Working` and the guards were never revisited |
+| **`peruse laboratory.log` was permanently empty** — the filter compared `FieldName::Source` against `"laboratory"`, and nothing writes that: `transmute` puts the *instrument* there and `carry` wrote no `Source` at all. A domain log is now *what happened in that domain* — the room or anything standing in it | `an_empty_file_reads_as_empty_rather_than_as_success` passed **because** the log was always empty. The test asserted the bug |
+| **The transcript dropped its newest records** — the tail binary search took `len - rows` as an upper bound on the assumption that a record costs one row. `RecordView` opens every `Input` after the first with a blank line, so the predicate was false at its own bound and the search converged on a skip that overflowed the pane. Bound is now `len` | The comment stated the false premise as a justification. The blank-row change landed later and nobody re-read it |
+| **A `wield` matching no recipe said nothing at all** — `finish` `continue`s after `transmute`, so returning quietly made it the one path that ends a command with no record. Echo, then silence, forever | The path was believed unreachable, so no test drove it |
+| **`move` did not clear `Product`** — the destination read `ready` on the panel before anything had been wielded, and `siphon` handed the freshly-delivered *input* straight back out | `siphon` clears the marker; nothing checked that `move` does |
+| **`purge` worked at a distance** — from `/tower/archive`, `purge mortar_and_pestle` scoured the laboratory's mortar. The cwd lookup compared a *leaf* against a *full path*, so it never matched and every purge reached its target through the tower-wide fallback | The fallback looked deliberate. It was the only path that ever fired |
+| **`damp` at exact burnout destroyed the fire's ash** — `Ash` is landed only by `burn`, which queries live `Burning` components, so removing `Burning` on the tick fuel hit zero orphaned the debt forever. Quenching one tick earlier produced ash; on the exact tick it vanished | An off-by-one in a branch nobody sampled |
+| **`State::Fouled` had no construction site** — an instrument holding only husks drew as `charged`, the same word as one loaded and ready, and `speak()` filters `Charged` out of its utterance entirely, so a screen-reader user heard nothing. Precisely the confusion §10.1's panel exists to remove | `an_instrument_walks_through_its_states` asserted `State::Charged` there, with the comment *"the husks are still in there"* |
+| **The Tab listing was wiped by Tab's own key-release** — `type_into_line` is gated on `on_message::<KeyboardInput>`, and winit sends one for the release too. The listing lived for the ~50 ms a finger was down | The test helper only ever writes `ButtonState::Pressed`. The release path had no coverage at all |
+| **`work_busy` rendered "divineing"** — the prose template appended a literal `ing` to `Verb::canonical`. English inflection is not string concatenation; `Verb::participle` now spells it | The authored-line lints check the *template*, never the interpolated result |
+
+**The fidelity regression.** `Fidelity::PREFERRED_GRID` was set to
+`DEEP_FOCUS_FLOOR`, which made `DisplayMode::default_for(tier_one.grid(w))` a
+**tautology** — `tier_one` aims at exactly that grid, so whenever it succeeds the
+answer is `Deep` — and `deep()` then dropped a second tier. 1920×1080 opened at
+240×67 with 8×16 pixel glyphs where 120×33 at 16×32 was intended. Aiming tier one
+at the Deep floor already bought what the default was reaching for (two panes
+hostable from the first frame, so `F4` works immediately); choosing `Deep` as well
+spent the affordance twice. The default is now `Wide`.
+
+**Layering, where a frontend had started deciding things**
+
+- **`abbreviate` moved into the sim.** Rule 2 gives a frontend *how* a cell is
+  drawn, not *what word appears in it*, and the Bevy build was deriving the
+  panel's two-letter labels from English stopwords in its own source — a rule
+  existing nowhere else, so `orbs-tui` would have had to reimplement it and the
+  two builds could disagree about what `bm` means. Its collision test lived in the
+  Bevy crate over a **hardcoded copy** of the instrument list, so renaming an
+  instrument left it passing on stale names.
+- **The panel's spoken domain is passed in**, not the literal `"laboratory"`.
+  §10's Phase 3a adds a second instrumented room; a sighted player would have read
+  `/tower/workshop` in the border while a reader heard "laboratory: forge burning".
+- **`needs_heat` became `Recipe::heat`.** It was `matches!(instrument,
+  "balneum_mariae" | "alembic")` in the executor while `recipes.toml` recorded the
+  same fact *as a comment* — so a designer adding a heated instrument would have
+  edited the file, read their own note, and shipped a recipe that runs cold.
+- **The athanor and dispensary are marker components**, not six `name == ATHANOR`
+  comparisons with nothing binding them together.
+- **`window_too_small` moved to `prose.toml`** (rule 6 has no frontend exemption)
+  and the prompt's `Prose` is reachable through `Sim::prose`.
+- **Prose hot-reload no longer moves the parser's nouns.** Every `grimoire_` key
+  was a `NounKind::Topic` read live, so renaming one mid-session changed what a
+  phrase resolves to — while `set_prose` documents itself as replay-safe *because
+  prose reaches no decision*. A noun is a decision; `tower::Topics` snapshots them
+  at construction.
+
+**Two findings checked and rejected.** A review proposed caching the
+`QueryState`s that `burn` and `finish` build per tick. `cargo run --release -p
+orbs-sim --example bench_steps` says rule 8's worst case — 29,000 `step()` calls —
+is **121 ms at ~4 µs a step**, so those constructions are noise at this entity
+count and the caching would be complexity bought for nothing. The example is kept
+as the instrument that says so. A second review claimed `ORBS_DUMP` reported a
+tier its grid could not reach; the arithmetic says 80×22 at tier 1 is exactly what
+a 640×352 window produces. The *real* defect underneath was different — the dump
+pinned a fixed fake window, which stopped being inert when the prompt learned to
+spend a second row at a fine tier — and `Fidelity::for_grid` now inverts the real
+path instead.
+
+**Structure.** `execute.rs` was 987 lines holding three unrelated concerns with
+only the sixteen-arm `match` touching all of them; it is now `execute/` with
+`dispatch`, `pipeline`, `grimoire`, `navigate` and `files`. The three TOML loaders
+became one `content::load`, `char_index` and the meter arithmetic moved to
+`orbs-render` where both callers can share them, and `paint`'s ten positional
+parameters became a `View`.
+
+### The prompt becomes a command line — built
+
+Caret editing, history, completion and an inline suggestion. Two independent
+reviews and a survey of `rustyline`, `reedline`, GNU readline, fish and zsh; what
+follows is what those changed, because most of it was load-bearing.
+
+| Question | Decision |
+|---|---|
+| **Places echo as their leaf** | The three-argument `move` echo was **already clipped** — `move charcoal /tower/laboratory/dispensary /tower/laboratory` lost its destination at the 80×22 floor. §7 already says *"players say the place, not the path"*; the echo teaching one canonical form and the player saying the leaf were only ever reconcilable one way. **Not** a "shortest unique suffix": `score_against` matches a phrase against the full name or the leaf and nothing between, so `laboratory/alembic` would teach a form the parser rejects. Collisions are **forbidden** instead, by `every_place_leaf_is_unique` — the day a seventh domain wants a second `dispensary`, a test fails rather than the echo quietly starting to lie |
+| **A component is looked for on the floor, then in the instruments, then in the dispensary** | The first draft put instruments first, reasoning that a product sits in the tool that made it. It does not: `siphon` moves it to `cwd`, and §10.1's loop makes `siphon` mandatory, so **every mid-pipeline `move` takes its subject off the laboratory floor**. The dispensary is stock and stock is the fallback |
+| **A working instrument is never raided** | Found while checking the above. `carry`'s lock was on the *destination* only, so a `move` could pull a reagent out of a running instrument: the run then matched no recipe, returned early, spent the Focus slot and **said nothing**. Live bug, fixed on its own account |
+| **`FieldName::Origin`, not `Source`** | `read_file` keys **domain logs** by `Source`, so a `move` carrying `Source = "dispensary"` would be filtered *out* of `peruse laboratory.log` — a record about the laboratory, missing from the laboratory's log. The closed field set made adding one a reviewed act, which is what it is for |
+| **The echo stays a restatement of what was said** | It is written at submit and the source is found at execute, a tick later. Filling the source in at submit was tried and refused: `Choices` outlives ticks, so a numbered prompt left open across a brew would execute against an N-tick-old world, and `carry`'s exclusive-source branch would then be *wrong* rather than merely narrow. From→to lives in the completion line, which knows the truth |
+| **The caret is reverse video, and needs nothing from `orbs-render`** | A block caret covered the character under it and blinked it. The first plan proposed a per-cell inverse flag — which would have **contradicted §19's own "what a cell holds"** and been the wrong layer besides. The caret is a *quad*, not a cell, so the glyph is simply redrawn on top in the tube's black. Frontend enrichment, exactly as `blink` already is |
+| **Completion returns a range, not an append** | `rustyline`'s shape. It matters more here than there: §6's parser resolves `clarty` to `clarity`, and a completer that can only extend is useless the moment the player has typed a near-miss — which is the player this game is built for |
+| **Tab's candidate list is Frame content, never a record** | There is deliberately no `scrollback_mut`: the stream *is* the log, and a frontend writing into it makes a session `(seed, submissions)` cannot replay. A Tab press is not a submission. §3's *"unlogged output is forbidden"* governs the orb's output, not the shell's own affordances |
+| **The suggestion is spoken, tagged `Hint`** | The first plan had it silent, on the grounds that §14's stream carries what *is*. That argument would equally forbid speaking the half-typed line — **which this codebase already speaks**. §19's own Frame-boundary rule settles it: *"a narrow pane is a visual constraint and must not become an informational one."* Its own kind, so verbosity can drop the most repetitive thing on screen |
+| **History is the frontend's, and `Up` filters by prefix** | Not because `Submissions` contains prompt digits — a frontend history has the same problem and needs the same filter — but because `Submissions` is the **replay log**, and reading it for a UI convenience invites someone to tidy it later. Prefix filtering is fish's default and zsh's `history-beginning-search-backward`; the anchor is held for the whole search, or the second `Up` searches the line the first one recalled |
+| **No debouncing, no caching, no async** | fish does all three and zsh recommends async, because their corpus is a filesystem and a history of tens of thousands of lines. Ours is a few dozen scene nouns in memory with no I/O — and rule 8 forbids async in the sim regardless. Written down because the prior art all points the other way |
+
+**Deferred, named:** `Ctrl+R` reverse incremental search — every editor surveyed
+has it, and against a repeating brew loop it is arguably worth more than Tab —
+plus `Delete`, `Ctrl+U`, `Ctrl+W`, word motion, paste, IME and scrollback
+wrapping. `Alt` stays unguarded so AltGr can type `@`, which is why `Alt+B`/`F`
+insert rather than move.
+
+**`ORBS_LINE` was a prerequisite, not a nicety.** `ORBS_DUMP` submits every
+segment, so the input buffer was always empty when the frame was painted — a
+caret position, a partial word and a ghost were the three things a dump could not
+show, which is every gate in this item.
+
+### Brewing as a tool pipeline — designed, Phase 1 item 1
+
+§10.1 is the design. Five revisions and two independent reviews; what follows is
+what the reviews changed, because most of it was load-bearing.
+
+| Question | Decision |
+|---|---|
+| **Five instruments, four taking Focus** | The athanor is *infrastructure*, not a stage. That is what makes "four tools, four Focus slots" exact rather than argued — §11.5's capacity track tops out at four, and the arithmetic falls out instead of being reached for. Earlier drafts had four stage-tools and had to defend the coincidence |
+| **A pane may hold as many production slots as it has instruments** | §9's per-pane cap of 1 is amended. **Not** a reversal of *"one production slot, tower-wide"* below — the counter stays global and the tools draw from it. The first review called this a re-litigation of a settled decision; it is not, and the distinction decides whether the owner is overturning §19 or amending §9 |
+| **Attention upkeep moves from per-open-pane to per-concurrent-action** | The real cost of the amendment, and the second review is what found it. §9 makes open panes the *price* of concurrency; four tools in one pane would have bought depth 4 at one pane's upkeep and exposure, decoupling depth from exposure. Charging the action rather than its container is more faithful to §9's own reasoning — concurrency is what upkeep was always pricing — and it keeps capacity 4 meaningful if cut-line item 7 is ever taken |
+| **`decoct` is retired, and nothing replaces it** | It went through three answers. First it was repointed at a tool — wrong, because §15 chose brewing to gate the parser *because "a shell-naive tester immediately understands 'make a potion'"*. Then it was kept as an intent-declaring affordance — also wrong, and the owner caught it: a verb that says *brew a potion* while brewing is a four-stage pipeline teaches the player something false, which is the one thing §6's echo mechanism must never do. **The only single command that brews a potion is a spell the player wrote.** A built-in shortcut would hand over free the exact thing §8 says the player is meant to build |
+| **`make a potion of clarity` → `grimoire clarity`** | §15's requirement is that the phrase resolve *somewhere useful*, not that a verb exist to satisfy it. Answering a newcomer's most natural sentence with the recipe makes it the tutorial entry point. `decoct`, `brew`, `make`, `mix` and `distil` all stay **claimed** and point here: the Phase 0 naming pass established that a released word does not stop resolving, it resolves to whatever it is nearest |
+| **§8's script example was itself the bug** | The design's headline spell contained `brew --recipe=clarity --qty 2` — a built-in doing a whole domain in one line, which no longer exists and arguably never should have. It becomes `invoke brew_clarity --qty 2`, a spell the player wrote. The section is stronger for it: it now shows **scripts composing scripts**, and every line the script saves is a line the player once typed |
+| **`move`'s first slot resolves inside its second** | The plan's own headline command did not work: `tower/scene.rs` registers non-place nodes only as children of `cwd`, so `move charcoal from dispensary to athanor` could not name `charcoal`. Three revisions asserted "the scoping rule survives untouched" having only considered materials inside a *tool*, and missed that `from <source>` exists precisely to name what is *not* where you are. Making the source slot scope the material fixes it without relaxing the rule for anything else |
+| **Heat is checked at start; the run then completes** | The alternatives were pausing (a countdown, forbidden below) and spoiling (costs progress, breaking *"never ruinous"*). The timing pressure survives because it comes from the burn being **time-based**, not from spoilage risk: idle lit time is pure waste, so you batch both heated stages into one lighting |
+| **Constant burn rate** | A load-varying rate would make fuel depend on which tools were mounted when — not a pure function of the tick, and exactly the countdown *"work is an interval"* refused |
+| **Ash at burn-out, not per tick** | Per-tick spawning would issue ids into `Children`, and insertion order *is* the parse. A determinism bug no test in the suite would have caught |
+| **`balneum_mariae`, not `retort`** | `retort` scored **667** against `revert` (a plain synonym for `undo`), so a bare `retort` could reach `undo` — found only because the second review checked the new *nouns* and not just the new verbs. The rename is also the better instrument: a water bath is *gently* heated, which is what sitting on the athanor should mean. It has the side effect of keeping `retort` a live `Vessel` noun, so the kind is never emptied |
+| **`wield` + `kindle`, not `stoke`/`start`/`tend`** | Computed against the real scoring function: `stoke` scores 600 against `stop` and shares its `sto` prefix, `start` prefix-collides with `status`, `tend` scores 667 against `attend`, `exert` 667 against `revert` |
+| **Capacity 1 is the form that ships** | Capacity 4 arrives at ~10 h via research, which is Phase 3a. For Phases 1–2 the pipeline is sequential, and the athanor is what makes that a decision rather than a queue. An earlier draft had this backwards — "designed for 4, degrades to 1" — when 1 is the only capacity anyone plays for a year |
+
+**What the reviews cost, and why the practice stays.** Two context-free reviews
+found: a headline command that could not parse, the deletion of §15's stated
+reason for gating on this domain, a counterweight silently removed, a noun
+collision, `is_destructive` having zero callers so a claimed "free" confirmation
+did not exist, `purge <tool>` *despawning the tool*, and a fixture collision on
+`alembic`. Every one was verified against the code before being accepted, and one
+review finding — that this re-litigates *"one production slot, tower-wide"* — was
+checked and **rejected**. Reviews are not authorities either.
+
 ### The inactivity grace — specified, built, and removed
 
 §5.0 called for a *"~60s inactivity grace so pausing to think is never
@@ -2040,8 +2569,31 @@ POST naming what the orb is made of.
 | **Sequential, not merged** | The POST is the machine; §4's report is the tower. To stop them reading as one screen twice, the POST is a **centred title card** — no pane, no `name qty state` columns — and the border does not exist until the stage that draws it |
 | **The versions are real** | `tower/boot.rs` exists because *"a report that could go stale is a lie the player reads first."* A POST printing invented numbers is the same lie one screen earlier. Bevy's is the exact pin, held to `Cargo.toml` by a test; Rust's comes from a build script |
 | **The world does not tick during it** | `tower::drift` rolls once per tick, so ticking through a wall-clock animation advances the RNG stream by an amount depending on how long boot took and whether anyone skipped. **The same seed would build a different world.** A correctness fix, not polish |
-| **Skip is a keypress, and §4 asked for sticky** | Sticky needs persistence, which does not exist and arrives with §15's Phase 5 settings screen. The keypress is the honest half-measure; the roadmap names the phase that closes it rather than claiming the requirement is met |
-| **Any key, including the bound ones** | `F10` quits. A player reaching for it during boot means *skip*, and without the guard they would skip and quit in one keystroke. Every keyed system is gated, typing included, so the skipping keystroke is not also the first letter of a command |
+| **Skip is a keypress, and §4 asked for sticky** | ~~Sticky needs persistence, which does not exist and arrives with §15's Phase 5 settings screen. The keypress is the honest half-measure.~~ **Superseded — the keypress skip is removed entirely (below).** §4's sticky skip still stands and still waits on Phase 5 |
+| **Any key, including the bound ones** | ~~`F10` quits, and a player reaching for it during boot means *skip*.~~ **Superseded with the keypress.** Every keyed system is still gated on `booted`, which is now the whole story: until the game is up, a keystroke does nothing at all |
+
+#### The keypress skip is removed
+
+**Any key went straight to the game. It no longer does.** The sequence runs to
+the end, every launch, and only `ORBS_BOOT=0` — a development affordance, not a
+player-facing one — starts past it.
+
+The reasoning above was about a sequence *"long and meant to be skippable"*. The
+owner's judgement is the opposite: at ~14 s it is **character rather than a
+wait**, and a keypress skip made the first thing a player ever does to this game
+be dismissing it. A CRT warming up is the game introducing itself; an interface
+that flinches away the moment you touch a key teaches that its own atmosphere is
+an obstacle.
+
+**This does not touch §4's sticky skip**, which is a different mechanism for a
+different person: a remembered setting for someone on their fortieth launch,
+chosen once. It still waits on Phase 5's settings screen, and `Boot::finished` is
+the state it will select.
+
+**What was actually gained by removing it:** the `booted` run condition stops
+being a guard against the skip keystroke doing two things at once, and becomes a
+single plain rule — until the game is up, a keystroke does nothing. The `F10`
+special case in the entry above disappears with the mechanism that needed it.
 
 **Three Rust versions existed and two were wrong.**
 `env!("CARGO_PKG_RUST_VERSION")` is **empty** in `crates/orbs` — it does not
@@ -2255,10 +2807,14 @@ and a version line under a six-row letterform would be the only small text there
 the frame drawing itself, the dependencies reporting — were over before they
 could be followed, which made them decoration rather than a sequence.
 
-**Four times slower: 17.6 s.** That is long, and it is meant to be skippable
-rather than short: any key, plus `ORBS_BOOT=0` for a session that never wants it.
-The judgement being recorded is that a boot sequence nobody can read is worse
-than one they skip, because the second at least works the first time.
+**Four times slower.** The judgement being recorded is that a boot sequence
+nobody can read is worse than one that takes a beat, because the second at least
+works the first time.
+
+*(Written when it was 17.6 s and skippable with any key. The sequence later lost
+its opening flash and settled at ~14 s, and the keypress skip was removed
+outright — see the entry above. `ORBS_BOOT=0` remains, as a development
+affordance rather than a player-facing one.)*
 
 #### An accessibility switch something else could flip
 

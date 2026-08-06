@@ -117,22 +117,28 @@ impl PaneTransition {
     /// common path costs one `compute` and no interpolation at all. Where a pane
     /// arrives *from* is [`ScreenLayout::transition`]'s business, not this
     /// module's — all this owns is the clock.
-    pub(crate) fn layout(&self, grid: GridSize, mode: DisplayMode) -> ScreenLayout {
-        let to = settled_layout(grid, mode, self.to);
+    pub(crate) fn layout(
+        &self,
+        grid: GridSize,
+        mode: DisplayMode,
+        input_rows: u16,
+    ) -> ScreenLayout {
+        let to = settled_layout(grid, mode, self.to, input_rows);
         if self.is_settled() {
             return to;
         }
-        let from = settled_layout(grid, mode, self.from);
+        let from = settled_layout(grid, mode, self.from, input_rows);
         ScreenLayout::transition(&from, &to, mode, self.progress())
     }
 }
 
-fn settled_layout(grid: GridSize, mode: DisplayMode, panes: u8) -> ScreenLayout {
+fn settled_layout(grid: GridSize, mode: DisplayMode, panes: u8, input_rows: u16) -> ScreenLayout {
     ScreenLayout::compute(&ScreenRequest {
         grid,
         main_panes: panes,
         sidebar_panes: 0,
         mode,
+        input_rows,
     })
 }
 
@@ -144,7 +150,7 @@ mod tests {
     const WIDE_GRID: GridSize = GridSize::new(160, 45);
 
     fn at(transition: &PaneTransition, mode: DisplayMode) -> Vec<Rect> {
-        transition.layout(WIDE_GRID, mode).main().to_vec()
+        transition.layout(WIDE_GRID, mode, 1).main().to_vec()
     }
 
     #[test]
@@ -154,7 +160,7 @@ mod tests {
         // animation has changed the game rather than how it arrives.
         for mode in [DisplayMode::Deep, DisplayMode::Wide] {
             for panes in [1, 2] {
-                let settled = settled_layout(WIDE_GRID, mode, panes);
+                let settled = settled_layout(WIDE_GRID, mode, panes, 1);
                 assert_eq!(at(&PaneTransition::settled(panes), mode), settled.main());
             }
         }
@@ -175,7 +181,7 @@ mod tests {
             "the new pane started at column {}, not at the right edge",
             arriving.col,
         );
-        let settled = settled_layout(WIDE_GRID, DisplayMode::Deep, 2).main()[1];
+        let settled = settled_layout(WIDE_GRID, DisplayMode::Deep, 2, 1).main()[1];
         assert_eq!(arriving.row, settled.row, "it should not move vertically");
         assert_eq!(arriving.rows, settled.rows, "it is full height throughout");
     }
@@ -239,7 +245,7 @@ mod tests {
 
         let leaving = at(&transition, DisplayMode::Deep);
         assert_eq!(leaving.len(), 2, "the departing pane stopped being painted");
-        let settled = settled_layout(WIDE_GRID, DisplayMode::Deep, 2).main()[1];
+        let settled = settled_layout(WIDE_GRID, DisplayMode::Deep, 2, 1).main()[1];
         assert!(
             leaving[1].cols < settled.cols,
             "the departing pane never narrowed",
@@ -260,7 +266,7 @@ mod tests {
         transition.retarget(2);
 
         for step in 0..=32 {
-            let panes = transition.layout(grid, DisplayMode::Deep);
+            let panes = transition.layout(grid, DisplayMode::Deep, 1);
             let main = panes.main();
             assert_eq!(main.len(), 2, "step {step}");
             let (left, right) = (main[0], main[1]);

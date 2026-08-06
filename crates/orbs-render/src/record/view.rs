@@ -188,9 +188,17 @@ impl<'a> RecordView<'a> {
         let indent = indent_for(prompt);
         let (mut rows, mut rest) = (0u16, records);
         let mut at_run_start = true;
+        let mut first = true;
         loop {
             let run = rest.clone();
             let Some(record) = rest.next() else { break };
+            // The blank row `draw_lines` puts before each command but the first.
+            // Measured here too, or the caller's "which records fit" arithmetic
+            // disagrees with what is drawn and the pane scrolls by a row a frame.
+            if record.kind() == RecordKind::Input && !first {
+                rows = rows.saturating_add(1);
+            }
+            first = false;
             // Only ever planned at a run's first record. A run that declines
             // declines for its whole length, and re-asking at each of its records
             // would walk the remainder every time — quadratic in the run, on a
@@ -206,7 +214,7 @@ impl<'a> RecordView<'a> {
                 continue;
             }
             at_run_start = !record.kind().tiles();
-            rows = rows.saturating_add(1);
+            rows = rows.saturating_add(wrapped_rows(&record, cols, prompt));
         }
         rows
     }
@@ -411,6 +419,20 @@ fn draw_lines<'r>(
             continue;
         }
         at_run_start = !record.kind().tiles();
+
+        // A blank row before each command but the first, so one exchange does
+        // not run into the next. The transcript is a wall of short lines and the
+        // prompt is the only thing separating them; without this, reading back
+        // three commands means finding the prompts by eye.
+        //
+        // Drawn rather than spoken: §14's stream is whole records in order, and
+        // an utterance for "nothing" is noise a listener cannot skip.
+        if record.kind() == RecordKind::Input && index > 0 {
+            row = row.saturating_add(1);
+            if row >= area.bottom() {
+                break;
+            }
+        }
         index += 1;
 
         drawn.clear();
@@ -453,27 +475,54 @@ fn draw_lines<'r>(
             }
         }
 
-        if complete {
-            let mut span = crate::span::Span::new(visible)
-                .with_style(style)
-                .with_kind(record.kind().utterance())
-                .with_spoken(&speech);
-            // The marker and the intensity are both silent channels. Tagging the
-            // utterance is what stops `xyzzy` from linearising as three identical
-            // lines, with a listener unable to tell the error from the offers.
-            if let Some(outcome) = record.outcome() {
-                span = span.with_outcome(outcome);
+        // Wrapped, not clipped — see `wrapped_rows`, which measures with the same
+        // iterator so the two cannot disagree about the row cost.
+        //
+        // **The whole record speaks once, on its first row.** §14's stream is
+        // whole records in stream order; a listener hearing one utterance per
+        // wrapped fragment would have to reassemble a sentence the screen shows
+        // whole, and would hear a *different number of things* depending on how
+        // wide the window happens to be. Continuations draw silently.
+        let width = wrap_width(area.cols, lead_for(&record, prompt));
+        let mut spoke = false;
+        for fragment in crate::wrap::Wrap::new(visible, width) {
+            if row >= area.bottom() {
+                break;
             }
-            painter.span(Pos::new(col, row), &span);
-        } else {
-            // `glyphs` rather than a `Span` with empty speech: an empty override
-            // means *no override*, so the span would announce its visible text
-            // and a listener would hear a prefix that grows every frame. §14's
-            // stream is whole records in stream order — a record announces when
-            // it finishes arriving, and stays silent until then.
-            painter.glyphs(Pos::new(col, row), visible, style);
+            let at = if spoke {
+                col.saturating_add(CONTINUATION)
+            } else {
+                col
+            };
+            if complete && !spoke {
+                let mut span = crate::span::Span::new(fragment)
+                    .with_style(style)
+                    .with_kind(record.kind().utterance())
+                    // The *whole* line, however it was broken up to fit.
+                    .with_spoken(&speech);
+                // The marker and the intensity are both silent channels. Tagging
+                // the utterance is what stops `xyzzy` from linearising as three
+                // identical lines, with a listener unable to tell the error from
+                // the offers.
+                if let Some(outcome) = record.outcome() {
+                    span = span.with_outcome(outcome);
+                }
+                painter.span(Pos::new(at, row), &span);
+            } else {
+                // `glyphs` rather than a `Span` with empty speech: an empty
+                // override means *no override*, so the span would announce its
+                // visible text and a listener would hear a prefix that grows
+                // every frame. §14's stream is whole records in stream order — a
+                // record announces when it finishes arriving, and stays silent
+                // until then.
+                painter.glyphs(Pos::new(at, row), fragment, style);
+            }
+            spoke = true;
+            row = row.saturating_add(1);
         }
-        row = row.saturating_add(1);
+        if !spoke {
+            row = row.saturating_add(1);
+        }
     }
     row.saturating_sub(area.row)
 }
@@ -483,6 +532,61 @@ fn draw_lines<'r>(
 const fn indent_for(prompt: Option<&str>) -> u16 {
     if prompt.is_some() { MARKER_WIDTH } else { 0 }
 }
+
+/// Rows a record's drawn line takes once wrapped.
+///
+/// **A line view wraps rather than clips.** It used to draw one row per record
+/// and cut whatever did not fit, which is silent data loss on the surface §14
+/// calls the game's primary output: a refusal naming two long reagents lost its
+/// verb, and `grimoire`'s own instructions — the one command whose entire job is
+/// telling a player what to type — lost the thing to type. A pane gives about 46
+/// cells once its border and §10.1's instrument panel are taken out, and
+/// `sage-tincture + ground-salt -> clarified-draught` is 47.
+///
+/// Measured here and drawn by [`draw_lines`] from the same [`Wrap`], so the two
+/// cannot disagree about how many rows a record costs — the failure that left the
+/// transcript with blank rows at the bottom while it dropped history off the top.
+fn wrapped_rows(record: &Record<'_>, cols: u16, prompt: Option<&str>) -> u16 {
+    let width = wrap_width(cols, lead_for(record, prompt));
+    if width == 0 {
+        return 1;
+    }
+    let line = record.to_line();
+    let rows = crate::wrap::Wrap::new(&line, width).count();
+    u16::try_from(rows).unwrap_or(u16::MAX).max(1)
+}
+
+/// Cells before a record's own text begins.
+///
+/// **Per record, because an `Input` starts after the whole prompt** and
+/// everything else after the marker. Measuring both at the marker width — which
+/// is what a single `indent` did — makes `height` believe a typed line has a
+/// dozen more cells than it draws into, so a long command measures one row and
+/// draws two. The pane then scrolls by a row a frame, which is the failure the
+/// tiling plan is shared to prevent and would have been reintroduced here.
+fn lead_for(record: &Record<'_>, prompt: Option<&str>) -> u16 {
+    match prompt {
+        None => 0,
+        Some(prompt) if record.kind() == RecordKind::Input => {
+            u16::try_from(prompt.chars().count()).unwrap_or(u16::MAX)
+        }
+        Some(_) => MARKER_WIDTH,
+    }
+}
+
+/// Cells a wrapped line may use, leaving room for a continuation's indent.
+///
+/// Every row of a record is wrapped to the *same* width, including the first, so
+/// [`wrapped_rows`] and [`draw_lines`] cannot count differently. The first row
+/// gives up [`CONTINUATION`] cells it could have used; that is the price of the
+/// two staying in step, and it buys the indent that makes a wrapped line read as
+/// part of the line above rather than as a new one.
+const fn wrap_width(cols: u16, lead: u16) -> u16 {
+    cols.saturating_sub(lead).saturating_sub(CONTINUATION)
+}
+
+/// How far a wrapped line's continuations are indented.
+const CONTINUATION: u16 = 2;
 
 /// How a run of [tiling](RecordKind::tiles) records packs across a pane.
 ///

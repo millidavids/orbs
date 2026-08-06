@@ -17,7 +17,7 @@ use orbs_render::{
 };
 use orbs_sim::Sim;
 
-use super::input::Line;
+use super::line::Line;
 use super::linear::Linear;
 use super::reveal::Reveal;
 use super::screen::Screen;
@@ -31,6 +31,35 @@ use super::transition::PaneTransition;
 /// lie the model exists to make impossible.
 const TELEMETRY: [FieldName; 3] = [FieldName::Name, FieldName::Quantity, FieldName::State];
 
+/// Everything a frame is drawn from, borrowed for the one call.
+///
+/// A struct rather than ten positional parameters: `paint` grew one for the Tab
+/// listing, one for the cached ghost and one for the cached panel, and by then
+/// three of its arguments were `&str`-ish and adjacent — the kind of signature
+/// where transposing two compiles cleanly. Every field is read-only; `Frame` and
+/// `Linear` stay separate because they are the two things `paint` writes.
+#[derive(Clone, Copy)]
+pub(crate) struct View<'a> {
+    /// The world, for everything the frame says.
+    pub(crate) sim: &'a Sim,
+    /// What is being typed.
+    pub(crate) line: &'a Line,
+    /// Grid, tier and focus mode.
+    pub(crate) screen: &'a Screen,
+    /// Where the pane animation has reached.
+    pub(crate) panes: &'a PaneTransition,
+    /// How much of the newest output has arrived.
+    pub(crate) reveal: &'a Reveal,
+    /// What Tab last offered, and where a cycle has reached.
+    pub(crate) offered: &'a super::input::Offered,
+    /// The inline suggestion trailing the caret.
+    pub(crate) ghost: &'a str,
+    /// §10.1's instruments, as the sim last reported them.
+    pub(crate) panel: &'a super::input::Panel,
+    /// How far back through the transcript the player is looking.
+    pub(crate) scroll: &'a super::input::Scroll,
+}
+
 /// Paint the session into `frame`.
 ///
 /// **Two panes, from a real `ScreenLayout`.** The game drew a single hand-built
@@ -42,17 +71,31 @@ const TELEMETRY: [FieldName; 3] = [FieldName::Name, FieldName::Quantity, FieldNa
 /// The layout arrives already interpolated: a pane appearing or leaving does so
 /// over a fraction of a second (see [`PaneTransition`]), and every rectangle here
 /// is wherever that motion has reached this frame.
-pub(crate) fn paint(
-    frame: &mut Frame,
-    sim: &Sim,
-    line: &Line,
-    screen: &Screen,
-    linear: &mut Linear,
-    panes: &PaneTransition,
-    reveal: &Reveal,
-) {
+pub(crate) fn paint(frame: &mut Frame, linear: &mut Linear, view: &View<'_>) {
+    let View {
+        sim,
+        line,
+        screen,
+        panes,
+        reveal,
+        offered,
+        ghost,
+        panel,
+        scroll,
+    } = *view;
     let grid = frame.size();
-    let layout = panes.layout(grid, screen.mode);
+    // The prompt spends a second row at the finest tier, so it keeps its pixel
+    // height when the cells shrink (§9).
+    let input_rows = screen.fidelity.map_or(1, orbs_render::Fidelity::input_rows);
+    // A Tab listing takes a row **from the layout**, so the pane above shrinks by
+    // one for as long as it is up. Drawing it at `input.row - 1` instead put it
+    // exactly on the session pane's bottom border, because `compute` hands the
+    // main tiler everything up to `above_input` — so completing a word erased the
+    // border and it came back when the listing went. Reserving the row is what a
+    // terminal does anyway: the list pushes the transcript up rather than
+    // scribbling on it.
+    let listing = u16::from(!offered.is_empty());
+    let layout = panes.layout(grid, screen.mode, input_rows.saturating_add(listing));
     let main = layout.main();
     let first = main.first().copied().unwrap_or(Rect::EMPTY);
 
@@ -70,14 +113,105 @@ pub(crate) fn paint(
     // it says the same thing as the cells, and a comparison you make by pressing
     // one key is a comparison you actually make.
     if linear.showing() {
-        super::linear::paint(linear, frame, sim, screen, first, carry_readings);
+        super::linear::paint(
+            linear,
+            frame,
+            sim,
+            screen,
+            first,
+            carry_readings,
+            panel,
+            scroll,
+        );
     } else {
-        session(frame, sim, screen, first, carry_readings, reveal);
+        session(
+            frame,
+            sim,
+            screen,
+            first,
+            carry_readings,
+            reveal,
+            panel,
+            scroll,
+        );
     }
     if let Some(second) = main.get(1) {
         telemetry(frame, sim, screen, *second);
     }
-    input_line(frame, layout.input(), line, &sim.prompt());
+    // The ghost arrives already computed. It stays a pure function of the line,
+    // the scene and whether a prompt is open — `shell::input::suggest` owns the
+    // one call and names what invalidates it, so there is no second copy able to
+    // disagree with the line it trails, and it stops being rebuilt on the ~59
+    // frames in 60 where none of its inputs moved.
+    let (list_area, prompt_area) = split_input(layout.input(), listing);
+    candidates(frame, list_area, offered);
+    input_line(frame, prompt_area, line, &sim.prompt(), ghost);
+}
+
+/// The reserved rows, divided into the Tab listing and the prompt proper.
+const fn split_input(input: Rect, listing: u16) -> (Rect, Rect) {
+    if listing == 0 || input.rows <= listing {
+        return (Rect::EMPTY, input);
+    }
+    (
+        Rect::new(input.col, input.row, input.cols, listing),
+        Rect::new(
+            input.col,
+            input.row + listing,
+            input.cols,
+            input.rows - listing,
+        ),
+    )
+}
+
+/// What Tab offered, on the row above the prompt.
+///
+/// **Not a record.** There is deliberately no `scrollback_mut` (§13): the
+/// scrollback *is* the log, and a frontend writing into it produces a session
+/// `(seed, submissions)` cannot replay — a Tab press is not a submission and
+/// never will be. So this is transient Frame content, gone on the next
+/// keystroke, and §3's "unlogged output is forbidden" is about the orb's output
+/// rather than the shell's own affordances.
+fn candidates(frame: &mut Frame, area: Rect, offered: &super::input::Offered) {
+    if offered.is_empty() || area.is_empty() {
+        return;
+    }
+    let row = area.row;
+    let mut painter = frame.painter(area);
+
+    // The one the cycle has reached is drawn bright against the rest, because
+    // repeated Tab changes the *line* and the list has to say which of them the
+    // line now holds. Without it the player is walking a wall of equal-looking
+    // words with no idea where they are.
+    let mut at = area.col;
+    for (index, option) in offered.options.iter().enumerate() {
+        if at >= area.right() {
+            break;
+        }
+        let current = offered.current == Some(index);
+        let style = if current { Style::SUCCESS } else { Style::DIM };
+        at = at.saturating_add(painter.glyphs(Pos::new(at, row), option, style));
+        at = at.saturating_add(2);
+    }
+
+    // Spoken once, as a sentence, rather than a span per candidate — a reader
+    // hearing eight separate utterances a keypress learns nothing. §19: a visual
+    // constraint must not become an informational one, and neither may a visual
+    // *affordance* — so the mark a sighted player sees is said aloud too.
+    let spoken = offered
+        .options
+        .iter()
+        .enumerate()
+        .map(|(index, option)| {
+            if offered.current == Some(index) {
+                format!("{option} (chosen)")
+            } else {
+                option.clone()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    painter.announce(UtteranceKind::Hint, Style::DIM.role, &spoken);
 }
 
 /// Paint the screen as it exists partway through the boot sequence.
@@ -87,15 +221,17 @@ pub(crate) fn paint(
 /// itself a cell at a time, and the POST card follows.
 ///
 /// Takes no Bevy resources, because `shell::dump` builds no `App` (§19).
+/// Takes no `Sim`: the boot screen draws nothing from the world. It used to, for
+/// a prompt that is no longer painted here, and the parameter survived as a
+/// `let _ = sim;` that two call sites still threaded an argument through for.
 pub(crate) fn paint_booting(
     frame: &mut Frame,
-    sim: &Sim,
     screen: &Screen,
     stage: crate::boot::Stage,
     progress: f32,
 ) {
     let grid = frame.size();
-    let layout = ScreenLayout::compute(&ScreenRequest::single(grid));
+    let layout = ScreenLayout::compute(&ScreenRequest::single_at(grid, screen.fidelity));
     let pane = layout.main().first().copied().unwrap_or(Rect::EMPTY);
 
     if stage.has_frame() {
@@ -113,29 +249,10 @@ pub(crate) fn paint_booting(
 
     crate::boot::paint(frame, stage, progress);
 
-    if stage.has_prompt() {
-        // The prompt types itself too, the same as everything else on this
-        // screen — a name appearing whole beside a card that is still arriving
-        // would be the one thing that had not booted.
-        let prompt = sim.prompt();
-        let typed = if matches!(stage, crate::boot::Stage::Prompt) {
-            orbs_render::arriving(&prompt, crate::boot::arrived(&prompt, progress))
-        } else {
-            &prompt
-        };
-        let input = layout.input();
-        let mut painter = frame.painter(input);
-        let written = painter.span(
-            Pos::new(input.col, input.row),
-            &Span::new(typed)
-                .with_style(Style::NORMAL)
-                .with_kind(UtteranceKind::Input),
-        );
-        // The caret trails the text it is typing, which is what a terminal does
-        // and what makes this read as input rather than as a label.
-        frame.set_cursor(Some(Pos::new(input.col.saturating_add(written), input.row)));
-    }
-    let _ = screen;
+    // **No prompt during boot.** It used to type itself here, caret and all,
+    // before the frame drew — an input line offered on a screen where nothing
+    // can be typed, since every keyed system is gated on `booted`. The first
+    // affordance the game showed was one that did not work.
 }
 
 /// The transcript: what was typed and what came back.
@@ -146,6 +263,8 @@ pub(super) fn session(
     pane: Rect,
     carry_readings: bool,
     reveal: &Reveal,
+    panel: &super::input::Panel,
+    scroll: &super::input::Scroll,
 ) {
     if pane.is_empty() {
         return;
@@ -167,18 +286,36 @@ pub(super) fn session(
         DisplayMode::Deep => "wide",
         DisplayMode::Wide => "deep",
     };
+    // **Scrolled-back is a state the pane has to declare**, and it *replaces* the
+    // `F4` hint rather than crowding in beside it — the title is already near the
+    // width a border gives at the 80x22 floor, and while the player is reading
+    // history the way back is the more urgent affordance.
+    //
+    // New output keeps arriving while they read; it must, or a completion they
+    // did not cause would be lost. So without this the newest line on screen
+    // simply is not the newest line and nothing says so. It goes in the title
+    // because `Painter::border` announces one as a heading, which is what makes a
+    // reader hear it too (§14).
+    //
+    // Plain ASCII, deliberately: an arrow glyph is CP437 0x18 and an em-dash is
+    // not in the repertoire at all — one shipped once and drew as `?`.
+    let hint = if scroll.is_back() {
+        "PgDn newest".to_owned()
+    } else {
+        format!("F4 {switch}")
+    };
     let title = if carry_readings {
         format!(
-            "{}  tick {}  tier {}  {}x{}  {}  F4 {switch}",
+            "{}  tick {}  tier {}  {}x{}  {}  {hint}",
             sim.location(),
             sim.tick().get(),
-            screen.fidelity.map_or(0, |tier| tier.scale()),
+            screen.fidelity.map_or(0, orbs_render::Fidelity::scale),
             screen.grid.cols,
             screen.grid.rows,
             focus(screen),
         )
     } else {
-        format!("{}  F4 {switch}", sim.location())
+        format!("{}  {hint}", sim.location())
     };
     painter.border(pane, Some(&title), Style::DIM);
 
@@ -189,7 +326,28 @@ pub(super) fn session(
     // §14 names progress bars specifically, and `Painter::progress` had lived in
     // an example since the Frame boundary landed because nothing had a duration
     // to show.
-    if let Some(working) = sim.working() {
+    // §10.1's instrument panel: a **permanent fixture** at the top of the pane,
+    // above the transcript, whenever the player is standing in the laboratory.
+    // Twice now a piece of laboratory state has been reported as a bug because
+    // the only way to see it was to touch it — a bar says it continuously.
+    // It follows the shape of the pane: down the side when the pane is wider
+    // than it is tall, across the top when it is taller than wide.
+    let instruments = panel.instruments.as_slice();
+    let split = super::panel::split(body, instruments);
+    super::panel::paint(&mut painter, split, instruments, &panel.domain);
+    body = split.rest;
+
+    // The tower-wide production meter stays: it is the *pool*, not an
+    // instrument, and it is what says the slot is spent wherever it was spent.
+    // Skipped in the laboratory, where the panel already draws that instrument's
+    // own bar and a second copy of it would be the same fact twice.
+    // `instruments.is_empty()` **first**: `Sim::working` walks every entity in
+    // the world with a dynamic component lookup and almost never short-circuits,
+    // and as the left operand it ran on every frame in the one place its result
+    // is thrown away — the laboratory, where `instruments` is non-empty.
+    if instruments.is_empty()
+        && let Some(working) = sim.working()
+    {
         let (done, total) = working.progress(sim.tick());
         let row = Rect::new(body.col, body.bottom().saturating_sub(1), body.cols, 1);
         body = Rect::new(body.col, body.row, body.cols, body.rows.saturating_sub(1));
@@ -204,13 +362,14 @@ pub(super) fn session(
     let records = sim.scrollback().records();
     let prompt = sim.prompt();
     let mut view = RecordView::prompt(&prompt);
+
+    // How much of the newest end the player has scrolled away from. Clamped to
+    // leave at least one record, so paging to the top lands on the oldest line
+    // rather than on an empty pane with no way to tell what happened.
+    let held = scroll.back().min(records.len().saturating_sub(1));
+    let visible = records.len() - held;
     // Only the tail fits. `iter().skip(n)` is O(1) here and stays `Clone`, which
     // is what `RecordView::draw` needs to measure and then draw.
-    //
-    // One row per record is a *floor*, not the height: a listing packs across
-    // the pane, so this skip always fits and usually wastes the difference.
-    // Widening it is what puts real history in the rows tiling frees up — a
-    // session that had five blank rows and dropped its own opening shows both.
     //
     // Binary search rather than a walk. `height` is **non-increasing** in the
     // skip — restoring an older record adds to a run's count and can only widen
@@ -218,10 +377,22 @@ pub(super) fn session(
     // that still fits" a monotone predicate. Walking it re-measured the whole
     // tail per step, which is quadratic in a per-frame path; this is about five
     // measurements at the 80×22 floor.
-    let (mut narrowest, mut widest) = (0, records.len().saturating_sub(usize::from(body.rows)));
+    //
+    // **The upper bound is `len`, not `len - rows`.** A record is not one row:
+    // `RecordView` opens every `Input` after the first with a blank line, and a
+    // wrapped message costs more still. `len - rows` therefore is not a skip
+    // that is known to fit, and a binary search whose predicate is false at its
+    // own upper bound converges on a value that overflows the pane — dropping
+    // the *newest* records off the bottom, out of the linear stream as well as
+    // the cells. Skipping everything is height 0, which always fits, at the cost
+    // of about one extra probe.
+    // **`take(visible)` before the skip**, so scrolling back is the same search
+    // over a shorter stream rather than a second way of choosing what to draw.
+    // The tail of the first `visible` records *is* the view when scrolled.
+    let (mut narrowest, mut widest) = (0, visible);
     while narrowest < widest {
         let candidate = narrowest + (widest - narrowest) / 2;
-        if view.height(body.cols, records.iter().skip(candidate)) <= body.rows {
+        if view.height(body.cols, records.iter().take(visible).skip(candidate)) <= body.rows {
             widest = candidate;
         } else {
             narrowest = candidate + 1;
@@ -230,10 +401,20 @@ pub(super) fn session(
     // Measured *before* the reveal is applied, so the tail that fits is the one
     // the finished output will need. Sizing the pane against half-arrived text
     // would make it reflow as the rest turned up.
-    if let Some((after, cells)) = reveal.budget(narrowest) {
+    //
+    // **No reveal while scrolled back.** The typewriter reveals the *newest*
+    // output, which is precisely what is off screen — applying it would hold back
+    // the last line of a page of history for a reason the player cannot see.
+    if !scroll.is_back()
+        && let Some((after, cells)) = reveal.budget(narrowest)
+    {
         view = view.revealing(after, cells);
     }
-    view.draw(&mut painter, body, records.iter().skip(narrowest));
+    view.draw(
+        &mut painter,
+        body,
+        records.iter().take(visible).skip(narrowest),
+    );
 }
 
 /// A tick count as a meter value, saturating rather than wrapping.
@@ -290,7 +471,7 @@ fn telemetry(frame: &mut Frame, sim: &Sim, screen: &Screen, pane: Rect) {
 }
 
 /// §9's focus mode, as a word.
-fn focus(screen: &Screen) -> &'static str {
+const fn focus(screen: &Screen) -> &'static str {
     match screen.mode {
         DisplayMode::Deep => "deep",
         DisplayMode::Wide => "wide",
@@ -302,26 +483,58 @@ fn quantity(count: usize) -> u64 {
 }
 
 /// Draw the prompt and what is being typed into it.
-fn input_line(frame: &mut Frame, area: Rect, line: &Line, prompt: &str) {
+fn input_line(frame: &mut Frame, area: Rect, line: &Line, prompt: &str, ghost: &str) {
     if area.is_empty() {
         return;
     }
-    let mut painter = frame.painter(area);
-    let prompt = painter.glyphs(area.origin(), prompt, Style::DIM);
+    // Two rows means **double-size glyphs**, not a spare row. A blank row above
+    // a 32-pixel prompt leaves it exactly as hard to read; what the line needs
+    // is to be bigger than the transcript it sits under.
+    //
+    // At 2× a glyph fills two cells across as well as down, so the text is
+    // written into *half* the columns and the frontend draws it into all of
+    // them. That halving is why the region lives on the `Frame` rather than in
+    // the renderer: it changes what fits.
+    let big = area.rows >= 2;
+    let row = area.row;
+    let width = if big { area.cols / 2 } else { area.cols };
 
-    let (visible, caret) = line.viewport(area.cols.saturating_sub(prompt));
+    let mut painter = frame.painter(Rect::new(area.col, row, width, 1));
+    let prompt = painter.glyphs(Pos::new(area.col, row), prompt, Style::DIM);
+
+    let (visible, caret) = line.viewport(width.saturating_sub(prompt));
     // One span for the whole line rather than a glyph run: the linear stream
     // should carry what is being typed, tagged `Input` so a reader can filter
     // the partial line out. It is re-spoken every frame — which is correct raw
     // material and wrong to recite verbatim, hence the tag.
     painter.span(
-        Pos::new(area.col.saturating_add(prompt), area.row),
+        Pos::new(area.col.saturating_add(prompt), row),
         &Span::new(visible).with_kind(UtteranceKind::Input),
     );
+
+    // The suggestion, after the caret and dim. **Spoken**, with its own kind so
+    // a reader can filter it: the half-typed line above is spoken, and §19's
+    // Frame-boundary rule is that *"truncation is visual only — a narrow pane is
+    // a visual constraint and must not become an informational one."* A ghost
+    // drawn and never announced is exactly that asymmetry.
+    if !ghost.is_empty() {
+        let at = area.col.saturating_add(prompt).saturating_add(caret);
+        let room = width.saturating_sub(at.saturating_sub(area.col));
+        painter.span(
+            Pos::new(at, row),
+            &Span::new(orbs_render::arriving(ghost, u32::from(room)))
+                .with_style(Style::DIM)
+                .with_kind(UtteranceKind::Hint),
+        );
+    }
+
     frame.set_cursor(Some(Pos::new(
         area.col.saturating_add(prompt).saturating_add(caret),
-        area.row,
+        row,
     )));
+    if big {
+        frame.set_magnified(Some(Rect::new(area.col, row, width, 1)));
+    }
 }
 
 /// The window cannot host the game.
@@ -329,15 +542,19 @@ fn input_line(frame: &mut Frame, area: Rect, line: &Line, prompt: &str) {
 /// `Screen::is_hostable` documents this as a real state to render rather than a
 /// reason to stop drawing: blanking the mesh left the player looking at an empty
 /// rectangle with no idea why.
-pub(crate) fn paint_too_small(frame: &mut Frame) {
+///
+/// Its one sentence comes from `content/prose.toml` (rule 6), not from a literal
+/// here: a string in Rust is invisible to the `ORBS_CONTENT` watcher, to the
+/// width and CP437 lints in `prose.rs`, and to a writer grepping `content/`. The
+/// sibling `boot/screen.rs` states the rule this was breaking — *"names and
+/// facts, no sentences… there is not a sentence in this file."*
+pub(crate) fn paint_too_small(frame: &mut Frame, sim: &Sim) {
     let area = frame.area();
     if area.is_empty() {
         return;
     }
+    let line = sim.prose().line("window_too_small", &[]);
     let mut painter = frame.painter(area);
-    painter.paragraph(
-        area,
-        &Span::new("the orb needs a larger window").with_style(Style::DANGER),
-    );
+    painter.paragraph(area, &Span::new(&line).with_style(Style::DANGER));
     frame.set_cursor(None);
 }

@@ -221,20 +221,23 @@ the same frame through the real `paint`, `Sim` and `ScreenLayout` into a `Frame`
 nobody rasterises, then prints it with its linear stream beneath:
 
 ```bash
-ORBS_DUMP="attend laboratory; decoct clarity; meditate 25" cargo run -p orbs
+ORBS_DUMP="attend laboratory; move sage to mortar_and_pestle; wield mortar_and_pestle; meditate 12; siphon mortar_and_pestle" cargo run -p orbs
 ORBS_DUMP=1 ORBS_GRID=160x44 cargo run -p orbs   # the worst-case grid
 ORBS_DUMP=1 ORBS_BOOT=post cargo run -p orbs     # a boot stage as text
 ORBS_BOOT=0 cargo run -p orbs                    # skip the boot sequence
+ORBS_LINE="wield mo" ORBS_DUMP=1 cargo run -p orbs   # ...with a line half-typed
+ORBS_SCROLL=14 ORBS_DUMP="..." cargo run -p orbs     # ...scrolled back 14 records
 ```
 
 Each `;`-separated line goes through `submit` and a real `step`. Phosphor, the
 CRT curve and the blinking caret are frontend enrichment (rule 2) and are not in
 a Frame — those still need eyes on a window.
 
-`ORBS_BOOT` takes `dark`, `prompt`, `frame` or `post` for the dump, and `0` to
-skip the sequence in the running game. Boot happens once per launch and runs for
-fourteen seconds, so without the latter every "see it" pass on anything else
-costs that wait.
+`ORBS_BOOT` takes `dark`, `frame` or `post` for the dump, and `0` to skip the
+sequence in the running game. Boot happens once per launch and runs for
+thirteen seconds, so without the latter every "see it" pass on anything else
+costs that wait. **`0` is the only skip there is** — the keypress skip was
+removed (§19), so a player sits through the whole sequence every time.
 
 ### Read the log, not only the screen
 

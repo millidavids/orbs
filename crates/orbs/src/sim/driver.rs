@@ -33,8 +33,16 @@ impl Tower {
     }
 
     /// The world, for painting.
-    pub(crate) fn sim(&self) -> &Sim {
+    pub(crate) const fn sim(&self) -> &Sim {
         &self.0
+    }
+
+    /// Replace the orb's authored voice (CLAUDE.md rule 6).
+    ///
+    /// Called from `content::reload` in `FixedUpdate`, so the swap lands on a
+    /// tick boundary rather than part-way through a schedule.
+    pub(crate) fn set_prose(&mut self, prose: orbs_sim::Prose) {
+        self.0.set_prose(prose);
     }
 
     /// Name the wizard at the orb.

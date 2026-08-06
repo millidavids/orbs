@@ -48,6 +48,15 @@ pub enum UtteranceKind {
     Echo,
     /// What the player typed.
     Input,
+    /// What the orb thinks they are about to type.
+    ///
+    /// The inline suggestion after the caret, and the candidates Tab offers.
+    /// **Spoken, not silent** — the half-typed line is spoken, and §19's
+    /// Frame-boundary rule is that a visual constraint must not become an
+    /// informational one, so a suggestion a sighted player can see and a reader
+    /// cannot would be exactly that. Its own kind so verbosity can drop it:
+    /// re-offered every keystroke, it is the most repetitive thing on screen.
+    Hint,
     /// A duration-action finishing.
     ///
     /// §14 announces **completions only**: at endgame a player may have ~25
@@ -118,13 +127,13 @@ impl Speech {
 
     /// How many utterances the frame produced.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.nodes.len()
     }
 
     /// Whether the frame produced nothing to speak.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.nodes.is_empty()
     }
 

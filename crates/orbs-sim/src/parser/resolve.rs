@@ -31,6 +31,22 @@ const TIE_WINDOW: u32 = 60;
 /// Extra credit per additional word in a matched phrase, so `go to` beats `go`.
 const PHRASE_BONUS: u32 = 40;
 
+/// Extra credit for a verb whose instrument is standing right here.
+///
+/// **Where you are is evidence about what you meant.** `grind` shares a prefix
+/// with `grimoire` and sits two edits from `bind`; on the page those are three
+/// words that could be confused, but in the laboratory — the only place `grind`
+/// is a word at all — a player reaching for it is reaching for the mortar. §7
+/// already makes place decide which *nouns* resolve; this is the same evidence
+/// applied to the verb.
+///
+/// Sized like [`PHRASE_BONUS`] and for the same reason: it settles a tie without
+/// overturning a real difference. An exactly-typed `grimoire` still beats a
+/// two-edit `grind` by 400, and no bonus this side of absurd should change that.
+/// What it does decide is the case where both readings are equally plausible,
+/// and there the tool in front of you is the better guess.
+const DOMAIN_BONUS: u32 = 40;
+
 /// The most readings a numbered prompt will offer.
 const MAX_PROMPT: usize = 4;
 
@@ -84,7 +100,25 @@ pub fn analyse(input: &str, scene: &Scene, mode: Mode) -> Analysis {
     // never empty given `all` is not.
     let words = &all[normalise::skip_leading_filler(&all)..];
 
-    let (mut candidates, incomplete) = collect(words, scene);
+    let (mut candidates, incomplete, elsewhere) = collect(words, scene);
+
+    // **A verb typed exactly beats a fuzzy reading of a different one**, even
+    // when the one typed belongs to another room. Without this, `grind sage` in
+    // the archive offered `sift sage archive.log` — `grind` is two edits from
+    // `find`, which `sift` claims — so scoping the verb to its domain would have
+    // *created* the silent misreading §19's naming pass exists to prevent
+    // instead of preventing it. Saying "not here" is the honest answer to a word
+    // the player knows.
+    if let Some((score, verb)) = elsewhere
+        && candidates
+            .iter()
+            .all(|candidate| candidate.verb_score < score)
+    {
+        return Analysis {
+            resolution: Resolution::Elsewhere { verb },
+            candidates,
+        };
+    }
 
     // A verb matched but its slot takes free text or a number, so there is no
     // list to offer. Saying so beats falling through to Unresolved, which used
@@ -92,9 +126,14 @@ pub fn analyse(input: &str, scene: &Scene, mode: Mode) -> Analysis {
     let settle_incomplete = |candidates: Vec<Candidate>| {
         incomplete.as_ref().map_or_else(
             || Analysis {
-                resolution: Resolution::Unresolved {
-                    suggestions: suggest(words),
-                },
+                // A verb the player knows, in a room that does not answer to it,
+                // beats suggesting three words they did not type.
+                resolution: elsewhere.map_or_else(
+                    || Resolution::Unresolved {
+                        suggestions: suggest(words),
+                    },
+                    |(_, verb)| Resolution::Elsewhere { verb },
+                ),
                 candidates: candidates.clone(),
             },
             |incomplete| Analysis {
@@ -173,13 +212,42 @@ pub fn analyse(input: &str, scene: &Scene, mode: Mode) -> Analysis {
 }
 
 /// Every reading worth scoring.
-fn collect(words: &[Word<'_>], scene: &Scene) -> (Vec<Candidate>, Option<Incomplete>) {
+fn collect(
+    words: &[Word<'_>],
+    scene: &Scene,
+) -> (Vec<Candidate>, Option<Incomplete>, Option<(u32, Verb)>) {
     let mut candidates = Vec::new();
     let mut incomplete = None;
+    // The best-scoring verb that would have matched if its instrument were here.
+    let mut elsewhere: Option<(u32, Verb)> = None;
 
     for synonym in SYNONYMS {
+        // A per-instrument verb is only a word where its instrument is (§7, and
+        // `Scene::offers`). Skipping it *here* rather than refusing later is what
+        // makes the saving real: out of its domain the reading never exists, so
+        // it can neither win a tie, capture a typo meant for another domain's
+        // verb, nor be offered in a numbered prompt. That property is what keeps
+        // the vocabulary safe to grow as §10's five further domains land.
+        //
+        // It is still *remembered*, so the answer can be "not here" rather than
+        // "I do not know that word" — see `Resolution::Elsewhere`.
+        if !scene.offers(synonym.verb) {
+            if let Some((score, _)) = match_phrase(synonym, words)
+                && elsewhere.is_none_or(|(best, _)| score > best)
+            {
+                elsewhere = Some((score, synonym.verb));
+            }
+            continue;
+        }
         let Some((verb_score, consumed)) = match_phrase(synonym, words) else {
             continue;
+        };
+        // The instrument is here, so the verb that names it is the likelier
+        // reading — see `DOMAIN_BONUS`.
+        let verb_score = if synonym.verb.is_operation() {
+            verb_score.saturating_add(DOMAIN_BONUS)
+        } else {
+            verb_score
         };
 
         let tail = normalise::strip_filler(&words[consumed..]);
@@ -190,7 +258,7 @@ fn collect(words: &[Word<'_>], scene: &Scene) -> (Vec<Candidate>, Option<Incompl
             // numbered list of what could fill it. One candidate per filler, so
             // the tie machinery produces the prompt rather than a special case.
             Some(missing) => {
-                for filler in fillers(missing.kind, scene) {
+                for filler in fillers(missing.kind, missing.index, scene) {
                     // Into the empty slot, keeping every slot that resolved.
                     // Rebuilding the list from scratch dropped `sift`'s pattern
                     // and left the file sitting in the pattern's position.
@@ -206,8 +274,13 @@ fn collect(words: &[Word<'_>], scene: &Scene) -> (Vec<Candidate>, Option<Incompl
                     candidates.push(score(intent, verb_score, filled.score));
                 }
 
-                if fillers(missing.kind, scene).is_empty() {
-                    incomplete.get_or_insert(Incomplete {
+                // `get_or_insert_with`, not `get_or_insert`: the eager form built
+                // the whole `Incomplete` — including `filled.arguments()`, which
+                // allocates a `Vec` — on **every** synonym past the first, then
+                // threw it away because the slot was already taken. This runs once
+                // per vocabulary entry per keystroke.
+                if fillers(missing.kind, missing.index, scene).is_empty() {
+                    incomplete.get_or_insert_with(|| Incomplete {
                         verb: synonym.verb,
                         register: synonym.register,
                         missing: missing.kind,
@@ -226,7 +299,7 @@ fn collect(words: &[Word<'_>], scene: &Scene) -> (Vec<Candidate>, Option<Incompl
         }
     }
 
-    (dedupe(candidates), incomplete)
+    (dedupe(candidates), incomplete, elsewhere)
 }
 
 /// A verb that matched but whose empty slot cannot be offered as a list.
@@ -244,7 +317,7 @@ struct Incomplete {
 /// every one of them. [`NounKind::Pattern`] and [`NounKind::Count`] are free text
 /// and a number: nothing in the world enumerates them, so they yield no fillers
 /// and the caller reports [`Resolution::Incomplete`] instead.
-fn fillers(kind: NounKind, scene: &Scene) -> Vec<super::intent::Argument> {
+fn fillers(kind: NounKind, slot: usize, scene: &Scene) -> Vec<super::intent::Argument> {
     if matches!(kind, NounKind::Pattern | NounKind::Count) {
         return Vec::new();
     }
@@ -254,6 +327,7 @@ fn fillers(kind: NounKind, scene: &Scene) -> Vec<super::intent::Argument> {
         .filter(|noun| kind == NounKind::Any || noun.kind == kind)
         .map(|noun| super::intent::Argument {
             kind: noun.kind,
+            slot,
             value: noun.name.clone(),
         })
         .collect()
@@ -282,7 +356,7 @@ fn score(intent: Intent, verb_score: u32, argument_score: u32) -> Candidate {
 ///
 /// Returns its score and how many words it consumed. Longer phrases earn a bonus
 /// so `go to` outranks `go` on the same input.
-fn match_phrase(synonym: &Synonym, words: &[Word<'_>]) -> Option<(u32, usize)> {
+pub(super) fn match_phrase(synonym: &Synonym, words: &[Word<'_>]) -> Option<(u32, usize)> {
     let span = synonym.words.len();
     if span > words.len() || span > LONGEST_PHRASE {
         return None;
@@ -354,7 +428,7 @@ fn suggest(words: &[Word<'_>]) -> Vec<Verb> {
 /// `make` at 750 and `clarity` is an essence, even though `take` *is* siphon.
 ///
 /// Argument fit still decides between readings of equal exactness.
-fn named_exactly(candidate: &Candidate) -> bool {
+const fn named_exactly(candidate: &Candidate) -> bool {
     candidate.verb_score >= fuzzy::EXACT
 }
 

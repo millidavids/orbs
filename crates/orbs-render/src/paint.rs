@@ -149,26 +149,66 @@ impl<'a> Painter<'a> {
     /// `spoken` is what a reader hears — `"east wall integrity 34 percent"`, not
     /// a row of block glyphs. §14 names progress bars specifically.
     pub fn progress(&mut self, area: Rect, done: u32, total: u32, style: Style, spoken: &str) {
+        // Spoken *before* the clip test, deliberately: a meter scrolled out of
+        // its pane is still a fact a listener needs, and §14's whole contract is
+        // that the linear stream does not depend on what happened to fit.
         self.frame
             .speech_mut()
             .push(UtteranceKind::Progress, style.role, spoken);
+        self.meter(area, done, total, style);
+    }
 
+    /// Draw a meter as a bar, silently.
+    ///
+    /// The same glyphs as [`Painter::progress`] with **nothing said**. For a
+    /// panel of standing meters — §10.1's five instruments — where speaking each
+    /// one per frame would bury the stream in furniture, and §14 asks for
+    /// *"progress announcements: completion only"*.
+    ///
+    /// A caller using this owes the listener one summary utterance covering the
+    /// panel, which is what [`Painter::announce`] is for. Drawing meters and
+    /// saying nothing at all would be a screen a reader cannot see.
+    ///
+    /// Integer-only: progress in this game is elapsed ticks against a duration
+    /// (DESIGN.md §5.0), and keeping floats out of the render path keeps a
+    /// deterministic sim rendering deterministically. `done` is clamped to
+    /// `total`; a `total` of zero draws an empty bar.
+    pub fn meter(&mut self, area: Rect, done: u32, total: u32, style: Style) {
         let area = area.intersection(self.area);
         if area.is_empty() {
             return;
         }
 
-        // Widened to u64 so a long duration cannot overflow the multiply.
-        let filled = if total == 0 {
-            0
-        } else {
-            let scaled = u64::from(area.cols) * u64::from(done.min(total)) / u64::from(total);
-            u16::try_from(scaled).unwrap_or(area.cols)
-        };
-
+        let filled = filled_of(area.cols, done, total);
         let row = Rect::new(area.col, area.row, area.cols, 1);
         self.fill(row, '░', style);
         self.fill(Rect::new(area.col, area.row, filled, 1), '█', style);
+    }
+
+    /// The same meter, drawn as a column that fills **upward**.
+    ///
+    /// A level reads as growing from the floor, which is what §10.1's side panel
+    /// wants when the pane is taller than it is wide.
+    ///
+    /// It lives here rather than in a frontend because the alternative already
+    /// happened: the Bevy panel re-derived the fill arithmetic and hand-drew the
+    /// `█`/`░` pair, so one instrument panel drew its bar two different ways
+    /// depending on which way the pane had split. Changing the glyphs or the
+    /// clamping in `meter` would have left the side panel on the old ones, and
+    /// a player pressing F4 would see the same five instruments in two bar
+    /// vocabularies.
+    pub fn meter_upward(&mut self, area: Rect, done: u32, total: u32, style: Style) {
+        let area = area.intersection(self.area);
+        if area.is_empty() {
+            return;
+        }
+
+        let filled = filled_of(area.rows, done, total);
+        for step in 0..area.rows {
+            let row = area.bottom().saturating_sub(1).saturating_sub(step);
+            let glyph = if step < filled { '█' } else { '░' };
+            self.fill(Rect::new(area.col, row, area.cols, 1), glyph, style);
+        }
     }
 
     /// Speak something with no visual form of its own.
@@ -322,12 +362,24 @@ impl<'a> Painter<'a> {
     }
 }
 
+/// How many of `steps` a meter fills.
+///
+/// Widened so a long duration cannot overflow the multiply, and clamped so a
+/// finished meter never overruns its own track.
+fn filled_of(steps: u16, done: u32, total: u32) -> u16 {
+    if total == 0 {
+        return 0;
+    }
+    let scaled = u64::from(steps) * u64::from(done.min(total)) / u64::from(total);
+    u16::try_from(scaled).unwrap_or(steps)
+}
+
 /// How many cells a box's outline occupies.
 ///
 /// `2 * (w + h) - 4`: the four corners would otherwise be counted twice. Only
 /// meaningful for a region at least two cells each way, which is the same floor
 /// [`Painter::border`] draws nothing below.
-fn perimeter(area: Rect) -> u16 {
+const fn perimeter(area: Rect) -> u16 {
     let doubled = area.cols.saturating_add(area.rows).saturating_mul(2);
     doubled.saturating_sub(4)
 }

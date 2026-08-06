@@ -21,7 +21,7 @@ use crate::geometry::Rect;
 use crate::layout::{MAX_MAIN_PANES, MIN_PANE_ROWS, STRIP_ROWS};
 
 /// How many horizontal bands Deep focus needs for `panes`.
-pub(crate) fn deep_bands(panes: u16) -> u16 {
+pub(crate) const fn deep_bands(panes: u16) -> u16 {
     if panes == 0 {
         0
     } else {
@@ -31,7 +31,7 @@ pub(crate) fn deep_bands(panes: u16) -> u16 {
 
 /// Columns per band. Two is the widest split that keeps a pane legible at the
 /// 80-column floor; three would give 26 columns each.
-fn deep_columns(panes: u16) -> u16 {
+const fn deep_columns(panes: u16) -> u16 {
     if panes <= 1 { 1 } else { 2 }
 }
 

@@ -25,6 +25,7 @@ pub struct Frame {
     cells: Vec<Cell>,
     cursor: Option<Pos>,
     speech: Speech,
+    magnified: Option<Rect>,
 }
 
 impl Frame {
@@ -47,6 +48,7 @@ impl Frame {
         self.cells.resize(grid.area(), Cell::BLANK);
         self.cursor = None;
         self.speech.clear();
+        self.magnified = None;
     }
 
     /// The frame's dimensions.
@@ -111,6 +113,27 @@ impl Frame {
         self.cursor = cursor.filter(|&pos| self.grid.contains(pos));
     }
 
+    /// A region whose glyphs are drawn at **double size**.
+    ///
+    /// One row of cells, occupying two rows and twice the columns on screen. The
+    /// prompt uses it at fine fidelity: a 32-pixel line is the thing you are
+    /// typing into rendered at the size of the transcript around it, and giving
+    /// it a blank row for company makes it no easier to read.
+    ///
+    /// This lives on the `Frame` rather than in the frontend because it is
+    /// **informational**, not decoration: at double width a line holds half the
+    /// characters, so what fits depends on it. Rule 2 draws the line at *how a
+    /// cell is drawn*, and this is what is drawn where.
+    #[must_use]
+    pub const fn magnified(&self) -> Option<Rect> {
+        self.magnified
+    }
+
+    /// Mark a region for double-size drawing. One row only; taller is clamped.
+    pub fn set_magnified(&mut self, area: Option<Rect>) {
+        self.magnified = area.map(|area| Rect::new(area.col, area.row, area.cols, 1));
+    }
+
     /// The linear stream for this frame.
     #[must_use]
     pub const fn speech(&self) -> &Speech {
@@ -146,7 +169,7 @@ impl Frame {
         }
     }
 
-    pub(crate) fn speech_mut(&mut self) -> &mut Speech {
+    pub(crate) const fn speech_mut(&mut self) -> &mut Speech {
         &mut self.speech
     }
 

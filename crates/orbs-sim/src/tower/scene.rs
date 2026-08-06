@@ -27,7 +27,7 @@
 
 use bevy_ecs::prelude::*;
 
-use super::node::{Cwd, Name, Nameable, children_of, path_of};
+use super::node::{Cwd, Fixture, Name, Nameable, children_of, path_of};
 use crate::execute::LOG;
 use crate::parser::{NounKind, Scene};
 
@@ -58,6 +58,35 @@ pub fn rebuild(world: &mut World) {
     // `peruse orb.log` and `sift <pattern> orb.log`.
     let mut scene = Scene::new().with(NounKind::File, LOG);
 
+    // Every recipe is a `Topic`, nameable from anywhere, because a manual is not
+    // a thing in a room — §6.1 registers recipes beside their essence so
+    // `make a potion of clarity` answers with how, which is the tutorial entry
+    // point now that `decoct` is retired (§19).
+    //
+    // ...and every subject the manual can answer on, from [`Topics`], which is
+    // snapshotted **once** at construction. Reading `Prose::topics()` live here
+    // made hot-reloading prose change what the parser can resolve: renaming
+    // `grimoire_brewing` mid-session dropped `Topic:brewing` and added another,
+    // so `grimoire brewing` started resolving somewhere else and `(seed,
+    // submissions)` no longer replayed to the same world — which is exactly what
+    // `Sim::set_prose` documents as safe, on the grounds that prose "reaches no
+    // decision". A noun *is* a decision.
+    //
+    // No intermediate `Vec<String>`: these ran per tick, cloning every name into
+    // an owned string only to hand `Scene::with` a `&str` it copies again.
+    {
+        let recipes = world.resource::<crate::content::Recipes>();
+        for output in recipes.outputs() {
+            scene = scene.with(NounKind::Topic, output);
+        }
+    }
+    {
+        let topics = world.resource::<Topics>();
+        for topic in &topics.0 {
+            scene = scene.with(NounKind::Topic, topic);
+        }
+    }
+
     // Every place, wherever the player is. Depth-first from the root, children
     // in spawn order.
     for node in walk(world, root_of(world, cwd.0)) {
@@ -69,6 +98,15 @@ pub fn rebuild(world: &mut World) {
         }
     }
 
+    // The verbs the instruments *here* answer to (§7, `Scene::offers`). Derived
+    // from the fixtures rather than listed, so a domain that raises a tool with
+    // its own verb gets that verb in scope without touching the parser.
+    for node in children_of(world, cwd.0) {
+        if let Some(operation) = world.get::<super::Operation>(node) {
+            scene = scene.offering(operation.0);
+        }
+    }
+
     // Everything else: only what is here.
     for node in children_of(world, cwd.0) {
         let (Some(name), Some(kind)) = (world.get::<Name>(node), world.get::<Nameable>(node))
@@ -76,12 +114,55 @@ pub fn rebuild(world: &mut World) {
             continue;
         };
         if kind.0 == NounKind::Place {
+            // ...and what is *in* the fixtures of this room. An instrument is a
+            // place so it can be surveyed and attended, but it is furniture on a
+            // bench rather than somewhere you travel to, and the sage in the
+            // mortar is plainly within reach of someone standing in the
+            // laboratory. Without this, §10.1's own loop cannot be typed:
+            // `move husks from alembic to dispensary` could not name `husks`.
+            //
+            // This does **not** loosen "you can only name what is where you
+            // are". That rule is about acting on another *domain* at a distance
+            // — the archive's fragments from the laboratory — and a domain is
+            // not a `Fixture`. Phase 2's pane addressing is still what relaxes
+            // it in general.
+            if world.get::<Fixture>(node).is_some() {
+                for held in children_of(world, node) {
+                    let (Some(name), Some(kind)) =
+                        (world.get::<Name>(held), world.get::<Nameable>(held))
+                    else {
+                        continue;
+                    };
+                    if kind.0 != NounKind::Place {
+                        scene = scene.with(kind.0, &name.0);
+                    }
+                }
+            }
             continue;
         }
-        scene = scene.with(kind.0, &name.0.clone());
+        scene = scene.with(kind.0, &name.0);
     }
 
     world.insert_resource(scene);
+}
+
+/// The grimoire subjects the parser can name, fixed at construction.
+///
+/// **Snapshotted, not read live from [`Prose`](crate::content::Prose).** Every
+/// `grimoire_` key is a `NounKind::Topic` in the scene, so reading them each tick
+/// meant a prose hot-reload could change what a phrase resolves to — a *decision*
+/// — while `Sim::set_prose` promises the opposite. The cost is that adding a new
+/// manual subject needs a relaunch rather than a save; the lines themselves still
+/// reload, which is what a writer is actually iterating on.
+#[derive(bevy_ecs::resource::Resource, Debug, Default)]
+pub struct Topics(pub Vec<String>);
+
+impl Topics {
+    /// The subjects a prose file can answer on.
+    #[must_use]
+    pub fn of(prose: &crate::content::Prose) -> Self {
+        Self(prose.topics().into_iter().map(ToOwned::to_owned).collect())
+    }
 }
 
 /// Every node under `from`, depth-first, children in spawn order.
@@ -144,11 +225,11 @@ mod tests {
             "branches keep their declared order",
         );
         assert!(
-            place("clarity") < place("warding") && place("warding") < place("haste"),
-            "essences keep theirs: {found:?}",
+            place("retort") < place("laboratory.log"),
+            "belongings keep theirs: {found:?}",
         );
         assert!(
-            place("/tower") < place("clarity"),
+            place("/tower") < place("retort"),
             "places are registered before belongings",
         );
     }
@@ -176,22 +257,48 @@ mod tests {
     #[test]
     fn a_domains_belongings_are_nameable_only_from_inside_it() {
         // §7: the tree is the tower and navigation is diegetic. Brewing happens
-        // in the laboratory because that is where the essences are, which is also
-        // what gives §19's Phase 2 pane addressing something to be an unlock
+        // in the laboratory because that is where the instruments are, which is
+        // also what gives §19's Phase 2 pane addressing something to be an unlock
         // *from* — acting at a distance has to become possible.
+        //
+        // Tested with `retort` rather than `clarity`: recipe names are `Topic`s
+        // nameable everywhere (§6.1), because a manual is not a thing in a room.
         let mut sim = Sim::new(1);
         sim.step();
-        assert!(!names(&sim).iter().any(|name| name == "clarity"));
+        assert!(!names(&sim).iter().any(|name| name == "retort"));
 
         sim.submit("attend laboratory");
         sim.step();
-        assert!(names(&sim).iter().any(|name| name == "clarity"));
+        assert!(names(&sim).iter().any(|name| name == "retort"));
         assert!(!names(&sim).iter().any(|name| name == "sigil-iv"));
 
         sim.submit("attend archive");
         sim.step();
         assert!(names(&sim).iter().any(|name| name == "sigil-iv"));
-        assert!(!names(&sim).iter().any(|name| name == "clarity"));
+        assert!(!names(&sim).iter().any(|name| name == "retort"));
+    }
+
+    #[test]
+    fn what_an_instrument_holds_is_nameable_from_the_room_it_stands_in() {
+        // The `Fixture` rule. An instrument is furniture on a bench, not
+        // somewhere you travel to, and §10.1's own loop cannot be typed
+        // otherwise: `move husks from alembic to dispensary` has to name
+        // `husks`. The domain rule above is untouched — a domain is not a
+        // fixture.
+        let mut sim = Sim::new(1);
+        sim.submit("attend laboratory");
+        sim.step();
+        assert!(
+            names(&sim).iter().any(|name| name == "sage"),
+            "the dispensary's sage is out of reach from the laboratory"
+        );
+
+        sim.submit("attend archive");
+        sim.step();
+        assert!(
+            !names(&sim).iter().any(|name| name == "sage"),
+            "it stayed nameable from another domain"
+        );
     }
 
     #[test]

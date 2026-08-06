@@ -2,8 +2,13 @@
 //!
 //! DESIGN.md §4 makes *the tower's* boot a status report reflecting real world
 //! state, and that report is built and shipped (`orbs_sim::tower::boot`). This
-//! is the **machine** waking up in front of it: the prompt appearing, the frame
-//! drawing itself, and the dependencies the game is made of reporting in.
+//! is the **machine** waking up in front of it: the frame drawing itself, and
+//! the dependencies the game is made of reporting in.
+//!
+//! **There is no prompt on any of these screens.** One typed itself here once,
+//! caret and all, before the frame existed — an input line offered where nothing
+//! can be typed, since every keyed system is gated on `booted`. The first
+//! affordance the game showed was one that did not work.
 //!
 //! It opens on **black and nothing else**. A CRT strike shipped here first — a
 //! flash and a sweeping band, then a flash alone — and neither survived being
@@ -36,8 +41,8 @@ use bevy::prelude::Resource;
 
 /// The stages, in order, with how long each lasts.
 ///
-/// About fourteen seconds all told. That is long for a fifth relaunch, which is
-/// what the skip is for.
+/// Just under thirteen seconds all told, and it runs every time: the keypress
+/// skip is gone (§19), and §4's *sticky* skip waits on Phase 5's settings.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) enum Stage {
     /// A dark tube. Nothing has happened yet.
@@ -45,11 +50,18 @@ pub(crate) enum Stage {
     /// **The screen simply opens black.** A flash-and-strike shipped here first,
     /// then a flash alone, and neither earned its place: the game is a wizard
     /// looking into a scrying orb, and an orb does not power on like a monitor.
-    /// What is left is a beat of dark before the prompt, which reads as the orb
-    /// being *found* rather than switched on.
+    /// What is left is a beat of dark before the frame draws, which reads as the
+    /// orb being *found* rather than switched on.
     Dark,
-    /// The prompt appears, with its caret.
-    Prompt,
+    // A `Prompt` stage lived here, and the input line typed itself before the
+    // frame drew. It is gone with the prompt it existed for: **nothing can be
+    // typed during boot** — every keyed system is gated on `booted` — so an
+    // input line on that screen was an affordance that did not work, offered
+    // before anything else on screen did.
+    //
+    // Removing the drawing alone would have left the stage as 1.2 s of black
+    // indistinguishable from a slow launch, which is the trap `Dark`'s own
+    // duration note warns about.
     /// The pane border draws itself, one cell at a time.
     Frame,
     /// Dependencies report in.
@@ -60,7 +72,7 @@ pub(crate) enum Stage {
 
 impl Stage {
     /// Every stage before [`Stage::Live`], in order.
-    pub(crate) const SEQUENCE: [Self; 4] = [Self::Dark, Self::Prompt, Self::Frame, Self::Post];
+    pub(crate) const SEQUENCE: [Self; 3] = [Self::Dark, Self::Frame, Self::Post];
 
     /// How long this stage lasts.
     ///
@@ -74,12 +86,12 @@ impl Stage {
     /// that does nothing, which is indistinguishable from a slow launch. Long
     /// enough to be a beat, not long enough to be a wait.
     ///
-    /// The total is still long, which is what the skip is for: any key, and
-    /// `ORBS_BOOT=0` for a session that never wants it.
+    /// `ORBS_BOOT=0` skips the whole thing, and is a development affordance —
+    /// boot runs once a launch and every "see it" pass would otherwise pay for
+    /// it. There is no player-facing skip.
     pub(crate) const fn duration(self) -> Duration {
         Duration::from_millis(match self {
             Self::Dark => 600,
-            Self::Prompt => 1200,
             Self::Frame => 3200,
             Self::Post => 9000,
             Self::Live => 0,
@@ -89,8 +101,7 @@ impl Stage {
     /// The stage after this one.
     pub(crate) const fn next(self) -> Self {
         match self {
-            Self::Dark => Self::Prompt,
-            Self::Prompt => Self::Frame,
+            Self::Dark => Self::Frame,
             Self::Frame => Self::Post,
             Self::Post | Self::Live => Self::Live,
         }
@@ -112,11 +123,6 @@ impl Stage {
     pub(crate) const fn has_frame(self) -> bool {
         matches!(self, Self::Frame | Self::Post | Self::Live)
     }
-
-    /// Whether the input line is on screen yet.
-    pub(crate) const fn has_prompt(self) -> bool {
-        !matches!(self, Self::Dark)
-    }
 }
 
 /// Where the boot sequence has reached.
@@ -124,6 +130,20 @@ impl Stage {
 pub(crate) struct Boot {
     stage: Stage,
     elapsed: Duration,
+}
+
+impl Default for Boot {
+    fn default() -> Self {
+        // `ORBS_BOOT=0` lands straight in the game. Boot happens once per launch,
+        // so without this every "see it" pass on anything else costs a four-second
+        // wait — and CLAUDE.md's warning about unmaintained debug affordances is
+        // about inventing surfaces nobody uses, not about the one that makes the
+        // gate cheap to run.
+        if std::env::var("ORBS_BOOT").is_ok_and(|value| value == "0") {
+            return Self::finished();
+        }
+        Self::new()
+    }
 }
 
 impl Boot {
@@ -178,17 +198,14 @@ impl Boot {
         }
     }
 
-    /// Go straight to the game.
-    ///
-    /// §4 asks for a **sticky** skip rather than a per-launch keypress, and
-    /// sticky needs somewhere to persist it — which does not exist yet and
-    /// arrives with §15's Phase 5 settings screen. Until then this is the
-    /// keypress, which is the honest half-measure rather than a claim that the
-    /// requirement is met.
-    pub(crate) const fn skip(&mut self) {
-        self.stage = Stage::Live;
-        self.elapsed = Duration::ZERO;
-    }
+    // There was a `skip()` here, driven by any keystroke. It is gone: the
+    // sequence is short and it is *character*, and a keypress skip made the
+    // first thing a player does to the game be dismissing it (§19).
+    //
+    // §4's **sticky** skip is a different thing and still stands — a remembered
+    // setting for someone on their fortieth launch, not a per-launch keypress —
+    // and it needs somewhere to persist, which arrives with §15's Phase 5
+    // settings screen. `Boot::finished` is the state it will select.
 }
 
 #[cfg(test)]
@@ -251,15 +268,17 @@ mod tests {
     }
 
     #[test]
-    fn skipping_arrives_in_the_same_state_as_waiting() {
-        let mut skipped = Boot::new();
-        skipped.skip();
+    fn a_finished_boot_is_the_same_state_as_a_watched_one() {
+        // `ORBS_BOOT=0` and §4's future sticky skip both select `finished()`,
+        // and it has to land in exactly the state sitting through the sequence
+        // reaches — otherwise the dump and the game are drawing different worlds.
+        let finished = Boot::finished();
 
         let mut waited = Boot::new();
         waited.advance(Duration::from_secs(30));
 
-        assert_eq!(skipped.stage(), waited.stage());
-        assert!(skipped.is_live() && waited.is_live());
+        assert_eq!(finished.stage(), waited.stage());
+        assert!(finished.is_live() && waited.is_live());
     }
 
     #[test]
@@ -278,13 +297,25 @@ mod tests {
     }
 
     #[test]
-    fn nothing_is_drawn_before_the_prompt() {
+    fn the_sequence_opens_on_nothing_at_all() {
         // The whole of "just open to black": the first stage puts nothing on
         // screen, and the sequence starts by *appearing* rather than by an
         // effect announcing it.
-        assert!(!Stage::Dark.has_prompt());
         assert!(!Stage::Dark.has_frame());
-        assert!(Stage::Prompt.has_prompt());
+        assert!(Stage::Frame.has_frame());
+    }
+
+    #[test]
+    fn no_stage_offers_a_prompt() {
+        // Nothing can be typed during boot — every keyed system is gated on
+        // `booted` — so an input line on those screens was an affordance that
+        // did not work, offered before anything else on screen did. The stage
+        // that existed to draw it went with it.
+        assert_eq!(Stage::SEQUENCE.len(), 3);
+        assert!(
+            !Stage::SEQUENCE.iter().any(|stage| stage.world_runs()),
+            "a boot stage let the world run"
+        );
     }
 
     #[test]

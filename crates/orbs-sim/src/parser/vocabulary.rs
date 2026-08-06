@@ -105,12 +105,108 @@ pub const SYNONYMS: &[Synonym] = &[
     syn(Verb::Meditate, Register::Shell, &["sleep"]),
     syn(Verb::Meditate, Register::Plain, &["rest"]),
     syn(Verb::Meditate, Register::Plain, &["pass"]),
-    // decoct — brew a potion
-    syn(Verb::Decoct, Register::Arcane, &["decoct"]),
-    syn(Verb::Decoct, Register::Plain, &["brew"]),
-    syn(Verb::Decoct, Register::Plain, &["make"]),
-    syn(Verb::Decoct, Register::Plain, &["mix"]),
-    syn(Verb::Decoct, Register::Plain, &["distil"]),
+    // move — carry a reagent between places (§10.1)
+    syn(Verb::Move, Register::Arcane, &["move"]),
+    syn(Verb::Move, Register::Shell, &["mv"]),
+    syn(Verb::Move, Register::Plain, &["transfer"]),
+    syn(Verb::Move, Register::Plain, &["transport"]),
+    syn(Verb::Move, Register::Plain, &["relocate"]),
+    // wield — set an instrument working
+    syn(Verb::Wield, Register::Arcane, &["wield"]),
+    syn(Verb::Wield, Register::Plain, &["use"]),
+    syn(Verb::Wield, Register::Plain, &["begin"]),
+    // empty — turn an instrument out into the store
+    //
+    // The counterpart of `purge`, and the distinction is the whole of §10.1's
+    // byproduct rule: `purge` destroys what you did not mean to make, `empty`
+    // *keeps* it. Husks are the mortar's leavings and the water bath's input, so
+    // the loop that throws them away is the loop that never finds route B.
+    //
+    // Not `clear`: it is one edit from `clean`, which `purge` claims, and
+    // confusing "put this somewhere safe" with "destroy it" is the one collision
+    // this domain can least afford — the same reasoning that kept `damp` out.
+    syn(Verb::Empty, Register::Arcane, &["empty"]),
+    syn(Verb::Empty, Register::Plain, &["unload"]),
+    // stop — cancel a working instrument
+    syn(Verb::Stop, Register::Arcane, &["stop"]),
+    syn(Verb::Stop, Register::Plain, &["cancel"]),
+    syn(Verb::Stop, Register::Plain, &["halt"]),
+    // Not `damp`: it scored 750 against `dump` (purge), and confusing "stop the
+    // athanor" with "destroy what is in it" is the one collision this domain
+    // cannot afford. `quench` is the better word anyway.
+    syn(Verb::Stop, Register::Plain, &["quench"]),
+    // The retired brewing verb (§19). `decoct` no longer exists as a command:
+    // brewing is §10.1's pipeline, and the only single line that makes a potion
+    // is a spell the player wrote.
+    //
+    // Every word it owned stays **claimed**, pointed at the recipe. The Phase 0
+    // naming pass established why: a released word does not stop resolving, it
+    // resolves to whatever it is nearest — an unclaimed `decant` landed on
+    // `decoct`. Releasing these five would scatter them across `divine`,
+    // `siphon` and `meditate` silently.
+    //
+    // It also answers the newcomer's sentence usefully. §15 chose brewing to
+    // gate the parser because *"a shell-naive tester immediately understands
+    // 'make a potion'"*, and `make a potion of clarity` -> `grimoire clarity`
+    // hands them the recipe, which is the tutorial entry point.
+    // `mix` and `distil` **left** for §10.1's per-instrument verbs below. They
+    // are not lost to the manual: `mix` and `distil` take a `Reagent` while
+    // `grimoire` takes a `Topic`, and the two never resolve to the same reading
+    // because the *scene* decides. `distil clarity` finds no reagent called
+    // `clarity` — it is a recipe output, a Topic — so the manual wins; `distil
+    // clarified-draught` finds the reagent on the bench, so the alembic wins.
+    // The tutorial sentence survives on `brew`, `make` and `decoct`.
+    syn(Verb::Grimoire, Register::Plain, &["decoct"]),
+    syn(Verb::Grimoire, Register::Plain, &["brew"]),
+    syn(Verb::Grimoire, Register::Plain, &["make"]),
+    // §10.1's per-instrument verbs: charge the tool and start it in one line.
+    //
+    // Four commands a stage — `move`, `wield`, `siphon`, `purge` — is the loop
+    // as first built, and the two in the middle are the ones a player types
+    // most. Naming the *operation* rather than the tool collapses the first two
+    // and reads as the domain's own language: you grind sage, you do not move
+    // sage into a mortar and then operate the mortar.
+    //
+    // `wield` stays. It is the general form, it is what a script writes when the
+    // instrument is the variable, and it is the only way to work a tool a verb
+    // has not been coined for.
+    syn(Verb::Grind, Register::Arcane, &["grind"]),
+    syn(Verb::Grind, Register::Plain, &["crush"]),
+    // `pound` is the other word for a mortar and sits one edit from `pour`,
+    // which collects a finished potion. Left unclaimed it resolves *to* `pour`
+    // at 800, which is wrong but harmless — an empty instrument refuses. Claimed
+    // for the mortar it would make `pour` a coin flip in both directions, and
+    // `pour` is the verb that ends a stage. Not worth one more synonym.
+    //
+    // `digest` is the alchemical term for gentle heating in a water bath, and it
+    // is three edits from anything else here. `steep` is what a player reaches
+    // for and is one edit from **both** `sleep` and `stop` — and `stop` cancels a
+    // run in flight. A typo that throws away six minutes of brewing is not a
+    // trade for a synonym nobody needs.
+    syn(Verb::Digest, Register::Arcane, &["digest"]),
+    syn(Verb::Digest, Register::Plain, &["bathe"]),
+    syn(Verb::Mix, Register::Arcane, &["mix"]),
+    syn(Verb::Mix, Register::Plain, &["combine"]),
+    syn(Verb::Mix, Register::Plain, &["stir"]),
+    syn(Verb::Distil, Register::Arcane, &["distil"]),
+    syn(Verb::Distil, Register::Plain, &["distill"]),
+    // The athanor's own verb. It is the odd one of the five: lighting a fire is
+    // not a run, so it takes no Focus slot and produces nothing — but it charges
+    // and starts exactly like the others, which is the whole reason it belongs
+    // here rather than under `wield`. `kindle charcoal` is `move charcoal to
+    // athanor` and `wield athanor`; bare `kindle` relights what was banked,
+    // which is the last line of every script loop.
+    //
+    // `light` was left out of the first naming pass *because* it scores 600
+    // against `list` (survey). That was the wrong lesson from the right number:
+    // an unclaimed word does not stop resolving, it resolves to whatever it is
+    // nearest — so `light athanor` silently ran `survey athanor`, showed an
+    // empty instrument, and read as "the fuel is gone and it will not relight".
+    // Claimed, an exact `light` scores 1000 and beats the fuzzy `list` outright,
+    // and it is the most natural English there is for lighting a fire.
+    syn(Verb::Kindle, Register::Arcane, &["kindle"]),
+    syn(Verb::Kindle, Register::Plain, &["light"]),
+    syn(Verb::Kindle, Register::Plain, &["fire"]),
     // siphon — collect a finished potion
     //
     // Was `decant`, which sat two edits from `decoct` (667) while both are core

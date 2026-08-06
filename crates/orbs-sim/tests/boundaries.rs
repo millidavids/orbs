@@ -22,7 +22,8 @@ use std::path::{Path, PathBuf};
 /// Every `.rs` file under `src/`.
 fn sources() -> Vec<PathBuf> {
     fn walk(dir: &Path, found: &mut Vec<PathBuf>) {
-        let entries = fs::read_dir(dir).unwrap_or_else(|error| panic!("read {dir:?}: {error}"));
+        let entries =
+            fs::read_dir(dir).unwrap_or_else(|error| panic!("read {}: {error}", dir.display()));
         for entry in entries.flatten() {
             let path = entry.path();
             if path.is_dir() {

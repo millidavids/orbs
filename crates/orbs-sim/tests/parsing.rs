@@ -16,7 +16,13 @@ fn tower() -> Scene {
         .with(NounKind::File, "purge_cycle.log")
         .with(NounKind::Essence, "clarity")
         .with(NounKind::Essence, "warding")
-        .with(NounKind::Vessel, "alembic")
+        // Recipes are `Topic` nouns beside their `Essence` (§6.1), which is what
+        // lets `make a potion of clarity` answer with the recipe now that
+        // `decoct` is retired.
+        .with(NounKind::Topic, "clarity")
+        .with(NounKind::Topic, "warding")
+        .with(NounKind::Reagent, "sage")
+        .with(NounKind::Vessel, "retort")
         .with(NounKind::Script, "night_watch")
         .with(NounKind::Fragment, "sigil-iv")
         .with(NounKind::Topic, "brewing")
@@ -36,9 +42,41 @@ fn echo(input: &str) -> String {
 
 #[test]
 fn the_designs_worked_examples_resolve() {
-    // Verbatim from §6.
-    assert_eq!(echo("make a potion of clarity"), "decoct clarity");
+    // Verbatim from §6. `make a potion of clarity` now answers with the recipe:
+    // §15 chose brewing to gate the parser because a shell-naive tester
+    // understands the phrase, which requires it to resolve somewhere *useful* —
+    // not that a verb exist to satisfy it. `decoct` is retired (§19).
+    assert_eq!(echo("make a potion of clarity"), "grimoire clarity");
     assert_eq!(echo("grep march feed.log"), "sift march feed.log");
+}
+
+#[test]
+fn the_retired_brewing_words_all_still_land_somewhere_deliberate() {
+    // The Phase 0 naming pass's rule: a released word does not stop resolving,
+    // it resolves to whatever it is nearest. These three stay claimed.
+    //
+    // `mix` and `distil` **left** this set: §10.1 gave them to the flask and the
+    // alembic, where they name a real operation rather than a retired one. That
+    // is not a release — they are more firmly claimed than before — but they are
+    // claimed *by a domain*, so out of the laboratory they resolve to
+    // `Elsewhere` rather than to the manual. `there is nothing here to mix with`
+    // is a better answer than a recipe nobody asked for.
+    for input in ["decoct clarity", "brew clarity", "make clarity"] {
+        assert_eq!(echo(input), "grimoire clarity", "{input:?}");
+    }
+
+    // ...and this scene stands nowhere in particular, so the two that left are
+    // out of scope entirely. The word is still recognised, which is the whole
+    // point of `Resolution::Elsewhere`.
+    for input in ["mix clarity", "distil clarity"] {
+        assert!(
+            matches!(
+                resolve(input, &tower(), Mode::Calm),
+                Resolution::Elsewhere { .. }
+            ),
+            "{input:?} should be a verb this place does not answer to"
+        );
+    }
 }
 
 #[test]
@@ -47,7 +85,7 @@ fn all_three_registers_reach_the_same_canonical_command() {
         assert_eq!(echo(input), "survey", "{input:?}");
     }
     for input in ["attend laboratory", "cd laboratory", "go to the laboratory"] {
-        assert_eq!(echo(input), "attend /tower/laboratory", "{input:?}");
+        assert_eq!(echo(input), "attend laboratory", "{input:?}");
     }
     for input in ["peruse feed.log", "cat feed.log", "read the feed.log"] {
         assert_eq!(echo(input), "peruse feed.log", "{input:?}");
@@ -77,8 +115,10 @@ fn every_verb_is_reachable_from_plain_english() {
         ("inspect night_watch", Verb::Verify),
         ("take it back", Verb::Undo),
         ("rest 30", Verb::Meditate),
-        ("brew clarity", Verb::Decoct),
-        ("collect alembic", Verb::Siphon),
+        ("transfer sage to laboratory", Verb::Move),
+        ("use laboratory", Verb::Wield),
+        ("cancel laboratory", Verb::Stop),
+        ("collect laboratory", Verb::Siphon),
         ("get rid of sludge", Verb::Purge),
         ("study sigil-iv", Verb::Divine),
         ("author night_watch", Verb::Scribe),
@@ -119,7 +159,7 @@ fn the_register_the_player_used_is_recorded() {
 
 #[test]
 fn typos_resolve() {
-    assert_eq!(echo("brew clarty"), "decoct clarity");
+    assert_eq!(echo("brew clarty"), "grimoire clarity");
     assert_eq!(echo("survy"), "survey");
     assert_eq!(echo("invok night_watch"), "invoke night_watch");
 }
@@ -132,17 +172,17 @@ fn abbreviations_resolve() {
 
 #[test]
 fn filler_is_ignored() {
-    assert_eq!(
-        echo("please go to the laboratory"),
-        "attend /tower/laboratory"
-    );
-    assert_eq!(echo("brew me a potion of warding"), "decoct warding");
+    assert_eq!(echo("please go to the laboratory"), "attend laboratory");
+    assert_eq!(echo("brew me a potion of warding"), "grimoire warding");
 }
 
 #[test]
 fn a_place_can_be_named_by_its_leaf_or_its_path() {
-    assert_eq!(echo("attend laboratory"), "attend /tower/laboratory");
-    assert_eq!(echo("attend /tower/laboratory"), "attend /tower/laboratory");
+    // Both forms are accepted, and **both echo the leaf** — the echo teaches one
+    // canonical form, and §7's is the one players say. The full path clipped the
+    // destination off a three-argument `move` at the 80×22 floor.
+    assert_eq!(echo("attend laboratory"), "attend laboratory");
+    assert_eq!(echo("attend /tower/laboratory"), "attend laboratory");
 }
 
 // ---------------------------------------------------------------------------
@@ -151,8 +191,8 @@ fn a_place_can_be_named_by_its_leaf_or_its_path() {
 
 #[test]
 fn a_missing_argument_becomes_a_numbered_prompt() {
-    // §6's worked example: "start potion" -> "brew --recipe=?" -> a numbered
-    // list of what could fill it.
+    // §6's worked example: a bare verb yields a numbered list of what could
+    // fill it, rather than an error.
     let resolution = resolve("brew", &tower(), Mode::Calm);
     let Resolution::Ambiguous { candidates } = resolution else {
         panic!("expected a prompt, got {resolution:?}");
@@ -160,11 +200,7 @@ fn a_missing_argument_becomes_a_numbered_prompt() {
 
     let offered: Vec<String> = candidates.iter().map(|c| c.intent.echo()).collect();
     assert!(
-        offered.contains(&"decoct clarity".to_owned()),
-        "{offered:?}"
-    );
-    assert!(
-        offered.contains(&"decoct warding".to_owned()),
+        offered.contains(&"grimoire clarity".to_owned()),
         "{offered:?}"
     );
 }
@@ -183,12 +219,12 @@ fn disambiguation_never_blocks_during_a_siege() {
         Confidence::Forced,
         "the echo must offer correction"
     );
-    assert_eq!(intent.verb, Verb::Decoct);
+    assert_eq!(intent.verb, Verb::Grimoire);
 }
 
 #[test]
 fn a_clear_winner_is_not_second_guessed() {
-    let resolution = resolve("decoct clarity", &tower(), Mode::Calm);
+    let resolution = resolve("wield laboratory", &tower(), Mode::Calm);
     let Resolution::Resolved { confidence, .. } = resolution else {
         panic!("expected a clean resolution: {resolution:?}");
     };

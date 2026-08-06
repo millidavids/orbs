@@ -3,6 +3,7 @@
 use bevy::prelude::*;
 
 use super::clock;
+use super::content;
 use super::driver::{Tower, advance};
 
 /// Owns the simulation and steps it once per world tick.
@@ -46,5 +47,10 @@ impl Plugin for SimPlugin {
         // hitch. See `clock` for why this is raised rather than removed, and why
         // it is installed in a way that does not depend on plugin order.
         clock::install(app);
+
+        // Content hot-reload (rule 6). No-op unless `ORBS_CONTENT` names a
+        // directory, so a shipped build starts no thread and reads no path.
+        // After `insert_resource(tower)`, which it loads into.
+        content::install(app);
     }
 }

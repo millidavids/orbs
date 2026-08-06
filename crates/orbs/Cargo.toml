@@ -11,6 +11,13 @@ authors.workspace = true
 orbs-sim = { path = "../orbs-sim" }
 orbs-render = { path = "../orbs-render" }
 
+# Content hot-reload (CLAUDE.md rule 6). The watcher lives *here*, not in
+# orbs-sim: rule 8 forbids async in the sim, rule 3 makes a frontend a caller
+# rather than a host, and a watcher inside the sim would make every headless
+# test touch the filesystem. `notify` runs a background thread and hands work
+# over a channel, which a system drains on a tick boundary.
+notify = "8.0"
+
 # No bevy_text / bevy_ui: every screen is terminal content drawn by our own
 # cell-grid renderer. See DESIGN.md §13.
 bevy = { version = "=0.19.0", default-features = false, features = [

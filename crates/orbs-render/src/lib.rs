@@ -48,6 +48,7 @@
 //!     main_panes: 2,
 //!     sidebar_panes: 1,
 //!     mode: DisplayMode::Deep,
+//!     input_rows: tier.input_rows(),
 //! });
 //!
 //! let mut frame = Frame::new(grid);
@@ -121,8 +122,26 @@ pub use style::{Intensity, Presentation, Role, Style};
 #[must_use]
 pub fn arriving(text: &str, cells: u32) -> &str {
     let taken = usize::try_from(cells).unwrap_or(usize::MAX);
-    match text.char_indices().nth(taken) {
-        Some((end, _)) => &text[..end],
-        None => text,
-    }
+    &text[..char_index(text, taken)]
+}
+
+/// The byte index of character `count`, or the end of `text`.
+///
+/// The counterpart to [`arriving`], and here for the same reason: **count
+/// characters, never bytes.** Frame text is bounded to the CP437 repertoire but
+/// is still UTF-8, so a byte offset can split `░` or `é` into something that is
+/// not a `str` and panic on the slice.
+///
+/// It lives in this crate because the two callers have to *agree*: the Bevy
+/// shell uses it to place the caret and slice the viewport, and `orbs-sim`'s
+/// completer uses it to compute the range a Tab replaces — then the shell splices
+/// one into the other. They were two private copies, identical today, in
+/// different crates; the first time either grew a nuance the caret and the
+/// replaced range would have desynchronised and Tab would have overwritten the
+/// wrong bytes.
+#[must_use]
+pub fn char_index(text: &str, count: usize) -> usize {
+    text.char_indices()
+        .nth(count)
+        .map_or(text.len(), |(index, _)| index)
 }

@@ -86,7 +86,7 @@ and every one of those now names a phase rather than an oversight.
 | `sift` / record filtering | ✅ `sift <pattern> orb.log` | — |
 | Eldritch + tampered presentation | ✅ `F7` cycles the register; all three faces draw | — |
 | Progress bars (`Painter::progress`) | ✅ a brew draws its meter | — |
-| Sidebar (`ScreenLayout::sidebar`) | ❌ example only | **Domain panes**, which the brewing plan review cut from this item — §9 opens with two domains at capacity 1, so one is minimised. Needs panes-per-domain to exist first |
+| Sidebar (`ScreenLayout::sidebar`) | ❌ example only | **Unblocked** — domain panes are back in scope as step 7 of Phase 1's brewing item (they were cut from it by an earlier review, then restored). §9 opens with two domains at capacity 1, so one is minimised |
 | 3- and 4-pane tiling | ❌ the game asks for at most 2 | **Phase 1+ progression.** Gated by *multiplex capacity*, not by domains: §11.5 starts the player at capacity **1** and reaches 3 at ~5 h. §9 keeps panes and capacity as separate unlocks that "must not be conflated" — drawing three panes at t=0 would delete the swap-or-let-it-burn trade the whole focus track is built on |
 | `Sim::with_schedule`'s build closure | ⚠️ test-only, and now says so | **Nothing left** — domain systems belong inside `Sim::new`, or the Bevy build, `orbs-tui` and `orbs-balance` each register their own and diverge (§13). Kept because the boundary tests drive it; marked so no frontend reaches for it |
 | Replay log (`Sim::submissions`) | ⚠️ written, never read | **Phase 1** — needs a replay command to read it |
@@ -386,16 +386,25 @@ defects — DESIGN.md §19.
 - [x] **A real boot sequence** — opens on black, then the prompt types itself,
       the pane border draws itself a cell at a time, and a POST card prints
       `O.R.B.S.` in block glyphs a character at a time before checking off
-      Blackhearth Games, Rust and Bevy. **14 s, any key skips** — paced to be
-      read rather than to be got past: at the first pass's 4.4 s the stages that
-      animate were over before they could be followed. The POST is a title card
-      rather than a table, so it cannot be mistaken for §4's tower report
+      Blackhearth Games, Rust and Bevy. **14 s, and it does not skip** — paced to
+      be read rather than to be got past: at the first pass's 4.4 s the stages
+      that animate were over before they could be followed. The POST is a title
+      card rather than a table, so it cannot be mistaken for §4's tower report.
+      The any-key skip was removed (§19): the sequence is character, and a
+      keypress skip made the first thing a player does to the game be dismissing
+      it. §4's *sticky* skip is a different mechanism and still waits on Phase 5
       arriving twice. **The world does not tick during it** — `tower::drift`
       rolls once per tick, so the same seed would otherwise build a different
       world depending on how long boot ran
       **See it:** ✅ `cargo run -p orbs`. Or as text:
-      `ORBS_DUMP=1 ORBS_BOOT=post cargo run -p orbs`, and `dark`/`prompt`/`frame`
-      for the rest. `ORBS_BOOT=0` skips it
+      `ORBS_DUMP=1 ORBS_BOOT=post cargo run -p orbs`, and `dark`/`frame` for the
+      rest. `ORBS_BOOT=0` skips it — the only skip there is.
+      **The prompt is gone from these screens**, and the `Prompt` stage with it:
+      an input line typed itself before the frame drew, on a screen where nothing
+      can be typed because every keyed system is gated on `booted`. The first
+      affordance the game showed was one that did not work. Removing the drawing
+      alone would have left 1.2 s of black indistinguishable from a slow launch,
+      so the stage went too — boot is ~13 s now, not 14
 - [x] **The tube strike — built, then cut** — a flash and a sweeping band first,
       then the band alone was dropped for reading as a fault, then the flash too.
       It never earned its place: the game is a wizard finding a computer inside a
@@ -440,7 +449,7 @@ the loop.
       **The clock runs whenever the window is open. One rule, no exceptions.**
       **See it:** ✅ launch, touch nothing, and watch `tick` in the border keep
       climbing; `meditate 30` still lands duration actions on the right ticks
-- [ ] **Brewing, gamified** — §10 gives the domain a minigame form
+- [x] **Brewing, gamified** — §10 gives the domain a minigame form
       (*"sequence/recipe puzzle with timing"*) and Phase 0 built a command
       instead: `decoct clarity` holds the slot for twenty ticks and finishes.
       This is the item that makes manual play *interesting* rather than a chore
@@ -453,6 +462,169 @@ the loop.
       `decoct` produces a node called `residue-N`. §11.5's Resources table
       already specifies the missing half. A recipe puzzle cannot be designed over
       a domain with no output to vary.
+
+      **The design is settled — DESIGN.md §10.1**, with §19's entry recording
+      what two independent reviews changed. Five instruments
+      (`mortar_and_pestle`, `balneum_mariae`, `flask_and_rod`, `alembic`, and the
+      `athanor` as shared heat), four of which take Focus. Three new verbs and
+      one retirement take §6.1's vocabulary to 18: `move`, `wield`, `stop` in;
+      **`decoct` out.**
+
+      **There is no command that brews a potion.** A verb claiming to do all four
+      stages at once would teach the player something false, and the only single
+      line that makes a potion is a spell they wrote — §8's whole argument.
+      `decoct`/`brew`/`make`/`mix`/`distil` stay claimed and resolve to
+      `grimoire <recipe>`, so *"make a potion of clarity"* answers with the
+      recipe and becomes the tutorial entry point. This also removed a built-in
+      that had been sitting in §8's headline script since draft 1.
+
+      Build in this order — each step is independently visible:
+
+  1. ✅ **Content format** (rule 6) — `serde`+`toml`, `orbs_sim::Prose` keyed by
+        situation with `{field}` interpolation, compiled in via `include_str!`
+        so headless tests need no filesystem. The watcher lives in the *frontend*
+        (`orbs/src/sim/content.rs`) because rule 8 forbids async in the sim and
+        rule 3 makes a frontend a caller; reloads land in `FixedUpdate`, on a
+        tick boundary. Prose hot-reload is **replay-safe** — no line reaches a
+        decision. *Recipes will not be, and need content versioned into
+        `Sim::submissions`; that arrives with step 2.*
+        Tests pin the authored lines to CP437, the 80×22 width, and lower case —
+        the first draft shipped an em-dash that drew as `?`, the same defect
+        CLAUDE.md already records finding in DESIGN.md's boot text.
+        **See it:** ✅ `ORBS_CONTENT=crates/orbs-sim/content cargo run -p orbs`,
+        edit `prose.toml`, and the next tick speaks the new line — confirmed in
+        the running game, not only in a dump
+  2. ✅ **Instruments as places** — the laboratory holds `mortar_and_pestle`,
+        `balneum_mariae`, `flask_and_rod`, `alembic`, `athanor` and
+        `dispensary`, each a place, so `survey alembic` inspects one from across
+        the room while §19's *"you can only name what is where you are"* still
+        governs its contents. New `NounKind::Reagent` — one kind for
+        ingredients, part-made materials, byproducts and fuel, because §10.1's
+        *every byproduct has at least one use* means a kind that sorted waste
+        from ingredient would encode a judgement the recipes are meant to keep
+        changing. `crucible` removed; `retort` stayed a vessel, so
+        `NounKind::Vessel` never empties and the fixtures move onto it.
+        **`purge` is now two tiers:** `Protected` (root, live domains) refuses
+        outright; any other **place is emptied, never destroyed**. Instruments
+        are safe by *being places* rather than by being protected — otherwise
+        `purge alembic` deleted the alembic and left a laboratory that could not
+        distil, from a verb §7 calls everyday maintenance.
+        **See it:** ✅ `ORBS_DUMP="attend laboratory; survey; survey dispensary;
+        purge dispensary; purge laboratory"` — six places listed, three reagents
+        in the dispensary, the dispensary scoured but intact, the laboratory
+        refused. Looking at it also caught the protected refusal reading *"the
+        laboratory is the tower itself"*, wording written when only the root
+        could reach it.
+        *Moved to step 3, where they gain a consumer:* **material states and
+        potions.** Both need recipes, and a state nothing reads is a field
+        waiting to drift out of step with the transformations meant to define
+        it. The `survey`-reports-contents idea is **dropped** — `survey <place>`
+        already inspects at a distance, which is what the loop actually needs
+  3. ✅ **The vocabulary and the tools that answer it — one slice.** `move`,
+        `wield`, `stop`; retire `decoct`; and the tools **run, lock, finish and
+        release**. Merged deliberately: retiring `decoct` removes the only live
+        brewing verb, so shipping it without working tools would leave the
+        laboratory less playable than it is today — a trough with no gate that
+        passes. `wield` and the thing it does arrive together.
+        Parser work: the source-scoped first slot and its deferred fill, `from`
+        added to `FILLER`, the `tra` prefix pin, plain synonyms, `Verb::ALL`
+        16→18. Retiring `decoct` repoints five claimed words at `grimoire`,
+        registers recipes as `Topic` nouns beside their `Essence`, and touches
+        ~22 files including a doctest and the `ORBS_DUMP` examples in CLAUDE.md
+        and SETUP.md. `DECOCT_TICKS` goes with it; `work::begin` keeps `divine`
+        as a caller. One slot each from the global pool; `meditate` **stalls**
+        rather than auto-advancing; a finished-but-uncollected tool **releases
+        its slot**, or a capacity-1 player who walks away is soft-locked
+        **See it:** `move sage from dispensary to mortar_and_pestle`, then
+        `wield mortar_and_pestle`; try to move into it and be refused;
+        `meditate 600` → finished, not advanced. `make a potion of clarity`
+        answers with the recipe
+  4. ✅ **The athanor burns, and gates the two heated instruments** — its own
+        module (`tower/heat.rs`) and its own content file (`content/fuel.toml`),
+        because it is the one instrument that transforms nothing. `Burning` is an
+        **interval**, so fuel is a pure function of the tick and survives
+        `meditate`; `Banked` is what `stop athanor` preserves. Deliberately not a
+        `Working`, so nothing counting the production pool can see it — that is
+        what keeps "four instruments, four Focus slots" exact.
+        Heat is checked when a run **starts** and the run then completes: pausing
+        would be the countdown §19 refused, spoiling would cost progress against
+        §11.5's *"never ruinous, only slower"*. Ash lands once, at burn-out, for
+        the same determinism reason — per-tick spawning would issue ids into
+        `Children` at a rate depending on how the ticks were consumed.
+        **The finding:** the two heated stages are not adjacent, so the play is
+        light → digest → **damp** → combine → relight → distil, and one charcoal
+        covers a whole brew. Found by the fire dying in the end-to-end test;
+        recorded in §10.1
+        **See it:** ✅ `ORBS_DUMP="attend laboratory; move charcoal to athanor;
+        wield athanor; meditate 20; stop athanor; wield athanor; meditate 60;
+        survey athanor"` — lights, damps and banks, relights, gutters, and leaves
+        ash. And `wield balneum_mariae` cold answers *"wants heat, and the
+        athanor is cold"*. **Text, not a bar** — the painter is step 6
+  5. ✅ **`siphon`, `stop`'s refund, and the triage slot** — `siphon` is live and
+        takes a **place**, not a vessel: §10.1 puts the product in the instrument
+        that made it. A `Product` marker separates what you meant to make from
+        what you did not, because telling them apart by *name* would mean the
+        laboratory deciding which reagents are waste — and §10.1 refuses that,
+        since every byproduct is some other recipe's input.
+        **Clearing is Triage work now**, not instant: `Triaging` is a separate
+        component from `Working` on purpose, so `in_flight()` and `CAPACITY`
+        cannot see it. Sharing one type would mean every counter had to remember
+        to filter, and the first that forgot would refuse a purge during a brew —
+        the exact inversion of §9. `PURGE_TICKS` sits under §11.5's 10–30 s band
+        deliberately: at the band's own numbers, clearing four instruments is two
+        minutes of a loop whose whole point is not feeling like a chore. A
+        placeholder the balance CLI sweeps.
+        `stop`'s refund needed no work — the inputs never left the instrument
+        **See it:** ✅ `ORBS_DUMP="attend laboratory; move sage to
+        mortar_and_pestle; wield mortar_and_pestle; meditate 10; siphon
+        mortar_and_pestle; purge mortar_and_pestle; survey; meditate 5; survey
+        mortar_and_pestle"` — the ground sage comes out onto the laboratory
+        floor, the husks stay behind, and the scouring takes ticks rather than a
+        keystroke
+  6. ✅ **The instrument panel** — `Sim::instruments()` reports every fixture
+        where the player is standing, so the panel is a property of *where you
+        are* rather than something a frontend decides to show. An accessor, not
+        records: rule 4 puts command *output* in records, and the panel is the
+        world's current state redrawn every frame — a record per instrument per
+        tick would bury the scrollback in its own furniture.
+        §14 needed a new `Painter::meter`: five bars drawn with `progress` push
+        five utterances **a frame**, against *"progress announcements: completion
+        only"*. `meter` draws silently and the panel owes **one** summary line
+        naming only what is doing something.
+        **It earned its rows twice over.** Banked fuel and a fouled instrument
+        were each reported as bugs because the only way to see them was to touch
+        them, and each was answered with a sentence. A sentence tells you once,
+        when you ask; a bar tells you continuously.
+        **See it:** ✅ at the 80×22 floor, `attend laboratory` puts six rows above
+        the transcript — one filling, one draining, four at rest — and the
+        linearised stream is a single `Progress` line. Added to
+        `examples/screens.rs`, where `parity` immediately caught the rows being
+        drawn with `span` (which speaks): a Wide strip too short for the athanor
+        **said one thing less than Deep**, which §9 forbids outright
+        *Deferred, and now smaller than it looked:* a **separate** laboratory
+        pane above `DEEP_FOCUS_FLOOR`, and telemetry's place in it. The panel
+        works at every size inside the session pane, so this is a layout
+        refinement rather than the feature
+  7. ✅ **Byproducts with uses, and `grimoire` alive** — the variance is a
+        **second route to the same draught**: route A spends fresh sage, route B
+        spends the husks a grind left behind. Free if you have been grinding,
+        unavailable if you have not, and slower — waste costs time, stock costs
+        stock. It also puts `weak-tincture` in two places at once: sent to the
+        alembic it is haste, sent to the flask it is half a clarity.
+        **`grimoire` was dark, which made the retirement of `decoct` a dead end.**
+        `make a potion of clarity` resolved to `grimoire clarity` and got a bare
+        acknowledgement — §15 weighs the dead-end rate above the raw resolution
+        rate, and I had introduced one while calling it the tutorial entry point.
+        It now walks the whole route tree backwards from the goal, tolerating the
+        cycles in the content (`dregs + sediment → rock-salt → …`) because those
+        cycles are what make waste re-enter the pipeline.
+        A recipe name answers with routes; any other subject answers with prose,
+        and manual topics are **derived from the `grimoire_` keys** so authoring
+        an entry makes it nameable without touching Rust
+        **See it:** ✅ `ORBS_DUMP="grimoire brewing; attend laboratory; make a
+        potion of clarity"` — the manual answers, then the full tree with **two
+        routes to `clarified-draught`** listed before a single instrument is
+        committed
   - **Decisions, not execution.** The outcome may depend on *what the player
         chooses given the tower's state*; it must never depend on how fast or
         precisely they act. §5.1 mechanises "triage bandwidth, not typing speed",
@@ -466,22 +638,109 @@ the loop.
   - **`meditate` idempotence must survive stages.** §19 chose an interval over
         a countdown so hundreds of ticks inside one `step()` behave identically
         to being watched. A staged action must also resolve with **no player
-        present**, which is what §5.0's offline catch-up requires
+        present** — that is a `meditate`-and-stage-boundary requirement, *not*
+        an offline one: §5 opens *"initially there is no offline progression"*
+        and puts it in Phase 3a, covering bound scripts rather than a lit athanor
   - Durations stay placeholders. §19 records `DECOCT_TICKS = 20` as one, and
         the balance CLI later in this phase is what sweeps it — do not hand-tune
   - Out of scope, stated: the archive's minigame (deferred, below), adversarial
         aberrations (siege-only, §5.1), nuisance aberrations (unscheduled in
         every phase — a separate finding, not this item's job)
 
-      **Exit criterion:** the same recipe, in two different tower states, has two
-      different right answers — and the difference is **readable from the records
-      before you act**. Not "the second playthrough differs", which a coin flip
-      satisfies; the point is that it is still interesting on the twentieth brew
-      **See it:** brew the same essence twice in different tower states, make
-      different calls, and get different results — with `ORBS_DUMP` showing why
+      **Exit criterion:** ✅ the same recipe, in two different tower states, has
+      two different right answers — and the difference is **readable from the
+      records before you act**. Not "the second playthrough differs", which a
+      coin flip satisfies; the point is that it is still interesting on the
+      twentieth brew
+      **See it:** ✅ `grimoire clarity` lists both routes to the draught before an
+      instrument is committed to either, and
+      `the_same_goal_has_two_right_answers_depending_on_what_the_laboratory_holds`
+      runs both to the same end — one on fresh sage, one on the husks a grind
+      left behind
+
+      **What is *not* done, stated plainly.** Durations are placeholders and the
+      balance CLI has not swept one of them; `PURGE_TICKS` and the athanor's
+      `ticks` are the two most likely to move. Capacity is still hard-wired to 1,
+      so the four-instrument pipeline this was designed around cannot be run
+      concurrently until Phase 2 reserves slots and Phase 3a researches them —
+      everything shipped here is the capacity-1 game. A separate laboratory
+      *pane* above `DEEP_FOCUS_FLOOR` is deferred: the panel works at every size
+      inside the session pane, which makes that a layout refinement rather than
+      the feature
 - [ ] Script engine — bind-time canonicalisation, ID-anchored referents, execution
       budget, failure taxonomy, Attention pool
       **See it:** write a `.spell`, `bind` it, walk away, come back to work done
+- [x] **The prompt becomes a command line** — caret editing (←/→, Home/End,
+      `Cmd+←/→` because a Mac has no Home key, Escape to clear, insert and delete
+      at the caret), history on ↑/↓ **filtered by what is typed** with the prefix
+      anchored for the whole search, `parser::complete` in orbs-sim, Tab, and an
+      inline suggestion that prefers history over completion.
+      **Not on the roadmap when it was asked for**, and taken against a 28-vs-24
+      month gap — it displaces nothing yet, but the script engine and the
+      remaining sabotage surfaces are what it competes with. DESIGN.md §19 records
+      the eleven decisions, including two live bugs the work uncovered: a `move`
+      could raid a **running** instrument and say nothing, and the
+      three-argument `move` echo was already clipping its own destination.
+      Deferred and named: `Ctrl+R`, `Delete`, `Ctrl+U`, `Ctrl+W`, word motion,
+      paste, IME, scrollback wrapping
+      **See it:** ✅ `ORBS_LINE="wield mo" ORBS_DUMP="attend laboratory"` shows
+      the partial line with `rtar_and_pestle` ghosted after the caret and a
+      `Hint` in the linearised stream. In the running game: type, walk into the
+      middle of a command and edit it, ↑ through the wields, Tab a name
+- [x] **Ten-angle review of the brewing + command-line work, applied** — eleven
+      live bugs, four of them reachable in a first session: `purge dispensary`
+      made the tower **unwinnable**, a `move` could raid an instrument being
+      scoured, `peruse <domain>.log` was permanently empty, and the transcript
+      dropped its newest records at the 80×22 floor. Plus a fidelity regression
+      that opened the default window two tiers finer than §9's table.
+      **Four had green tests over them, three of which asserted the bug** — see
+      DESIGN.md §19 for the table and for the two findings that were checked and
+      rejected.
+      **See it:** ✅ `ORBS_DUMP="attend laboratory; move sage to
+      mortar_and_pestle; wield mortar_and_pestle; meditate 12; siphon
+      mortar_and_pestle"` — the linear stream now says `laboratory:
+      mortar_and_pestle fouled` where it said nothing at all, and
+      `cargo run -p orbs-sim --example session` runs the whole §10.1 pipeline and
+      reads nine lines back out of `laboratory.log`
+- [x] **Readable recipes, Tab cycling, and a scrollable transcript** — three
+      things a player asked for after using the laboratory.
+      `grimoire` now reads as **instructions in doing order** rather than as the
+      raw breadth-first walk printed backwards as five unlabelled columns; it
+      stops at what the dispensary stocks instead of expanding three ways to make
+      the rock-salt you already have. Repeated **Tab cycles** the candidates
+      (readline's `menu-complete`), the first press still listing without touching
+      the line. **PageUp/PageDown** scroll the transcript, with the border saying
+      so — Up/Down stay history.
+      The recipe work found a fourth thing: a line view **clipped** anything past
+      the pane width instead of wrapping, which is silent loss on §14's primary
+      surface. Wrapping went into `RecordView`, so every long refusal benefits.
+      **See it:** ✅ `ORBS_DUMP="attend laboratory; grimoire clarity"` — five
+      numbered steps, byproducts, heat markers, alternatives, nothing clipped at
+      the 80×22 floor. ✅ `ORBS_SCROLL=14 ORBS_DUMP="…"` shows the transcript held
+      back with `PgDn newest` in the border. In the running game: type `wield `
+      and press Tab three times
+- [x] **Per-instrument verbs, scoped to their domain** — `grind sage` is the
+      `move` and the `wield` in one, and the instrument is named by the verb
+      rather than typed. `mix a and b` charges two, with `and` dropped as filler
+      so the slots fill positionally — the mechanism `move x to y` already used.
+      Five verbs (`grind`, `digest`, `mix`, `distil`, `kindle`), each declared by
+      its own instrument and **only a word where that instrument stands** (§7).
+      `kindle` is the odd one — lighting is not a run — but it charges and starts
+      like the rest, and bare `kindle` relights what was banked. That is
+      what keeps §10's five further domains from widening each other's collision
+      surface. Out of its domain a verb still answers — `there is nothing here to
+      mix with` — and an exactly-typed one outranks a fuzzy rival, without which
+      scoping would have *created* the misreading it prevents.
+      DESIGN.md §19 records the three conditions and why `grind` was kept over a
+      collision-free alternative.
+      **`empty <tool>`** landed with them: the counterpart of `purge`, turning an
+      instrument out into the store instead of destroying what it holds. §10.1
+      says every byproduct has a use, so a loop that can only clear by destroying
+      never finds route B. Instant, unlike `purge` — the four ticks are the price
+      of destroying, not of tidying.
+      **See it:** ✅ `ORBS_DUMP="attend laboratory; grind sage; meditate 12"` —
+      three commands where four were needed, same result. ✅ the same verbs in
+      `attend archive` say where they are not
 - [ ] Remaining sabotage surfaces (world, script text, trigger clocks)
       **See it:** `verify` each of the four surfaces and have it name the tampering
 - [ ] Third domain (scrying — the player's first discovery)

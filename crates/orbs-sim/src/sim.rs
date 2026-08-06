@@ -8,6 +8,7 @@
 use bevy_ecs::prelude::*;
 use orbs_render::{Outcome, Presentation, RecordKind};
 
+use crate::content::{Fuels, Prose, Recipes};
 use crate::execute::run_pending;
 use crate::parser::{Mode, ParseLog, ParseRecord, Resolution, Scene, analyse, report};
 use crate::rng::Rngs;
@@ -65,6 +66,19 @@ impl Sim {
         world.init_resource::<ParseLog>();
         world.init_resource::<Wizard>();
         world.init_resource::<Choices>();
+        // The compiled-in default, so a headless `Sim` needs no filesystem
+        // (rule 6, rule 8). A frontend swaps it with `set_prose`.
+        world.init_resource::<Prose>();
+        // The manual's subjects, fixed here. They are parser nouns, so reading
+        // them live from `Prose` would let a hot reload change what a phrase
+        // resolves to — see `tower::Topics`.
+        let topics = crate::tower::Topics::of(world.resource::<Prose>());
+        world.insert_resource(topics);
+        // Recipes are **not** hot-reloadable, unlike prose: they reach
+        // decisions, so swapping them mid-session would break replay from
+        // `(seed, submissions)` unless the content were versioned with it.
+        world.init_resource::<Recipes>();
+        world.init_resource::<Fuels>();
 
         // Its **own** schedule, run before the caller's. Adding `run_pending`
         // to the same schedule and relying on insertion order would be an
@@ -76,7 +90,12 @@ impl Sim {
         commands.add_systems(run_pending);
 
         let mut schedule = new_sim_schedule();
-        schedule.add_systems((tower::finish, tower::drift));
+        // `burn` before `finish`: a fire that runs out on the same tick a heated
+        // stage lands should be cold *after* that stage completes, not before —
+        // the run was already committed when it started (§10.1), and ordering it
+        // the other way would make a completion depend on which system Bevy
+        // happened to sort first.
+        schedule.add_systems((tower::burn, tower::finish, tower::drift).chain());
         build(&mut schedule);
 
         // A **third** pass, for the same reason `commands` is a first one:
@@ -187,13 +206,17 @@ impl Sim {
         ));
         let resolution = analysis.resolution;
 
+        // Cloned because `report` needs the prose while `Scrollback` is borrowed
+        // mutably, and both live in the same world. It is one line's worth of
+        // lookup on a keystroke, not per frame.
+        let prose = self.world.resource::<Prose>().clone();
         let mut scrollback = self.world.resource_mut::<Scrollback>();
         let records = scrollback.records_mut();
         records
             .push(RecordKind::Input)
             .text(orbs_render::FieldName::Message, line)
             .finish();
-        report(line, &resolution, records);
+        report(line, &resolution, &prose, records);
 
         self.world.resource_mut::<Submissions>().push(tick, line);
         match resolution {
@@ -206,7 +229,9 @@ impl Sim {
                 let readings = candidates.into_iter().map(|c| c.intent).collect();
                 self.world.resource_mut::<Choices>().offer(readings);
             }
-            Resolution::Incomplete { .. } | Resolution::Unresolved { .. } => {}
+            Resolution::Incomplete { .. }
+            | Resolution::Elsewhere { .. }
+            | Resolution::Unresolved { .. } => {}
         }
     }
 
@@ -270,6 +295,19 @@ impl Sim {
     ///
     /// One at a time: §11.5 opens at multiplex capacity 1 and §9's fourth
     /// invariant reserves that slot for the action's whole duration.
+    ///
+    /// # Why `iter_entities` rather than a query
+    ///
+    /// A query needs `&mut World` to build its `QueryState`, and this takes
+    /// `&self` because a **paint** calls it — the frontend holds the sim shared.
+    /// The filter is by component, so it is correct; it is the *breadth* that is
+    /// unfortunate.
+    ///
+    /// **Bevy 0.19 made that breadth wider.** Resources are components now, kept
+    /// on dedicated entities, so this walks those too. Nothing here can carry
+    /// `Working`, so the answer is unchanged — but a future broad walk that
+    /// filters on something a resource *could* have would silently include them,
+    /// which is the trap worth knowing about before writing the next one.
     #[must_use]
     pub fn working(&self) -> Option<tower::Working> {
         self.world
@@ -277,10 +315,54 @@ impl Sim {
             .find_map(|entity| entity.get::<tower::Working>().copied())
     }
 
+    /// The instruments where the player is standing, for §10.1's panel.
+    ///
+    /// Empty anywhere but the laboratory, which is what makes the panel a
+    /// property of *where you are* rather than something a frontend decides to
+    /// show.
+    #[must_use]
+    pub fn instruments(&self) -> Vec<tower::Instrument> {
+        tower::instruments(&self.world)
+    }
+
     /// The readings the orb is waiting for the player to pick between (§6).
     #[must_use]
     pub fn choices(&self) -> &Choices {
         self.world.resource::<Choices>()
+    }
+
+    /// Replace the orb's voice — CLAUDE.md rule 6's hot reload.
+    ///
+    /// A frontend owns the file watcher (rule 3: the sim is called, never
+    /// hosted; rule 8: no async here) and calls this **between** steps, so a
+    /// reload lands on a tick boundary and never mid-schedule.
+    ///
+    /// # Replay
+    ///
+    /// Safe. No line reaches a decision — prose is presentation over a record
+    /// that was already built, so `(seed, submissions)` still replays to the
+    /// same world. **Recipes will not have this property**, and when they arrive
+    /// the content they came from has to be versioned into the submission log.
+    ///
+    /// That claim was **false while `grimoire_` keys fed the scene**: every one is
+    /// a `NounKind::Topic`, so renaming one mid-session changed what the parser
+    /// resolves. [`Topics`](crate::tower::Topics) is snapshotted at construction
+    /// and deliberately not touched here, which is what makes the paragraph above
+    /// true again — a new manual subject needs a relaunch, its text does not.
+    pub fn set_prose(&mut self, prose: Prose) {
+        self.world.insert_resource(prose);
+    }
+
+    /// The orb's voice, for the handful of lines a **frontend** must speak.
+    ///
+    /// Almost nothing needs this: prose belongs on a record, and a frontend
+    /// drawing a record gets the sentence with it. The exception is a screen the
+    /// sim has no record for — §9's "window too small" — which is still authored
+    /// prose and still rule 6's, so it is read from here rather than written as a
+    /// literal in the Bevy crate.
+    #[must_use]
+    pub fn prose(&self) -> &Prose {
+        self.world.resource::<Prose>()
     }
 
     /// Commands resolved but not yet run.
@@ -381,7 +463,7 @@ impl Sim {
 
     /// Read-only access to the world, for frontends rendering current state.
     #[must_use]
-    pub fn world(&self) -> &World {
+    pub const fn world(&self) -> &World {
         &self.world
     }
 
@@ -390,7 +472,7 @@ impl Sim {
     ///
     /// This is a deliberate escape hatch. Mutating the world *between* steps is
     /// fine; anything that makes two runs from the same seed diverge is not.
-    pub fn world_mut(&mut self) -> &mut World {
+    pub const fn world_mut(&mut self) -> &mut World {
         &mut self.world
     }
 }

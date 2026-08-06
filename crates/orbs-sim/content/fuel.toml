@@ -1,0 +1,30 @@
+# What the athanor burns (DESIGN.md §10.1).
+#
+# Its own file rather than a table in `recipes.toml`, because the athanor is the
+# one instrument that transforms nothing: it takes fuel and gives heat, and
+# forcing it into the recipe shape would have meant inventing an output for it.
+#
+# `ticks` is how long one of these burns. The athanor consumes fuel **whether or
+# not anything is mounted on it**, so idle lit time is pure waste — that is the
+# whole timing pressure of §10.1, and the reason a script ends its loop with
+# `stop athanor` while a distracted player does not.
+#
+# Placeholders, like every duration here: the balance CLI sweeps them. This one
+# sets how many heated stages fit in one lighting, and therefore whether a brew
+# wants one trip to the dispensary or several.
+#
+# **A charcoal outlasts a brew by a wide margin, on purpose.** It was 40 ticks
+# once, which is barely the 26 ticks of heat a clarity needs plus the unheated
+# combination between them - so damping mid-brew was not a good move, it was the
+# only move, and the fire needed watching like a third instrument.
+#
+# At 300 the pressure is unchanged in kind and much gentler in degree: idle lit
+# time is still pure waste, so batching heated stages and damping between them
+# still saves fuel. It is now an *optimisation an attentive player takes* rather
+# than a tax every brew pays, which is the right shape - the careless player is
+# slower, never stuck, and the script that damps is meaningfully ahead over a
+# session rather than trivially ahead over one brew.
+
+[charcoal]
+ticks = 600
+leaves = "ash"

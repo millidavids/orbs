@@ -8,7 +8,8 @@ use bevy::window::WindowResized;
 
 use orbs_render::DEEP_FOCUS_FLOOR;
 
-use super::input::{Line, SubmittedMessage, type_into_line};
+use super::input::{SubmittedMessage, type_into_line};
+use super::line::Line;
 use super::linear::Linear;
 use super::reveal::Reveal;
 use super::screen::{Screen, cycle_mode, spawn_camera, track_window};
@@ -26,6 +27,16 @@ use crate::sim::Tower;
 pub(crate) enum ShellSystems {
     /// Keystrokes reach the line; finished lines reach the sim.
     Input,
+    /// Animations advance: the typewriter reveal and the pane transition.
+    ///
+    /// A set of its own so `repaint` can order **after** it. Both write state
+    /// `repaint` then reads, with no edge between them, so on the frame a burst
+    /// of output lands the executor could run `repaint` first — drawing the whole
+    /// burst complete — and `drive_reveal` second, setting `shown` back to zero.
+    /// The next frame the same text vanishes and types itself in: output that
+    /// flashes whole and then rewinds. Same class of defect [`Self::Input`]
+    /// exists for.
+    Drive,
 }
 
 /// The window, the camera, the grid, and the command line.
@@ -35,11 +46,33 @@ impl Plugin for ShellPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Screen>()
             .init_resource::<Line>()
+            .init_resource::<super::input::Offered>()
+            .init_resource::<super::input::Ghost>()
+            .init_resource::<super::input::Panel>()
+            .init_resource::<super::input::Scroll>()
             .init_resource::<Linear>()
             .init_resource::<PaneTransition>()
             .init_resource::<Reveal>()
             .add_message::<SubmittedMessage>()
             .add_systems(Startup, (spawn_camera, track_window).chain())
+            // **Not** gated on `booted`, and not in the input set. A focus loss
+            // during the boot sequence strands held keys exactly as one during
+            // play does, and the guard has to outlive whatever stole the window.
+            .add_systems(
+                Update,
+                super::input::forget_held_keys.run_if(on_message::<bevy::window::WindowFocused>),
+            )
+            // The panel only moves when the world does — see `Panel`. **Not**
+            // gated on `booted`: `Tower` is marked changed when it is inserted,
+            // and that is the frame that fills the panel for the starting room.
+            // Behind the boot gate the flag has long expired by the time the
+            // sequence ends, leaving the panel blank until the next tick.
+            .add_systems(
+                Update,
+                super::input::refresh_panel
+                    .in_set(ShellSystems::Drive)
+                    .run_if(resource_changed::<crate::sim::Tower>),
+            )
             .add_systems(
                 Update,
                 (
@@ -49,13 +82,20 @@ impl Plugin for ShellPlugin {
                     // is about to produce.
                     finish_reveal.run_if(on_message::<KeyboardInput>),
                     submit.run_if(on_message::<SubmittedMessage>),
+                    // After `submit`, so the frame that clears the line clears
+                    // the suggestion with it. Gated on what it actually depends
+                    // on — see `Ghost`.
+                    super::input::suggest.run_if(
+                        resource_changed::<Line>.or_else(resource_changed::<crate::sim::Tower>),
+                    ),
                 )
                     .chain()
                     .in_set(ShellSystems::Input)
-                    // Nothing typed reaches the line until the game is up. The
-                    // keystroke that skips the boot sequence is a skip and not
-                    // input, so it must not also be the first letter of a
-                    // command — see `boot::plugin::skip`.
+                    // Nothing typed reaches the line until the game is up: there
+                    // is no input line during the sequence, and §4 draws no
+                    // prompt there. (This used to be justified by the keypress
+                    // that skipped boot needing not to be the first letter of a
+                    // command. That skip is gone; the guard is not vestigial.)
                     .run_if(crate::boot::booted),
             )
             .add_systems(
@@ -80,14 +120,23 @@ impl Plugin for ShellPlugin {
                     // is "clear the line" muscle memory, and quitting the game
                     // mid-sentence is not a recoverable surprise.
                     quit.run_if(input_just_pressed(KeyCode::F10)),
+                    // **PageUp/PageDown, not the arrows.** Up and Down walk the
+                    // command history (§19) and must keep doing so — a shell
+                    // where Up sometimes scrolls and sometimes recalls is a shell
+                    // you cannot type in without looking.
+                    scroll_back.run_if(input_just_pressed(KeyCode::PageUp)),
+                    scroll_forward.run_if(input_just_pressed(KeyCode::PageDown)),
                     // Unconditional: both of these have to keep moving on the
                     // frames where nothing happened, which is most of them.
-                    drive_panes,
-                    drive_reveal,
+                    drive_panes.in_set(ShellSystems::Drive),
+                    drive_reveal.in_set(ShellSystems::Drive),
                 )
-                    // Every key here is guarded, `F10` most of all: a player
-                    // reaching for it during boot means *skip*, and without this
-                    // they would skip and quit in the same keystroke.
+                    // Every key here is guarded: none of them means anything
+                    // before the world runs, and `F6` would write a trace of a
+                    // session that has not happened. (`F10` was singled out when
+                    // a keypress skipped boot — quitting and skipping in one
+                    // keystroke. That skip is gone; the guard still earns its
+                    // place.)
                     .run_if(crate::boot::booted),
             );
     }
@@ -148,10 +197,84 @@ fn drive_panes(screen: Res<Screen>, time: Res<Time>, mut panes: ResMut<PaneTrans
 ///
 /// The sim resolves it immediately and queues any command for the next tick —
 /// see `orbs_sim::session` for why those are two different clocks.
-fn submit(mut lines: MessageReader<SubmittedMessage>, mut tower: ResMut<Tower>) {
+fn submit(
+    mut lines: MessageReader<SubmittedMessage>,
+    mut tower: ResMut<Tower>,
+    mut scroll: ResMut<super::input::Scroll>,
+) {
     for submitted in lines.read() {
         tower.submit(&submitted.line);
+        // Back to the newest output. The player acted; what they want to see is
+        // what it did, and leaving them in history to watch their own command
+        // scroll past off screen is the one place terminal convention is wrong
+        // here — a terminal has no orb answering on its own clock.
+        scroll.rewind();
     }
+}
+
+/// A **conservative** row budget for the transcript body.
+///
+/// The pane's own body is shorter than the grid once its border, the prompt, a
+/// Tab listing and §10.1's instrument panel are taken out, and `paint` is the
+/// only thing that knows exactly. Under-estimating is the safe direction: a page
+/// that moves slightly less than a screenful overlaps the last one by a line or
+/// two, which is what a reader wants anyway.
+fn page_rows(screen: &Screen) -> u16 {
+    screen.grid.rows.saturating_sub(6).max(1)
+}
+
+/// How many records the transcript is currently showing.
+///
+/// **Measured, not assumed.** [`Scroll`](super::input::Scroll) moves in records,
+/// and the step used to be the pane's *row* count on the reasoning that a record
+/// costs at least one row, so a page can never hold more records than rows. That
+/// bound runs the other way: "at least a row each" caps records-per-page *above*,
+/// so stepping by the row count moves further than a screenful and `PgUp` jumped
+/// clean over the lines in between — drawn at neither end of the jump. It is now
+/// wrong by more than it was, because `RecordView` opens every command with a
+/// blank row and wraps a long line over several.
+///
+/// So this runs the same monotone search `prompt::session` draws with: the
+/// smallest skip whose measured height fits. The step is then the page the player
+/// is actually looking at, and paging can only ever overlap.
+fn page_step(screen: &Screen, tower: &Tower, back: usize) -> usize {
+    let sim = tower.sim();
+    let records = sim.scrollback().records();
+    let visible = records.len().saturating_sub(back);
+    if visible == 0 {
+        return 1;
+    }
+    let rows = page_rows(screen);
+    let cols = screen.grid.cols.saturating_sub(2);
+    let prompt = sim.prompt();
+    let view = orbs_render::RecordView::prompt(&prompt);
+    let (mut narrowest, mut widest) = (0, visible);
+    while narrowest < widest {
+        let candidate = narrowest + (widest - narrowest) / 2;
+        if view.height(cols, records.iter().take(visible).skip(candidate)) <= rows {
+            widest = candidate;
+        } else {
+            narrowest = candidate + 1;
+        }
+    }
+    (visible - narrowest).max(1)
+}
+
+/// Look further back through the transcript.
+fn scroll_back(mut scroll: ResMut<super::input::Scroll>, screen: Res<Screen>, tower: Res<Tower>) {
+    let total = tower.sim().scrollback().records().len();
+    let step = page_step(&screen, &tower, scroll.back());
+    scroll.page(step, true, total);
+}
+
+/// Come back toward the newest output.
+fn scroll_forward(
+    mut scroll: ResMut<super::input::Scroll>,
+    screen: Res<Screen>,
+    tower: Res<Tower>,
+) {
+    let step = page_step(&screen, &tower, scroll.back());
+    scroll.page(step, false, 0);
 }
 
 /// Where the parse trace is written.
@@ -241,7 +364,64 @@ mod tests {
         });
     }
 
-    fn type_line(app: &mut App, line: &str) {
+    /// Hold a modifier down, the way winit reports one.
+    fn hold(app: &mut App, key: KeyCode) {
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(key);
+    }
+
+    #[test]
+    fn losing_the_window_forgets_held_modifiers() {
+        // **The bug this test exists for.** `Cmd+Shift+Ctrl+4` on macOS hands
+        // the window to the screenshot overlay mid-chord, so the *release* for
+        // Cmd and Ctrl is delivered to that overlay and never to us. Held state
+        // then says they are down forever, every keystroke after it hits the
+        // chord guard, and the prompt is dead with nothing on screen to say why.
+        let mut app = app();
+        hold(&mut app, KeyCode::SuperLeft);
+        hold(&mut app, KeyCode::ControlLeft);
+
+        app.world_mut().write_message(bevy::window::WindowFocused {
+            window: Entity::PLACEHOLDER,
+            focused: false,
+        });
+        app.update();
+
+        assert!(
+            !app.world()
+                .resource::<ButtonInput<KeyCode>>()
+                .any_pressed([KeyCode::SuperLeft, KeyCode::ControlLeft]),
+            "a stolen window left its modifiers held"
+        );
+
+        // And typing works again, which is the thing the player noticed.
+        type_only(&mut app, "survey");
+        assert_eq!(app.world().resource::<Line>().viewport(80).0, "survey");
+    }
+
+    #[test]
+    fn a_chord_does_not_reach_enter_or_backspace() {
+        // Both bypassed the chord guard, so `Cmd+Enter` submitted the line on
+        // its way to the operating system.
+        let mut app = app();
+        type_only(&mut app, "survey");
+
+        hold(&mut app, KeyCode::SuperLeft);
+        press(&mut app, Key::Enter, Some("\r"));
+        press(&mut app, Key::Backspace, Some("\u{8}"));
+        app.update();
+
+        assert_eq!(
+            app.world().resource::<Line>().viewport(80).0,
+            "survey",
+            "a chord edited or submitted the line"
+        );
+    }
+
+    /// Type without submitting, for tests that want to inspect the buffer.
+    /// Type `line` without submitting it.
+    fn type_only(app: &mut App, line: &str) {
         for glyph in line.chars() {
             // Exactly what winit delivers: the spacebar arrives as `Key::Space`
             // with `text: Some(" ")`, never as `Key::Character(" ")`.
@@ -252,6 +432,12 @@ mod tests {
             };
             press(app, key, Some(&glyph.to_string()));
         }
+        app.update();
+    }
+
+    /// Type `line` and press Enter.
+    fn type_line(app: &mut App, line: &str) {
+        type_only(app, line);
         press(app, Key::Enter, Some("\r"));
         app.update();
     }
@@ -297,14 +483,209 @@ mod tests {
         // `text` carries them — winit documents Enter as `Some("\r")` — and one
         // in the buffer occupies a cell and draws nothing, so the caret drifts
         // away from the text with no visible cause.
+        // `Escape` is no longer among them — it clears the line now, which is
+        // the muscle memory `plugin.rs` moved quit off `Esc` to make room for.
+        // Tab now *completes* rather than doing nothing, so what it must not do
+        // is leave its own `\t` behind — asserting an exact line here would be
+        // asserting the completer's answer instead.
+        let mut tabbed = app();
+        press(&mut tabbed, Key::Tab, Some("\t"));
+        tabbed.update();
+        assert!(
+            !tabbed.world().resource::<Line>().text().contains('\t'),
+            "a tab reached the buffer"
+        );
+
         let mut app = app();
-        press(&mut app, Key::Tab, Some("\t"));
         press(&mut app, Key::Character("a".into()), Some("a"));
-        press(&mut app, Key::Escape, Some("\u{1b}"));
         press(&mut app, Key::Enter, Some("\r"));
         app.update();
-
         assert_eq!(messages(&app).first().map(String::as_str), Some("a"));
+    }
+
+    #[test]
+    fn tab_extends_as_far_as_the_candidates_agree() {
+        let mut app = app();
+        type_line(&mut app, "attend laboratory");
+        type_only(&mut app, "wield mo");
+        press(&mut app, Key::Tab, Some("\t"));
+        app.update();
+
+        assert_eq!(
+            app.world().resource::<Line>().viewport(80).0,
+            "wield mortar_and_pestle ",
+            "a lone candidate should complete and leave a space"
+        );
+    }
+
+    #[test]
+    fn tab_lists_when_extending_would_add_nothing() {
+        // readline's `show-all-if-ambiguous`. The candidates are **transient
+        // Frame content**, never a record: a Tab press is not a submission, and
+        // a frontend writing to the log breaks replay by construction.
+        let mut app = app();
+        type_line(&mut app, "attend laboratory");
+        type_only(&mut app, "wield ");
+        press(&mut app, Key::Tab, Some("\t"));
+        app.update();
+
+        let offered = &app
+            .world()
+            .resource::<super::super::input::Offered>()
+            .options;
+        assert!(offered.len() > 1, "expected a list, got {offered:?}");
+        assert!(offered.iter().any(|name| name == "alembic"), "{offered:?}");
+    }
+
+    #[test]
+    fn repeated_tab_cycles_through_the_candidates() {
+        // readline's `menu-complete`. The first press says there is more than one
+        // answer; every press after that has to *choose* one, or the list is a
+        // dead end that leaves the player typing the name out by hand.
+        let mut app = app();
+        type_line(&mut app, "attend laboratory");
+        type_only(&mut app, "wield ");
+
+        // The first press lists and leaves the line alone (bash's default).
+        press(&mut app, Key::Tab, Some("\t"));
+        app.update();
+        assert_eq!(
+            app.world().resource::<Line>().text(),
+            "wield ",
+            "the first Tab changed the line instead of listing"
+        );
+
+        // Every press after it chooses.
+        let mut seen = Vec::new();
+        for _ in 0..3 {
+            press(&mut app, Key::Tab, Some("\t"));
+            app.update();
+            seen.push(app.world().resource::<Line>().text().to_owned());
+        }
+        assert!(
+            seen[0] != seen[1] && seen[1] != seen[2],
+            "Tab did not move through the options: {seen:?}"
+        );
+        for line in &seen {
+            assert!(line.starts_with("wield "), "{line:?}");
+        }
+        // ...and the list says which one the line is holding.
+        assert_eq!(
+            app.world()
+                .resource::<super::super::input::Offered>()
+                .current,
+            Some(2),
+            "the listing does not mark where the cycle has reached"
+        );
+    }
+
+    #[test]
+    fn typing_ends_the_tab_cycle() {
+        // Otherwise the next Tab resumes a completion the player has typed past,
+        // and splices a candidate into the middle of a word.
+        let mut app = app();
+        type_line(&mut app, "attend laboratory");
+        type_only(&mut app, "wield ");
+        press(&mut app, Key::Tab, Some("\t"));
+        app.update();
+
+        type_only(&mut app, "a");
+        assert_eq!(
+            app.world()
+                .resource::<super::super::input::Offered>()
+                .current,
+            None,
+            "the cycle survived a keystroke"
+        );
+    }
+
+    #[test]
+    fn the_ghost_prefers_history_over_completion() {
+        // fish's order and zsh's default: history is the cheap half and usually
+        // the right one, because a brew loop is a player repeating themselves.
+        let mut app = app();
+        type_line(&mut app, "attend laboratory");
+        type_line(&mut app, "wield athanor");
+
+        type_only(&mut app, "wield a");
+        let scene_open = {
+            let tower = app.world().resource::<Tower>();
+            (
+                tower.sim().scene().clone(),
+                !tower.sim().choices().is_empty(),
+            )
+        };
+        let ghost = app
+            .world()
+            .resource::<Line>()
+            .ghost(&scene_open.0, scene_open.1);
+        assert_eq!(
+            ghost, "thanor",
+            "history should win: completion alone would offer `alembic` too"
+        );
+    }
+
+    #[test]
+    fn escape_clears_the_line() {
+        let mut app = app();
+        type_only(&mut app, "survey");
+        press(&mut app, Key::Escape, Some("\u{1b}"));
+        app.update();
+
+        assert_eq!(app.world().resource::<Line>().viewport(80).0, "");
+    }
+
+    #[test]
+    fn the_caret_moves_and_edits_land_where_it_is() {
+        let mut app = app();
+        type_only(&mut app, "srvey");
+
+        // Walk back to just after the `s` and put the missing `u` in.
+        for _ in 0..4 {
+            press(&mut app, Key::ArrowLeft, None);
+        }
+        app.update();
+        type_only(&mut app, "u");
+
+        assert_eq!(app.world().resource::<Line>().viewport(80).0, "survey");
+    }
+
+    #[test]
+    fn up_walks_history_filtered_by_what_is_typed() {
+        // fish's default and zsh's `history-beginning-search-backward`: with a
+        // brew loop repeating itself, typing `wield ` and pressing Up should
+        // walk the wields, not the whole log.
+        let mut app = app();
+        for line in [
+            "survey",
+            "wield mortar_and_pestle",
+            "status",
+            "wield alembic",
+        ] {
+            type_line(&mut app, line);
+        }
+
+        type_only(&mut app, "wield ");
+        press(&mut app, Key::ArrowUp, None);
+        app.update();
+        assert_eq!(
+            app.world().resource::<Line>().viewport(80).0,
+            "wield alembic"
+        );
+
+        press(&mut app, Key::ArrowUp, None);
+        app.update();
+        assert_eq!(
+            app.world().resource::<Line>().viewport(80).0,
+            "wield mortar_and_pestle",
+            "the second Up searched the recalled line instead of the anchor"
+        );
+
+        // Walking forward past the newest restores what was being typed.
+        press(&mut app, Key::ArrowDown, None);
+        press(&mut app, Key::ArrowDown, None);
+        app.update();
+        assert_eq!(app.world().resource::<Line>().viewport(80).0, "wield ");
     }
 
     #[test]
@@ -414,12 +795,24 @@ mod tests {
 
         let after = *app.world().resource::<Screen>();
         assert_ne!(after.mode, before.mode, "F4 did not reach `cycle_mode`");
+
+        // Compared by *mode* rather than by direction. A comfortable default
+        // tier means a window this size already starts in Deep focus, so F4
+        // moves it to Wide and the cell count goes down — which is the same
+        // mechanism seen from the other end. Asserting "after has more cells"
+        // only held while the default was the coarsest tier that fit.
+        let (deep, wide) = if after.mode == orbs_render::DisplayMode::Deep {
+            (after, before)
+        } else {
+            (before, after)
+        };
         assert!(
-            after.grid.cols > before.grid.cols,
-            "focus switched without buying cells: {:?} -> {:?}",
-            before.grid,
-            after.grid,
+            deep.grid.cols > wide.grid.cols,
+            "deep focus buys no cells over wide: {:?} -> {:?}",
+            wide.grid,
+            deep.grid,
         );
+        let after = deep;
         assert!(
             after.grid.fits(orbs_render::DEEP_FOCUS_FLOOR),
             "deep focus still cannot host a second pane: {:?}",

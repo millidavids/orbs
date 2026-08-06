@@ -30,7 +30,7 @@ impl Screen {
     ///
     /// `false` is a real state to render — a "window too small" screen — not a
     /// reason to panic. See `ScreenLayout::compute`.
-    pub(crate) fn is_hostable(self) -> bool {
+    pub(crate) const fn is_hostable(self) -> bool {
         self.grid.fits(MIN_GRID)
     }
 
@@ -48,11 +48,20 @@ impl Screen {
     /// window — the layout had the cells for one pane and no more.
     fn for_window(pixels: (u32, u32), mode: Option<DisplayMode>) -> Self {
         let base = Fidelity::tier_one(pixels);
-        let mode = mode.unwrap_or_else(|| {
-            base.map_or(DisplayMode::Wide, |tier| {
-                DisplayMode::default_for(tier.grid(pixels))
-            })
-        });
+        // **Wide by default, always.** This used to be
+        // `DisplayMode::default_for(tier.grid(pixels))`, which is a tautology:
+        // `tier_one` *aims* at `PREFERRED_GRID`, and `PREFERRED_GRID` **is**
+        // `DEEP_FOCUS_FLOOR`, so whenever tier one succeeds its grid fits the
+        // floor by construction and the answer is `Deep` every time. `deep()`
+        // then dropped a **second** tier, and the game opened two steps finer
+        // than the tier table says: 1920×1080 came up at 240×67 with 8×16 pixel
+        // glyphs where 120×33 at 16×32 was intended.
+        //
+        // Aiming tier one at the Deep floor already bought what that default was
+        // reaching for — §9's two panes are hostable from the first frame, so
+        // `F4` works immediately rather than needing a bigger window. Choosing
+        // Deep as well spent the affordance twice.
+        let mode = mode.unwrap_or(DisplayMode::Wide);
 
         // `deep()` is `None` at the finest scale — there is no smaller whole-pixel
         // step, so Deep focus is simply unavailable there and Wide serves instead.
@@ -101,7 +110,7 @@ pub(crate) fn cycle_mode(
     info!(
         "focus {:?} -> tier {}x -> grid {}x{}",
         screen.mode,
-        screen.fidelity.map_or(0, |tier| tier.scale()),
+        screen.fidelity.map_or(0, orbs_render::Fidelity::scale),
         screen.grid.cols,
         screen.grid.rows,
     );
@@ -175,11 +184,17 @@ mod tests {
         // puts the game off §9's tier table.
         //
         // The warp is normalised in `crt.wgsl` instead, which costs no cells.
+        // The table moved one step finer when `tier_one` gained a *preferred*
+        // grid: aiming only at the 80×22 floor gave a 4K display exactly as much
+        // text as a 720p one, drawn in 48×96-pixel glyphs. The relationship §9
+        // asks for is unchanged — a bigger window still buys a bigger glyph, and
+        // `deep()` still buys the cells multiplexing needs — the whole table just
+        // sits one step down.
         for (window, scale) in [
-            ((1280u32, 720u32), 2),
-            ((1920, 1080), 3),
-            ((2560, 1440), 4),
-            ((3840, 2160), 6),
+            ((1280u32, 720u32), 1),
+            ((1920, 1080), 2),
+            ((2560, 1440), 3),
+            ((3840, 2160), 4),
         ] {
             let screen = Screen::for_window(window, Some(DisplayMode::Wide));
             assert_eq!(
@@ -222,7 +237,7 @@ mod tests {
         // `Fidelity::deep` is `None` at scale 1: there is no smaller whole-pixel
         // step. Deep focus is simply unavailable there.
         let smallest = Screen::for_window((640, 352), Some(DisplayMode::Deep));
-        assert_eq!(smallest.fidelity.map(|tier| tier.scale()), Some(1));
+        assert_eq!(smallest.fidelity.map(orbs_render::Fidelity::scale), Some(1));
         assert!(smallest.is_hostable());
     }
 

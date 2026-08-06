@@ -258,6 +258,7 @@ fn siege(grid: GridSize, mode: DisplayMode) -> Frame {
         main_panes: 4,
         sidebar_panes: 3,
         mode,
+        input_rows: 1,
     });
 
     let mut frame = Frame::new(grid);
@@ -550,17 +551,44 @@ fn exemption(records: &Records) {
 
 /// A duration-action in flight, with its meter.
 fn laboratory(painter: &mut Painter<'_>, area: Rect) {
-    painter.span(area.origin(), &Span::new("decoct haste"));
-    painter.progress(
-        Rect::new(area.col, area.row + 1, area.cols.min(20), 1),
-        252,
-        372,
-        Style::COST,
-        "haste, 68 percent, 2 minutes remaining",
-    );
-    painter.span(
-        Pos::new(area.col, area.row + 2),
-        &Span::new("reagents: 3").with_style(Style::DIM),
+    // §10.1's instrument panel, in miniature: a standing meter per instrument,
+    // drawn with `meter` rather than `progress` so five of them do not push five
+    // utterances a frame. The panel owes one summary line instead — the last
+    // call here is that debt paid, and §14 is why it exists.
+    const PANEL: [(&str, &str, Option<(u32, u32)>); 5] = [
+        ("mortar_and_pestle", "ready", None),
+        ("balneum_mariae", "working", Some((7, 12))),
+        ("flask_and_rod", "empty", None),
+        ("alembic", "empty", None),
+        // The one bar that drains: fuel remaining, not ticks elapsed.
+        ("athanor", "burning", Some((22, 40))),
+    ];
+
+    // `glyphs`, not `span`: every row here is **silent**. Drawn with `span` the
+    // rows spoke, and a Wide strip too short for the athanor then said one thing
+    // less than Deep did — which `parity` catches and §9 forbids outright, since
+    // a strip that shows less makes the display mode a difficulty choice.
+    //
+    // The panel's whole speech is the one summary below, which does not depend
+    // on how many rows happened to fit.
+    for (row, (name, state, meter)) in PANEL.into_iter().enumerate() {
+        let row = area.row + u16::try_from(row).unwrap_or(0);
+        if row >= area.bottom() {
+            break;
+        }
+        painter.glyphs(Pos::new(area.col, row), name, Style::DIM);
+        let at = area.col + 18;
+        painter.glyphs(Pos::new(at, row), state, Style::DIM);
+        if let Some((done, total)) = meter {
+            let bar = Rect::new(at + 9, row, area.cols.saturating_sub(27), 1);
+            painter.meter(bar, done, total, Style::COST);
+        }
+    }
+
+    painter.announce(
+        UtteranceKind::Progress,
+        Role::Normal,
+        "laboratory: mortar_and_pestle ready, balneum_mariae working, athanor burning",
     );
 }
 

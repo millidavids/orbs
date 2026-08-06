@@ -134,15 +134,24 @@ picture, because it looks like evidence.
 with its linear stream beneath.
 
 ```sh
-ORBS_DUMP="attend laboratory; decoct clarity; meditate 25" cargo run -p orbs
+ORBS_DUMP="attend laboratory; move sage to mortar_and_pestle; wield mortar_and_pestle; meditate 12; siphon mortar_and_pestle" cargo run -p orbs
 ORBS_DUMP=1 ORBS_GRID=160x44 cargo run -p orbs      # the worst-case grid
 ORBS_DUMP=1 ORBS_BOOT=post cargo run -p orbs        # one boot stage as text
+ORBS_LINE="wield mo" ORBS_DUMP=1 cargo run -p orbs  # ...with a line half-typed
 ORBS_BOOT=0 cargo run -p orbs                       # skip the boot sequence
 ```
 
-`ORBS_BOOT` takes `dark`, `prompt`, `frame` or `post` for a dump, and `0` to skip
-the sequence in the running game — boot runs once per launch and lasts fourteen
-seconds, so without it every pass over anything else costs that wait.
+`ORBS_BOOT` takes `dark`, `frame` or `post` for a dump, and `0` to skip the
+sequence in the running game — boot runs once per launch, so without it every
+pass over anything else costs that wait. (`prompt` was a stage until the prompt
+was taken out of the boot sequence; `requested_stage` now returns `None` for it,
+which silently dumps the **live game screen** instead — a wrong picture that
+looks like a right one.)
+
+`ORBS_LINE` puts text in the input buffer. `ORBS_DUMP` submits every segment it
+is given, so the buffer is always empty by the time the frame is painted — a
+caret position, a partial word and the completion ghost are the three things a
+dump cannot otherwise show.
 
 Each `;`-separated line goes through `submit` and a real `step`, so what prints
 is the world having actually run. What it cannot show is what rule 2 says is a

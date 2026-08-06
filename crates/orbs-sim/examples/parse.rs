@@ -135,6 +135,12 @@ fn show(resolution: &Resolution, indent: &str) {
             println!("{indent}-> {} {}", verb.canonical(), so_far.join(" "));
             println!("{indent}{} what? ({missing:?})", verb.canonical());
         }
+        Resolution::Elsewhere { verb } => {
+            println!(
+                "{indent}there is nothing here to {} with (§7)",
+                verb.canonical()
+            );
+        }
         Resolution::Unresolved { suggestions } => {
             let names: Vec<_> = suggestions.iter().map(|verb| verb.canonical()).collect();
             println!(
@@ -161,6 +167,9 @@ fn siege_contrast(scene: &Scene) {
             }
             Resolution::Incomplete { verb, missing, .. } => {
                 println!("  {label}  needs a {missing:?} for {}", verb.canonical());
+            }
+            Resolution::Elsewhere { verb } => {
+                println!("  {label}  not here: {}", verb.canonical());
             }
             Resolution::Unresolved { .. } => println!("  {label}  nothing"),
         }
@@ -190,8 +199,12 @@ fn repl(scene: &Scene, log: &mut ParseLog, mut tick: u64) -> u64 {
         print!("orbs:~$ ");
         let _ = std::io::stdout().flush();
 
+        // The lock is taken and released *before* the match rather than in its
+        // scrutinee, where the temporary would live to the end of the match and
+        // hold stdin across the arms.
         let mut line = String::new();
-        match stdin.lock().read_line(&mut line) {
+        let read = stdin.lock().read_line(&mut line);
+        match read {
             Ok(0) => break,
             Ok(_) => {}
             Err(error) => {

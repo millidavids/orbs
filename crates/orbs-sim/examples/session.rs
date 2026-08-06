@@ -18,10 +18,26 @@ fn main() {
         // Fragment and Place slots were unfillable and half the sixteen-verb
         // vocabulary could not be exercised at all.
         "attend laboratory",
-        "decoct clarity",
-        "meditate 25",
-        "decoct warding",
-        "meditate 25",
+        // **§10.1's loop, not `decoct`.** The rename commit updated `attend
+        // alembic` here and left the two `decoct` lines, which now fuzzy-resolve
+        // to `grimoire` — so this example demonstrated two manual look-ups and
+        // two no-op waits, and touched neither `move`, `wield`, `stop` nor
+        // `siphon`. The one example whose stated purpose is exercising the
+        // vocabulary was exercising none of the pipeline.
+        "grimoire brewing",
+        // §10.1's per-instrument verbs: `kindle charcoal` is the `move` and the
+        // `wield` in one, and the instrument is named by the verb rather than
+        // typed. `move`/`wield` still work — they are the general forms.
+        "kindle charcoal",
+        "grind sage",
+        "meditate 10",
+        "siphon mortar_and_pestle",
+        "purge mortar_and_pestle",
+        "meditate 5",
+        "digest ground-sage",
+        "meditate 15",
+        "siphon balneum_mariae",
+        "stop athanor",
         "verify laboratory.log",
         "peruse laboratory.log",
         "purge laboratory.log",

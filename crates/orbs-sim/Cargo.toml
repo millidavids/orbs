@@ -19,6 +19,12 @@ bevy_ecs = { workspace = true }
 orbs-render = { path = "../orbs-render" }
 rand = { workspace = true }
 rand_chacha = { workspace = true }
+# Content parsing only. This crate never *watches* a file — a frontend owns the
+# watcher and hands new content in at a tick boundary (rule 3, rule 8), which is
+# what keeps the sim headless, deterministic and testable without a filesystem.
+serde = { workspace = true }
+thiserror = { workspace = true }
+toml = { workspace = true }
 
 [lints]
 workspace = true

@@ -1,0 +1,452 @@
+//! The laboratory's instruments, as something a pane can draw.
+//!
+//! DESIGN.md §10.1 makes the instrument panel a **permanent fixture** of the
+//! laboratory's pane rather than part of the command stream: with four
+//! instruments running you watch and respond, and a transcript that scrolls the
+//! state away is not something you can watch.
+//!
+//! # Why this is an accessor rather than records
+//!
+//! Rule 4 puts *command output* in records — one line, one event, scrolled away
+//! once read. The panel is the opposite shape: it is the world's **current
+//! state**, redrawn every frame, and emitting a record per instrument per tick
+//! would bury the scrollback under its own furniture. The existing progress
+//! meter took the same route (`Sim::working`), and this generalises it.
+//!
+//! Rule 2 still holds: what is returned here is *information*, and a frontend
+//! decides how a cell is drawn. Nothing the panel shows is available to one
+//! frontend and not another, so the terminal build draws the same bars.
+
+use bevy_ecs::prelude::*;
+
+use super::node::{Cwd, Fixture, Name, children_of};
+use crate::tick::Tick;
+
+/// A meter, as a fraction.
+///
+/// `done` over `total`, whatever it measures. The athanor reports fuel
+/// **remaining** here where an instrument reports ticks **elapsed**, which is
+/// the whole of what makes one bar drain while the others fill — see
+/// [`Burning::fuel`](super::Burning::fuel).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Meter {
+    /// The filled part.
+    pub done: u64,
+    /// The whole.
+    pub total: u64,
+}
+
+/// One instrument, as the panel draws it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Instrument {
+    /// What the player types to name it.
+    pub name: String,
+    /// Two letters for a narrow column — `mortar_and_pestle` is `mp`.
+    ///
+    /// **Decided here, not by a frontend.** Rule 2 gives a frontend *how* a cell
+    /// is drawn, not *what word appears in it*, and the Bevy build was deriving
+    /// this from English stopwords in its own source — a rule that existed
+    /// nowhere else, so `orbs-tui` would have had to reimplement the same
+    /// heuristic and the two builds could silently disagree about what `bm`
+    /// means. The panel module's own header already claimed otherwise: *"nothing
+    /// the panel shows is available to one frontend and not another."*
+    pub short: String,
+    /// One word for its condition — what a reader hears.
+    pub state: State,
+    /// Its meter, if it has one running.
+    pub meter: Option<Meter>,
+}
+
+/// What an instrument is doing.
+///
+/// A closed set, for the same reason [`FieldName`](orbs_render::FieldName) is:
+/// a view that silently skipped a state it did not recognise would draw a
+/// working instrument as idle.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum State {
+    /// Nothing in it, nothing to do.
+    Empty,
+    /// Holding something, not started.
+    Charged,
+    /// Running.
+    Working,
+    /// Being cleared — §9's triage slot.
+    Scouring,
+    /// Finished, with a product waiting to be siphoned.
+    Ready,
+    /// Holding only what the last run fouled it with.
+    Fouled,
+    /// The athanor, alight.
+    Burning,
+    /// The athanor, damped with fuel kept.
+    Banked,
+    /// The athanor, cold and empty.
+    Cold,
+}
+
+impl State {
+    /// The word a reader hears and a column shows.
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Empty => "empty",
+            Self::Charged => "charged",
+            Self::Working => "working",
+            Self::Scouring => "scouring",
+            Self::Ready => "ready",
+            Self::Fouled => "fouled",
+            Self::Burning => "burning",
+            Self::Banked => "banked",
+            Self::Cold => "cold",
+        }
+    }
+}
+
+/// Every instrument where the player is standing, in the order they were raised.
+///
+/// Empty anywhere but the laboratory, which is what makes the panel a property
+/// of *where you are* rather than a thing the frontend has to decide to show.
+#[must_use]
+pub fn instruments(world: &World) -> Vec<Instrument> {
+    let now = *world.resource::<Tick>();
+    let cwd = world.resource::<Cwd>().0;
+
+    // The **dispensary is not an instrument** and is deliberately absent. It is
+    // a shelf: it does nothing, it has no meter, and it is `charged` from the
+    // first tick to the last — a row that never changes teaches the eye to skip
+    // the panel, which is the one thing a permanent fixture must not do.
+    // `survey dispensary` is how you read a shelf.
+    let fixtures: Vec<Entity> = children_of(world, cwd)
+        .into_iter()
+        .filter(|node| world.get::<Fixture>(*node).is_some())
+        .filter(|node| world.get::<super::Store>(*node).is_none())
+        .collect();
+
+    let mut panel = Vec::with_capacity(fixtures.len());
+    for node in fixtures {
+        let name = world
+            .get::<Name>(node)
+            .map_or_else(String::new, |name| name.0.clone());
+        // No `holds` list. It was built here — a `String` per held reagent per
+        // instrument per frame, at 60 Hz — and read by nothing in either
+        // frontend. What it was reaching for is now `State::Fouled`, which is
+        // the one question the contents were meant to answer.
+        let (state, meter) = read(world, node, &name, now);
+        panel.push(Instrument {
+            short: abbreviate(&name),
+            name,
+            state,
+            meter,
+        });
+    }
+    panel
+}
+
+/// A two-letter form of an instrument's name, for a narrow column.
+///
+/// The initial of each meaningful part — `mortar_and_pestle` is `mp`,
+/// `flask_and_rod` is `fr` — and the first two letters when there is only one
+/// part, which is what keeps `alembic` and `athanor` apart as `al` and `at`.
+/// Both rules are needed: initials alone would make them both `a`.
+fn abbreviate(name: &str) -> String {
+    let parts: Vec<&str> = name
+        .split('_')
+        .filter(|part| !matches!(*part, "and" | "of" | "the"))
+        .collect();
+
+    if parts.len() >= 2 {
+        return parts
+            .iter()
+            .filter_map(|part| part.chars().next())
+            .take(2)
+            .collect();
+    }
+    name.chars().take(2).collect()
+}
+
+/// What one instrument is doing, and how far through.
+fn read(world: &World, node: Entity, name: &str, now: Tick) -> (State, Option<Meter>) {
+    if let Some(work) = world.get::<super::Working>(node) {
+        let (done, total) = work.progress(now);
+        return (State::Working, Some(Meter { done, total }));
+    }
+    if let Some(triage) = world.get::<super::Triaging>(node) {
+        let total = triage.ends.get().saturating_sub(triage.started.get());
+        let done = now.get().saturating_sub(triage.started.get()).min(total);
+        return (State::Scouring, Some(Meter { done, total }));
+    }
+
+    // The heat source answers on its own terms: it runs no operation, so its
+    // meter is fuel rather than progress, and it drains.
+    if world.get::<super::HeatSource>(node).is_some() {
+        if let Some(fire) = super::burning(world, node) {
+            let (done, total) = fire.fuel(now);
+            return (State::Burning, Some(Meter { done, total }));
+        }
+        let banked = super::banked(world, node);
+        if banked > 0 {
+            return (
+                State::Banked,
+                Some(Meter {
+                    done: banked,
+                    total: banked,
+                }),
+            );
+        }
+        // **Something burnable**, not merely something. Testing for any child at
+        // all reported `charged` when the athanor held only the `ash` its own
+        // burnout had left, one tick before `wield athanor` answered "nothing in
+        // it to burn" — the panel and the verb contradicting each other on
+        // screen at the same time.
+        let fuels = world.resource::<crate::content::Fuels>();
+        let holds_fuel = children_of(world, node).into_iter().any(|held| {
+            world
+                .get::<Name>(held)
+                .is_some_and(|name| fuels.get(&name.0).is_some())
+        });
+        return (
+            if holds_fuel {
+                State::Charged
+            } else {
+                State::Cold
+            },
+            None,
+        );
+    }
+
+    let held = children_of(world, node);
+    if held.is_empty() {
+        return (State::Empty, None);
+    }
+    // A product waiting is `ready`.
+    if held
+        .iter()
+        .any(|held| world.get::<super::Product>(*held).is_some())
+    {
+        return (State::Ready, None);
+    }
+    // Otherwise: does what is in there start anything? **`Fouled` had no
+    // construction site at all** — this fell through to `Charged`, so an
+    // instrument holding only the husks of the last run drew the same word as one
+    // charged and ready to go, and `speak()` filtered `Charged` out of its
+    // utterance entirely. That is precisely the confusion the panel exists to
+    // remove: "a fouled instrument read as *it will not start*".
+    let holding: Vec<String> = held
+        .iter()
+        .filter_map(|held| world.get::<Name>(*held).map(|name| name.0.clone()))
+        .collect();
+    if world
+        .resource::<crate::content::Recipes>()
+        .matching(name, &holding)
+        .is_some()
+    {
+        return (State::Charged, None);
+    }
+    (State::Fouled, None)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Sim;
+
+    fn panel(sim: &mut Sim) -> Vec<Instrument> {
+        instruments(sim.world_mut())
+    }
+
+    fn state_of(sim: &mut Sim, want: &str) -> State {
+        panel(sim)
+            .into_iter()
+            .find(|instrument| instrument.name == want)
+            .unwrap_or_else(|| panic!("no {want}"))
+            .state
+    }
+
+    #[test]
+    fn there_is_no_panel_outside_the_laboratory() {
+        // The panel belongs to *where you are*, so a frontend never has to
+        // decide whether to show it.
+        let mut sim = Sim::new(1);
+        sim.step();
+        assert!(panel(&mut sim).is_empty(), "the tower root has instruments");
+
+        sim.submit("attend archive");
+        sim.step();
+        assert!(panel(&mut sim).is_empty(), "the archive has instruments");
+    }
+
+    #[test]
+    fn the_laboratory_reports_its_instruments_in_the_order_they_were_raised() {
+        let mut sim = Sim::new(1);
+        sim.submit("attend laboratory");
+        sim.step();
+        let names: Vec<String> = panel(&mut sim)
+            .into_iter()
+            .map(|instrument| instrument.name)
+            .collect();
+        assert_eq!(
+            names,
+            [
+                "mortar_and_pestle",
+                "balneum_mariae",
+                "flask_and_rod",
+                "alembic",
+                "athanor",
+            ]
+        );
+    }
+
+    #[test]
+    fn the_dispensary_is_not_on_the_panel() {
+        // It is a shelf: no meter, nothing to do, and `charged` from the first
+        // tick to the last. A row that never changes teaches the eye to skip the
+        // panel, which is the one thing a permanent fixture must not do.
+        let mut sim = Sim::new(1);
+        sim.submit("attend laboratory");
+        sim.step();
+        assert!(
+            !panel(&mut sim)
+                .into_iter()
+                .any(|instrument| instrument.name == "dispensary"),
+            "the shelf is taking a row"
+        );
+    }
+
+    #[test]
+    fn every_instrument_abbreviates_to_two_distinct_letters() {
+        // `alembic` and `athanor` both start with `a`, so initials alone would
+        // collide — which in a two-letter column is indistinguishable.
+        //
+        // Against the **real panel**, not a hardcoded copy of the instrument
+        // list. This test lived in the Bevy crate and asserted over a
+        // `const LABORATORY: [&str; 5]`, so renaming an instrument in `build.rs`
+        // left it passing on stale names and adding a colliding one went
+        // unnoticed anywhere.
+        let mut sim = Sim::new(1);
+        sim.submit("attend laboratory");
+        sim.step();
+
+        let short: Vec<String> = panel(&mut sim)
+            .into_iter()
+            .map(|instrument| instrument.short)
+            .collect();
+        assert_eq!(short, ["mp", "bm", "fr", "al", "at"]);
+
+        let mut unique = short.clone();
+        unique.sort();
+        unique.dedup();
+        assert_eq!(unique.len(), short.len(), "two instruments share a label");
+    }
+
+    #[test]
+    fn an_instrument_walks_through_its_states() {
+        let mut sim = Sim::new(1);
+        sim.submit("attend laboratory");
+        sim.step();
+        assert_eq!(state_of(&mut sim, "mortar_and_pestle"), State::Empty);
+
+        sim.submit("move sage to mortar_and_pestle");
+        sim.step();
+        assert_eq!(state_of(&mut sim, "mortar_and_pestle"), State::Charged);
+
+        sim.submit("wield mortar_and_pestle");
+        sim.step();
+        assert_eq!(state_of(&mut sim, "mortar_and_pestle"), State::Working);
+
+        sim.step_n(20);
+        assert_eq!(state_of(&mut sim, "mortar_and_pestle"), State::Ready);
+
+        sim.submit("siphon mortar_and_pestle");
+        sim.step();
+        // **`Fouled`, not `Charged`.** The husks left behind match no recipe, so
+        // the mortar will not start — and this asserted `Charged`, the same word
+        // as an instrument loaded and ready to go, while `State::Fouled` had no
+        // construction site anywhere in the workspace. The panel exists to stop
+        // "a fouled instrument read as *it will not start*"; it was saying the
+        // opposite, and `speak()` filters `Charged` out of its utterance
+        // entirely, so a screen-reader user heard nothing at all.
+        assert_eq!(
+            state_of(&mut sim, "mortar_and_pestle"),
+            State::Fouled,
+            "the husks are still in there and start nothing"
+        );
+
+        sim.submit("purge mortar_and_pestle");
+        sim.step();
+        assert_eq!(state_of(&mut sim, "mortar_and_pestle"), State::Scouring);
+
+        sim.step_n(super::super::PURGE_TICKS);
+        assert_eq!(state_of(&mut sim, "mortar_and_pestle"), State::Empty);
+    }
+
+    #[test]
+    fn a_working_instrument_reports_a_filling_meter() {
+        let mut sim = Sim::new(1);
+        sim.submit("attend laboratory");
+        sim.step();
+        sim.submit("move sage to mortar_and_pestle");
+        sim.step();
+        sim.submit("wield mortar_and_pestle");
+        sim.step();
+
+        let early = panel(&mut sim)[0].meter.expect("a meter");
+        sim.step_n(4);
+        let later = panel(&mut sim)[0].meter.expect("a meter");
+
+        assert_eq!(early.total, later.total);
+        assert!(later.done > early.done, "the meter did not fill");
+    }
+
+    #[test]
+    fn the_athanor_reports_a_draining_meter() {
+        // The one bar that runs the other way. Same `Meter`, same fraction — it
+        // is handed fuel remaining rather than ticks elapsed.
+        let mut sim = Sim::new(1);
+        sim.submit("attend laboratory");
+        sim.step();
+        sim.submit("move charcoal to athanor");
+        sim.step();
+        sim.submit("wield athanor");
+        sim.step();
+
+        let fire = |sim: &mut Sim| {
+            panel(sim)
+                .into_iter()
+                .find(|instrument| instrument.name == super::super::ATHANOR)
+                .expect("the athanor")
+        };
+
+        let early = fire(&mut sim).meter.expect("a meter");
+        sim.step_n(6);
+        let later = fire(&mut sim).meter.expect("a meter");
+
+        assert_eq!(early.total, later.total);
+        assert!(later.done < early.done, "the fuel meter did not drain");
+    }
+
+    #[test]
+    fn the_athanor_reports_banked_fuel_rather_than_looking_cold() {
+        // The defect that made damping read as losing the charcoal: banked fuel
+        // has no node, so without this the panel shows an empty, cold athanor.
+        let mut sim = Sim::new(1);
+        sim.submit("attend laboratory");
+        sim.step();
+        assert_eq!(state_of(&mut sim, "athanor"), State::Cold);
+
+        sim.submit("move charcoal to athanor");
+        sim.step();
+        sim.submit("wield athanor");
+        sim.step();
+        sim.step_n(5);
+        sim.submit("stop athanor");
+        sim.step();
+
+        assert_eq!(state_of(&mut sim, "athanor"), State::Banked);
+        assert!(
+            panel(&mut sim)
+                .into_iter()
+                .any(|instrument| instrument.meter.is_some()),
+            "banked fuel is invisible again"
+        );
+    }
+}

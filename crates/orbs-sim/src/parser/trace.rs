@@ -45,7 +45,7 @@ pub enum Outcome {
 }
 
 impl Outcome {
-    fn label(self) -> &'static str {
+    const fn label(self) -> &'static str {
         match self {
             Self::Resolved => "resolved",
             Self::Forced => "forced",
@@ -119,6 +119,17 @@ impl ParseRecord {
                 echo.push_str(&format!(" <{missing:?}?>"));
                 (Outcome::Incomplete, Some(echo), Some(*register), Vec::new())
             }
+            // Traced as unresolved, because for §15's gate it *is* a line the
+            // player typed that ran nothing. The echo names the verb, so a
+            // cluster of these reads as "they tried to brew in the archive"
+            // rather than as a parser failure — which is a design signal about
+            // where the domains sit, not a phrasing one.
+            Resolution::Elsewhere { verb } => (
+                Outcome::Unresolved,
+                Some(verb.canonical().to_owned()),
+                None,
+                Vec::new(),
+            ),
             Resolution::Unresolved { suggestions } => {
                 (Outcome::Unresolved, None, None, suggestions.clone())
             }
@@ -290,9 +301,11 @@ mod tests {
     use crate::parser::{NounKind, Scene, analyse};
 
     fn tower() -> Scene {
+        // Recipes are `Topic` nouns (§6.1), which is what a bare `brew` now
+        // enumerates — `decoct` is retired and its words point at the grimoire.
         Scene::new()
-            .with(NounKind::Essence, "clarity")
-            .with(NounKind::Essence, "warding")
+            .with(NounKind::Topic, "clarity")
+            .with(NounKind::Topic, "warding")
     }
 
     fn log_of(inputs: &[&str], mode: Mode) -> ParseLog {
@@ -308,7 +321,7 @@ mod tests {
 
     #[test]
     fn outcomes_are_tallied_for_the_gate() {
-        let log = log_of(&["decoct clarity", "brew", "xyzzy"], Mode::Calm);
+        let log = log_of(&["grimoire clarity", "brew", "xyzzy"], Mode::Calm);
         assert_eq!(log.resolved(), 1);
         assert_eq!(log.ambiguous(), 1);
         assert_eq!(log.unresolved(), 1);
@@ -328,8 +341,8 @@ mod tests {
         // Clustering needs the losers, not just the winner.
         let log = log_of(&["brew"], Mode::Calm);
         let tsv = log.to_tsv();
-        assert!(tsv.contains("decoct clarity"), "{tsv}");
-        assert!(tsv.contains("decoct warding"), "{tsv}");
+        assert!(tsv.contains("grimoire clarity"), "{tsv}");
+        assert!(tsv.contains("grimoire warding"), "{tsv}");
     }
 
     #[test]
@@ -343,7 +356,7 @@ mod tests {
 
     #[test]
     fn the_export_is_rectangular() {
-        let tsv = log_of(&["decoct clarity", "brew", "xyzzy"], Mode::Calm).to_tsv();
+        let tsv = log_of(&["grimoire clarity", "brew", "xyzzy"], Mode::Calm).to_tsv();
         let mut lines = tsv.lines();
         let columns = lines.next().expect("header").split('\t').count();
         for line in lines {

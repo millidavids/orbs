@@ -72,7 +72,7 @@ impl DisplayMode {
     /// measurements of it, so this only ever picks a *default* — §9 requires the
     /// player be able to override it at any time, including mid-siege.
     #[must_use]
-    pub fn default_for(grid: GridSize) -> Self {
+    pub const fn default_for(grid: GridSize) -> Self {
         if grid.fits(DEEP_FOCUS_FLOOR) {
             Self::Deep
         } else {
@@ -93,18 +93,34 @@ pub struct ScreenRequest {
     pub sidebar_panes: u8,
     /// How the main window is divided.
     pub mode: DisplayMode,
+    /// Rows the input line occupies. At least 1.
+    ///
+    /// Two at the finest fidelity, so the prompt keeps its **pixel** height when
+    /// the cells shrink — see [`Fidelity::input_rows`](crate::Fidelity::input_rows).
+    /// A frontend that does not care passes 1 and gets what it always got.
+    pub input_rows: u16,
 }
 
 impl ScreenRequest {
     /// A request for a single main pane and no sidebar — the opening state, and
     /// the shape of the boot report (§4).
     #[must_use]
-    pub fn single(grid: GridSize) -> Self {
+    pub const fn single(grid: GridSize) -> Self {
         Self {
             grid,
             main_panes: 1,
             sidebar_panes: 0,
             mode: DisplayMode::default_for(grid),
+            input_rows: 1,
+        }
+    }
+
+    /// The same, with the input line sized for a fidelity tier.
+    #[must_use]
+    pub fn single_at(grid: GridSize, fidelity: Option<crate::Fidelity>) -> Self {
+        Self {
+            input_rows: fidelity.map_or(1, crate::Fidelity::input_rows),
+            ..Self::single(grid)
         }
     }
 }
@@ -169,8 +185,14 @@ impl ScreenLayout {
         // costs one column of eighty. `orbs-tui` pays a cell it does not need,
         // and that is the right trade: an invisible gutter in a terminal beats
         // divergent layouts between frontends, which §9's parity rule forbids.
-        let above_input = grid.rows - 1;
-        layout.input = Rect::new(1, above_input, grid.cols.saturating_sub(2), 1);
+        // The input's *height in rows* varies with fidelity, because its height
+        // in **pixels** should not. Fine cells make everything smaller including
+        // the one line the player reads on every frame, so at the finest tier it
+        // spends a second row and stays the size it was. See
+        // [`Fidelity::input_rows`](crate::Fidelity::input_rows).
+        let input_rows = request.input_rows.max(1).min(grid.rows);
+        let above_input = grid.rows - input_rows;
+        layout.input = Rect::new(1, above_input, grid.cols.saturating_sub(2), input_rows);
 
         let main_panes = u16::from(request.main_panes).min(MAIN_CAP);
 
@@ -258,6 +280,7 @@ mod tests {
             main_panes: main,
             sidebar_panes: side,
             mode,
+            input_rows: 1,
         }
     }
 

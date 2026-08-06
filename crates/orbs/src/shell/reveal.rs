@@ -75,7 +75,7 @@ impl Reveal {
     /// new one starts. Queueing would let a fast player build a backlog that
     /// never drains, and the output on screen would fall further behind the
     /// world with every command.
-    pub(crate) fn observe(&mut self, records: usize, cells: u16) {
+    pub(crate) const fn observe(&mut self, records: usize, cells: u16) {
         if records <= self.seen {
             // The stream can also shrink — a test clearing it, a future `clear`
             // command — and resyncing is better than revealing from a stale

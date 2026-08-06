@@ -1,4 +1,9 @@
-//! The line the player is typing.
+//! Keystrokes reaching the line, and the state a paint reads back.
+//!
+//! The line *itself* is [`Line`] — buffer, caret, history,
+//! Tab and the ghost, none of which needs a window. This file is the Bevy half:
+//! the one system that turns a `KeyboardInput` into an edit, and the three
+//! resources holding what a frame would otherwise recompute 60 times a second.
 //!
 //! # Read `text`, not `logical_key`
 //!
@@ -29,52 +34,134 @@
 use bevy::input::ButtonState;
 use bevy::input::keyboard::{Key, KeyCode, KeyboardInput};
 use bevy::prelude::*;
+use bevy::window::WindowFocused;
 
-/// The parser's own limit (§6). Matching it here means the buffer never holds
-/// something the parser would truncate — a shorter cap would silently change
-/// what a command means, and a longer one would let the player type into a void.
-const MAX_INPUT: usize = 512;
+use super::line::Line;
+use crate::sim::Tower;
 
-/// The command line as it currently stands.
+/// What Tab last offered, and which of them is in the line.
+///
+/// A resource rather than a record, and cleared on the next keystroke: readline
+/// lists on ambiguity, but the log is the sim's and a Tab press is not something
+/// a replay could reproduce.
 #[derive(Resource, Debug, Default)]
-pub(crate) struct Line {
-    text: String,
+pub(crate) struct Offered {
+    /// The candidates, in the order the completer offered them.
+    pub(crate) options: Vec<String>,
+    /// Which one repeated Tab has reached, so the list can mark it.
+    ///
+    /// Without this the list is a wall of equal-looking words while the line
+    /// changes underneath it, and the player has no way to see where they are in
+    /// the cycle — which is the whole affordance.
+    pub(crate) current: Option<usize>,
 }
 
-impl Line {
-    /// The tail of the line that fits `width` cells, and the caret's column
-    /// within it.
-    ///
-    /// Without this the line has no viewport: at the 80×22 floor the prompt
-    /// leaves 72 cells, past which `put_str` clips silently *and*
-    /// [`Frame::set_cursor`](orbs_render::Frame::set_cursor) refuses an off-grid
-    /// position — so the player types into a dead line with no caret and no
-    /// explanation. `sift "march north" /tower/laboratory/feed.log` is 44
-    /// characters, so 72 is not a theoretical limit.
-    ///
-    /// One cell is always reserved for the caret, which is what makes the line
-    /// scroll rather than stall.
-    pub(crate) fn viewport(&self, width: u16) -> (&str, u16) {
-        if width == 0 {
-            return ("", 0);
-        }
-        let width = usize::from(width);
-        let count = self.text.chars().count();
-        if count < width {
-            return (&self.text, to_col(count));
-        }
-        let skip = count + 1 - width;
-        let start = self
-            .text
-            .char_indices()
-            .nth(skip)
-            .map_or(self.text.len(), |(index, _)| index);
-        (&self.text[start..], to_col(width - 1))
+impl Offered {
+    /// Whether there is anything to draw.
+    pub(crate) const fn is_empty(&self) -> bool {
+        self.options.is_empty()
+    }
+
+    /// Forget the listing.
+    pub(crate) fn clear(&mut self) {
+        self.options.clear();
+        self.current = None;
     }
 }
 
-fn to_col(count: usize) -> u16 {
-    u16::try_from(count).unwrap_or(u16::MAX)
+/// The inline suggestion trailing the caret.
+///
+/// **Recomputed on change, not per frame.** [`Line::ghost`] walks the history,
+/// then runs the whole completer — which filters every synonym, builds an owned
+/// `String` per candidate, sorts, dedups, and collects a `Vec<char>` into a
+/// `String` for the common prefix. That ran at 60 Hz off inputs that change on a
+/// keystroke or a tick, so ~59 frames in 60 rebuilt a string identical to the one
+/// already on screen.
+///
+/// It stays a pure function of `(line, scene, prompt_open)` — this holds the
+/// result, and the run condition names exactly what invalidates it, so there is
+/// no second copy able to drift from the line it trails.
+#[derive(Resource, Debug, Default)]
+pub(crate) struct Ghost(pub(crate) String);
+
+/// Recompute the suggestion.
+pub(crate) fn suggest(mut ghost: ResMut<Ghost>, line: Res<Line>, tower: Res<Tower>) {
+    let sim = tower.sim();
+    ghost.0 = line.ghost(sim.scene(), !sim.choices().is_empty());
+}
+
+/// How far back through the transcript the player has scrolled.
+///
+/// **In records, not rows.** The transcript already finds its tail by
+/// binary-searching for the smallest *record* skip whose measured height fits the
+/// pane, because a record is not one row — a wrapped message is several, a tiled
+/// listing packs many into few, and every command opens with a blank line. Rows
+/// would need a second, different measure of the same stream; records reuse the
+/// one that is already there and already correct.
+///
+/// Zero is the bottom, which is where it returns on every submission: you typed
+/// something, so you want to see what it did.
+#[derive(Resource, Debug, Default)]
+pub(crate) struct Scroll {
+    /// Records held back from the newest end.
+    back: usize,
+}
+
+impl Scroll {
+    /// How far back the view is.
+    pub(crate) const fn back(&self) -> usize {
+        self.back
+    }
+
+    /// Whether the player is looking at history rather than at the newest output.
+    pub(crate) const fn is_back(&self) -> bool {
+        self.back > 0
+    }
+
+    /// Return to the newest output.
+    pub(crate) const fn rewind(&mut self) {
+        self.back = 0;
+    }
+
+    /// Move by `step` records, older or newer. Clamped at both ends.
+    ///
+    /// **`step` is a record count the caller measured**, not a row count. A row
+    /// count is not a safe stand-in: a record costs *at least* one row, which
+    /// caps records-per-page above rather than below, so paging by the pane's
+    /// rows moved more than a screenful and dropped the lines in between. See
+    /// `plugin::page_step`, which measures the page with the same `RecordView`
+    /// the transcript is drawn with.
+    pub(crate) fn page(&mut self, step: usize, older: bool, total: usize) {
+        let step = step.max(1);
+        self.back = if older {
+            self.back.saturating_add(step).min(total)
+        } else {
+            self.back.saturating_sub(step)
+        };
+    }
+}
+
+/// §10.1's instrument panel, as the sim last reported it.
+///
+/// **Rebuilt on tick, not per frame.** `tower::instruments` walks the room's
+/// children, then each fixture's children, cloning a `String` per name and
+/// allocating a `Vec` per lookup — roughly twenty allocations for the
+/// laboratory's five instruments, at 60 Hz, for state that changes at most once a
+/// second. The sim is the authority either way; this is where the answer waits
+/// between ticks.
+#[derive(Resource, Debug, Default)]
+pub(crate) struct Panel {
+    /// The instruments where the player is standing.
+    pub(crate) instruments: Vec<orbs_sim::tower::Instrument>,
+    /// That place's leaf name, for the panel's spoken summary.
+    pub(crate) domain: String,
+}
+
+/// Re-read the panel from the world.
+pub(crate) fn refresh_panel(mut panel: ResMut<Panel>, tower: Res<Tower>) {
+    let sim = tower.sim();
+    panel.instruments = sim.instruments();
+    panel.domain = orbs_sim::parser::leaf(&sim.location()).to_owned();
 }
 
 /// A line the player finished.
@@ -82,6 +169,28 @@ fn to_col(count: usize) -> u16 {
 pub(crate) struct SubmittedMessage {
     /// What they typed, verbatim.
     pub(crate) line: String,
+}
+
+/// Forget every held key when the window loses focus.
+///
+/// **The bug this exists for.** A key's release event goes to whoever has focus.
+/// Press `Cmd+Shift+Ctrl+4` on macOS and the screenshot overlay takes the window
+/// away mid-chord, so the release for `Cmd` and `Ctrl` is delivered to *it* —
+/// and `ButtonInput` here believes they are still down. Forever. Every keystroke
+/// after that hits [`type_into_line`]'s chord guard and is dropped, and the
+/// prompt is dead with nothing on screen to say why.
+///
+/// Any modal the operating system throws up does this: screenshots, Spotlight,
+/// mission control, a notification stealing focus. The fix is not to enumerate
+/// them but to distrust held state across a focus boundary, which is the only
+/// moment the release could have gone missing.
+pub(crate) fn forget_held_keys(
+    mut focus: MessageReader<WindowFocused>,
+    mut keys: ResMut<ButtonInput<KeyCode>>,
+) {
+    if focus.read().any(|event| !event.focused) {
+        keys.reset_all();
+    }
 }
 
 /// Feed keystrokes into the line.
@@ -94,11 +203,17 @@ pub(crate) fn type_into_line(
     mut keys: MessageReader<KeyboardInput>,
     held: Res<ButtonInput<KeyCode>>,
     mut line: ResMut<Line>,
+    tower: Res<Tower>,
+    mut offered: ResMut<Offered>,
     mut submitted: MessageWriter<SubmittedMessage>,
 ) {
     // Chords are commands, not text. Alt is deliberately **not** in this list:
     // AltGr is how European layouts type `@`, `#` and `\`, and guarding on it
     // would make those characters untypeable for the players who need them.
+    //
+    // The consequence, stated: `Alt+B`/`Alt+F` — readline's word motion — insert
+    // characters rather than moving. Word motion is deferred with `Ctrl+R`,
+    // `Delete`, `Ctrl+U` and `Ctrl+W`.
     let chord = held.any_pressed([
         KeyCode::ControlLeft,
         KeyCode::ControlRight,
@@ -106,90 +221,98 @@ pub(crate) fn type_into_line(
         KeyCode::SuperRight,
     ]);
 
+    // ...except the editing chords, which a Mac keyboard has no other key for:
+    // there is no Home or End, and `Cmd+←/→` is what every text field on the
+    // platform does. An allow-list rather than a hole — the guard exists because
+    // `Cmd+Enter` was submitting lines, and that must stay true.
+    let editing = held.any_pressed([KeyCode::SuperLeft, KeyCode::SuperRight])
+        && !held.any_pressed([KeyCode::ControlLeft, KeyCode::ControlRight]);
+
     for event in keys.read() {
         // `repeat` is deliberately not filtered: held Backspace should delete
         // more than one character, which is what every text field does.
         if event.state != ButtonState::Pressed {
             continue;
         }
+        // Any keystroke retires the last Tab listing — it answered a question
+        // the player has already moved past.
+        //
+        // **Inside the press filter, and after it.** This ran at the top of the
+        // function, which is gated on `on_message::<KeyboardInput>` — and winit
+        // sends a `KeyboardInput` for the *release* too. So lifting the Tab key
+        // re-entered here, cleared the list, and `continue`d past the release: a
+        // listing that lived for the ~50ms a finger was down. `press` in the
+        // tests only ever writes `Pressed`, which is why the suite was green.
+        // A Tab cycle ends with it, for the same reason and in the same place:
+        // the next Tab should start a fresh completion rather than resume one the
+        // player has typed past.
+        if !matches!(event.logical_key, Key::Tab) {
+            offered.clear();
+            line.end_cycle();
+        }
+        // The chord guard covers **every** key, `Enter` and `Backspace`
+        // included. They used to bypass it, so `Cmd+Enter` submitted the line
+        // and `Ctrl+Backspace` ate a character — a chord the player aimed at
+        // their operating system reaching into the prompt on the way past.
+        if chord {
+            // `Cmd+←/→` is Home/End on a keyboard that has neither.
+            if editing {
+                match &event.logical_key {
+                    Key::ArrowLeft => line.home(),
+                    Key::ArrowRight => line.end(),
+                    _ => {}
+                }
+            }
+            continue;
+        }
         match &event.logical_key {
             Key::Enter => {
-                let finished = std::mem::take(&mut line.text);
+                // A bare digit answering §6's numbered prompt is an answer, not
+                // a phrasing, so it is not remembered. `answering` is sampled
+                // from the world *before* `submit` clears `Choices`.
+                let remember = !answering(&tower, line.text());
+                let finished = line.take(remember);
                 submitted.write(SubmittedMessage { line: finished });
             }
-            Key::Backspace => {
-                line.text.pop();
+            Key::Backspace => line.backspace(),
+            Key::Escape => line.clear(),
+            Key::ArrowLeft => line.left(),
+            Key::ArrowRight => line.right(),
+            Key::ArrowUp => line.earlier(),
+            Key::ArrowDown => line.later(),
+            Key::Home => line.home(),
+            Key::End => line.end(),
+            Key::Tab => {
+                let open = !tower.sim().choices().is_empty();
+                // Candidates are **transient Frame content**, not a record.
+                // There is deliberately no `scrollback_mut` (§13): a frontend
+                // writing into the log makes a session that `(seed,
+                // submissions)` cannot replay, and a Tab press is not a
+                // submission.
+                //
+                // Assigned even when empty, so a Tab that *completes* a word
+                // retires the listing that asked which word it was.
+                offered.options = line.tab(tower.sim().scene(), open);
+                offered.current = line.cycling();
             }
             _ => {
-                if chord {
-                    continue;
-                }
                 let Some(text) = &event.text else {
                     continue;
                 };
-                for glyph in text.chars().filter(|c| orbs_render::is_renderable(*c)) {
-                    if line.text.chars().count() >= MAX_INPUT {
-                        break;
-                    }
-                    line.text.push(glyph);
-                }
+                line.insert(text);
             }
         }
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn line_of(text: &str) -> Line {
-        Line {
-            text: text.to_owned(),
-        }
-    }
-
-    #[test]
-    fn a_short_line_is_shown_whole_with_the_caret_after_it() {
-        let line = line_of("survey");
-        assert_eq!(line.viewport(40), ("survey", 6));
-    }
-
-    #[test]
-    fn a_long_line_scrolls_and_keeps_its_caret_on_screen() {
-        // The failure this exists to prevent: past the pane width the text stops
-        // appearing and `set_cursor` refuses an off-grid position, so the player
-        // types into a dead line.
-        let line = line_of("abcdefghij");
-        let (visible, caret) = line.viewport(5);
-        assert_eq!(visible, "ghij", "the tail must stay visible");
-        assert_eq!(caret, 4, "the caret must stay inside the viewport");
-        assert!(usize::from(caret) < 5);
-    }
-
-    #[test]
-    fn the_caret_never_leaves_the_grid_at_any_length() {
-        for length in 0..200usize {
-            let line = line_of(&"x".repeat(length));
-            for width in [1u16, 8, 72] {
-                let (visible, caret) = line.viewport(width);
-                assert!(caret < width, "len {length} width {width} caret {caret}");
-                assert!(visible.chars().count() < usize::from(width) + 1);
-            }
-        }
-    }
-
-    #[test]
-    fn a_zero_width_viewport_is_empty_rather_than_a_panic() {
-        assert_eq!(line_of("survey").viewport(0), ("", 0));
-    }
-
-    #[test]
-    fn a_multibyte_glyph_is_not_split() {
-        // `░` is three bytes and one cell. Slicing the tail by byte offset would
-        // panic mid-character; the viewport has to seek by `char_indices`.
-        let line = line_of("░░░░░");
-        let (visible, caret) = line.viewport(3);
-        assert_eq!(visible, "░░", "one cell is reserved for the caret");
-        assert_eq!(caret, 2);
-    }
+/// Whether this line is a digit answering a numbered prompt.
+///
+/// Read *before* the line is submitted, because `Sim::submit` clears `Choices`
+/// the moment it takes a non-digit — so afterwards there is no way to tell an
+/// answer from a command that happened to be a number.
+fn answering(tower: &Tower, line: &str) -> bool {
+    // Through the sim's own predicate, not a second copy of it. What counts as
+    // an answer is §6's rule — a leading `#`, a `1)`, a range would all be
+    // changes to it — and the sim already exports the canonical form.
+    !tower.sim().choices().is_empty() && orbs_sim::parser::is_answer(line)
 }

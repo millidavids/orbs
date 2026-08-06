@@ -11,16 +11,27 @@
 //!
 //! let scene = Scene::new()
 //!     .with(NounKind::Place, "/tower/laboratory")
-//!     .with(NounKind::Essence, "clarity");
+//!     .with(NounKind::Reagent, "sage");
 //!
 //! // All three registers reach the same canonical command.
-//! for input in ["decoct clarity", "brew clarity", "make a potion of clarity"] {
+//! for input in [
+//!     "move sage to laboratory",
+//!     "mv sage laboratory",
+//!     "transfer the sage to the laboratory",
+//! ] {
 //!     let resolved = resolve(input, &scene, Mode::Calm);
-//!     assert_eq!(resolved.intent().expect("resolves").echo(), "decoct clarity");
+//!     // A place echoes as its **leaf**: the full path clipped the destination
+//!     // off a three-argument `move` at the 80×22 floor, and §7 says players
+//!     // say the place rather than the path anyway.
+//!     assert_eq!(
+//!         resolved.intent().expect("resolves").echo(),
+//!         "move sage laboratory",
+//!     );
 //! }
 //! ```
 
 mod arguments;
+mod complete;
 mod fuzzy;
 mod intent;
 mod normalise;
@@ -31,8 +42,9 @@ mod trace;
 mod verb;
 mod vocabulary;
 
+pub use complete::{Completion, Suggestion, complete, is_answer};
 pub use fuzzy::{EXACT, MIN_SIMILARITY, distance, is_near, similarity};
-pub use intent::{Argument, Candidate, Confidence, Intent, Mode, Resolution};
+pub use intent::{Argument, Candidate, Confidence, Intent, Mode, Resolution, leaf};
 pub use report::report;
 pub use resolve::{Analysis, analyse, resolve};
 pub use scene::{Noun, NounMatch, Scene};

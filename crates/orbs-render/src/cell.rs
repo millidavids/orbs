@@ -44,7 +44,7 @@ impl Cell {
 
     /// Whether the cell would draw nothing but background.
     #[must_use]
-    pub fn is_blank(self) -> bool {
+    pub const fn is_blank(self) -> bool {
         self.glyph == ' '
     }
 }

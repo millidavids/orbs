@@ -299,14 +299,6 @@ fn arrived_cells(progress: f32, total: usize) -> u32 {
     )
 }
 
-/// How many characters of `text` have arrived by `progress`.
-///
-/// For a caller with one string rather than a card of them — the input line
-/// during [`Stage::Prompt`].
-pub(crate) fn arrived(text: &str, progress: f32) -> u32 {
-    arrived_cells(progress, text.chars().count())
-}
-
 fn to_cells(count: usize) -> u32 {
     u32::try_from(count).unwrap_or(u32::MAX)
 }
@@ -540,7 +532,7 @@ mod tests {
     fn it_draws_nothing_before_its_own_stage() {
         // The tube is dark and the frame is still drawing itself; a splash that
         // painted through those would be on screen before the screen was.
-        for stage in [Stage::Dark, Stage::Prompt, Stage::Frame] {
+        for stage in [Stage::Dark, Stage::Frame] {
             let mut frame = Frame::new(GridSize::new(80, 22));
             paint(&mut frame, stage, 0.5);
             assert!(

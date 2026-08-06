@@ -104,7 +104,16 @@ pub fn report(world: &mut World) {
     // the dead-end rate — on things nobody built yet. See
     // [`is_live`](crate::execute::is_live) for which, and for the one that is
     // worse than a dead end.
-    for verb in Verb::ALL.into_iter().filter(|verb| is_live(*verb)) {
+    //
+    // A **domain's own** verbs are left out. The boot report is written before
+    // the player has gone anywhere, and `grind` is not a word at the tower root
+    // — offering it there is the dead end this filter exists to avoid, one step
+    // further in. `grimoire brewing` is what teaches them, from inside the
+    // laboratory where they work.
+    for verb in Verb::ALL
+        .into_iter()
+        .filter(|verb| is_live(*verb) && !verb.is_operation())
+    {
         let mut entry = records.push(RecordKind::Entry);
         entry = entry.text(FieldName::Name, verb.canonical());
         // `status` and `undo` take nothing, and an empty field is not the same
@@ -150,18 +159,23 @@ mod tests {
         // their guesswork rather than the vocabulary — but a tester sent after a
         // verb nobody has built yet is testing Phase 1, and `bind` would have
         // them read a `sift` of the session log as a success.
+        // A domain's own verbs are **also** left out, for the same reason one
+        // step further in: the report is written at the tower root, and `grind`
+        // is not a word there (§7). Sending a tester after it would be the exact
+        // dead end this list exists to avoid.
         let sim = Sim::new(1);
         let listed = rows(&sim, RecordKind::Entry);
         for verb in Verb::ALL {
+            let offered = is_live(verb) && !verb.is_operation();
             assert_eq!(
                 listed.iter().any(|name| name == verb.canonical()),
-                is_live(verb),
+                offered,
                 "{} is offered by the boot report but {}",
                 verb.canonical(),
-                if is_live(verb) {
+                if offered {
                     "should be"
                 } else {
-                    "is dark"
+                    "should not be"
                 },
             );
         }

@@ -142,9 +142,23 @@ pub(crate) fn build(frame: &Frame, theme: &Phosphor, scale: u16, showing: bool, 
 
     let position = |column: f32, row: f32| (left + column * cell_width, top - row * cell_height);
 
+    // A region the `Frame` marked for double-size drawing — the prompt at fine
+    // fidelity (§9). Its cells are skipped here and drawn below at 2×, so one
+    // row of them fills two rows and twice the columns.
+    let magnified = frame.magnified();
+    let inside = |column: usize, row: usize| {
+        magnified.is_some_and(|area| {
+            let (column, row) = (
+                u16::try_from(column).unwrap_or(u16::MAX),
+                u16::try_from(row).unwrap_or(u16::MAX),
+            );
+            row == area.row && column >= area.col && column < area.right()
+        })
+    };
+
     for (row, cells) in frame.rows().enumerate() {
         for (column, cell) in cells.iter().enumerate() {
-            if cell.is_blank() {
+            if cell.is_blank() || inside(column, row) {
                 continue;
             }
             let Some(index) = cp437::cp437_index(cell.glyph) else {
@@ -156,6 +170,39 @@ pub(crate) fn build(frame: &Frame, theme: &Phosphor, scale: u16, showing: bool, 
                 y,
                 cell_width,
                 cell_height,
+                theme.resolve(cell.style).to_linear().to_f32_array(),
+                atlas::uv(index, cell.style.presentation),
+            );
+        }
+    }
+
+    // The magnified pass. Same glyphs, same atlas, quads twice the size — which
+    // is the whole trick: no second cell ratio, no second font, and the grid
+    // stays one grid.
+    if let Some(area) = magnified {
+        for offset in 0..area.cols {
+            let column = area.col.saturating_add(offset);
+            let Some(cell) = frame.cell(orbs_render::Pos::new(column, area.row)) else {
+                continue;
+            };
+            if cell.is_blank() {
+                continue;
+            }
+            let Some(index) = cp437::cp437_index(cell.glyph) else {
+                continue;
+            };
+            // Anchored at the region's own origin and stepping two cells per
+            // glyph, so the run stays flush with the left edge rather than
+            // drifting right by its own magnification.
+            let (x, y) = position(
+                grid_offset(usize::from(area.col)) + f32::from(offset) * 2.0,
+                grid_offset(usize::from(area.row)),
+            );
+            geometry.push_cell(
+                x,
+                y,
+                cell_width * 2.0,
+                cell_height * 2.0,
                 theme.resolve(cell.style).to_linear().to_f32_array(),
                 atlas::uv(index, cell.style.presentation),
             );
@@ -174,15 +221,56 @@ pub(crate) fn build(frame: &Frame, theme: &Phosphor, scale: u16, showing: bool, 
         && let Some(caret) = frame.cursor()
         && let Some(index) = cp437::cp437_index(CARET)
     {
-        let (x, y) = position(f32::from(caret.col), f32::from(caret.row));
+        // The caret magnifies with the text it trails. A full-size block beside
+        // a double-size prompt reads as a rendering fault, and it is the one
+        // glyph on screen whose whole job is saying *here*.
+        let big = magnified.is_some_and(|area| {
+            caret.row == area.row && caret.col >= area.col && caret.col <= area.right()
+        });
+        let (x, y) = match magnified.filter(|_| big) {
+            Some(area) => position(
+                f32::from(area.col) + f32::from(caret.col.saturating_sub(area.col)) * 2.0,
+                f32::from(area.row),
+            ),
+            None => position(f32::from(caret.col), f32::from(caret.row)),
+        };
+        let (width, height) = if big {
+            (cell_width * 2.0, cell_height * 2.0)
+        } else {
+            (cell_width, cell_height)
+        };
         geometry.push_cell(
             x,
             y,
-            cell_width,
-            cell_height,
+            width,
+            height,
             theme.resolve(Style::BRIGHT).to_linear().to_f32_array(),
             atlas::uv(index, orbs_render::Presentation::Plain),
         );
+
+        // **Reverse video.** The caret used to sit one past the end of the line,
+        // always on a blank, so a solid block was fine. It can sit mid-line now,
+        // and a block drawn over a character hides the character — blinking it in
+        // and out, in the one place the player is looking.
+        //
+        // So the glyph underneath is redrawn on top of the block in the tube's
+        // own black, which is what a terminal does and what the `CARET` comment
+        // meant by *"we have no inverse video to fall back on"*. Entirely a
+        // frontend job: the caret is a quad rather than a cell, so no per-cell
+        // inverse flag is needed and §19's *"what a cell holds"* stands.
+        if let Some(under) = frame.cell(caret)
+            && !under.is_blank()
+            && let Some(glyph) = cp437::cp437_index(under.glyph)
+        {
+            geometry.push_cell(
+                x,
+                y,
+                width,
+                height,
+                Color::BLACK.to_linear().to_f32_array(),
+                atlas::uv(glyph, under.style.presentation),
+            );
+        }
     }
 
     geometry.commit(mesh);
@@ -214,7 +302,10 @@ pub(crate) fn empty_mesh() -> Mesh {
 
 /// `usize` grid coordinate to pixels, without a lossy cast lint at every site.
 fn grid_offset(index: usize) -> f32 {
-    u16::try_from(index).map_or(f32::from(u16::MAX), f32::from)
+    /// The furthest a cell coordinate can be, when one does not fit a `u16`.
+    const FURTHEST: f32 = u16::MAX as f32;
+
+    u16::try_from(index).map_or(FURTHEST, f32::from)
 }
 
 #[cfg(test)]
@@ -278,6 +369,54 @@ mod tests {
             quads(&built(&frame_with("a b", 80, 22), 1)),
             2,
             "the space between should not be drawn"
+        );
+    }
+
+    #[test]
+    fn a_magnified_row_is_drawn_once_at_double_size() {
+        // The prompt at fine fidelity. One row of cells, quads twice the size —
+        // no second cell ratio and no second font, which is what keeps the grid
+        // one grid.
+        let mut frame = frame_with("abc", 10, 2);
+        let plain = quads(&built(&frame, 1));
+
+        frame.set_magnified(Some(orbs_render::Rect::new(0, 0, 3, 1)));
+        let magnified = built(&frame, 1);
+
+        assert_eq!(
+            quads(&magnified),
+            plain,
+            "a magnified cell was drawn twice, or dropped"
+        );
+
+        // Twice as wide and twice as tall as a normal cell.
+        let corners = positions(&magnified);
+        let width = corners[1][0] - corners[0][0];
+        let height = corners[0][1] - corners[3][1];
+        assert!(
+            (width - f32::from(orbs_render::CELL_WIDTH) * 2.0).abs() < f32::EPSILON,
+            "magnified width was {width}"
+        );
+        assert!(
+            (height - f32::from(orbs_render::CELL_HEIGHT) * 2.0).abs() < f32::EPSILON,
+            "magnified height was {height}"
+        );
+    }
+
+    #[test]
+    fn a_magnified_run_steps_two_cells_a_glyph() {
+        // Stepping one would overlap each glyph with the last by half, which
+        // reads as a smear rather than as text.
+        let mut frame = frame_with("ab", 10, 2);
+        frame.set_magnified(Some(orbs_render::Rect::new(0, 0, 2, 1)));
+        let corners = positions(&built(&frame, 1));
+
+        let first = corners[0][0];
+        let second = corners[4][0];
+        assert!(
+            (second - first - f32::from(orbs_render::CELL_WIDTH) * 2.0).abs() < f32::EPSILON,
+            "glyphs stepped {} apart",
+            second - first
         );
     }
 

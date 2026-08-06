@@ -59,7 +59,7 @@ pub(crate) fn panes(
 /// stacks [`STRIP_ROWS`](crate::STRIP_ROWS) strips below the main pane, so a
 /// strip unrolls downward from its own top edge instead. One rule for both would
 /// send a strip sideways across the screen.
-fn edge(rect: Rect, mode: DisplayMode) -> Rect {
+const fn edge(rect: Rect, mode: DisplayMode) -> Rect {
     match mode {
         DisplayMode::Deep => Rect::new(rect.col.saturating_add(rect.cols), rect.row, 0, rect.rows),
         DisplayMode::Wide => Rect::new(rect.col, rect.row, rect.cols, 0),

@@ -25,7 +25,9 @@ suspicious = { level = "warn", priority = -1 }
 complexity = { level = "warn", priority = -1 }
 perf = { level = "warn", priority = -1 }
 style = { level = "warn", priority = -1 }
-# Selective pedantic — the whole group is too noisy, these earn their keep.
+# Selective pedantic and nursery — the whole groups are too noisy, these earn
+# their keep. Each was added after a sweep that found real defects, not because
+# the lint sounded good.
 cast_precision_loss = "warn"
 cast_possible_truncation = "warn"
 cast_sign_loss = "warn"
@@ -33,6 +35,70 @@ must_use_candidate = "warn"
 missing_panics_doc = "warn"
 doc_markdown = "warn"
 unwrap_used = "warn"
+
+# A read-only helper that demands `&mut World` cannot be called from anywhere
+# holding a shared borrow, for no reason its body can point at. Four in
+# `execute/` did.
+needless_pass_by_ref_mut = "warn"
+
+# `get_or_insert` built an `Incomplete` — allocating a `Vec` — once per
+# vocabulary entry per keystroke, then threw it away because the slot was taken.
+or_fun_call = "warn"
+
+# `ends_with(".log")` is a byte comparison, so a `FEED.LOG` in the content file
+# would spawn without its sabotage marker and be silently immune.
+case_sensitive_file_extension_comparisons = "warn"
+
+# `stdin.lock()` in a `match` scrutinee holds the lock across every arm.
+significant_drop_in_scrutinee = "warn"
+
+# Cheap and mechanical; ~40 accessors were missing it.
+missing_const_for_fn = "warn"
+redundant_clone = "warn"
+implicit_clone = "warn"
+redundant_closure_for_method_calls = "warn"
+match_like_matches_macro = "warn"
+unnecessary_debug_formatting = "warn"
+
+# Already clean across the workspace, so these cost nothing to hold and are the
+# ones a hurried change is most likely to break.
+uninlined_format_args = "warn"
+manual_let_else = "warn"
+redundant_else = "warn"
+explicit_iter_loop = "warn"
+semicolon_if_nothing_returned = "warn"
+items_after_statements = "warn"
+needless_collect = "warn"
+map_unwrap_or = "warn"
+
+# NOT enabled, and deliberately. Each was looked at site by site rather than
+# waved away, and the count is what a sweep would report today:
+#
+# - `redundant_pub_crate` (108) fights CLAUDE.md's visibility rule, which asks
+#   for `pub(crate)` on shared items regardless of the module's own visibility.
+# - `needless_pass_by_value` (47) — every one is an ECS system parameter, where
+#   taking `Res<T>`/`ResMut<T>` by value *is* the signature Bevy requires. The
+#   two in `orbs-sim` are `bevy_ecs` systems in tests, same thing.
+# - `suboptimal_flops` (14) suggests `mul_add`, which changes rounding in the
+#   render maths for no measured gain.
+# - `trivially_copy_pass_by_ref` (12) would make `&Screen` and `&PaneTransition`
+#   by-value while `&Sim`, `&Line` and `&Panel` beside them must stay by
+#   reference. One consistent paint signature is worth more than six bytes.
+# - `unreadable_literal` (8) would break `0xC0FFEE`, a hex *word* that reads
+#   worse with separators in it.
+# - `module_name_repetitions` (6) flags `record::RecordKind`, which is
+#   re-exported as `orbs_render::RecordKind` — the repetition does not exist on
+#   the public path anyone types.
+# - `option_if_let_else` (4) turns multi-line `match` arms into `map_or_else`
+#   with two closures. It is in nursery because it often reads worse; here it
+#   does.
+# - `similar_names` (4) is noise.
+# - `match_same_arms` (1) would merge `Verb::signature`'s three `PLACE` arms,
+#   each carrying its own §19 reasoning for why that verb takes a place. The
+#   comments are the valuable part.
+# - `too_many_lines` (1) is `render::grid::build` at 104. It walks the frame and
+#   emits quads — one operation, in the hot path, and splitting it would scatter
+#   the vertex emission. CLAUDE.md's 300-line rule is about files.
 
 [workspace.dependencies]
 # ECS — used standalone in orbs-sim. NEVER depend on `bevy` there. See CLAUDE.md.
@@ -46,6 +112,12 @@ rand_chacha = "0.9"
 
 thiserror = "2.0"
 tracing = "0.1"
+
+# Content files (DESIGN.md §12, CLAUDE.md rule 6): prose and recipes live in
+# TOML, never as string literals in Rust. `serde` is derive-only here — no
+# runtime, no async, nothing that reaches the filesystem from inside the sim.
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.9"
 
 [profile.dev]
 opt-level = 1

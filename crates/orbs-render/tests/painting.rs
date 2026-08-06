@@ -306,6 +306,7 @@ fn a_full_screen_linearises_in_paint_order() {
         main_panes: 2,
         sidebar_panes: 2,
         mode: DisplayMode::Deep,
+        input_rows: 1,
     });
 
     let mut frame = Frame::new(grid);
@@ -365,6 +366,7 @@ fn panes_drawn_from_a_layout_never_bleed_into_each_other() {
         main_panes: 4,
         sidebar_panes: 3,
         mode: DisplayMode::Deep,
+        input_rows: 1,
     });
 
     let mut frame = Frame::new(grid);

@@ -15,19 +15,34 @@ use orbs_sim::parser::{
 
 /// One noun of every kind, so any verb can be given a fitting argument.
 fn scene() -> Scene {
-    Scene::new()
+    // **Standing in the laboratory**, with every per-instrument verb in scope.
+    // Those verbs only resolve where their instrument is (§7,
+    // `Scene::offers`), so a scene without them would have this whole file
+    // measuring the scoping rule instead of the naming.
+    //
+    // The naming guards below are therefore the *worst case*: every word the
+    // game has, all live at once. Out in the archive the laboratory's four are
+    // not candidates at all, so a collision pinned here is narrower in play than
+    // it looks on the page.
+    Verb::ALL
+        .into_iter()
+        .filter(|verb| verb.is_operation())
+        .fold(Scene::new(), Scene::offering)
         .with(NounKind::Place, "/tower/laboratory")
         .with(NounKind::File, "feed.log")
         .with(NounKind::Topic, "brewing")
         .with(NounKind::Essence, "clarity")
-        .with(NounKind::Vessel, "alembic")
+        .with(NounKind::Reagent, "sage")
+        // `alembic` became an instrument — a place — with §10.1, so the vessel
+        // fixture is `retort`, which stayed one when `crucible` was removed.
+        .with(NounKind::Vessel, "retort")
         .with(NounKind::Fragment, "sigil-iv")
         .with(NounKind::Script, "night_watch")
         .with(NounKind::Any, "sludge")
 }
 
 /// An argument that satisfies `verb`'s signature.
-fn sample_argument(verb: Verb) -> &'static str {
+const fn sample_argument(verb: Verb) -> &'static str {
     let Some(slot) = verb.signature().first() else {
         return "";
     };
@@ -37,7 +52,8 @@ fn sample_argument(verb: Verb) -> &'static str {
         NounKind::Pattern => "march feed.log",
         NounKind::Topic => "brewing",
         NounKind::Essence => "clarity",
-        NounKind::Vessel => "laboratory",
+        NounKind::Reagent => "sage",
+        NounKind::Vessel => "retort",
         NounKind::Fragment => "sigil-iv",
         NounKind::Script => "night_watch",
         NounKind::Count => "30",
@@ -79,9 +95,30 @@ fn canonical_names_are_one_short_word() {
 /// the player meant to collect. `decant` became `siphon`.
 #[test]
 fn no_two_canonical_names_fuzzy_match_each_other() {
+    // **Except across a domain boundary**, where the two are never candidates at
+    // the same time unless you are standing in the laboratory — and there the
+    // instrument in front of you breaks the tie (`resolve::DOMAIN_BONUS`).
+    //
+    // `grind` and `bind` sit at exactly `MIN_SIMILARITY`, which is *two* edits in
+    // a five-letter word: further apart than the tolerated `find`/`bind` at 750,
+    // and the two take different argument kinds on top. `grind` is the word the
+    // mortar answers to; a collision this weak does not buy renaming it.
+    const ACROSS_DOMAINS: [(&str, &str); 1] = [("grind", "bind")];
+
     for a in Verb::ALL {
         for b in Verb::ALL {
             if a >= b {
+                continue;
+            }
+            let pair = (a.canonical(), b.canonical());
+            if ACROSS_DOMAINS.contains(&pair) {
+                assert_ne!(
+                    a.is_operation(),
+                    b.is_operation(),
+                    "{} and {} are both in scope together — the exemption does not apply",
+                    a.canonical(),
+                    b.canonical()
+                );
                 continue;
             }
             let score = similarity(a.canonical(), b.canonical());
@@ -114,9 +151,17 @@ fn three_character_canonical_prefixes_name_at_most_one_verb() {
             .map(|verb| verb.canonical())
             .filter(|other| other.starts_with(prefix))
             .collect();
+        // `gri` is the one shared prefix, between `grimoire` and `grind`, and it
+        // is shared only *in the laboratory* — the one room where both are
+        // words. There the instrument settles it (`resolve::DOMAIN_BONUS`), and
+        // neither reaches `MIN_SIMILARITY` from three letters anyway, so the
+        // shorthand this test guards resolves to nothing rather than to the
+        // wrong thing. That is the `dec`-prefixed-three-verbs defect avoided by
+        // a different route, not conceded.
+        let expected = if prefix == "gri" { 2 } else { 1 };
         assert_eq!(
             hits.len(),
-            1,
+            expected,
             "the abbreviation {prefix:?} reaches {hits:?}"
         );
     }
@@ -179,13 +224,31 @@ fn the_tolerated_collision_set_is_pinned() {
     assert_eq!(
         collisions,
         [
+            // `light` (wield) vs `list` (survey). Tolerated on purpose, and the
+            // reason is the rule this whole test exists for: unclaimed, `light`
+            // resolved to `list`, so `light athanor` silently ran `survey
+            // athanor` and read as the fire being unrelightable. Claimed, an
+            // exact match beats the fuzzy one and the collision costs a prompt
+            // on a typo instead of a wrong command with `Clear` confidence.
+            ("list", "light"),
             ("cat", "cast"),
+            // `grind` (the mortar) against `find` (sift) and `bind` (scripts).
+            // Both are **across a domain boundary**: `grind` is a word only in
+            // the laboratory (§7), and the other two go everywhere — so the
+            // three are candidates together in exactly one room, where the
+            // instrument standing in it settles the tie
+            // (`resolve::DOMAIN_BONUS`). `find`/`grind` and `grind`/`bind` are
+            // both two edits, further apart than the `find`/`bind` above them,
+            // and the three take different argument kinds. This is the case
+            // domain scoping was added for.
+            ("find", "grind"),
             ("find", "bind"),
             ("audit", "edit"),
             ("wait", "write"),
             ("decoct", "decant"),
             ("decoct", "decode"),
             ("make", "take"),
+            ("grind", "bind"),
         ],
         "the set of tolerated synonym collisions changed"
     );
@@ -218,8 +281,12 @@ fn ambiguous_synonym_prefixes_are_known() {
     ambiguous.sort_unstable();
 
     // `aut`: automate (bind) vs author (scribe).
-    // `dec`: decoct vs decant (siphon) vs decipher/decode (divine).
+    // `dec`: decoct (now grimoire) vs decant (siphon) vs decipher/decode (divine).
+    // `gri`: grimoire vs grind — and only where the mortar is, since `grind` is
+    //        not a word anywhere else (§7). There the instrument settles it
+    //        (`resolve::DOMAIN_BONUS`).
     // `ins`: inscribe (scribe) vs inspect (verify).
+    // `tra`: transfer/transport (move) vs translate (divine).
     // Each prompts, which is the right answer — the abbreviation genuinely is
     // ambiguous. What must never happen is one of them resolving silently, and
     // `every_phrase_reaches_the_verb_that_claims_it` is what guards that.
@@ -227,8 +294,10 @@ fn ambiguous_synonym_prefixes_are_known() {
         ambiguous,
         [
             ("aut", vec!["bind", "scribe"]),
-            ("dec", vec!["decoct", "divine", "siphon"]),
+            ("dec", vec!["divine", "grimoire", "siphon"]),
+            ("gri", vec!["grimoire", "grind"]),
             ("ins", vec!["scribe", "verify"]),
+            ("tra", vec!["divine", "move"]),
         ],
         "the set of ambiguous synonym prefixes changed"
     );
@@ -254,24 +323,31 @@ fn the_words_the_naming_pass_replaced_still_resolve() {
     // `decant` it must not *release* it either, since an unclaimed `decant`
     // lands on `decoct`.
     let scene = Scene::new()
-        .with(NounKind::Vessel, "alembic")
-        .with(NounKind::Essence, "clarity")
+        // `siphon` takes a **place** now (§10.1): the product sits in the
+        // instrument that made it, not in a vessel.
+        .with(NounKind::Place, "/tower/laboratory/alembic")
+        .with(NounKind::Vessel, "retort")
+        .with(NounKind::Topic, "clarity")
         .with(NounKind::Fragment, "sigil-iv")
         .with(NounKind::Script, "night_watch");
 
     for (input, expected) in [
+        // Echoed as a **leaf**: the full path clipped the destination off a
+        // three-argument `move` at the 80×22 floor, and the leaf is what §7 says
+        // players say anyway.
         ("decant alembic", "siphon alembic"),
         ("siphon alembic", "siphon alembic"),
         ("decipher sigil-iv", "divine sigil-iv"),
         ("divine sigil-iv", "divine sigil-iv"),
         ("inscribe night_watch", "scribe night_watch"),
         ("scribe night_watch", "scribe night_watch"),
-        ("decoct clarity", "decoct clarity"),
+        // Retired in Phase 1 (§19) and still claimed, pointed at the recipe.
+        ("decoct clarity", "grimoire clarity"),
+        ("brew clarity", "grimoire clarity"),
     ] {
         let echo = resolve(input, &scene, Mode::Calm)
             .intent()
-            .map(|intent| intent.echo())
-            .unwrap_or_else(|| "<unresolved>".to_owned());
+            .map_or_else(|| "<unresolved>".to_owned(), orbs_sim::parser::Intent::echo);
         assert_eq!(echo, expected, "{input:?}");
     }
 }

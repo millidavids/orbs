@@ -76,21 +76,87 @@ impl Fidelity {
         )
     }
 
-    /// The default tier for a window: the largest scale whose grid still meets
-    /// [`MIN_GRID`].
+    /// The grid the default tier aims for, when the window can afford it.
+    ///
+    /// [`MIN_GRID`] is a **floor**, not a target. Choosing the largest scale that
+    /// merely clears it landed every window on 80×22 with the biggest cells that
+    /// would fit — a 4K display and a 720p one got the same amount of text, and
+    /// the text on the 4K one was enormous.
+    ///
+    /// This is [`DEEP_FOCUS_FLOOR`](crate::DEEP_FOCUS_FLOOR) deliberately: aiming
+    /// at it means a default window can host §9's two-pane Deep focus, so `F4` is
+    /// available rather than needing a bigger window first.
+    pub const PREFERRED_GRID: GridSize = crate::DEEP_FOCUS_FLOOR;
+
+    /// The default tier for a window: the largest scale that still gives a
+    /// comfortable grid, falling back to the largest that clears [`MIN_GRID`].
     ///
     /// `None` means the window is too small to host the game at all — below
     /// roughly 640×352 — which is a real answer the frontend must handle rather
     /// than a case to clamp away.
     #[must_use]
     pub fn tier_one(window: (u32, u32)) -> Option<Self> {
+        // Aim high, settle for the floor. A window that cannot reach the
+        // preferred grid still gets the biggest text it can carry, which is the
+        // small-window case `MIN_GRID` exists for.
+        Self::largest_meeting(window, Self::PREFERRED_GRID)
+            .or_else(|| Self::largest_meeting(window, MIN_GRID))
+    }
+
+    /// The tier a window showing exactly `grid` would be at.
+    ///
+    /// For a caller that has a grid and **no window** — `ORBS_DUMP`, which takes
+    /// its grid from an environment variable. It used to pin
+    /// `tier_one((1280, 720))` under a comment claiming the tier was inert, and
+    /// that stopped being true when the prompt learned to spend a second row at a
+    /// fine tier: every dump then reserved a magnified prompt and halved its own
+    /// input viewport, whatever grid was asked for.
+    ///
+    /// Inverts the real path rather than guessing: build the window that `grid`
+    /// implies at each scale and take the **finest** one
+    /// [`tier_one`](Self::tier_one) agrees with, so the pair a dump reports is a
+    /// pair the game can actually reach.
+    ///
+    /// **Finest, not coarsest**, and the difference is the whole point of the
+    /// function. A grid is reachable at several scales — 100×30 is an 800×480
+    /// window at scale 1 and a 6400×3840 one at scale 8 — and keeping the
+    /// coarsest reported `tier 8` for a dump anyone would call small, then drew a
+    /// **one-row** prompt where the same grid on a plausible window has the
+    /// magnified two-row one. That is the layout `ORBS_DUMP` exists to check, so
+    /// hiding it is the one answer worse than being wrong loudly. The finest
+    /// scale is also the tighter screen, which is the same reason `DEFAULT_GRID`
+    /// is §4's floor.
+    #[must_use]
+    pub fn for_grid(grid: GridSize) -> Option<Self> {
+        (NonZeroU8::MIN.get()..=Self::SCALES)
+            .filter_map(NonZeroU8::new)
+            .map(Self)
+            .find(|candidate| {
+                let (cell_width, cell_height) = candidate.cell_pixels();
+                let window = (
+                    u32::from(grid.cols) * u32::from(cell_width),
+                    u32::from(grid.rows) * u32::from(cell_height),
+                );
+                Self::tier_one(window) == Some(*candidate)
+            })
+    }
+
+    /// The coarsest scale [`for_grid`](Self::for_grid) will consider.
+    ///
+    /// Scale 8 is a 64×128 pixel cell — an eight-inch glyph on a 4K panel. Past
+    /// it the search is describing windows nobody has, and it needs *some* bound
+    /// because the mapping from grid to window is one-to-many.
+    const SCALES: u8 = 8;
+
+    /// The largest scale whose grid still fits `wanted`.
+    fn largest_meeting(window: (u32, u32), wanted: GridSize) -> Option<Self> {
         // The grid shrinks monotonically as scale rises, so the first failure is
         // one past the last candidate.
         let mut best = None;
         let mut scale = NonZeroU8::MIN;
         loop {
             let candidate = Self(scale);
-            if !candidate.grid(window).fits(MIN_GRID) {
+            if !candidate.grid(window).fits(wanted) {
                 return best;
             }
             best = Some(candidate);
@@ -99,6 +165,24 @@ impl Fidelity {
             };
             scale = next;
         }
+    }
+
+    /// Rows the input line should occupy at this tier.
+    ///
+    /// The prompt is the one line a player reads on **every** frame, and a finer
+    /// tier shrinks it along with everything else. Spending a second row at the
+    /// finest scale keeps its height in *pixels* roughly where a coarser tier
+    /// puts it, without a second cell size anywhere in the frame — one grid, one
+    /// ratio, and the row count doing the work.
+    ///
+    /// The threshold is **scale 2**, not scale 1. A row is 32 physical pixels at
+    /// scale 2, and that still read as part of the transcript rather than as the
+    /// thing being typed into — which is exactly the tier Deep focus drops a
+    /// 1440p window to, so the prompt shrank on the one screen carrying the most
+    /// at once. Scale 3 and up are 48 pixels or more and need no help.
+    #[must_use]
+    pub const fn input_rows(self) -> u16 {
+        if self.scale() <= 2 { 2 } else { 1 }
     }
 
     /// One step finer — the tier Deep-focus multiplexing engages (§9).
@@ -131,10 +215,29 @@ mod tests {
     /// for.
     #[test]
     fn the_design_tier_table_reproduces_exactly() {
-        let floor = GridSize::new(80, 22);
-        assert_tiers((1920, 1080), (3, floor), (2, GridSize::new(120, 33)));
-        assert_tiers((2560, 1440), (4, floor), (3, GridSize::new(106, 30)));
-        assert_tiers((1280, 720), (2, floor), (1, GridSize::new(160, 45)));
+        assert_tiers(
+            (1920, 1080),
+            (2, GridSize::new(120, 33)),
+            (1, GridSize::new(240, 67)),
+        );
+        assert_tiers(
+            (2560, 1440),
+            (3, GridSize::new(106, 30)),
+            (2, GridSize::new(160, 45)),
+        );
+    }
+
+    #[test]
+    fn the_finest_tier_has_no_finer_step_and_needs_none() {
+        // 1280×720's row of the table. Scale 1 is the smallest whole-pixel cell,
+        // so Deep focus engages at the same fidelity — and does not need a finer
+        // one, because 160×45 already carries four panes. Tier 2 exists to *buy
+        // cells*; a window that has them already needs nothing bought.
+        let tier = Fidelity::tier_one((1280, 720)).expect("supported");
+        assert_eq!(tier.scale(), 1);
+        assert_eq!(tier.grid((1280, 720)), GridSize::new(160, 45));
+        assert_eq!(tier.deep(), None);
+        assert!(tier.grid((1280, 720)).fits(crate::DEEP_FOCUS_FLOOR));
     }
 
     #[test]
@@ -153,11 +256,48 @@ mod tests {
     }
 
     #[test]
-    fn tier_one_is_the_largest_scale_that_fits() {
+    fn tier_one_is_the_largest_scale_that_stays_comfortable() {
+        // The next step coarser must fail the *preferred* grid — otherwise a
+        // bigger glyph was available and not taken, which is the direction §9
+        // wants erred in.
         let window = (1920, 1080);
         let tier = Fidelity::tier_one(window).expect("supported");
         let coarser = Fidelity::new(NonZeroU8::new(tier.scale() + 1).expect("non-zero"));
-        assert!(!coarser.grid(window).fits(MIN_GRID));
+        assert!(!coarser.grid(window).fits(Fidelity::PREFERRED_GRID));
+    }
+
+    #[test]
+    fn a_window_too_small_to_be_comfortable_still_gets_the_floor() {
+        // The preferred grid is an aim, not a second floor. A window that cannot
+        // reach it must still host the game with the biggest text it can carry.
+        let window = (700, 400);
+        let tier = Fidelity::tier_one(window).expect("hosts the floor");
+        assert!(tier.grid(window).fits(MIN_GRID));
+        assert!(!tier.grid(window).fits(Fidelity::PREFERRED_GRID));
+    }
+
+    #[test]
+    fn the_prompt_keeps_its_pixel_height_across_the_tier_table() {
+        // The point of `input_rows`: one grid, one cell ratio, and the *row
+        // count* absorbing the difference. A prompt that shrank with the tier
+        // would be the one line read on every frame getting hardest to read
+        // exactly when the most is on screen.
+        //
+        // **Deep focus is checked too**, and is where this was first wrong:
+        // it drops a tier below the default, so it is the finest scale any
+        // window actually reaches, and 32 pixels there read as transcript.
+        for window in [(1280u32, 720u32), (1920, 1080), (2560, 1440)] {
+            let tier = Fidelity::tier_one(window).expect("supported");
+            for tier in [Some(tier), tier.deep()].into_iter().flatten() {
+                let (_, cell) = tier.cell_pixels();
+                let height = cell * tier.input_rows();
+                assert!(
+                    (32..=64).contains(&height),
+                    "{window:?} at {}×: the prompt is {height} pixels tall",
+                    tier.scale(),
+                );
+            }
+        }
     }
 
     #[test]

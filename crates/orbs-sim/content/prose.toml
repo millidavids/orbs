@@ -1,0 +1,159 @@
+# The orb's voice.
+#
+# CLAUDE.md rule 6: prose lives here, never as a string literal in Rust. The
+# writing budget is ~88k words (DESIGN.md §12) and string literals would make it
+# unmanageable by month 20.
+#
+# This file is compiled in as the default (`include_str!`), so headless tests and
+# the balance harness need no filesystem. A frontend may hand a replacement to
+# `Sim::set_prose` at a tick boundary, which is what makes it hot-reloadable.
+#
+# ## Placeholders
+#
+# `{name}`, `{state}`, `{source}` … interpolate the record's own fields, by the
+# label in `FieldName::label`. A placeholder with no matching field is left as
+# written — visible on screen, so a typo is caught by looking rather than by
+# silently rendering an empty gap.
+#
+# ## Style
+#
+# Lower case throughout. The tower's whole surface is a terminal and a
+# capitalised sentence would be the only thing on screen shouting (§3). No
+# trailing full stop for the same reason.
+#
+# Keep every line inside the 80×22 floor's usable width — roughly 70 cells once
+# the border and glyph are drawn. `worst_case_legibility` is what measures it.
+
+[lines]
+
+# ---------------------------------------------------------------------------
+# Work — the production slot (§9, §11.5)
+# ---------------------------------------------------------------------------
+
+# §5.0: "repairing the rats occupies the laboratory pane for its duration,
+# during which you are not brewing". The refusal only bites if it says so - this
+# line replaces three bare field values that rendered as "decoct decoct
+# laboratory" and told a player nothing.
+#
+# `{state}` is `Verb::participle`, already inflected. It used to be
+# `{state}ing` over `Verb::canonical`, which reads correctly for `wield` and
+# gave "the archive is busy divineing" for the only other verb that can hold
+# the slot.
+work_busy = "the {source} is busy {state}. wait for it, or stop it"
+
+# §7 guards catastrophic targets in character rather than with an error. It
+# covers the root *and* the live domains, so this must read for both - an
+# earlier wording said "is the tower itself" and drew as "the laboratory is the
+# tower itself" the moment a domain was tried.
+purge_protected = "the orb will not unmake the {path}"
+
+# A verb that belongs to an instrument, typed where that instrument is not (§7).
+#
+# `mix` means the flask and rod, and there is no flask and rod in the archive —
+# so the parser never considers the word there, which is what keeps one domain's
+# vocabulary from capturing another's typos as §10's five further domains land.
+# But "I do not know that word" would be a lie about a word the game taught in
+# the room next door, so the refusal names the verb and says where it is not.
+verb_elsewhere = "there is nothing here to {name} with"
+
+# The commonest refusal in the game: the parser resolved a name on submit and by
+# the next tick it was gone, or the player named something that is not within
+# reach. It drew as two bare field values — `mix sage` — which says what was
+# wanted and never says it was refused.
+missing_target = "there is no {path} within reach"
+
+# The one sentence on the "window too small" screen (§9's `is_hostable`). It
+# lived as a `Span::new("...")` literal in the Bevy frontend — invisible to the
+# `ORBS_CONTENT` watcher, invisible to the width and CP437 lints below, and
+# unfindable by a writer grepping `content/`. Rule 6 has no frontend exemption.
+window_too_small = "the orb needs a larger window"
+
+# ---------------------------------------------------------------------------
+# The laboratory (§10.1)
+# ---------------------------------------------------------------------------
+
+# §10.1's loop opens with clearing an instrument of what the last brew left.
+# A place is emptied, never destroyed.
+# empty - the counterpart of purge. §10.1: every byproduct has at least one use,
+# so the loop needs a way to clear an instrument that *keeps* what was in it.
+# Husks are the mortar's leavings and the water bath's input; a player who can
+# only clear by destroying never finds the second route to a draught.
+empty_done = "you turn the {name} out into the {path}: {state}"
+empty_already = "the {name} is already empty"
+empty_nowhere = "there is nowhere here to put what the {name} holds"
+empty_is_store = "the {name} is the shelf; move things out of it by name"
+
+purge_begins = "you set to scouring the {path}"
+purge_already = "you are already scouring the {path}"
+purge_place = "the {path} is clean"
+purge_place_empty = "the {path} was already clean"
+
+# siphon - the fourth move of the loop, and the end of it being a dark verb.
+siphon_done = "you draw off the {name} from the {source}"
+siphon_empty = "the {name} has nothing worth drawing off"
+siphon_working = "the {name} is still at work"
+
+# ---------------------------------------------------------------------------
+# The grimoire (§6.1) - the in-world manual.
+#
+# A recipe name answers with its routes, walked out of `recipes.toml`. Anything
+# else is a *subject*, and answers from here. Keys are `grimoire_<topic>`.
+# ---------------------------------------------------------------------------
+
+grimoire_brewing = "kindle, grind, digest, mix, distil - then siphon, then empty or purge"
+
+# A recipe, written as instructions rather than as a table.
+#
+# The steps come out in **doing** order — the walk is post-order over the recipe
+# graph — so reading top-down is the order you type.
+#
+# **What becomes what, first**, because that is the part a player is looking
+# for; where and how long follow in brackets. Long steps wrap at a word boundary
+# rather than clipping — see `RecordView::wrapped_rows` — so a two-input step
+# breaks after the arrow instead of losing the thing it makes.
+#
+# `{kind}` is the heat marker, already worded. Forgetting to light the athanor is
+# the commonest way a stage refuses, so it earns its place on the line.
+grimoire_route = "{name}: {count} steps, {ticks} ticks"
+grimoire_step = "{index} {detail} -> {name} + {state}  ({source}, {ticks}t{kind})"
+grimoire_step_or = "or {detail} -> {name} + {state}  ({source}, {ticks}t{kind})"
+grimoire_heat = ", needs heat"
+
+# Terse on purpose. The interpolated line is what has to fit ~60 cells at the
+# 80x22 floor, and "you move the ground-sage from the laboratory to the
+# balneum_mariae" is 66 - clipped, in the one line whose whole job is saying
+# where a thing came from and went to.
+move_done = "{name}: {origin} to {path}"
+
+# The lock. §10.1: it is what makes different recipes need different scripts.
+wield_busy = "the {name} is at work. wait, or stop it"
+
+# A refusal has to say what is in there, or "nothing happens" and "you loaded
+# the wrong thing" look identical.
+wield_empty = "the {name} is empty"
+wield_no_recipe = "the {name} can do nothing with {detail}"
+wield_done = "the {source} yields {name}, and leaves {detail}"
+
+# A run that lands on contents matching no recipe. Should not be reachable —
+# the lock sees to that — but `transmute` used to return silently here, which
+# made it the one path that ends a wield with no record at all: the echo, and
+# then nothing, ever. §14 announces completions, and a run ending is one.
+wield_nothing = "the {name} settles, and yields nothing"
+
+stop_done = "you still the {name}. what it holds is untouched"
+stop_idle = "the {name} is not working"
+
+# The athanor - shared heat, and the one instrument that takes no focus.
+#
+# Every one of these carries the fuel count, because banked fuel is the only
+# thing in the laboratory with no node to `survey`. Without the number a player
+# who damps sees an empty athanor and concludes the charcoal is gone - which is
+# exactly how it was reported.
+kindle_done = "the athanor takes light. fuel for {left} ticks"
+kindle_banked = "the athanor catches on banked fuel. {left} ticks of it"
+kindle_lit = "the athanor is already burning"
+kindle_cold = "the athanor has nothing in it to burn, and nothing banked"
+athanor_out = "the athanor gutters and goes cold"
+damp_done = "you damp the athanor. {left} ticks of fuel keep"
+damp_idle = "the athanor is already cold"
+wield_cold = "the {name} wants heat, and the athanor is cold"

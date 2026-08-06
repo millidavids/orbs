@@ -24,7 +24,7 @@
 use orbs_render::{DisplayMode, Fidelity, Frame, GridSize};
 use orbs_sim::Sim;
 
-use super::input::Line;
+use super::line::Line;
 use super::linear::Linear;
 use super::screen::Screen;
 use super::transition::PaneTransition;
@@ -38,6 +38,27 @@ const GRID: &str = "ORBS_GRID";
 
 /// The variable that picks a boot stage to dump.
 const BOOT: &str = "ORBS_BOOT";
+
+/// A line left **unsubmitted** in the prompt.
+///
+/// `ORBS_DUMP` submits every `;`-separated segment, so the input buffer is
+/// always empty by the time the frame is painted — which makes a caret position,
+/// a partly-typed word and a suggestion ghost the three things a dump cannot
+/// show. Everything the prompt does between keystrokes needed this to be gated
+/// at all.
+///
+/// ```text
+/// ORBS_DUMP="attend laboratory" ORBS_LINE="wield mo" cargo run -p orbs
+/// ```
+const LINE: &str = "ORBS_LINE";
+
+/// How many records to hold back from the newest end.
+///
+/// The transcript's scroll is a keypress, and a dump presses no keys — so
+/// without this the one thing §15 asks for, *reaching it from the running game*,
+/// could only be checked by a person sitting in front of a window. Same reason
+/// `ORBS_LINE` exists.
+const SCROLL: &str = "ORBS_SCROLL";
 
 /// Commands are separated by this, so one shell word can drive a session.
 const SEPARATOR: char = ';';
@@ -59,6 +80,23 @@ pub(crate) fn run(seed: u64, wizard: Option<String>) -> bool {
     if let Some(name) = wizard {
         sim.rename(&name);
     }
+    // Authored content, if `ORBS_CONTENT` names a directory (rule 6). A dump
+    // builds no `App` and so has no watcher, but it must still read what is on
+    // disk — otherwise the one tool CLAUDE.md says to reach for first is the one
+    // tool that cannot show a writer their own edit.
+    if std::env::var_os(crate::sim::content::CONTENT_DIR).is_some() {
+        match crate::sim::content::load() {
+            Some(prose) => sim.set_prose(prose),
+            // A dump installs no `tracing` subscriber, so `content`'s own
+            // warning goes nowhere. Without this line a writer with malformed
+            // TOML sees their edit quietly not happen, which is the exact
+            // failure mode the built-in fallback otherwise looks like.
+            None => eprintln!(
+                "warn: {} is set but no prose loaded; drawing the built-in text",
+                crate::sim::content::CONTENT_DIR
+            ),
+        }
+    }
 
     // `1` is the idiom for "just boot it"; anything else is a session to type.
     // Every line goes through `submit` and a real `step`, so what prints is the
@@ -76,9 +114,16 @@ pub(crate) fn run(seed: u64, wizard: Option<String>) -> bool {
 
     let grid = grid();
     let screen = Screen {
-        // A tier is a window-pixel fact and there is no window; the grid is
-        // given directly, which is the only thing the layout reads.
-        fidelity: Fidelity::tier_one((1280, 720)),
+        // **The tier the grid implies, not a fixed one.** This pinned
+        // `tier_one((1280, 720))` under a comment claiming the tier was inert —
+        // and it stopped being inert the moment the prompt learned to take two
+        // rows at a fine tier, because `paint` reads `Fidelity::input_rows`. So
+        // every dump reserved a magnified prompt, halved the input viewport, and
+        // labelled itself with a tier its `ORBS_GRID` could never produce: a tool
+        // CLAUDE.md sells as drawing "the same frame the game draws" was drawing
+        // a combination the game cannot reach, which hides exactly the layout
+        // bugs it exists to find.
+        fidelity: Fidelity::for_grid(grid),
         grid,
         mode: DisplayMode::default_for(grid),
     };
@@ -89,7 +134,7 @@ pub(crate) fn run(seed: u64, wizard: Option<String>) -> bool {
     // this the sequence could only be checked by a person sitting in front of it
     // — which is exactly the position `ORBS_DUMP` exists to get out of.
     if let Some((stage, progress)) = requested_stage() {
-        super::prompt::paint_booting(&mut frame, &sim, &screen, stage, progress);
+        super::prompt::paint_booting(&mut frame, &screen, stage, progress);
         print(&frame);
         return true;
     }
@@ -105,19 +150,37 @@ pub(crate) fn run(seed: u64, wizard: Option<String>) -> bool {
         } else {
             1
         });
+        let typed = std::env::var(LINE).map_or_else(|_| Line::default(), |text| Line::typed(&text));
+        // A dump builds no `App`, so the two cached resources have nobody to
+        // fill them: they are computed here from the same functions the systems
+        // call, rather than left empty — a dump that silently omitted the panel
+        // would be a picture that proves the wrong thing.
+        let panel = super::input::Panel {
+            instruments: sim.instruments(),
+            domain: orbs_sim::parser::leaf(&sim.location()).to_owned(),
+        };
         super::prompt::paint(
             &mut frame,
-            &sim,
-            &Line::default(),
-            &screen,
             &mut Linear::default(),
-            &panes,
-            // A dump is a still. `Reveal::default()` has nothing in flight, so
-            // the output it prints is the output that finished arriving.
-            &super::reveal::Reveal::default(),
+            &super::prompt::View {
+                sim: &sim,
+                line: &typed,
+                screen: &screen,
+                panes: &panes,
+                // A dump is a still. `Reveal::default()` has nothing in flight,
+                // so the output it prints is the output that finished arriving.
+                reveal: &super::reveal::Reveal::default(),
+                // Tab's candidate list is a keystroke's worth of state, and a
+                // dump presses no keys. The *ghost* still shows, because it is a
+                // function of `ORBS_LINE` rather than of anything that happened.
+                offered: &super::input::Offered::default(),
+                scroll: &scrolled(),
+                ghost: &typed.ghost(sim.scene(), !sim.choices().is_empty()),
+                panel: &panel,
+            },
         );
     } else {
-        super::prompt::paint_too_small(&mut frame);
+        super::prompt::paint_too_small(&mut frame, &sim);
     }
 
     print(&frame);
@@ -147,7 +210,6 @@ fn requested_stage() -> Option<(Stage, f32)> {
     let request = std::env::var(BOOT).ok()?;
     let stage = match request.as_str() {
         "dark" => Stage::Dark,
-        "prompt" => Stage::Prompt,
         "frame" => Stage::Frame,
         "post" => Stage::Post,
         _ => return None,
@@ -160,6 +222,23 @@ fn requested_stage() -> Option<(Stage, f32)> {
 /// A malformed value falls back rather than panicking: this is a development
 /// switch, and the useful answer to a typo is the default screen plus the
 /// obvious mismatch, not a stack trace.
+/// How far back `ORBS_SCROLL` asks the transcript to be.
+///
+/// A malformed value scrolls nowhere, for the same reason a malformed grid falls
+/// back: the useful answer to a typo is the default screen, not a stack trace.
+fn scrolled() -> super::input::Scroll {
+    let mut scroll = super::input::Scroll::default();
+    if let Ok(back) = std::env::var(SCROLL)
+        && let Ok(back) = back.trim().parse::<u16>()
+    {
+        // `page` moves by records and clamps to a total; asking it for exactly
+        // the requested distance, with that distance as the ceiling, lands on it.
+        let back = usize::from(back);
+        scroll.page(back, true, back);
+    }
+    scroll
+}
+
 fn grid() -> GridSize {
     let Ok(request) = std::env::var(GRID) else {
         return DEFAULT_GRID;

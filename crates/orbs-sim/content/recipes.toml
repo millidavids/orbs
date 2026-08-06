@@ -1,0 +1,150 @@
+# What each instrument does to what is put in it (DESIGN.md §10.1).
+#
+# One table per instrument, and each has a single shape — which is what makes
+# this readable and what lets a material's *state* decide which recipes can fire,
+# rather than the player memorising a fixed sequence.
+#
+#   mortar_and_pestle   one reagent  -> one reagent          (preprocess)
+#   balneum_mariae      one reagent  -> one reagent          (process, needs heat)
+#   flask_and_rod       two reagents -> one reagent          (combine)
+#   alembic             one reagent  -> a potion             (distil, needs heat)
+#
+# `leaves` is the byproduct. §10.1's rule is that **every byproduct has at least
+# one use** — a byproduct that is only ever litter turns `purge` into tidying,
+# which is the feeling this whole item exists to remove. `husks` feeds the
+# balneum_mariae; `ash` is a flask_and_rod input; `sediment` and `dregs` are
+# below.
+#
+# `ticks` is a placeholder. ROADMAP is explicit: the balance CLI sweeps these and
+# they are not to be hand-tuned. They sit short on purpose so a fifteen-minute
+# scripted scenario can run a whole brew more than once.
+#
+# `heat = true` means the athanor must be alight. It is written **here** rather
+# than inferred from the instrument's name: the table above used to say "needs
+# heat" in a comment while the executor carried the same fact as a `matches!` over
+# two hardcoded names, so a designer adding a heated instrument would have edited
+# this file, read their own note, and shipped a recipe that silently runs cold.
+
+# ---------------------------------------------------------------------------
+# mortar_and_pestle - grinding. No heat.
+# ---------------------------------------------------------------------------
+
+[[mortar_and_pestle]]
+input = "sage"
+output = "ground-sage"
+leaves = "husks"
+ticks = 8
+
+[[mortar_and_pestle]]
+input = "rock-salt"
+output = "ground-salt"
+leaves = "husks"
+ticks = 8
+
+# Ash is a byproduct that grinds down into something the flask wants, which is
+# what keeps the athanor's waste from being pure litter.
+[[mortar_and_pestle]]
+input = "ash"
+output = "potash"
+leaves = "husks"
+ticks = 6
+
+# ---------------------------------------------------------------------------
+# balneum_mariae - gentle digestion over the athanor. Needs heat.
+# ---------------------------------------------------------------------------
+
+[[balneum_mariae]]
+input = "ground-sage"
+output = "sage-tincture"
+leaves = "sediment"
+ticks = 12
+heat = true
+
+[[balneum_mariae]]
+input = "husks"
+output = "weak-tincture"
+leaves = "sediment"
+ticks = 10
+heat = true
+
+# ---------------------------------------------------------------------------
+# flask_and_rod - combination. Two in, one out. No heat.
+# ---------------------------------------------------------------------------
+
+[[flask_and_rod]]
+inputs = ["sage-tincture", "ground-salt"]
+output = "clarified-draught"
+leaves = "dregs"
+ticks = 10
+
+# **The second route to the same draught**, and the whole of §10.1's exit
+# criterion: the same goal, two right answers, and which is right depends on what
+# the laboratory is holding.
+#
+# Route A above spends fresh sage. This one spends the husks the mortar left
+# behind - free if you have been grinding, and unavailable if you have not. It is
+# slower, because that is the trade: waste costs time, stock costs stock.
+#
+# It also puts weak-tincture in two places at once. Sent to the alembic it is
+# haste; sent to the flask it is half a clarity. That is the second decision, and
+# it is the one that keeps this interesting on the twentieth brew.
+[[flask_and_rod]]
+inputs = ["weak-tincture", "ground-salt"]
+output = "clarified-draught"
+leaves = "dregs"
+ticks = 14
+
+[[flask_and_rod]]
+inputs = ["sage-tincture", "potash"]
+output = "fixed-draught"
+leaves = "dregs"
+ticks = 10
+
+# Dregs and sediment are not litter: together they make the salt the alembic
+# needs to fix a distillation.
+[[flask_and_rod]]
+inputs = ["dregs", "sediment"]
+output = "rock-salt"
+leaves = "husks"
+ticks = 6
+
+# Phlegm is the watery fraction a distillation throws off. On its own it is the
+# most useless thing in the laboratory, which is exactly why it must have a use
+# (§10.1) - cut with potash it slakes back into workable salt.
+[[flask_and_rod]]
+inputs = ["phlegm", "potash"]
+output = "rock-salt"
+leaves = "dregs"
+ticks = 8
+
+# ---------------------------------------------------------------------------
+# alembic - distillation. Needs heat. The only instrument that yields a potion.
+# ---------------------------------------------------------------------------
+
+[[alembic]]
+input = "clarified-draught"
+output = "clarity"
+leaves = "phlegm"
+ticks = 14
+potion = true
+heat = true
+
+[[alembic]]
+input = "fixed-draught"
+output = "warding"
+leaves = "phlegm"
+ticks = 14
+potion = true
+heat = true
+
+[[alembic]]
+input = "weak-tincture"
+output = "haste"
+leaves = "phlegm"
+ticks = 12
+potion = true
+heat = true
+
+# ---------------------------------------------------------------------------
+# athanor - fuel, not recipes. Arrives with step 4.
+# ---------------------------------------------------------------------------

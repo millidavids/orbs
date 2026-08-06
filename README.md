@@ -6,7 +6,7 @@ A wizard stares into his scrying orb and finds a computer terminal inside it.
 
 O.R.B.S. is a text-only game played entirely through a fantasy command line. You
 tend a wizard's tower by navigating a filesystem that *is* your duties — brewing
-in `/alembic`, warding in `/battlements`, spying in `/lens` — and you progress by
+in `/laboratory`, warding in `/battlements`, spying in `/lens` — and you progress by
 writing scripts that teach the orb to do your work without you. When you are
 ready, you descend into a siege, where an intelligent enemy attacks the automation
 you built and you must diagnose and repair it under pressure.
@@ -20,7 +20,7 @@ O.R.B.S. v0.9.3  —  cold start
 scrying lens ................ [ ok ]
 ley-line uplink ............. [ ok ]
 grimoire index .............. [ 2841 ]
-alembic ..................... [ ok ]
+laboratory .................. [ ok ]
 battlements ................. [ DEGRADED ]
   east_wall integrity 34%
 menagerie ................... [ not found ]

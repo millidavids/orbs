@@ -42,12 +42,12 @@ pub struct Scrollback(Records);
 impl Scrollback {
     /// The records, for a view to draw or a pipe stage to filter.
     #[must_use]
-    pub fn records(&self) -> &Records {
+    pub const fn records(&self) -> &Records {
         &self.0
     }
 
     /// The records, for a command to write into.
-    pub fn records_mut(&mut self) -> &mut Records {
+    pub const fn records_mut(&mut self) -> &mut Records {
         &mut self.0
     }
 }
@@ -68,13 +68,13 @@ impl Pending {
 
     /// How many commands are waiting.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.0.len()
     }
 
     /// Whether nothing is waiting.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
 
@@ -168,13 +168,13 @@ impl Choices {
 
     /// How many are on offer.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.0.len()
     }
 
     /// Whether the orb is waiting on an answer.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
 
@@ -197,12 +197,12 @@ pub struct Skip(u64);
 
 impl Skip {
     /// Ask for `ticks` more.
-    pub fn request(&mut self, ticks: u64) {
+    pub const fn request(&mut self, ticks: u64) {
         self.0 = self.0.saturating_add(ticks);
     }
 
     /// Take one, if any are owed.
-    pub(crate) fn take(&mut self) -> bool {
+    pub(crate) const fn take(&mut self) -> bool {
         if self.0 == 0 {
             return false;
         }
@@ -212,7 +212,7 @@ impl Skip {
 
     /// How many ticks are still owed.
     #[must_use]
-    pub fn owed(&self) -> u64 {
+    pub const fn owed(&self) -> u64 {
         self.0
     }
 }
@@ -371,12 +371,17 @@ mod tests {
         assert_eq!(a.submissions().all(), b.submissions().all());
     }
 
-    /// Ask something the orb cannot settle, in the laboratory where the essences are.
+    /// Ask something the orb cannot settle, in the archive where the fragments are.
+    ///
+    /// Was `decoct nonsense` against the laboratory's three essences, until
+    /// `decoct` was retired (§19). The archive's three fragments are the same
+    /// shape of question and are not going anywhere — what is under test is the
+    /// numbered prompt, not the domain.
     fn asked(seed: u64) -> Sim {
         let mut sim = Sim::new(seed);
-        sim.submit("attend laboratory");
+        sim.submit("attend archive");
         sim.step();
-        sim.submit("decoct nonsense");
+        sim.submit("divine nonsense");
         sim.step();
         sim
     }
@@ -395,7 +400,7 @@ mod tests {
 
         sim.step();
         assert!(
-            messages(&sim).iter().any(|line| line == "decoct haste"),
+            messages(&sim).iter().any(|line| line == "divine sigil-ix"),
             "{:?}",
             messages(&sim),
         );
@@ -414,7 +419,7 @@ mod tests {
 
         sim.submit("1");
         sim.step();
-        assert!(messages(&sim).iter().any(|line| line == "decoct clarity"));
+        assert!(messages(&sim).iter().any(|line| line == "divine sigil-iv"));
     }
 
     #[test]

@@ -6,6 +6,7 @@
 //!
 //! See `CLAUDE.md` for the architectural rules this crate exists to uphold.
 
+pub mod content;
 pub mod parser;
 
 pub mod execute;
@@ -17,6 +18,7 @@ mod schedule;
 mod sim;
 mod tick;
 
+pub use content::{ContentError, Prose};
 pub use execute::{LOG, MAX_MEDITATE};
 pub use rng::{RngStream, Rngs};
 pub use schedule::{SimSchedule, new_sim_schedule};

@@ -12,7 +12,7 @@
 use bevy_ecs::prelude::*;
 
 use super::fuzzy::{self, MIN_SIMILARITY};
-use super::verb::NounKind;
+use super::verb::{NounKind, Verb};
 
 /// Something the player can refer to by name.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -43,6 +43,7 @@ pub struct NounMatch {
 #[derive(Resource, Debug, Default, Clone)]
 pub struct Scene {
     nouns: Vec<Noun>,
+    operations: Vec<Verb>,
 }
 
 impl Scene {
@@ -60,6 +61,34 @@ impl Scene {
             kind,
         });
         self
+    }
+
+    /// Offer a per-instrument verb, because its instrument is here.
+    ///
+    /// **§7's rule, applied to verbs.** *"You can only name what is where you
+    /// are"* has always governed nouns; an instrument's own verb is the same
+    /// claim about the same thing said the other way round. `mix` means the
+    /// flask and rod, and there is no flask and rod in the archive — so the word
+    /// should not resolve there any more than `flask_and_rod` itself does.
+    ///
+    /// This is what keeps the vocabulary from growing without bound as §10's
+    /// five further domains land. Each coins the verbs its own tools need, and
+    /// none of them costs the others a possible misreading: the parser never
+    /// considers a warding verb while you are brewing.
+    #[must_use]
+    pub fn offering(mut self, verb: Verb) -> Self {
+        self.operations.push(verb);
+        self
+    }
+
+    /// Whether a per-instrument verb has its instrument here.
+    ///
+    /// Always true for a verb that is not one — the core vocabulary goes
+    /// everywhere, because `attend`, `survey` and `peruse` are how you *reach* a
+    /// domain and gating them would lock the key inside the door.
+    #[must_use]
+    pub fn offers(&self, verb: Verb) -> bool {
+        !verb.is_operation() || self.operations.contains(&verb)
     }
 
     /// Everything in the scene.

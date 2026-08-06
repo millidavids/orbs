@@ -37,6 +37,7 @@
 use orbs_render::{FieldName, Outcome, RecordKind, Records};
 
 use super::intent::{Confidence, Resolution};
+use crate::content::Prose;
 
 /// Write `resolution` to `records`.
 ///
@@ -52,7 +53,11 @@ use super::intent::{Confidence, Resolution};
 /// is danger, cost, and success (§4), and a parser needing one more word is none
 /// of those — spending an accent here would dilute the three signals that have
 /// to read instantly during a siege.
-pub fn report(input: &str, resolution: &Resolution, records: &mut Records) {
+///
+/// Takes [`Prose`] because one outcome needs an authored sentence rather than a
+/// restatement of the input: a verb that exists but not *here* has to say so, and
+/// rule 6 puts that sentence in `content/prose.toml`.
+pub fn report(input: &str, resolution: &Resolution, prose: &Prose, records: &mut Records) {
     match resolution {
         Resolution::Resolved { intent, confidence } => {
             let outcome = match confidence {
@@ -74,10 +79,14 @@ pub fn report(input: &str, resolution: &Resolution, records: &mut Records) {
             // The command as far as it got, so the prompt can show the player
             // their own words back rather than starting over. §19 records the
             // defect where rebuilding this from scratch dropped resolved slots.
+            //
+            // Leaves here too, or `move sage` prompts in full paths while
+            // `move sage X` echoes leaves — the same command shown two ways one
+            // keystroke apart.
             let mut sofar = String::from(verb.canonical());
             for argument in filled {
                 sofar.push(' ');
-                sofar.push_str(&argument.value);
+                sofar.push_str(argument.display());
             }
             records
                 .push(RecordKind::Echo)
@@ -106,6 +115,19 @@ pub fn report(input: &str, resolution: &Resolution, records: &mut Records) {
         // `Unresolved` keeps the "always at least one record" guarantee true
         // without inventing a fifth outcome for a bug.
         Resolution::Ambiguous { .. } => unresolved(input, records),
+        // A real verb, in a room that does not answer to it. The record carries
+        // the verb as a *fact* and the sentence comes from `content/prose.toml`
+        // (rule 6); §6 forbids a bare error, and "I do not know that word" would
+        // be a lie about a word the game taught next door.
+        Resolution::Elsewhere { verb } => {
+            let message = prose.line("verb_elsewhere", &[("name", verb.canonical())]);
+            records
+                .push(RecordKind::Echo)
+                .outcome(Outcome::Unresolved)
+                .text(FieldName::Name, verb.canonical())
+                .text(FieldName::Message, &message)
+                .finish();
+        }
         Resolution::Unresolved { suggestions } => {
             unresolved(input, records);
             for verb in suggestions {
@@ -136,7 +158,12 @@ mod tests {
 
     fn records_for(input: &str, scene: &Scene) -> Records {
         let mut records = Records::new();
-        report(input, &resolve(input, scene, Mode::Calm), &mut records);
+        report(
+            input,
+            &resolve(input, scene, Mode::Calm),
+            &Prose::default(),
+            &mut records,
+        );
         records
     }
 
@@ -197,6 +224,7 @@ mod tests {
                     intent: intent.clone(),
                     confidence,
                 },
+                &Prose::default(),
                 &mut records,
             );
             assert_eq!(
