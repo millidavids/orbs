@@ -134,7 +134,7 @@ picture, because it looks like evidence.
 with its linear stream beneath.
 
 ```sh
-ORBS_DUMP="attend laboratory; move sage to mortar_and_pestle; wield mortar_and_pestle; meditate 12; siphon mortar_and_pestle" cargo run -p orbs
+ORBS_DUMP="attend laboratory; move sage to mortar_and_pestle; wield mortar_and_pestle; meditate 12; empty mortar_and_pestle" cargo run -p orbs
 ORBS_DUMP=1 ORBS_GRID=160x44 cargo run -p orbs      # the worst-case grid
 ORBS_DUMP=1 ORBS_BOOT=post cargo run -p orbs        # one boot stage as text
 ORBS_LINE="wield mo" ORBS_DUMP=1 cargo run -p orbs  # ...with a line half-typed
@@ -152,6 +152,30 @@ looks like a right one.)
 is given, so the buffer is always empty by the time the frame is painted — a
 caret position, a partial word and the completion ghost are the three things a
 dump cannot otherwise show.
+
+`ORBS_EDIT` types into the spell editor once a `scribe` has opened it —
+newline-separated keystrokes, in order. The editor's own two states decide what a
+segment is: it opens in **command** state, so the first segment is a word (`edit`
+or `quit`, which is the whole vocabulary), `edit` drops into the buffer, and
+`<esc>` comes back out.
+
+**There is no `save` word.** The buffer writes itself out a beat after the typing
+stops, and that pause is measured off `Time` — which a dump never advances,
+having no frames. In a dump, **`quit` is how you save**: it flushes, then closes.
+The vim shorthand still separates the two if you need it (`w` writes and stays,
+`wq` writes and closes).
+
+`ORBS_THEN` runs commands **after** that session, which is the only way to look
+at a spell that was just saved: a save queues its write for the next tick like
+every other effect, so a `peruse` inside `ORBS_DUMP` runs before the spell exists.
+
+```sh
+# A spell is written *for* a domain, so `scribe` happens from inside one and
+# there is no `attend` in the file.
+ORBS_DUMP="attend laboratory; scribe brewing" \
+ORBS_EDIT="edit\nkindle charcoal\ngrind the sage\nempty mortar_and_pestle\n<esc>\nquit" \
+ORBS_THEN="invoke brewing; meditate 40" cargo run -p orbs
+```
 
 Each `;`-separated line goes through `submit` and a real `step`, so what prints
 is the world having actually run. What it cannot show is what rule 2 says is a

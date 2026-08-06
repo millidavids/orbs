@@ -46,7 +46,7 @@ fn the_designs_worked_examples_resolve() {
     // §15 chose brewing to gate the parser because a shell-naive tester
     // understands the phrase, which requires it to resolve somewhere *useful* —
     // not that a verb exist to satisfy it. `decoct` is retired (§19).
-    assert_eq!(echo("make a potion of clarity"), "grimoire clarity");
+    assert_eq!(echo("make a potion of clarity"), "recall clarity");
     assert_eq!(echo("grep march feed.log"), "sift march feed.log");
 }
 
@@ -62,7 +62,7 @@ fn the_retired_brewing_words_all_still_land_somewhere_deliberate() {
     // `Elsewhere` rather than to the manual. `there is nothing here to mix with`
     // is a better answer than a recipe nobody asked for.
     for input in ["decoct clarity", "brew clarity", "make clarity"] {
-        assert_eq!(echo(input), "grimoire clarity", "{input:?}");
+        assert_eq!(echo(input), "recall clarity", "{input:?}");
     }
 
     // ...and this scene stands nowhere in particular, so the two that left are
@@ -92,12 +92,83 @@ fn all_three_registers_reach_the_same_canonical_command() {
     }
 }
 
+// ---------------------------------------------------------------------------
+// What a slot accepts — `peruse` reads text, and only text
+// ---------------------------------------------------------------------------
+
+#[test]
+fn a_spell_reads_back_like_any_other_file() {
+    // `peruse` takes `NounKind::Readable`, which is `File` *or* `Script`. Until
+    // it did, a `.spell` registered as a `Script` was unreadable: `best_match`
+    // filters on the slot's kind, so the only noun kind `peruse` could see was
+    // `File`, and the spell you had just written could not be read back.
+    assert_eq!(echo("peruse night_watch"), "peruse night_watch");
+    assert_eq!(echo("cat night_watch"), "peruse night_watch");
+}
+
+#[test]
+fn peruse_refuses_things_that_are_not_text() {
+    // **The guard, and the reason `Readable` exists rather than `Any`.**
+    //
+    // Widening `peruse` to `NounKind::Any` also makes a spell readable, passes
+    // the whole suite, and is wrong: every noun in the scene becomes something
+    // to read. `peruse sage` resolves at full confidence and reports a
+    // zero-line read of a reagent — the symptom `execute::files` documents as
+    // the reason resolution goes by kind in the first place.
+    //
+    // It lands where it costs most. `peruse` owns `read`, `cat`, `open` and
+    // `show`, so it is the verb a shell-naive tester reaches for earliest, and
+    // §15 weighs the dead-end rate above the raw resolution rate.
+    for input in ["peruse sage", "read the sage", "open retort", "cat clarity"] {
+        let resolution = resolve(input, &tower(), Mode::Calm);
+        let read_it = matches!(
+            &resolution,
+            Resolution::Resolved { intent, .. } if intent.verb == Verb::Peruse,
+        );
+        assert!(!read_it, "{input:?} was read as a file: {resolution:?}");
+    }
+}
+
+#[test]
+fn a_slot_offers_only_what_could_fill_it() {
+    // The matcher, the numbered prompt and Tab completion each asked "does this
+    // noun fit this slot?" in their own words, so a slot kind meaning *a set*
+    // could be understood by one and not the others. `NounKind::accepts` is now
+    // the single answer; this is the surface where a disagreement would show.
+    //
+    // A bare `peruse` must offer files to read. Under `Any` it offered the
+    // three places instead — `1. peruse /tower/laboratory` — which is not a
+    // question a player can answer usefully.
+    let resolution = resolve("peruse", &tower(), Mode::Calm);
+    let offered: Vec<NounKind> = match &resolution {
+        Resolution::Resolved { intent, .. } => intent.arguments.iter().map(|a| a.kind).collect(),
+        Resolution::Ambiguous { candidates } => candidates
+            .iter()
+            .flat_map(|candidate| candidate.intent.arguments.iter())
+            .map(|a| a.kind)
+            .collect(),
+        Resolution::Incomplete { filled, .. } => filled.iter().map(|a| a.kind).collect(),
+        other => panic!("a bare `peruse` went nowhere useful: {other:?}"),
+    };
+
+    assert!(
+        !offered.is_empty(),
+        "a bare `peruse` named nothing at all, so this test proves nothing: {resolution:?}",
+    );
+    for kind in offered {
+        assert!(
+            NounKind::Readable.accepts(kind),
+            "a bare `peruse` offered a {kind:?}, which has no text in it",
+        );
+    }
+}
+
 #[test]
 fn the_echo_is_always_arcane() {
     // §6: whichever register is canonical is the one players absorb, so a shell
     // native typing `rm` must still be shown `purge`.
     assert_eq!(echo("rm sludge"), "purge sludge");
-    assert_eq!(echo("man brewing"), "grimoire brewing");
+    assert_eq!(echo("man brewing"), "recall brewing");
     assert_eq!(echo("run night_watch"), "invoke night_watch");
     assert_eq!(echo("cron night_watch"), "bind night_watch");
 }
@@ -111,14 +182,18 @@ fn every_verb_is_reachable_from_plain_english() {
         ("read feed.log", Verb::Peruse),
         ("search march feed.log", Verb::Sift),
         ("how are things", Verb::Status),
-        ("explain brewing", Verb::Grimoire),
+        ("explain brewing", Verb::Recall),
         ("inspect night_watch", Verb::Verify),
         ("take it back", Verb::Undo),
         ("rest 30", Verb::Meditate),
         ("transfer sage to laboratory", Verb::Move),
         ("use laboratory", Verb::Wield),
         ("cancel laboratory", Verb::Stop),
-        ("collect laboratory", Verb::Siphon),
+        // `collect` was `siphon`'s. It moved to `empty` when `siphon` retired
+        // (§19), because a released word does not stop resolving — it resolves
+        // to whatever it is nearest, and the two nearest here are `purge` and
+        // `stop`, the pair this room can least afford to confuse.
+        ("collect laboratory", Verb::Empty),
         ("get rid of sludge", Verb::Purge),
         ("study sigil-iv", Verb::Divine),
         ("author night_watch", Verb::Scribe),
@@ -159,7 +234,7 @@ fn the_register_the_player_used_is_recorded() {
 
 #[test]
 fn typos_resolve() {
-    assert_eq!(echo("brew clarty"), "grimoire clarity");
+    assert_eq!(echo("brew clarty"), "recall clarity");
     assert_eq!(echo("survy"), "survey");
     assert_eq!(echo("invok night_watch"), "invoke night_watch");
 }
@@ -167,13 +242,16 @@ fn typos_resolve() {
 #[test]
 fn abbreviations_resolve() {
     assert_eq!(echo("sur"), "survey");
-    assert_eq!(echo("grim brewing"), "grimoire brewing");
+    // Was `grim brewing`, when the manual was called `grimoire`. That
+    // abbreviation now reaches **`grind`** — correctly, and `Elsewhere` says so
+    // rather than guessing — which is the clash the rename removed.
+    assert_eq!(echo("reca brewing"), "recall brewing");
 }
 
 #[test]
 fn filler_is_ignored() {
     assert_eq!(echo("please go to the laboratory"), "attend laboratory");
-    assert_eq!(echo("brew me a potion of warding"), "grimoire warding");
+    assert_eq!(echo("brew me a potion of warding"), "recall warding");
 }
 
 #[test]
@@ -200,7 +278,7 @@ fn a_missing_argument_becomes_a_numbered_prompt() {
 
     let offered: Vec<String> = candidates.iter().map(|c| c.intent.echo()).collect();
     assert!(
-        offered.contains(&"grimoire clarity".to_owned()),
+        offered.contains(&"recall clarity".to_owned()),
         "{offered:?}"
     );
 }
@@ -219,7 +297,7 @@ fn disambiguation_never_blocks_during_a_siege() {
         Confidence::Forced,
         "the echo must offer correction"
     );
-    assert_eq!(intent.verb, Verb::Grimoire);
+    assert_eq!(intent.verb, Verb::Recall);
 }
 
 #[test]

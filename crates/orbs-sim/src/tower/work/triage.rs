@@ -105,6 +105,7 @@ pub fn purge(world: &mut World, target: Entity) {
             .push(RecordKind::Completion)
             .text(FieldName::Name, Verb::Purge.canonical())
             .text(FieldName::Path, &name)
+            .text(FieldName::At, &name)
             .text(FieldName::State, "scouring")
             .text(FieldName::Message, &message)
             .role(Role::Cost)

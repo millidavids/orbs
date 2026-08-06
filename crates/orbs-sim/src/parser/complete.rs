@@ -210,10 +210,21 @@ fn nouns(verb: Verb, filled: usize, partial: &str, scene: &Scene) -> Vec<Suggest
         return Vec::new();
     }
 
+    // **`Name` is the exception among the free-text kinds.** It cannot *resolve*
+    // against the scene — a spell being coined does not exist — but the commonest
+    // `scribe` is reopening one that does, and a verb whose argument is usually a
+    // file you already have should complete it. So completion offers the spells
+    // that exist while resolution still accepts anything typed.
+    let offered = if slot.kind == NounKind::Name {
+        NounKind::Script
+    } else {
+        slot.kind
+    };
+
     scene
         .nouns()
         .iter()
-        .filter(|noun| noun.kind == slot.kind || slot.kind == NounKind::Any)
+        .filter(|noun| offered.accepts(noun.kind))
         .filter_map(|noun| {
             // A place is shown and typed as its leaf (§7: players say the place,
             // not the path) — through the same helper the echo uses, so Tab

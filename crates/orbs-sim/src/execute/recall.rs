@@ -50,22 +50,27 @@ use super::{acknowledge, missing};
 const MAX_DEPTH: usize = 16;
 
 /// Show how a thing is made, and every way there is to make it.
-pub(super) fn grimoire(intent: &Intent, world: &mut World) {
+pub(super) fn recall(intent: &Intent, world: &mut World) {
     let Some(topic) = intent
         .arguments
         .first()
         .map(|argument| argument.value.clone())
     else {
-        acknowledge(Verb::Grimoire, world);
+        acknowledge(Verb::Recall, world);
         return;
     };
 
     let plan = plan(world, &topic);
     if plan.is_empty() {
-        // Not a recipe. §6.1 makes `grimoire` the **in-world manual**, so a
+        // Not a recipe. §6.1 makes `recall` the **in-world manual**, so a
         // subject like `brewing` is answered with authored prose (rule 6) rather
         // than treated as a thing that does not exist.
-        let key = format!("grimoire_{topic}");
+        //
+        // `recall_` is also what [`Prose::topics`](crate::content::Prose::topics)
+        // strips to decide what is *nameable*, which is why the route templates
+        // below are `route_` and not `recall_`: a template is not a subject, and
+        // sharing the prefix registered `step_or` as something to ask about.
+        let key = format!("recall_{topic}");
         if world.resource::<Prose>().has(&key) {
             let message = world.resource::<Prose>().line(&key, &[]);
             world
@@ -77,7 +82,7 @@ pub(super) fn grimoire(intent: &Intent, world: &mut World) {
                 .finish();
             return;
         }
-        missing(Verb::Grimoire, &topic, world);
+        missing(Verb::Recall, &topic, world);
         return;
     }
 
@@ -90,7 +95,7 @@ fn say_plan(world: &mut World, goal: &str, plan: &Plan) {
     let ticks: u64 = plan.steps.iter().map(|step| step.ticks).sum();
 
     let heading = world.resource::<Prose>().line(
-        "grimoire_route",
+        "route_line",
         &[
             ("name", goal),
             ("count", &steps.to_string()),
@@ -128,15 +133,15 @@ fn say_step(world: &mut World, step: &Step, index: Option<usize>) {
     let inputs = step.inputs.join(" + ");
     let prose = world.resource::<Prose>();
     let heat = if step.heat {
-        prose.line("grimoire_heat", &[])
+        prose.line("route_heat", &[])
     } else {
         String::new()
     };
     let message = prose.line(
         if index.is_some() {
-            "grimoire_step"
+            "route_step"
         } else {
-            "grimoire_step_or"
+            "route_step_or"
         },
         &[
             (
@@ -229,7 +234,7 @@ fn plan(world: &World, goal: &str) -> Plan {
     let mut plan = Plan::default();
     let mut seen = BTreeSet::new();
 
-    // **The goal itself is never treated as stock.** `grimoire rock-salt` should
+    // **The goal itself is never treated as stock.** `recall rock-salt` should
     // answer with how to make it even though the dispensary holds some, which is
     // what the `depth > 0` guard inside `build` is for.
     build(recipes, &stocked, goal, 0, &mut plan, &mut seen, true);

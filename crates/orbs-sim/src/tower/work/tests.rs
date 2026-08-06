@@ -65,9 +65,13 @@ fn stage(sim: &mut Sim, thing: &str, instrument: &str) {
 fn run(sim: &mut Sim, thing: &str, instrument: &str) {
     stage(sim, thing, instrument);
     sim.step_n(20);
-    sim.submit(&format!("siphon {instrument}"));
+    // **`empty`, not `siphon` then `purge`.** `siphon` is retired (§19), and
+    // scouring alone would *destroy* the product this helper exists to keep —
+    // which is the trap of removing a verb whose job was quietly two jobs.
+    // `empty` shelves everything and frees the tool in one move, and `reachable`
+    // searches the store, so the next stage finds what this one made.
+    sim.submit(&format!("empty {instrument}"));
     sim.step();
-    scour(sim, instrument);
 }
 
 #[test]
@@ -434,24 +438,30 @@ fn stopping_an_instrument_leaves_what_it_holds() {
 }
 
 #[test]
-fn siphoning_takes_the_product_and_leaves_the_byproduct() {
-    // The fourth move of §10.1's loop. `siphon` takes what you meant to
-    // make; `purge` clears what you did not. Telling them apart by *name*
-    // would mean the laboratory deciding which reagents are waste, which
-    // §10.1 refuses — every byproduct is some other recipe's input.
+fn the_next_stage_takes_the_product_and_leaves_the_byproduct() {
+    // **What retired `siphon`** (§19). Drawing a stage's output onto the bench
+    // was the fourth move of §10.1's loop when a reagent had to be carried by
+    // hand; the per-instrument verbs reach into an idle tool, so the pipeline
+    // advances on its own and the drawing-off step had stopped doing anything.
+    //
+    // The byproduct still stays behind, which is the property that mattered:
+    // telling product from waste by *name* would mean the laboratory deciding
+    // which reagents are rubbish, and §10.1 refuses — every byproduct is some
+    // other recipe's input.
     let mut sim = Sim::new(1);
     sim.submit("attend laboratory");
     sim.step();
     stage(&mut sim, "sage", "mortar_and_pestle");
     sim.step_n(20);
 
-    sim.submit("siphon mortar_and_pestle");
+    sim.submit("digest ground-sage");
     sim.step();
 
-    // The product landed where the player is standing, loose and nameable.
+    sim.submit("attend balneum_mariae");
+    sim.step();
     assert!(
         here(&mut sim).contains(&"ground-sage".to_owned()),
-        "the product did not come out"
+        "the next stage could not reach into the mortar",
     );
 
     sim.submit("attend mortar_and_pestle");
@@ -465,17 +475,23 @@ fn siphoning_takes_the_product_and_leaves_the_byproduct() {
 }
 
 #[test]
-fn siphoning_a_working_instrument_is_refused() {
+fn a_working_instrument_will_not_give_up_its_charge() {
+    // §10.1's lock covers taking as much as putting. `reachable` skips busy
+    // instruments, so a stage cannot be robbed of what it is working on — which
+    // matters more now that reaching into instruments is the ordinary path
+    // rather than the exception.
     let mut sim = Sim::new(1);
     sim.submit("attend laboratory");
     sim.step();
     stage(&mut sim, "sage", "mortar_and_pestle");
 
-    sim.submit("siphon mortar_and_pestle");
+    sim.submit("digest sage");
+    sim.step();
+    sim.submit("attend mortar_and_pestle");
     sim.step();
     assert!(
-        !here(&mut sim).contains(&"ground-sage".to_owned()),
-        "a running instrument gave up a product early"
+        here(&mut sim).contains(&"sage".to_owned()),
+        "a running instrument was robbed of its charge",
     );
 }
 
@@ -550,7 +566,9 @@ fn the_same_goal_has_two_right_answers_depending_on_what_the_laboratory_holds() 
     // behind: free if you have been grinding, unavailable if you have not,
     // and slower, because that is the trade. Both end in clarity.
     //
-    // The readable-before-you-act half is `grimoire clarity`, which lists
+    // The readable-before-you-act half is `recall clarity`, which lists
+    // (see `every_event_a_spell_can_wait_on_says_where_it_happened` for the
+    // other half of the contract this loop now has to keep)
     // both routes to the draught without committing an instrument to either.
 
     // --- Route A: fresh sage ------------------------------------------
@@ -573,7 +591,12 @@ fn the_same_goal_has_two_right_answers_depending_on_what_the_laboratory_holds() 
     sim.submit("wield flask_and_rod");
     sim.step();
     sim.step_n(20);
-    sim.submit("siphon flask_and_rod");
+
+    // **The draught is left where it was made**, and that is the whole of it
+    // now. `siphon flask_and_rod` used to be needed here to lift it onto the
+    // bench; the bench is gone (§19) and a finished product simply sits in the
+    // tool that made it, where the next tool — or `empty` — takes it from.
+    sim.submit("attend flask_and_rod");
     sim.step();
     assert!(
         here(&mut sim).contains(&"clarified-draught".to_owned()),
@@ -587,8 +610,10 @@ fn the_same_goal_has_two_right_answers_depending_on_what_the_laboratory_holds() 
     // Grinding sage makes husks. Route B is what those husks are *for*.
     stage(&mut sim, "sage", "mortar_and_pestle");
     sim.step_n(20);
-    sim.submit("siphon mortar_and_pestle");
-    sim.step();
+    // **Straight out of the mortar.** This is the clearest place the retirement
+    // of `siphon` shows: the byproduct is taken to the next stage by naming it,
+    // with nothing drawn off first. What is left — the ground-sage route B does
+    // not want — is scoured, which is `purge` doing the one job `empty` does not.
     sim.submit("move husks to balneum_mariae");
     sim.step();
     scour(&mut sim, "mortar_and_pestle");
@@ -601,12 +626,14 @@ fn the_same_goal_has_two_right_answers_depending_on_what_the_laboratory_holds() 
     sim.submit("wield balneum_mariae");
     sim.step();
     sim.step_n(20);
-    sim.submit("siphon balneum_mariae");
+    sim.submit("attend balneum_mariae");
     sim.step();
     assert!(
         here(&mut sim).contains(&"weak-tincture".to_owned()),
         "the husks did not become a tincture"
     );
+    sim.submit("attend laboratory");
+    sim.step();
 
     sim.submit("move weak-tincture to flask_and_rod");
     sim.step();
@@ -615,7 +642,7 @@ fn the_same_goal_has_two_right_answers_depending_on_what_the_laboratory_holds() 
     sim.submit("wield flask_and_rod");
     sim.step();
     sim.step_n(20);
-    sim.submit("siphon flask_and_rod");
+    sim.submit("attend flask_and_rod");
     sim.step();
     assert!(
         here(&mut sim).contains(&"clarified-draught".to_owned()),
@@ -696,5 +723,62 @@ fn a_whole_brew_runs_end_to_end_on_one_charcoal() {
     assert!(
         inside.contains(&"phlegm".to_owned()),
         "distilling left no byproduct: {inside:?}"
+    );
+}
+
+#[test]
+fn every_event_a_spell_can_wait_on_says_where_it_happened() {
+    // **The contract eleven emit sites already disagreed about.** The instrument
+    // was in `Name` at one site, `Path` at another and `Source` at a third —
+    // where `FieldName::Source`'s own doc forbids a place — and `Name` itself
+    // meant a verb, an instrument, a product or a list of products depending on
+    // who wrote the line.
+    //
+    // Survivable while only a person reads the log. Unsurvivable the moment a
+    // **spell** does, because "wait until the mortar finishes" has to be one
+    // question with one answer. `FieldName::At` is that answer, and this is what
+    // stops the next completion being added without it.
+    let mut sim = Sim::new(1);
+    for line in [
+        "attend laboratory",
+        "kindle charcoal",
+        "grind sage",
+        "meditate 30",
+        "siphon mortar_and_pestle",
+        "purge mortar_and_pestle",
+        "meditate 20",
+    ] {
+        sim.submit(line);
+        sim.step();
+    }
+
+    // Only the completions that *are* events — a run landing, a yield, an
+    // emptying, the athanor going cold. A refusal is not something a spell waits
+    // on, and demanding `At` of one would be asserting a contract nothing needs.
+    let events: Vec<String> = sim
+        .scrollback()
+        .records()
+        .iter()
+        .filter(|record| record.kind() == orbs_render::RecordKind::Completion)
+        .filter(|record| record.field(orbs_render::FieldName::State).is_some())
+        .filter_map(|record| match record.field(orbs_render::FieldName::At) {
+            Some(orbs_render::Value::Text(at)) => Some(at.to_owned()),
+            _ => record
+                .field(orbs_render::FieldName::Name)
+                .and_then(|value| match value {
+                    orbs_render::Value::Text(text) => Some(format!("MISSING At: {text}")),
+                    _ => None,
+                }),
+        })
+        .collect();
+
+    assert!(!events.is_empty(), "the brew produced no events at all");
+    let missing: Vec<&String> = events
+        .iter()
+        .filter(|line| line.starts_with("MISSING"))
+        .collect();
+    assert!(
+        missing.is_empty(),
+        "completions a spell would wait on, with nowhere to read the place: {missing:?}",
     );
 }

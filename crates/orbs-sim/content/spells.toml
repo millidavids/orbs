@@ -1,0 +1,28 @@
+# The spells the tower already holds (DESIGN.md §8).
+#
+# **Not prose, and not hot-reloadable.** A spell is a sequence of *decisions* —
+# the same reason `recipes.toml` is excluded from `Sim::set_prose`'s reload
+# contract. Swapping one mid-session would break replay from
+# `(seed, submissions)` unless the content were versioned into the submission
+# log, so these load once at construction like a recipe and never again.
+#
+# Lines are written the way a player would type them, **loose phrasing and
+# all**. They are canonicalised when the file is first read into the world, by
+# the same `parser::analyse` a typed line goes through — so the shipped spell is
+# a worked example of the thing §8 calls *"the orb writes down what you meant"*,
+# rather than a listing that was already canonical and therefore taught nothing.
+
+# The first spell the player ever sees, and the one `scribe` opens onto.
+#
+# §12's onboarding wants the first automation to be something the player has
+# already done by hand, so this is the opening of §10.1's loop and nothing more:
+# light the athanor, grind the sage. It stops before the interesting part on
+# purpose — the whole point of the item is that the player finishes it.
+# **No `attend`.** A spell is written *for* a domain and runs there, so walking
+# to it is not something a spell does — it is where the spell already is.
+[first_light]
+domain = "laboratory"
+lines = [
+    "kindle charcoal",
+    "grind sage",
+]

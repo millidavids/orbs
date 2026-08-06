@@ -228,6 +228,28 @@ fn tint_background(theme: Res<Theme>, mut clear: ResMut<ClearColor>) {
     clear.0 = theme.0.background.into();
 }
 
+/// Everything the shell keeps between frames, as one dependency.
+///
+/// A `SystemParam` rather than eight more parameters on [`repaint`]. The same
+/// `clippy.toml` threshold that split `repaint` from `rasterise` fired again
+/// when the editor arrived, and it was asking the same question a second time:
+/// these eight are not eight dependencies, they are **one** — the state
+/// `shell::View` is assembled from. Splitting the *system* again would have
+/// meant two systems painting one frame.
+#[derive(bevy::ecs::system::SystemParam)]
+struct ShellState<'w> {
+    line: Res<'w, crate::shell::Line>,
+    offered: Res<'w, crate::shell::Offered>,
+    ghost: Res<'w, crate::shell::Ghost>,
+    panel: Res<'w, crate::shell::Panel>,
+    scroll: Res<'w, crate::shell::Scroll>,
+    panes: Res<'w, crate::shell::PaneTransition>,
+    reveal: Res<'w, crate::shell::Reveal>,
+    /// `ResMut` because the editor's viewport follows its caret, and how many
+    /// lines fit is a fact only the painter has — see `Editor::scroll_to`.
+    editing: ResMut<'w, crate::shell::Editing>,
+}
+
 /// Paint the screen into the `Frame`.
 ///
 /// Split from [`rasterise`] rather than being one `redraw`, because they are two
@@ -240,17 +262,21 @@ fn tint_background(theme: Res<Theme>, mut clear: ResMut<ClearColor>) {
 fn repaint(
     screen: Res<Screen>,
     tower: Res<Tower>,
-    line: Res<crate::shell::Line>,
-    offered: Res<crate::shell::Offered>,
-    ghost: Res<crate::shell::Ghost>,
-    panel: Res<crate::shell::Panel>,
-    scroll: Res<crate::shell::Scroll>,
-    panes: Res<crate::shell::PaneTransition>,
-    reveal: Res<crate::shell::Reveal>,
+    mut shell: ShellState,
     boot: Option<Res<crate::boot::Boot>>,
     mut linear: ResMut<crate::shell::Linear>,
     mut canvas: ResMut<Canvas>,
 ) {
+    let ShellState {
+        line,
+        offered,
+        ghost,
+        panel,
+        scroll,
+        panes,
+        reveal,
+        ref mut editing,
+    } = shell;
     let frame = &mut canvas.frame;
     frame.reset(screen.grid);
 
@@ -263,7 +289,7 @@ fn repaint(
         crate::shell::paint(
             frame,
             &mut linear,
-            &crate::shell::View {
+            crate::shell::View {
                 sim: tower.sim(),
                 line: &line,
                 screen: &screen,
@@ -273,6 +299,7 @@ fn repaint(
                 ghost: &ghost.0,
                 panel: &panel,
                 scroll: &scroll,
+                editing: editing.get_mut(),
             },
         );
     } else {

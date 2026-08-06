@@ -174,7 +174,42 @@ pub fn begin(world: &mut World, place: Entity, verb: Verb, subject: NodeId, tick
         started: now,
         ends: Tick::new(now.get().saturating_add(ticks)),
     });
+    // **Who asked for this run**, carried on the instrument so the completion
+    // can be credited to them ticks later. A spell charges the mortar and the
+    // mortar yields on its own schedule, in a different system — so without
+    // this, the one line a loop emits most often is the one the transcript still
+    // showed, and hiding a spell's own output only got most of the way there.
+    // **Set or cleared, never just set.** An insert with no matching clear left
+    // the credit on the instrument when a run was cancelled — and the player's
+    // own next run on that tool inherited it, so their completion was attributed
+    // to a spell and the transcript filtered it out entirely. They typed a
+    // command, waited twenty seconds, and nothing ever appeared.
+    match bidder(world) {
+        Some(spell) => {
+            world.entity_mut(place).insert(Bidden(spell));
+        }
+        None => {
+            world.entity_mut(place).remove::<Bidden>();
+        }
+    }
     true
+}
+
+/// Which spell asked for the run an instrument is doing, if a spell did.
+///
+/// Removed when the run lands — see `land::finish`. Nothing reads it in
+/// between: it exists only to survive the gap between charging an instrument and
+/// its completion arriving.
+#[derive(Component, Debug, Clone)]
+pub struct Bidden(pub String);
+
+/// The spell currently being credited for what the world emits, if any.
+pub(crate) fn bidder(world: &World) -> Option<String> {
+    world
+        .resource::<Scrollback>()
+        .records()
+        .attributed()
+        .map(ToOwned::to_owned)
 }
 
 /// Why an instrument will not accept a command right now.
@@ -193,6 +228,17 @@ pub enum Busy {
 }
 
 impl Busy {
+    /// What the instrument is doing, as a word output can use.
+    ///
+    /// Public because the script runner reports a *wait* rather than a refusal
+    /// and still has to say what it is waiting on — see `tower::spell::block`.
+    /// The same word either way: a player and a spell looking at one busy mortar
+    /// should not be told two different things about it.
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        self.state()
+    }
+
     /// The `State` field value.
     const fn state(self) -> &'static str {
         match self {
@@ -251,12 +297,20 @@ pub fn refuse_busy(world: &mut World, verb: Verb, place: Entity, why: Busy) {
 }
 
 /// Push one completion record about an instrument.
-pub(super) fn say(world: &mut World, name: &str, state: &str, message: &str, role: Role) {
+/// Say something happened, naming **what** and **where** separately.
+///
+/// `at` is not optional and not derivable from `name`, which is the whole point:
+/// callers passed the instrument here sometimes and the *product* other times
+/// (`siphon` says `ground-sage`), so nothing downstream could tell which. A
+/// spell asking *"has the mortar finished?"* needs one field with one meaning —
+/// see [`FieldName::At`].
+pub(super) fn say(world: &mut World, name: &str, at: &str, state: &str, message: &str, role: Role) {
     world
         .resource_mut::<Scrollback>()
         .records_mut()
         .push(RecordKind::Completion)
         .text(FieldName::Name, name)
+        .text(FieldName::At, at)
         .text(FieldName::State, state)
         .text(FieldName::Message, message)
         .role(role)
@@ -280,6 +334,10 @@ pub fn stop(world: &mut World, place: Entity) -> bool {
     let stopped = world.get::<Working>(place).is_some();
     if stopped {
         world.entity_mut(place).remove::<Working>();
+        // The run is over, so its credit is spent. Left behind, the next run on
+        // this instrument — the player's own — would be attributed to whichever
+        // spell started the one that was cancelled.
+        world.entity_mut(place).remove::<Bidden>();
     }
     let (key, state, role) = if stopped {
         ("stop_done", "stopped", Role::Cost)

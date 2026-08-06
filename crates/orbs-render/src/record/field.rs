@@ -41,6 +41,26 @@ pub enum FieldName {
     /// and a record about the laboratory must still appear in the laboratory's
     /// log while saying it came from the dispensary.
     Origin,
+    /// **The place this happened**, as a leaf. `mortar_and_pestle`, `athanor`.
+    ///
+    /// # Why this had to exist before a spell could watch anything
+    ///
+    /// Eleven sites emitted a completion and put the instrument in whichever
+    /// field was nearest: `Name` at `produce::fouled` and `heat`, `Path` at
+    /// `refuse_busy` and `stop`, [`Source`](Self::Source) at `land` and
+    /// `transmute` — where its own documentation forbids a place. `Name` itself
+    /// meant one of {verb, instrument, product, list of products} depending on
+    /// who wrote the line.
+    ///
+    /// That is survivable while a person is reading the log and unsurvivable the
+    /// moment a **spell** is, because *"wait until the mortar finishes"* has to
+    /// be one question with one answer. This is that answer: a completion says
+    /// where it happened here, always, and `tower::spell::watch` reads nothing
+    /// else to find out.
+    ///
+    /// Distinct from [`Path`](Self::Path), which is a full path to a thing, and
+    /// from [`Origin`](Self::Origin), which is where a thing *was*.
+    At,
     /// Free prose — a log line's text, the orb speaking.
     Message,
     /// Secondary prose, subordinate to [`FieldName::Message`].
@@ -61,11 +81,31 @@ pub enum FieldName {
     /// column reading `1` for the first of two would be a lie the closed field
     /// set exists to prevent.
     Choice,
+    /// Which spell caused this, if a spell did rather than a player.
+    ///
+    /// **An annotation**, like [`Outcome`](Self::Outcome) — filtered *on*, never
+    /// drawn. Missing that put the spell's filename on the end of every line it
+    /// caused: `peruse orb.log` read `retort watch.spell`, and a screen reader
+    /// heard the same. `is_annotation` is the one gate between a field a view
+    /// consults and a field a player reads. A spell working
+    /// the laboratory emits exactly what the same commands typed by hand emit —
+    /// which is right, and which buried the transcript: a `repeat` loop pushes a
+    /// move, a yield and an empty every few ticks for as long as it runs, and
+    /// the player's own last line scrolls off in seconds.
+    ///
+    /// So the transcript shows what *you* did and the log shows everything.
+    /// That costs no new storage and no second path, because a log is already a
+    /// view over this stream (§3, rule 4) — `peruse laboratory.log` reads the
+    /// same records the pane declined to draw.
+    ///
+    /// It also names the culprit, which §8.1 asks for on its own account: a
+    /// record that says which spell moved the sage is one `sift` can select.
+    Spell,
 }
 
 impl FieldName {
     /// Every field name, in declaration order.
-    pub const ALL: [Self; 13] = [
+    pub const ALL: [Self; 15] = [
         Self::Name,
         Self::Path,
         Self::Kind,
@@ -75,10 +115,12 @@ impl FieldName {
         Self::Remaining,
         Self::Source,
         Self::Origin,
+        Self::At,
         Self::Message,
         Self::Detail,
         Self::Outcome,
         Self::Choice,
+        Self::Spell,
     ];
 
     /// The word a player sees as a column header and hears in a linearised row.
@@ -97,10 +139,12 @@ impl FieldName {
             Self::Remaining => "left",
             Self::Source => "source",
             Self::Origin => "from",
+            Self::At => "at",
             Self::Message => "message",
             Self::Detail => "detail",
             Self::Outcome => "outcome",
             Self::Choice => "choice",
+            Self::Spell => "spell",
         }
     }
 
@@ -119,7 +163,7 @@ impl FieldName {
     /// pipeline filters on outcome.
     #[must_use]
     pub const fn is_annotation(self) -> bool {
-        matches!(self, Self::Outcome)
+        matches!(self, Self::Outcome | Self::Spell)
     }
 
     /// Resolve a label back to its field, exactly.

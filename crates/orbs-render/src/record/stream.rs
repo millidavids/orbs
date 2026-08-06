@@ -58,6 +58,17 @@ pub struct Records {
     fields: Vec<StoredField>,
     entries: Vec<StoredRecord>,
     register: Presentation,
+    /// How many records have **ever** been pushed, across the stream's whole
+    /// life — see [`Records::sequence`].
+    pushed: u64,
+    /// The spell everything emitted from now on is the doing of, if any.
+    ///
+    /// Set once around an instruction rather than at every emit site, for the
+    /// same reason [`Records::register`] is: a spell's output is whatever the
+    /// commands it ran emitted, and those are the *same* sites a player's typing
+    /// reaches. There is nothing to change at the sites, and changing them all
+    /// would mean every future one had to remember.
+    attributed: Option<String>,
 }
 
 impl Records {
@@ -107,7 +118,79 @@ impl Records {
         self.entries.is_empty()
     }
 
+    /// How many records have **ever** been pushed.
+    ///
+    /// # A sequence number, not a length, and the difference is load-bearing
+    ///
+    /// A script watching the stream keeps a cursor into it: everything before
+    /// the cursor has been seen, everything after is new. The obvious cursor is
+    /// an index — `len()` — and it is correct only for as long as the stream is
+    /// never truncated.
+    ///
+    /// It never is *today*: [`clear`](Self::clear) is called from one test. But
+    /// the stream grows without bound and §5's Phase 3a offline catch-up is
+    /// ~29k steps, so the day someone adds rotation, every saved cursor would
+    /// silently point at the wrong record and spells would re-fire or skip
+    /// events with **no test catching it**.
+    ///
+    /// This does not reset. A cursor compared against it stays correct across a
+    /// truncation, which is the whole reason it exists before there is one.
+    #[must_use]
+    pub const fn sequence(&self) -> u64 {
+        self.pushed
+    }
+
+    /// Every record a transcript should draw: the ones nobody's spell caused.
+    ///
+    /// # One definition, because four callers measure this stream
+    ///
+    /// The filter began life as a closure in the frontend's paint, and the paint
+    /// is not the only thing that counts records: paging measures a step over
+    /// them, the scroll clamp bounds itself by them, and the typewriter reveal
+    /// indexes into them. Those three kept counting the *whole* stream while the
+    /// pane drew a subset — two different units for one `Scroll::back`, so with
+    /// a spell running `PageUp` jumped whole screens and `PageDown` did nothing for
+    /// several presses, and the reveal indexed a sequence it was not drawing.
+    ///
+    /// Anything that needs "what the player sees" asks here.
+    pub fn drawn(&self) -> impl Iterator<Item = Record<'_>> + Clone {
+        self.iter()
+            .filter(|record| record.field(FieldName::Spell).is_none())
+    }
+
+    /// How many records a transcript would draw.
+    #[must_use]
+    pub fn drawn_len(&self) -> usize {
+        self.drawn().count()
+    }
+
+    /// Attribute everything pushed from now on to `spell`, or to nobody.
+    ///
+    /// Paired with a clear, always — a runner that returned without clearing
+    /// would attribute the player's own next line to a spell, and the transcript
+    /// would stop showing them their own typing.
+    pub fn attribute(&mut self, spell: Option<&str>) {
+        self.attributed = spell.map(ToOwned::to_owned);
+    }
+
+    /// Which spell is being credited, if any.
+    #[must_use]
+    pub fn attributed(&self) -> Option<&str> {
+        self.attributed.as_deref()
+    }
+
+    /// How many records have been dropped off the front, if any.
+    ///
+    /// `sequence() - len()`. What a cursor subtracts to find its index.
+    #[must_use]
+    pub const fn dropped(&self) -> u64 {
+        self.pushed.saturating_sub(self.entries.len() as u64)
+    }
+
     /// Empty the stream, keeping every allocation for the next command.
+    ///
+    /// **`pushed` deliberately survives**, so a cursor taken before a clear does
+    /// not silently start pointing at new records — see [`sequence`](Self::sequence).
     pub fn clear(&mut self) {
         self.text.clear();
         self.fields.clear();
@@ -542,7 +625,19 @@ impl RecordBuilder<'_> {
             self.kind,
         );
 
+        // Stamped here rather than by the caller: everything a spell does goes
+        // through the ordinary emit sites, so the only place that reliably knows
+        // is the stream itself.
+        if let Some(spell) = self.stream.attributed.clone() {
+            let (start, end) = self.stream.intern(&spell);
+            self.stream.fields.push(StoredField {
+                name: FieldName::Spell,
+                payload: Payload::Text { start, end },
+            });
+        }
+
         let first = self.first;
+        self.stream.pushed = self.stream.pushed.saturating_add(1);
         self.stream.entries.push(StoredRecord {
             kind: self.kind,
             role: self.role,

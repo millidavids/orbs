@@ -17,6 +17,7 @@ use orbs_render::{
 };
 use orbs_sim::Sim;
 
+use super::editor::Editor;
 use super::line::Line;
 use super::linear::Linear;
 use super::reveal::Reveal;
@@ -36,9 +37,13 @@ const TELEMETRY: [FieldName; 3] = [FieldName::Name, FieldName::Quantity, FieldNa
 /// A struct rather than ten positional parameters: `paint` grew one for the Tab
 /// listing, one for the cached ghost and one for the cached panel, and by then
 /// three of its arguments were `&str`-ish and adjacent — the kind of signature
-/// where transposing two compiles cleanly. Every field is read-only; `Frame` and
-/// `Linear` stay separate because they are the two things `paint` writes.
-#[derive(Clone, Copy)]
+/// where transposing two compiles cleanly. `Frame` and `Linear` stay separate
+/// because they are the two things `paint` writes.
+///
+/// **No longer `Copy`**, and passed by value rather than by reference. The
+/// editor's viewport follows its caret, and how many lines fit is a fact only
+/// the painter has — so `editing` is the one `&mut` field, and the whole struct
+/// moves rather than being duplicated.
 pub(crate) struct View<'a> {
     /// The world, for everything the frame says.
     pub(crate) sim: &'a Sim,
@@ -58,6 +63,12 @@ pub(crate) struct View<'a> {
     pub(crate) panel: &'a super::input::Panel,
     /// How far back through the transcript the player is looking.
     pub(crate) scroll: &'a super::input::Scroll,
+    /// The spell being edited, if the player is in the editor.
+    ///
+    /// `&mut` alone in this struct, because the editor's viewport follows the
+    /// caret and only the painter knows how tall the pane is — see
+    /// `Editor::scroll_to`. Everything else here is read-only and stays so.
+    pub(crate) editing: Option<&'a mut Editor>,
 }
 
 /// Paint the session into `frame`.
@@ -71,7 +82,7 @@ pub(crate) struct View<'a> {
 /// The layout arrives already interpolated: a pane appearing or leaving does so
 /// over a fraction of a second (see [`PaneTransition`]), and every rectangle here
 /// is wherever that motion has reached this frame.
-pub(crate) fn paint(frame: &mut Frame, linear: &mut Linear, view: &View<'_>) {
+pub(crate) fn paint(frame: &mut Frame, linear: &mut Linear, view: View<'_>) {
     let View {
         sim,
         line,
@@ -82,7 +93,8 @@ pub(crate) fn paint(frame: &mut Frame, linear: &mut Linear, view: &View<'_>) {
         ghost,
         panel,
         scroll,
-    } = *view;
+        editing,
+    } = view;
     let grid = frame.size();
     // The prompt spends a second row at the finest tier, so it keeps its pixel
     // height when the cells shrink (§9).
@@ -112,6 +124,24 @@ pub(crate) fn paint(frame: &mut Frame, linear: &mut Linear, view: &View<'_>) {
     // The same rectangle, not a second pane: the point of §14's stream is that
     // it says the same thing as the cells, and a comparison you make by pressing
     // one key is a comparison you actually make.
+    // **The editor takes the session pane while it is open.** Not a pane of its
+    // own: §9's pane count is a progression axis, and an editor that added one
+    // would hand the player a second pane for free — the thing the multiplex
+    // track sells. You go and write, and while you are writing that is what the
+    // window shows.
+    if let Some(editor) = editing {
+        if let Some((col, row)) = super::sheet::paint(frame, editor, first, sim.prose()) {
+            frame.set_cursor(Some(Pos::new(col, row)));
+        }
+        if let Some(second) = main.get(1) {
+            telemetry(frame, sim, screen, *second);
+        }
+        // No prompt row: the prompt is dead while the editor has the keyboard
+        // (`editing::not_editing`), and drawing a caret it cannot accept a
+        // keystroke into is the clearest possible lie about where typing goes.
+        return;
+    }
+
     if linear.showing() {
         super::linear::paint(
             linear,
@@ -239,12 +269,7 @@ pub(crate) fn paint_booting(
         // **Untitled.** `Painter::border` announces its title as a heading, and
         // a border drawing itself one cell at a time would speak a pane that is
         // not there yet. The title arrives with the game.
-        let revealed = if matches!(stage, crate::boot::Stage::Frame) {
-            progress
-        } else {
-            1.0
-        };
-        painter.border_revealed(pane, Style::DIM, revealed);
+        painter.border_revealed(pane, Style::DIM, stage.frame_progress(progress));
     }
 
     crate::boot::paint(frame, stage, progress);
@@ -299,7 +324,14 @@ pub(super) fn session(
     //
     // Plain ASCII, deliberately: an arrow glyph is CP437 0x18 and an em-dash is
     // not in the repertoire at all — one shipped once and drew as `?`.
-    let hint = if scroll.is_back() {
+    // **Reading outranks scrolled-back, which outranks the focus key.** Once the
+    // transcript has the keyboard the player needs the way out more than
+    // anything else on the row — and the way out is the one thing no other
+    // screen has taught them. `unfurl_keys` is authored (rule 6) rather than a
+    // literal here, because it is a sentence a player reads.
+    let hint = if scroll.is_reading() {
+        sim.prose().line("unfurl_keys", &[])
+    } else if scroll.is_back() {
         "PgDn newest".to_owned()
     } else {
         format!("F4 {switch}")
@@ -363,11 +395,26 @@ pub(super) fn session(
     let prompt = sim.prompt();
     let mut view = RecordView::prompt(&prompt);
 
+    // **What the player did, not what their spells did.** A spell emits exactly
+    // what the same commands typed by hand emit — which is right, and which
+    // buried the pane: a `repeat` loop pushes several records every few ticks for
+    // as long as it runs, and the player's own last line scrolled off in seconds.
+    //
+    // Nothing is lost and nothing is stored twice. A log is already a view over
+    // this one stream (§3, rule 4), so `peruse laboratory.log` reads the very
+    // records this declines to draw — see `FieldName::Spell`.
+    //
+    // A closure rather than a collected `Vec`: `RecordView` measures the tail
+    // several times per frame and needs a `Clone` iterator, and the scrollback
+    // grows without bound.
+    let drawn = || records.drawn();
+    let total = records.drawn_len();
+
     // How much of the newest end the player has scrolled away from. Clamped to
     // leave at least one record, so paging to the top lands on the oldest line
     // rather than on an empty pane with no way to tell what happened.
-    let held = scroll.back().min(records.len().saturating_sub(1));
-    let visible = records.len() - held;
+    let held = scroll.back().min(total.saturating_sub(1));
+    let visible = total - held;
     // Only the tail fits. `iter().skip(n)` is O(1) here and stays `Clone`, which
     // is what `RecordView::draw` needs to measure and then draw.
     //
@@ -392,7 +439,7 @@ pub(super) fn session(
     let (mut narrowest, mut widest) = (0, visible);
     while narrowest < widest {
         let candidate = narrowest + (widest - narrowest) / 2;
-        if view.height(body.cols, records.iter().take(visible).skip(candidate)) <= body.rows {
+        if view.height(body.cols, drawn().take(visible).skip(candidate)) <= body.rows {
             widest = candidate;
         } else {
             narrowest = candidate + 1;
@@ -410,11 +457,7 @@ pub(super) fn session(
     {
         view = view.revealing(after, cells);
     }
-    view.draw(
-        &mut painter,
-        body,
-        records.iter().take(visible).skip(narrowest),
-    );
+    view.draw(&mut painter, body, drawn().take(visible).skip(narrowest));
 }
 
 /// A tick count as a meter value, saturating rather than wrapping.

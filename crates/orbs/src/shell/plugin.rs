@@ -50,9 +50,11 @@ impl Plugin for ShellPlugin {
             .init_resource::<super::input::Ghost>()
             .init_resource::<super::input::Panel>()
             .init_resource::<super::input::Scroll>()
+            .init_resource::<super::input::Quiet>()
             .init_resource::<Linear>()
             .init_resource::<PaneTransition>()
             .init_resource::<Reveal>()
+            .init_resource::<super::Editing>()
             .add_message::<SubmittedMessage>()
             .add_systems(Startup, (spawn_camera, track_window).chain())
             // **Not** gated on `booted`, and not in the input set. A focus loss
@@ -76,6 +78,32 @@ impl Plugin for ShellPlugin {
             .add_systems(
                 Update,
                 (
+                    // **Exactly one surface takes a keystroke.** The prompt, the
+                    // editor and — since `unfurl` — the transcript are all on
+                    // screen at once, and the failure where two consume a key is
+                    // invisible until a player types `:wq` and finds it in their
+                    // command history.
+                    //
+                    // The editor is gated here; the prompt decides *inside*
+                    // itself, because it also has to discard what it declines.
+                    // See `input::type_into_line`.
+                    // **First in the chain**, so both text fields read the gap
+                    // in front of this frame's keystroke rather than zero.
+                    super::input::watch_quiet,
+                    super::editing::open_requested.run_if(resource_changed::<crate::sim::Tower>),
+                    super::editing::type_into_editor
+                        .run_if(on_message::<KeyboardInput>)
+                        .run_if(super::editing::editing),
+                    // **After** the keys, so a keystroke restarts the settle
+                    // clock before it is advanced rather than after — otherwise
+                    // the frame a player types on counts toward the pause they
+                    // have not taken yet.
+                    super::editing::autosave.run_if(super::editing::editing),
+                    // **No `not_editing` here.** It has to *run* to throw the
+                    // keystrokes away — a reader that never runs keeps its
+                    // cursor, and everything typed while another surface had the
+                    // keyboard arrived the instant this did. The check moved
+                    // inside; see `type_into_line`.
                     type_into_line.run_if(on_message::<KeyboardInput>),
                     // Before `submit`, so a keystroke completes the output that
                     // is already on screen rather than the output its own line
@@ -126,6 +154,22 @@ impl Plugin for ShellPlugin {
                     // you cannot type in without looking.
                     scroll_back.run_if(input_just_pressed(KeyCode::PageUp)),
                     scroll_forward.run_if(input_just_pressed(KeyCode::PageDown)),
+                    // **The arrows scroll only while reading.** At the prompt
+                    // they walk the command history and must keep doing so — a
+                    // shell where Up sometimes scrolls and sometimes recalls is
+                    // a shell you cannot type in without looking. Inside the
+                    // mode there is no history to walk, so they are free.
+                    scroll_back
+                        .run_if(input_just_pressed(KeyCode::ArrowUp))
+                        .run_if(super::editing::reading),
+                    scroll_forward
+                        .run_if(input_just_pressed(KeyCode::ArrowDown))
+                        .run_if(super::editing::reading),
+                    // Escape leaves, exactly as it leaves the editor's buffer.
+                    stop_reading
+                        .run_if(input_just_pressed(KeyCode::Escape))
+                        .run_if(super::editing::reading),
+                    start_reading.run_if(resource_changed::<crate::sim::Tower>),
                     // Unconditional: both of these have to keep moving on the
                     // frames where nothing happened, which is most of them.
                     drive_panes.in_set(ShellSystems::Drive),
@@ -150,7 +194,7 @@ impl Plugin for ShellPlugin {
 fn drive_reveal(tower: Res<Tower>, time: Res<Time>, mut reveal: ResMut<Reveal>) {
     let records = tower.sim().scrollback().records();
     let cells = tail_cells(records, reveal.settled_len());
-    reveal.observe(records.len(), cells);
+    reveal.observe(records.drawn_len(), cells);
     reveal.advance(time.delta_secs());
 }
 
@@ -240,7 +284,7 @@ fn page_rows(screen: &Screen) -> u16 {
 fn page_step(screen: &Screen, tower: &Tower, back: usize) -> usize {
     let sim = tower.sim();
     let records = sim.scrollback().records();
-    let visible = records.len().saturating_sub(back);
+    let visible = records.drawn_len().saturating_sub(back);
     if visible == 0 {
         return 1;
     }
@@ -251,7 +295,7 @@ fn page_step(screen: &Screen, tower: &Tower, back: usize) -> usize {
     let (mut narrowest, mut widest) = (0, visible);
     while narrowest < widest {
         let candidate = narrowest + (widest - narrowest) / 2;
-        if view.height(cols, records.iter().take(visible).skip(candidate)) <= rows {
+        if view.height(cols, records.drawn().take(visible).skip(candidate)) <= rows {
             widest = candidate;
         } else {
             narrowest = candidate + 1;
@@ -260,9 +304,45 @@ fn page_step(screen: &Screen, tower: &Tower, back: usize) -> usize {
     (visible - narrowest).max(1)
 }
 
+/// Hand the transcript the keyboard when `unfurl` has asked for it.
+///
+/// The sim owns the *decision* and the frontend owns the scroll, exactly as it
+/// does for the editor — see `execute::unfurl`. `Sim::unfurling` takes rather
+/// than reads, so this fires once per `unfurl` rather than every frame.
+///
+/// **It pages back on the way in.** Entering a reading mode that showed the same
+/// screen you were already looking at would leave the player pressing a key to
+/// find out whether the word did anything.
+fn start_reading(
+    mut tower: ResMut<Tower>,
+    mut scroll: ResMut<super::input::Scroll>,
+    screen: Res<Screen>,
+) {
+    // Peeked first — see `editing::open_requested` for why reaching for `&mut`
+    // unconditionally defeats every `resource_changed::<Tower>` guard.
+    if !tower.is_unfurling() {
+        return;
+    }
+    tower.unfurling();
+    scroll.read();
+    let total = tower.sim().scrollback().records().drawn_len();
+    let step = page_step(&screen, &tower, scroll.back());
+    scroll.page(step, true, total);
+}
+
+/// Give the keyboard back to the prompt.
+///
+/// **Escape, the same as the editor.** One meaning in every mode the game has:
+/// step out of the one you are in. It deliberately does *not* scroll back to the
+/// newest output — a player who read back and pressed Escape wants to type, not
+/// to lose their place, and `PgDn` is still there to walk forward.
+fn stop_reading(mut scroll: ResMut<super::input::Scroll>) {
+    scroll.stop_reading();
+}
+
 /// Look further back through the transcript.
 fn scroll_back(mut scroll: ResMut<super::input::Scroll>, screen: Res<Screen>, tower: Res<Tower>) {
-    let total = tower.sim().scrollback().records().len();
+    let total = tower.sim().scrollback().records().drawn_len();
     let step = page_step(&screen, &tower, scroll.back());
     scroll.page(step, true, total);
 }
@@ -364,11 +444,223 @@ mod tests {
         });
     }
 
+    /// Press a **physical** key, the way `input_just_pressed` sees one.
+    ///
+    /// [`press`] hardcodes `key_code` because the text field reads `text` and
+    /// `logical_key` and nothing else — but the F-keys, Escape and the paging
+    /// keys are all bound through `ButtonInput`, which `keyboard_input_system`
+    /// fills from `key_code` alone. A test using `press` for those presses `A`
+    /// forever and the binding never fires.
+    fn tap(app: &mut App, key_code: KeyCode, logical_key: Key) {
+        app.world_mut().write_message(KeyboardInput {
+            key_code,
+            logical_key,
+            state: ButtonState::Pressed,
+            text: None,
+            repeat: false,
+            window: Entity::PLACEHOLDER,
+        });
+        app.update();
+        // Released on the way out, or `input_just_pressed` sees it held and the
+        // *next* tap of the same key is not a fresh press.
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .release(key_code);
+    }
+
+    /// Hold a modifier down and let the keyboard fall silent long enough that
+    /// the chord can only be a ghost.
+    ///
+    /// **The silence is the evidence.** The first version of this fix read the
+    /// keystroke's `text` instead, on the belief that macOS hands back none
+    /// under a chord — winit 0.30.13 `platform_impl/macos/event.rs:154` sets
+    /// `text` from `logical_key.to_text()` with no modifier check at all, so
+    /// `Cmd+A` carries `Some("a")` and that fix typed a letter into the prompt
+    /// on every copy, paste and select-all.
+    fn ghost(app: &mut App, key: KeyCode) {
+        hold(app, key);
+        app.world_mut()
+            .resource_mut::<super::super::input::Quiet>()
+            .silent_for(30.0);
+    }
+
     /// Hold a modifier down, the way winit reports one.
     fn hold(app: &mut App, key: KeyCode) {
         app.world_mut()
             .resource_mut::<ButtonInput<KeyCode>>()
             .press(key);
+    }
+
+    #[test]
+    fn unfurl_hands_the_transcript_the_keyboard_and_escape_hands_it_back() {
+        // **The word exists because the key could not be discovered.** `PageUp`
+        // has scrolled the transcript since the transcript existed, and the
+        // border advertised `PgDn newest` only once you were *already* scrolled
+        // back — an affordance that announced itself exclusively to players who
+        // had found it. In a game with no mouse, that is no affordance.
+        //
+        // The half that must not regress is the exit: Escape means the same
+        // thing here as in the editor, or the player is stuck in a mode with no
+        // way out and nothing on screen to type into.
+        let mut app = app();
+        assert!(
+            !app.world()
+                .resource::<super::super::input::Scroll>()
+                .is_reading(),
+            "the transcript had the keyboard before anyone asked",
+        );
+
+        type_only(&mut app, "unfurl");
+        press(&mut app, Key::Enter, Some("\r"));
+        app.update();
+        // The write lands on a tick, and the mode is entered from the request.
+        app.world_mut().resource_mut::<Tower>().step();
+        app.update();
+        assert!(
+            app.world()
+                .resource::<super::super::input::Scroll>()
+                .is_reading(),
+            "`unfurl` did not hand over the keyboard",
+        );
+
+        tap(&mut app, KeyCode::Escape, Key::Escape);
+        assert!(
+            !app.world()
+                .resource::<super::super::input::Scroll>()
+                .is_reading(),
+            "escape did not return to the prompt",
+        );
+    }
+
+    #[test]
+    fn the_prompt_is_deaf_while_the_transcript_is_being_read() {
+        // Three surfaces can own the keyboard now — the prompt, the editor and
+        // the transcript — and the failure where two consume a key is invisible
+        // until a player types `:wq` and finds it in their command history.
+        //
+        // Asserted on the **line**, not on the run conditions: a predicate that
+        // is correct and not wired to anything reads exactly like one that
+        // works, and the run conditions were where this could go wrong.
+        let mut app = app();
+        app.world_mut().resource_mut::<Line>().clear();
+        app.world_mut()
+            .resource_mut::<super::super::input::Scroll>()
+            .read();
+
+        type_only(&mut app, "survey");
+        assert_eq!(
+            app.world().resource::<Line>().viewport(80).0,
+            "",
+            "typing reached the prompt while the transcript had the keyboard",
+        );
+
+        // ...and it comes back the moment reading ends.
+        app.world_mut()
+            .resource_mut::<super::super::input::Scroll>()
+            .stop_reading();
+        type_only(&mut app, "survey");
+        assert_eq!(
+            app.world().resource::<Line>().viewport(80).0,
+            "survey",
+            "the prompt did not get the keyboard back",
+        );
+    }
+
+    #[test]
+    fn a_modifier_stuck_with_no_focus_event_still_lets_you_type() {
+        // **The fix above was not enough, and this is the test that says why.**
+        // It asserts recovery *without* a `WindowFocused`, because the reported
+        // failure — `Cmd+Shift+Ctrl+4` — leaves no focus event to hang a fix on.
+        //
+        // Every recovery path in Bevy 0.19 hangs off exactly that event:
+        // `WindowFocused(false)` → `check_keyboard_focus_lost` →
+        // `KeyboardFocusLost` → `release_all`. And Bevy drops winit's
+        // `ModifiersChanged`, which is the OS saying what is *really* down. So
+        // when a key-up is swallowed silently there is no mechanism anywhere to
+        // notice, and the field is dead for the rest of the session.
+        //
+        // The evidence that breaks the deadlock is the keystroke itself: the OS
+        // gave us text, so the OS is not treating this as a command.
+        let mut app = app();
+        ghost(&mut app, KeyCode::SuperLeft);
+        ghost(&mut app, KeyCode::ControlLeft);
+
+        type_only(&mut app, "survey");
+        assert_eq!(
+            app.world().resource::<Line>().viewport(80).0,
+            "survey",
+            "a ghost modifier ate every keystroke, with no focus event to clear it",
+        );
+        assert!(
+            !app.world()
+                .resource::<ButtonInput<KeyCode>>()
+                .any_pressed([KeyCode::SuperLeft, KeyCode::ControlLeft]),
+            "the ghost survived the keystroke that disproved it",
+        );
+    }
+
+    #[test]
+    fn the_editor_recovers_from_a_ghost_modifier_too() {
+        // **The surface it was reported on.** The prompt and the editor share
+        // the guard, which is why they shared the freeze — and a fix tested only
+        // on the prompt would have been half a fix, exactly as the focus hook
+        // was.
+        let mut app = app();
+        app.world_mut()
+            .resource_mut::<crate::shell::Editing>()
+            .open(crate::shell::Editor::open("x.spell", "laboratory", &[]));
+        ghost(&mut app, KeyCode::SuperLeft);
+
+        // `edit` drops into the buffer, then a word into the spell. Both are
+        // ordinary typing, and both were being eaten.
+        type_only(&mut app, "edit");
+        press(&mut app, Key::Enter, Some("\r"));
+        app.update();
+        type_only(&mut app, "survey");
+
+        let mut editing = app.world_mut().resource_mut::<crate::shell::Editing>();
+        let editor = editing.get_mut().expect("the editor closed");
+        assert_eq!(
+            editor.lines(),
+            ["survey"],
+            "a ghost modifier froze the editor",
+        );
+    }
+
+    #[test]
+    fn a_chord_in_use_is_still_a_chord() {
+        // **The counterweight, and the regression the first fix shipped.** That
+        // version treated "the key came with text" as proof no chord was held —
+        // but winit 0.30.13 sets `text` from `logical_key.to_text()` with no
+        // modifier check (`platform_impl/macos/event.rs:154`), so `Cmd+A` and
+        // `Cmd+V` carry `Some("a")`/`Some("v")` and every copy, paste and
+        // select-all typed a letter into the prompt.
+        //
+        // A chord a person is holding is used within moments of being pressed,
+        // so no silence has elapsed and the guard stands.
+        let mut app = app();
+        hold(&mut app, KeyCode::SuperLeft);
+
+        type_only(&mut app, "a");
+        assert_eq!(
+            app.world().resource::<Line>().viewport(80).0,
+            "",
+            "`Cmd+A` typed its letter into the prompt",
+        );
+
+        press(&mut app, Key::Enter, Some("\r"));
+        app.update();
+        assert!(
+            app.world()
+                .resource::<ButtonInput<KeyCode>>()
+                .pressed(KeyCode::SuperLeft),
+            "a chord in use was mistaken for a ghost",
+        );
+        assert_eq!(
+            app.world().resource::<Line>().viewport(80).0,
+            "",
+            "`Cmd+Enter` reached the prompt",
+        );
     }
 
     #[test]

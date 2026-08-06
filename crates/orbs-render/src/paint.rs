@@ -305,9 +305,21 @@ impl<'a> Painter<'a> {
     /// to announce yet, and [`Painter::border`] speaks its title as a heading —
     /// which would put a pane into the linear stream before the pane exists.
     ///
-    /// The walk starts at the top-left and goes clockwise, which is the reading
-    /// order the shape suggests. `progress` at or above 1.0 is exactly
-    /// [`border`](Self::border) with no title.
+    /// # Four corners at once
+    ///
+    /// It grows from **all four corners simultaneously**, each running clockwise
+    /// along its own side, and they meet on the corners together. `progress` at
+    /// or above 1.0 is exactly [`border`](Self::border) with no title.
+    ///
+    /// This replaced a single line from the top-left. That reads well and takes
+    /// four times as long as it needs to: at the 80×22 floor one line is 202
+    /// cells where the longest of four sides is 79, so the box closes in a
+    /// little over a third of the time for the same per-cell pace.
+    ///
+    /// **Each side is drawn `progress` of its own length**, not at a shared
+    /// cells-per-second. The sides are different lengths, so a shared pace would
+    /// have the short ones finish early and sit waiting — and the shape would
+    /// stop being four lines racing and start being two that had already parked.
     ///
     /// Where a frontend gets `progress` from is its own business — nothing in
     /// this crate knows what a second is. The *path* is geometry, which is why
@@ -317,11 +329,90 @@ impl<'a> Painter<'a> {
         if area.cols < 2 || area.rows < 2 {
             return;
         }
+        let progress = progress.clamp(0.0, 1.0);
+        let left = area.col;
+        let right = area.right().saturating_sub(1);
+        let top = area.row;
+        let bottom = area.bottom().saturating_sub(1);
+        // Each side is its own length, and each is drawn `progress` of the way
+        // along — so all four close on the corners together rather than the
+        // short sides finishing early and waiting.
+        let across = area.cols.saturating_sub(1);
+        let down = area.rows.saturating_sub(1);
+
+        // Top-left, rightwards along the top.
+        self.reveal_side(
+            (left..right).map(move |col| {
+                let glyph = if col == left {
+                    box_drawing::TOP_LEFT
+                } else {
+                    box_drawing::HORIZONTAL
+                };
+                (Pos::new(col, top), glyph)
+            }),
+            across,
+            progress,
+            style,
+        );
+        // Top-right, downwards.
+        self.reveal_side(
+            (top..bottom).map(move |row| {
+                let glyph = if row == top {
+                    box_drawing::TOP_RIGHT
+                } else {
+                    box_drawing::VERTICAL
+                };
+                (Pos::new(right, row), glyph)
+            }),
+            down,
+            progress,
+            style,
+        );
+        // Bottom-right, leftwards along the bottom.
+        self.reveal_side(
+            ((left + 1)..=right).rev().map(move |col| {
+                let glyph = if col == right {
+                    box_drawing::BOTTOM_RIGHT
+                } else {
+                    box_drawing::HORIZONTAL
+                };
+                (Pos::new(col, bottom), glyph)
+            }),
+            across,
+            progress,
+            style,
+        );
+        // Bottom-left, upwards.
+        self.reveal_side(
+            ((top + 1)..=bottom).rev().map(move |row| {
+                let glyph = if row == bottom {
+                    box_drawing::BOTTOM_LEFT
+                } else {
+                    box_drawing::VERTICAL
+                };
+                (Pos::new(left, row), glyph)
+            }),
+            down,
+            progress,
+            style,
+        );
+    }
+
+    /// Draw `progress` of the way along one side of a revealing box.
+    ///
+    /// `len` is passed rather than counted because the iterator is consumed
+    /// drawing it, and `mix` needs the total before the first cell is placed.
+    fn reveal_side(
+        &mut self,
+        cells: impl Iterator<Item = (Pos, char)>,
+        len: u16,
+        progress: f32,
+        style: Style,
+    ) {
         // `mix` is the crate's one float-to-integer conversion, and it already
         // carries the justification for it — see `tween`.
-        let mut budget = crate::tween::mix(0, perimeter(area), progress.clamp(0.0, 1.0));
-
-        for (at, glyph) in perimeter_cells(area) {
+        let mut budget = crate::tween::mix(0, len, progress);
+        for (at, glyph) in cells {
             if budget == 0 {
                 return;
             }
@@ -372,57 +463,4 @@ fn filled_of(steps: u16, done: u32, total: u32) -> u16 {
     }
     let scaled = u64::from(steps) * u64::from(done.min(total)) / u64::from(total);
     u16::try_from(scaled).unwrap_or(steps)
-}
-
-/// How many cells a box's outline occupies.
-///
-/// `2 * (w + h) - 4`: the four corners would otherwise be counted twice. Only
-/// meaningful for a region at least two cells each way, which is the same floor
-/// [`Painter::border`] draws nothing below.
-const fn perimeter(area: Rect) -> u16 {
-    let doubled = area.cols.saturating_add(area.rows).saturating_mul(2);
-    doubled.saturating_sub(4)
-}
-
-/// The outline's cells, clockwise from the top-left corner.
-///
-/// Clockwise from the top left because that is the order the shape reads in, and
-/// because starting anywhere else makes the corner a player watches for arrive
-/// last.
-fn perimeter_cells(area: Rect) -> impl Iterator<Item = (Pos, char)> {
-    let left = area.col;
-    let right = area.right().saturating_sub(1);
-    let top = area.row;
-    let bottom = area.bottom().saturating_sub(1);
-
-    let across_top = (left..=right).map(move |col| {
-        let glyph = if col == left {
-            box_drawing::TOP_LEFT
-        } else if col == right {
-            box_drawing::TOP_RIGHT
-        } else {
-            box_drawing::HORIZONTAL
-        };
-        (Pos::new(col, top), glyph)
-    });
-    let down_right = (top.saturating_add(1)..bottom)
-        .map(move |row| (Pos::new(right, row), box_drawing::VERTICAL));
-    let back_along_bottom = (left..=right).rev().map(move |col| {
-        let glyph = if col == left {
-            box_drawing::BOTTOM_LEFT
-        } else if col == right {
-            box_drawing::BOTTOM_RIGHT
-        } else {
-            box_drawing::HORIZONTAL
-        };
-        (Pos::new(col, bottom), glyph)
-    });
-    let up_left = (top.saturating_add(1)..bottom)
-        .rev()
-        .map(move |row| (Pos::new(left, row), box_drawing::VERTICAL));
-
-    across_top
-        .chain(down_right)
-        .chain(back_along_bottom)
-        .chain(up_left)
 }

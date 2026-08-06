@@ -24,9 +24,9 @@ pub enum NounKind {
     File,
     /// Free text matched against file contents. `sift march feed.log`.
     Pattern,
-    /// A manual topic. `grimoire brewing`.
+    /// A manual topic. `recall brewing`.
     Topic,
-    /// An essence that can be brewed. `grimoire clarity`.
+    /// An essence that can be brewed. `recall clarity`.
     ///
     /// The *quality* a recipe produces, not a thing on a shelf. What you carry
     /// is a [`Reagent`](Self::Reagent).
@@ -51,6 +51,48 @@ pub enum NounKind {
     Script,
     /// A count of ticks. `meditate 30`.
     Count,
+    /// A name the player is **coining**, not one the world already holds.
+    ///
+    /// `scribe morning` — the spell does not exist yet, which is the whole point
+    /// of the command, so it cannot resolve against the scene the way every
+    /// other argument does. Free text, like [`Pattern`](Self::Pattern), and one
+    /// word.
+    ///
+    /// §6.1 writes the command as `scribe <name>`; the signature said
+    /// `NounKind::Script` and therefore **could not parse the create case at
+    /// all** — a required slot with nothing in the world to fill it. The two
+    /// other script verbs are right to keep `Script`, because `bind` and
+    /// `invoke` name a spell that exists.
+    ///
+    /// Not [`Any`](Self::Any): `Any` searches every category, so `scribe sage`
+    /// would quietly create a spell named after a reagent.
+    Name,
+    /// Anything with text in it — `peruse orb.log`, `peruse night_watch.spell`.
+    ///
+    /// A **slot** kind, never a noun's own: nothing in the tower *is* a
+    /// readable, the way something is a [`File`](Self::File) or a
+    /// [`Script`](Self::Script). It says what a slot will take, which is what
+    /// makes `peruse` reach a spell without `peruse` reaching a reagent.
+    ///
+    /// The alternative was [`Any`](Self::Any), and it is wrong in a way that
+    /// passes the whole suite: `peruse sage` resolves at full confidence and
+    /// reports a zero-line read of a reagent, and a bare `peruse` offers the
+    /// four *places* as things to read. `execute::files` already records why
+    /// resolution goes by kind, and `peruse` — `read`, `cat`,
+    /// `open`, `show` — is the verb a shell-naive tester reaches for first, so
+    /// the dead end would land where §15 weighs it heaviest.
+    Readable,
+    /// Anything that can be **running** — an instrument, or a spell.
+    ///
+    /// A slot kind, never a noun's own, like [`Readable`](Self::Readable).
+    ///
+    /// `stop` took a [`Place`](Self::Place) and so could only ever reach an
+    /// instrument. An invoked spell was therefore **unstoppable**: nothing but
+    /// running out of program removes it, so `repeat` with no count ran for ever
+    /// and `stop <spell>` did not resolve to it. A player who wrote one had no
+    /// way back — §6's dead end, arrived at from a direction the parser could
+    /// not see.
+    Stoppable,
     /// Anything nameable — `verify` and `purge` accept any surface.
     Any,
 }
@@ -75,7 +117,36 @@ impl NounKind {
             Self::Fragment => "fragment",
             Self::Script => "script",
             Self::Count => "count",
+            Self::Name => "name",
+            // What the orb asks for, not what the type is called. "Which
+            // readable?" is not a sentence; a spell is a file you read.
+            Self::Readable => "file",
+            // What the orb asks for, not what the type is called: you stop a
+            // thing that is working, and both an instrument and a spell are.
+            Self::Stoppable => "place",
             Self::Any => "name",
+        }
+    }
+
+    /// Whether a noun of kind `noun` may fill a slot wanting `self`.
+    ///
+    /// **The one definition of that question.** It was three copies of
+    /// `kind == NounKind::Any || noun.kind == kind` — in
+    /// [`Scene::best_match`](super::Scene::best_match), in `resolve::fillers`
+    /// and in `complete::nouns` — which is three chances for a slot kind to be
+    /// understood by the matcher and not by the numbered prompt, or by both and
+    /// not by Tab. A slot that accepts a *set* has to agree in all three or the
+    /// three surfaces disagree about what a command takes.
+    #[must_use]
+    pub const fn accepts(self, noun: Self) -> bool {
+        match self {
+            Self::Any => true,
+            Self::Readable => matches!(noun, Self::File | Self::Script),
+            Self::Stoppable => matches!(noun, Self::Place | Self::Script),
+            // `as u8` because `PartialEq::eq` is not const and a fieldless enum
+            // casts cleanly. Writing the other ten arms out would be a table
+            // that says only "equal" eleven times.
+            _ => self as u8 == noun as u8,
         }
     }
 }
@@ -111,7 +182,12 @@ impl Slot {
 const NOTHING: &[Slot] = &[];
 const PLACE: &[Slot] = &[Slot::required(NounKind::Place)];
 const PLACE_OPTIONAL: &[Slot] = &[Slot::optional(NounKind::Place)];
-const FILE: &[Slot] = &[Slot::required(NounKind::File)];
+// `peruse` takes anything with text in it, so a `.spell` reads back like a log.
+// `sift` deliberately does **not** yet: its second slot is what it searches, and
+// searching a spell is a different feature from reading one.
+const READABLE: &[Slot] = &[Slot::required(NounKind::Readable)];
+/// `stop` reaches an instrument **or** a running spell.
+const STOPPABLE: &[Slot] = &[Slot::required(NounKind::Stoppable)];
 const PATTERN_AND_FILE: &[Slot] = &[
     Slot::required(NounKind::Pattern),
     Slot::required(NounKind::File),
@@ -164,6 +240,10 @@ const TWO_REAGENTS: &[Slot] = &[
 
 const FRAGMENT: &[Slot] = &[Slot::required(NounKind::Fragment)];
 const SCRIPT: &[Slot] = &[Slot::required(NounKind::Script)];
+// `scribe` coins a name rather than naming something that exists — see
+// `NounKind::Name`. `bind` and `invoke` keep `SCRIPT`, because a spell they name
+// has to be there already.
+const SPELL_NAME: &[Slot] = &[Slot::required(NounKind::Name)];
 
 /// A canonical command.
 ///
@@ -183,12 +263,38 @@ pub enum Verb {
     Sift,
     /// Tower overview — the boot report.
     Status,
-    /// The in-world manual.
-    Grimoire,
+    /// The in-world manual — what the orb remembers about a subject.
+    ///
+    /// **Was `grimoire`, and the word was released** (§19). A grimoire is a
+    /// wizard's book of *spells*, which is what `/grimoire` now holds, so using
+    /// the same word for the manual made the one word mean both the reference
+    /// you read and the book you write in. §6.1's *"a released word does not
+    /// stop resolving"* rule protects **shipped** vocabulary; nothing has
+    /// shipped, and unclaimed `grimoire` now reads as the directory it names.
+    Recall,
     /// Detect tampering.
     Verify,
     /// Revert the last command.
     Undo,
+    /// Read back through what the orb has said.
+    ///
+    /// # A verb for a key that already worked
+    ///
+    /// `PageUp` has scrolled the transcript since the transcript existed. The
+    /// problem is that nothing says so: the border advertises `PgDn newest` only
+    /// once you are *already* scrolled back, so the affordance announces itself
+    /// exclusively to players who have found it. In a game with no mouse and no
+    /// menus, a key nobody can discover is a key nobody has.
+    ///
+    /// So the way in is a word, like everything else here — and using it once
+    /// teaches the keys, which is the part that survives after the player stops
+    /// needing the word.
+    ///
+    /// **Not `recollect`**, which was the first name and collides: `rec` is
+    /// claimed by `recall`, and `rec_is_pinned_as_a_prefix_before_anything_else_
+    /// wants_it` names this exact scenario a word in advance. `und` and `unf`
+    /// part at the third character, which is the length the naming pass governs.
+    Unfurl,
     /// Fast-forward the clock.
     Meditate,
     /// Carry a reagent from one place to another.
@@ -209,9 +315,21 @@ pub enum Verb {
     Empty,
     /// Cancel a working instrument, refunding what it holds.
     Stop,
-    /// Collect a finished potion.
-    Siphon,
+    // `Siphon` was here — *"collect a finished potion"* — and is **retired**
+    // (§19). It took the product out of a tool and put it on the laboratory
+    // floor, which mattered when §10.1's loop was `move`/`wield`/`siphon` and a
+    // stage's output had to be carried by hand.
+    //
+    // The per-instrument verbs ended that: `digest ground-sage` reaches into an
+    // idle instrument and takes what it needs, so the pipeline advances without
+    // anything being drawn off first. What was left was a convenience that put
+    // things somewhere `empty` puts them better — and the floor and the store
+    // are now one place, because `siphon` was the only thing that could ever put
+    // a reagent on the floor.
     /// Destroy waste or spoilage.
+    ///
+    /// The one that is genuinely not `empty`: this **destroys** what a tool
+    /// holds rather than shelving it.
     Purge,
     /// Research a fragment.
     Divine,
@@ -231,9 +349,10 @@ impl Verb {
         Self::Peruse,
         Self::Sift,
         Self::Status,
-        Self::Grimoire,
+        Self::Recall,
         Self::Verify,
         Self::Undo,
+        Self::Unfurl,
         Self::Meditate,
         Self::Move,
         Self::Wield,
@@ -244,7 +363,6 @@ impl Verb {
         Self::Kindle,
         Self::Empty,
         Self::Stop,
-        Self::Siphon,
         Self::Purge,
         Self::Divine,
         Self::Scribe,
@@ -256,10 +374,17 @@ impl Verb {
     ///
     /// §6.1 wrote the rule as "one short word, ideally ≤7 characters". The
     /// Phase 0 naming pass settled the "ideally" at **8**: `grimoire` and
-    /// `meditate` are the two most in-world names in the set and carry the
-    /// game's identity, abbreviation covers the typing cost (`grim`, `medit`),
+    /// `meditate` were the two most in-world names in the set and carried the
+    /// game's identity, abbreviation covered the typing cost (`grim`, `medit`),
     /// and the two 8-character names that had *no* such defence — `decipher`
     /// and `inscribe` — were shortened instead.
+    ///
+    /// **`meditate` is now the only one that spends the eighth character**,
+    /// since `grimoire` became `recall` (§19). The limit stays at 8 rather than
+    /// tightening to 7, because tightening it would forbid a word no verb
+    /// currently wants while costing `meditate` the name that makes it feel
+    /// like a thing a wizard does — and §6.1's rule was always about the words
+    /// you type a thousand times, which this is not one of.
     pub const MAX_CANONICAL_LEN: usize = 8;
 
     /// What this verb wants after it, as a single word.
@@ -284,9 +409,10 @@ impl Verb {
             Self::Peruse => "peruse",
             Self::Sift => "sift",
             Self::Status => "status",
-            Self::Grimoire => "grimoire",
+            Self::Recall => "recall",
             Self::Verify => "verify",
             Self::Undo => "undo",
+            Self::Unfurl => "unfurl",
             Self::Meditate => "meditate",
             Self::Move => "move",
             Self::Wield => "wield",
@@ -297,7 +423,6 @@ impl Verb {
             Self::Kindle => "kindle",
             Self::Empty => "empty",
             Self::Stop => "stop",
-            Self::Siphon => "siphon",
             Self::Purge => "purge",
             Self::Divine => "divine",
             Self::Scribe => "scribe",
@@ -359,9 +484,10 @@ impl Verb {
             Self::Peruse => "perusing",
             Self::Sift => "sifting",
             Self::Status => "checking",
-            Self::Grimoire => "reading",
+            Self::Recall => "reading",
             Self::Verify => "verifying",
             Self::Undo => "undoing",
+            Self::Unfurl => "unfurling",
             Self::Meditate => "meditating",
             Self::Move => "moving",
             Self::Wield => "wielding",
@@ -372,7 +498,6 @@ impl Verb {
             Self::Kindle => "kindling",
             Self::Empty => "emptying",
             Self::Stop => "stopping",
-            Self::Siphon => "siphoning",
             Self::Purge => "purging",
             Self::Divine => "divining",
             Self::Scribe => "scribing",
@@ -387,28 +512,28 @@ impl Verb {
         match self {
             Self::Attend => PLACE,
             Self::Survey => PLACE_OPTIONAL,
-            Self::Peruse => FILE,
+            Self::Peruse => READABLE,
             Self::Sift => PATTERN_AND_FILE,
-            Self::Status | Self::Undo => NOTHING,
-            Self::Grimoire => TOPIC,
+            Self::Status | Self::Undo | Self::Unfurl => NOTHING,
+            Self::Recall => TOPIC,
             Self::Verify | Self::Purge => ANYTHING,
             Self::Meditate => COUNT,
             Self::Move => MOVE,
             // An instrument is a place (§10.1), and you always name the
             // instrument rather than what is inside it.
-            Self::Wield | Self::Stop | Self::Empty => PLACE,
+            Self::Wield | Self::Empty => PLACE,
+            // **A spell counts.** `stop` reaching only instruments made an
+            // invoked spell unstoppable — see `NounKind::Stoppable`.
+            Self::Stop => STOPPABLE,
             // §10.1's per-instrument verbs name the *material*, not the tool —
             // the tool is what the verb means.
             // `kindle` takes fuel, and takes it optionally: `kindle` on its own
             // relights what is banked, which is the end of every script loop.
             Self::Grind | Self::Digest | Self::Distil | Self::Kindle => ONE_REAGENT,
             Self::Mix => TWO_REAGENTS,
-            // Was `VESSEL`, when a finished brew sat in one. §10.1 makes the
-            // product sit in the **instrument** that made it, and you always
-            // name the instrument rather than its insides (§19).
-            Self::Siphon => PLACE,
             Self::Divine => FRAGMENT,
-            Self::Scribe | Self::Bind | Self::Invoke => SCRIPT,
+            Self::Scribe => SPELL_NAME,
+            Self::Bind | Self::Invoke => SCRIPT,
         }
     }
 
@@ -434,6 +559,59 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_slot_kind_accepts_itself_and_nothing_else_by_default() {
+        // The eleven ordinary kinds are exact. `as u8` stands in for an `==`
+        // that is not const, so this is the test that says the cast is a
+        // comparison and not an ordering accident.
+        for kind in [
+            NounKind::Place,
+            NounKind::File,
+            NounKind::Reagent,
+            NounKind::Script,
+            NounKind::Fragment,
+        ] {
+            assert!(kind.accepts(kind), "{kind:?} did not accept itself");
+            for other in [NounKind::Place, NounKind::File, NounKind::Reagent] {
+                if (kind as u8) != (other as u8) {
+                    assert!(!kind.accepts(other), "{kind:?} accepted a {other:?}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn readable_is_text_and_any_is_everything() {
+        // The two slot-only kinds, and the line between them. `Readable` exists
+        // because `Any` is too wide for `peruse`: a reagent is nameable and has
+        // no text in it.
+        assert!(NounKind::Readable.accepts(NounKind::File));
+        assert!(NounKind::Readable.accepts(NounKind::Script));
+        for opaque in [
+            NounKind::Reagent,
+            NounKind::Place,
+            NounKind::Essence,
+            NounKind::Vessel,
+            NounKind::Fragment,
+        ] {
+            assert!(
+                !NounKind::Readable.accepts(opaque),
+                "a {opaque:?} is not something to read",
+            );
+            assert!(NounKind::Any.accepts(opaque), "`Any` means any");
+        }
+    }
+
+    #[test]
+    fn nothing_in_the_world_is_ever_a_slot_only_kind() {
+        // `Readable` and `Any` say what a slot takes; no node is ever spawned
+        // as one. If that changes, `accepts` starts answering a question about
+        // itself — `Readable.accepts(Readable)` is false, so a noun spawned as
+        // one would be unreachable by the very slot named after it.
+        assert!(!NounKind::Readable.accepts(NounKind::Readable));
+        assert!(!NounKind::Readable.accepts(NounKind::Any));
+    }
+
+    #[test]
     fn the_vocabulary_is_the_tower_wide_verbs_plus_the_laboratory_s_own() {
         // §6.1's sixteen, plus `move`/`wield`/`stop` for §10.1's pipeline, minus
         // `decoct` — retired because a verb claiming to brew a potion, when
@@ -447,6 +625,16 @@ mod tests {
         // ...plus `empty`, which turns an instrument out into the store rather
         // than destroying what is in it (§10.1's byproduct rule).
         let tower_wide = Verb::ALL.iter().filter(|verb| !verb.is_operation());
+        // 19 until `siphon` retired (§19), then 18, and 19 again for `unfurl`.
+        // The per-instrument verbs reach into idle instruments, so drawing a
+        // stage's output onto the bench had stopped doing anything — and with it
+        // gone, the bench and the shelf are one place.
+        //
+        // **`unfurl` is the first word added back**, and it earns the seat by
+        // being the only way to reach a surface that already existed: `PageUp`
+        // has always scrolled the transcript and nothing ever said so. A
+        // vocabulary getting smaller is the direction §6.1 wants, and a word
+        // that makes a mouseless game navigable is the exception it allows for.
         assert_eq!(tower_wide.count(), 19);
 
         // One per instrument the laboratory raises: `grind`, `digest`, `mix`,

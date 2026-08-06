@@ -33,6 +33,44 @@ const STUDIO: &str = "blackhearth games";
 /// What the logo says, one character per entry in [`GLYPHS`].
 const NAME: &str = "O.R.B.S.";
 
+/// What the initials stand for, one word per letter.
+///
+/// Each word lands as **its own letter** does — `Operational` with the `O`,
+/// `Relic` with the `R` — which is what turns the logo printing itself into the
+/// name being spelled out rather than a decoration that happens to be slow.
+/// `every_word_of_the_subtitle_has_a_letter` holds the two together, so renaming
+/// the game cannot leave a word with nothing to arrive with.
+const EXPANSION: [&str; 4] = ["Operational", "Relic", "Bewitching", "System"];
+
+/// The subtitle's own width, including the single spaces between its words.
+///
+/// Computed rather than written down: it decides where the block is centred, and
+/// a hand-counted 35 would be wrong the first time a word changed.
+fn expansion_width() -> usize {
+    EXPANSION
+        .iter()
+        .map(|word| word.chars().count())
+        .sum::<usize>()
+        + EXPANSION.len()
+        - 1
+}
+
+/// Where each word of [`EXPANSION`] starts, and which [`GLYPHS`] entry brings it.
+///
+/// **The glyph index is `2 * i`**, because the full stops are glyphs too: the
+/// table is `O . R . B . S .`, so the letters are the even entries. That is the
+/// one piece of arithmetic tying the two together, and it is here rather than
+/// inline so there is one place to be wrong.
+fn expansion_places() -> [(usize, usize); 4] {
+    let mut places = [(0, 0); 4];
+    let mut col = 0;
+    for (index, word) in EXPANSION.iter().enumerate() {
+        places[index] = (col, index * 2);
+        col += word.chars().count() + 1;
+    }
+    places
+}
+
 /// Where each character of [`NAME`] sits in [`ART`], as `(first column, width)`.
 ///
 /// The letterforms are **column-separable** — no glyph shares a column with its
@@ -132,10 +170,10 @@ pub(crate) fn paint(frame: &mut Frame, stage: Stage, progress: f32) {
 
     let area = frame.area();
     let lines = reported();
-    // Logo, a blank row, then the report. Centred as a block, with no pane
-    // around it: §4's tower report is a table inside a border, and this must not
-    // read as the same screen arriving twice.
-    let height = to_row(ART.len() + lines.len() + 1);
+    // Logo, the subtitle, a blank row, then the report. Centred as a block, with
+    // no pane around it: §4's tower report is a table inside a border, and this
+    // must not read as the same screen arriving twice.
+    let height = to_row(ART.len() + lines.len() + 2);
     let top = area.rows.saturating_sub(height) / 2;
 
     let mut painter = frame.painter(area);
@@ -185,7 +223,56 @@ pub(crate) fn paint(frame: &mut Frame, stage: Stage, progress: f32) {
     // the moment `ok` lands, so the whole row shunted sideways at the end of
     // every check. Anchoring both ends to something that is not moving means
     // nothing moves but the dots.
-    let first = top.saturating_add(to_row(ART.len() + 1));
+    // **The subtitle, a word per letter.** `Operational` lands with the `O`,
+    // `Relic` with the `R` — so the logo printing itself reads as the name being
+    // spelled out rather than as a decoration that happens to be slow.
+    //
+    // Positioned from the **whole** subtitle's width and drawn word by word at
+    // fixed offsets, never re-centred on what has arrived so far. That is the
+    // lesson the report lines below already carry: a line centred on its own
+    // width shunts sideways every time it grows, and four words arriving would
+    // have made the whole thing crawl left four times.
+    let subtitle_col = area
+        .col
+        .saturating_add(area.cols.saturating_sub(to_row(expansion_width())) / 2);
+    let subtitle_row = top.saturating_add(to_row(ART.len()));
+    for (word, (offset, glyph)) in EXPANSION.iter().zip(expansion_places()) {
+        if printed <= glyph {
+            break;
+        }
+        painter.glyphs(
+            Pos::new(subtitle_col.saturating_add(to_row(offset)), subtitle_row),
+            word,
+            Style::DIM,
+        );
+    }
+    // Spoken once, as much of it as is on screen — the same rule the logo above
+    // follows, and the reason neither is drawn with `span` per word: §14 wants
+    // one utterance for one thing, not four for a sentence.
+    let said = EXPANSION
+        .iter()
+        .zip(expansion_places())
+        .take_while(|(_, (_, glyph))| printed > *glyph)
+        .map(|(word, _)| *word)
+        .collect::<Vec<_>>()
+        .join(" ");
+    if !said.is_empty() {
+        painter.announce(UtteranceKind::Text, Style::DIM.role, &said);
+    }
+
+    // The version, in the corner of the window rather than in the report. The
+    // module docs argued it out of the report on the grounds that a version line
+    // under a six-row logo would be the only small text on the card — which is
+    // still true, and is exactly why it belongs in the corner instead, where
+    // small text is what a corner is for.
+    let version = format!("v{}", env!("CARGO_PKG_VERSION"));
+    painter.glyphs(
+        Pos::new(area.col.saturating_add(1), area.bottom().saturating_sub(1)),
+        &version,
+        Style::DIM,
+    );
+
+    let first = top.saturating_add(to_row(ART.len() + 2));
     let done_col = logo_col.saturating_add(to_row(logo_width.saturating_sub(DONE.len())));
 
     for (index, label) in lines.iter().enumerate() {
@@ -530,16 +617,13 @@ mod tests {
 
     #[test]
     fn it_draws_nothing_before_its_own_stage() {
-        // The tube is dark and the frame is still drawing itself; a splash that
-        // painted through those would be on screen before the screen was.
-        for stage in [Stage::Dark, Stage::Frame] {
-            let mut frame = Frame::new(GridSize::new(80, 22));
-            paint(&mut frame, stage, 0.5);
-            assert!(
-                frame.to_text().trim().is_empty(),
-                "{stage:?} drew the splash",
-            );
-        }
+        // The tube is dark; a splash that painted through it would be on screen
+        // before the screen was. (The border no longer has a stage to itself —
+        // it closes *during* the card now, so there is one stage left to keep
+        // the splash out of.)
+        let mut frame = Frame::new(GridSize::new(80, 22));
+        paint(&mut frame, Stage::Dark, 0.5);
+        assert!(frame.to_text().trim().is_empty(), "the dark stage drew");
     }
 
     #[test]

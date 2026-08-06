@@ -18,7 +18,7 @@
 //! Two screens, deliberately, and they must not read as one thing twice. The
 //! split is visual as well as sequential — the POST is a centred title card with
 //! no pane and no `name qty state` columns, and the pane border does not exist
-//! until [`Stage::Frame`] draws it. What follows the card is the tower's report,
+//! until [`Stage::Post`] draws it. What follows the card is the tower's report,
 //! already sitting in the scrollback where `Sim::new` put it.
 //!
 //! # It is wall-clock, so it lives here and not in the sim
@@ -62,9 +62,14 @@ pub(crate) enum Stage {
     // Removing the drawing alone would have left the stage as 1.2 s of black
     // indistinguishable from a slow launch, which is the trap `Dark`'s own
     // duration note warns about.
-    /// The pane border draws itself, one cell at a time.
-    Frame,
-    /// Dependencies report in.
+    /// The card: the border draws itself while the logo prints and the
+    /// dependencies report in.
+    ///
+    /// **One stage, because they happen at once.** The border used to have a
+    /// stage of its own that finished before the card began, which made the
+    /// opening two waits in a row — three and a bit seconds of a box drawing
+    /// itself against nothing, and only then a name. They start together now,
+    /// and the box closes while the logo is still spelling itself out.
     Post,
     /// The game.
     Live,
@@ -72,7 +77,15 @@ pub(crate) enum Stage {
 
 impl Stage {
     /// Every stage before [`Stage::Live`], in order.
-    pub(crate) const SEQUENCE: [Self; 3] = [Self::Dark, Self::Frame, Self::Post];
+    pub(crate) const SEQUENCE: [Self; 2] = [Self::Dark, Self::Post];
+
+    /// How much of the card's time the border spends closing.
+    ///
+    /// The four runs cover a quarter of the cells one continuous line did, so
+    /// this is a shorter *and* faster reveal than the stage it replaced: the box
+    /// is whole while the logo is still arriving, which is the point — it frames
+    /// the name rather than waiting for it.
+    pub(crate) const FRAME_SHARE: f32 = 0.22;
 
     /// How long this stage lasts.
     ///
@@ -92,7 +105,6 @@ impl Stage {
     pub(crate) const fn duration(self) -> Duration {
         Duration::from_millis(match self {
             Self::Dark => 600,
-            Self::Frame => 3200,
             Self::Post => 9000,
             Self::Live => 0,
         })
@@ -101,8 +113,7 @@ impl Stage {
     /// The stage after this one.
     pub(crate) const fn next(self) -> Self {
         match self {
-            Self::Dark => Self::Frame,
-            Self::Frame => Self::Post,
+            Self::Dark => Self::Post,
             Self::Post | Self::Live => Self::Live,
         }
     }
@@ -121,7 +132,18 @@ impl Stage {
 
     /// Whether the pane border is on screen yet.
     pub(crate) const fn has_frame(self) -> bool {
-        matches!(self, Self::Frame | Self::Post | Self::Live)
+        matches!(self, Self::Post | Self::Live)
+    }
+
+    /// How far the border has closed, given how far this stage has run.
+    ///
+    /// Its own clock inside the card's, so the box finishes early and the logo
+    /// keeps going. Always whole once the game arrives.
+    pub(crate) fn frame_progress(self, progress: f32) -> f32 {
+        match self {
+            Self::Post => (progress / Self::FRAME_SHARE).clamp(0.0, 1.0),
+            _ => 1.0,
+        }
     }
 }
 
@@ -302,7 +324,27 @@ mod tests {
         // screen, and the sequence starts by *appearing* rather than by an
         // effect announcing it.
         assert!(!Stage::Dark.has_frame());
-        assert!(Stage::Frame.has_frame());
+        assert!(Stage::Post.has_frame());
+    }
+
+    #[test]
+    fn the_border_and_the_card_start_together() {
+        // **They used to be two waits in a row**: three and a bit seconds of a
+        // box drawing itself against nothing, and only then a name. One stage
+        // now, so the first frame of the card has both a border beginning and a
+        // logo beginning.
+        assert_eq!(Stage::Post.frame_progress(0.0), 0.0);
+        assert!(
+            Stage::Post.frame_progress(Stage::FRAME_SHARE / 2.0) > 0.0,
+            "the border had not started while the card was running",
+        );
+        // ...and the box is whole well before the card is done, so it frames the
+        // name rather than racing it to the end.
+        assert_eq!(Stage::Post.frame_progress(Stage::FRAME_SHARE), 1.0);
+        assert!(
+            Stage::Post.frame_progress(0.5) >= 1.0,
+            "the border was still drawing halfway through the card",
+        );
     }
 
     #[test]
@@ -310,8 +352,9 @@ mod tests {
         // Nothing can be typed during boot — every keyed system is gated on
         // `booted` — so an input line on those screens was an affordance that
         // did not work, offered before anything else on screen did. The stage
-        // that existed to draw it went with it.
-        assert_eq!(Stage::SEQUENCE.len(), 3);
+        // that existed to draw it went with it — as, later, did the one that
+        // drew the border on its own.
+        assert_eq!(Stage::SEQUENCE.len(), 2);
         assert!(
             !Stage::SEQUENCE.iter().any(|stage| stage.world_runs()),
             "a boot stage let the world run"
@@ -324,11 +367,16 @@ mod tests {
         // drawing itself and the dependencies reporting were both over before
         // they could be read. A stage that animates needs to be seconds, not
         // fractions of one.
-        for stage in [Stage::Frame, Stage::Post] {
-            assert!(
-                stage.duration() >= Duration::from_secs(3),
-                "{stage:?} is too quick to read",
-            );
-        }
+        assert!(
+            Stage::Post.duration() >= Duration::from_secs(3),
+            "the card is too quick to read",
+        );
+        // The border is a share of it rather than a stage, so it needs checking
+        // in its own right: a quarter of nine seconds is two, which is a box
+        // drawing itself rather than a box appearing.
+        assert!(
+            Stage::Post.duration().mul_f32(Stage::FRAME_SHARE) >= Duration::from_millis(1200),
+            "the border closes too fast to watch",
+        );
     }
 }

@@ -7,7 +7,7 @@
 //!   verb phrase — `go to`, `look for`, `get rid of`, `how do i`, `take it back`.
 //!   So [`tokenise`] keeps everything and [`strip_filler`] runs afterwards, on
 //!   the argument tail only.
-//! - **Punctuation is not uniformly noise.** `?` is a synonym for `grimoire` and
+//! - **Punctuation is not uniformly noise.** `?` is a synonym for `recall` and
 //!   `./` is one for `invoke`, while `feed.log` and `/tower/laboratory` need their
 //!   separators intact.
 //! - **Lowercasing must not destroy the input.** [`NounKind::Pattern`] is free
@@ -246,7 +246,7 @@ mod tests {
 
     #[test]
     fn standalone_punctuation_synonyms_survive() {
-        // `?` is grimoire and `./` is invoke (§6.1).
+        // `?` is recall and `./` is invoke (§6.1).
         assert_eq!(matching("?"), ["?"]);
         assert_eq!(matching("./ night_watch"), ["./", "night_watch"]);
     }

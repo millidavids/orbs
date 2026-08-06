@@ -1,8 +1,10 @@
-//! What an instrument makes, and collecting it.
+//! What an instrument makes.
 //!
 //! The back half of §10.1's loop: [`transmute`] turns an instrument's contents
-//! into what its recipe yields, and [`siphon`] takes the product out while
-//! leaving the byproduct behind.
+//! into what its recipe yields, and leaves both the product and the byproduct
+//! **inside the tool**. Taking them out is somebody else's job — the next
+//! stage's verb reaches in for what it needs, `empty` shelves the lot, `purge`
+//! destroys it.
 //!
 //! §7: *"alchemical byproduct accumulates and must be purged manually or by a
 //! bound cleanup script."* The byproduct lands **in the instrument**, which is
@@ -12,17 +14,22 @@
 use bevy_ecs::prelude::*;
 use orbs_render::{FieldName, RecordKind, Role};
 
-use super::slot::{Busy, busy, refuse_busy, say};
+use super::slot::say;
 use crate::content::{Prose, Recipes};
-use crate::parser::{NounKind, Verb};
+use crate::parser::NounKind;
 use crate::session::Scrollback;
-use crate::tower::node::{Cwd, Name, Nameable, NodeIds, children_of};
+use crate::tower::node::{Name, children_of};
 
 /// A thing an instrument was asked to make, as opposed to what it left behind.
 ///
-/// Marks the half of a finished run that [`siphon`] collects. Byproducts carry no
-/// marker — §10.1's rule is that every one of them has a use, so "waste" is a
-/// judgement about *this* brew rather than a property of the reagent.
+/// Marks the half of a finished run that the recipe was **for**. Byproducts
+/// carry no marker — §10.1's rule is that every one of them has a use, so
+/// "waste" is a judgement about *this* brew rather than a property of the
+/// reagent.
+///
+/// **`siphon` read this and is retired** (§19). `tower::panel` still does: the
+/// marker is what makes an instrument show as having finished with something
+/// worth taking, which is a fact about the tool rather than about any verb.
 #[derive(Component, Debug, Clone, Copy)]
 pub struct Product;
 
@@ -68,12 +75,19 @@ pub(super) fn transmute(world: &mut World, place: Entity) {
         let message = world
             .resource::<Prose>()
             .line("wield_nothing", &[("name", &name)]);
-        say(world, &name, "fouled", &message, Role::Cost);
+        say(world, &name, &name, "fouled", &message, Role::Cost);
         return;
     };
 
+    // **One of each input, not everything in the vessel.** The instrument is
+    // charged a unit at a time now, so a run spends a unit — and what is left
+    // over stays where it is rather than being destroyed by a recipe that never
+    // asked for it.
     for node in held {
-        world.entity_mut(node).despawn();
+        let Some(name) = world.get::<Name>(node).map(|name| name.0.clone()) else {
+            continue;
+        };
+        super::super::stock::take(world, place, &name, 1);
     }
     // A finished potion is an `Essence`; everything else is crafting stock. The
     // byproduct is always stock — §10.1 gives every one of them a use.
@@ -82,17 +96,16 @@ pub(super) fn transmute(world: &mut World, place: Entity) {
     } else {
         NounKind::Reagent
     };
-    // The product is marked, the byproduct is not. That is the whole difference
-    // `siphon` and `purge` read: **`siphon` takes what you meant to make, `purge`
-    // clears what you did not.** Telling them apart by name would mean the
-    // laboratory knowing which reagents are "waste", which §10.1 explicitly
-    // refuses — every byproduct is some other recipe's input.
+    // The product is marked, the byproduct is not — which is what the panel
+    // reads to say a tool has finished with something worth having. Telling them
+    // apart by **name** would mean the laboratory knowing which reagents are
+    // "waste", which §10.1 explicitly refuses: every byproduct is some other
+    // recipe's input, and route B of the clarified draught is exactly the husks
+    // route A leaves behind.
     for (product, kind, wanted) in [(&output, kind, true), (&leaves, NounKind::Reagent, false)] {
-        let id = world.resource_mut::<NodeIds>().issue();
-        let node = world
-            .spawn((id, Name(product.clone()), Nameable(kind)))
-            .id();
-        world.entity_mut(node).insert(ChildOf(place));
+        // Merged into whatever is already there, so a second run adds to the
+        // pile rather than standing a second node beside it under the same name.
+        let node = super::super::stock::give(world, place, product, kind, 1);
         if wanted {
             world.entity_mut(node).insert(Product);
         }
@@ -111,70 +124,24 @@ pub(super) fn transmute(world: &mut World, place: Entity) {
         // so not `Detail`, which is prose a view draws in front of the message.
         .text(FieldName::State, &leaves)
         .text(FieldName::Source, &name)
+        // Where it happened. `Name` here is the **product**, which is why a
+        // spell could not use it to know which instrument yielded — see
+        // `FieldName::At`.
+        .text(FieldName::At, &name)
         .text(FieldName::Message, &message)
         .role(Role::Success)
         .finish();
 }
 
-/// Collect what an instrument made, leaving what it fouled itself with.
-///
-/// The fourth move of §10.1's loop, and the end of `siphon` being a dark verb.
-/// The product lands where the player is standing, loose and nameable, ready to
-/// be `move`d onward — which is what makes the pipeline typeable without ever
-/// naming an instrument's insides (§19).
-pub fn siphon(world: &mut World, place: Entity) -> bool {
-    let name = world
-        .get::<Name>(place)
-        .map_or_else(String::new, |name| name.0.clone());
-
-    // **Through `busy`, not `Working` alone.** `slot::busy` exists precisely so
-    // no caller checks half the lock, and this one did: a scour in flight left
-    // `siphon` free to lift the product out of an instrument a `purge` was four
-    // ticks from emptying, so `purge x; siphon x` rescued exactly what the scour
-    // was started to destroy — while `move`, `wield`, `purge` and `begin` all
-    // refuse on the same state.
-    match busy(world, place) {
-        Some(Busy::Working) => {
-            let message = world
-                .resource::<Prose>()
-                .line("siphon_working", &[("name", &name)]);
-            say(world, &name, "working", &message, Role::Cost);
-            return false;
-        }
-        Some(why) => {
-            refuse_busy(world, Verb::Siphon, place, why);
-            return false;
-        }
-        None => {}
-    }
-
-    let cwd = world.resource::<Cwd>().0;
-    let taken: Vec<Entity> = contents(world, place)
-        .into_iter()
-        .filter(|node| world.get::<Product>(*node).is_some())
-        .collect();
-
-    if taken.is_empty() {
-        let message = world
-            .resource::<Prose>()
-            .line("siphon_empty", &[("name", &name)]);
-        say(world, &name, "empty", &message, Role::Cost);
-        return false;
-    }
-
-    let collected: Vec<String> = taken
-        .iter()
-        .filter_map(|node| world.get::<Name>(*node).map(|held| held.0.clone()))
-        .collect();
-    for node in taken {
-        world.entity_mut(node).insert(ChildOf(cwd));
-        world.entity_mut(node).remove::<Product>();
-    }
-
-    let listed = collected.join(", ");
-    let message = world
-        .resource::<Prose>()
-        .line("siphon_done", &[("name", &listed), ("source", &name)]);
-    say(world, &listed, "collected", &message, Role::Success);
-    true
-}
+// `siphon` lived here and is **retired** (§19). It lifted the `Product` out of
+// an instrument and set it on the laboratory floor, which was the fourth move of
+// §10.1's loop back when a stage's output had to be carried by hand.
+//
+// `reachable` searches idle instruments, so the next tool takes the output
+// directly — `digest ground-sage` needs nothing drawn off first — and with
+// `siphon` gone nothing can put a reagent on the floor at all. The bench and the
+// shelf are one place, and `empty` is how a tool is cleared into it.
+//
+// [`Product`] survives it: `tower::panel` reads the marker to show that a tool
+// has finished with something in it, which is a fact about the instrument rather
+// than about any verb.

@@ -19,6 +19,19 @@ pub struct Argument {
     pub slot: usize,
 }
 
+// **There is no `anchor` field, and there was one.** §8 binds referents *"by
+// stable entity ID"* so a destroyed-and-rebuilt thing fails the check instead of
+// being silently acted on — §8.1's substitution surface, and a real requirement
+// about things that *can* be rebuilt. §8's own example is `north_gate`, which a
+// siege tears down and the player puts back.
+//
+// Nothing in the tower is like that yet: `purge` on a place scours it rather
+// than despawning it, so an instrument's identity is fixed for the life of the
+// world. The field was `None` at every construction site and read at none, and
+// the `#5` it produced was written into every spell to guard a substitution that
+// cannot occur. It comes back with wards and gates, when there is something for
+// it to catch and something to test it against.
+
 impl Argument {
     /// The value as the echo shows it.
     ///
@@ -194,6 +207,24 @@ pub enum Resolution {
         /// The verb they meant.
         verb: Verb,
     },
+    /// A word that means something **in a spell**, typed at the prompt.
+    ///
+    /// [`Elsewhere`](Self::Elsewhere) one step further. That one covers a verb
+    /// this *place* does not answer to; this covers a word the *prompt* does not
+    /// answer to, and the same reasoning applies — *"I do not know that word"*
+    /// would be a lie about a word the game taught the player in the editor.
+    ///
+    /// **This exists because the alternative was destructive.** `wait for the
+    /// mortar` at the prompt used to open the editor on a new empty
+    /// `mortar.spell` — `for`/`the` are filler, `wait` is a `meditate` synonym
+    /// whose `Count` slot cannot take `mortar`, so the reading lost to
+    /// `scribe <Name>`, which takes free text. `repeat 3` resolved to `undo`.
+    /// A player learning a word in the editor and trying it here destroyed
+    /// something.
+    InSpell {
+        /// The word they used.
+        word: super::SpellWord,
+    },
     /// Nothing scored. Never a bare error (§6) — always something to try.
     Unresolved {
         /// Verbs worth suggesting, best first.
@@ -210,6 +241,7 @@ impl Resolution {
             Self::Ambiguous { .. }
             | Self::Incomplete { .. }
             | Self::Elsewhere { .. }
+            | Self::InSpell { .. }
             | Self::Unresolved { .. } => None,
         }
     }

@@ -52,7 +52,63 @@ fn main() {
     show("The prompt — every outcome §6 can produce", &prompt);
     speak(&prompt);
 
+    let editor = editor_screen(GridSize::new(80, 22));
+    show("The spell editor at the 80×22 floor (§8)", &editor);
+    speak(&editor);
+
     worst_case();
+}
+
+/// The spell editor, at the size where it is tightest (§8).
+///
+/// **Hand-built from literals**, like `boot_report` and `siege` beside it: this
+/// example lives in `orbs-render`, whose `[dependencies]` is deliberately empty,
+/// so it cannot reach `orbs`'s editor or `orbs-sim`'s spells. What it checks is
+/// the thing that is genuinely at risk — that a gutter, a border, a filename, a
+/// status line and a caret position all fit in 80 columns with room left for a
+/// spell, and that every one of them **speaks**.
+///
+/// The real painter is `orbs::shell::sheet`. If this layout stops fitting, that
+/// one has the same problem.
+fn editor_screen(grid: GridSize) -> Frame {
+    const GUTTER: u16 = 5;
+    let mut frame = Frame::new(grid);
+    let area = Rect::new(0, 0, grid.cols, grid.rows);
+    let mut painter = frame.painter(area);
+    painter.border(area, Some("night_watch.spell *"), Style::DIM);
+
+    let lines = [
+        "attend laboratory#2",
+        "kindle charcoal",
+        "grind sage",
+        "siphon mortar_and_pestle",
+        "empty mortar_and_pestle",
+    ];
+    for (index, line) in lines.iter().enumerate() {
+        let y = 1 + u16::try_from(index).unwrap_or(0);
+        painter.span(
+            Pos::new(1, y),
+            &Span::new(&format!("{:>4} ", index + 1)).with_style(Style::DIM),
+        );
+        painter.span(Pos::new(1 + GUTTER, y), &Span::new(line));
+    }
+
+    // The row that must never be blank: §6 forbids a dead end, and this is the
+    // game's first modal surface — a player who does not know the words has
+    // nowhere else to find them, so in command state this row *is* the whole
+    // interface.
+    let status = grid.rows.saturating_sub(2);
+    painter.span(
+        Pos::new(1, status),
+        &Span::new("edit  save  quit  discard").with_style(Style::DIM),
+    );
+    painter.span(
+        Pos::new(grid.cols.saturating_sub(5), status),
+        &Span::new("3:11").with_style(Style::DIM),
+    );
+
+    frame.set_cursor(Some(Pos::new(1 + GUTTER + 10, 3)));
+    frame
 }
 
 // ---------------------------------------------------------------------------

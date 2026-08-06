@@ -108,7 +108,7 @@ pub fn report(world: &mut World) {
     // A **domain's own** verbs are left out. The boot report is written before
     // the player has gone anywhere, and `grind` is not a word at the tower root
     // — offering it there is the dead end this filter exists to avoid, one step
-    // further in. `grimoire brewing` is what teaches them, from inside the
+    // further in. `recall brewing` is what teaches them, from inside the
     // laboratory where they work.
     for verb in Verb::ALL
         .into_iter()

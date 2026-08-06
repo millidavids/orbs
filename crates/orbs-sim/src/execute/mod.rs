@@ -15,7 +15,7 @@
 //! |---|---|
 //! | `dispatch` | the `match`, `meditate`, `status`, and the two records every verb can need |
 //! | `pipeline` | `move`, `wield`, `stop`, `siphon`, `purge`, `divine` — §10.1's loop |
-//! | `grimoire` | `grimoire` — §6.1's manual, read *before* the loop |
+//! | `recall` | `recall` — §6.1's manual, read *before* the loop |
 //! | `navigate` | `attend`, `survey` — §7's places |
 //! | `files` | `peruse`, `sift`, `verify` — §3's log |
 //!
@@ -24,13 +24,18 @@
 
 mod dispatch;
 mod files;
-mod grimoire;
 mod navigate;
 mod pipeline;
+mod recall;
+mod scribe;
+mod unfurl;
 
 #[cfg(test)]
 mod tests;
 
-pub use dispatch::{LOG, MAX_MEDITATE, is_live, run_pending};
+pub use dispatch::{LOG, MAX_MEDITATE, execute_one, is_live, run_pending};
+pub use navigate::find_domain;
+pub use scribe::{Opening, Request, Written, canonicalise, write};
+pub use unfurl::Unfurling;
 
 use dispatch::{acknowledge, missing};

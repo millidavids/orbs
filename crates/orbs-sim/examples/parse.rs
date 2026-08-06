@@ -141,6 +141,9 @@ fn show(resolution: &Resolution, indent: &str) {
                 verb.canonical()
             );
         }
+        Resolution::InSpell { word } => {
+            println!("{indent}`{}` is a word for spells (§8)", word.canonical());
+        }
         Resolution::Unresolved { suggestions } => {
             let names: Vec<_> = suggestions.iter().map(|verb| verb.canonical()).collect();
             println!(
@@ -170,6 +173,9 @@ fn siege_contrast(scene: &Scene) {
             }
             Resolution::Elsewhere { verb } => {
                 println!("  {label}  not here: {}", verb.canonical());
+            }
+            Resolution::InSpell { word } => {
+                println!("  {label}  for spells: {}", word.canonical());
             }
             Resolution::Unresolved { .. } => println!("  {label}  nothing"),
         }

@@ -128,6 +128,18 @@ pub fn report(input: &str, resolution: &Resolution, prose: &Prose, records: &mut
                 .text(FieldName::Message, &message)
                 .finish();
         }
+        // A word the editor taught them, typed here. Naming it and saying where
+        // it belongs — §6 forbids a bare error, and this word is one the game
+        // itself put in their hands.
+        Resolution::InSpell { word } => {
+            let message = prose.line("word_in_spell", &[("name", word.canonical())]);
+            records
+                .push(RecordKind::Echo)
+                .outcome(Outcome::Unresolved)
+                .text(FieldName::Name, word.canonical())
+                .text(FieldName::Message, &message)
+                .finish();
+        }
         Resolution::Unresolved { suggestions } => {
             unresolved(input, records);
             for verb in suggestions {

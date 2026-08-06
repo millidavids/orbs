@@ -69,33 +69,54 @@ pub(super) fn survey(intent: &Intent, world: &mut World) {
         None => world.resource::<Cwd>().0,
     };
 
-    let here: Vec<(String, &'static str)> = tower::children_of(world, at)
+    let mut here: Vec<(String, &'static str, Option<String>)> = tower::children_of(world, at)
         .into_iter()
         .filter_map(|node| {
             let name = world.get::<tower::Name>(node)?.0.clone();
             let kind = world.get::<tower::Nameable>(node)?.0;
-            Some((name, kind.label()))
+            // Only stock is counted. A place, a file and a spell are each one
+            // thing that is either there or not, and `x1` beside every row is a
+            // column of noise.
+            let stock = world.get::<tower::Stock>(node).map(|stock| stock.label());
+            Some((name, kind.label(), stock))
         })
         .collect();
 
+    // **Grouped by kind, then by name.** A room's contents arrive in whatever
+    // order the tree was walked, which put the two files either side of the
+    // instruments and made the listing something you read rather than scanned.
+    // Sorted here rather than in the frontend because §14's linear stream is the
+    // same sequence — a screen-reader user gets the grouping too, and a view
+    // that re-ordered would be carrying an ordering the record stream does not.
+    here.sort_by(|left, right| left.1.cmp(right.1).then_with(|| left.0.cmp(&right.0)));
+
     let mut scrollback = world.resource_mut::<Scrollback>();
     let records = scrollback.records_mut();
-    for (name, kind) in here {
-        records
-            .push(RecordKind::Entry)
-            .text(FieldName::Name, &name)
-            .text(FieldName::Kind, kind)
-            .finish();
+    // **A heading per kind, and the kind off every row.** `sage reagent` said
+    // the word once per line for no gain, and that repetition is what made a
+    // listing read as a wall rather than as a table. The rows carry a name and,
+    // where there is one, an amount — which is what lets the view line the two
+    // up in columns (`Tiling`).
+    let mut section = "";
+    for (name, kind, stock) in here {
+        if kind != section {
+            section = kind;
+            records
+                .push(RecordKind::Section)
+                .text(FieldName::Kind, kind)
+                .finish();
+        }
+        let mut record = records.push(RecordKind::Entry).text(FieldName::Name, &name);
+        if let Some(stock) = stock {
+            record = record.text(FieldName::Quantity, &stock);
+        }
+        record.finish();
     }
 }
 
-/// The tower root.
+/// Where the tree begins, which is not where the player stands.
 pub(super) fn root(world: &World) -> Entity {
-    let mut at = world.resource::<Cwd>().0;
-    while let Some(parent) = world.get::<ChildOf>(at).map(ChildOf::parent) {
-        at = parent;
-    }
-    at
+    tower::root(world)
 }
 
 /// The place `target` names, by full path or by last segment (§7).
@@ -107,6 +128,50 @@ pub(super) fn find_place(world: &World, from: Entity, target: &str) -> Option<En
                 || world
                     .get::<tower::Name>(node)
                     .is_some_and(|n| n.0 == target))
+        {
+            return Some(node);
+        }
+        stack.extend(tower::children_of(world, node));
+    }
+    None
+}
+
+/// The place `named`, searched from the top of the tree.
+///
+/// The one lookup a spell's `Domain` needs, exported because the runner lives in
+/// `tower::spell` and this is `execute`'s answer to "which place is that". A
+/// second copy would be a second answer to a question `find_place` already
+/// settles — including that a place answers to its full path *or* its leaf.
+pub fn find_domain(world: &World, named: &str) -> Option<Entity> {
+    find_place(world, tower::root(world), named)
+}
+
+/// The spell `target` names, wherever it is kept.
+///
+/// # Nameable and findable are the same rule, and must not live apart
+///
+/// `tower::scene` registers every `.spell` from the whole tree, so a spell can be
+/// *named* from anywhere — that is what keeps `invoke` usable outside the one
+/// room with no laboratory in it. Nothing was doing the matching half, and the
+/// failure was silent in the worst way: from the laboratory,
+/// `peruse first_light.spell` resolved at **`Clear`** confidence, found no node,
+/// fell through to the record-stream reader, and reported `peruse 0` — a
+/// zero-line read of a file with three lines in it.
+///
+/// That is the symptom [`files`](super::files) already documents as the reason
+/// resolution goes by kind, arriving from the other direction. The lookup is
+/// global because the scene is global; change one and the other has to move.
+///
+/// The extension is optional, because [`with_extension`](crate::content::with_extension)
+/// makes `first_light` and `first_light.spell` the same spell everywhere else.
+pub(super) fn find_script(world: &World, target: &str) -> Option<Entity> {
+    let wanted = crate::content::with_extension(target);
+    let mut stack = vec![tower::root(world)];
+    while let Some(node) = stack.pop() {
+        if world.get::<tower::Nameable>(node).map(|n| n.0) == Some(NounKind::Script)
+            && world
+                .get::<tower::Name>(node)
+                .is_some_and(|name| name.0 == wanted)
         {
             return Some(node);
         }

@@ -52,6 +52,28 @@ pub fn rebuild(world: &mut World) {
     let Some(cwd) = world.get_resource::<Cwd>().copied() else {
         return;
     };
+    let scene = scene_at(world, cwd.0);
+    world.insert_resource(scene);
+}
+
+/// What could be named **if the player were standing at `at`**.
+///
+/// # Why this is separate from [`rebuild`]
+///
+/// §8 canonicalises a spell's lines at authoring time, *"because a script
+/// executes later, in a different world state, where live-state disambiguation
+/// is unavailable"* — and a spell's own lines move it around: `attend
+/// laboratory` then `grind sage` only resolves because the second line runs
+/// somewhere the first line went. Canonicalising against the scene the *player*
+/// is standing in would refuse every location-scoped verb in the file.
+///
+/// So the writer walks a simulated position through the lines and asks this at
+/// each one. It takes `&World` and **returns** rather than inserting, because
+/// the alternative — swap `Cwd`, call `rebuild`, swap back — would clobber the
+/// live `Scene` from inside an input call, and input touches only session state.
+#[must_use]
+pub fn scene_at(world: &World, at: Entity) -> Scene {
+    let cwd = Cwd(at);
 
     // §3's log is nameable from the moment the game starts and is not a node in
     // the tree, so it is registered first — dropping it here would silently kill
@@ -66,8 +88,8 @@ pub fn rebuild(world: &mut World) {
     // ...and every subject the manual can answer on, from [`Topics`], which is
     // snapshotted **once** at construction. Reading `Prose::topics()` live here
     // made hot-reloading prose change what the parser can resolve: renaming
-    // `grimoire_brewing` mid-session dropped `Topic:brewing` and added another,
-    // so `grimoire brewing` started resolving somewhere else and `(seed,
+    // `recall_brewing` mid-session dropped `Topic:brewing` and added another,
+    // so `recall brewing` started resolving somewhere else and `(seed,
     // submissions)` no longer replayed to the same world — which is exactly what
     // `Sim::set_prose` documents as safe, on the grounds that prose "reaches no
     // decision". A noun *is* a decision.
@@ -87,9 +109,36 @@ pub fn rebuild(world: &mut World) {
         }
     }
 
+    // **Every spell, wherever the player is standing.**
+    //
+    // The same exemption places have, for the same reason. Without it a `.spell`
+    // is nameable only from inside `/grimoire`, because everything that is not a
+    // place is registered from `cwd` — and `/grimoire` is a protected domain
+    // rather than a `Fixture`, so its contents do not reach out the way the
+    // dispensary's do. That would make `invoke first_light` work only where
+    // there is no laboratory to run it in, which is precisely nowhere useful.
+    //
+    // It does not loosen §19's *"you can only name what is where you are"*. That
+    // rule stops you acting on another **domain** at a distance — the archive's
+    // fragments from the laboratory — and a spell is not a domain. It is the
+    // book you carry: §8 has the player keeping their spellbook in vim, and the
+    // fiction that survives that is something on your person, not a shelf you
+    // walk to.
+    //
+    // `execute::dispatch` records the cost of getting this wrong: a `Script`
+    // slot with nothing in scope is *worse than a dead end*, because
+    // `bind night_watch` then falls through to `sift` and reports success.
+    for node in walk(world, super::filesystem_root(world, cwd.0)) {
+        if world.get::<Nameable>(node).map(|n| n.0) == Some(NounKind::Script)
+            && let Some(name) = world.get::<Name>(node)
+        {
+            scene = scene.with(NounKind::Script, &name.0);
+        }
+    }
+
     // Every place, wherever the player is. Depth-first from the root, children
     // in spawn order.
-    for node in walk(world, root_of(world, cwd.0)) {
+    for node in walk(world, super::filesystem_root(world, cwd.0)) {
         if world.get::<Nameable>(node).map(|n| n.0) == Some(NounKind::Place) {
             // A place answers to its full path; §6's matcher also accepts the
             // last segment, which is what makes `attend laboratory` reach
@@ -143,13 +192,13 @@ pub fn rebuild(world: &mut World) {
         scene = scene.with(kind.0, &name.0);
     }
 
-    world.insert_resource(scene);
+    scene
 }
 
-/// The grimoire subjects the parser can name, fixed at construction.
+/// The manual subjects the parser can name, fixed at construction.
 ///
 /// **Snapshotted, not read live from [`Prose`](crate::content::Prose).** Every
-/// `grimoire_` key is a `NounKind::Topic` in the scene, so reading them each tick
+/// `recall_` key is a `NounKind::Topic` in the scene, so reading them each tick
 /// meant a prose hot-reload could change what a phrase resolves to — a *decision*
 /// — while `Sim::set_prose` promises the opposite. The cost is that adding a new
 /// manual subject needs a relaunch rather than a save; the lines themselves still
@@ -179,14 +228,9 @@ fn walk(world: &World, from: Entity) -> Vec<Entity> {
     seen
 }
 
-/// Walk up from `node` to the tower root.
-fn root_of(world: &World, node: Entity) -> Entity {
-    let mut at = node;
-    while let Some(parent) = world.get::<ChildOf>(at).map(ChildOf::parent) {
-        at = parent;
-    }
-    at
-}
+// `root_of` lived here and is now `node::filesystem_root` — the same walk was
+// written out in four places, and the day `/grimoire` sits beside `/tower`
+// exactly one of them should have to learn about it.
 
 #[cfg(test)]
 mod tests {

@@ -8,7 +8,7 @@
 use bevy_ecs::prelude::*;
 use orbs_render::{Outcome, Presentation, RecordKind};
 
-use crate::content::{Fuels, Prose, Recipes};
+use crate::content::{Fuels, Prose, Recipes, Spells};
 use crate::execute::run_pending;
 use crate::parser::{Mode, ParseLog, ParseRecord, Resolution, Scene, analyse, report};
 use crate::rng::Rngs;
@@ -79,6 +79,14 @@ impl Sim {
         // `(seed, submissions)` unless the content were versioned with it.
         world.init_resource::<Recipes>();
         world.init_resource::<Fuels>();
+        // Spells sit in the same tier as recipes and for the same reason: a
+        // spell is nothing *but* decisions, so a reload would break replay from
+        // `(seed, submissions)`. Read once, here, and never again — the player's
+        // own edits go through the world, not through this.
+        world.init_resource::<Spells>();
+        world.init_resource::<crate::execute::Opening>();
+        world.init_resource::<crate::execute::Unfurling>();
+        world.init_resource::<tower::spell::Depth>();
 
         // Its **own** schedule, run before the caller's. Adding `run_pending`
         // to the same schedule and relying on insertion order would be an
@@ -95,7 +103,21 @@ impl Sim {
         // the run was already committed when it started (§10.1), and ordering it
         // the other way would make a completion depend on which system Bevy
         // happened to sort first.
-        schedule.add_systems((tower::burn, tower::finish, tower::drift).chain());
+        // `spell::advance` **before** `finish`: a spell must see the world as
+        // the previous tick left it rather than racing the completion of the run
+        // it is waiting on. Running it after would let a script start the next
+        // stage on the same tick the previous one landed, which is a free tick
+        // no manual player gets — §8's speed advantage arriving by accident, and
+        // arriving at concentration 0 where §19 says nothing may.
+        schedule.add_systems(
+            (
+                tower::spell::advance,
+                tower::burn,
+                tower::finish,
+                tower::drift,
+            )
+                .chain(),
+        );
         build(&mut schedule);
 
         // A **third** pass, for the same reason `commands` is a first one:
@@ -231,8 +253,121 @@ impl Sim {
             }
             Resolution::Incomplete { .. }
             | Resolution::Elsewhere { .. }
+            | Resolution::InSpell { .. }
             | Resolution::Unresolved { .. } => {}
         }
+    }
+
+    /// Save a spell out of the editor.
+    ///
+    /// **The third entry point, and the last one.** [`submit`](Self::submit)
+    /// takes a line the player typed; this takes a file the player wrote. Both
+    /// are *decisions*, which is the test for what belongs in
+    /// [`Submissions`](crate::session::Submissions) and therefore in a replay —
+    /// and the keystrokes that built the buffer are not, which is why the editor
+    /// itself lives in the frontend beside the prompt's own line editor.
+    ///
+    /// # What lands, and when
+    ///
+    /// Like `submit`, this does **not** advance world time. It records the
+    /// submission immediately and queues the write for the next tick, because
+    /// `session` is explicit that effects land on a tick boundary through
+    /// `Pending` — a world mutated from inside an input call produces a session
+    /// that `(seed, submissions)` cannot reproduce. `scene::rebuild` runs per
+    /// tick anyway, so a new spell is nameable from the tick after it is saved
+    /// either way.
+    ///
+    /// The **typed** lines are what gets recorded, not the canonical form they
+    /// become. A replay re-derives the canonicalisation, so improving the
+    /// canonicaliser cannot silently make an old session replay into a different
+    /// world.
+    pub fn write_spell(&mut self, name: &str, lines: &[String]) {
+        let filename = crate::content::with_extension(name);
+        let tick = *self.world.resource::<Tick>();
+        self.world
+            .resource_mut::<Submissions>()
+            .wrote(tick, &filename, lines);
+        self.world
+            .resource_mut::<Pending>()
+            .write(filename, lines.to_vec());
+    }
+
+    /// What a spell holds, if the tower has one by that name.
+    ///
+    /// The extension is optional — `morning` and `morning.spell` are the same
+    /// spell everywhere a player can name one.
+    #[must_use]
+    pub fn spell(&self, name: &str) -> Option<Vec<String>> {
+        let wanted = crate::content::with_extension(name);
+        self.world
+            .iter_entities()
+            .find(|entity| {
+                entity.get::<tower::Nameable>().map(|kind| kind.0)
+                    == Some(crate::parser::NounKind::Script)
+                    && entity
+                        .get::<tower::Name>()
+                        .is_some_and(|node| node.0 == wanted)
+            })
+            .and_then(|entity| entity.get::<tower::Held>().map(|held| held.0.clone()))
+    }
+
+    /// Which line of `name` a running invocation is on, if one is running.
+    ///
+    /// **What the editor draws its marker from.** A spell being edited while it
+    /// runs is the loop this whole surface exists for, and a buffer that does
+    /// not say where the orb has reached is a buffer you are editing blind.
+    #[must_use]
+    pub fn running_line(&self, name: &str) -> Option<u64> {
+        let wanted = crate::content::with_extension(name);
+        self.world
+            .iter_entities()
+            .filter(|entity| {
+                entity
+                    .get::<tower::Name>()
+                    .is_some_and(|node| node.0 == wanted)
+            })
+            .find_map(|entity| entity.get::<tower::spell::Running>())
+            .and_then(tower::spell::line_of)
+    }
+
+    /// A spell the orb has been asked to open, if any.
+    ///
+    /// **Takes** rather than reads: `scribe` asks once, and a frontend polling a
+    /// persistent flag would reopen the editor every frame. See
+    /// [`Opening`](crate::execute::Opening).
+    pub fn opening(&mut self) -> Option<crate::execute::Request> {
+        self.world.resource_mut::<crate::execute::Opening>().take()
+    }
+
+    /// Whether a `scribe` is waiting, without taking it.
+    ///
+    /// **So a frontend can ask before it mutates.** `opening` takes `&mut self`,
+    /// so a system holding `ResMut<Tower>` stamps the resource's change tick
+    /// merely by *asking* — which leaves `resource_changed::<Tower>` true for
+    /// ever and quietly returns every system gated on it to 60 Hz, including the
+    /// two whose doc comments exist to say they must not be.
+    #[must_use]
+    pub fn has_opening(&self) -> bool {
+        self.world
+            .resource::<crate::execute::Opening>()
+            .is_pending()
+    }
+
+    /// Whether an `unfurl` is waiting, without taking it. See [`Sim::has_opening`].
+    #[must_use]
+    pub fn is_unfurling(&self) -> bool {
+        self.world.resource::<crate::execute::Unfurling>().pending()
+    }
+
+    /// Whether `unfurl` has asked for the transcript to take the keyboard.
+    ///
+    /// **Takes** rather than reads, for the same reason [`Sim::opening`] does: a
+    /// frontend polling a persistent flag would re-enter reading mode every
+    /// frame, including the frame after the player pressed Escape to leave it.
+    pub fn unfurling(&mut self) -> bool {
+        self.world
+            .resource_mut::<crate::execute::Unfurling>()
+            .take()
     }
 
     /// Answer a numbered prompt.
@@ -344,7 +479,7 @@ impl Sim {
     /// same world. **Recipes will not have this property**, and when they arrive
     /// the content they came from has to be versioned into the submission log.
     ///
-    /// That claim was **false while `grimoire_` keys fed the scene**: every one is
+    /// That claim was **false while `recall_` keys fed the scene**: every one is
     /// a `NounKind::Topic`, so renaming one mid-session changed what the parser
     /// resolves. [`Topics`](crate::tower::Topics) is snapshotted at construction
     /// and deliberately not touched here, which is what makes the paragraph above

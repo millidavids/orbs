@@ -241,7 +241,7 @@ Issuing an action is free; **actions take time to complete.** Brewing, warding,
 repairing, deciphering, and summoning all occupy their pane for a duration
 measured in ticks.
 
-**Attention is therefore the real scarcity, and it is expressed as concurrency:**
+**Concurrency is therefore the real scarcity:**
 how many duration-actions you can have in flight at once. That is precisely what
 focus panes gate (§9), which means the economy and the focus system are the same
 system rather than two bolted together.
@@ -251,8 +251,10 @@ This gives every downstream claim its teeth without a currency:
 - **Nuisances have real decision content.** Repairing the rats occupies the
   laboratory pane for its duration, during which you are not brewing. "Handle when
   convenient" is a genuine trade-off.
-- **Automation wins** because script actions occupy Attention rather than Focus,
-  and because of script-only capabilities and the speed advantage (§8).
+- **Automation wins** because script actions occupy Concentration rather than
+  Focus, and because of script-only capabilities and the speed advantage (§8).
+  It wins *nothing at all* until the first concentration level is bought, which
+  is what makes that upgrade the game's turn rather than a step on a curve.
 - **Multiplexing is valuable** because in-flight manual actions reserve their
   Focus slot (§9, invariant 4), so capacity — not pane count — is what caps how
   much you can have going by hand.
@@ -547,15 +549,16 @@ The Phase 0 vocabulary (16 commands), canonical arcane with synonym registers:
 | `peruse <file>` | Read a file | `cat`, `less` | read, open, show |
 | `sift <pat> <src>` | Filter for matches | `grep` | search, filter, "look for" |
 | `status` | Tower overview (the boot report) | — | overview, "how are things" |
-| `grimoire <topic>` | In-world manual | `man`, `help`, `?` | explain, "how do I" |
+| `recall <topic>` | In-world manual | `man`, `help`, `?` | explain, "how do I" |
+| `meditate <n>` | Fast-forward the clock | `sleep` | rest, pass — **not `wait`, see §19** |
 | `verify <target>` | Detect tampering | `check` | inspect, audit |
 | `undo` | Revert the last command | — | revert, "take it back" |
 | `meditate <n>` | Fast-forward the clock | `wait`, `sleep` | rest, pass |
 | `decoct <essence>` | Brew a potion — **retired in Phase 1, see below** | — | brew, make, mix, distil |
-| `siphon <vessel>` | Collect a finished potion | — | collect, decant, pour |
+| `empty <place>` | Turn a tool out into the dispensary | — | unload, collect, decant, pour |
 | `purge <target>` | Destroy waste or spoilage | `rm` | clean, dump, "get rid of" |
 | `divine <frag>` | Research a fragment | — | decipher, study, translate |
-| `scribe <name>` | Author a script | `vi`, `edit` | inscribe, author |
+| `scribe <name>` | Open a spell in the editor, making it if new | `vi`, `edit` | inscribe, author |
 | `bind <script>` | Attach a script to a trigger | `cron` | schedule, automate |
 | `invoke <script>` | Run a script or spell | `run`, `exec`, `./` | cast, do |
 
@@ -566,6 +569,19 @@ Every row resolves from all three registers; the echo always shows column one.
 in the table as a plain-English synonym, so nothing a player learned stops
 working. That is not courtesy: a released word does not stop resolving, it
 resolves to whatever it is nearest, and `decant` unclaimed lands on `decoct`.
+
+**`siphon` was retired outright in Phase 1** (§19) and `empty` inherited its
+words. Not a rename: the verb had nothing left to do once the per-instrument
+verbs could reach into an idle tool, and with it gone the laboratory bench and
+the dispensary are one place. `take` was deliberately *not* inherited, which
+removed a tolerated collision rather than moving it.
+
+**A fourth changed in Phase 1: `grimoire`→`recall`** (§19), and this one was
+**released rather than kept as a synonym.** The rule above protects *shipped*
+vocabulary and nothing has shipped — and `grimoire` now names the player's
+spellbook at `/grimoire`, so keeping it pointed at the manual would make one word
+mean both the reference you read and the book you write in. Typed alone it now
+reads as the directory it is.
 
 **Phase 1 adds three and retires one, taking the vocabulary to 18.** The brewing
 pipeline (§10.1, §19) needs a way to move a thing, start a tool, and cancel one:
@@ -798,17 +814,20 @@ invisible.
 - **Resource contention** resolves in execution order; starved instructions log
   and degrade per the taxonomy.
 - **Scripts may not bind other scripts.** Scripts *may* `invoke` another script,
-  with a **call-depth limit of 3**. The Attention pool alone is not a sufficient
-  recursion guard: exhausting it makes every subsequent instruction `Budget
-  starved`, which logs at high verbosity only, so all automation would stop
-  silently. Depth-limiting makes runaway recursion a loud, diagnosable failure.
+  with a **call-depth limit of 3**. The Concentration pool alone is not a
+  sufficient recursion guard: exhausting it makes every subsequent instruction
+  `Budget starved`, which logs at high verbosity only, so all automation would
+  stop silently. Depth-limiting makes runaway recursion a loud, diagnosable
+  failure.
 - **A script action and a manual action may target the same domain
-  simultaneously** — they occupy different resources (Attention vs Focus, §9).
+  simultaneously** — they occupy different resources (Concentration vs Focus, §9).
   They contend only for reagents and mana, resolved under the resource-contention
   rule above, with the manual action taking precedence: the player's own hand
   wins over the orb's.
-- **Attention exhaustion is a visible condition**, surfaced in `status` and in the
-  sidebar — never a quiet log line.
+- **Concentration exhaustion is a visible condition**, surfaced in `status` and in
+  the sidebar — never a quiet log line. At concentration 0 it is not an exhaustion
+  at all but the **starting state**, and `bind` says so in those terms: the orb
+  cannot hold a spell for you yet.
 - **Instruction dispatch is atomic within a tick; saves are permitted only at tick
   boundaries.** Autosave runs every N ticks and on significant events, not every
   second.
@@ -927,10 +946,12 @@ of which exist already:
 - **Capability unlocks** — conditionals, loops, triggers, bindings, offline
   accrual, and extra focus panes are each discovered and researched. Early scripts
   are linear command lists.
-- **Upkeep is paid in Attention, not mana.** A bound script holds a fraction of
-  the Attention pool even while idle, so "what is worth automating" is a genuine
-  portfolio decision. Mana upkeep would have been free in practice, since mana
-  does not bind in the tower. Explicit from Phase 1.
+- **Upkeep is paid in Concentration, not mana.** A bound script holds a **whole
+  slot** while it is bound, idle or not, so "what is worth automating" is a
+  genuine portfolio decision — and at concentration 1 it is the sharpest decision
+  in the game, because binding a second spell means letting the first one go.
+  Mana upkeep would have been free in practice, since mana does not bind in the
+  tower. Explicit from Phase 1.
 
 ### Soft drift
 
@@ -966,8 +987,20 @@ Used consistently throughout; earlier drafts overloaded "attention".
 | Name | Meaning | Source |
 |---|---|---|
 | **Focus** | Manual concurrency — how many duration-actions *you* can have running | Multiplex capacity |
-| **Attention** | Automated concurrency — how many script actions can run at once | Shared pool (§11.5) |
+| **Concentration** | Automated concurrency — how many spells you can hold at once | Shared pool (§11.5) |
 | **Execution budget** | Instructions per tick per script | Fixed constant (§8) |
+
+**Concentration is denominated in *scripts*, and it starts at zero.** A bound
+script holds one slot for as long as it is bound; the concurrent actions it drives
+hold fractions of one. Both charges are needed and neither is redundant — the
+whole-slot charge is what makes *"what is worth automating"* a portfolio decision
+even for an idle script, and the fractional charge is what keeps §11.5's
+multiplexing counterweight scaling with concurrency rather than with pane count.
+
+The unit is scripts because that is the thing the player names, holds, and lets
+go of. *"I am concentrating on `night_watch`"* is a sentence about a spell, not
+about a number of in-flight brews — and starting at **0** makes the first
+concentration level a real unlock rather than a raised ceiling.
 
 ### Layout — the orb resolves more detail
 
@@ -1097,14 +1130,20 @@ risk (§12), the *mechanics* come from a shared template with per-pair tuning �
 only the flavour line is bespoke. Twenty-one distinctive sentences is cheap;
 twenty-one bespoke systems is not.
 
-**The multiplexing counterweight is attention upkeep per open pane, not aberration
-rate.** Synergies grow O(n²) in open panes (three hold three pairs, four hold six)
+**The multiplexing counterweight is Concentration upkeep per open pane, not
+aberration rate.** Synergies grow O(n²) in open panes (three hold three pairs, four hold six)
 so the counterweight must keep pace — but nuisance rate is hard-capped
 (invariant 5), so at endgame, where max multiplex meets max trace and max drift,
 a rate-based counterweight would stop counterweighting at exactly the point it was
 designed for. Upkeep is uncapped and scales cleanly: **each concurrent production
-action holds a fraction of the Attention pool**, so multiplexing trades directly
+action holds a fraction of a Concentration slot**, so multiplexing trades directly
 against automation capacity.
+
+The fractional charge is the reason Concentration keeps a per-action component at
+all when it is *counted* in scripts. Charging only whole scripts would make this
+counterweight blind to concurrency — a player would buy depth 4 and pay the same
+as at depth 1 — which is exactly the pane-proxy failure the amendment below
+describes, returning in a new unit.
 
 **Amended in Phase 1: upkeep is charged per concurrent action, not per open
 pane.** Panes were a proxy for concurrency, and the proxy broke the moment one
@@ -1120,7 +1159,7 @@ usable capacity at 2, stranding §11.5's 3-at-5h and 4-at-10h unlocks behind a
 rendering decision — precisely what the paragraph below warns against. Per-action
 upkeep keeps capacity 4 meaningful if that cut is ever taken.
 
-**Attention is decoupled from multiplex capacity as a progression track.** The
+**Concentration is decoupled from multiplex capacity as a progression track.** The
 pool grows via ley-line upgrades and grimoire rank, so capping multiplexing for
 legibility reasons (§4, cut-line item 6) does not silently cap the game's core
 progression as a side effect of a rendering decision.
@@ -1347,24 +1386,37 @@ because automation is *non-blocking*.
 - **Not automating is never ruinous**, only slower. Players who want to do it by
   hand can, until they choose to push far enough that they cannot.
 
-### Focus, panes, and attention
+### Focus, panes, and concentration
 
 | Track | Start | Growth |
 |---|---|---|
 | **Domain panes** (breadth) | 2 of 7 | One per activity discovered; all 7 by ~hour 10 |
 | **Focus / multiplex capacity** (depth) | 1 | 2 at ~1.5h, 3 at ~5h, 4 at ~10h |
-| **Attention pool** (automation) | 3 concurrent script actions | **~25** by the soft ending, via ley-line upgrades and grimoire rank |
+| **Concentration** (automation) | **0** — everything by hand | **1** as one of the first upgrades; **~8** by the soft ending, via ley-line upgrades and grimoire rank |
 
-**The attention pool starts at 3 and must climb steeply.** The `night_watch.spell`
-example in §8 issues a ward, a double brew, a purge, and a conditional — three or
-more concurrent duration-actions from a single script. A 3-slot pool is saturated
-by the player's *first* script, which is the game's headline emotional beat; a
-ceiling is the wrong reward for it. At ~6 min average duration, 25 slots is ~250
-actions/hour against a manual ceiling of 40/hour at Focus 4 — automation dominates
-by roughly 6×, which is what pillar 3 promises. Growth stays stepped and
-non-exponential.
+**Concentration starts at zero, and the first level is the game's turn.** Until it
+is bought the tower is worked entirely by hand: the player can `scribe` a spell
+and read it back, but the orb cannot hold one. That is deliberate. Pillar 3's
+promise is that *teaching the orb to do your work* is the progression, and a
+promise the player is handed at minute zero is not a progression — it is a
+premise. Buying concentration 1 is the moment the game becomes the game it
+advertises, and it should be reachable inside the first hour.
 
-Each open pane holds a fraction of the pool (§9), so breadth of attention trades
+**Concentration 1 is also the sharpest decision in the game**, for exactly as long
+as it lasts. One slot means one standing spell, so binding a second is *letting
+the first one go* — the portfolio question §8 describes, at its most
+uncompromising, before the player has enough slots to stop thinking about it.
+
+**~8 by the soft ending, and the arithmetic is inherited rather than invented.**
+The retired Attention pool was denominated in actions and ran 3 → ~25 on the
+reasoning that at ~6 min average duration, 25 slots is ~250 actions/hour against
+a manual ceiling of 40/hour at Focus 4 — automation dominating by roughly 6×,
+which is what pillar 3 promises. §8's `night_watch.spell` issues a ward, a double
+brew, a purge and a conditional: three or more concurrent actions from one script.
+**~25 actions ÷ ~3 actions per script ≈ 8 scripts**, so the same 6× advantage
+survives the change of unit. Growth stays stepped and non-exponential.
+
+Each open pane holds a fraction of a slot (§9), so breadth of attention trades
 against depth of automation.
 
 ### Mana — a fixed siege budget
@@ -1452,9 +1504,9 @@ sweep against. First-pass targets:
 | A brewed potion | 2–3 reagents | Reagents from brewing and sieges |
 | A siege consumes | 4–8 potions | — |
 
-**~75 research events across the game** (≈50 commands + ~10 capabilities + ~7
-attention steps + 3 multiplex + 5 domain discoveries) at 3–5 fragments each is
-~300 fragments.
+**~75 research events across the game** (≈50 commands + ~10 capabilities + ~8
+concentration steps + 3 multiplex + 5 domain discoveries) at 3–5 fragments each
+is ~300 fragments.
 
 Fragment supply, first pass:
 
@@ -1487,17 +1539,22 @@ concurrency**.
 
 | Resource | Produced by | Consumed by | Role |
 |---|---|---|---|
-| **Concurrency** | Focus panes (§9) | Duration-actions in flight | The real throttle on attention |
+| **Concurrency** | Focus panes (§9) | Duration-actions in flight | The real throttle on what you do by hand |
 | **Mana** | Passive regeneration, ley-line upgrades | Invocations, script upkeep, repairs | The throttle on action |
 | **Reagents** | Brewing, sieges (exclusive tiers) | Potions, enchantments, repairs | Crafting economy |
 | **Fragments** | Sieges, hidden directories, remote hosts | Research in `archive/` | Progression gate |
 | **Integrity** | Repair, warding | Damaged by sieges, decay, aberrations | Tower health, persistent |
-| **Attention** | Ley-line upgrades, grimoire rank (**not** pane count) | Shared pool across all bound scripts | Caps total automation |
+| **Concentration** | Ley-line upgrades, grimoire rank (**not** pane count) | Shared pool across all bound scripts | Caps total automation |
 
-**Attention is a shared pool, not a per-script bound.** Draft 5 described both;
-they are different mechanisms with different balance behaviour. A shared pool
-makes "what is worth automating" a real portfolio decision, which is the intended
-texture.
+**Concentration is a shared pool, not a per-script bound.** Draft 5 described
+both; they are different mechanisms with different balance behaviour. A shared
+pool makes "what is worth automating" a real portfolio decision, which is the
+intended texture.
+
+That it is *counted* in scripts does not make it per-script: one slot is not
+reserved for one spell. The pool is shared, a bound script draws a whole slot from
+it and its in-flight actions draw fractions, and what the player buys is the size
+of the pool.
 
 ### Intended shape
 
@@ -1524,7 +1581,7 @@ texture.
    regardless of which pane is displayed (§9).
 5. No siege can reduce tower integrity below its pre-siege value (§5).
 6. Nuisance arrival rate has a hard ceiling regardless of trace, panes, and drift
-   (§5.3). The multiplexing counterweight is therefore attention upkeep, not
+   (§5.3). The multiplexing counterweight is therefore Concentration upkeep, not
    nuisance rate (§9).
 7. Unattended-siege backlog is capped at 5, decays over time, and clears only at
    ≥20% completion, by dispersal, or by lapse.
@@ -1942,7 +1999,7 @@ in the suite would have caught it, and none was ever written that could have.
 | Phase | Goal | Words | Cal. | Exit criterion |
 |---|---|---|---|---|
 | **0. Vertical slice** | Parser + instrumentation, **the prompt — an interactive command line, built before the domains and used to verify them**, **brewing + archive (the two starting domains)**, **`orbs-render` Frame boundary**, **log-poisoning sabotage on brewing logs**, cell-grid renderer + fidelity tiers, worst-case CRT legibility test, structured-record output model, seeded-RNG + `step()` determinism spine, boot, scaffold tutorial | ~3k | 4 mo | Numeric gate below |
-| **1. Core loop** | World clock, script engine + attention pool + failure taxonomy, remaining sabotage surfaces, 3 domains, minimal apprenticeship, content data format, balance CLI **sweeping §11.5's first-pass numbers**, **scrappy internal `orbs-tui` as a dev tool** | ~15k | 5 mo | A player automates a duty and feels clever; non-terminal testers in the loop |
+| **1. Core loop** | World clock, script engine + **concentration** + failure taxonomy, remaining sabotage surfaces, 3 domains, minimal apprenticeship, content data format, balance CLI **sweeping §11.5's first-pass numbers**, **scrappy internal `orbs-tui` as a dev tool** | ~15k | 5 mo | A player automates a duty and feels clever; non-terminal testers in the loop |
 | **2. Siege** | Autobattler, trait composition, adversarial aberrations, escrow economy, **unattended-siege backlog + dispersal**, pane addressing, one siege type, drift stub, synergy template | ~15k | 4 mo | Sieges are tense and scripts visibly matter |
 | **3a. Breadth** | All 7 domains, discovery/research, full drift, **offline progression + its unlock**, shared-engine extraction | ~18k | 4 mo | Every domain playable |
 | **3b. Remote hosts** | The second content type: trees, verbs, infiltration, trace amplification. **`orbs-tui` to ship quality, if the schedule allows** | ~12k | 3 mo | Infiltration loop closed |
@@ -2108,6 +2165,947 @@ domains are settled (brewing + archive), and the fragment trickle has a rate
    price-shop — Exapunks is $19.99.
 
 ## 19. Decisions log
+
+### `unfurl` — a word for a key nobody could find
+
+`PageUp` has scrolled the transcript since the transcript existed, and nothing
+ever said so: the border advertises `PgDn newest` **only once you are already
+scrolled back**, so the affordance announced itself exclusively to players who
+had found it. In a game with no mouse and no menus that is no affordance at all,
+and a long `survey` was effectively unreadable past the pane's height.
+
+So the way in is a word, like everything else here. `unfurl` hands the transcript
+the keyboard, pages back once so the screen visibly changes, and puts
+`pgup/pgdn  esc out` in the border — which is the part the player keeps after
+they stop needing the word. **Escape means what it means in the editor**: step
+out of the mode you are in. It deliberately does not scroll back to the newest
+output; someone who read back and pressed Escape wants to type, not to lose
+their place.
+
+#### Not `recollect`, and not `scroll`, and not `page`
+
+Three names died to the naming pass, all before shipping, which is the whole
+point of it:
+
+- **`recollect`** collides with `recall` on `rec` — and
+  `rec_is_pinned_as_a_prefix_before_anything_else_wants_it` names this exact
+  scenario a word in advance: *"a future `recipe`, `record` or `recover` would
+  build the `dec`-reaches-three-verbs defect, one word at a time and with
+  nothing complaining."*
+- **`scroll`** made `scr` reach `scribe` *and* `unfurl`, caught by
+  `ambiguous_synonym_prefixes_are_known` — which is why that test pins a set
+  rather than counting one.
+- **bare `page`** fuzzy-matches `purge`. A collision between *read back* and
+  *destroy what is in this* is not one to tolerate whichever way it resolves, so
+  only the phrases `page up` and `page back` survive — and they name the key,
+  which is better than the word they replaced.
+
+`und` and `unf` part at the third character, which is the length the pass
+governs.
+
+#### Declining a keystroke means running
+
+Three surfaces can own the keyboard now, and the prompt's guard used to be a run
+condition. That is the wrong shape: **a system that does not run keeps its
+message cursor**, so every key typed while the editor or the transcript held the
+keyboard was still queued — and arrived at the prompt in a burst the moment it
+ran again. Typing while reading and then pressing Escape dumped all of it into
+the command line.
+
+`type_into_line` runs whenever there are keys and decides for itself, clearing
+the reader when it declines. The invariant that exactly one surface consumes a
+keystroke now lives in one function rather than in a pair of predicates that had
+to stay complements as modes were added.
+
+**Found by a test written to check something else** — the assertion that mattered
+was the second one, that the prompt gets the keyboard *back*.
+
+### `survey` reads as a TOML table, tiled — built
+
+`sage reagent` in one flat weight, with no indication of how many, repeated once
+per row. Three problems in one line, and the middle one was the model's fault
+rather than the view's — there were no counts to show until `Stock` existed.
+
+```text
+[reagent]
+charcoal    = ∞  ground-sage = 1  husks       = 1  rock-salt   = ∞
+sage        = ∞
+```
+
+- **`RecordKind::Section`** carries the kind that used to sit on every row, and
+  stacks while the entries tile. Saying `reagent` once per line gained nothing
+  and is what made a listing read as a wall rather than as a table. It speaks as
+  a `Heading`, so §14 gives a listener the grouping the columns give everyone
+  else.
+- **The brackets are the view's.** The record holds the bare word, so `sift
+  reagent` finds it and a reader hears a heading rather than punctuation;
+  `[reagent]` is how this surface draws one.
+- **Tiled, and never wrapped.** `per_row` is a whole number of strides and a
+  stride is the widest entry in the run, so an entry either gets its own column
+  or the run stacks. There is no arithmetic that can leave half a name at the
+  end of a row, which is a property rather than a bound to tune.
+
+#### The planner measures fields, not the rendered line
+
+The `=` only lines up if every tile pads its name to the run's widest. Measuring
+the joined text gives one width for the pair, packs them tight, and leaves the
+eye nothing to run down.
+
+**Getting that wrong broke a screen it was not aimed at.** Setting the stride
+from the name alone while still drawing the whole line made the cold-launch verb
+listing overlap itself — `attend plasurvey plaperuse filsift`. The planner tracks
+both widths now and uses whichever the run is actually drawn from.
+
+#### `=` binds an amount, and only an amount
+
+The first version bound the second field whatever it was, and the verb listing
+became `stop = place` — a grammar rewritten as an assignment, saying the two are
+the same thing. How many of something there are is the one relation `=` reads
+correctly, so `FieldName::Quantity` is the one it is used for; everything else
+keeps the juxtaposition it had.
+
+The separator is overdrawn dim after the span rather than drawn as a third span
+of its own: the span already carried the whole tile into the linear stream, and a
+second would put ` = ` in it as an utterance.
+
+### A spell's output goes to the log, not the pane — built
+
+A running spell emits exactly what the same commands typed by hand emit. That is
+right, and it buried the transcript: a `repeat` loop pushes a move, a wait, a
+yield and an empty every few ticks for as long as it runs, so the player's own
+last line scrolled off in seconds.
+
+**No new storage and no second path**, because a log is already a view over the
+one record stream (§3, rule 4). `FieldName::Spell` names which spell caused a
+record; the transcript draws the records without it, and `peruse laboratory.log`
+reads the very ones it declined to draw. That also names the culprit, which §8.1
+wants on its own account — a record saying which spell moved the sage is one
+`sift` can select.
+
+#### Stamped by the stream, not by the emit sites
+
+`Records::attribute` is set once around a spell's turn, exactly as
+`Records::register` is set once for the tonal register. A spell's output *is*
+what the ordinary sites emit, so there is nothing at those sites to change — and
+changing them all would mean every future site had to remember.
+
+#### The half that was nearly missed
+
+Hiding what the runner emits got most of the way there and left the line a loop
+produces **most often**: `the mortar_and_pestle yields ground-sage`. An
+instrument completes on its own schedule, ticks later, in `work::land` rather
+than in the runner — so the credit has to be carried on the instrument
+(`Bidden`) from the moment it is charged and re-applied when the run lands. It is
+*taken* rather than read, so a credit cannot be spent on whatever starts that
+instrument next.
+
+`everything_a_spell_does_is_credited_to_it` sweeps the whole stream rather than
+checking one record, which is what catches this class: the sites a spell reaches
+are the ordinary ones, so the property has to hold for records nobody thought
+about. Reverting the `Bidden` half reproduces five stray yields.
+
+The player's own line stays: the `invoke` they typed, its echo, and the orb
+answering that it has taken the spell up. Those are the command, not its output,
+and hiding them would make casting a spell look like nothing happened.
+
+### Stock has a count, and the base reagents are endless — built
+
+The tower held **one** of each reagent, as one entity per name, with no quantity
+anywhere. A `repeat` loop over `grind sage` therefore fired exactly once and then
+reported an empty mortar for ever — correct behaviour with nothing behind it.
+§11.5 wants the laboratory to always have something to do, and a laboratory whose
+sage is spent after one grind has nothing.
+
+**`Stock` is a component with two states**, `Endless` and `Counted(u32)`:
+
+- **Endless is not "a very large number."** A count that started high would still
+  tick down on the panel and still end, and the promise is that it does not.
+- **A variant, not a name check.** `tower::Role` already records what happens
+  otherwise — six sites branching on `name == ATHANOR` with nothing binding them
+  together. Which stock is inexhaustible is decided once, where the tower is
+  built, and §10's five further domains will each have their own.
+- **Charcoal is endless too.** It is fuel rather than an ingredient, but a cold
+  athanor with nothing to burn is the same stalled laboratory by another route.
+
+**What is *made* is scarce**, and that is where the game is: the base reagents
+are the floor, and everything derived from them costs the tower's time.
+
+#### One unit per move
+
+`move sage to mortar_and_pestle` takes one and leaves the rest; a run spends one
+of each input. A count nobody can spend part of is a number on a screen — taking
+one is what makes it the thing you manage.
+
+#### Merging was already needed, and had nothing to show it
+
+`give` pours onto an existing pile rather than standing a second node beside it.
+Grinding twice used to leave **two** nodes both called `ground-sage` in the
+dispensary — two `survey` rows under one name, and a name the parser then had to
+choose between arbitrarily. That was true before counts existed; counts merely
+made it visible.
+
+#### The second copy is what made the first fix look like it worked
+
+`move` and charging an instrument were two copies of the same three lines, and
+they drifted the instant counts arrived: `move sage` took a unit while
+`grind sage` re-parented the **endless pile itself** into the mortar, where the
+run consumed it and `empty` swept it into the store. The tower's inexhaustible
+sage was gone for good after one grind — and the `move` path, tested on its own,
+looked entirely correct. `hand` is the one function now.
+
+### The screenshot chord froze the prompt, then froze the editor — really fixed
+
+`Cmd+Shift+Ctrl+4` hands the window to macOS's screenshot overlay mid-chord, so
+the release for Cmd and Ctrl goes to the overlay. `ButtonInput` believes they are
+down forever, every keystroke hits the chord guard, and the field is dead with
+nothing on screen to say why.
+
+**The first fix was `forget_held_keys` on `WindowFocused(false)`, and it did not
+work.** Reported again a day later, on the editor. Reading the engine says why,
+and it is structural rather than a slip:
+
+- `WindowFocused(false)` is the **only** thing that reaches
+  `check_keyboard_focus_lost`, which is the only thing that writes
+  `KeyboardFocusLost`, which is the only thing that calls `release_all`. Every
+  recovery path in Bevy 0.19 hangs off that one event — so our system was a
+  second copy of a mechanism the engine already had, not an addition to it.
+- **Bevy 0.19 drops winit's `ModifiersChanged` entirely.** That is the OS saying
+  what is *actually* held, and it never reaches the app. Verified by grep against
+  the pinned source: `bevy_winit` matches it nowhere.
+
+So when a key-up is swallowed without a focus event, there is no mechanism
+anywhere in the stack to notice, and no event to hang a third fix on.
+
+#### The evidence is the keystroke itself
+
+`chord_is_stale`: if the key arrived **with text**, the OS is not treating it as
+a command, so the held chord is a ghost from a swallowed release. The guard
+yields, the character lands, and the stale state is cleared — the field comes
+back on the first key typed, with no focus event required.
+
+Platform-independent by construction. A real chord produces no text on macOS,
+and a control character on Windows and X11 — which both text fields already
+filter, because a control byte in the buffer would occupy a cell and draw
+nothing. `a_real_chord_is_still_not_text` pins that: `Cmd+Enter` carries
+`text: Some("\r")` and must stay guarded, which is the bug the guard was built
+for in the first place.
+
+**Both fields, tested separately.** They share the guard, which is why they
+shared the freeze — and a fix tested only on the prompt would have been half a
+fix, exactly as the focus hook was. `forget_held_keys` stays: it is correct when
+a focus event *does* arrive, and cheaper than waiting for a keystroke.
+
+### An `if` was the one line the orb did not write down — fixed
+
+**Reported as "the `if` block is working inversely"**, from a screenshot, and it
+was not inverted. `if mortar is empty` ran the `else` every time because
+`mortar` was compared **exactly** against `mortar_and_pestle`, found nothing, and
+answered no for ever. `if mortar_and_pestle is empty` had always worked.
+
+Two defects, and the second is the one that made the first survive.
+
+#### Canonicalisation skipped a control word's tail
+
+Every other line goes through §6's matcher at save — that is what turns
+`grind the sage` into `grind sage`. A control word was kept verbatim, and so was
+everything after it, including the place the question is about. `if` was
+therefore the only line in the language where the player's own phrasing had to
+match the tower's internal name character for character.
+
+`scribe::written_condition` now resolves the names in a question the way a
+command's argument is resolved, and `peruse` reads back
+`if mortar_and_pestle is empty`. That is the same lesson the echo teaches at the
+prompt, applied to the one line that was exempt from it. The word itself is
+still verbatim — the collision `Resolution::InSpell` exists for is unchanged.
+
+#### "No" and "there is nothing here by that name" were the same answer
+
+`holds` returned `bool`. A place the tower does not have is §8's *Referent
+missing*, not a false condition, and conflating them is what made this silent:
+a spell could take the `else` on every pass for ever without saying one word.
+§8's taxonomy is titled *"scripts always log and never halt"*, and this did
+neither.
+
+It returns `Option<bool>` now, and the runner says `spell_nowhere` naming the
+place — every evaluation, like every other line-level failure. **That is
+defence in depth rather than belt-and-braces**: canonicalisation fixes the names
+a player writes today, and the runtime line catches a spell whose world has
+changed since it was saved, which is exactly §8.1's substitution surface.
+
+#### Why no test caught it
+
+`if` was covered at the *parse* level only — `program.rs` and `spellword.rs` both
+test `if the mortar is idle`, and neither ever resolved that name against a
+world. A condition that parses and a condition that finds anything are different
+claims. The three new tests in `tower::spell::tests` run the spell and assert on
+**which branch executed**; asserting on `holds` directly would have agreed with
+the bug.
+
+### The orb was writing down a shorter command than it heard — fixed
+
+Reported as *"`grind sage` is truncated to `grind` when I close and reopen the
+editor."* It was, and the file really changed: `quit` saves, so every visit
+re-canonicalised the spell against whatever happened to be on the shelf at that
+moment.
+
+§10.1's per-instrument verbs take their reagent **optionally** — bare `grind`
+recharges a mortar that is already loaded, which is deliberate and is what makes
+those verbs worth having. The consequence nobody traced: with the sage spent,
+`grind sage` resolves to `grind` with no arguments, and the orb wrote `grind`
+down as though that were what it heard. Two different commands, swapped in
+silence, in a file the player had finished writing.
+
+`scribe::dropped_argument` keeps the line as typed and flags it instead.
+
+**Why it asks about reagents rather than about words.** Canonicalisation is
+*supposed* to discard: `make a potion of clarity` becomes `recall clarity`, and
+`look around` becomes `survey`. A sweep for "did any word vanish" flags both —
+the game's two flagship plain-English phrasings — so that fix would have broken
+the tutorial to save the editor.
+
+The distinguishing fact is that a reagent's **name** is a fixed property of the
+recipes while its **presence** is not. `sage` names something whether or not any
+is on the shelf; `around` names nothing, ever. So the question is whether a
+dropped word is in `Recipes::vocabulary`, and that answer does not move when the
+laboratory does. The counterweight test asserts the three phrasings still
+canonicalise and that none of them is flagged.
+
+#### ...and the guard immediately exposed four lines that fell out of their block
+
+Flagging `grind sage` made it visible that a kept-verbatim line loses its
+indentation:
+
+```text
+repeat
+    if mortar_and_pestle is empty
+grind sage                          ← flagged, so un-indented
+    else
+```
+
+**Four branches keep a line's words** — a spell naming another spell, an
+unreadable line, `attend`, and now a dropped reagent — and every one wrote
+`line.trim()`, which keeps the words and throws the whitespace away. Two of them
+had been doing it since they were written; nothing had put a flagged line inside
+a block before.
+
+Structurally harmless, because blocks are delimited by `repeat`/`if`/`else`/`end`
+and never by layout. Alarming to look at, which is worse than harmless in a file
+whose whole job is being read back — and it contradicted what this module already
+says about control words: *"the indentation is the orb's, not the player's."*
+That was true of one branch and false of four. `verbatim` is now the one way to
+write a kept line, and it takes the block depth.
+
+### The running-line marker moved left, and went green
+
+It replaced the gutter's trailing space, which put it *between* the number and
+the code — so the digits shifted a column the instant an invocation reached the
+line. It has its own column now, left of the number, and the number sits still.
+
+The gutter is the same five cells: a marker column, three digits, a space.
+Three still spells every line of any spell anyone will write, and a sixth column
+would come out of the 80-cell floor, where columns are the scarce thing.
+
+Green by `Role::Success` rather than by a colour — the theme's completion accent,
+which is green in every theme where green reads and yellow in the one where it
+would disappear into the base ramp.
+
+### A prose line drew its own placeholder — fixed, and now guarded
+
+`spell_gave_up` read `{name} waited too long on the {source}`, and `say_failure`
+supplies `name`, `detail` and `count`. So a player watching a spell give up read
+*"waited too long on the `{source}`, and moved on"*, literally.
+
+`prose.toml`'s header calls this deliberate — *"a placeholder with no matching
+field is left as written, visible on screen, so a typo is caught by looking
+rather than by silently rendering an empty gap."* It worked exactly as designed:
+found by looking, while answering a question about something else.
+
+`no_line_a_spell_can_say_has_a_hole_in_it` is so looking does not have to. It
+drives a spell through every failure the runner has — a wait that never lands, a
+question about nowhere, a name that is not there, a forbidden verb — and asserts
+no message in the **whole stream** contains a `{`. Swept rather than listed: a
+list of keys is the thing that goes stale, and a new failure line with a new
+placeholder is covered here the day it is written.
+
+### The editor indents blocks as you type — built
+
+Four spaces per level, eight two blocks deep, on every line of every spell was a
+tax on writing one. `Enter` inside a block now opens the next line at that
+block's depth, `end` and `else` step back out as the word completes, and
+`Backspace` in the leading whitespace falls back a whole level.
+
+**The rule is one function, in `orbs-sim`.** `parser::indent_around` says where a
+line sits and where the next one starts; `canonicalise` folds it when the orb
+writes the file and the editor folds it as you type. That is not tidiness — the
+orb re-indents on save, so a buffer that indented differently would make **every
+save look like it had moved your work**. `what_the_editor_indents_is_what_the_orb_
+writes_down` checks the buffer against the shared function rather than against a
+hand-written expectation, which would agree with itself and with neither.
+
+Three judgement calls, and what decided each:
+
+- **`end` moves when the word lands**, not when the line is left. A player types
+  it inside the body, and a line that sat one level too deep until save would
+  read as the save having moved it. Only lines that *are* control words re-indent
+  — a command line jumping while you typed ordinary text would be the editor
+  fighting you.
+- **`Enter` mid-line indents nothing.** Auto-indent applies when the split leaves
+  the line empty, which is "start the next one". Breaking a line mid-text moves
+  the tail exactly as it was, because prepending an indent there — or trimming
+  what the caret split — stops `Enter` and `Backspace` being each other's
+  inverse. `enter_splits_the_line_and_backspace_joins_it_again` already pinned
+  that and caught this being written the other way round.
+- **`Backspace` outdenting is not a nicety**, it is the other half: `Enter`
+  leaves the caret four columns in, and without it getting back out costs the
+  four keypresses the indent just saved. It falls back to the previous *multiple*
+  of a level, so a hand-spaced line lands on the grid rather than being pushed
+  off it.
+
+A blank line is now written out empty rather than as typed, because auto-indent
+leaves the caret's level behind on a line nothing was put on — trailing spaces
+that draw as nothing and would otherwise go into the file.
+
+### A spell is edited while it runs — built
+
+Four changes, and they are one mechanic. A spell can be opened, altered and
+watched *mid-flight*; the orb reads along with you.
+
+#### One line per tick, which turns spell length into a cost
+
+`SCRIPT_BUDGET` was 4 and is now **1**. §8 introduced it as *"the execution
+budget — the orb's attention"*, and at four it was only a runaway guard: the
+difference between a tight spell and a sloppy one vanished inside a single tick,
+so there was nothing for an efficient script to *be better at*.
+
+At one, a spell costs a tick per step and **a shorter spell is a faster spell**.
+Two lines that do what three did is a real advantage, and a `repeat` whose body
+could have been tightened is paid for every turn. That is the lever §11.5 wants
+and the old number did not give.
+
+Everything counts as a step — a command, checking a `wait`, entering a `repeat`,
+asking an `if`. Counting only *commands* would make block-heavy spells free,
+which is precisely the wrong incentive. It also keeps the budget doing its
+original job: entering a block spends a step, so an empty `repeat` cannot spin
+inside one tick and hang the game.
+
+#### Saving is debounced, and `save` is not a word any more
+
+The buffer writes itself out a beat after the typing stops (0.6s). `save` and
+`discard` are gone from the editor's vocabulary, which is now `edit` and `quit`.
+
+**Because saving stopped being a thing you finish with.** A spell reloads live,
+so the loop is: watch it go wrong, fix the line, watch the next pass take it. A
+`save` word standing in the middle of that is a chore where the mechanic should
+be.
+
+Debounced rather than per-keystroke because a save mid-word would hand a running
+invocation a half-typed line to reload from.
+
+Three things follow, and each deleted code:
+
+- **`quit` cannot refuse any more.** It refused on unsaved work, which made
+  `discard` load-bearing — without it, unsaved work had no exit. There is no
+  reachable unsaved state now, so both the refusal and its escape hatch are gone
+  and `quit` simply flushes and closes.
+- **`Complaint::Unsaved` and `Outcome::Close` were deleted**, being a refusal and
+  an exit nothing could reach.
+- **`q!` now means `quit`.** A vim user reaches for it, and "without saving" has
+  stopped being a thing that can happen. `w`, `q`, `wq` and `x` stay as the
+  unadvertised easter egg; `w` is the only way left to write *without* closing,
+  and it is what `ORBS_EDIT` and `ORBS_DUMP` use, having no clock to pause on.
+
+#### A save over a running spell takes hold now, not on the next casting
+
+`Running.program` is re-derived and swapped in place, keeping the position as it
+stands.
+
+This is not a violation of §8's *"reloads queue to the next tick boundary, so a
+file cannot change under a script mid-execution"* — it **is** that rule. A save
+is queued through `Pending` like every other effect, so the swap happens between
+steps and never inside one.
+
+**The position is kept rather than remapped**, and nothing else is honest:
+matching old lines to new ones is a diff, and a diff that guesses wrong moves a
+running spell to a line the player did not point it at. Editing below the marker
+behaves exactly as expected; editing above it shifts what runs next — the same
+thing that happens when you edit a script somebody is reading aloud from.
+
+It supersedes the *stop → edit → restart* loop recorded below, which is now one
+option rather than the only one. `stop` is still there and still needed.
+
+#### The marker, and `line_of` returning `Option`
+
+The editor's gutter marks the line the orb is on with `»`, replacing the
+gutter's trailing space rather than taking a column — a gutter that widened when
+an invocation started would shift every line sideways under the player's caret.
+
+§14 forbids a fact carried only visually, so the **title says it too**:
+`Painter::border` pushes a title to the speech stream as a `Heading`, and
+`editor_at_line` is authored prose like everything else.
+
+`line_of` returned `0` for "run off the end", which the two log sites never see —
+they report a failure on the step they are executing. The marker does: a spell
+whose last line has run keeps `Running` until the tick tidies it up, and the
+sentinel put the marker on a line numbered zero, which no file has. It returns
+`Option<u64>` now.
+
+**Found by looking, not by a test.** `ORBS_DUMP` also grew the ability to open
+the editor from `ORBS_THEN` — the only ordering that can show a spell being
+edited while it runs, since the invocation has to be cast first — and the first
+version of that replayed `ORBS_EDIT` into the already-written buffer and reported
+`9 lines, 1 the orb could not read` for a three-line spell.
+
+### Domain-scoped spells, watchable events, and the first control structures — built
+
+#### A spell belongs to a domain, and `attend` inside one is meaningless
+
+`scribe` takes the domain from where you stand; the spell runs there wherever you
+are. **The domain is data on the spell, not a directory.** `/grimoire/laboratory/`
+was the obvious shape and it breaks the tower: a directory spawns as a place, so
+that `laboratory` collides on the leaf with `/tower/laboratory`, `attend
+laboratory` becomes a walk-order coin flip, and `every_place_leaf_is_unique`
+fails — the test whose comment says it exists *"rather than the echo quietly
+starting to lie."*
+
+`scribe` at `/tower` refuses, in voice. The first refusal in the game about
+**where you are** rather than what you named.
+
+**This is a precondition for control flow, not a tidy-up.** Canonicalisation used
+to walk a simulated position through a spell's own `attend` lines. A `repeat`
+makes that walk execute a body once at authoring time and N times at run time;
+an `if` makes it **undecidable** — you cannot know at save time which branch ran,
+so you cannot know which room line 9 resolves against. §8 fixes canonicalisation
+at authoring time, so the walk and control flow could never both exist.
+
+#### Events are records, once the completion contract is honest
+
+No second stream, no event bus. §3 already forbids unlogged output, so every
+consequence is on the record stream — and the argument that settles it is §8.1's:
+**a private bus would let a spell react to something the player cannot see or
+audit**, and log poisoning would have nothing to bite on. Here, forging the event
+and forging the evidence are the same act.
+
+But the records could not answer *"has the mortar finished?"*. Eleven emit sites
+put the instrument in whichever field was nearest — `Name` at two, `Path` at two,
+`Source` at two more, where that field's own documentation forbids a place — and
+`Name` itself meant a verb, an instrument, a product or a **list** of products
+depending on who wrote the line. `siphon` announces `ground-sage`, so a spell
+reading `Name` to find the instrument would have been asking a reagent.
+
+**`FieldName::At` is the fix**: a completion says where it happened, always, and
+the shared `say` helper now *requires* it as a separate argument so a new call
+site cannot forget. A test drives a full brew and fails on any event without one;
+it caught three sites on the first run.
+
+#### `wait` before `if`, and `wait` had to be taken from `meditate`
+
+Autonauts is the closest prior art — its audience is explicitly non-programmers
+and its conditional primitive is *"repeat until hear X"*, a **listen rather than
+a branch**. That sets the unlock order: a wait needs no condition vocabulary, no
+comparisons, no truthiness, only a noun.
+
+`wait` was `meditate`'s shell synonym. One word cannot be both, so it was
+released to the spell vocabulary and `sleep` carries the sense at the prompt —
+which it always did better. The tolerated-collision set is **one shorter** than
+it was: `("wait", "write")` went with it.
+
+#### Control words are spell-only, and the prompt answers for them
+
+Not in §6's vocabulary and not fuzzy-matched: `wait` collided with `meditate`,
+`repeat` reaches `revert` at 667 over a 600 threshold, and adding five words
+fuzzily to a vocabulary whose naming pass exists to have no collisions is the
+wrong trade.
+
+**That left a hole §6 forbids, and it was not hypothetical.** Before this,
+`wait for the mortar` at the prompt **opened the editor on a new empty
+`mortar.spell`** — `for`/`the` are filler, `wait`'s `Count` slot cannot take
+`mortar`, so the reading lost to `scribe <Name>`, which takes free text.
+`repeat 3` resolved to `undo`. A player learning a word in the editor and trying
+it at the prompt destroyed something.
+
+`Resolution::InSpell` is `Elsewhere` one step further — *a real word, in the
+wrong place, answered honestly*. And because canonicalisation runs **at save**,
+the fix had to reach there too: without it the file would have held
+`scribe mortar` permanently, with a cheerful *"written down"*.
+
+#### `end` closes every block, and the orb indents its own fair copy
+
+One closing word, chosen for **learnability** rather than diagnosability — the
+earlier draft claimed the latter and it is false: counting detects imbalance but
+cannot say which block, and cannot detect a misordered close at all. `fi`/`done`
+were dropped as generic aliases, because `repeat … fi` would then parse, which is
+worse than either scheme.
+
+Indentation is cosmetic and **the orb re-derives it from block depth on write**.
+It has to: `anchored` strips leading whitespace from every command line, so a
+hand-indented spell could not round-trip a save. Re-indenting makes the file the
+orb's fair copy, which is what §8 says a saved spell is.
+
+#### A malformed spell runs
+
+§8 leaves exactly one answer. It **cannot be refused at save** — *"`bind` always
+succeeds"*, and a draft you cannot save is a dead end — and it **cannot halt at
+cast**, because the taxonomy is titled *"scripts always log and never halt."* So
+an unmatched `repeat` is closed at end of file, a stray `end` is dropped, each is
+reported once naming the line, and the spell runs.
+
+#### A spell can be called off, which it could not be
+
+`stop` took a `Place`. A spell is a `Script`, so `stop night_watch` never
+resolved to the thing it named — and **nothing but running out of program**
+removes `Running`, which an unbounded `repeat` never does. A player who wrote one
+had a spell working the laboratory for ever with no way to reach it: §6's dead
+end, arrived at from a direction the parser could not see.
+
+`stop` now takes a `Stoppable` — a place **or** a script — through the same
+slot-kind-as-set machinery `peruse` uses. Spells are checked first, which is safe
+rather than a tie-break: a `.spell` in the grimoire and a fixture in a room can
+never share a name.
+
+**Stopping the spell does not stop what it started.** `stop mortar_and_pestle` is
+still how a run is cancelled; calling a spell off is walking away from it, and
+the brew it began finishes exactly as it would if the line had been typed by
+hand. Two things to stop, and `stop` reaching both must not conflate them.
+
+The claim this corrects is one made in this very log: *"the budget bounds a tick,
+so it wastes itself rather than hanging the game."* True of the frame. False of
+the session, which is the part a player experiences.
+
+#### `if` and `else`, and the arithmetic that makes a branch different from a loop
+
+The fourth unlock, and last for the reason §8 gives: it is the only one needing a
+vocabulary for **state** rather than for what just happened. Two shapes and no
+operators — `if the dispensary has sage`, `if the mortar is idle`. No
+comparisons, no booleans, no `and`, no nesting of conditions; each is a thing to
+learn that the tower never taught.
+
+**A question the orb cannot read answers no**, and says so. Guessing would be
+worse than refusing here in a way it is not elsewhere: a condition the player did
+not write would decide what their laboratory does while they are somewhere else.
+
+The implementation detail worth recording is that **a branch is not a loop with
+one turn**. An `if` costs *two* path elements going in — which half, then the
+step within it — so walking back out has to pop two. Popping one leaves the path
+pointing at the *other* half, and the spell runs both. That is why the runner's
+stack records what kind of block each entry is rather than only a count: two
+exits that look like arithmetic, and one piece of arithmetic is right for only
+one of them.
+
+`else` sits level with its `if` in the orb's fair copy. Indented as body it reads
+as a step inside the branch it ends, which is the opposite of what it does.
+
+#### `siphon` is retired, and the bench and the shelf become one place
+
+**The verb had nothing left to do.** `reachable` searches idle instruments, so
+`digest ground-sage` takes the mortar's output directly — the pipeline advances
+with nothing drawn off first. `siphon` was step three of a four-command loop that
+had quietly become two, and a docstring in `reachable` still asserted the
+opposite: *"§10.1's loop makes `siphon` mandatory."* Written when the loop was
+`move`/`wield`/`siphon`, never revisited when the per-instrument verbs collapsed
+charge-and-start.
+
+**And it was the only thing that could put a reagent on the laboratory floor.**
+`move`'s destination resolves through `instrument`, which finds fixtures only. So
+retiring it does not just remove a verb — it removes a *place*: the loose bench
+where products landed. There is one place things go when they leave a tool, and
+it is the dispensary.
+
+What is left is a clean three-way split, each doing something the others cannot:
+
+| | |
+|---|---|
+| the next stage's verb | takes what it needs, leaves the rest |
+| `empty` | shelves **everything**, freeing the tool |
+| `purge` | **destroys** what is inside |
+
+`empty` inherited `collect`, `decant` and `pour`, because §6.1's rule is that a
+released word does not stop resolving — it resolves to whatever it is nearest,
+and the two nearest in this room are `purge` and `stop`, which is the pair a
+laboratory can least afford to confuse. **`take` was deliberately not
+inherited**: it sat one edit from `make` and was only safe while it belonged to a
+verb with a different argument kind, so the `("make", "take")` collision is gone
+rather than moved. Two entries have now left the tolerated-collision list and
+none has joined it.
+
+A trap worth recording, because a test caught it rather than a review: the work
+tests' `run` helper was `stage / wait / siphon / purge`, and deleting the siphon
+line left `purge` **destroying the product** the helper existed to keep. A verb
+whose job is quietly two jobs does not decompose by deletion.
+
+#### The `#id` annotation is withdrawn until something can be substituted
+
+Spells were saved as `siphon mortar_and_pestle#5`, and the `#5` was wrong to be
+there. **§8's requirement is about referents that can be destroyed and rebuilt**,
+and its own example says so: `ward --upon north_gate#7f2a`. A siege tears a gate
+down, the player puts it back, the rebuilt gate is a new entity — and the anchor
+is the only thing that can tell, which is what makes §8.1's substitution sabotage
+detectable rather than invisible.
+
+Nothing in the tower is like that. `purge` on a place **scours** it rather than
+despawning it — *"an instrument is safe by being a place"* — and the sim's four
+despawns are spent fuel, an instrument's contents, and loose reagents. The
+mortar's identity is fixed for the life of the world, so the annotation guarded
+a substitution that cannot occur.
+
+Worse, it was **inert**: the field it fed was `None` at every construction site
+and read at none, and at run time the line was re-parsed with `#5` fuzzy-matched
+away as noise — verified by writing `siphon mortar_and_pestle#999999` into a
+spell and watching it resolve to the mortar anyway. So it was decoration that
+*looked* load-bearing, in a file the player has to be able to read, and the
+`Referent missing` row it was supposed to support does not work either.
+
+It goes back with wards and gates in Phase 2, where there is something for it to
+catch and something to test it against. Generalising it from one example about
+one kind of place was the error.
+
+#### Text stays canonical; the program is derived
+
+`Held(Vec<String>)` remains the single source of truth and the program is rebuilt
+at every cast. §8's hot-reload is line-anchored — *"only lines the player
+actually changed are re-resolved"* — and §8.1's sabotage surface is *"a line
+reordered"*. An enemy mutates the text; the program is whatever the text means.
+
+**A new sabotage affordance falls out and §8.1's tell budget was not designed for
+it:** moving an `end` changes far more meaning than moving a command line.
+
+#### Three things the walker had to learn
+
+- **A path, not a line number.** `[2, 1]` is the second step inside the third,
+  and a `loops` stack holds each open `repeat`'s remaining count — a save with a
+  position and no counts would resume every enclosing loop from its first turn.
+- **Entering a block spends a budget step.** It looks wasteful and it is the
+  guard: a `repeat` whose body spends nothing would otherwise be an unbounded
+  loop inside one tick, and the game would stop.
+- **An empty body is stepped *past*, not into.** Descending into one puts the
+  path where `at` cannot resolve, which the runner reads as the end of the spell
+   — so `repeat 2 / end / survey` ended before the survey rather than after it.
+
+#### The cursor is a sequence number
+
+`Records::sequence()` counts everything ever pushed and does not reset on
+`clear`. An index into the stream is correct only while nothing truncates it, and
+the stream grows without bound against a Phase 3a offline catch-up of ~29k steps
+— so the day rotation arrives, every saved cursor would point at the wrong record
+and spells would re-fire or skip with no test catching it.
+
+A `wait` reads only what arrived after its cursor, which is what lets a spell
+blocked for thirty ticks still see everything that happened in them, **and** what
+stops a loop's second turn being satisfied instantly by its first turn's event.
+
+### The script engine and the spell editor — built
+
+Five decisions, in the order they were forced.
+
+#### `grimoire` is a place, not a verb — the manual is `recall`
+
+A grimoire is a wizard's book of **spells**, which is what `/grimoire` now holds.
+Using the same word for the in-world manual made one word mean both the
+reference you read and the book you write in.
+
+**The word was released rather than re-pointed.** §6.1's *"a released word does
+not stop resolving"* rule protects **shipped** vocabulary; nothing has shipped,
+and unclaimed `grimoire` now reads as the directory it names — which it is.
+
+The rename deleted a collision rather than mitigating one. `gri` was the
+vocabulary's only shared three-character prefix, between `grimoire` and `grind`,
+and it had needed a paragraph arguing the clash was survivable because the two
+were words in the same room. That paragraph and its test exemption are both
+gone. `recall` scores at most **500** against every other canonical and synonym
+(threshold 600); the forward risk is the **prefix**, so `rec` is pinned by a test
+before a future `recipe` or `repair` wants it.
+
+#### `/grimoire` is a root domain, beside `/tower` and not inside it
+
+The filesystem root is now a **nameless** node holding `/tower` and `/grimoire`.
+Nameless because `path_of` collects a segment only where a `Name` is present, so
+paths stay `/tower/laboratory` with no special case anywhere — verified by
+building it before the tests that depend on it, which is also how three tests
+that would have silently stopped covering half the tree were caught.
+
+A sibling rather than a room, because **a spell is a book you carry**. §8 has the
+player keeping their spellbook in vim; the fiction that survives that is
+something on your person, not a shelf you walk to.
+
+It is a root domain but **not a §9 activity domain**. §9's panes are per
+*activity* — the seven you multiplex between — and writing is not one of them.
+You do not run the grimoire concurrently with brewing; you go and write, and what
+you wrote runs somewhere else. So it adds nothing to the pane count and is not
+the third discovery the roadmap reserves for scrying.
+
+**Spells are nameable from anywhere**, the same exemption places have. Without
+it `invoke` would work only while standing in the grimoire — the one room with no
+laboratory to run a spell in.
+
+#### Saving the buffer is the authoring event, not `bind`
+
+§8: *"`bind` resolves loose phrasing to canonical commands **at authoring time**
+and stores the canonical form."* `bind` was the only authoring event when that
+was written. `:w` is now that event, so `bind` and `invoke` both run text that is
+already arcane. A refinement of §8, in the doc's own words.
+
+Canonicalisation walks a **simulated position** through the spell, because
+§10.1's per-instrument verbs only resolve where their instrument is: a spell
+opening `attend laboratory` and then grinding is ordinary, and resolving every
+line against wherever the *player* stands would refuse the second one.
+
+**Places are anchored by ID; stock never is.** §8's own example is
+`ward --upon north_gate#7f2a` — a place. §10.1 despawns an instrument's contents
+and respawns the products with fresh IDs every stage, so `grind sage#31` would
+produce a spell that works exactly once and reports `Referent missing` for ever
+after — passing its first test on the way.
+
+#### The editor is the frontend's, and the save is the sim's
+
+The buffer lives beside the prompt's own line editor, in the Bevy crate. **A
+keystroke reaches no decision**: it never enters `Submissions`, never enters
+`ParseLog`, and cannot make two runs from one seed diverge. That is the same test
+by which line editing was put there originally.
+
+Three things confirmed it rather than merely allowing it: `tests/boundaries.rs`
+forbids `orbs-sim` from naming a layout type *by substring*, so a buffer there
+could not know its own pane height; `ORBS_DUMP` runs in the frontend and already
+reaches into the line editor; and `orbs-tui` is ten lines with nothing to diverge
+from.
+
+**One entry per save.** `Submissions` became an enum — `Typed` and
+`Wrote { name, lines }` — carrying the buffer as typed rather than as
+canonicalised, so improving the canonicaliser cannot silently make an old session
+replay into a different world.
+
+**Two states, and it opens in the one that cannot lose your work.** *Command*
+takes words — `edit`, `save`, `quit`, `discard` — and *editing* takes keystrokes
+into the spell, with `Esc` coming back. Any unambiguous prefix will do, so `e`,
+`s` and `q` work for the same reason `sur` means `survey` outside.
+
+Two reasons this beat the always-insert-with-a-`:`-line it replaced. The small
+one: `:` is punctuation you have to be told about, and a modal surface that
+answers to `edit` and `quit` is the same game as the one around it, while one
+answering to `:wq` is a different program wearing its clothes.
+
+The large one: **opening in command state means the first keystroke cannot damage
+anything.** A player who does not yet know what this screen is presses a key and
+is told what the words are, rather than silently editing a spell they thought
+they were reading.
+
+`Esc` has **one meaning in both states** — step back toward the command line —
+so it never leaves the editor and never discards. `quit` refuses on unsaved work,
+which is what makes `discard` load-bearing rather than a convenience: without it
+a dirty buffer would have no exit, and §6's dead end is the failure §15 weighs
+above the raw resolution rate.
+
+**`w`, `q`, `wq`, `x` and `q!` also work, and are never advertised.** An easter
+egg for the hands that have typed `:wq` ten thousand times: finding it works is a
+small gift, and not finding it costs nobody anything. It is a second table,
+matched **exactly** while the vocabulary is matched by prefix — one merged list
+would resolve `w` and `wq` by whichever was listed first, which is an ordering
+nobody would think to check and a save-and-quit that silently only saved. `q!`
+earns its place by being what a vim user reaches for at the exact moment `quit`
+has just refused them.
+
+*The `:` line shipped first and lasted one question.* It opened only with the
+caret at column 0, so typing a line and pressing `:` to save put a colon in the
+spell — and `Esc`'s advice to use `:w` could not be followed without pressing
+Home. Neither the tests nor `ORBS_DUMP` could see it: the tests drove the command
+line directly and the dump split the script itself, so both reached past the one
+function that was wrong. The decision now lives on `Editor` and both go through
+it.
+
+#### `invoke` is a convenience; automation is still what Concentration buys
+
+§19 above settles that **automation wins nothing at all** until the first
+Concentration level. `invoke` runs at concentration 0, so it cannot be allowed to
+win anything either — and it does not. It types for you, and typing was already
+free: §5.0 makes issuing an action cost only the time the action takes, and §14
+forbids any mechanic requiring fast typing.
+
+So an invoked spell takes the **same** durations, occupies the **same**
+production slot, and needs you standing there. What `bind` adds is the two things
+that matter — running **unattended**, and §8's speed advantage — and they arrive
+together, which is what keeps that purchase the game's turn.
+
+**Per-action, not whole-spell, and this is forced rather than preferred.** If an
+invoked spell held the production slot for its whole run, at `CAPACITY = 1` its
+own `grind` would be refused by its own occupancy and it could never do anything.
+
+#### What the runner had to learn that was not obvious
+
+- **A script *waits*; it is not *refused*.** A player at a busy mortar should be
+  told so. A script reaching the same line is not making a mistake — it is the
+  next stage of a recipe arriving before the last one finished. Refusing it emits
+  one complaint per tick for the whole duration of a run that is going perfectly.
+- **The predicate asks "would this be refused", not "does this start work".**
+  The first version asked the narrower question and `siphon` fell through it —
+  `move`, `empty` and `purge` were the same hole. Found by **looking at the
+  screen**, not by a test.
+- **Blocked is not silent, and not forever.** Said once when the wait starts;
+  after `PATIENCE` ticks it becomes a real failure and the spell moves on. §8's
+  taxonomy is titled *"scripts always log and never halt"*, and an unbounded
+  silent yield is a halt.
+- **A spell has its own position.** `attend` writes `Cwd`, so without one a spell
+  would teleport the player mid-brew.
+- **Three verbs are hazards from a script**: `meditate` runs its whole count
+  inside one `step()`, `scribe` would open the editor under the player's hands,
+  and `undo` is command-anchored.
+- **Finishing removes the component, never despawns the entity** — `Running` is
+  worn by the spell node itself, so despawning deleted the spell from the
+  grimoire the moment it completed. Caught by a test.
+
+### Concentration replaces the Attention pool — designed, Phase 1
+
+**Automated concurrency is counted in *spells you are holding*, not in actions
+they have in flight, and it starts at zero.**
+
+`concentration 0` is the tower worked entirely by hand. The first level — one of
+the first upgrades in the game, inside the first hour — buys **one standing
+spell**, and the player *concentrates* on it. That is the mechanic and it is also
+the fiction: holding a spell is a thing a wizard does, and letting one go to hold
+another is a thing a wizard feels.
+
+**Why the unit changed.** The retired **Attention** pool counted concurrent
+script *actions* and started at 3 — enough that a player's first script saturated
+it, which §11.5 called the game's headline beat and the wrong place for a ceiling.
+Counting scripts instead makes the number the one the player actually holds in
+their head. *"I am concentrating on `night_watch`"* is a sentence about a spell;
+*"I have three action-slots free"* is a sentence about a budget.
+
+**Starting at 0 rather than 1 is the substantive half**, and it moves the game's
+turn. Pillar 3 promises that teaching the orb to do your work *is* the
+progression; a promise handed over at minute zero is a premise, not a
+progression. So automation wins nothing at all until the first level is bought,
+and that purchase is the moment the game becomes what it advertises.
+
+| Superseded | Now |
+|---|---|
+| **Attention**, counted in concurrent script actions | **Concentration**, counted in bound scripts |
+| Starts at **3** — the first script saturates it | Starts at **0** — no script runs at all |
+| ~25 by the soft ending | **~8** by the soft ending |
+
+**The ceiling is inherited, not re-invented.** §11.5 derived ~25 action-slots from
+~6 min average durations giving ~250 actions/hour against a manual 40/hour at
+Focus 4 — a 6× advantage, which is what pillar 3 promises. §8's `night_watch.spell`
+issues three or more concurrent actions from one script, so ~25 ÷ ~3 ≈ **8
+scripts** and the same 6× survives the change of unit.
+
+**A whole slot *and* a fraction, which is not redundant.** A bound script holds
+one slot while bound, idle or not — that is what makes "what is worth automating"
+a portfolio decision, and at concentration 1 it is the sharpest decision in the
+game, because binding a second spell means letting the first one go. Its in-flight
+actions additionally hold *fractions* of a slot, because §11.5's multiplexing
+counterweight prices **concurrency**: charging only whole scripts would let a
+player buy depth 4 and pay what they paid at depth 1, which is precisely the
+pane-proxy failure that amendment already fixed once, returning in a new unit.
+
+**Three sections leaned on Attention being per-action** and were checked rather
+than assumed: §8's call-depth limit (which exists *because* pool exhaustion fails
+silently — still true), §8's "a script action and a manual action occupy different
+resources", and §11.5's counterweight. The fractional charge is what keeps the
+third one working; the other two only needed the name.
+
+Earlier drafts overloaded the word "attention", which is why §9 fixed three
+resource names in the first place. **The word is now free** and used only in its
+ordinary English sense — §9's table names Focus, Concentration and Execution
+budget, and the history sections below keep "Attention" where they record what a
+past draft decided.
 
 ### Per-instrument verbs, scoped to their domain — built
 

@@ -52,18 +52,42 @@ impl Scrollback {
     }
 }
 
+/// Something the player asked for, waiting for the tick that does it.
+#[derive(Debug, Clone)]
+pub enum Queued {
+    /// A resolved command.
+    Command(Intent),
+    /// A spell to write out — see [`Sim::write_spell`](crate::Sim::write_spell).
+    ///
+    /// **In the same queue as commands, deliberately.** A save and a typed line
+    /// both land on the next tick, and two queues would mean an ordering between
+    /// them that nothing states — so `scribe morning` followed immediately by a
+    /// save could apply in either order.
+    Write {
+        /// The spell's filename, extension included.
+        name: String,
+        /// What the buffer held, before canonicalisation.
+        lines: Vec<String>,
+    },
+}
+
 /// Commands resolved but not yet run.
 ///
 /// Drained by [`run_pending`](crate::execute::run_pending) at the start of every tick, which is what keeps
 /// "the player typed it" and "the world did it" on opposite sides of a tick
 /// boundary.
 #[derive(Resource, Debug, Default)]
-pub struct Pending(Vec<Intent>);
+pub struct Pending(Vec<Queued>);
 
 impl Pending {
     /// Queue an intent for the next tick.
     pub fn push(&mut self, intent: Intent) {
-        self.0.push(intent);
+        self.0.push(Queued::Command(intent));
+    }
+
+    /// Queue a spell to be written on the next tick.
+    pub fn write(&mut self, name: String, lines: Vec<String>) {
+        self.0.push(Queued::Write { name, lines });
     }
 
     /// How many commands are waiting.
@@ -79,7 +103,7 @@ impl Pending {
     }
 
     /// Take everything waiting.
-    pub fn drain(&mut self) -> Vec<Intent> {
+    pub fn drain(&mut self) -> Vec<Queued> {
         std::mem::take(&mut self.0)
     }
 }
@@ -217,24 +241,63 @@ impl Skip {
     }
 }
 
-/// Every line the player submitted, with the tick it landed on.
+/// One thing the player did that the world has to be able to be told again.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Submission {
+    /// A line typed at the prompt.
+    Typed(String),
+    /// A spell saved out of the editor.
+    ///
+    /// # Why the whole text, and not the keystrokes
+    ///
+    /// Editing is the first thing in the game that takes input without every
+    /// keypress being a decision. A cursor moving left reaches nothing, changes
+    /// no state the world can see, and must not enter a replay — recording it
+    /// would bloat the log by orders of magnitude *and* couple replay to editor
+    /// internals, so changing how `Home` behaves would break every saved
+    /// session.
+    ///
+    /// The save is the decision, so the save is the entry. One per `:w`,
+    /// carrying what the buffer held.
+    Wrote {
+        /// The spell's filename.
+        name: String,
+        /// Its lines, exactly as the buffer held them — **before**
+        /// canonicalisation, so replaying re-derives the same canonical form
+        /// rather than trusting one recorded alongside it.
+        lines: Vec<String>,
+    },
+}
+
+/// Everything the player did, with the tick it landed on.
 ///
 /// A replay needs exactly `(seed, submissions)` and nothing else. Recorded from
 /// the start even though nothing consumes it yet, because the pairing is
 /// unrecoverable after the fact — the tick a line landed on cannot be inferred
 /// from the line.
 #[derive(Resource, Debug, Default)]
-pub struct Submissions(Vec<(Tick, String)>);
+pub struct Submissions(Vec<(Tick, Submission)>);
 
 impl Submissions {
     /// Note that `line` was submitted during `tick`.
     pub fn push(&mut self, tick: Tick, line: &str) {
-        self.0.push((tick, line.to_owned()));
+        self.0.push((tick, Submission::Typed(line.to_owned())));
     }
 
-    /// Every submission, in order.
+    /// Note that a spell was saved during `tick`.
+    pub fn wrote(&mut self, tick: Tick, name: &str, lines: &[String]) {
+        self.0.push((
+            tick,
+            Submission::Wrote {
+                name: name.to_owned(),
+                lines: lines.to_vec(),
+            },
+        ));
+    }
+
+    /// Everything, in order.
     #[must_use]
-    pub fn all(&self) -> &[(Tick, String)] {
+    pub fn all(&self) -> &[(Tick, Submission)] {
         &self.0
     }
 }
@@ -348,10 +411,66 @@ mod tests {
         assert_eq!(
             sim.submissions().all(),
             [
-                (Tick::new(0), "look around".to_owned()),
-                (Tick::new(3), "survey".to_owned()),
+                (Tick::new(0), Submission::Typed("look around".to_owned())),
+                (Tick::new(3), Submission::Typed("survey".to_owned())),
             ],
         );
+    }
+
+    #[test]
+    fn saving_a_spell_is_one_submission_carrying_the_whole_buffer() {
+        // **The editor's replay contract.** Keystrokes reach no decision and
+        // never enter this log; the save does, once, with what the buffer held.
+        // Recording the *typed* lines rather than the canonical ones is
+        // deliberate — a replay re-derives the canonical form, so the
+        // canonicaliser changing cannot make an old session replay into a
+        // different world while claiming it did not.
+        let mut sim = Sim::new(1);
+        sim.step_n(2);
+        sim.write_spell("morning", &["make a potion of clarity".to_owned()]);
+
+        assert_eq!(
+            sim.submissions().all(),
+            [(
+                Tick::new(2),
+                Submission::Wrote {
+                    name: "morning.spell".to_owned(),
+                    lines: vec!["make a potion of clarity".to_owned()],
+                },
+            )],
+        );
+    }
+
+    #[test]
+    fn a_written_spell_replays_from_seed_and_submissions() {
+        // The property `Submission::Wrote` exists for, and the one revision 3 of
+        // the plan asserted without testing. A `Wrote` entry nothing replays is
+        // a shape with no consumer.
+        let mut live = Sim::new(9);
+        live.submit("attend laboratory");
+        live.step();
+        live.write_spell("morning", &["make a potion of clarity".to_owned()]);
+        live.step();
+
+        let mut replayed = Sim::new(9);
+        for (tick, submission) in live.submissions().all().to_vec() {
+            while replayed.tick() < tick {
+                replayed.step();
+            }
+            match submission {
+                Submission::Typed(line) => replayed.submit(&line),
+                Submission::Wrote { name, lines } => {
+                    replayed.write_spell(&name, &lines);
+                }
+            }
+        }
+        while replayed.tick() < live.tick() {
+            replayed.step();
+        }
+
+        let spell_of = |sim: &Sim| -> Option<Vec<String>> { sim.spell("morning") };
+        assert_eq!(spell_of(&live), spell_of(&replayed));
+        assert!(spell_of(&live).is_some(), "the spell was never written");
     }
 
     #[test]

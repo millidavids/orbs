@@ -130,6 +130,12 @@ impl ParseRecord {
                 None,
                 Vec::new(),
             ),
+            Resolution::InSpell { word } => (
+                Outcome::Unresolved,
+                Some(word.canonical().to_owned()),
+                None,
+                Vec::new(),
+            ),
             Resolution::Unresolved { suggestions } => {
                 (Outcome::Unresolved, None, None, suggestions.clone())
             }
@@ -302,7 +308,7 @@ mod tests {
 
     fn tower() -> Scene {
         // Recipes are `Topic` nouns (§6.1), which is what a bare `brew` now
-        // enumerates — `decoct` is retired and its words point at the grimoire.
+        // enumerates — `decoct` is retired and its words point at the manual.
         Scene::new()
             .with(NounKind::Topic, "clarity")
             .with(NounKind::Topic, "warding")
@@ -321,7 +327,7 @@ mod tests {
 
     #[test]
     fn outcomes_are_tallied_for_the_gate() {
-        let log = log_of(&["grimoire clarity", "brew", "xyzzy"], Mode::Calm);
+        let log = log_of(&["recall clarity", "brew", "xyzzy"], Mode::Calm);
         assert_eq!(log.resolved(), 1);
         assert_eq!(log.ambiguous(), 1);
         assert_eq!(log.unresolved(), 1);
@@ -341,8 +347,8 @@ mod tests {
         // Clustering needs the losers, not just the winner.
         let log = log_of(&["brew"], Mode::Calm);
         let tsv = log.to_tsv();
-        assert!(tsv.contains("grimoire clarity"), "{tsv}");
-        assert!(tsv.contains("grimoire warding"), "{tsv}");
+        assert!(tsv.contains("recall clarity"), "{tsv}");
+        assert!(tsv.contains("recall warding"), "{tsv}");
     }
 
     #[test]
@@ -356,7 +362,7 @@ mod tests {
 
     #[test]
     fn the_export_is_rectangular() {
-        let tsv = log_of(&["grimoire clarity", "brew", "xyzzy"], Mode::Calm).to_tsv();
+        let tsv = log_of(&["recall clarity", "brew", "xyzzy"], Mode::Calm).to_tsv();
         let mut lines = tsv.lines();
         let columns = lines.next().expect("header").split('\t').count();
         for line in lines {

@@ -1,4 +1,6 @@
 mod dump;
+mod editing;
+mod editor;
 mod input;
 mod line;
 mod linear;
@@ -7,9 +9,12 @@ mod plugin;
 mod prompt;
 mod reveal;
 mod screen;
+mod sheet;
 mod transition;
 
 pub(crate) use dump::run as dump;
+pub(crate) use editing::Editing;
+pub(crate) use editor::{Editor, Mode as EditorMode, Outcome as EditorOutcome};
 pub(crate) use input::{Ghost, Offered, Panel, Scroll};
 pub(crate) use line::Line;
 pub(crate) use linear::Linear;

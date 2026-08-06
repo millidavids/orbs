@@ -147,7 +147,7 @@ impl Recipes {
         })
     }
 
-    /// Every recipe an instrument knows, for the grimoire.
+    /// Every recipe an instrument knows, for the manual.
     #[must_use]
     pub fn for_instrument(&self, instrument: &str) -> &[Recipe] {
         self.by_instrument
@@ -160,7 +160,7 @@ impl Recipes {
     /// More than one is the point rather than an accident: §10.1's exit
     /// criterion is that the same goal has *two different right answers*
     /// depending on what the laboratory is holding, and a single route can only
-    /// ever have one. This is what `grimoire` shows so the difference is
+    /// ever have one. This is what `recall` shows so the difference is
     /// readable **before** the player commits an instrument to it.
     #[must_use]
     pub fn routes(&self, output: &str) -> Vec<(&str, &Recipe)> {
@@ -173,6 +173,30 @@ impl Recipes {
                     .map(move |recipe| (instrument.as_str(), recipe))
             })
             .collect()
+    }
+
+    /// Every reagent name the laboratory knows, consumed or produced.
+    ///
+    /// **The vocabulary, not the stock.** A reagent's *name* is a fixed fact
+    /// about the recipes; whether any is on the shelf right now is not. That
+    /// distinction is what `scribe::dropped_argument` needs: the orb must be
+    /// able to tell `grind sage` typed when the sage happens to be spent from
+    /// `look around`, where the extra word never named anything.
+    #[must_use]
+    pub fn vocabulary(&self) -> Vec<&str> {
+        let mut out: Vec<&str> = self
+            .by_instrument
+            .values()
+            .flatten()
+            .flat_map(|recipe| {
+                std::iter::once(recipe.output.as_str())
+                    .chain(recipe.inputs())
+                    .chain(std::iter::once(recipe.leaves.as_str()))
+            })
+            .collect();
+        out.sort_unstable();
+        out.dedup();
+        out
     }
 
     /// Every distinct output any instrument can produce.

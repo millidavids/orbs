@@ -20,23 +20,25 @@ fn main() {
         "attend laboratory",
         // **§10.1's loop, not `decoct`.** The rename commit updated `attend
         // alembic` here and left the two `decoct` lines, which now fuzzy-resolve
-        // to `grimoire` — so this example demonstrated two manual look-ups and
-        // two no-op waits, and touched neither `move`, `wield`, `stop` nor
-        // `siphon`. The one example whose stated purpose is exercising the
-        // vocabulary was exercising none of the pipeline.
-        "grimoire brewing",
+        // to the manual — so this example demonstrated two manual look-ups and
+        // two no-op waits, and touched neither `move`, `wield` nor `stop`. The
+        // one example whose stated purpose is exercising the vocabulary was
+        // exercising none of the pipeline.
+        "recall brewing",
         // §10.1's per-instrument verbs: `kindle charcoal` is the `move` and the
         // `wield` in one, and the instrument is named by the verb rather than
         // typed. `move`/`wield` still work — they are the general forms.
         "kindle charcoal",
         "grind sage",
         "meditate 10",
-        "siphon mortar_and_pestle",
-        "purge mortar_and_pestle",
-        "meditate 5",
+        // **No draw-off.** `digest ground-sage` reaches into the mortar for what
+        // the grind made — which is what retired `siphon` (§19) — and `empty`
+        // shelves what is left rather than the pipeline needing a step to lift
+        // each stage's output onto a bench that no longer exists.
         "digest ground-sage",
+        "empty mortar_and_pestle",
         "meditate 15",
-        "siphon balneum_mariae",
+        "empty balneum_mariae",
         "stop athanor",
         "verify laboratory.log",
         "peruse laboratory.log",

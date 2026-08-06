@@ -44,6 +44,6 @@ mod view;
 pub use field::{FieldName, Value};
 pub use kind::RecordKind;
 pub use outcome::Outcome;
-pub use sift::Sift;
+pub use sift::{Sift, contains_ignoring_case};
 pub use stream::{Record, RecordBuilder, Records};
 pub use view::RecordView;

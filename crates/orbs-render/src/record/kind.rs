@@ -34,6 +34,19 @@ use crate::style::Presentation;
 /// Not `#[non_exhaustive]`, for the reason given on [`Role`](crate::Role).
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum RecordKind {
+    /// What the rows under it are, in a listing that groups them.
+    ///
+    /// `[reagent]`, `[place]` — the shape a `.toml` table header has, because
+    /// that is the shape a player who has seen one config file already knows.
+    ///
+    /// **It stacks while the rows tile.** A heading packed into a column beside
+    /// the things it heads would head nothing; the whole point is that it owns
+    /// its row and the entries fill in underneath.
+    ///
+    /// It also carries the `kind` that used to sit on every row. `sage reagent`
+    /// repeated the word once per line for no gain, and the repetition is what
+    /// made a listing read as a wall rather than as a table.
+    Section,
     /// One row of a filesystem listing.
     Entry,
     /// One line of a log. **Diagnostic surface** (§3).
@@ -57,7 +70,8 @@ pub enum RecordKind {
 
 impl RecordKind {
     /// Every kind, in declaration order.
-    pub const ALL: [Self; 9] = [
+    pub const ALL: [Self; 10] = [
+        Self::Section,
         Self::Entry,
         Self::LogLine,
         Self::ScriptLine,
@@ -125,7 +139,8 @@ impl RecordKind {
     pub const fn marker(self) -> Option<char> {
         match self {
             Self::Completion => Some('√'),
-            Self::Entry
+            Self::Section
+            | Self::Entry
             | Self::LogLine
             | Self::ScriptLine
             | Self::Schedule
@@ -147,6 +162,9 @@ impl RecordKind {
             // Fielded rows. §14: a reader must never have to reconstruct
             // columns from spacing, so these speak as `label: value`.
             Self::Entry | Self::LogLine | Self::Schedule | Self::Status => UtteranceKind::TableRow,
+            // A heading, because that is what it is: §14 gives a reader the
+            // same grouping the columns give everyone else.
+            Self::Section => UtteranceKind::Heading,
             Self::ScriptLine | Self::Message => UtteranceKind::Text,
             Self::Completion => UtteranceKind::Completion,
             Self::Echo => UtteranceKind::Echo,

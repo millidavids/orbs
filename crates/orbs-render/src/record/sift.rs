@@ -106,7 +106,14 @@ impl Records {
 /// Byte windows are safe on UTF-8 here: a continuation byte is always `>= 0x80`
 /// and can never equal an ASCII byte, so a match can neither straddle nor split
 /// a character boundary.
-fn contains_ignoring_case(haystack: &str, needle: &str) -> bool {
+///
+/// **Public because a `.spell` is searched too.** `sift` over the record stream
+/// goes through [`Record::matches`], but a spell's lines are stored text
+/// (`tower::Held`) rather than records, and a second implementation would be a
+/// second answer to *"does this line match?"* — the case-folding rule is one §19
+/// already had to correct once, when `sift ERROR feed.log` searched for `error`.
+#[must_use]
+pub fn contains_ignoring_case(haystack: &str, needle: &str) -> bool {
     let (haystack, needle) = (haystack.as_bytes(), needle.as_bytes());
     if needle.is_empty() {
         return true;

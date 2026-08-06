@@ -118,7 +118,7 @@ impl Scene {
 
         let mut best: Option<NounMatch> = None;
         for noun in &self.nouns {
-            if kind != NounKind::Any && noun.kind != kind {
+            if !kind.accepts(noun.kind) {
                 continue;
             }
             for candidate in &candidates {

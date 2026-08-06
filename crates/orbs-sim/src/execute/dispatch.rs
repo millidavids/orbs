@@ -12,11 +12,11 @@ use orbs_render::{FieldName, RecordKind, Role};
 
 use crate::parser::{Intent, Verb};
 use crate::rng::Rngs;
-use crate::session::{Pending, Scrollback, Skip};
+use crate::session::{Pending, Queued, Scrollback, Skip};
 use crate::tick::Tick;
 use crate::tower;
 
-use super::{files, grimoire, navigate, pipeline};
+use super::{files, navigate, pipeline, recall, scribe};
 
 /// The name the scrollback answers to.
 ///
@@ -39,9 +39,30 @@ pub const MAX_MEDITATE: u64 = 3600;
 /// do not exist yet.
 pub fn run_pending(world: &mut World) {
     let queued = world.resource_mut::<Pending>().drain();
-    for intent in queued {
-        execute(&intent, world);
+    for item in queued {
+        match item {
+            Queued::Command(intent) => execute(&intent, world),
+            // A save is not a command — no verb ran, and no `Intent` describes
+            // it — but it lands on the same boundary and in the same order.
+            Queued::Write { name, lines } => {
+                scribe::write(world, &name, &lines);
+            }
+        }
     }
+}
+
+/// Run one resolved command, from wherever the caller is standing.
+///
+/// **The script runner's door into the same dispatch a typed line takes.** §13
+/// is explicit that if the live game and the CLI harness diverged *"we would not
+/// find out until Phase 3"*, and a script with its own copy of any verb is that
+/// divergence with an extra step. It does not go through
+/// [`Pending`](crate::session::Pending): that queue is drained by the `commands`
+/// schedule which runs **before** the one the runner is in, so a script routed
+/// through it would manage exactly one instruction per tick whatever its budget
+/// said.
+pub fn execute_one(intent: &Intent, world: &mut World) {
+    execute(intent, world);
 }
 
 fn execute(intent: &Intent, world: &mut World) {
@@ -50,6 +71,7 @@ fn execute(intent: &Intent, world: &mut World) {
         Verb::Survey => navigate::survey(intent, world),
         Verb::Meditate => meditate(intent, world),
         Verb::Status => status(world),
+        Verb::Unfurl => super::unfurl::unfurl(world),
         Verb::Peruse => files::peruse(intent, world),
         Verb::Sift => files::sift(intent, world),
         Verb::Verify => files::verify(intent, world),
@@ -63,8 +85,9 @@ fn execute(intent: &Intent, world: &mut World) {
         }
         Verb::Stop => pipeline::stop(intent, world),
         Verb::Empty => pipeline::empty(intent, world),
-        Verb::Siphon => pipeline::siphon(intent, world),
-        Verb::Grimoire => grimoire::grimoire(intent, world),
+        Verb::Recall => recall::recall(intent, world),
+        Verb::Scribe => scribe::scribe(intent, world),
+        Verb::Invoke => tower::spell::invoke(intent, world),
         Verb::Purge => pipeline::purge(intent, world),
         _ => acknowledge(intent.verb, world),
     }
@@ -117,11 +140,17 @@ pub const fn is_live(verb: Verb) -> bool {
             | Verb::Kindle
             | Verb::Stop
             | Verb::Empty
-            | Verb::Siphon
-            | Verb::Grimoire
+            | Verb::Recall
+            | Verb::Scribe
+            | Verb::Invoke
             | Verb::Divine
             | Verb::Purge
             | Verb::Verify
+            // **The one word whose whole reason for existing is being found.**
+            // A verb that makes long output readable, left off the list a cold
+            // launch teaches from, would be exactly the affordance-nobody-can-
+            // discover problem it was added to solve — one level up.
+            | Verb::Unfurl
     )
 }
 

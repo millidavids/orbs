@@ -88,19 +88,30 @@ purge_already = "you are already scouring the {path}"
 purge_place = "the {path} is clean"
 purge_place_empty = "the {path} was already clean"
 
-# siphon - the fourth move of the loop, and the end of it being a dark verb.
-siphon_done = "you draw off the {name} from the {source}"
-siphon_empty = "the {name} has nothing worth drawing off"
-siphon_working = "the {name} is still at work"
+# `siphon_*` lived here. The verb is retired (§19): the next stage reaches into
+# an idle instrument for what it needs, so drawing the product onto a bench had
+# stopped doing anything - and with nothing able to put a reagent on the floor,
+# the bench and the shelf are one place.
 
 # ---------------------------------------------------------------------------
-# The grimoire (§6.1) - the in-world manual.
+# `recall` (§6.1) - the in-world manual.
 #
 # A recipe name answers with its routes, walked out of `recipes.toml`. Anything
-# else is a *subject*, and answers from here. Keys are `grimoire_<topic>`.
+# else is a *subject*, and answers from here. Keys are `recall_<topic>`.
+#
+# **Only subjects take the `recall_` prefix.** `Prose::topics` strips it to
+# decide what the player may *name*, so a template key sharing the prefix
+# becomes something to ask the orb about: the route templates below used to be
+# `grimoire_step` and `grimoire_step_or`, which registered `step` and `step_or`
+# as manual subjects nobody authored. They are `route_` now.
 # ---------------------------------------------------------------------------
 
-grimoire_brewing = "kindle, grind, digest, mix, distil - then siphon, then empty or purge"
+recall_brewing = "kindle, grind, digest, mix, distil - then empty, or purge the waste"
+
+# The manual is where a player looks for a word they half-remember, so the verb
+# that exists *because* an affordance was undiscoverable had better be findable
+# in the one place built for finding things.
+recall_unfurl = "read back through the record: pgup/pgdn move, esc returns"
 
 # A recipe, written as instructions rather than as a table.
 #
@@ -114,10 +125,10 @@ grimoire_brewing = "kindle, grind, digest, mix, distil - then siphon, then empty
 #
 # `{kind}` is the heat marker, already worded. Forgetting to light the athanor is
 # the commonest way a stage refuses, so it earns its place on the line.
-grimoire_route = "{name}: {count} steps, {ticks} ticks"
-grimoire_step = "{index} {detail} -> {name} + {state}  ({source}, {ticks}t{kind})"
-grimoire_step_or = "or {detail} -> {name} + {state}  ({source}, {ticks}t{kind})"
-grimoire_heat = ", needs heat"
+route_line = "{name}: {count} steps, {ticks} ticks"
+route_step = "{index} {detail} -> {name} + {state}  ({source}, {ticks}t{kind})"
+route_step_or = "or {detail} -> {name} + {state}  ({source}, {ticks}t{kind})"
+route_heat = ", needs heat"
 
 # Terse on purpose. The interpolated line is what has to fit ~60 cells at the
 # 80x22 floor, and "you move the ground-sage from the laboratory to the
@@ -157,3 +168,125 @@ athanor_out = "the athanor gutters and goes cold"
 damp_done = "you damp the athanor. {left} ticks of fuel keep"
 damp_idle = "the athanor is already cold"
 wield_cold = "the {name} wants heat, and the athanor is cold"
+
+# ---------------------------------------------------------------------------
+# The spellbook (§8). Writing a spell, and the orb writing down what you meant.
+# ---------------------------------------------------------------------------
+
+# Opening one. `scribe_new` has to say the file was *made*, or a mistyped name
+# looks exactly like the spell you wanted and opens empty.
+scribe_new = "a fresh page: {name}, for the {source}"
+scribe_open = "you open {name}, written for the {source}"
+# Safe, and silent without this: the running copy keeps its own orders, so an
+# edit that seems to do nothing has in fact landed - on the next casting.
+scribe_running = "{name} is running. the orb reads along as you write"
+spell_reloaded = "{name} changes under the orb's hand"
+
+# A spell is written *for* somewhere, so there is nowhere to write one from the
+# tower's landing. The first refusal in the game that is about **where you are**
+# rather than about what you named, so the sentence has to teach rather than
+# scold - a player who has not found a domain yet does not know there are any.
+scribe_nowhere = "a spell is written for a place. go where the work is first"
+
+# Saving. §8: bind always succeeds, so a line the orb could not read is kept as
+# typed and counted rather than refused - a draft you cannot save is a dead end.
+scribe_done = "{name}: {count} lines, written down"
+scribe_unclear = "{name}: {count} lines, {detail} the orb could not read"
+
+# Reading back through the transcript (§19). The keys always worked; nothing
+# ever said so, and in a game with no mouse a key nobody can discover is a key
+# nobody has. The word is the way in, and the row it puts on screen is what the
+# player keeps afterwards.
+unfurl_begins = "you unfurl the record"
+# **As short as the `PgDn newest` it replaces.** This rides in the border title
+# beside the location, the tick, the tier and the grid, and at the 80-column
+# floor there is about twenty cells left - the first wording was 39 and drew as
+# "esc back to" with the rest cut off.
+#
+# Lower case like everything else here, which `authored_lines_do_not_shout`
+# caught: the two hints this sits between are `F4 deep` and `PgDn newest`, both
+# Rust literals, and matching *them* would have made this the one capitalised
+# line in the file. §3's no-shouting rule is about the file, not the neighbours.
+unfurl_keys = "pgup/pgdn  esc out"
+
+# The editor's own furniture. Terse: these sit on one row of a pane that may be
+# 80 cells wide, beside the filename and the position.
+#
+# **The command row is the whole interface in command state**, so these have to
+# name every word. A player who does not know them has nowhere else to look -
+# the editor is the first modal surface in the game.
+#
+# Two words, where there were four. `save` and `discard` are gone because the
+# buffer writes itself out a beat after you stop typing (§19): saving is not a
+# thing you do, and there is therefore nothing to throw away. What is left is
+# the only two decisions still the player's - write, or leave.
+editor_words = "edit  quit"
+editor_editing = "esc to stop writing"
+editor_unknown = "the orb does not know '{detail}' - try edit or quit"
+
+# On the title bar while an invocation of this spell is running, beside the
+# gutter's marker. The marker alone would be a fact carried only by a glyph in a
+# column, which §14 forbids; a title is pushed to the speech stream as a heading.
+editor_at_line = "(the orb is on line {count})"
+
+# ---------------------------------------------------------------------------
+# Casting a spell (§8). Every line names the spell, and every failure names the
+# line - §8.1: "the culprit is never anonymous".
+# ---------------------------------------------------------------------------
+
+spell_begun = "the orb takes up {name}"
+spell_done = "{name} is finished"
+spell_unknown = "there is no {name} in your grimoire"
+spell_already = "{name} is already running"
+spell_empty = "{name} has nothing written in it"
+spell_homeless = "{name} names a place the tower no longer has"
+
+# Calling a spell off. **What it started keeps going** - stopping the spell is
+# not stopping the mortar, exactly as walking away from a brew you typed by hand
+# does not stop the brew.
+spell_stopped = "you let {name} go. what it started runs on"
+spell_not_running = "{name} is not running"
+
+# A word the editor taught them, typed at the prompt. §6 forbids a bare error,
+# and "I do not know that word" would be a lie about a word the game itself put
+# in their hands - the same reasoning as `verb_elsewhere`, one step further.
+word_in_spell = "'{name}' is a word for spells, not for the orb"
+
+# The two ways a spell can be structurally wrong. Neither refuses and neither
+# halts: §8 fixes that saving always succeeds and that scripts never halt, so
+# the orb closes what was left open and says so once.
+spell_unclosed = "{name} line {count}: nothing closed this, so the orb closed it"
+spell_stray_end = "{name} line {count}: an end with nothing open. ignored"
+spell_stray_else = "{name} line {count}: an else with no if before it. ignored"
+# **Not guessed at.** A condition the player did not write would decide what
+# their laboratory does while they are elsewhere, so an unreadable one simply
+# never holds - and says so rather than quietly always taking the else.
+spell_unreadable_if = "{name} line {count}: that question means nothing. answered no"
+
+# A question about somewhere the tower does not have. §8's *Referent missing*,
+# and **not the same as the answer being no** - which is exactly the bug this
+# line exists to make impossible to have again. `if mortar is empty` compared
+# `mortar` against `mortar_and_pestle`, found nothing, answered no on every pass
+# and took the else for ever, saying not one word about it (§19).
+spell_nowhere = "{name} line {count}: there is no {detail} here to ask about"
+spell_too_deep = "{name} is too many spells deep; the orb loses the thread"
+
+# §8's taxonomy: "scripts always log and never halt". Each of these skips the
+# line and carries on - none of them stops the spell.
+spell_missing = "{name} line {count}: nothing here answers to '{detail}'"
+spell_forbidden = "{name} line {count}: the orb will not do '{detail}' from a spell"
+
+# Waiting is normal - it is what a recipe does. Said **once**, when the wait
+# starts, because a line per tick would bury the log under a spell working
+# correctly.
+spell_waiting = "{name} waits: the {source} is {state}"
+# An **explicit** wait, which reads differently from being blocked: the spell
+# meant to stop here.
+spell_watching = "{name} watches for the {source}"
+# `{detail}`, **not `{source}`** — which is what it said, and `say_failure`
+# supplies `name`, `detail` and `count` only, so the placeholder drew on screen
+# as the literal text `{source}`. Exactly the failure the header above says this
+# file's unmatched placeholders are left visible to catch, and it was caught by
+# looking rather than by a test. `no_line_a_spell_can_say_has_a_hole_in_it` is
+# the test now.
+spell_gave_up = "{name} waited too long on the {detail}, and moved on"

@@ -105,12 +105,49 @@ pub(crate) fn suggest(mut ghost: ResMut<Ghost>, line: Res<Line>, tower: Res<Towe
 pub(crate) struct Scroll {
     /// Records held back from the newest end.
     back: usize,
+    /// Whether the transcript has the keyboard — see [`Scroll::is_reading`].
+    reading: bool,
 }
 
 impl Scroll {
     /// How far back the view is.
     pub(crate) const fn back(&self) -> usize {
         self.back
+    }
+
+    /// Whether the transcript currently has the keyboard.
+    ///
+    /// # Why a verb turns this on
+    ///
+    /// `PageUp` has scrolled since the transcript existed, and nothing said so:
+    /// the border advertises `PgDn newest` only once you are *already* scrolled
+    /// back, so the affordance announced itself exclusively to players who had
+    /// found it. In a game with no mouse and no menus, that is no affordance at
+    /// all — hence `unfurl` (§19), and hence this: the word puts the keys on
+    /// screen, which is what the player keeps once they stop needing the word.
+    ///
+    /// It is the **third** thing that can own the keyboard, after the prompt and
+    /// the editor. Which one consumes a keystroke is decided in
+    /// [`type_into_line`] rather than by a set of run conditions that had to
+    /// stay complements — see there for why declining a key means running.
+    pub(crate) const fn is_reading(&self) -> bool {
+        self.reading
+    }
+
+    /// Take the keyboard, and start from where the view already is.
+    pub(crate) const fn read(&mut self) {
+        self.reading = true;
+    }
+
+    /// Give the keyboard back to the prompt.
+    ///
+    /// **Escape alone, and it does not scroll anywhere.** Leaving reading mode
+    /// is not the same act as returning to the newest output — a player who read
+    /// back and pressed Escape wants to type, not to lose their place — so
+    /// `PgDn` still walks forward and this only hands the keys over. It is the
+    /// same meaning Escape has in the editor: step out of the mode you are in.
+    pub(crate) const fn stop_reading(&mut self) {
+        self.reading = false;
     }
 
     /// Whether the player is looking at history rather than at the newest output.
@@ -193,6 +230,95 @@ pub(crate) fn forget_held_keys(
     }
 }
 
+/// Whether a keystroke that produced `text` proves the held chord is a ghost.
+///
+/// # Why a focus hook was never going to be enough
+///
+/// [`forget_held_keys`] assumed a stolen window is *observable*. Bevy makes the
+/// same assumption and nothing else: `WindowFocused(false)` is the only thing
+/// that reaches `check_keyboard_focus_lost`, which is the only thing that writes
+/// `KeyboardFocusLost`, which is the only thing that calls `release_all`. Every
+/// recovery path in the engine hangs off that one event.
+///
+/// **And Bevy 0.19 drops winit's `ModifiersChanged`**, which is the OS telling
+/// you what is *actually* held — so when a key-up is swallowed without a focus
+/// event, there is no mechanism anywhere to notice. The modifier is down for the
+/// rest of the session, every keystroke hits the guard, and the field is dead
+/// with nothing on screen to say why. `Cmd+Shift+Ctrl+4` does exactly this: the
+/// screenshot overlay takes the keys and gives back no focus change.
+///
+/// So the recovery cannot be another focus hook. It is this: **the OS decides
+/// what is text.** If a chord were really in force, macOS would interpret the
+/// key as a command and hand us no text at all; Windows and X11 hand back a
+/// control character, which [`Line::insert`] and the editor both already filter.
+/// Text arriving *is* the proof that nothing is being held — so the held state
+/// is stale, and saying so unsticks it on the first character typed.
+///
+/// Platform-independent, needs no event that may never come, and cannot make a
+/// text field unusable: the worst case is one keystroke behaving as though the
+/// chord had been released, which is what actually happened.
+pub(crate) fn chord_is_stale(quiet: f32) -> bool {
+    quiet >= STALE_AFTER
+}
+
+/// How long the keyboard must be silent before a held chord is disbelieved.
+///
+/// **Generous, because a false positive types a letter into the prompt.** A real
+/// chord is pressed and used inside a fraction of a second; this is the gap left
+/// by an overlay that held the keyboard for as long as it took a person to drag
+/// a screenshot rectangle.
+const STALE_AFTER: f32 = 2.0;
+
+/// How long the keyboard was silent before the keystroke being handled now.
+#[derive(Resource, Debug, Default)]
+pub(crate) struct Quiet {
+    /// The gap the text fields read this frame.
+    gap: f32,
+    /// Silence accumulated since the last key, which becomes the next `gap`.
+    since: f32,
+}
+
+impl Quiet {
+    /// The gap before the keystroke being handled now.
+    pub(crate) const fn gap(&self) -> f32 {
+        self.gap
+    }
+
+    /// Declare the keyboard to have been silent for `seconds`.
+    ///
+    /// For tests: `MinimalPlugins` brings `TimePlugin`, which rewrites `Time`
+    /// from its own clock every frame, so a test cannot advance the silence by
+    /// advancing `Time`. This drives the one value the guard actually reads.
+    #[cfg(test)]
+    pub(crate) const fn silent_for(&mut self, seconds: f32) {
+        // The accumulator, not the published gap: `watch_quiet` runs first and
+        // publishes `since` into `gap` on the frame keys arrive, so setting
+        // `gap` here would be overwritten before anything read it.
+        self.since = seconds;
+    }
+}
+
+/// Advance the silence, and hand it to the text fields when a key arrives.
+///
+/// **Two fields, because resetting on arrival would erase the very thing the
+/// readers need.** A frame with keys publishes the silence that preceded them
+/// and starts counting again; a frame without keys just counts.
+///
+/// Ordered before the text fields, so the gap they read is the one in front of
+/// this frame's keystroke.
+pub(crate) fn watch_quiet(
+    time: Res<Time>,
+    mut keys: MessageReader<KeyboardInput>,
+    mut quiet: ResMut<Quiet>,
+) {
+    if keys.read().next().is_some() {
+        quiet.gap = quiet.since;
+        quiet.since = 0.0;
+    } else {
+        quiet.since += time.delta_secs();
+    }
+}
+
 /// Feed keystrokes into the line.
 ///
 /// Runs in `Update`, never `FixedUpdate`: ticks are 1 Hz (§5.0) and typing
@@ -201,12 +327,33 @@ pub(crate) fn forget_held_keys(
 /// observed between two ticks of the same frame.
 pub(crate) fn type_into_line(
     mut keys: MessageReader<KeyboardInput>,
-    held: Res<ButtonInput<KeyCode>>,
+    mut held: ResMut<ButtonInput<KeyCode>>,
     mut line: ResMut<Line>,
     tower: Res<Tower>,
     mut offered: ResMut<Offered>,
     mut submitted: MessageWriter<SubmittedMessage>,
+    editing: Res<super::editing::Editing>,
+    scroll: Res<Scroll>,
+    quiet: Res<Quiet>,
 ) {
+    // **Discarded here, not gated out by a run condition.** A message this
+    // system never *reads* is still in the queue on the next frame, because
+    // every reader carries its own cursor — so a system that simply does not run
+    // while another surface has the keyboard leaves the keystrokes waiting, and
+    // they all arrive at once the moment it runs again.
+    //
+    // That is not hypothetical: typing while the transcript was being read and
+    // then pressing Escape put every one of those characters into the prompt,
+    // and the test that found it had been written to check something else.
+    // Clearing the cursor is what actually throws a keystroke away.
+    if editing.is_open() || scroll.is_reading() {
+        keys.clear();
+        return;
+    }
+    // Set when a keystroke proves the held chord is a ghost, and acted on after
+    // the loop — `held` is borrowed for the duration of it.
+    let mut stale = false;
+    let stale_chord = chord_is_stale(quiet.gap());
     // Chords are commands, not text. Alt is deliberately **not** in this list:
     // AltGr is how European layouts type `@`, `#` and `\`, and guarding on it
     // would make those characters untypeable for the players who need them.
@@ -254,7 +401,11 @@ pub(crate) fn type_into_line(
         // included. They used to bypass it, so `Cmd+Enter` submitted the line
         // and `Ctrl+Backspace` ate a character — a chord the player aimed at
         // their operating system reaching into the prompt on the way past.
-        if chord {
+        // ...**unless the keyboard has been silent long enough that the held
+        // chord cannot be real** — see `chord_is_stale`. A ghost from a
+        // swallowed key-up outlives any gap; a chord a person is holding does
+        // not.
+        if chord && !stale_chord {
             // `Cmd+←/→` is Home/End on a keyboard that has neither.
             if editing {
                 match &event.logical_key {
@@ -265,6 +416,7 @@ pub(crate) fn type_into_line(
             }
             continue;
         }
+        stale |= chord && stale_chord;
         match &event.logical_key {
             Key::Enter => {
                 // A bare digit answering §6's numbered prompt is an answer, not
@@ -302,6 +454,14 @@ pub(crate) fn type_into_line(
                 line.insert(text);
             }
         }
+    }
+
+    // The ghost is cleared *after* the loop, so the rest of this frame's keys
+    // are judged by the same rule as the one that exposed it. Without this the
+    // next keystroke would be guarded all over again — the character that got
+    // through would look like a fluke, which is worse than a steady failure.
+    if stale {
+        held.reset_all();
     }
 }
 

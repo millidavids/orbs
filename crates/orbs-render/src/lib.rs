@@ -105,6 +105,7 @@ pub use linear::{Speech, Utterance, UtteranceKind};
 pub use paint::Painter;
 pub use record::{
     FieldName, Outcome, Record, RecordBuilder, RecordKind, RecordView, Records, Sift, Value,
+    contains_ignoring_case,
 };
 pub use span::Span;
 pub use style::{Intensity, Presentation, Role, Style};

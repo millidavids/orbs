@@ -163,6 +163,18 @@ fn fill_one(
             },
             EXACT,
         )),
+        // A name the player is coining. **One word, and the raw one** — a spell
+        // called `night_watch` must keep its underscore and its case, and taking
+        // the whole tail the way `Pattern` does would make `scribe my new spell`
+        // a file with spaces in it.
+        NounKind::Name => Some((
+            Argument {
+                kind,
+                slot,
+                value: words.first()?.raw.to_owned(),
+            },
+            EXACT,
+        )),
         NounKind::Count => {
             let value: u64 = words.first()?.matching.parse().ok()?;
             Some((

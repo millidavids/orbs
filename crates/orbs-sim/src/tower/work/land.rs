@@ -9,7 +9,7 @@ use bevy_ecs::prelude::*;
 use orbs_render::{FieldName, RecordKind, Role};
 
 use super::produce::transmute;
-use super::slot::{Triaging, Working};
+use super::slot::{Bidden, Triaging, Working};
 use crate::content::Prose;
 use crate::parser::Verb;
 use crate::session::Scrollback;
@@ -32,6 +32,11 @@ pub fn finish(world: &mut World) {
         .collect();
     for place in scoured {
         world.entity_mut(place).remove::<Triaging>();
+        // A scour ends its instrument's run too, so the credit goes with it —
+        // see `slot::stop`. Taken rather than read: nothing here is attributed,
+        // because a purge is the player's or the spell's own line and was
+        // already credited when it was issued.
+        world.entity_mut(place).remove::<Bidden>();
         let name = world
             .get::<Name>(place)
             .map_or_else(String::new, |name| name.0.clone());
@@ -54,6 +59,7 @@ pub fn finish(world: &mut World) {
             .push(RecordKind::Completion)
             .text(FieldName::Name, Verb::Purge.canonical())
             .text(FieldName::Path, &name)
+            .text(FieldName::At, &name)
             .text(FieldName::State, "emptied")
             .count(FieldName::Quantity, emptied)
             .text(FieldName::Message, &message)
@@ -69,6 +75,20 @@ pub fn finish(world: &mut World) {
         .collect();
 
     for (place, working) in landed {
+        // **Credited to whoever asked for it**, ticks after they asked. A spell
+        // charges the mortar and the mortar yields on its own schedule, in this
+        // system rather than in the runner — so a completion the player did not
+        // cause was the one line a loop still put in their transcript.
+        //
+        // Taken rather than read: the run is over, and a credit left behind
+        // would be spent on the next thing this instrument does, whoever starts
+        // it.
+        let bidden = world.entity_mut(place).take::<Bidden>();
+        world
+            .resource_mut::<Scrollback>()
+            .records_mut()
+            .attribute(bidden.as_ref().map(|spell| spell.0.as_str()));
+
         // The slot is released the moment the work lands, **before** anything is
         // collected. A finished instrument holds its product until siphoned but
         // holds no Focus — otherwise a capacity-1 player who walked away from a
@@ -82,6 +102,10 @@ pub fn finish(world: &mut World) {
         // leaving the sage sitting whole in the mortar. See `Verb::transmutes`.
         if working.verb.transmutes() {
             transmute(world, place);
+            world
+                .resource_mut::<Scrollback>()
+                .records_mut()
+                .attribute(None);
             continue;
         }
 
@@ -99,8 +123,15 @@ pub fn finish(world: &mut World) {
             .text(FieldName::Name, working.verb.canonical())
             .text(FieldName::Detail, &subject)
             .text(FieldName::Source, &source)
+            // Where it happened, always in the same field — what a spell reads
+            // to know the mortar has finished. See `FieldName::At`.
+            .text(FieldName::At, &source)
             .role(Role::Success)
             .finish();
+        world
+            .resource_mut::<Scrollback>()
+            .records_mut()
+            .attribute(None);
     }
 }
 

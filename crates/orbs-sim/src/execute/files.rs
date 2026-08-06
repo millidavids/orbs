@@ -19,7 +19,7 @@ use crate::parser::{Intent, NounKind, Verb};
 use crate::session::Scrollback;
 use crate::tower::{self, Cwd};
 
-use super::navigate::{find_place, root};
+use super::navigate::{find_place, find_script, root};
 use super::{LOG, acknowledge, missing};
 
 /// Read a file.
@@ -91,6 +91,10 @@ fn here_or_place(world: &World, target: &str) -> Option<Entity> {
             let root = root(world);
             find_place(world, root, target)
         })
+        // ...and a spell, wherever it is kept. Scripts are nameable from
+        // anywhere (`tower::scene`), so they have to be findable from anywhere
+        // or `peruse` resolves and then reads nothing — see [`find_script`].
+        .or_else(|| find_script(world, target))
 }
 
 /// Which file an intent names, if any.
@@ -108,7 +112,7 @@ fn named_file(intent: &Intent) -> Option<&str> {
     intent
         .arguments
         .iter()
-        .find(|argument| argument.kind == NounKind::File)
+        .find(|argument| NounKind::Readable.accepts(argument.kind))
         .map(|argument| argument.value.as_str())
 }
 
@@ -127,6 +131,26 @@ fn read_file(world: &World, intent: &Intent, pattern: Option<&str>) -> Vec<Strin
     let Some(file) = named_file(intent) else {
         return Vec::new();
     };
+
+    // **Stored text wins, and does not fall through.** A `.spell` holds lines a
+    // player wrote (`tower::Held`); everything else is a *view* over the record
+    // stream. Falling through on an empty spell would search the log for a file
+    // name and report whatever it found, which is the same class of defect as
+    // `bind` falling through to `sift` — a wrong answer wearing a right one's
+    // clothes. An empty spell reads as empty, which is true.
+    if let Some(node) = here_or_place(world, file)
+        && let Some(held) = world.get::<tower::Held>(node)
+    {
+        return held
+            .0
+            .iter()
+            .filter(|line| {
+                pattern.is_none_or(|pattern| orbs_render::contains_ignoring_case(line, pattern))
+            })
+            .cloned()
+            .collect();
+    }
+
     let domain = (file != LOG).then(|| domain_names(world, file.trim_end_matches(".log")));
     let sift = pattern.map(Sift::new);
 
@@ -170,12 +194,9 @@ fn domain_names(world: &World, domain: &str) -> Vec<String> {
     let Some(cwd) = world.get_resource::<Cwd>().map(|cwd| cwd.0) else {
         return names;
     };
-    // Walk from the tower root: a log is readable from wherever it is held, and
-    // §7 makes a domain nameable from anywhere.
-    let mut at = cwd;
-    while let Some(parent) = world.get::<ChildOf>(at).map(ChildOf::parent) {
-        at = parent;
-    }
+    // Walk from where the tree begins: a log is readable from wherever it is
+    // held, and §7 makes a domain nameable from anywhere.
+    let at = tower::filesystem_root(world, cwd);
     if let Some(place) = find_place(world, at, domain) {
         names.extend(
             tower::children_of(world, place)

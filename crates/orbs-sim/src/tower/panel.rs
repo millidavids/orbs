@@ -356,7 +356,11 @@ mod tests {
         sim.step_n(20);
         assert_eq!(state_of(&mut sim, "mortar_and_pestle"), State::Ready);
 
-        sim.submit("siphon mortar_and_pestle");
+        // **The next stage takes the product**, which is what `siphon` used to
+        // do before it retired (§19) — and it is still the moment the mortar
+        // stops being `Ready`, because what makes it ready is having something
+        // worth taking in it.
+        sim.submit("digest ground-sage");
         sim.step();
         // **`Fouled`, not `Charged`.** The husks left behind match no recipe, so
         // the mortar will not start — and this asserted `Charged`, the same word

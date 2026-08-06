@@ -83,13 +83,17 @@ pub const SYNONYMS: &[Synonym] = &[
     syn(Verb::Status, Register::Arcane, &["status"]),
     syn(Verb::Status, Register::Plain, &["how", "are", "things"]),
     syn(Verb::Status, Register::Plain, &["overview"]),
-    // grimoire — the manual
-    syn(Verb::Grimoire, Register::Arcane, &["grimoire"]),
-    syn(Verb::Grimoire, Register::Shell, &["man"]),
-    syn(Verb::Grimoire, Register::Shell, &["help"]),
-    syn(Verb::Grimoire, Register::Shell, &["?"]),
-    syn(Verb::Grimoire, Register::Plain, &["how", "do", "i"]),
-    syn(Verb::Grimoire, Register::Plain, &["explain"]),
+    // recall — the manual. **`grimoire` is deliberately not here**: the word
+    // names `/grimoire`, the book of spells the player writes, and one word
+    // cannot be both the reference you read and the book you write in. Released
+    // rather than re-pointed, because §6.1's "a released word does not stop
+    // resolving" rule is about *shipped* vocabulary and nothing has shipped.
+    syn(Verb::Recall, Register::Arcane, &["recall"]),
+    syn(Verb::Recall, Register::Shell, &["man"]),
+    syn(Verb::Recall, Register::Shell, &["help"]),
+    syn(Verb::Recall, Register::Shell, &["?"]),
+    syn(Verb::Recall, Register::Plain, &["how", "do", "i"]),
+    syn(Verb::Recall, Register::Plain, &["explain"]),
     // verify — detect tampering
     syn(Verb::Verify, Register::Arcane, &["verify"]),
     syn(Verb::Verify, Register::Shell, &["check"]),
@@ -99,9 +103,41 @@ pub const SYNONYMS: &[Synonym] = &[
     syn(Verb::Undo, Register::Arcane, &["undo"]),
     syn(Verb::Undo, Register::Plain, &["take", "it", "back"]),
     syn(Verb::Undo, Register::Plain, &["revert"]),
+    // unfurl — read back through what the orb has said.
+    //
+    // **No `less` and no `read`**: both are `peruse`'s, and `peruse` reads a
+    // *file* while this reads the transcript. Two words for two different
+    // surfaces is the collision the naming pass exists to prevent, and the
+    // player who types `less` means the log they can name.
+    //
+    // **And no `scroll` either.** It was the obvious plain word and `scr` then
+    // reached `scribe` *and* `unfurl` — caught by
+    // `ambiguous_synonym_prefixes_are_known` before it shipped, which is the
+    // whole reason that test pins a set rather than counting one.
+    //
+    // `page up` is better than the word it replaced anyway: it is what a player
+    // would say, and it happens to name the key that has always done this.
+    syn(Verb::Unfurl, Register::Arcane, &["unfurl"]),
+    syn(Verb::Unfurl, Register::Shell, &["history"]),
+    //
+    // **The phrases only, never bare `page`.** On its own it fuzzy-matches
+    // `purge` — and a collision between *read back* and *destroy what is in
+    // this* is not one to tolerate, whichever way round it resolves. `page up`
+    // and `page back` are what a player says anyway, and neither is near
+    // anything.
+    syn(Verb::Unfurl, Register::Plain, &["page", "up"]),
+    syn(Verb::Unfurl, Register::Plain, &["page", "back"]),
     // meditate — fast-forward the clock
     syn(Verb::Meditate, Register::Arcane, &["meditate"]),
-    syn(Verb::Meditate, Register::Shell, &["wait"]),
+    // **`wait` left this list for the spell vocabulary** (§19). It was
+    // `meditate`'s shell synonym and is now §8's smallest control structure, and
+    // one word cannot be both: `wait for the mortar` at the prompt has to mean
+    // the same thing it means in a spell, or the editor teaches a line that
+    // destroys something when typed.
+    //
+    // `sleep` is the shell word that carries the sense here — `wait` was always
+    // the weaker of the two for *"let time pass"*, and `sleep 30` is the one a
+    // shell native reaches for anyway.
     syn(Verb::Meditate, Register::Shell, &["sleep"]),
     syn(Verb::Meditate, Register::Plain, &["rest"]),
     syn(Verb::Meditate, Register::Plain, &["pass"]),
@@ -127,6 +163,20 @@ pub const SYNONYMS: &[Synonym] = &[
     // this domain can least afford — the same reasoning that kept `damp` out.
     syn(Verb::Empty, Register::Arcane, &["empty"]),
     syn(Verb::Empty, Register::Plain, &["unload"]),
+    // **`siphon`'s words, inherited** (§19). §6.1's rule is that a released word
+    // does not stop resolving — it resolves to whatever it is nearest — so
+    // leaving `collect`, `decant` and `pour` unclaimed would scatter them across
+    // `purge` and `stop`, which are the two verbs in this room a mistake costs
+    // most. `empty` is the honest heir: it is what taking things out of a tool
+    // is called now.
+    //
+    // `take` is deliberately **not** inherited. It sat one edit from `make`
+    // (`recall`) and was only safe while it belonged to a verb with a `Place`
+    // signature; on `empty` it would be the same collision with none of the
+    // separation.
+    syn(Verb::Empty, Register::Plain, &["collect"]),
+    syn(Verb::Empty, Register::Plain, &["decant"]),
+    syn(Verb::Empty, Register::Plain, &["pour"]),
     // stop — cancel a working instrument
     syn(Verb::Stop, Register::Arcane, &["stop"]),
     syn(Verb::Stop, Register::Plain, &["cancel"]),
@@ -147,18 +197,18 @@ pub const SYNONYMS: &[Synonym] = &[
     //
     // It also answers the newcomer's sentence usefully. §15 chose brewing to
     // gate the parser because *"a shell-naive tester immediately understands
-    // 'make a potion'"*, and `make a potion of clarity` -> `grimoire clarity`
+    // 'make a potion'"*, and `make a potion of clarity` -> `recall clarity`
     // hands them the recipe, which is the tutorial entry point.
     // `mix` and `distil` **left** for §10.1's per-instrument verbs below. They
     // are not lost to the manual: `mix` and `distil` take a `Reagent` while
-    // `grimoire` takes a `Topic`, and the two never resolve to the same reading
+    // `recall` takes a `Topic`, and the two never resolve to the same reading
     // because the *scene* decides. `distil clarity` finds no reagent called
     // `clarity` — it is a recipe output, a Topic — so the manual wins; `distil
     // clarified-draught` finds the reagent on the bench, so the alembic wins.
     // The tutorial sentence survives on `brew`, `make` and `decoct`.
-    syn(Verb::Grimoire, Register::Plain, &["decoct"]),
-    syn(Verb::Grimoire, Register::Plain, &["brew"]),
-    syn(Verb::Grimoire, Register::Plain, &["make"]),
+    syn(Verb::Recall, Register::Plain, &["decoct"]),
+    syn(Verb::Recall, Register::Plain, &["brew"]),
+    syn(Verb::Recall, Register::Plain, &["make"]),
     // §10.1's per-instrument verbs: charge the tool and start it in one line.
     //
     // Four commands a stage — `move`, `wield`, `siphon`, `purge` — is the loop
@@ -216,11 +266,6 @@ pub const SYNONYMS: &[Synonym] = &[
     // to collect. Claimed, they cost a prompt on a typo instead.
     //
     // "take it back" still reaches undo: three words beat one on longest match.
-    syn(Verb::Siphon, Register::Arcane, &["siphon"]),
-    syn(Verb::Siphon, Register::Plain, &["collect"]),
-    syn(Verb::Siphon, Register::Plain, &["decant"]),
-    syn(Verb::Siphon, Register::Plain, &["take"]),
-    syn(Verb::Siphon, Register::Plain, &["pour"]),
     // purge — destroy waste
     syn(Verb::Purge, Register::Arcane, &["purge"]),
     syn(Verb::Purge, Register::Shell, &["rm"]),

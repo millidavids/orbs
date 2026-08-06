@@ -52,7 +52,7 @@ fn a_dark_verb_only_acknowledges_and_a_live_one_does_not() {
     // A **dark** verb must do no work of its own. Three ways of being dark
     // all count, because they are equally empty for a player and asserting
     // one shape would be asserting which kind of unfinished a verb is:
-    // `siphon retort` resolves and acknowledges; `grimoire brewing` does not
+    // `siphon retort` resolves and acknowledges; `recall brewing` does not
     // resolve at all, there being no Topic in the starting tower; and `bind
     // night_watch` is taken by `sift` through the collision documented in
     // `vocabulary`. So the check is on the verb's *own* name never appearing
@@ -122,7 +122,7 @@ fn sample(verb: Verb) -> (&'static str, &'static str) {
         Verb::Peruse => ("laboratory", "peruse laboratory.log"),
         Verb::Sift => ("laboratory", "sift decoct laboratory.log"),
         Verb::Status => ("tower", "status"),
-        Verb::Grimoire => ("tower", "grimoire brewing"),
+        Verb::Recall => ("tower", "recall brewing"),
         Verb::Verify => ("laboratory", "verify laboratory.log"),
         Verb::Undo => ("tower", "undo"),
         Verb::Meditate => ("tower", "meditate 1"),
@@ -141,12 +141,12 @@ fn sample(verb: Verb) -> (&'static str, &'static str) {
         // An instrument, not a vessel: §10.1 puts the product in the thing
         // that made it. The mortar is empty here, and the refusal that
         // yields is still the world answering rather than acknowledging.
-        Verb::Siphon => ("laboratory", "siphon mortar_and_pestle"),
         Verb::Purge => ("laboratory", "purge laboratory.log"),
         Verb::Divine => ("archive", "divine sigil-iv"),
         Verb::Scribe => ("tower", "scribe night_watch"),
         Verb::Bind => ("tower", "bind night_watch"),
         Verb::Invoke => ("tower", "invoke night_watch"),
+        Verb::Unfurl => ("tower", "unfurl"),
     }
 }
 

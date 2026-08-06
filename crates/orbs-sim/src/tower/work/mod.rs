@@ -6,9 +6,10 @@
 //! and it is expressed as concurrency: how many things you can have in flight at
 //! once.
 //!
-//! That is why this is the economy. §5.0 again: *"Attention is therefore the real
-//! scarcity, and it is expressed as concurrency … which means the economy and the
-//! focus system are the same system rather than two bolted together."*
+//! That is why this is the economy. §5.0 again: *"Concurrency is therefore the
+//! real scarcity: how many duration-actions you can have in flight at once …
+//! which means the economy and the focus system are the same system rather than
+//! two bolted together."*
 //!
 //! # One production slot
 //!
@@ -35,7 +36,7 @@ mod triage;
 mod tests;
 
 pub use land::finish;
-pub use produce::{Product, contents, siphon};
+pub use produce::{Product, contents};
 pub use slot::{
     Busy, CAPACITY, DIVINE_TICKS, PURGE_TICKS, Triaging, Working, begin, busy, in_flight, occupied,
     refuse_busy, stop,

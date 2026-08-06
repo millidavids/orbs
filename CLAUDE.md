@@ -221,12 +221,47 @@ the same frame through the real `paint`, `Sim` and `ScreenLayout` into a `Frame`
 nobody rasterises, then prints it with its linear stream beneath:
 
 ```bash
-ORBS_DUMP="attend laboratory; move sage to mortar_and_pestle; wield mortar_and_pestle; meditate 12; siphon mortar_and_pestle" cargo run -p orbs
+ORBS_DUMP="attend laboratory; move sage to mortar_and_pestle; wield mortar_and_pestle; meditate 12; empty mortar_and_pestle" cargo run -p orbs
 ORBS_DUMP=1 ORBS_GRID=160x44 cargo run -p orbs   # the worst-case grid
 ORBS_DUMP=1 ORBS_BOOT=post cargo run -p orbs     # a boot stage as text
 ORBS_BOOT=0 cargo run -p orbs                    # skip the boot sequence
 ORBS_LINE="wield mo" ORBS_DUMP=1 cargo run -p orbs   # ...with a line half-typed
 ORBS_SCROLL=14 ORBS_DUMP="..." cargo run -p orbs     # ...scrolled back 14 records
+```
+
+**The spell editor has two channels of its own.** `ORBS_EDIT` types into the
+editor a `scribe` opened — newline-separated keystrokes, in order. **The editor's
+own two states decide what a segment is**: it opens in *command* state so the
+first segment is a word (`edit` or `quit` — that is the whole vocabulary), `edit`
+drops into the buffer, and the token `<esc>` comes back out.
+
+**There is no `save`.** The buffer writes itself out a beat after the typing
+stops, and that pause is measured off `Time`, which a dump never advances. So in
+a dump, **`quit` is how you save** — it flushes, then closes. The vim shorthand
+still works if you want one without the other: `w` writes and stays, `wq` does
+both.
+
+`ORBS_THEN` runs commands *after* the editing session — needed because a save
+queues its write for the next tick like every other effect, so a `peruse` inside
+`ORBS_DUMP` runs before the spell exists and offers the other readables instead.
+That looks exactly like a bug and is not one.
+
+```bash
+# The whole loop: write it, save it, cast it. A spell is written *for* a domain
+# (`scribe` from inside one), so there is no `attend` in the file.
+ORBS_DUMP="attend laboratory; scribe brewing" \
+ORBS_EDIT="edit\nkindle charcoal\ngrind the sage\nempty mortar_and_pestle\n<esc>\nquit" \
+ORBS_THEN="invoke brewing; meditate 40" cargo run -p orbs
+
+# ...and what the orb wrote down, which is not what was typed.
+ORBS_DUMP="attend laboratory; scribe morning" \
+ORBS_EDIT="edit\nmake a potion of clarity\n<esc>\nquit" \
+ORBS_THEN="peruse morning.spell" cargo run -p orbs
+
+# Editing a spell while it runs — the marker in the gutter is the orb's place
+# in the file, and the save that lands a beat later is picked up mid-flight.
+ORBS_DUMP="attend laboratory; invoke brewing; meditate 3; scribe brewing" \
+  cargo run -p orbs
 ```
 
 Each `;`-separated line goes through `submit` and a real `step`. Phosphor, the

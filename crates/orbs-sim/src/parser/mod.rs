@@ -38,6 +38,7 @@ mod normalise;
 mod report;
 mod resolve;
 mod scene;
+mod spellword;
 mod trace;
 mod verb;
 mod vocabulary;
@@ -45,9 +46,14 @@ mod vocabulary;
 pub use complete::{Completion, Suggestion, complete, is_answer};
 pub use fuzzy::{EXACT, MIN_SIMILARITY, distance, is_near, similarity};
 pub use intent::{Argument, Candidate, Confidence, Intent, Mode, Resolution, leaf};
+pub use normalise::is_filler;
 pub use report::report;
 pub use resolve::{Analysis, analyse, resolve};
 pub use scene::{Noun, NounMatch, Scene};
+pub use spellword::{
+    Condition, INDENT, SpellWord, State as SpellState, argument as spell_argument, condition,
+    indent_around, leading as spell_word, write_condition,
+};
 pub use trace::{Outcome, ParseLog, ParseRecord};
 pub use verb::{NounKind, Slot, Verb};
 pub use vocabulary::{Register, SYNONYMS, Synonym};

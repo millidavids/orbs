@@ -60,6 +60,40 @@ const LINE: &str = "ORBS_LINE";
 /// `ORBS_LINE` exists.
 const SCROLL: &str = "ORBS_SCROLL";
 
+/// What to type into the spell editor, once `scribe` has opened it.
+///
+/// Newline-separated keystrokes, in order. **The editor's own state decides what
+/// a segment is** — it opens in command state, so the first segment is a word,
+/// `edit` drops into the buffer, and the token `<esc>` comes back out:
+///
+/// ```text
+/// ORBS_DUMP="scribe morning" \
+///   ORBS_EDIT="edit\ngrind sage\n<esc>\nquit" cargo run -p orbs
+/// ```
+///
+/// **`quit` is how a dump saves**, and there is no `save` to reach for. In the
+/// running game the buffer writes itself out a beat after the typing stops, and
+/// that pause is measured off `Time` — which a dump does not advance, having no
+/// frames. `quit` flushes, which is why it is the last segment above; `w` and
+/// `wq` also work, and write without closing and with closing respectively.
+///
+/// Without this the editor could only be looked at by a person sitting in front
+/// of a window, and it is the surface this whole item is about. Same reason
+/// `ORBS_LINE` and `ORBS_SCROLL` exist.
+const EDIT: &str = "ORBS_EDIT";
+
+/// Commands to run **after** `ORBS_EDIT` has finished with the editor.
+///
+/// A save queues its write for the next tick, like every other effect (see
+/// `session`'s two clocks), so a `peruse` in `ORBS_DUMP` runs before the spell
+/// is there. This is what makes the payoff visible:
+///
+/// ```text
+/// ORBS_DUMP="scribe morning" ORBS_EDIT="edit\nbrew clarity\n<esc>\nquit" \
+///   ORBS_THEN="peruse morning.spell" cargo run -p orbs
+/// ```
+const THEN: &str = "ORBS_THEN";
+
 /// Commands are separated by this, so one shell word can drive a session.
 const SEPARATOR: char = ';';
 
@@ -102,14 +136,7 @@ pub(crate) fn run(seed: u64, wizard: Option<String>) -> bool {
     // Every line goes through `submit` and a real `step`, so what prints is the
     // world having actually run rather than a pose struck for the screenshot.
     if request != "1" {
-        for line in request
-            .split(SEPARATOR)
-            .map(str::trim)
-            .filter(|line| !line.is_empty())
-        {
-            sim.submit(line);
-            sim.step();
-        }
+        drive(&mut sim, &request);
     }
 
     let grid = grid();
@@ -151,10 +178,45 @@ pub(crate) fn run(seed: u64, wizard: Option<String>) -> bool {
             1
         });
         let typed = std::env::var(LINE).map_or_else(|_| Line::default(), |text| Line::typed(&text));
+        // If a `scribe` in `ORBS_DUMP` asked for the editor, open it — and let
+        // `ORBS_EDIT` type into it. Without this the one surface the whole item
+        // is about could only be looked at by a person sitting in front of a
+        // window, which is the position `ORBS_DUMP` exists to get out of.
+        let mut editing = opened(&mut sim);
+        // Commands to run *after* the editing session. A `:w` queues its write
+        // for the next tick like every other effect, so a `peruse` typed in
+        // `ORBS_DUMP` runs before the spell exists — it would offer the other
+        // readables instead, which looks exactly like a bug and is not one.
+        // This is the only way to look at what was just saved.
+        if let Ok(after) = std::env::var(THEN) {
+            sim.step();
+            drive(&mut sim, &after);
+            // A `scribe` **in `ORBS_THEN`** opens the editor too, and that is the
+            // only ordering that can show a spell being edited while it runs:
+            // the invocation has to be cast before the editor is opened on it.
+            //
+            // **Opened, not typed into.** `ORBS_EDIT` has had its session by now
+            // and belongs to the `scribe` that started it; replaying it here
+            // types the whole script a second time into a buffer that already
+            // holds it. That is not hypothetical — it is what this did first
+            // time, and the dump reported `9 lines, 1 the orb could not read`
+            // for a three-line spell.
+            editing = editing.or_else(|| open(&mut sim));
+        }
+        // The running-line marker. In the game this is pushed in each frame by
+        // `editing::autosave`; a dump builds no `App` and advances no `Time`, so
+        // it is done here from the same accessor — the same reason the panel
+        // below is computed rather than left empty.
+        if let Some(editor) = editing.as_mut() {
+            editor.set_running_line(sim.running_line(editor.name()));
+        }
         // A dump builds no `App`, so the two cached resources have nobody to
         // fill them: they are computed here from the same functions the systems
         // call, rather than left empty — a dump that silently omitted the panel
         // would be a picture that proves the wrong thing.
+        // Taken before the borrow below, because `unfurling` takes rather than
+        // reads and `View` holds `&sim` for the whole call.
+        let scroll = scrolled(&mut sim);
         let panel = super::input::Panel {
             instruments: sim.instruments(),
             domain: orbs_sim::parser::leaf(&sim.location()).to_owned(),
@@ -162,7 +224,7 @@ pub(crate) fn run(seed: u64, wizard: Option<String>) -> bool {
         super::prompt::paint(
             &mut frame,
             &mut Linear::default(),
-            &super::prompt::View {
+            super::prompt::View {
                 sim: &sim,
                 line: &typed,
                 screen: &screen,
@@ -174,9 +236,10 @@ pub(crate) fn run(seed: u64, wizard: Option<String>) -> bool {
                 // dump presses no keys. The *ghost* still shows, because it is a
                 // function of `ORBS_LINE` rather than of anything that happened.
                 offered: &super::input::Offered::default(),
-                scroll: &scrolled(),
+                scroll: &scroll,
                 ghost: &typed.ghost(sim.scene(), !sim.choices().is_empty()),
                 panel: &panel,
+                editing: editing.as_mut(),
             },
         );
     } else {
@@ -208,13 +271,17 @@ fn print(frame: &Frame) {
 /// skip-it-entirely case and belongs to the running game, not here.
 fn requested_stage() -> Option<(Stage, f32)> {
     let request = std::env::var(BOOT).ok()?;
-    let stage = match request.as_str() {
-        "dark" => Stage::Dark,
-        "frame" => Stage::Frame,
-        "post" => Stage::Post,
+    // `frame` outlived the stage it named. The border and the card are one stage
+    // now, so it selects the moment the box is still closing and the first
+    // letter is landing — which is what anyone typing `frame` wanted to look at,
+    // and was never a thing the old stage could show.
+    let (stage, progress) = match request.as_str() {
+        "dark" => (Stage::Dark, 0.5),
+        "frame" => (Stage::Post, Stage::FRAME_SHARE / 2.0),
+        "post" => (Stage::Post, 0.5),
         _ => return None,
     };
-    Some((stage, 0.5))
+    Some((stage, progress))
 }
 
 /// The grid to draw into, from `ORBS_GRID` or §4's floor.
@@ -226,7 +293,7 @@ fn requested_stage() -> Option<(Stage, f32)> {
 ///
 /// A malformed value scrolls nowhere, for the same reason a malformed grid falls
 /// back: the useful answer to a typo is the default screen, not a stack trace.
-fn scrolled() -> super::input::Scroll {
+fn scrolled(sim: &mut orbs_sim::Sim) -> super::input::Scroll {
     let mut scroll = super::input::Scroll::default();
     if let Ok(back) = std::env::var(SCROLL)
         && let Ok(back) = back.trim().parse::<u16>()
@@ -236,7 +303,118 @@ fn scrolled() -> super::input::Scroll {
         let back = usize::from(back);
         scroll.page(back, true, back);
     }
+    // An `unfurl` in the script hands the transcript the keyboard, exactly as
+    // `plugin::start_reading` does in the game. A dump builds no `App`, so the
+    // one system that would otherwise do this has nobody to run it — the same
+    // reason the panel below is computed here rather than left empty.
+    //
+    // The page it lands on is `ORBS_SCROLL`'s, so the two compose: `ORBS_SCROLL`
+    // says how far back to look and `unfurl` says the keys are live.
+    if sim.unfurling() {
+        scroll.read();
+    }
     scroll
+}
+
+/// Submit every `;`-separated command in `script`, stepping between them.
+///
+/// One loop rather than two, so the commands before an editing session and the
+/// ones after it are driven identically — a second copy would be a second answer
+/// to what a dump command *is*.
+fn drive(sim: &mut Sim, script: &str) {
+    for line in script
+        .split(SEPARATOR)
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+    {
+        sim.submit(line);
+        sim.step();
+    }
+}
+
+/// The editor, if a `scribe` in this dump opened one, with `ORBS_EDIT` typed in.
+///
+/// A dump presses no keys, so the keystrokes are replayed here through the same
+/// [`Editor`](super::Editor) methods the shell's key handler calls — not through
+/// a second implementation, which would let the dump and the game disagree about
+/// what typing does.
+///
+/// **The `:` goes through `insert` like any other character**, rather than
+/// calling into its innards. That looks like a detail and is not: the editor's
+/// two states decide there whether a keystroke is a word or a line of a spell,
+/// and a dump that skipped the decision could not show it going wrong. It did go
+/// wrong once — under the old `:` command line, opening it required the caret at
+/// column 0, so typing a line and then trying to save put a colon in the spell —
+/// and neither this nor the unit tests could see it, because both reached past
+/// the one function that had the bug.
+///
+/// **There is no marker for a command**, because the editor's own state already
+/// says which a segment is: it opens in `Mode::Command`, so the first segment is
+/// a word, `edit` switches to the buffer, and `<esc>` switches back. The script
+/// is therefore the keystrokes in order and nothing else.
+///
+/// A `save` here **writes for real**: `Sim::write_spell` records the submission
+/// and queues the write, and the dump steps afterwards. That is the point — the
+/// picture is of a spell that has actually been saved.
+/// The editor a pending `scribe` asked for, with nothing typed into it.
+///
+/// The same two lines `editing::open_requested` runs in the game. Separate from
+/// [`opened`] because `ORBS_EDIT` is one session belonging to one `scribe`, and
+/// a second `scribe` later in the dump must open a buffer rather than replay it.
+fn open(sim: &mut orbs_sim::Sim) -> Option<super::Editor> {
+    let request = sim.opening()?;
+    Some(super::Editor::open(
+        &request.name,
+        &request.domain,
+        &request.lines,
+    ))
+}
+
+fn opened(sim: &mut orbs_sim::Sim) -> Option<super::Editor> {
+    let mut editor = open(sim)?;
+
+    let Ok(script) = std::env::var(EDIT) else {
+        return Some(editor);
+    };
+    // `\n` as two characters, because a shell word carries it that way.
+    let mut wrote_a_line = false;
+    for segment in script.replace("\\n", "\n").split('\n') {
+        // The one token a keyboard has and a shell word does not.
+        if segment.trim() == "<esc>" {
+            editor.escape();
+            continue;
+        }
+
+        // In the buffer, a break goes **between** lines rather than after each
+        // one: a trailing newline would put an empty line at the end of every
+        // spell the dump writes, and the log would report one line more than was
+        // typed.
+        if editor.mode() == super::EditorMode::Editing && wrote_a_line {
+            editor.enter();
+        }
+        for character in segment.chars() {
+            editor.type_text(&character.to_string());
+        }
+
+        if editor.mode() == super::EditorMode::Editing {
+            wrote_a_line = true;
+            continue;
+        }
+        // Command state: `Enter` runs the word.
+        match editor.enter() {
+            Some(super::EditorOutcome::Save) => {
+                sim.write_spell(editor.name(), editor.lines());
+                editor.saved();
+            }
+            Some(super::EditorOutcome::SaveAndClose) => {
+                sim.write_spell(editor.name(), editor.lines());
+                sim.step();
+                return None;
+            }
+            None => {}
+        }
+    }
+    Some(editor)
 }
 
 fn grid() -> GridSize {

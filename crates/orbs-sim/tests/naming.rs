@@ -57,6 +57,18 @@ const fn sample_argument(verb: Verb) -> &'static str {
         NounKind::Fragment => "sigil-iv",
         NounKind::Script => "night_watch",
         NounKind::Count => "30",
+        // Free text the player is coining, so any word will do — and a word that
+        // is *not* in the scene, so this measures the naming rather than a
+        // lucky match against something the fixture happens to hold.
+        NounKind::Name => "morning",
+        // A slot kind, never a noun's own, so the sample is a noun that *fills*
+        // one. The log, not the spell: this exercises the ordinary reading and
+        // leaves `peruse night_watch` to the tests that are about spells.
+        NounKind::Readable => "feed.log",
+        // A slot kind, never a noun's own. The place, not the spell: this
+        // exercises the ordinary `stop <instrument>` and leaves calling a spell
+        // off to the tests that are about spells.
+        NounKind::Stoppable => "/tower/laboratory",
         NounKind::Any => "sludge",
     }
 }
@@ -151,20 +163,41 @@ fn three_character_canonical_prefixes_name_at_most_one_verb() {
             .map(|verb| verb.canonical())
             .filter(|other| other.starts_with(prefix))
             .collect();
-        // `gri` is the one shared prefix, between `grimoire` and `grind`, and it
-        // is shared only *in the laboratory* — the one room where both are
-        // words. There the instrument settles it (`resolve::DOMAIN_BONUS`), and
-        // neither reaches `MIN_SIMILARITY` from three letters anyway, so the
-        // shorthand this test guards resolves to nothing rather than to the
-        // wrong thing. That is the `dec`-prefixed-three-verbs defect avoided by
-        // a different route, not conceded.
-        let expected = if prefix == "gri" { 2 } else { 1 };
+        // **No exceptions any more.** `gri` was the one shared prefix, between
+        // `grimoire` and `grind`, and it needed a paragraph arguing the clash
+        // was survivable because the two were words in the same room. Renaming
+        // the manual to `recall` (§19) deleted the clash rather than mitigating
+        // it, and the exception went with it — an exemption that outlives its
+        // cause is how a guard quietly stops guarding.
         assert_eq!(
             hits.len(),
-            expected,
+            1,
             "the abbreviation {prefix:?} reaches {hits:?}"
         );
     }
+}
+
+#[test]
+fn rec_is_pinned_as_a_prefix_before_anything_else_wants_it() {
+    // **The forward risk `recall` actually carries, which is not edit distance.**
+    // `recall` scores at most 500 against every other canonical and synonym in
+    // the vocabulary — nowhere near `MIN_SIMILARITY` — so no collision exists
+    // today. But `rec` prefix-matches `recall` at 900, and §5 has `repair` for
+    // nuisances while §11 has recipes and records: a future `recipe`, `record`
+    // or `recover` would build the `dec`-reaches-three-verbs defect the naming
+    // pass exists to prevent, one word at a time and with nothing complaining.
+    //
+    // So the prefix is claimed here rather than discovered in Phase 2.
+    let owners: Vec<&str> = Verb::ALL
+        .iter()
+        .map(|verb| verb.canonical())
+        .filter(|name| name.starts_with("rec"))
+        .collect();
+    assert_eq!(
+        owners,
+        ["recall"],
+        "`rec` is spoken for; a second verb wanting it needs a different word",
+    );
 }
 
 /// **The invariant the whole pass rests on.**
@@ -244,10 +277,20 @@ fn the_tolerated_collision_set_is_pinned() {
             ("find", "grind"),
             ("find", "bind"),
             ("audit", "edit"),
-            ("wait", "write"),
+            // `("wait", "write")` **left this set**, and the set is one shorter
+            // than it was. `wait` was `meditate`'s shell synonym; §8 needed it
+            // as the smallest control structure, and one word cannot be both —
+            // so it was released to the spell vocabulary (§19). A tolerated
+            // collision disappearing is the direction this list should move in.
             ("decoct", "decant"),
             ("decoct", "decode"),
-            ("make", "take"),
+            // `("make", "take")` **left this set** with `siphon` (§19). `take`
+            // was one of its plain synonyms and sat one edit from `make`
+            // (`recall`); it was survivable only because the two verbs took
+            // different argument kinds. `empty` inherited `collect`, `decant`
+            // and `pour` and deliberately **not** `take`, so the collision is
+            // gone rather than moved. Two entries have now left this list and
+            // none has joined it.
             ("grind", "bind"),
         ],
         "the set of tolerated synonym collisions changed"
@@ -281,21 +324,22 @@ fn ambiguous_synonym_prefixes_are_known() {
     ambiguous.sort_unstable();
 
     // `aut`: automate (bind) vs author (scribe).
-    // `dec`: decoct (now grimoire) vs decant (siphon) vs decipher/decode (divine).
-    // `gri`: grimoire vs grind — and only where the mortar is, since `grind` is
-    //        not a word anywhere else (§7). There the instrument settles it
-    //        (`resolve::DOMAIN_BONUS`).
+    // `dec`: decoct (now recall) vs decant (now empty) vs decipher/decode (divine).
     // `ins`: inscribe (scribe) vs inspect (verify).
     // `tra`: transfer/transport (move) vs translate (divine).
     // Each prompts, which is the right answer — the abbreviation genuinely is
     // ambiguous. What must never happen is one of them resolving silently, and
     // `every_phrase_reaches_the_verb_that_claims_it` is what guards that.
+    //
+    // **`gri` left this set.** It was `grimoire` vs `grind`, and it needed an
+    // argument about the mortar being in only one room. Renaming the manual to
+    // `recall` (§19) removed the clash outright — the set is one shorter than it
+    // was, which is the direction it should move in.
     assert_eq!(
         ambiguous,
         [
             ("aut", vec!["bind", "scribe"]),
-            ("dec", vec!["divine", "grimoire", "siphon"]),
-            ("gri", vec!["grimoire", "grind"]),
+            ("dec", vec!["divine", "empty", "recall"]),
             ("ins", vec!["scribe", "verify"]),
             ("tra", vec!["divine", "move"]),
         ],
@@ -335,15 +379,19 @@ fn the_words_the_naming_pass_replaced_still_resolve() {
         // Echoed as a **leaf**: the full path clipped the destination off a
         // three-argument `move` at the 80×22 floor, and the leaf is what §7 says
         // players say anyway.
-        ("decant alembic", "siphon alembic"),
-        ("siphon alembic", "siphon alembic"),
+        // **`decant` outlived the verb it was a synonym for.** `siphon` retired
+        // (§19) and `empty` inherited its words, because §6.1's rule is that a
+        // released word does not stop resolving — it resolves to whatever it is
+        // nearest, and the two nearest here are `purge` and `stop`. Somebody who
+        // learned `decant` still gets the thing that takes stuff out of a tool.
+        ("decant alembic", "empty alembic"),
         ("decipher sigil-iv", "divine sigil-iv"),
         ("divine sigil-iv", "divine sigil-iv"),
         ("inscribe night_watch", "scribe night_watch"),
         ("scribe night_watch", "scribe night_watch"),
         // Retired in Phase 1 (§19) and still claimed, pointed at the recipe.
-        ("decoct clarity", "grimoire clarity"),
-        ("brew clarity", "grimoire clarity"),
+        ("decoct clarity", "recall clarity"),
+        ("brew clarity", "recall clarity"),
     ] {
         let echo = resolve(input, &scene, Mode::Calm)
             .intent()

@@ -438,7 +438,17 @@ fn draw_lines<'r>(
         drawn.clear();
         // Content only: an annotation drawn as text would put an internal token
         // — `"resolved survey"` — on screen for a player to read.
-        record.write_line(&mut drawn);
+        //
+        // **The brackets are the view's, not the record's.** A section carries
+        // the bare word so `sift reagent` finds it and a screen reader hears a
+        // heading rather than punctuation; `[reagent]` is how this surface draws
+        // one, and drawing is what a view is for (rule 4).
+        // **A listing keeps its `=` even when it is not tiled.** A run of one
+        // does not pack — and scrolling clips a run, so the last visible entry
+        // of a listing was stacking and coming out as `charcoal ∞` while the
+        // rows above it read `charcoal = ∞`. One entry of a table is still a row
+        // of that table. `drawn_form` is what `wrapped_rows` measures.
+        drawn.push_str(&drawn_form(&record));
         speech.clear();
         record.speak(&mut speech);
 
@@ -551,9 +561,30 @@ fn wrapped_rows(record: &Record<'_>, cols: u16, prompt: Option<&str>) -> u16 {
     if width == 0 {
         return 1;
     }
-    let line = record.to_line();
+    // **Measured as it is drawn, not as `to_line` renders it.** `draw_lines`
+    // wraps a `Section` in `[…]` and binds a counted `Entry` with ` = `, each
+    // two cells wider than the plain join — so a row within two cells of the
+    // wrap point measured one row and drew two, and the binary search above
+    // picked a skip whose measured height fit while the drawn one overflowed,
+    // pushing the newest record off the bottom of the pane and out of §14's
+    // stream. Exactly the failure `wrapped_rows` was written to prevent.
+    let line = drawn_form(record);
     let rows = crate::wrap::Wrap::new(&line, width).count();
     u16::try_from(rows).unwrap_or(u16::MAX).max(1)
+}
+
+/// A record's text exactly as the stacked path draws it.
+///
+/// One definition, so the measure and the draw cannot disagree about two
+/// characters — see [`wrapped_rows`].
+fn drawn_form(record: &Record<'_>) -> String {
+    if record.kind() == RecordKind::Section {
+        let mut out = String::from("[");
+        record.write_line(&mut out);
+        out.push(']');
+        return out;
+    }
+    amount_of(record).unwrap_or_else(|| record.to_line())
 }
 
 /// Cells before a record's own text begins.
@@ -601,7 +632,38 @@ struct Tiling {
     stride: u16,
     per_row: u16,
     count: usize,
+    /// Width of the name column, when the run reads as `name = value`.
+    ///
+    /// `None` when nothing in the run has a second field — a listing of places
+    /// is names and nothing else, and an ` = ` with nothing after it would be a
+    /// column of punctuation.
+    named: Option<u16>,
 }
+
+/// A listing entry written as `name = amount`, if it is one.
+///
+/// `None` for everything else, which is every record that is not a row of a
+/// counted listing — those keep the plain juxtaposition [`Record::write_line`]
+/// gives them.
+fn amount_of(record: &Record<'_>) -> Option<String> {
+    if record.kind() != RecordKind::Entry {
+        return None;
+    }
+    let amount = record.field(FieldName::Quantity)?;
+    let (_, name) = record.content().next()?;
+
+    let mut out = String::new();
+    name.write(&mut out);
+    out.push_str(BINDS);
+    amount.write(&mut out);
+    Some(out)
+}
+
+/// What sits between a tiled entry's name and its value.
+///
+/// Spaced, so the `=` never touches either — the whole point of aligning the
+/// column is that the eye can run down it.
+const BINDS: &str = " = ";
 
 impl Tiling {
     /// Plan the run beginning at `run`'s first record, or `None` to stack.
@@ -627,30 +689,73 @@ impl Tiling {
             return None;
         }
 
-        let (mut widest, mut count) = (0usize, 0usize);
+        // **Measured field by field, not as a rendered line.** A listing reads
+        // as `name = value`, and the `=` only lines up if every tile puts its
+        // name in a column of one width and its value in a column of another.
+        // Measuring the joined text gives one width for the pair, which packs
+        // them tightly and leaves the eye nothing to run down.
+        let (mut name_wide, mut value_wide, mut count) = (0usize, 0usize, 0usize);
+        // The whole rendered line, for the runs that are not `name = amount`.
+        // **Measuring only the name would set the stride too narrow for what is
+        // actually drawn**, and the tiles would overlap: the cold-launch verb
+        // listing came out as `attend plasurvey plaperuse filsift` — every entry
+        // truncated by its neighbour.
+        let mut line_wide = 0usize;
         let mut drawn = String::new();
         for record in run.take_while(|record| record.kind().tiles()) {
             if record.marker().is_some() {
                 return None;
             }
+            let mut fields = record.content();
+            let Some((_, name)) = fields.next() else {
+                continue;
+            };
+            drawn.clear();
+            name.write(&mut drawn);
+            name_wide = name_wide.max(drawn.chars().count());
+            // **An amount, specifically** — not "whatever the second field is".
+            // A cold launch lists the verbs as `stop place`, meaning *stop takes
+            // a place*, and binding those with an `=` turns a grammar into an
+            // assignment: `stop = place` says the two are the same thing.
+            //
+            // How many of something there are is the one relation `=` reads
+            // correctly, so that is the one it is used for. Everything else
+            // keeps the juxtaposition it had.
+            if let Some(value) = record.field(FieldName::Quantity) {
+                drawn.clear();
+                value.write(&mut drawn);
+                value_wide = value_wide.max(drawn.chars().count());
+            }
             drawn.clear();
             record.write_line(&mut drawn);
-            widest = widest.max(drawn.chars().count());
+            line_wide = line_wide.max(drawn.chars().count());
             count += 1;
         }
         // One name is not a listing, and packing it would only move it right.
-        if count < 2 || widest == 0 {
+        if count < 2 || line_wide == 0 {
             return None;
         }
 
+        let named = (value_wide > 0).then(|| to_cols(name_wide));
+        let widest = if value_wide > 0 {
+            name_wide + BINDS.len() + value_wide
+        } else {
+            line_wide
+        };
         let stride = to_cols(widest.saturating_add(COLUMN_GAP));
         let per_row = available / stride;
         // Nothing gained, and stacking keeps the fallback in one place.
+        //
+        // **A tile never wraps.** `per_row` is a whole number of strides, and a
+        // stride is the widest entry in the run — so an entry either has its own
+        // column or the run stacks. There is no arithmetic here that can put
+        // half a name at the end of a line.
         (per_row >= 2).then_some(Self {
             indent,
             stride,
             per_row,
             count,
+            named,
         })
     }
 
@@ -694,8 +799,33 @@ fn draw_tiled<'r>(
             .saturating_add(indent)
             .saturating_add(to_cols(placed % usize::from(per_row)) * stride);
 
+        // **Padded to the run's name column**, so every `=` in the listing sits
+        // in the same place and the eye can run down it. Built as one string
+        // rather than drawn in three pieces because the reveal clips by
+        // character and speaks per record: splitting the tile would type the
+        // value before the name on a narrow pane, and say each entry twice.
         drawn.clear();
-        record.write_line(&mut drawn);
+        let mut bound = false;
+        match plan.named {
+            Some(named) => {
+                let mut fields = record.content();
+                if let Some((_, name)) = fields.next() {
+                    name.write(&mut drawn);
+                    // A run may mix entries that have an amount with entries
+                    // that do not — a room holds reagents *and* fixtures. One
+                    // without gets its name and no trailing ` = ` to explain.
+                    if let Some(value) = record.field(FieldName::Quantity) {
+                        for _ in drawn.chars().count()..usize::from(named) {
+                            drawn.push(' ');
+                        }
+                        drawn.push_str(BINDS);
+                        value.write(&mut drawn);
+                        bound = true;
+                    }
+                }
+            }
+            None => record.write_line(&mut drawn),
+        }
         speech.clear();
         record.speak(&mut speech);
 
@@ -719,6 +849,14 @@ fn draw_tiled<'r>(
                     .with_kind(record.kind().utterance())
                     .with_spoken(&speech),
             );
+            // The `=` is punctuation holding two facts apart, not a fact — so it
+            // recedes, and the name and the value it separates do not. Overdrawn
+            // rather than drawn as a third span: the span above already carried
+            // the whole tile into the linear stream, and a second one here would
+            // put ` = ` in it as an utterance of its own.
+            if let Some(named) = plan.named.filter(|_| bound) {
+                painter.glyphs(Pos::new(col.saturating_add(named), row), BINDS, Style::DIM);
+            }
         } else if !visible.is_empty() {
             // Silent until whole — see the stacked path for why this is `glyphs`.
             painter.glyphs(Pos::new(col, row), visible, record.style());

@@ -82,6 +82,22 @@ pub fn resolve(input: &str, scene: &Scene, mode: Mode) -> Resolution {
 /// Resolve, keeping every scored reading for instrumentation.
 #[must_use]
 pub fn analyse(input: &str, scene: &Scene, mode: Mode) -> Analysis {
+    // **Spell words are answered before the matcher sees the line**, because the
+    // matcher's answer is worse than no answer. `wait for the mortar` used to
+    // open the editor on a new empty `mortar.spell` — `for`/`the` are filler,
+    // `wait` is a `meditate` synonym whose `Count` slot cannot take `mortar`, so
+    // the reading lost to `scribe <Name>`, which takes free text. `repeat 3`
+    // resolved to `undo`.
+    //
+    // Exact, never fuzzy: these are not in §6's vocabulary and must not compete
+    // with it. A typo like `waat` falls through and is answered as a typo.
+    if let Some(word) = super::spellword::leading(input) {
+        return Analysis {
+            resolution: Resolution::InSpell { word },
+            candidates: Vec::new(),
+        };
+    }
+
     let tokens = normalise::Tokens::split(input);
     let all = tokens.words();
 
@@ -318,13 +334,16 @@ struct Incomplete {
 /// and a number: nothing in the world enumerates them, so they yield no fillers
 /// and the caller reports [`Resolution::Incomplete`] instead.
 fn fillers(kind: NounKind, slot: usize, scene: &Scene) -> Vec<super::intent::Argument> {
-    if matches!(kind, NounKind::Pattern | NounKind::Count) {
+    // `Name` joins them: a spell being coined does not exist, so the world has
+    // nothing to offer and a numbered prompt would list things the player is
+    // explicitly *not* naming.
+    if matches!(kind, NounKind::Pattern | NounKind::Count | NounKind::Name) {
         return Vec::new();
     }
     scene
         .nouns()
         .iter()
-        .filter(|noun| kind == NounKind::Any || noun.kind == kind)
+        .filter(|noun| kind.accepts(noun.kind))
         .map(|noun| super::intent::Argument {
             kind: noun.kind,
             slot,

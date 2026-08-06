@@ -42,7 +42,7 @@
 use bevy_ecs::prelude::*;
 use orbs_render::{FieldName, RecordKind, Role};
 
-use super::node::{Name, Nameable, NodeIds};
+use super::node::Name;
 use crate::content::{Fuels, Prose};
 use crate::parser::{NounKind, Verb};
 use crate::session::Scrollback;
@@ -161,9 +161,20 @@ pub fn kindle(world: &mut World, athanor: Entity) -> bool {
             continue;
         };
         if let Some(fuel) = world.resource::<Fuels>().get(&name) {
-            ticks = ticks.saturating_add(fuel.ticks);
-            ash.push(fuel.leaves.clone());
-            spent.push(node);
+            // **Per unit, not per pile.** Fuel is stock now, so N charcoal is
+            // one node with `Counted(N)` — and burning the node while crediting
+            // one charcoal's ticks and one charcoal's ash destroyed the other
+            // N-1 outright. Endless fuel burns one unit and stays endless,
+            // which is what makes the athanor lightable for ever.
+            let units = match world.get::<super::Stock>(node) {
+                Some(super::Stock::Counted(count)) => *count,
+                _ => 1,
+            };
+            for _ in 0..units {
+                ticks = ticks.saturating_add(fuel.ticks);
+                ash.push(fuel.leaves.clone());
+            }
+            spent.push((name, units));
         }
     }
 
@@ -173,8 +184,8 @@ pub fn kindle(world: &mut World, athanor: Entity) -> bool {
     }
 
     let spent_fuel = !spent.is_empty();
-    for node in spent {
-        world.entity_mut(node).despawn();
+    for (name, units) in spent {
+        super::stock::take(world, athanor, &name, units);
     }
     // The ash it *will* leave is decided now and held until burn-out, so a
     // `meditate` that runs the whole fire out in one step spawns exactly what a
@@ -242,11 +253,9 @@ fn spend(world: &mut World, athanor: Entity) {
     world.entity_mut(athanor).remove::<Ash>();
 
     for leaving in leavings {
-        let id = world.resource_mut::<NodeIds>().issue();
-        let node = world
-            .spawn((id, Name(leaving), Nameable(NounKind::Reagent)))
-            .id();
-        world.entity_mut(node).insert(ChildOf(athanor));
+        // Merged, so a second burning adds to the ash rather than standing a
+        // second pile beside it under the same name.
+        super::stock::give(world, athanor, &leaving, NounKind::Reagent, 1);
     }
 
     let message = world.resource::<Prose>().line("athanor_out", &[]);
@@ -255,6 +264,7 @@ fn spend(world: &mut World, athanor: Entity) {
         .records_mut()
         .push(RecordKind::Completion)
         .text(FieldName::Name, ATHANOR)
+        .text(FieldName::At, ATHANOR)
         .text(FieldName::State, "cold")
         .text(FieldName::Message, &message)
         .role(Role::Cost)
@@ -296,6 +306,7 @@ fn report(world: &mut World, key: &str, role: Role, state: &str, fuel: Option<u6
         .records_mut()
         .push(RecordKind::Completion)
         .text(FieldName::Name, ATHANOR)
+        .text(FieldName::At, ATHANOR)
         .text(FieldName::State, state)
         .text(FieldName::Message, &message)
         .role(role);

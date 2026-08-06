@@ -155,7 +155,7 @@ mod tests {
         for (input, target) in [
             ("sur", "survey"),
             ("dec", "decoct"),
-            ("grim", "grimoire"),
+            ("reca", "recall"),
             ("medit", "meditate"),
         ] {
             assert!(

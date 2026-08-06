@@ -1,6 +1,6 @@
 //! §10.1's brewing loop: clear, charge, wield, draw off.
 //!
-//! `move`, `wield`, `stop`, `siphon`, `purge` and the `grimoire` that makes the
+//! `move`, `wield`, `stop`, `siphon`, `purge` and the `recall` that makes the
 //! whole thing readable **before** the player commits an instrument to a route.
 //! Everything here is scoped to where the player is standing — see
 //! [`instrument`], which is the one lookup the pipeline uses and the reason
@@ -44,27 +44,30 @@ fn instrument(world: &World, path: &str) -> Option<(Entity, String)> {
 
 /// Everywhere a component can be taken from, in the order it is looked for.
 ///
-/// **The floor first**, because that is where `siphon` puts a product
-/// (`tower::work` moves it to `cwd`) and §10.1's loop makes `siphon` mandatory —
-/// so the thing a player is moving mid-pipeline is nearly always lying on the
-/// bench, not still inside the instrument that made it.
+/// **The instruments first**, in raise order — because the thing a player is
+/// moving mid-pipeline is the output of the last stage, and it is still inside
+/// the tool that made it. **This is what retired `siphon`** (§19): the loop used
+/// to be `move`/`wield`/`siphon`, so a stage's output had to be drawn onto the
+/// bench before the next tool could have it. Reaching into an idle instrument
+/// means `digest ground-sage` advances the pipeline on its own, and drawing off
+/// first was a step that had stopped doing anything.
 ///
-/// **Then the instruments**, in raise order: what is left inside one is the
-/// byproduct `siphon` deliberately did not take, or a charge not yet wielded.
 /// **Busy instruments are skipped** — §10.1's lock covers taking as much as
 /// putting, and without this a `move` could gut a run in flight, spend the Focus
 /// slot for nothing and say not a word about it.
 ///
 /// **The store last.** It is stock, and stock is the fallback.
+///
+/// # There is no floor
+///
+/// A tier used to come first here for things lying loose in the room. Nothing
+/// can be there any more: `siphon` was the only thing that ever put a reagent on
+/// the floor, and `move`'s destination resolves through [`instrument`], which
+/// finds fixtures only. The bench and the shelf are one place now, and it is the
+/// dispensary.
 fn reachable(world: &World, cwd: Entity) -> Vec<Entity> {
     let here = tower::children_of(world, cwd);
-
-    // The floor: everything loose in the room.
-    let mut order: Vec<Entity> = here
-        .iter()
-        .copied()
-        .filter(|node| world.get::<tower::Fixture>(*node).is_none())
-        .collect();
+    let mut order: Vec<Entity> = Vec::new();
 
     // One partition rather than two filtered passes over a cached bool: the
     // instruments in raise order, then the stores.
@@ -144,7 +147,16 @@ pub(super) fn carry(intent: &Intent, world: &mut World) {
                 return;
             }
         },
-        None => reachable(world, cwd),
+        // **Never the destination itself.** `reachable` walks every instrument
+        // and store in the room, the destination included — so `move charcoal to
+        // athanor` when the athanor already held charcoal found it *there*,
+        // took a unit out and put a unit back, and reported `charcoal: athanor
+        // to athanor`. A player could not add a second unit of anything an
+        // instrument already had, and the command said it had worked.
+        None => reachable(world, cwd)
+            .into_iter()
+            .filter(|node| world.get::<ChildOf>(*node).map(ChildOf::parent) != Some(to))
+            .collect(),
     };
 
     let Some(node) = haystack.into_iter().find(|node| {
@@ -165,14 +177,7 @@ pub(super) fn carry(intent: &Intent, world: &mut World) {
         .and_then(|parent| world.get::<tower::Name>(parent))
         .map_or_else(String::new, |name| name.0.clone());
 
-    world.entity_mut(node).insert(ChildOf(to));
-    // **A moved thing is no longer a product.** `siphon` clears this marker when
-    // it collects, but a `move` re-parented it intact — so the destination read
-    // `ready` on the panel before anything had been wielded, and `siphon` there
-    // handed the freshly-delivered *input* straight back out, emptying the
-    // charge. It marks "this instrument made this", which stops being true the
-    // moment it is carried somewhere else.
-    world.entity_mut(node).remove::<tower::Product>();
+    hand(world, node, to);
 
     let message = world.resource::<Prose>().line(
         "move_done",
@@ -283,6 +288,44 @@ pub(super) fn operate(intent: &Intent, world: &mut World) {
     start(world, at, &name, verb);
 }
 
+/// Move one of whatever `node` is into `to`.
+///
+/// # One unit if it is stock, the whole thing if it is not
+///
+/// A reagent is a pile with a count, so handing one over takes a unit and adds a
+/// unit — and an endless pile yields its unit without shrinking, which is what
+/// makes the base reagents the floor the laboratory stands on. A vessel, a file
+/// and a spell are one of a kind and simply move.
+///
+/// **One function for `move` and for charging an instrument**, because they were
+/// two copies of the same three lines and the copies drifted the moment counts
+/// arrived: `move sage` took a unit while `grind sage` re-parented the endless
+/// pile itself into the mortar — where the run consumed it and `empty` swept it
+/// into the store, so the tower's inexhaustible sage was gone for good after one
+/// grind. The second copy is what made the *first* fix look like it worked.
+fn hand(world: &mut World, node: Entity, to: Entity) {
+    let Some(thing) = world.get::<tower::Name>(node).map(|name| name.0.clone()) else {
+        return;
+    };
+    // **A moved thing is no longer a product.** The marker means "this
+    // instrument made this", which stops being true the moment it is carried
+    // somewhere else — the destination used to read `ready` on the panel before
+    // anything had been wielded there. `give` spawns or merges without it, so
+    // the stock path clears it by construction.
+    let Some(&kind) = world.get::<tower::Nameable>(node).map(|kind| &kind.0) else {
+        return;
+    };
+    if world.get::<tower::Stock>(node).is_none() {
+        world.entity_mut(node).insert(ChildOf(to));
+        world.entity_mut(node).remove::<tower::Product>();
+        return;
+    }
+    if let Some(from) = world.get::<ChildOf>(node).map(ChildOf::parent) {
+        tower::take(world, from, &thing, 1);
+    }
+    tower::give(world, to, &thing, kind, 1);
+}
+
 /// Move one reagent into `at`, saying where it came from.
 fn charge(world: &mut World, node: Entity, at: Entity, destination: &str) {
     let thing = world
@@ -295,9 +338,7 @@ fn charge(world: &mut World, node: Entity, at: Entity, destination: &str) {
         .and_then(|parent| world.get::<tower::Name>(parent))
         .map_or_else(String::new, |name| name.0.clone());
 
-    world.entity_mut(node).insert(ChildOf(at));
-    // See `carry`: a moved thing is no longer this instrument's product.
-    world.entity_mut(node).remove::<tower::Product>();
+    hand(world, node, at);
 
     let message = world.resource::<Prose>().line(
         "move_done",
@@ -453,12 +494,36 @@ pub(super) fn empty(intent: &Intent, world: &mut World) {
 
     let mut turned_out = Vec::new();
     for node in held {
-        if let Some(held) = world.get::<tower::Name>(node) {
-            turned_out.push(held.0.clone());
+        let Some(held) = world.get::<tower::Name>(node).map(|name| name.0.clone()) else {
+            continue;
+        };
+        let kind = world
+            .get::<tower::Nameable>(node)
+            .map_or(crate::parser::NounKind::Reagent, |kind| kind.0);
+        turned_out.push(held.clone());
+
+        // **Poured onto the pile, not stood beside it.** Reparenting the node
+        // left a second `ground-sage` in the dispensary every time the mortar
+        // was emptied — two rows under one name, and a name the parser then has
+        // to choose between arbitrarily. That was already true before counts;
+        // it simply had nothing to show it with.
+        match world.get::<tower::Stock>(node).copied() {
+            Some(tower::Stock::Counted(count)) => {
+                world.entity_mut(node).despawn();
+                tower::give(world, store, &held, kind, count);
+            }
+            // Endless in an instrument is not a thing the tower makes, and
+            // pouring it into the store would silently make the store endless.
+            // Dropped rather than merged, exactly as a spent unit is.
+            Some(tower::Stock::Endless) => {
+                world.entity_mut(node).despawn();
+            }
+            // Not stock: it moves whole, and stops being a product on the way.
+            None => {
+                world.entity_mut(node).insert(ChildOf(store));
+                world.entity_mut(node).remove::<tower::Product>();
+            }
         }
-        world.entity_mut(node).insert(ChildOf(store));
-        // See `carry`: what leaves an instrument is no longer its product.
-        world.entity_mut(node).remove::<tower::Product>();
     }
 
     let listed = turned_out.join(", ");
@@ -496,24 +561,6 @@ fn say_empty(world: &mut World, key: &str, name: &str, store: &str, moved: &str,
     record.role(role).finish();
 }
 
-/// Collect what an instrument made (§10.1).
-pub(super) fn siphon(intent: &Intent, world: &mut World) {
-    let Some(name) = intent
-        .arguments
-        .first()
-        .map(|argument| argument.value.clone())
-    else {
-        acknowledge(Verb::Siphon, world);
-        return;
-    };
-    match instrument(world, &name) {
-        Some((at, _)) => {
-            tower::siphon(world, at);
-        }
-        None => missing(Verb::Siphon, &name, world),
-    }
-}
-
 /// Cancel a working instrument (§10.1).
 pub(super) fn stop(intent: &Intent, world: &mut World) {
     let Some(name) = intent
@@ -524,6 +571,17 @@ pub(super) fn stop(intent: &Intent, world: &mut World) {
         acknowledge(Verb::Stop, world);
         return;
     };
+
+    // **A spell first.** `stop` used to reach instruments only, which made an
+    // invoked spell impossible to call off — see `tower::spell::stop_spell`.
+    // Spells are looked at before instruments because a spell and an instrument
+    // can never share a name (one is a `.spell` in the grimoire, the other a
+    // fixture), so the order is a preference between disjoint sets rather than a
+    // tie-break that could surprise anyone.
+    if tower::spell::stop_spell(world, &name) {
+        return;
+    }
+
     match instrument(world, &name) {
         // Stopping the athanor damps the fire and **banks** what has not burnt,
         // which is what makes `stop athanor` at the end of a script loop worth

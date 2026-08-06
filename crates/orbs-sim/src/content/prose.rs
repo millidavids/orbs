@@ -99,16 +99,26 @@ impl Prose {
         self.lines.contains_key(key)
     }
 
-    /// Every subject the manual can answer on, from the `grimoire_` keys.
+    /// Every subject the manual can answer on, from the `recall_` keys.
     ///
     /// Derived rather than listed, so authoring a manual entry in the content
     /// file is all it takes to make the subject **nameable** — otherwise a
-    /// writer adds `grimoire_warding`, and the parser has never heard of it.
+    /// writer adds `recall_warding`, and the parser has never heard of it.
+    ///
+    /// # The prefix is load-bearing, so templates do not share it
+    ///
+    /// This makes every key under the prefix a **parser noun**, which is a
+    /// strong thing for a content file to be able to do by accident. The route
+    /// templates were `grimoire_route`, `grimoire_step`, `grimoire_step_or` and
+    /// `grimoire_heat`, so the scene registered `route`, `step`, `step_or` and
+    /// `heat` as subjects a player could ask about and the manual could not
+    /// answer. They are `route_` now, and a template that wants a new name
+    /// should take any prefix but this one.
     #[must_use]
     pub fn topics(&self) -> Vec<&str> {
         self.lines
             .keys()
-            .filter_map(|key| key.strip_prefix("grimoire_"))
+            .filter_map(|key| key.strip_prefix("recall_"))
             .collect()
     }
 }
