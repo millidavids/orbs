@@ -1,0 +1,136 @@
+# What colour each material draws an instrument's bar in (DESIGN.md §19).
+#
+# A *hint*, never a carrier. `survey <instrument>` names the contents outright on
+# every frontend, the panel names the instrument and its state, and both reach
+# the linear stream — so a player who cannot see the colour loses a convenience
+# and nothing else. §14's rule is that colour is never the sole carrier of
+# meaning, and this is on the right side of it.
+#
+# The eight families are fixed in `orbs_render::Tint` and this file selects one
+# by name: green, brown, grey, gold, violet, red, blue, bone. **An unknown name
+# is a load error**, deliberately — a typo that quietly drew the base hue would
+# look exactly like a material nobody had got round to tinting yet, which is the
+# failure mode `Recipe::heat` and `craft_of` have each already paid for once.
+#
+# A material with no entry here draws in the base hue, which is the honest
+# default: it says "nobody has decided", not "this is colourless".
+#
+# **The athanor is deliberately absent from the effect, not from the file.**
+# Charcoal and ash have tints like anything else, because they are materials and
+# they sit in other instruments — `ash` grinds into `potash` in the mortar. What
+# ignores them is the *fire*: it burns one orange ramp on every tube (§19), and a
+# hearth drawing grey flames because its fuel is grey would put back the exact
+# problem that decision removed.
+
+# ---------------------------------------------------------------------------
+# Reagents — what the pipeline starts from and passes along.
+# ---------------------------------------------------------------------------
+
+[sage]
+tint = "green"
+
+[ground-sage]
+tint = "green"
+
+[rock-salt]
+tint = "bone"
+
+[ground-salt]
+tint = "bone"
+
+[charcoal]
+tint = "grey"
+
+# **Grey, not bone.** Potash is what ash grinds down into, and it takes its
+# colour from where it came from — which also keeps the two draughts apart:
+# `clarified` is tincture + salt and `fixed` is tincture + potash, so if both
+# salts were bone the flask would make the same colour twice.
+[potash]
+tint = "grey"
+
+# ---------------------------------------------------------------------------
+# Byproducts — §10.1 gives every one of these a use, so they are as likely to be
+# sitting in an instrument as any reagent.
+# ---------------------------------------------------------------------------
+
+[husks]
+tint = "brown"
+
+[ash]
+tint = "grey"
+
+[sediment]
+tint = "brown"
+
+[dregs]
+tint = "brown"
+
+[phlegm]
+tint = "grey"
+
+# ---------------------------------------------------------------------------
+# Extracts — what the bath and the flask hand along.
+#
+# **Every one of these is tinted, and the omission was visible.** A `ready`
+# instrument holds its product, so an untinted output meant the bar went colourless
+# at the exact moment the run finished — the panel forgetting what it had just
+# spent eight ticks making. The chain now carries its colour the whole way:
+# sage is green, its tincture is green, and it only leaves the family when the
+# flask combines it with something else.
+# ---------------------------------------------------------------------------
+
+[sage-tincture]
+tint = "green"
+
+# From husks rather than from ground sage — route B, and thinner for it. Same
+# family, because it is still sage.
+[weak-tincture]
+tint = "green"
+
+# **Authored as the mixture they are, not as a third colour.** The flask draws
+# its growing band by averaging its two ingredients, and these are what it leaves
+# behind — so writing them as `green` + `bone` makes the band and the product the
+# same colour *by construction*. A third colour would match only for as long as
+# two numbers happened to agree, and the day they stopped, a player would watch a
+# mixture form and then turn into something else.
+#
+# `the_flasks_products_are_the_colour_of_what_makes_them` checks this against
+# `recipes.toml` rather than trusting it, because the two files have to agree and
+# nothing else makes them.
+[clarified-draught]
+tint = "green"
+with = "bone"
+
+[fixed-draught]
+tint = "green"
+with = "grey"
+
+# ---------------------------------------------------------------------------
+# Essences — the end of the pipeline.
+#
+# **Each is the colour of the draught it was distilled from**, not gold. Gold
+# was reserved for essences so a finished potion looked like it was worth the
+# fuel; deriving them costs that and buys something better, because the alembic
+# is a *vessel* and its bar is the liquid in it. A potion that changed to an
+# unrelated colour the instant it finished would be the discontinuity the flask's
+# authored mixtures exist to remove, one stage later.
+#
+# The "worth the fuel" signal did not need a colour of its own: a finished
+# instrument is `State::Ready`, which `style_of` already draws in `Style::SUCCESS`
+# — an accent, reaching the linear stream, which is where §4 says meaning belongs.
+# DESIGN.md §19.
+# ---------------------------------------------------------------------------
+
+# From `clarified-draught`, which is green + bone.
+[clarity]
+tint = "green"
+with = "bone"
+
+# From `fixed-draught`, which is green + grey.
+[warding]
+tint = "green"
+with = "grey"
+
+# From `weak-tincture`, which is plain green — so this one is not a mixture.
+[haste]
+tint = "green"

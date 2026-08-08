@@ -16,14 +16,37 @@ use serde::de::DeserializeOwned;
 /// Carries **which file**, which the three separate error types could only say
 /// in their message text — so a caller could not tell them apart without
 /// matching on a string.
+///
+/// Two kinds, because a file can be well-formed TOML and still wrong.
+/// `materials.toml` selecting a colour that does not exist parses perfectly and
+/// is unusable, and the writer needs to be told which name and what the real
+/// ones are — a `toml::de::Error` has no room to say either.
 #[derive(Debug, thiserror::Error)]
-#[error("{file} is not valid content: {source}")]
-pub struct ContentError {
-    /// The file's name, as a writer would look for it.
-    pub file: &'static str,
-    /// What the parser objected to.
-    #[source]
-    pub source: toml::de::Error,
+pub enum ContentError {
+    /// The text is not valid TOML of the expected shape.
+    #[error("{file} is not valid content: {source}")]
+    Malformed {
+        /// The file's name, as a writer would look for it.
+        file: &'static str,
+        /// What the parser objected to.
+        #[source]
+        source: toml::de::Error,
+    },
+    /// The text parsed, and says something the game cannot act on.
+    #[error("{file}: {message}")]
+    Invalid {
+        /// The file's name, as a writer would look for it.
+        file: &'static str,
+        /// What is wrong, in terms a writer can fix.
+        message: String,
+    },
+}
+
+impl ContentError {
+    /// A well-formed file that says something impossible.
+    pub(super) const fn new(file: &'static str, message: String) -> Self {
+        Self::Invalid { file, message }
+    }
 }
 
 /// Parse an authored file.
@@ -39,7 +62,7 @@ pub(super) fn parse<T: DeserializeOwned>(
     file: &'static str,
     text: &str,
 ) -> Result<T, ContentError> {
-    toml::from_str(text).map_err(|source| ContentError { file, source })
+    toml::from_str(text).map_err(|source| ContentError::Malformed { file, source })
 }
 
 /// Parse a file that ships with the crate.

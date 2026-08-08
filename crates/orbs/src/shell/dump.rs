@@ -39,6 +39,35 @@ const GRID: &str = "ORBS_GRID";
 /// The variable that picks a boot stage to dump.
 const BOOT: &str = "ORBS_BOOT";
 
+/// Where every instrument's animation has reached, in seconds. See [`bench()`].
+///
+/// Named for the fire because that is what it was built for; it drives the
+/// mortar's stroke and everything after it too. Renaming an environment variable
+/// that is written down in CLAUDE.md and §15's See-it lines costs more than the
+/// slight misnomer does.
+const FIRE_PHASE: &str = "ORBS_FIRE_PHASE";
+
+/// How far through the current **world tick** to draw, `0.0`..`1.0`.
+///
+/// A dump builds no `App`, so there is no `Time<Fixed>` to read the position
+/// from and every bar would sit exactly on a tick boundary — which is precisely
+/// the jump the creep exists to remove, making it the one thing about it a dump
+/// could not show. See [`bench()`].
+const TICK: &str = "ORBS_TICK";
+
+/// How far through the mortar's pour to draw, `0.0`..`1.0`. See [`bench()`].
+///
+/// The load is an *edge* — the frame a reagent enters an empty bowl — and a dump
+/// runs no systems, so it never observes one. Without this the pour is the one
+/// animation with no See-it line at all.
+const LOAD: &str = "ORBS_LOAD";
+
+/// How far through the kindling flare to draw, `0.0`..`1.0`. See [`bench()`].
+///
+/// The flare lasts under a second in a running game and is mostly colour, so it
+/// is the one part of the effect a person cannot reliably catch by playing.
+const FLARE: &str = "ORBS_FLARE";
+
 /// A line left **unsubmitted** in the prompt.
 ///
 /// `ORBS_DUMP` submits every `;`-separated segment, so the input buffer is
@@ -239,6 +268,12 @@ pub(crate) fn run(seed: u64, wizard: Option<String>) -> bool {
                 scroll: &scroll,
                 ghost: &typed.ghost(sim.scene(), !sim.choices().is_empty()),
                 panel: &panel,
+                // A dump builds no `App` and advances no `Time`, so every
+                // instrument would draw at phase zero forever and the See-it
+                // gate would be "it compiles". `ORBS_FIRE_PHASE` is what makes
+                // the animations visible as text: step it by a tick and the
+                // plume climbs, the pestle falls. See CLAUDE.md.
+                bench: &bench(),
                 editing: editing.as_mut(),
             },
         );
@@ -250,7 +285,19 @@ pub(crate) fn run(seed: u64, wizard: Option<String>) -> bool {
     true
 }
 
-/// The frame, then what it says.
+/// A wash's colour, as a writer would name it.
+///
+/// Two names joined for the flask's mixing band, which is the one region that is
+/// two materials at once — and printing only the first would hide exactly the
+/// thing that instrument's picture is about.
+fn label(wash: orbs_render::Wash) -> String {
+    match wash.with {
+        None => wash.tint.name().to_owned(),
+        Some(second) => format!("{}+{}", wash.tint.name(), second.name()),
+    }
+}
+
+/// The frame, then what it says, then what it is tinted.
 fn print(frame: &Frame) {
     println!("{}", frame.to_text());
     println!("-- linearised (DESIGN.md §14) --");
@@ -260,6 +307,28 @@ fn print(frame: &Frame) {
             format!("{:?}", utterance.kind),
             utterance.text
         );
+    }
+
+    // **A tint is pure colour, so the frame above cannot show it** — the glyphs
+    // are identical with it and without. That makes it the one part of the panel
+    // whose See-it line would otherwise be "it compiles", and the failure it
+    // hides is total: a material reported by the sim whose colour never reaches a
+    // cell draws in the base hue and looks exactly like a material nobody has
+    // tinted yet.
+    //
+    // Printed only when there are some, so every other dump is unchanged.
+    if !frame.tints().is_empty() {
+        println!("-- tinted regions (DESIGN.md §19) --");
+        for (area, wash) in frame.tints() {
+            println!(
+                "  {:<8} {}×{} at {},{}",
+                label(*wash),
+                area.cols,
+                area.rows,
+                area.col,
+                area.row,
+            );
+        }
     }
 }
 
@@ -284,11 +353,58 @@ fn requested_stage() -> Option<(Stage, f32)> {
     Some((stage, progress))
 }
 
-/// The grid to draw into, from `ORBS_GRID` or §4's floor.
+/// A finite `f32` from the environment, if the variable holds one.
 ///
-/// A malformed value falls back rather than panicking: this is a development
-/// switch, and the useful answer to a typo is the default screen plus the
-/// obvious mismatch, not a stack trace.
+/// Four switches read the same shape — `ORBS_FIRE_PHASE`, `ORBS_FLARE`,
+/// `ORBS_TICK`, `ORBS_LOAD` — and had four copies of the parse. The
+/// `is_finite` check is the part worth having in one place: a `NaN` reaching
+/// `clamp` comes back `NaN`, and a `NaN` phase makes every hash in `pulse` draw
+/// from a wrapped-to-zero moment, which is a still picture that looks like a
+/// broken animation rather than like a typo.
+fn number(name: &str) -> Option<f32> {
+    let value = std::env::var(name).ok()?;
+    let parsed = value.trim().parse::<f32>().ok()?;
+    parsed.is_finite().then_some(parsed)
+}
+
+/// The athanor's fire, at whatever phase `ORBS_FIRE_PHASE` asks for.
+///
+/// **A dump advances no `Time`**, so without this the fire draws at phase zero
+/// forever and "see it" degrades to "it compiles". Stepping the value shows the
+/// plume move:
+///
+/// ```text
+/// ORBS_DUMP="attend laboratory; kindle charcoal; meditate 300" \
+///   ORBS_FIRE_PHASE=0.4 cargo run -p orbs
+/// ```
+///
+/// A malformed value burns at zero, for the same reason a malformed grid falls
+/// back: the useful answer to a typo is the default screen, not a stack trace.
+/// `ORBS_FIRE=0` still turns the effect off entirely — the two are separate
+/// switches because a phase of zero is a perfectly ordinary phase.
+fn bench() -> super::bench::Bench {
+    let mut bench = super::bench::Bench::default();
+    if let Some(phase) = number(FIRE_PHASE) {
+        // A negative phase is refused by `tick` itself rather than here — see
+        // `Bench::tick`, where running the decays backwards used to manufacture
+        // an ignition and a pour out of nothing.
+        bench.tick(phase);
+    }
+    // **After the phase**, because `tick` decays the flare — setting it first
+    // would have the phase immediately burn it off, and `ORBS_FLARE=1` would
+    // silently do nothing at any phase past a second.
+    if let Some(fraction) = number(FLARE) {
+        bench.set_flare(fraction);
+    }
+    if let Some(fraction) = number(TICK) {
+        bench.set_advance(fraction.clamp(0.0, 1.0));
+    }
+    if let Some(fraction) = number(LOAD) {
+        bench.set_load(fraction);
+    }
+    bench
+}
+
 /// How far back `ORBS_SCROLL` asks the transcript to be.
 ///
 /// A malformed value scrolls nowhere, for the same reason a malformed grid falls
@@ -332,6 +448,20 @@ fn drive(sim: &mut Sim, script: &str) {
     }
 }
 
+/// The editor a pending `scribe` asked for, with nothing typed into it.
+///
+/// The same two lines `editing::open_requested` runs in the game. Separate from
+/// [`opened`] because `ORBS_EDIT` is one session belonging to one `scribe`, and
+/// a second `scribe` later in the dump must open a buffer rather than replay it.
+fn open(sim: &mut orbs_sim::Sim) -> Option<super::Editor> {
+    let request = sim.opening()?;
+    Some(super::Editor::open(
+        &request.name,
+        &request.domain,
+        &request.lines,
+    ))
+}
+
 /// The editor, if a `scribe` in this dump opened one, with `ORBS_EDIT` typed in.
 ///
 /// A dump presses no keys, so the keystrokes are replayed here through the same
@@ -356,20 +486,6 @@ fn drive(sim: &mut Sim, script: &str) {
 /// A `save` here **writes for real**: `Sim::write_spell` records the submission
 /// and queues the write, and the dump steps afterwards. That is the point — the
 /// picture is of a spell that has actually been saved.
-/// The editor a pending `scribe` asked for, with nothing typed into it.
-///
-/// The same two lines `editing::open_requested` runs in the game. Separate from
-/// [`opened`] because `ORBS_EDIT` is one session belonging to one `scribe`, and
-/// a second `scribe` later in the dump must open a buffer rather than replay it.
-fn open(sim: &mut orbs_sim::Sim) -> Option<super::Editor> {
-    let request = sim.opening()?;
-    Some(super::Editor::open(
-        &request.name,
-        &request.domain,
-        &request.lines,
-    ))
-}
-
 fn opened(sim: &mut orbs_sim::Sim) -> Option<super::Editor> {
     let mut editor = open(sim)?;
 
@@ -417,6 +533,11 @@ fn opened(sim: &mut orbs_sim::Sim) -> Option<super::Editor> {
     Some(editor)
 }
 
+/// The grid to draw into, from `ORBS_GRID` or §4's floor.
+///
+/// A malformed value falls back rather than panicking: this is a development
+/// switch, and the useful answer to a typo is the default screen plus the
+/// obvious mismatch, not a stack trace.
 fn grid() -> GridSize {
     let Ok(request) = std::env::var(GRID) else {
         return DEFAULT_GRID;

@@ -171,18 +171,39 @@ impl Fidelity {
     ///
     /// The prompt is the one line a player reads on **every** frame, and a finer
     /// tier shrinks it along with everything else. Spending a second row at the
-    /// finest scale keeps its height in *pixels* roughly where a coarser tier
-    /// puts it, without a second cell size anywhere in the frame — one grid, one
-    /// ratio, and the row count doing the work.
+    /// finest scale holds its height in *pixels* where the tier above puts it,
+    /// without a second cell size anywhere in the frame — one grid, one ratio,
+    /// and the row count doing the work.
     ///
-    /// The threshold is **scale 2**, not scale 1. A row is 32 physical pixels at
-    /// scale 2, and that still read as part of the transcript rather than as the
-    /// thing being typed into — which is exactly the tier Deep focus drops a
-    /// 1440p window to, so the prompt shrank on the one screen carrying the most
-    /// at once. Scale 3 and up are 48 pixels or more and need no help.
+    /// # It may never grow when the tier gets finer
+    ///
+    /// **The threshold is scale 1, and it is derived rather than chosen.** A
+    /// glyph is `16 × scale` pixels tall and doubling gives `32 × scale`, so
+    /// doubling at scale `s` is only compensation — rather than magnification —
+    /// while it stays within the tier above it:
+    ///
+    /// ```text
+    /// 32s ≤ 16(s + 1)   ⇔   16s ≤ 16   ⇔   s ≤ 1
+    /// ```
+    ///
+    /// Tiers step by one scale and row-doubling steps by two, and those only
+    /// agree on the 2→1 step. The threshold was `scale ≤ 2` and overshot by 4/3
+    /// at exactly one place: F4 on a 1440p window drops scale 3 → 2, and the
+    /// prompt went **48 px → 64 px — bigger — while every other glyph halved**.
+    ///
+    /// A constant height is not available. The reachable heights are `16s` or
+    /// `32s`: `{16, 32}`, `{32, 64}`, `{48, 96}`, `{64, 128}`, which share no
+    /// value. So the property actually held is *monotone*: 32, 32, 48, 64 across
+    /// scales 1 to 4, never rising as the tier gets finer.
+    ///
+    /// The cost is on the record. At scale 2 the prompt is now the transcript's
+    /// own size, which is the complaint that moved this threshold to 2 in the
+    /// first place — see DESIGN.md §19. Size was a blunt instrument for
+    /// *distinguishability*, and it bought a prompt that grew when the screen
+    /// got denser.
     #[must_use]
     pub const fn input_rows(self) -> u16 {
-        if self.scale() <= 2 { 2 } else { 1 }
+        if self.scale() <= 1 { 2 } else { 1 }
     }
 
     /// One step finer — the tier Deep-focus multiplexing engages (§9).
@@ -276,27 +297,81 @@ mod tests {
         assert!(!tier.grid(window).fits(Fidelity::PREFERRED_GRID));
     }
 
+    /// The prompt's glyph height at a tier, in physical pixels.
+    fn prompt_pixels(tier: Fidelity) -> u16 {
+        let (_, cell) = tier.cell_pixels();
+        cell * tier.input_rows()
+    }
+
     #[test]
-    fn the_prompt_keeps_its_pixel_height_across_the_tier_table() {
-        // The point of `input_rows`: one grid, one cell ratio, and the *row
-        // count* absorbing the difference. A prompt that shrank with the tier
-        // would be the one line read on every frame getting hardest to read
-        // exactly when the most is on screen.
+    fn the_prompt_never_grows_as_the_tier_gets_finer() {
+        // **The property that replaced a range nobody chose.** This asserted
+        // only `(32..=64).contains(&height)`, which every tier satisfies — and a
+        // *jump inside that band* is exactly the defect it was meant to catch:
+        // F4 on a 1440p window dropped scale 3 → 2 and the prompt went 48 px to
+        // 64 px, growing while every other glyph on screen halved.
         //
-        // **Deep focus is checked too**, and is where this was first wrong:
-        // it drops a tier below the default, so it is the finest scale any
-        // window actually reaches, and 32 pixels there read as transcript.
-        for window in [(1280u32, 720u32), (1920, 1080), (2560, 1440)] {
-            let tier = Fidelity::tier_one(window).expect("supported");
-            for tier in [Some(tier), tier.deep()].into_iter().flatten() {
-                let (_, cell) = tier.cell_pixels();
-                let height = cell * tier.input_rows();
-                assert!(
-                    (32..=64).contains(&height),
-                    "{window:?} at {}×: the prompt is {height} pixels tall",
-                    tier.scale(),
-                );
-            }
+        // A constant height is not reachable at all (see `input_rows`), so what
+        // is held instead is monotonicity: finer tier, never a taller prompt.
+        for scale in 1..8u8 {
+            // `1..8` is never zero, so the `let ... else { continue }` this used
+            // to open with could not take its branch — a guard that reads like
+            // one and skips nothing.
+            let finer = Fidelity::new(NonZeroU8::new(scale).expect("non-zero"));
+            let coarser = Fidelity::new(NonZeroU8::new(scale + 1).expect("non-zero"));
+            assert!(
+                prompt_pixels(finer) <= prompt_pixels(coarser),
+                "{}× has a {}px prompt against {}×'s {}px — it grew",
+                finer.scale(),
+                prompt_pixels(finer),
+                coarser.scale(),
+                prompt_pixels(coarser),
+            );
+        }
+    }
+
+    #[test]
+    fn the_prompt_is_never_smaller_than_the_text_it_sits_under() {
+        // The other half, and the reason `input_rows` exists at all: the one
+        // line read on every frame must not be the hardest thing on screen to
+        // read.
+        //
+        // **Asserted against an absolute floor, not against the text.** The old
+        // version compared `prompt_pixels(tier)` with `tier.cell_pixels().1` —
+        // and `prompt_pixels` *is* that height times `input_rows()`, which is
+        // never less than one. `cell * n >= cell` cannot fail, so the test held
+        // nothing and would have sat green through `input_rows` returning 1 at
+        // every tier, which is the whole defect.
+        //
+        // What actually has to hold is that the prompt never falls below two
+        // native rows. That is the readability floor the mechanism exists for:
+        // at the finest tier the transcript's own text *is* one native row, and
+        // a prompt matching it would be the smallest thing on screen.
+        let floor = 2 * CELL_HEIGHT;
+        for scale in 1..8u8 {
+            let tier = Fidelity::new(NonZeroU8::new(scale).expect("non-zero"));
+            assert!(
+                prompt_pixels(tier) >= floor,
+                "{scale}×: a {}px prompt, under the {floor}px floor",
+                prompt_pixels(tier),
+            );
+        }
+    }
+
+    #[test]
+    fn f4_never_enlarges_the_prompt_on_any_real_window() {
+        // The bug as a player met it. **Deep focus is the half that was wrong**:
+        // it drops a tier below the default, so it is the finest scale a window
+        // actually reaches, and 1440p is the window where the jump happened.
+        for window in [(1280u32, 720u32), (1920, 1080), (2560, 1440), (3840, 2160)] {
+            let out = Fidelity::tier_one(window).expect("supported");
+            let Some(deep) = out.deep() else { continue };
+            assert!(
+                prompt_pixels(deep) <= prompt_pixels(out),
+                "{window:?}: F4 takes the prompt from {}px to {}px",
+                prompt_pixels(out),
+                prompt_pixels(deep),
+            );
         }
     }
 

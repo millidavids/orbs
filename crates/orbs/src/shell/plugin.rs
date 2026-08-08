@@ -54,6 +54,7 @@ impl Plugin for ShellPlugin {
             .init_resource::<Linear>()
             .init_resource::<PaneTransition>()
             .init_resource::<Reveal>()
+            .init_resource::<super::Bench>()
             .init_resource::<super::Editing>()
             .add_message::<SubmittedMessage>()
             .add_systems(Startup, (spawn_camera, track_window).chain())
@@ -170,10 +171,33 @@ impl Plugin for ShellPlugin {
                         .run_if(input_just_pressed(KeyCode::Escape))
                         .run_if(super::editing::reading),
                     start_reading.run_if(resource_changed::<crate::sim::Tower>),
-                    // Unconditional: both of these have to keep moving on the
-                    // frames where nothing happened, which is most of them.
+                    // Unconditional: all three of these have to keep moving on
+                    // the frames where nothing happened, which is most of them.
                     drive_panes.in_set(ShellSystems::Drive),
                     drive_reveal.in_set(ShellSystems::Drive),
+                    // §10.1's instruments animate on wall-clock time, not on the
+                    // tick — the sim must not be able to observe it, or replay
+                    // would depend on how long a frame took. See `shell::bench`.
+                    //
+                    // **After `refresh_panel`, explicitly.** It reads `Panel` to
+                    // catch the two edges it animates — a hearth lighting, a
+                    // bowl filling — and `refresh_panel` is what writes it. Both
+                    // were merely `in_set(Drive)`, which orders them against
+                    // `repaint` and not against each other, so the executor was
+                    // free to run this first and see the *previous* frame's
+                    // panel. That is the same class of defect `Drive` itself
+                    // exists for, one level down.
+                    //
+                    // **Gated on `booted` with the rest, deliberately.** The
+                    // panel is not on screen during the sequence, and the clock
+                    // starting at zero when the game appears is what anyone
+                    // would want. The edges cost nothing either: `Bench` seeds
+                    // `was_lit` and `was_charged` *true* precisely so a tower
+                    // that opens with a fire already going does not flare on the
+                    // first frame it is looked at.
+                    super::bench::advance
+                        .in_set(ShellSystems::Drive)
+                        .after(super::input::refresh_panel),
                 )
                     // Every key here is guarded: none of them means anything
                     // before the world runs, and `F6` would write a trace of a

@@ -20,7 +20,9 @@
 //! would be exactly that.
 
 use bevy::prelude::*;
-use orbs_render::{Intensity, Role, Style};
+use orbs_render::{Depiction, Intensity, Role, Style, Wash};
+
+use super::ember;
 
 /// A hand-tuned harmony: one base hue at three weights, plus the accent triad.
 ///
@@ -46,7 +48,12 @@ pub(crate) struct Phosphor {
     pub(crate) background: Srgba,
 }
 
-const fn rgb(red: f32, green: f32, blue: f32) -> Srgba {
+/// An opaque colour, written the way the tables below read best.
+///
+/// `pub(super)` so [`super::ember`] shares it rather than declaring an
+/// identical one — it had, and two copies of a three-token helper is two places
+/// for the alpha channel to be spelled differently.
+pub(super) const fn rgb(red: f32, green: f32, blue: f32) -> Srgba {
     Srgba::new(red, green, blue, 1.0)
 }
 
@@ -137,8 +144,56 @@ pub(crate) const MONOCHROME: Phosphor = Phosphor {
 pub(crate) const ALL: [Phosphor; 4] = [AMBER, GREEN, MUTED_VIOLET, MONOCHROME];
 
 impl Phosphor {
-    /// The colour a cell of this style is drawn in.
+    /// The colour a cell of this style is drawn in, with no material tint.
+    ///
+    /// Most of the screen. [`Phosphor::resolve_tinted`] is the same thing for
+    /// the handful of cells inside an instrument's bar.
     pub(crate) fn resolve(&self, style: Style) -> Color {
+        self.resolve_tinted(style, None)
+    }
+
+    /// The colour a cell draws in, given the colour family of whatever region it
+    /// falls in.
+    ///
+    /// **The tint is tried first and may decline.** It declines on an accent
+    /// (§4 keeps the triad for meaning) and on the fire (§19 makes it one orange
+    /// ramp everywhere), so the two channels below it are reached exactly when a
+    /// material has nothing to say about the cell.
+    pub(crate) fn resolve_tinted(&self, style: Style, wash: Option<Wash>) -> Color {
+        if let Some(wash) = wash
+            && let Some(tinted) =
+                super::tint::resolve(wash, style.role, style.intensity, style.depicted())
+        {
+            return tinted.into();
+        }
+        self.untinted(style)
+    }
+
+    /// The colour a cell of this style is drawn in.
+    fn untinted(&self, style: Style) -> Color {
+        // **The overwhelmingly common case, taken first.** This runs once per
+        // cell per frame — 7,040 times at the worst-case 160×44 — and a picture
+        // occupies about thirty cells of one panel. Everything else on screen
+        // pays two matches and a call to be told it is not a fire.
+        //
+        // **Reading the field directly is safe *only* to skip work.**
+        // `depicted()` can turn a depiction into `None`; it can never turn
+        // `None` into one, so a cell that fails this test would have resolved to
+        // no colour anyway. That asymmetry is the whole argument, and it is why
+        // the branch below still goes through the accessor rather than the
+        // field.
+        if !matches!(style.depiction, Depiction::None) {
+            // **`depicted()`, never `style.depiction`.** The accessor is where
+            // §4's "accents are never decorative" is enforced: it yields `None`
+            // on any cell carrying an accent, so a `Role::Danger` cell can never
+            // come back painted in flame colours. Reading the field directly
+            // *here* is the one way to get this wrong, and `orbs-tui` will have
+            // to resolve it too.
+            if let Some(depicted) = ember::resolve(style.depicted()) {
+                return depicted.into();
+            }
+        }
+
         let srgba = match style.role {
             // Ordinary text varies on intensity alone (§4).
             Role::Normal => self.base[weight(style.intensity)],
@@ -149,6 +204,13 @@ impl Phosphor {
             Role::Success => self.success,
         };
         srgba.into()
+    }
+
+    /// The base hue at one weight. For tests in [`ember`](super::ember), which
+    /// have to compare a flame against the body text of the same theme.
+    #[cfg(test)]
+    pub(crate) const fn base_at(&self, intensity: Intensity) -> Srgba {
+        self.base[weight(intensity)]
     }
 }
 
@@ -166,7 +228,10 @@ const fn weight(intensity: Intensity) -> usize {
 /// Used to check that meaning survives without hue — the cheap, honest proxy for
 /// §14's colourblind-safety requirement. Two accents that differ only in hue are
 /// the same colour to a substantial minority of players.
-fn luminance(colour: Srgba) -> f32 {
+///
+/// `pub(crate)` so [`ember`](super::ember) holds its ramps to the same bar. Two
+/// copies of a luminance formula is how one of them quietly stops matching.
+pub(crate) fn luminance(colour: Srgba) -> f32 {
     fn channel(value: f32) -> f32 {
         if value <= 0.039_28 {
             value / 12.92
@@ -178,8 +243,9 @@ fn luminance(colour: Srgba) -> f32 {
 }
 
 #[cfg(test)]
-/// WCAG contrast ratio, `1.0..=21.0`.
-fn contrast(a: Srgba, b: Srgba) -> f32 {
+/// WCAG contrast ratio, `1.0..=21.0`. `pub(crate)` for the same reason
+/// [`luminance`] is.
+pub(crate) fn contrast(a: Srgba, b: Srgba) -> f32 {
     let (high, low) = {
         let (x, y) = (luminance(a), luminance(b));
         if x > y { (x, y) } else { (y, x) }
@@ -189,6 +255,58 @@ fn contrast(a: Srgba, b: Srgba) -> f32 {
 
 #[cfg(test)]
 mod tests {
+    /// A real bar, painted by the real painter, resolved by the real palette.
+    ///
+    /// **The gap every unit test in this crate leaves open.** `bath::cell`
+    /// proves it emits a depiction, `ember::resolve` proves a depiction becomes
+    /// a colour, and neither proves the two are *connected* — a painter that
+    /// dropped the depiction on the way into the `Cell` would keep both green
+    /// while the bar drew in plain base hue.
+    #[test]
+    fn an_instrument_picture_reaches_the_palette_as_its_own_colour() {
+        use orbs_render::{Frame, GridSize, Rect, Steep};
+
+        let area = Rect::new(0, 0, 2, 8);
+        let mut frame = Frame::new(GridSize::new(2, 8));
+        frame.painter(area).bath_meter_upward(
+            area,
+            8,
+            8,
+            Steep {
+                phase: 3.0,
+                motion: orbs_render::Motion::Bubbling,
+                ..Steep::default()
+            },
+        );
+
+        let theme = super::ALL[0];
+        let base: Vec<_> = [
+            orbs_render::Intensity::Dim,
+            orbs_render::Intensity::Normal,
+            orbs_render::Intensity::Bright,
+        ]
+        .iter()
+        .map(|weight| theme.base_at(*weight))
+        .collect();
+
+        let mut liquid = 0;
+        for row in 0..8 {
+            for col in 0..2 {
+                let cell = frame
+                    .cell(orbs_render::Pos::new(col, row))
+                    .expect("inside the grid");
+                let colour = theme.resolve(cell.style);
+                assert!(
+                    !base.iter().any(|weight| Color::from(*weight) == colour),
+                    "a liquid cell resolved to the base hue — the picture is not \
+                     reaching the palette",
+                );
+                liquid += 1;
+            }
+        }
+        assert_eq!(liquid, 16, "the bar did not fill");
+    }
+
     use super::*;
 
     /// Body text against its own background, at the weight most of the game is

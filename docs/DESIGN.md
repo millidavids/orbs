@@ -2166,6 +2166,278 @@ domains are settled (brewing + archive), and the fragment trickle has a rate
 
 ## 19. Decisions log
 
+### The flask_and_rod — two things becoming one
+
+§10.1's fourth instrument picture, and the only one whose subject is a *pair*.
+
+**The bar is three bands.** Two ingredients above, the mixture growing from the
+floor, and both ingredients shrinking at the same rate as it climbs. The
+conservation is the mortar's — the vessel is always full of material and what
+changes is how much has combined — and the even shrinking is the part that
+carries the meaning: one input consumed before the other is touched would read
+as *this reagent, then that one*, which is not combining.
+
+**The mixture's colour is the average of its two ingredients**, not a third
+authored one. A colour sitting between its neighbours reads as a mixture of
+them; a new colour reads as a *substitution*, which is the opposite of what the
+instrument does. The average is taken of the two **bases**, so the mixed band
+derives its own three-step ramp and roils in its own colour like any other
+liquid.
+
+That required the tint channel to carry a pair, and it could — because a tint
+lives on the `Frame` per *region* rather than on the `Cell` per position, a
+payload costs a few words a frame instead of a byte times 7,040. The decision
+below to keep it off the `Cell` is what made this affordable a fortnight later,
+which is the usual shape of that kind of decision paying off.
+
+**§14 is satisfied by the one boundary that matters.** Three bands told apart by
+colour alone would be alarming if the bands were the reading — they are not. The
+reading is where the mixture *ends*, and that boundary is a glyph edge: `█`
+below, `▓` above, a whole coverage step. The bands are a hint about contents,
+like every other tint.
+
+### A finished bath settles rather than freezing
+
+The at-rest rule — *an instrument that is not working does not move* — was
+written about instruments that have **not started**, and it stays absolute for
+those. A bath that has *finished* is a different thing: it has just spent its
+run over a lit athanor, it is still hot, and liquid that hot does not stop
+moving because the timer did.
+
+So `Motion` is three states rather than a `bool`. `Standing` is dead flat;
+`Settling` runs at a third the rate with a third the bubbles and never reaches
+the brightest step. The tempo is what keeps the rule intact — a bar moving that
+slowly is visibly a thing calming rather than a thing running.
+
+**It also earns its place informationally.** `Charged` and `Ready` are the two
+at-rest states a player must tell apart, and the meter cannot help: the sim
+reports no quantity for either. Before this they were the same still picture at
+different fills; now one is moving and one is not.
+
+### Material tints — a hint that lives on the Frame
+
+Every reagent and byproduct has an authored colour family, and an instrument's
+bar draws in the colour of what is inside it. Sage grinds pale green; leave the
+husks and the same bar turns brown.
+
+**It is a hint over `survey`, not a carrier.** §14 forbids colour being the
+*sole* carrier of meaning, and three things keep this on the right side of that:
+`survey <instrument>` names the contents outright on every frontend, the panel
+names the instrument and its state, and both reach the linear stream. A player
+who cannot see the colour loses a convenience.
+
+**It lives on the `Frame`, and the reason is arithmetic.** The obvious home is a
+byte on `Style` — and a tint is a property of *what is in an instrument*, so
+every cell of one bar carries the same value. Per-cell, that spends a byte on all
+7,040 cells of a 160×44 grid to express something that varies across five of
+them, and takes `Cell` from 8 bytes to 12 for the second time. It is a
+`(Rect, Tint)` side-table instead, cleared with `speech` and `magnified` every
+frame.
+
+`Frame::magnified` is the precedent and the argument is the same one: it is
+*informational*, so it belongs where both frontends can see it. Handing the Bevy
+build a tint beside the Frame would have been the thing rule 2 exists to prevent
+— *"the moment a frontend conveys something the Frame does not, the other
+frontend is playing a worse game rather than wearing a different skin."*
+
+| | |
+|---|---|
+| Eight families, closed | `Tint` is fixed in `orbs-render` and the TOML selects one *by name*, exactly as `Role` is a name the frontend resolves. The crate still holds no concrete colour |
+| An unknown name fails the load | Not a fallback. An untinted material draws in the base hue too, so a silent one would make a typo indistinguishable from an omission — the defect `Recipe::heat` and `craft_of` have each paid for once |
+| One base per tint, ramp derived | Eight numbers to tune rather than twenty-four, and monotonic by construction. The dim step began at 0.66× and was raised to 0.74× because brown fell under the 3.0 contrast floor |
+| Hot-reloadable in principle | Unlike recipes and spells, a tint reaches no decision — no verb branches on it — so swapping the file mid-session cannot break replay from `(seed, submissions)` |
+
+**Two things a tint may never paint over.** An accent, because §4 reserves the
+triad strictly for meaning — a fouled instrument's label stays red however brown
+its husks are. And the fire, because it burns one orange ramp on every tube by
+the decision below; fuel is a tinted material like any other and the flame simply
+does not consult it. A tinted hearth would put the four-ramp problem back in a
+new costume.
+
+**The failure mode is total and silent, so it has its own See-it.** A tint
+changes no glyph, so a dump of the frame is identical with it and without — and a
+colour reported by the sim that never reaches a cell draws in the base hue, which
+is exactly what an untinted material looks like. `ORBS_DUMP` therefore prints the
+tinted *regions* beneath the linear stream. That is not decoration: the first
+version of this shipped a derived `Default` on `Materials`, so `init_resource`
+installed an **empty table** and every material lost its colour while the file on
+disk was perfectly correct. The cross-crate test in `shell::panel` caught it;
+nothing within any single crate could have.
+
+### The balneum mariae — a level, not a progress bar
+
+§10.1's third instrument picture, and the one that had to solve a problem the
+first two did not.
+
+**The bar is the liquid in the vessel.** A gentle digestion draws something out
+of a reagent and into a liquid, so the level starts shallow, rises as the
+extraction proceeds, and stands full until the tincture is taken.
+
+The alternative — a bar reading *how far along* — fails on the state that matters
+most. The sim reports no meter for a charged instrument, so `stand_in` hands it
+`0/1`, and a progress bar draws **nothing**: a loaded bath and an empty one look
+identical. That is the invisible-state defect this panel was built to remove,
+arrived at from a new direction, and it is the second time the answer has been
+the same one. The mortar reached it first: *the bar is what is in the bowl*, not
+how much has been done to it. **An instrument's bar should describe its contents,
+not its progress** — progress is what the contents' state implies.
+
+**All of the motion is in the colour, and that is the whole design.** The glyph
+is `█` from the floor of the vessel to its surface at every fill and every phase.
+Three things follow, all of them wanted:
+
+| | |
+|---|---|
+| The value survives greyscale trivially | Solid against blank is the strongest join the alphabet has — the same one the fire's flame front is pinned to. §14 needs no argument here, only the observation |
+| Nothing reads as a bubble | Considered and rejected: a mark in the water is a mark *of* something, and a vessel holds one substance. `∙°·` are the fire's sparks besides |
+| It is legible at one cell | The panel's horizontal layout gives each instrument a single row, and a picture whose motion is textural needs height. This one does not |
+
+**Its tempo is the slowest on the panel**, at four shared-clock ticks per beat.
+That is the signature a *gentle* heat should have — ROADMAP asks that what is
+running be legible without reading a word — and it is simultaneously a
+photosensitivity argument the bath does not have to make: 0.75 flashes a second
+against a floor of 3, where the fire is inside the band by recorded exemption.
+
+**The roil takes the staggered clock, not the shared one.** `shared_tick` exists
+for pictures that *travel*; a shimmer that stays put sampled off it turns every
+cell of the vessel over on the same instant, which is whole-field modulation —
+the hazard the rate cap alone does not cover. The first draft did exactly that
+and would have failed `cells_do_not_all_turn_over_together`.
+
+**No pour.** `Bench` carries one load timer driven by one edge, found by
+`Craft::Grinding`, so handing it to the bath as well would mean charging the
+mortar poured the bath. The bath does not need one: unlike the mortar it is
+already a picture at rest, so a load is visible without an animation to announce
+it.
+
+### One fire, material tints, and where the accessibility promise went
+
+Three decisions taken together, because the third is the price of the first two
+and taking them separately would have hidden that.
+
+**Fire is orange on every tube.** It shipped as four ramps — amber burned orange,
+green burned green, violet violet, monochrome white — on the argument that §4's
+premise is a single curved CRT whose base hue carries the picture, so an orange
+fire on the green phosphor is a colour that tube cannot make. That argument is
+about the *tube*; the thing being drawn is a **fire**, and a green fire does not
+read as one, it reads as the meter having changed colour. `Depiction` exists
+precisely because a picture is worth more than consistency with the surrounding
+hue, and four ramps was that concession made and then taken back. One ramp also
+has to clear the contrast floor against *four* backgrounds rather than sit inside
+one theme's family, which is a stronger property and a smaller table: measured
+5.5:1 at the coolest ember against the tightest background, on a floor of 3.0.
+
+**Materials carry a tint.** A reagent or byproduct has an authored colour, and an
+instrument's bar draws in it — sage grinds pale green, the husks it leaves are
+pale brown, the bath's liquid takes the colour of what is dissolved in it. It is
+a **convenience over `survey`**, which remains the authority on what is inside
+anything, and it is not the sole carrier of anything: the panel names the
+instrument and its state, and the linear stream carries both.
+
+**Both put hue on the monochrome theme, and §4's promise went with it.** That
+theme existed so *"a player with a colour vision deficiency loses nothing"*, and
+`palette` tested that its base carried no hue at all. An exemption was considered
+— tints resolving to base hue on that one theme — and rejected, because it makes
+the accessible option also an aesthetic choice: a player who needs the
+accommodation has to give up amber to get it.
+
+So the guarantee moves to **Phase 5: colour-vision filters and a true greyscale
+mode**, applied as a post-pass over the composited frame in the CRT shader, after
+the phosphor and before the barrel. One place catches the fire, the tints and the
+accent triad, rather than four palettes each being solved three more times. A
+filter is orthogonal to the theme, which is what an accommodation should be.
+
+**This is a promise deferred, not dropped, and the deferral has a cost.** Until
+that item lands the game is *less* accessible than it was, and the roadmap item
+says so at the top rather than reading like ordinary polish. What still holds in
+the meantime: the accent triad remains separable without hue at all
+(`palette::the_accent_triad_is_separable_without_hue`), every meter's value is
+read off a glyph boundary rather than a colour, and `Depiction` reaches no
+utterance. The tints are allowed to collapse under a filter; `danger`, `cost` and
+`success` are not.
+
+### Versioning — `0.<phase>.<step>` until release
+
+The workspace version tracks [ROADMAP.md](ROADMAP.md) rather than a public API,
+because there is no public API: every crate here is consumed only by this
+workspace, so the semver contract has nothing to describe. What a reader wants
+from the number before release is *where in the plan is this*, and the phase and
+step say exactly that. It is also player-visible — `boot::screen` draws
+`v{CARGO_PKG_VERSION}` on the POST card — so it doubles as the thing a tester
+quotes in a report.
+
+| Question | Decision |
+|---|---|
+| Form | `0.<phase>.<step>`, one workspace version inherited by all five crates |
+| Phase 0.5 | The interlude gets **no minor of its own** — it is bookkeeping between 0 and 1, and `0.0.5` would collide with a Phase 0 step. Work done there versions under the phase it serves |
+| A step is a **completed roadmap item**, not a commit | Commits are not a unit anyone reads; a checked box is. Corrections folded into an item (the `✅` entries under Phase 1) do not advance it — they are the item still being finished |
+| Completing a phase | Bumps the **minor** and resets the patch to zero |
+| After 1.0 | Ordinary semver, and the switch is **one-way**. Recorded here so the jump from `0.<phase>` to `1.<minor>` is never read as a thirteenth phase |
+
+**Bumping it is part of finishing a step, not a release chore.** CLAUDE.md's
+*Finishing a step* makes the three things one action: the box is ticked, the
+version moves, and whatever was decided lands in this section. A step that did
+only the first of those is a step whose evidence is a checkbox.
+
+**The number is asserted by nothing**, deliberately. There is no test tying it to
+`ROADMAP.md`'s checkboxes, and writing one would pin a judgement call — whether an
+item counts as done is the question the See-it gate exists to ask, and it is
+answered by a person looking at the running game. The convention is therefore a
+habit with a written home rather than a check, which is the same standing the
+See-it rule itself has.
+
+### Instrument animation — corrections from review
+
+Four decisions came out of an adversarial review of §10.1's animated bars. All
+four were confirmed by measurement rather than by argument, and all four had a
+green test suite sitting on top of them.
+
+**A travelling pattern wraps on the distance it travels, not on the cycle.** The
+plume and the mortar's debris are the only pictures in `orbs-render` that
+*correlate* consecutive ticks — that is what makes them move rather than churn —
+so they are the only ones the cycle boundary can tear. `shared_tick` runs
+`143 → 0`, and a coordinate computed as `step - tick` jumped 143 cells there:
+the whole plume re-randomised in one frame, once every twenty-four seconds.
+Measured at 24 of 32 plume cells translating across the wrap against 31 of 32
+elsewhere, and 26 of 40 for the debris.
+
+`CYCLE_SECS` had asserted the opposite — *"there is no seam there: consecutive
+ticks are uncorrelated hashes everywhere"* — which is true for an ordinary cell
+and exactly backwards for a drift. `pulse::rising` and `pulse::falling` reduce
+the coordinate modulo the pattern's own travel period, so `143` and `−1` are the
+same coordinate and the wrap is one more ordinary step. **A picture that
+translates must take its coordinate from those two and never subtract a tick by
+hand.**
+
+**`Depiction` is flat, and the reason is `Cell`'s size.** It arrived as
+`Flame(Heat)` — a payload-carrying enum, which pushed `Style` to a second word
+and `Cell` from 8 bytes to 12. A `Frame` holds one `Cell` per grid position and
+is reset every frame, so that was +28 KiB and ~1.2 µs per frame at the worst-case
+160×44, on *every screen in the game*, for a picture occupying about thirty cells
+of one panel. Eleven fieldless variants with `flame()`/`spark()`/`smoke()`
+constructors read the same at every call site and cost nothing. `Cell` is now
+pinned at 8 bytes by test.
+
+**A picture may never be able to vanish.** Three separate animations learned this
+independently: the flare floors the flame at one cell so ignition is not a blank
+frame, the pour floors the block at one for the same reason, and the cold
+hearth's wisp did not — its noise clears the threshold about three times in eight
+over three cells, so every draw in a narrow bar could miss at once. Reduce-motion
+pins the phase at zero, which froze that blank for the session. A cold athanor
+drawing nothing is indistinguishable from a row the panel forgot, which is the
+invisible-state defect §10.1's panel exists to remove.
+
+**The animated bars carry no accent, and `cold` is spoken.** Two halves of the
+same rule. The picture bars take `Style::NORMAL` rather than the instrument's
+accent — on the fire the accent is not even available, since `Style::depicted`
+drops the picture on any accented cell — and nothing is lost, because the label
+carries the accent in both layouts and `speak` carries the state into the linear
+stream. That second clause was false for one state: `cold` was filtered out of
+the utterance while the `Top` layout drew the word and the panel drew a wisp of
+smoke for it. §19's rule is that a visual constraint must not become an
+informational one, and this failed it in the direction nobody checks. Only
+`empty` is filtered now.
+
 ### `unfurl` — a word for a key nobody could find
 
 `PageUp` has scrolled the transcript since the transcript existed, and nothing
@@ -3376,6 +3648,38 @@ became one `content::load`, `char_index` and the meter arithmetic moved to
 `orbs-render` where both callers can share them, and `paint`'s ten positional
 parameters became a `View`.
 
+#### The magnified prompt grew when the screen got denser — reversed
+
+`Fidelity::input_rows` spent a second row at `scale ≤ 2`, drawing the prompt at
+double size so it kept its pixel height as the tier got finer. On a **1440p
+window it did the opposite**: F4 drops scale 3 → 2, and the prompt went 48 px to
+**64 px — larger — while every other glyph on screen halved.**
+
+**The mismatch is arithmetic, not taste.** Tiers step by one scale (3 → 2 is ×⅔)
+and row-doubling steps by ×2; those agree only on the 2 → 1 step. Doubling at
+scale `s` stays within the tier above it exactly while `32s ≤ 16(s + 1)`, which
+is `s ≤ 1`. The threshold is now derived from that rather than chosen.
+
+**A constant height was never available.** The reachable heights are `16s` or
+`32s` — `{16,32}`, `{32,64}`, `{48,96}`, `{64,128}` — which share no value, so
+"the prompt keeps its size" was not a property that could hold. What holds
+instead is **monotone**: 32, 32, 48, 64 across scales 1 to 4, never rising as the
+tier gets finer, plus never falling below the transcript it sits under.
+
+The cost is the complaint that set the threshold at 2 in the first place: at
+scale 2 the prompt is now the transcript's own size, and someone found that
+hard to pick out. Size was a blunt instrument for *distinguishability* and it
+bought a prompt that grew when the screen got denser; if the prompt needs to
+stand out, the tools are the caret, the dim `orbs:~$`, and the rule above it.
+
+Two things fell out. The input line is no longer half-width at scale 2 — a
+double-size glyph costs two columns as well as two rows, so **1080p gets its full
+typing width back**. And the guarding test was the real failure: it asserted only
+that the height landed in a 32–64 px *band*, which every tier satisfies, so the
+jump *inside* that band passed for as long as it existed. A range nobody chose is
+not a decision. It now asserts monotonicity across the table, the floor against
+the body text, and that F4 cannot enlarge the prompt on any real window.
+
 ### The prompt becomes a command line — built
 
 Caret editing, history, completion and an inline suggestion. Two independent
@@ -3743,12 +4047,24 @@ real terminal, which is a reason to keep it and a reason not to open on it.
 list's order is what `F2` cycles and a default outside that order makes the first
 keypress do nothing visible.
 
-**A fourth theme, monochrome**, and it earns its place on accessibility rather
-than taste. Every other theme is one hue at three weights, which is what a real
-tube did; this one is neutral text with the accents carrying all the colour there
-is. It is the highest contrast the game offers and the only theme where a player
-with a colour vision deficiency loses nothing from the base ramp — there is no
-hue in it to lose.
+**A fourth theme, monochrome.** Every other theme is one hue at three weights,
+which is what a real tube did; this one is neutral text with the accents carrying
+all the colour there is. It is the highest contrast the game offers, and its
+**base ramp** has no hue in it to lose.
+
+> **It no longer carries the accessibility guarantee**, and the change is
+> deliberate — §19. This paragraph used to say monochrome was *"the only theme
+> where a player with a colour vision deficiency loses nothing"*, and two later
+> decisions retired that: the athanor burns one orange ramp on every tube, and
+> materials carry a tint hinting at what is inside an instrument. Both put hue on
+> this theme.
+>
+> The guarantee moved to **Phase 5's colour-vision filters and true greyscale
+> mode**, which is a better home for it than a theme ever was: a theme made the
+> accommodation an aesthetic choice, so a player who needed it had to give up
+> amber to get it. A filter is orthogonal to the theme, which is what an
+> accommodation should be. Monochrome is a grey *aesthetic* until that item
+> lands.
 
 Its values are **solved, not picked**, and the first attempt failed: a light base
 leaves very little luminance headroom above it, and `success` landed 1.22:1 from
@@ -3813,6 +4129,323 @@ works the first time.
 its opening flash and settled at ~14 s, and the keypress skip was removed
 outright — see the entry above. `ORBS_BOOT=0` remains, as a development
 affordance rather than a player-facing one.)*
+
+#### A fourth channel on `Style`, for the one thing that means nothing
+
+The athanor's meter is drawn as a fire: flame glyphs in the filled portion, a
+plume in the empty one, both on per-theme colour ramps. That needed a colour
+family §4 does not have, and §4 describes its palette as closed — base hue at
+three weights, plus an accent triad, *"accents are never decorative"*.
+
+**`Depiction` is admitted as an explicit exception, on the grounds that it says
+nothing.** §14's rule is that colour is never the *sole carrier of meaning*, and
+the guarantee behind it is that every `Role` reaches the linear stream beside its
+text. A channel carrying no meaning has nothing to withhold from a listener, so
+it cannot break that guarantee. Three things hold it to that:
+
+- `Style::depicted()` yields `None` on any accented cell, so a `Role::Danger`
+  cell can never render in flame colours. The rule lives in the accessor rather
+  than at each call site because there is one call site *per frontend*, in
+  different crates.
+- A test asserts a burning meter's linear stream is byte-identical to a plain
+  one's.
+- The athanor's bar drops to `Role::Normal` while alight. Its meaning is the fill
+  boundary and the panel's spoken summary, not an accent.
+
+Rejected: putting it in `Role` (a category error, and it would distort the
+greyscale-separability tests the accent triad exists to pass) and in
+`Presentation` (which selects a glyph-atlas face and is pinned by
+`presentation_never_changes_the_colour`).
+
+**Per-theme ramps, not one fixed orange.** An orange fire on the green phosphor
+is a colour that tube cannot make, and `MONOCHROME` — the accessibility theme,
+whose entire claim is that there is no hue in it to lose — would have gained one.
+Amber's flame ramp *is* orange into yellow because amber's base hue already is.
+
+Two constraints that were not obvious until the values were solved rather than
+picked, which is the same lesson the base palette taught:
+
+- **Monochrome has no headroom.** Its `Bright` is `rgb(1.0, 1.0, 1.0)`; nothing
+  is hotter than white. Its flame tops out *at* white, and the test compares the
+  hottest step against `Normal`, not `Bright` — the obvious phrasing is
+  unsatisfiable for the one theme that most needs keeping.
+- **Violet's embers had to be raised well past what the eye would pick.** Violet
+  luminance is carried almost entirely by its red channel (blue weighs 0.0722
+  against green's 0.7152), so a purple that *looks* like a deep ember contrasts
+  2.7:1 against that theme's background — under the 3.0 floor — and is
+  simultaneously darker than its own smoke. Both tests failed on the first pass.
+
+#### Fire motion, and a deliberate exemption from the photosensitive band
+
+**`FLIP_HZ` is 6 Hz, which is inside the 3–30 Hz band this document elsewhere
+says to stay out of.** That is a departure taken knowingly, and this entry exists
+so it is never mistaken for an oversight. It shipped at 2.5 Hz first and was
+raised on request, because at 2.5 the fire read as a slideshow.
+
+The band is a rule about **flashes covering a substantial share of the visual
+field** — W3C puts the threshold near a quarter of it. The 3 Hz floor this
+project adopted was calibrated on the *whole tube* flickering at 19.1 Hz. The
+athanor's meter is a bar two cells wide: three orders of magnitude less area, and
+nowhere near any published threshold. Applying a whole-screen number to it is
+conservative rather than correct.
+
+The exemption is conditional on all three of these, and **if any is removed the
+rate comes back down with it**:
+
+- **Nothing turns over together.** Every cell's tick boundary is offset by a fixed
+  fraction of a tick, so a change is a few cells out of thirty rather than the
+  strip as a whole. Whole-field modulation is the hazard; motion is not.
+- **Each step is small.** The flame ramp is deliberately compressed, so a flip is
+  a hue step rather than an on/off flash.
+- **The element stays small.** Two cells wide, one instrument, one room.
+
+It remains **held by construction**: a cell's appearance is a function of its tick
+index, and the quantiser advances that index 6 times a second and no faster,
+whatever the noise does. The test changed shape rather than number — it asserted
+`FLIP_HZ < 3.0`, and now asserts the rate is bounded, known, and obeyed per cell.
+An earlier design bounded *aggregate luminance* across the bar instead; that test
+is satisfied exactly by an alternating checkerboard, which is the pattern trigger
+the same band covers.
+
+**It rides `CrtSettings::on`.** An env var is not a switch a player can reach,
+and the entry below is precisely the failure of gating motion on something
+indirect. F3 cycles the tube to `OFF`; that now stops the fire too. The
+persistent per-effect toggle stays with Phase 5's settings item — and at this
+rate that item has a real dependency rather than a nominal one.
+
+#### The fire's shape, and what it cost at the boundary
+
+**Hottest at the base, mellowing into the tip.** The first version put the
+brightest cell at the flame *front*, reasoning that the front is where fuel is
+being consumed. It read as a bar with a bright edge rather than as a fire; what
+an eye expects is a glowing bed fading upward. The bottom half is solid `█` and
+carries all its motion in hue; `▓` begins about halfway up and grows commoner
+toward the tip, where a real flame breaks up.
+
+`Heat` went from three steps to four for this. The earlier argument was that
+CP437 gives flame only two glyphs, so a longer ramp has nothing underneath it —
+which stops being true the moment the bottom half is glyph-constant and the ramp
+is working alone down there.
+
+**The fill boundary was relaxed and then bought back stronger than it started.**
+Letting `▓` reach the flame tip means letting it reach the topmost lit cell,
+which is the join, so the rule went from `█`/`░` to `█`-or-`▓` against `░` — a
+3:1 coverage step where the plain meter draws 4:1.
+
+Then `░` was given up entirely: the fire meter's empty track is now **blank**,
+and `░` became the last of a puff of smoke pittering out. The join is `█` or `▓`
+against *nothing*, which is the strongest the alphabet can draw, and it arrived
+as a side effect of an aesthetic request rather than by aiming at it. The join
+that stays forbidden throughout is `▓` against `▒`: one dither step, which the
+CRT's bloom erases, and the meter's *value* is read off this join. The **dark
+side is pinned absolutely**, sparks included.
+
+This is the fire meter only. The plain `meter` keeps its `░` track — the other
+four instruments are gauges rather than fires, and an empty track there would
+read as a missing bar rather than as clear air.
+
+**A puff's height and its age are the same number.** A puff at height `h` left
+the fire `h` ticks ago, because it rose a cell a tick to get there. So thinning
+smoke by its distance from the fire is not the stationary threshold that killed
+an earlier version of the drift — the puff fades *because* it travels. Getting
+this wrong once cost a debugging pass; writing it down is cheaper than earning it
+again.
+
+**The plume gets a shared clock; the flame keeps its per-cell stagger.** The two
+properties genuinely conflict — a translation only reads as one if neighbouring
+cells step together, and staggered they never line up. Measured, the drift washed
+out to a coin toss. The exchange is safe because `FLIP_HZ` is unaffected and what
+moves together is `░` against `▒` on the dim half of the bar, while the bright
+half stays decorrelated.
+
+#### The mortar, and what a second animated instrument cost
+
+The athanor's fire was one instrument's picture. The mortar is the second, and
+building it is where the shape for the remaining three got settled.
+
+**The other four need no new colours.** Fire needed a whole `Depiction` family
+because *fire is orange* — a hue no phosphor theme has. Grinding does not: it
+lives in the base hue at `Dim`/`Normal`/`Bright`, which already exists and is
+theme-safe. Five instruments each with their own ramps would have been about a
+hundred hand-solved colours; the athanor stays the exception.
+
+**The bar is one lump of material, and grinding reduces it.** An instrument's
+meter counts ticks elapsed, but drawing that as a filling bar says nothing about
+a mortar. A mortar does not fill a container — it *breaks large things into small
+ones*. So the bar is a solid block seen edge-on: it gives way at its underside,
+the pieces snow down through a working gap, and they collect as a coarse bed at
+the bottom.
+
+**The four shades are four states of one substance**, which is what makes the
+picture legible with no legend: `█` whole, `▒` and `░` in pieces and in the air,
+`▓` broken and settled. That is the whole vocabulary, and its economy is the
+point.
+
+Material is conserved on screen. The block's underside sits a *fixed* gap above
+the bed, so as the bed rises the block is **eaten rather than pushed** — the bar
+is always full of something and what changes is how much of it is broken. A block
+that kept its height and rode upward would leave a growing hole at the top, and
+the bowl would read as emptying rather than grinding.
+
+That framing is what let the panel draw states it previously could not. A
+**loaded** mortar is a solid bar of `█` — the clearest "there is something in
+here" the alphabet has — and a **finished** one is all `▓`, held until the tool
+is emptied. Neither is a special case; both are states the sim reports
+`meter: None` for, exactly like the cold hearth.
+
+**There is no tool in the picture, and that was the third attempt.** The first
+two put a pestle in the gap:
+
+1. `╥`, which looks most like the tool — a head with a stem pointing at what it
+   is about to hit. It fails on the *horizontal* layout, which §10.1 reaches
+   whenever the pane is taller than it is wide and a player reaches with F4:
+   there "down" points at the border, and `╥` reads as a stray box-drawing
+   character.
+2. `■`, direction-neutral so it survives the rotation, with its own cool ramp
+   (`Depiction::Tool`) so it read as stone rather than as the reagent it was
+   crushing. It worked, and it was still wrong: a mark from outside the fill
+   vocabulary reads as an *object visiting the bar* rather than as the material
+   changing state. The bar has two cells to say something in, and spending one on
+   a tool costs the thing the bar is actually about.
+
+`Depiction::Tool` and its four hand-solved ramps were removed with it. An API
+with no callers is unshaped (§15), and keeping a channel against a possible
+future use is how a palette grows colours nobody looks at.
+
+**The fall is slower than the clock.** One cell every two ticks rather than one
+per tick, which puts every cell in the gap at 1.5 flashes a second — under the
+3 Hz floor, so unlike the fire this needs no exemption. At the full rate the
+debris streaks rather than falls, so the safe choice is also the better-looking
+one.
+
+**The bed creeps between the world's ticks.** §5.0 turns the world at 1 Hz and
+the sim reports whole ticks, so a meter read straight off it moves once a second
+in one jump — which is what the animation was decorating around rather than
+fixing.
+
+The fix is not a faster tick. §5.0's rate is what makes duration scarce and it
+governs replay, offline catch-up and the balance harness; changing it to make a
+bar look nicer would be the tail wagging the dog. What changed is the recognition
+that **the tick count is a *sample*, not the quantity**: an eight-tick grind is
+eight seconds of work, and at three and a half seconds it really is
+seven-sixteenths done. Drawing between samples is therefore *closer* to the truth
+than the sample is, which is the opposite of the trade the fire's flare makes.
+
+`Painter::creeping` does the interpolation and a frontend supplies the `0..1`,
+the same division as the flare and the pane tween. The Bevy build reads it from
+the **same `Time<Fixed>` the sim steps on**, so it cannot disagree with the sim
+about when a tick lands — a self-counted copy would, the first time the clock
+hitched, and the symptom would be a bar arriving at a cell just before or after
+the tick it belongs to.
+
+`stop` mid-tick is the one case where the prediction was wrong; it corrects on
+the next frame. With motion off the bar snaps to whole ticks, which is the honest
+fallback: a player who turned animation off gets the sim's own sampling rate.
+
+**Tempo is the organising principle for the rest.** The fire shimmers
+continuously and fast; the mortar's debris drifts steadily downward at half that
+rate. Each remaining instrument should get its own, so what is running is legible
+from across the room without reading a word.
+
+Two measurement traps are worth keeping, because both cost a confusing failure:
+
+- **Transitions and flashes are not the same number.** A flash is a *pair* of
+  opposing changes, so the flash rate is half the transition rate. A test
+  asserting transitions against the 3 Hz floor failed at 4.58 and the failure was
+  the units rather than the design.
+- **A phase landing on a half-tick rounds either way.** `shared_tick` rounds, so
+  advancing a phase by exactly two ticks can move the index by one instead of
+  two. Sampling *on* ticks (`tick / FLIP_HZ`) is the safe point; a tick *centre*
+  is precisely the boundary, which is the wrong guess and the one that was made
+  first.
+
+**`Craft` moved into the sim.** A frontend picking its picture by matching on the
+literal `"mortar_and_pestle"` would re-derive in its own source what
+`recipes.toml` already knows, and `orbs-tui` would derive it a second time and
+could disagree. `Instrument` now carries what the thing *does*, for the same
+reason it already carried its two-letter form. The heat source answers by
+component rather than by name, because `heat::source` already refuses to find it
+by name — a *reagent* called `athanor` on the floor would have matched.
+
+**The animation clock is now `shell::bench`, not `shell::fire`.** One clock, one
+reduce-motion switch, per-instrument views (`burn`, `grind`). Five clocks would
+be five places to get the one number with a safety argument attached wrong. The
+rename was cheap with one consumer and would not have been with five.
+
+#### Three states a hearth has that a gauge does not
+
+The meter had two readings — how full, and nothing else. A hearth has more, and
+the panel exists precisely so a player never has to touch a thing to learn its
+state (§10.1).
+
+**A cold hearth smokes.** `State::Cold` reports **no meter at all** — there is no
+quantity left — so it drew nothing, and "out" was indistinguishable from "the
+panel forgot this row". It now draws a wisp off the bottom, tapering over about
+three cells and clear above: the only bar in the game with no quantity behind it,
+and the only one drawn past the check that skips every meterless instrument.
+
+**A guttering hearth keeps the last of its orange.** A fire with a handful of
+ticks left divides to zero cells, and an empty bar says *out* — wrong, and wrong
+in the direction that matters, since "still lit" against "cold" is exactly what
+`kindle` turns on. One faint `▓` ember says so. This is **the only place the fire
+deliberately shows more than the plain meter would**, and it is always `▓` and
+never `█`, so it cannot be misread as a cell of fill. The ember gets the same
+pinned blank above it that a real flame front does — without that it sat directly
+against `▒`, which is the one join forbidden everywhere else.
+
+**Lighting one flares, and the flame grows up out of the base.** Over one world
+tick the fire climbs from a single cell to the full height of its fuel, burning
+at the top of the ramp where it has just caught and settling behind itself.
+Everything above the front is drawn as **nothing** — fuel that is present but not
+alight.
+
+This took three attempts and each failure is worth keeping:
+
+1. A uniform heat boost over the whole flame. The bar lit instantly and the
+   flare was a colour that faded. Nothing climbed.
+2. A boost applied only below a rising front, with the fuel above it drawn as
+   *dark flame* — which is what "present but not alight" literally is. That
+   filled the entire bar with dithered orange the instant `kindle` landed, and
+   the flare read as a highlight sweeping over an already-full bar.
+3. The fuel above the front drawn as nothing at all. The flame grows into empty
+   space, which is the thing an eye reads as catching.
+
+**This is the one place the fire meter shows less than its value**, and only for
+the tick after ignition. That is a real cost and it is paid deliberately: it is
+the same trade `Reveal` makes for arriving text and `ScreenLayout::transition`
+makes for arriving panes — a value animating *to* the truth reads better than one
+teleporting to it. §14 is unharmed because the linear stream never sees the
+animation; the panel's spoken summary says *burning* from the first frame.
+
+**One tick is the duration, and that is not arbitrary.** §5.0 makes a tick one
+real second, the bar redraws at frame rate, and the world advances at 1 Hz — so a
+tick is the longest an animation can run and still finish before anything it
+describes can change. The flare ends exactly as the fuel it is burning ticks down
+for the first time.
+
+The boost is four ramp steps, which saturates what has just caught at `Core` and
+leaves the flame's own tip cooler. Six would take every caught cell to `Core`, and
+a bar at one flat colour reads as a UI flash rather than as something catching
+light. The front never starts at zero — at the exact instant of ignition that
+blanks the whole bar for a frame, right when the player is looking for something
+to have happened — and it is floored at one cell *only when there is fuel*, since
+flooring an empty bar invents a flame on a spent athanor.
+
+**Ignition is an edge, and the panel is not a reliable place to watch for one.**
+It only carries the room the player is standing in, so "no athanor visible" had
+to be distinguished from "athanor out" — otherwise walking out of the laboratory
+and back sets off a flare every time you come home. `Fire` also starts seeded
+*lit*, so a tower that opens with the athanor already burning does not flare on
+its first frame.
+
+**Sparks carry a fixed identity for their whole life.** A spark's drift
+coordinate is constant while it travels — position and tick rise together — so a
+single hash settles both whether it exists and how high it gets, and it simply
+moves. A lifetime read off *distance from the fire* instead is a fixed ceiling
+every spark dies at, which reads as a hard edge ruled across the plume. They are
+barred from the boundary cell, and a spent athanor throws none: it is still
+`Burning` for the tick before it goes out, and sparks off an empty bar would say
+there is fuel left at the exact moment the bar says there is none.
 
 #### An accessibility switch something else could flip
 

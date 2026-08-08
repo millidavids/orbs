@@ -4,12 +4,14 @@
 
 mod fuel;
 mod load;
+mod material;
 mod prose;
 mod recipe;
 mod spell;
 
 pub use fuel::{Fuel, Fuels};
 pub use load::ContentError;
+pub use material::Materials;
 pub use prose::Prose;
 pub use recipe::{Recipe, Recipes};
 pub use spell::{EXTENSION, Spell, Spells, with_extension, without_extension};

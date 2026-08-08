@@ -14,6 +14,7 @@ use crate::cell::Cell;
 use crate::geometry::{GridSize, Pos, Rect};
 use crate::linear::Speech;
 use crate::paint::Painter;
+use crate::style::Wash;
 
 /// One screen's worth of cells, plus its linearisation.
 ///
@@ -26,6 +27,8 @@ pub struct Frame {
     cursor: Option<Pos>,
     speech: Speech,
     magnified: Option<Rect>,
+    /// Regions drawn in a material's colour family. See [`Frame::tint_at`].
+    tints: Vec<(Rect, Wash)>,
 }
 
 impl Frame {
@@ -49,6 +52,9 @@ impl Frame {
         self.cursor = None;
         self.speech.clear();
         self.magnified = None;
+        // Cleared, not reallocated — the panel writes the same handful of
+        // regions every frame and this keeps the allocation across all of them.
+        self.tints.clear();
     }
 
     /// The frame's dimensions.
@@ -132,6 +138,51 @@ impl Frame {
     /// Mark a region for double-size drawing. One row only; taller is clamped.
     pub fn set_magnified(&mut self, area: Option<Rect>) {
         self.magnified = area.map(|area| Rect::new(area.col, area.row, area.cols, 1));
+    }
+
+    /// The colour family a region draws in, if one was asked for.
+    ///
+    /// **Regions, not cells, and that is the whole design.** A tint is a
+    /// property of *what is in an instrument*, so every cell of one bar shares
+    /// it — encoding it per cell would spend a byte on all 7,040 cells of a
+    /// 160×44 grid to express a value that varies across five of them, and
+    /// [`Cell`](crate::Cell) is pinned at 8 bytes by a test that records what the
+    /// last such byte cost.
+    ///
+    /// It lives on the `Frame` rather than beside it for the same reason
+    /// [`Frame::magnified`] does: the moment a frontend is handed something the
+    /// Frame does not carry, the other frontend is playing a worse game rather
+    /// than wearing a different skin. `orbs-tui` reads this and resolves the
+    /// same eight names to ANSI indices.
+    ///
+    /// **Later regions win**, so a caller may paint over an earlier tint without
+    /// having to find and remove it — the same last-write-wins a `Cell` has.
+    #[must_use]
+    pub fn tint_at(&self, at: Pos) -> Option<Wash> {
+        self.tints
+            .iter()
+            .rev()
+            .find(|(area, _)| area.contains(at))
+            .map(|(_, wash)| *wash)
+    }
+
+    /// Draw a region in a material's colour family.
+    ///
+    /// An empty rectangle is ignored rather than stored, so a caller need not
+    /// check — the panel skips whole instruments at narrow widths and would
+    /// otherwise leave zero-area entries for `tint_at` to walk.
+    pub fn set_tint(&mut self, area: Rect, wash: Wash) {
+        let area = area.intersection(self.area());
+        if !area.is_empty() {
+            self.tints.push((area, wash));
+        }
+    }
+
+    /// Every tinted region, for a frontend that would rather walk them than
+    /// probe per cell.
+    #[must_use]
+    pub fn tints(&self) -> &[(Rect, Wash)] {
+        &self.tints
     }
 
     /// The linear stream for this frame.

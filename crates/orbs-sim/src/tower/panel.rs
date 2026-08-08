@@ -19,6 +19,8 @@
 
 use bevy_ecs::prelude::*;
 
+use orbs_render::Wash;
+
 use super::node::{Cwd, Fixture, Name, children_of};
 use crate::tick::Tick;
 
@@ -36,11 +38,41 @@ pub struct Meter {
     pub total: u64,
 }
 
+/// What an instrument *does* — the action, not the noun.
+///
+/// **Named here rather than matched on in a frontend**, for the reason
+/// [`Instrument::short`] is: rule 2 gives a frontend *how* a cell is drawn, not
+/// what the thing in it is. A frontend picking its picture by comparing against
+/// the literal `"mortar_and_pestle"` would be re-deriving, in its own source,
+/// knowledge that lives here — and `orbs-tui` would have to derive it a second
+/// time and could silently disagree.
+///
+/// A closed set, like [`State`]: a view that fell through to a default for an
+/// unrecognised craft would draw a working instrument as an idle one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Craft {
+    /// Crushing one reagent into another. The mortar and pestle.
+    Grinding,
+    /// Gentle digestion over the athanor. The balneum mariae.
+    Digesting,
+    /// Two reagents into one. The flask and rod.
+    Combining,
+    /// A reagent into a potion. The alembic.
+    Distilling,
+    /// Not an operation at all — shared heat the others draw on. The athanor,
+    /// which is why it is the one instrument taking no Focus (§10.1).
+    Heating,
+    /// A fixture with no recipe of its own.
+    Idle,
+}
+
 /// One instrument, as the panel draws it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Instrument {
     /// What the player types to name it.
     pub name: String,
+    /// What it does, for a view choosing how to picture it.
+    pub craft: Craft,
     /// Two letters for a narrow column — `mortar_and_pestle` is `mp`.
     ///
     /// **Decided here, not by a frontend.** Rule 2 gives a frontend *how* a cell
@@ -55,6 +87,31 @@ pub struct Instrument {
     pub state: State,
     /// Its meter, if it has one running.
     pub meter: Option<Meter>,
+    /// The colour families of what is inside it, in the order it is held.
+    ///
+    /// **A hint over `survey`, never a substitute** — see
+    /// [`Tint`](orbs_render::Tint). An entry is `None` when nobody has tinted
+    /// that material, and the bar draws that part in the base hue.
+    ///
+    /// **Two, because `flask_and_rod` combines two** (§10.1) and its picture is
+    /// precisely *these two becoming one*. Every other instrument fills only the
+    /// first. A fixed array rather than a `Vec` because this is rebuilt per
+    /// instrument per frame, and the `holds` list that used to live here was
+    /// removed for allocating exactly that way.
+    ///
+    /// **Decided here rather than by a frontend**, exactly as [`Self::short`] and
+    /// [`Self::craft`] are: the alternative is two frontends each reading
+    /// `materials.toml` and each mapping contents to a colour, which is a rule
+    /// living in two places that can disagree.
+    pub tints: [Option<Wash>; 2],
+}
+
+impl Instrument {
+    /// The colour of what is inside, for the instruments that hold one thing.
+    #[must_use]
+    pub const fn tint(&self) -> Option<Wash> {
+        self.tints[0]
+    }
 }
 
 /// What an instrument is doing.
@@ -134,6 +191,8 @@ pub fn instruments(world: &World) -> Vec<Instrument> {
         let (state, meter) = read(world, node, &name, now);
         panel.push(Instrument {
             short: abbreviate(&name),
+            craft: craft_of(world, node),
+            tints: tints_of(world, node),
             name,
             state,
             meter,
@@ -162,6 +221,57 @@ fn abbreviate(name: &str) -> String {
             .collect();
     }
     name.chars().take(2).collect()
+}
+
+/// What an instrument does.
+///
+/// **Read from the entity, never matched on its name.** Every instrument already
+/// carries [`Operation`](super::Operation) — the verb that charges and starts it,
+/// put there by `build::raise` — and those five verbs are exactly the five
+/// crafts. Reading it makes this a closed, compiler-checked map.
+///
+/// An earlier version matched four hardcoded strings with a silent fallthrough,
+/// which is the pattern `content/recipe.rs` records having already paid for once:
+/// `heat` was a `matches!` over two instrument names in Rust while the TOML noted
+/// it in a comment, *"so a designer adding a heated instrument would have edited
+/// this file, read their own note, and shipped a recipe that silently runs
+/// cold."* A renamed instrument would have fallen through to [`Craft::Idle`] here
+/// and quietly lost its picture, with nothing failing.
+/// The colour families of what is in an instrument, in the order it is held.
+///
+/// **In world order, which is `survey`'s order.** The flask's picture puts its
+/// two ingredients in bands, and a panel that ordered them differently from the
+/// transcript would be two views of one vessel disagreeing about which reagent
+/// is which.
+///
+/// Untinted materials keep their slot as `None` rather than being skipped, so
+/// one uncoloured thing in a flask does not silently promote the other into its
+/// band.
+fn tints_of(world: &World, node: Entity) -> [Option<Wash>; 2] {
+    let materials = world.resource::<crate::content::Materials>();
+    let mut held = children_of(world, node)
+        .into_iter()
+        .filter_map(|held| world.get::<Name>(held))
+        .map(|name| materials.wash(&name.0));
+    [held.next().flatten(), held.next().flatten()]
+}
+
+fn craft_of(world: &World, node: Entity) -> Craft {
+    // The heat source answers first, and by component: `heat::source` already
+    // refuses to find it by name because a *reagent* called `athanor` lying on
+    // the floor would have matched.
+    if world.get::<super::HeatSource>(node).is_some() {
+        return Craft::Heating;
+    }
+    match world.get::<super::Operation>(node).map(|verb| verb.0) {
+        Some(crate::parser::Verb::Grind) => Craft::Grinding,
+        Some(crate::parser::Verb::Digest) => Craft::Digesting,
+        Some(crate::parser::Verb::Mix) => Craft::Combining,
+        Some(crate::parser::Verb::Distil) => Craft::Distilling,
+        // `Kindle` is the heat source's, and it answered above. Anything else is
+        // a fixture with no operation of its own — the dispensary, a shelf.
+        _ => Craft::Idle,
+    }
 }
 
 /// What one instrument is doing, and how far through.
@@ -260,6 +370,33 @@ mod tests {
             .find(|instrument| instrument.name == want)
             .unwrap_or_else(|| panic!("no {want}"))
             .state
+    }
+
+    #[test]
+    fn every_instrument_reports_the_craft_it_actually_does() {
+        // **Pinned against the real world, not against a fixture.** `craft_of`
+        // had no test at all while it matched hardcoded names, so renaming an
+        // instrument in `build.rs` would have dropped it to `Craft::Idle` and
+        // silently taken its picture away with a green suite — exactly what
+        // moved `abbreviate`'s test into this file.
+        let mut sim = Sim::new(1);
+        sim.submit("attend laboratory");
+        sim.step();
+
+        let crafts: Vec<(String, Craft)> = panel(&mut sim)
+            .into_iter()
+            .map(|instrument| (instrument.name, instrument.craft))
+            .collect();
+        assert_eq!(
+            crafts,
+            vec![
+                ("mortar_and_pestle".to_owned(), Craft::Grinding),
+                ("balneum_mariae".to_owned(), Craft::Digesting),
+                ("flask_and_rod".to_owned(), Craft::Combining),
+                ("alembic".to_owned(), Craft::Distilling),
+                ("athanor".to_owned(), Craft::Heating),
+            ],
+        );
     }
 
     #[test]

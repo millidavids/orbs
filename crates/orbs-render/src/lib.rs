@@ -21,9 +21,16 @@
 //!    other three noticing. See [`record`] for why the model
 //!    lives here rather than in `orbs-sim`.
 //! 2. **No colour.** A [`Cell`] carries a [`Style`] — a [`Role`], an
-//!    [`Intensity`], a [`Presentation`] — and never a hue. Each frontend
-//!    resolves those against its own palette: curated phosphor themes under
-//!    Bevy, the user's terminal theme under `orbs-tui`.
+//!    [`Intensity`], a [`Presentation`], a [`Depiction`] — and never a hue. Each
+//!    frontend resolves those against its own palette: curated phosphor themes
+//!    under Bevy, the user's terminal theme under `orbs-tui`.
+//!
+//!    [`Depiction`] is the odd one and the exception that proves the rule: it
+//!    selects a colour ramp and says nothing, where every other channel says
+//!    something and lets the frontend pick the colour. It exists so the
+//!    athanor's meter can be a *picture* of a fire rather than a reading of one.
+//!    See [`Style::depicted`] for the rule that keeps it from painting over
+//!    anything that means something.
 //! 3. **A linear stream, always.** Every frame carries a [`Speech`] alongside
 //!    its cells, because a cell grid read back row by row is box-drawing
 //!    characters and column fragments, not sentences. DESIGN.md §14 makes this
@@ -79,36 +86,50 @@
 pub mod cp437;
 pub mod record;
 
+mod bath;
 mod cell;
 mod fidelity;
+mod fire;
 mod frame;
 mod geometry;
+mod grind;
 mod layout;
 mod linear;
+// Public for its module docs: it is the one place that decides what motion
+// *means* across the two vessels, and both `Steep` and `Stir` point at it.
+pub mod liquid;
+mod mix;
 mod paint;
+mod pulse;
 mod span;
 mod style;
 mod tiling;
 mod tween;
 mod wrap;
 
+pub use bath::Steep;
 pub use cell::Cell;
 pub use cp437::{REPLACEMENT, cp437_glyph, cp437_index, is_renderable};
 pub use fidelity::{CELL_HEIGHT, CELL_WIDTH, Fidelity, MIN_GRID};
+pub use fire::Burn;
 pub use frame::Frame;
 pub use geometry::{GridSize, Pos, Rect};
+pub use grind::{Grind, fallen_cells};
 pub use layout::{
     DEEP_FOCUS_FLOOR, DisplayMode, MAX_MAIN_PANES, MAX_PANES, MIN_PANE_ROWS, STRIP_ROWS,
     ScreenLayout, ScreenRequest,
 };
 pub use linear::{Speech, Utterance, UtteranceKind};
+pub use liquid::{DRIFT_EVERY, Motion, RISE_EVERY, STIR_EVERY};
+pub use mix::{Band, Stir};
 pub use paint::Painter;
+pub use pulse::{CYCLE_SECS, FLIP_HZ};
 pub use record::{
     FieldName, Outcome, Record, RecordBuilder, RecordKind, RecordView, Records, Sift, Value,
     contains_ignoring_case,
 };
 pub use span::Span;
-pub use style::{Intensity, Presentation, Role, Style};
+pub use style::{Density, Depiction, Heat, Intensity, Presentation, Roil, Role, Style, Tint, Wash};
 
 /// The first `cells` characters of `text` — what has arrived, if it is arriving.
 ///

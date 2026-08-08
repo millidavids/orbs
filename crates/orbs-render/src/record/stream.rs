@@ -328,6 +328,9 @@ impl<'a> Record<'a> {
             role: self.role(),
             intensity,
             presentation: self.presentation(),
+            // A record is a reading, never a picture. Only the athanor's meter
+            // depicts anything, and it is painted rather than logged.
+            depiction: crate::style::Depiction::None,
         }
     }
 

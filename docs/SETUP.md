@@ -134,10 +134,10 @@ picture, because it looks like evidence.
 with its linear stream beneath.
 
 ```sh
-ORBS_DUMP="attend laboratory; move sage to mortar_and_pestle; wield mortar_and_pestle; meditate 12; empty mortar_and_pestle" cargo run -p orbs
+ORBS_DUMP="attend laboratory; grind sage; meditate 12; empty mortar_and_pestle" cargo run -p orbs
 ORBS_DUMP=1 ORBS_GRID=160x44 cargo run -p orbs      # the worst-case grid
 ORBS_DUMP=1 ORBS_BOOT=post cargo run -p orbs        # one boot stage as text
-ORBS_LINE="wield mo" ORBS_DUMP=1 cargo run -p orbs  # ...with a line half-typed
+ORBS_LINE="grind sa" ORBS_DUMP=1 cargo run -p orbs  # ...with a line half-typed
 ORBS_BOOT=0 cargo run -p orbs                       # skip the boot sequence
 ```
 

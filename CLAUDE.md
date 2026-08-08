@@ -169,6 +169,46 @@ The Bevy dependency tree is ~126 crates and is the single most likely thing to
 break on a toolchain or version change, so it must be exercised at every step
 rather than discovered at the end of a phase.
 
+### Finishing a step — tick the box, bump the version
+
+**A step is not done until three things have happened together**, and they are one
+action rather than three:
+
+1. Its checkbox in [docs/ROADMAP.md](docs/ROADMAP.md) is ticked, with a **See it**
+   line that works.
+2. The workspace version in [Cargo.toml](Cargo.toml) is bumped.
+3. Anything decided along the way is in DESIGN.md §19.
+
+**The version is `0.<phase>.<step>` until release** — it tracks the roadmap, not
+a public API, because there is no public API: every crate here is consumed only
+by this workspace, so semver has nothing to describe yet. Completing a *step*
+bumps the patch; completing a *phase* bumps the minor and resets the patch to
+zero. DESIGN.md §19 records the rest, including that Phase 0.5 gets no minor of
+its own and that the switch to ordinary semver at 1.0 is one-way.
+
+```toml
+[workspace.package]
+version = "0.1.8"     # phase 1, step 8
+```
+
+All five crates inherit it (`version.workspace = true`), so there is exactly one
+line to change. **It is player-visible**: `boot::screen` draws
+`v{CARGO_PKG_VERSION}` on the POST card, which is what a tester quotes in a
+report — so a stale version is a bug report pointing at the wrong build.
+
+```bash
+ORBS_DUMP=1 ORBS_BOOT=post cargo run -p orbs | grep 'v0\.'   # see it
+```
+
+**A correction folded into a step does not advance it.** The `✅` entries under
+Phase 1 are items still being finished, not new steps; they bump nothing. What
+advances the number is a box going from `[ ]` to `[x]`.
+
+**Nothing asserts the number**, deliberately — whether an item is *done* is the
+judgement the See-it gate exists to make, and a test pinning it would be pinning
+that judgement. It is a habit, which is why it is written here next to the gate
+rather than left to memory.
+
 ### Seeing it
 
 Work is not done when it compiles. It is done when it has been *looked at*.
@@ -213,6 +253,19 @@ test suite did not** — an em-dash in DESIGN.md's own boot text that CP437 cann
 draw, and pane content eating a border because a sub-painter was not established.
 Add a screen to it whenever a new surface is built.
 
+**A dump has no clocks of its own.** It builds no `App`, so it advances no
+`Time` and has no `Time<Fixed>` — every animation would sit at phase zero and
+every bar exactly on a tick boundary. `ORBS_FIRE_PHASE` (the animation clock) and
+`ORBS_TICK` (position within a world tick) are what make those visible as text;
+without them the See-it lines degrade to "it compiles".
+
+**Each instrument has its own verb** (§19, built): `grind`, `digest`, `mix`,
+`distil`, and the athanor's `kindle`. `grind sage` *is* `move sage to
+mortar_and_pestle` followed by `wield mortar_and_pestle` — naming the operation
+rather than the tool collapses the two commands a player types most. `move` and
+`wield` still exist and still work; they are simply not how the loop is written
+any more, and a dump using them is testing the long way round.
+
 **Reach for `ORBS_DUMP` first; keep `ORBS_CAPTURE` for what only pixels show.**
 The screenshot path needs a composited window, and without one it writes a valid
 PNG of a **black rectangle** — the renderer fine, the picture proving nothing.
@@ -221,13 +274,105 @@ the same frame through the real `paint`, `Sim` and `ScreenLayout` into a `Frame`
 nobody rasterises, then prints it with its linear stream beneath:
 
 ```bash
-ORBS_DUMP="attend laboratory; move sage to mortar_and_pestle; wield mortar_and_pestle; meditate 12; empty mortar_and_pestle" cargo run -p orbs
+ORBS_DUMP="attend laboratory; grind sage; meditate 12; empty mortar_and_pestle" cargo run -p orbs
 ORBS_DUMP=1 ORBS_GRID=160x44 cargo run -p orbs   # the worst-case grid
 ORBS_DUMP=1 ORBS_BOOT=post cargo run -p orbs     # a boot stage as text
 ORBS_BOOT=0 cargo run -p orbs                    # skip the boot sequence
-ORBS_LINE="wield mo" ORBS_DUMP=1 cargo run -p orbs   # ...with a line half-typed
+ORBS_LINE="grind sa" ORBS_DUMP=1 cargo run -p orbs   # ...with a line half-typed
 ORBS_SCROLL=14 ORBS_DUMP="..." cargo run -p orbs     # ...scrolled back 14 records
+ORBS_FIRE_PHASE=0.33 ORBS_DUMP="..." cargo run -p orbs   # ...an instrument mid-animation
+ORBS_TICK=0.5 ORBS_DUMP="..." cargo run -p orbs      # ...half way through a world tick
 ```
+
+**Three animations are *edges*, and a dump observes none of them.** The flare,
+the pour and the creep all start on a frame where something changed, and a dump
+runs no systems — so each needs a switch of its own or it is the one part of the
+effect with no See-it line at all:
+
+```bash
+# The athanor catching. Compare 1 against 0: the flame climbs out of the base.
+ORBS_BOOT=0 ORBS_FLARE=1 ORBS_DUMP="attend laboratory; kindle charcoal" cargo run -p orbs
+
+# The mortar filling. **`move`, not `grind`** — `grind sage` is the move and the
+# wield in one tick, so the bowl never rests at `charged` and never pours. Step
+# ORBS_LOAD 1.0 → 0.5 → 0.0 and the block builds up off the floor of the bowl.
+ORBS_BOOT=0 ORBS_LOAD=0.5 \
+  ORBS_DUMP="attend laboratory; move sage to mortar_and_pestle" cargo run -p orbs
+
+# The bed creeping *between* ticks rather than jumping once a second.
+ORBS_BOOT=0 ORBS_TICK=0.5 ORBS_DUMP="attend laboratory; grind sage; meditate 3" cargo run -p orbs
+```
+
+**The balneum mariae's See-it line is longer than the others, and it has to be.**
+The bath needs the athanor alight — `heat = true` in `recipes.toml` — and it takes
+its input from the mortar, so reaching a *working* bath means running the first
+two stages first. There is no shortcut:
+
+```bash
+# A vessel filling with tincture. Step the meditate to watch the level rise.
+ORBS_BOOT=0 ORBS_DUMP="attend laboratory; kindle charcoal; grind sage; \
+  meditate 9; empty mortar_and_pestle; digest ground-sage; meditate 6" cargo run -p orbs
+
+# ...and the three states the sim reports no meter for, which is where a vessel
+# picture earns its keep. `move`, not `digest`, to stop at charged.
+ORBS_BOOT=0 ORBS_DUMP="attend laboratory; kindle charcoal; grind sage; \
+  meditate 9; empty mortar_and_pestle; move ground-sage to balneum_mariae" cargo run -p orbs
+```
+
+**`ORBS_DUMP` cannot show the bath moving, and that is by design.** All of the
+roil is in the colour — the glyph is `█` at every fill and every phase, which is
+what makes the level survive greyscale — so a dump of it is a solid bar that
+proves nothing. The `screens` example prints the ramp steps as `a`/`b`/`c`, and
+that is the only text See-it there is for it:
+
+```bash
+cargo run -p orbs-render --example screens   # ...the roil, as letters
+```
+
+**A material's tint is pure colour too, so a dump prints the *regions*.** A tint
+changes no glyph, which makes it the one thing on the panel whose failure is
+total and invisible: a colour reported by the sim that never reaches a cell draws
+in the base hue and looks exactly like a material nobody has tinted yet. Every
+dump that has one lists it under the linear stream:
+
+```bash
+# sage grinds green; leave the husks behind and the same bar turns brown.
+ORBS_BOOT=0 ORBS_DUMP="attend laboratory; move sage to mortar_and_pestle" cargo run -p orbs
+ORBS_BOOT=0 ORBS_DUMP="attend laboratory; grind sage; meditate 9; \
+  move ground-sage to dispensary" cargo run -p orbs
+```
+```text
+-- tinted regions (DESIGN.md §19) --
+  green    2×17 at 64,2        ← and `brown` after the husks are all that is left
+```
+
+Colours are authored in `crates/orbs-sim/content/materials.toml` against the
+eight names in `orbs_render::Tint`. **An unknown name fails the load** rather
+than falling back, because an untinted material draws in the base hue too — a
+silent fallback would make a typo indistinguishable from an omission.
+
+**The flask prints three regions, and one of them is two colours.** Its bar is
+the only place a region is a *mixture* — `green+bone` below is the two
+ingredients becoming one thing — and reaching it means running the first three
+stages, because the flask combines what the mortar and the bath hand it:
+
+```bash
+ORBS_BOOT=0 ORBS_GRID=80x60 ORBS_DUMP="attend laboratory; kindle charcoal; \
+  grind sage; meditate 9; empty mortar_and_pestle; digest ground-sage; \
+  meditate 14; siphon balneum_mariae; grind rock-salt; meditate 9; \
+  empty mortar_and_pestle; mix sage-tincture with ground-salt; meditate 5" \
+  cargo run -p orbs
+```
+```text
+flask_and_rod  working  ██████████████████████████████▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
+  green      11×1 at 58,3     ← the two ingredients, shrinking together
+  bone       10×1 at 69,3
+  green+bone 30×1 at 28,3     ← the mixture, growing from the fill end
+```
+
+Step the last `meditate` and the mixture grows while both bands shrink at the
+same rate — neither ingredient is consumed before the other is touched, which is
+what combining means.
 
 **The spell editor has two channels of its own.** `ORBS_EDIT` types into the
 editor a `scribe` opened — newline-separated keystrokes, in order. **The editor's
@@ -302,4 +447,5 @@ crates/orbs/src/crt/plugin.rs`, to force the re-embed.
   is cheap and worth keeping.
 - When a decision is made, record it in DESIGN.md §19 rather than only in
   conversation.
-- Update [docs/ROADMAP.md](docs/ROADMAP.md) status as phases progress.
+- Update [docs/ROADMAP.md](docs/ROADMAP.md) status as phases progress — and bump
+  the version with it. See *Finishing a step* above.

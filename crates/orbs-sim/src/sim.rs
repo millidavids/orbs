@@ -79,6 +79,12 @@ impl Sim {
         // `(seed, submissions)` unless the content were versioned with it.
         world.init_resource::<Recipes>();
         world.init_resource::<Fuels>();
+        // Materials **are** hot-reloadable in principle, unlike the two above:
+        // a tint is read by the instrument panel and by nothing else, so no verb
+        // branches on it and swapping it mid-session cannot change what the
+        // world does. Installed here beside them because that is where content
+        // lives, not because it shares their constraint.
+        world.init_resource::<crate::content::Materials>();
         // Spells sit in the same tier as recipes and for the same reason: a
         // spell is nothing *but* decisions, so a reload would break replay from
         // `(seed, submissions)`. Read once, here, and never again — the player's

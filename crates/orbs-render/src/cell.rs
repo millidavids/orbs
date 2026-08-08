@@ -6,7 +6,9 @@ use crate::style::Style;
 /// One cell of the grid: a glyph and what it means.
 ///
 /// A `Cell` never carries a colour. The frontend resolves [`Style`] against the
-/// active phosphor theme (Bevy) or the user's terminal palette (TUI).
+/// active phosphor theme (Bevy) or the user's terminal palette (TUI) — including
+/// [`Depiction`](crate::Depiction), which names a ramp rather than a hue and
+/// leaves *which* orange a flame is to whichever tube is drawing it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Cell {
     /// The glyph, guaranteed to be inside the CP437 repertoire (see
@@ -58,6 +60,21 @@ impl Default for Cell {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_cell_stays_eight_bytes() {
+        // A `Frame` is one of these per grid position and there are 7,040 of
+        // them at the worst-case 160×44, reset every frame. `Depiction` arrived
+        // as `Flame(Heat)` — a payload-carrying enum that pushed `Style` to a
+        // second word and `Cell` to twelve bytes, +28 KiB and ~1.2 µs a frame on
+        // *every* screen, for a picture occupying about thirty cells of one
+        // panel. Flattening it to fieldless variants bought that back.
+        //
+        // This is a budget, not a fact about the current fields: the next thing
+        // added to `Style` has to fit in the spare byte or argue for the cost.
+        assert_eq!(size_of::<Cell>(), 8);
+        assert_eq!(size_of::<Style>(), 4);
+    }
 
     #[test]
     fn unrenderable_glyphs_are_substituted() {

@@ -15,9 +15,9 @@
 //! less, the setting would become a difficulty choice."*
 
 use orbs_render::{
-    DisplayMode, Fidelity, FieldName, Frame, GridSize, Intensity, Outcome, Painter, Pos,
-    Presentation, RecordKind, RecordView, Records, Rect, Role, ScreenLayout, ScreenRequest, Sift,
-    Span, Style, UtteranceKind,
+    Burn, Depiction, DisplayMode, Fidelity, FieldName, Frame, GridSize, Grind, Intensity, Outcome,
+    Painter, Pos, Presentation, RecordKind, RecordView, Records, Rect, Role, ScreenLayout,
+    ScreenRequest, Sift, Span, Steep, Style, UtteranceKind,
 };
 
 /// The wizard's name is world state (`orbs_sim::Wizard`), which this crate does
@@ -56,7 +56,399 @@ fn main() {
     show("The spell editor at the 80×22 floor (§8)", &editor);
     speak(&editor);
 
+    burning();
+    grinding();
+    steeping();
     worst_case();
+}
+
+/// The balneum mariae: a vessel of liquid, rolling as it digests.
+///
+/// **The only place the roil can be looked at as text.** Every other instrument
+/// carries some of its motion in glyphs, so `ORBS_DUMP` shows it moving; this one
+/// carries *all* of its motion in colour by design — the glyph is `█` at every
+/// fill and every phase — so a dump of it is a solid bar that proves nothing.
+/// Printed as ramp steps, the roil is visible.
+fn steeping() {
+    const ROWS: u16 = 12;
+    // Four ticks, which is exactly one beat of the bath's own tempo — long
+    // enough that every cell has had the chance to turn over once.
+    let tick = 1.0 / orbs_render::FLIP_HZ;
+
+    println!("\n── The balneum mariae — 5/8 digested ──\n");
+    println!("    █ liquid, every cell, always.  a still  b stirred  c rolling");
+    println!("    Bubbles are lighter *colour*, never a second glyph — a mark in the");
+    println!("    water would be a mark of something, and a vessel holds one substance.");
+    println!("    So the level survives with the colour thrown away: solid against");
+    println!("    blank, the strongest join there is.\n");
+    println!("    Each column is one rise. Read a letter and find it one row higher");
+    println!("    in the column to its right — that is a bubble on its way up.\n");
+
+    let mut columns = Vec::new();
+    for step in 0u16..6 {
+        // One *rise* per column, so the translation is visible across the page.
+        let phase = f32::from(step * orbs_render::RISE_EVERY) * tick;
+        let mut frame = Frame::new(GridSize::new(2, ROWS));
+        let area = Rect::new(0, 0, 2, ROWS);
+        frame.painter(area).bath_meter_upward(
+            area,
+            5,
+            8,
+            Steep {
+                phase,
+                motion: orbs_render::Motion::Bubbling,
+                ..Steep::default()
+            },
+        );
+        columns.push(frame);
+    }
+
+    for row in 0..ROWS {
+        let mut line = String::from("    ");
+        for frame in &columns {
+            for col in 0..2 {
+                let cell = frame.cell(Pos::new(col, row));
+                line.push(cell.map_or(' ', |cell| depiction_mark(cell.style.depicted())));
+            }
+            line.push_str("  ");
+        }
+        println!("{line}");
+    }
+    println!("\n    0   1   2   3   4   5   ← rises, three shared-clock ticks each");
+    println!("    A bubble climbs a cell every three ticks — one flash a second, so");
+    println!("    unlike the fire this needs no §19 exemption. It is also the slowest");
+    println!("    tempo on the panel, which is the signature a gentle heat should have.");
+
+    // ...and the three states the sim reports no meter for, which is where a
+    // vessel picture earns its keep: all three would otherwise draw nothing.
+    println!("\n    charged        fouled         ready");
+    let resting = [(0u32, false), (0, true), (8, false)];
+    let mut frames = Vec::new();
+    for (done, spent) in resting {
+        let mut frame = Frame::new(GridSize::new(2, ROWS));
+        let area = Rect::new(0, 0, 2, ROWS);
+        frame.painter(area).bath_meter_upward(
+            area,
+            done,
+            8,
+            Steep {
+                phase: 3.0,
+                spent,
+                ..Steep::default()
+            },
+        );
+        frames.push(frame);
+    }
+    for row in 0..ROWS {
+        let mut line = String::from("    ");
+        for frame in &frames {
+            for col in 0..2 {
+                let cell = frame.cell(Pos::new(col, row));
+                line.push(cell.map_or(' ', |cell| cell.glyph));
+            }
+            line.push_str("             ");
+        }
+        println!("{}", line.trim_end());
+    }
+    println!("\n    A charged vessel is a shallow layer, not an empty one — a bar");
+    println!("    reading *how far along* would draw it blank, which is exactly what");
+    println!("    an empty instrument looks like. Sediment (▓, still, two cells deep)");
+    println!("    lies too low to be mistaken for a level.");
+}
+
+/// The mortar and pestle: a block broken down, across a fall and a lifecycle.
+///
+/// Six consecutive frames of the shared clock — one world tick — so the debris
+/// falls three cells, which is the whole depth of the working gap.
+fn grinding() {
+    const ROWS: u16 = 16;
+    let tick = 1.0 / orbs_render::FLIP_HZ;
+
+    println!("\n── The mortar and pestle — 3/8 broken down ──\n");
+    println!("    █ whole   ▓ broken and settled   ▒░ in pieces, in the air");
+    println!("    The block is eaten from below: the gap between it and the bed is");
+    println!("    fixed, so the bar stays full of material and what changes is state.\n");
+
+    let mut columns = Vec::new();
+    for step in 0u16..6 {
+        let phase = f32::from(step) * tick;
+        let mut frame = Frame::new(GridSize::new(2, ROWS));
+        let area = Rect::new(0, 0, 2, ROWS);
+        frame.painter(area).grind_meter_upward(
+            area,
+            3,
+            8,
+            Grind {
+                phase,
+                working: true,
+                ..Grind::default()
+            },
+        );
+        columns.push((orbs_render::fallen_cells(phase), frame));
+    }
+
+    for row in 0..ROWS {
+        let mut line = String::from("    ");
+        for (_, frame) in &columns {
+            for col in 0..2 {
+                line.push(
+                    frame
+                        .cell(Pos::new(col, row))
+                        .map_or(' ', |cell| cell.glyph),
+                );
+            }
+            line.push_str("     ");
+        }
+        println!("{line}");
+    }
+    let heights: Vec<String> = columns
+        .iter()
+        .map(|(fallen, _)| format!("{:<7}", format!("v{fallen}")))
+        .collect();
+    println!("    {}", heights.join(""));
+
+    // The whole lifecycle. **Four of these five report no meter at all** — the
+    // sim has a quantity only while a run is going — so every one of them was a
+    // blank row before this picture existed.
+    //
+    // The pour is sampled three times because it is an *edge*: the frame a
+    // reagent enters an empty bowl, gone a tick later.
+    println!("\n── the same bowl, pouring through fouled ──\n");
+    for (label, done, working, spent, load) in [
+        ("pouring", 0u32, false, false, 1.0),
+        ("pouring", 0, false, false, 0.5),
+        ("charged", 0, false, false, 0.0),
+        ("working", 3, true, false, 0.0),
+        ("working", 6, true, false, 0.0),
+        ("ready", 8, false, false, 0.0),
+        ("fouled", 0, false, true, 0.0),
+    ] {
+        let mut frame = Frame::new(GridSize::new(2, ROWS));
+        let area = Rect::new(0, 0, 2, ROWS);
+        frame.painter(area).grind_meter_upward(
+            area,
+            done,
+            8,
+            Grind {
+                phase: tick * 3.0,
+                working,
+                spent,
+                load,
+                ..Grind::default()
+            },
+        );
+        let column: String = (0..ROWS)
+            .rev()
+            .map(|row| frame.cell(Pos::new(0, row)).map_or(' ', |cell| cell.glyph))
+            .collect();
+        println!("    {label:<9} {done}/8  bottom |{column}| top");
+    }
+
+    // Horizontal, which is what a tall narrow pane gets. The picture needs no
+    // adjusting for it: "down" is simply "toward the collected end", and the
+    // shade ramp carries the same four states on either axis.
+    println!("\n── ...and horizontal, where down means leftward ──\n");
+    for step in 0u16..6 {
+        let phase = f32::from(step) * tick;
+        let mut frame = Frame::new(GridSize::new(40, 1));
+        let area = Rect::new(0, 0, 40, 1);
+        frame.painter(area).grind_meter(
+            area,
+            3,
+            8,
+            Grind {
+                phase,
+                working: true,
+                ..Grind::default()
+            },
+        );
+        let row: String = (0..40)
+            .map(|col| frame.cell(Pos::new(col, 0)).map_or(' ', |cell| cell.glyph))
+            .collect();
+        println!("    v{}  {row}", orbs_render::fallen_cells(phase));
+    }
+}
+
+/// The athanor's meter, burning, at several phases.
+///
+/// **What this can and cannot check.** `orbs-render` has an empty
+/// `[dependencies]` and this example prints text, so it can show neither the
+/// flame ramp's colours nor the assembled instrument panel — `orbs::shell::panel`
+/// is private to the Bevy crate. What it does show is the thing that is
+/// genuinely at risk and that no unit test displays: whether the glyph pattern
+/// reads as *fire* rather than as noise, and whether the `█`/`░` join stays
+/// findable while everything around it moves.
+///
+/// The colours need eyes on a window. See CLAUDE.md's See-it lines.
+fn burning() {
+    // A drained athanor: enough plume to see, enough fire to read.
+    const ROWS: u16 = 16;
+    const REMAINING: u32 = 5;
+    const CAPACITY: u32 = 16;
+
+    println!("\n── The athanor, burning — {REMAINING}/{CAPACITY} fuel, four phases ──\n");
+
+    // Vertical, as the side panel draws it (§10.1), two cells wide.
+    //
+    // **One tick apart**, so consecutive columns are consecutive frames of the
+    // animation rather than an arbitrary sample of it — that is what makes the
+    // plume's drift and the sparks' rise visible as motion in a still dump.
+    let tick = 1.0 / orbs_render::FLIP_HZ;
+    let burn = |phase: f32| Burn {
+        phase,
+        flare: 0.0,
+        lit: true,
+    };
+    let mut columns = Vec::new();
+    for step in 0u16..4 {
+        let phase = f32::from(step) * tick;
+        let mut frame = Frame::new(GridSize::new(2, ROWS));
+        let area = Rect::new(0, 0, 2, ROWS);
+        frame
+            .painter(area)
+            .fire_meter_upward(area, REMAINING, CAPACITY, burn(phase));
+        columns.push((phase, frame));
+    }
+
+    let glyph_at = |frame: &Frame, col: u16, row: u16| {
+        frame
+            .cell(Pos::new(col, row))
+            .map_or(' ', |cell| cell.glyph)
+    };
+
+    for row in 0..ROWS {
+        let mut line = String::from("    ");
+        for (_, frame) in &columns {
+            for col in 0..2 {
+                line.push(glyph_at(frame, col, row));
+            }
+            line.push_str("     ");
+        }
+        println!("{line}");
+    }
+    let labels: Vec<String> = columns
+        .iter()
+        .map(|(phase, _)| format!("{phase:<7.2}"))
+        .collect();
+    println!("    {}", labels.join(""));
+
+    // Horizontal, as the top panel draws it when the pane is taller than wide.
+    println!();
+    for step in [0u16, 1] {
+        let phase = f32::from(step) * tick;
+        let mut frame = Frame::new(GridSize::new(48, 1));
+        let area = Rect::new(0, 0, 48, 1);
+        frame
+            .painter(area)
+            .fire_meter(area, REMAINING, CAPACITY, burn(phase));
+        let row: String = (0..48).map(|col| glyph_at(&frame, col, 0)).collect();
+        println!("    {phase:.2}  {row}");
+    }
+
+    // The states the same bar can be in — a running game shows one at a time,
+    // and the flare is over in a second.
+    //
+    // **Printed twice, as glyphs and as heat, and the heat is the point.** The
+    // flare is *entirely* a colour event: a front of ignition climbing from the
+    // base, with the glyphs deliberately identical throughout so the meter never
+    // misreports fuel. A dump showing only glyphs would print every frame of it
+    // the same and prove nothing, which is worse than not showing it at all.
+    // The digits are the ramp step, `1` coolest to `4` hottest — watch the `1`s
+    // give way from the left, which is the bottom of the bar.
+    println!("\n── kindling: cold, the flare climbing, guttering ──\n");
+    println!("    glyphs: █ ▓ fire   ░ ▒ smoke   ∙ ° · sparks");
+    println!("    heat:   1..4 ramp step, * spark, . : smoke, space nothing\n");
+
+    // Four ticks of cold, because the wisp is sparse by design — at any one
+    // instant the bottom cell is clear 60% of the time, and a single sample of
+    // it prints an empty column and looks like a bug.
+    for step in 0u16..4 {
+        let phase = f32::from(step) * tick;
+        show_hearth(
+            &format!("cold {step}"),
+            0,
+            1,
+            Burn {
+                phase,
+                flare: 0.0,
+                lit: false,
+            },
+            ROWS,
+        );
+    }
+
+    // **The flare, sampled across its life rather than at one instant.** It is a
+    // front climbing from the base, so a single frame of it says nothing about
+    // whether it climbs — the heat column is where you watch the `1`s give way.
+    for fifth in 0..=5u16 {
+        let flare = 1.0 - f32::from(fifth) / 5.0;
+        show_hearth(
+            &format!("flare {flare:.1}"),
+            CAPACITY,
+            CAPACITY,
+            Burn {
+                phase: tick,
+                flare,
+                lit: true,
+            },
+            ROWS,
+        );
+    }
+
+    // Fuel the bar rounds away: one tick left of six hundred, which divides to
+    // zero cells. The ember is what says "still lit" rather than "out".
+    show_hearth("guttering", 1, 600, burn(tick), ROWS);
+}
+
+/// One hearth, printed as glyphs and again as heat. See [`burning`].
+fn show_hearth(label: &str, done: u32, total: u32, burn: Burn, rows: u16) {
+    let mut frame = Frame::new(GridSize::new(2, rows));
+    let area = Rect::new(0, 0, 2, rows);
+    frame
+        .painter(area)
+        .fire_meter_upward(area, done, total, burn);
+
+    let read = |as_heat: bool| -> String {
+        (0..rows)
+            .rev()
+            .map(|row| {
+                frame.cell(Pos::new(0, row)).map_or(' ', |cell| {
+                    if as_heat {
+                        depiction_mark(cell.style.depicted())
+                    } else {
+                        cell.glyph
+                    }
+                })
+            })
+            .collect()
+    };
+    println!("    {label:<10} |{}|  heat |{}|", read(false), read(true));
+}
+
+/// A depiction as one character, so a text dump can show colour it cannot draw.
+///
+/// **This is the only See-it there is for the bath's roil.** All of that
+/// instrument's motion is in its colour — the glyph is `█` at every fill and
+/// every phase, by design — so `ORBS_DUMP` shows a solid bar and proves nothing.
+/// Printed as ramp steps, the roil is text.
+const fn depiction_mark(depiction: Depiction) -> char {
+    match depiction {
+        Depiction::SparkEmber
+        | Depiction::SparkBody
+        | Depiction::SparkBlaze
+        | Depiction::SparkCore => '*',
+        Depiction::SmokeThin => '.',
+        Depiction::SmokeThick => ':',
+        Depiction::FlameEmber => '1',
+        Depiction::FlameBody => '2',
+        Depiction::FlameBlaze => '3',
+        Depiction::FlameCore => '4',
+        Depiction::LiquidStill => 'a',
+        Depiction::LiquidStirred => 'b',
+        Depiction::LiquidRolling => 'c',
+        Depiction::Sediment => ',',
+        Depiction::None => ' ',
+    }
 }
 
 /// The spell editor, at the size where it is tightest (§8).

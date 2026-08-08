@@ -24,13 +24,17 @@
 //! drawn *into* the structural border, so without the announcement a pane would
 //! lose its identity in the linear stream.
 
+use crate::bath;
 use crate::cell::Cell;
 use crate::cp437::box_drawing;
+use crate::fire;
 use crate::frame::Frame;
 use crate::geometry::{Pos, Rect};
+use crate::grind;
 use crate::linear::UtteranceKind;
+use crate::mix;
 use crate::span::Span;
-use crate::style::{Presentation, Role, Style};
+use crate::style::{Presentation, Role, Style, Wash};
 use crate::wrap::Wrap;
 
 /// A clipped writer into a region of a [`Frame`].
@@ -173,6 +177,13 @@ impl<'a> Painter<'a> {
     /// (DESIGN.md §5.0), and keeping floats out of the render path keeps a
     /// deterministic sim rendering deterministically. `done` is clamped to
     /// `total`; a `total` of zero draws an empty bar.
+    ///
+    /// **It fills the whole rectangle**, as [`Painter::meter_upward`] does with
+    /// its own. This used to draw a single row however tall the rect was, which
+    /// [`Painter::fire_meter`] and [`Painter::grind_meter`] do not — so the same
+    /// two-row bar would be two rows thick for one instrument and one row thick
+    /// for the next. Every caller passes a single row today; what this fixes is
+    /// the four painters being able to disagree about it tomorrow.
     pub fn meter(&mut self, area: Rect, done: u32, total: u32, style: Style) {
         let area = area.intersection(self.area);
         if area.is_empty() {
@@ -180,9 +191,8 @@ impl<'a> Painter<'a> {
         }
 
         let filled = filled_of(area.cols, done, total);
-        let row = Rect::new(area.col, area.row, area.cols, 1);
-        self.fill(row, '░', style);
-        self.fill(Rect::new(area.col, area.row, filled, 1), '█', style);
+        self.fill(area, '░', style);
+        self.fill(Rect::new(area.col, area.row, filled, area.rows), '█', style);
     }
 
     /// The same meter, drawn as a column that fills **upward**.
@@ -209,6 +219,277 @@ impl<'a> Painter<'a> {
             let glyph = if step < filled { '█' } else { '░' };
             self.fill(Rect::new(area.col, row, area.cols, 1), glyph, style);
         }
+    }
+
+    /// [`Painter::meter`], drawn as a fire.
+    ///
+    /// For the athanor, which is the one instrument that *is* one (§10.1). Its
+    /// meter reports fuel remaining rather than ticks elapsed, so the bar drains
+    /// — the flame shrinks and the plume above it grows, with nothing here
+    /// arranging for that.
+    ///
+    /// **Silent, and the fill boundary is exactly [`Painter::meter`]'s.** Both
+    /// take their length from the same `filled_of`, so the two can never disagree
+    /// about where the value is — and the cell behind the flame front is always
+    /// `█` with the cell ahead of it always `░`, so the join reads with no colour
+    /// at all. §14: the meter's *value* must never be carried by hue.
+    ///
+    /// [`FLIP_HZ`](crate::FLIP_HZ) caps how fast any one cell may change, and
+    /// does so by construction. 3–30 Hz is the photosensitive band.
+    ///
+    /// `phase` is elapsed seconds from the frontend's own clock. Nothing here
+    /// knows what a second is.
+    pub fn fire_meter(&mut self, area: Rect, done: u32, total: u32, burn: fire::Burn) {
+        self.burning(area, done, total, burn, Runs::Rightward);
+    }
+
+    /// [`Painter::meter_upward`], drawn as a fire.
+    ///
+    /// The orientation the side panel uses, and the one the metaphor was built
+    /// for: the plume rises. See [`Painter::fire_meter`].
+    pub fn fire_meter_upward(&mut self, area: Rect, done: u32, total: u32, burn: fire::Burn) {
+        self.burning(area, done, total, burn, Runs::Upward);
+    }
+
+    /// [`Painter::meter`], drawn as a mortar being worked.
+    ///
+    /// **The bar is what is in the bowl**, not how far along: chunks become
+    /// powder, the boundary is where the pestle works, and the whole bar carries
+    /// something at every moment. So a *loaded* mortar and a *finished* one are
+    /// this same picture at nothing-ground and everything-ground — which is what
+    /// lets the panel draw two states the sim reports no meter for at all.
+    ///
+    /// Silent, and the value boundary is exactly [`Painter::meter`]'s: both take
+    /// their length from the same `filled_of`, and the cell against the face is
+    /// always `░` so the join reads with no colour at all.
+    ///
+    /// **Nothing here is a tool.** An earlier version put a pestle `■` in the
+    /// working gap, and a mark from outside the fill vocabulary reads as an
+    /// object visiting the bar rather than as the material changing state. The
+    /// four shades are four states of one substance, which is the whole picture —
+    /// and it is direction-neutral for free, which the pestle needed an argument
+    /// for: §10.1's panel turns horizontal whenever the pane is taller than it is
+    /// wide.
+    pub fn grind_meter(&mut self, area: Rect, done: u32, total: u32, work: grind::Grind) {
+        self.grinding(area, done, total, work, Runs::Rightward);
+    }
+
+    /// [`Painter::meter_upward`], drawn as a mortar being worked.
+    ///
+    /// The orientation the side panel uses, and the one the pestle's swing was
+    /// built for — though the glyph is chosen so the horizontal form reads too.
+    /// See [`Painter::grind_meter`].
+    pub fn grind_meter_upward(&mut self, area: Rect, done: u32, total: u32, work: grind::Grind) {
+        self.grinding(area, done, total, work, Runs::Upward);
+    }
+
+    /// [`Painter::meter`], drawn as a water bath.
+    ///
+    /// For the balneum mariae (§10.1), which digests gently over the athanor.
+    /// **The bar is the liquid in the vessel**, not how far along: a charged bath
+    /// is a shallow layer and a finished one is full, so the two states the sim
+    /// reports no meter for are this same picture at its ends rather than
+    /// special cases.
+    ///
+    /// Silent, and the value boundary is exactly [`Painter::meter`]'s: both take
+    /// their length from the same `filled_of`. The join is solid against blank —
+    /// **all** of the bath's motion is in its colour, so the level survives
+    /// greyscale with nothing to argue about.
+    pub fn bath_meter(&mut self, area: Rect, done: u32, total: u32, work: bath::Steep) {
+        self.steeping(area, done, total, work, Runs::Rightward);
+    }
+
+    /// [`Painter::meter_upward`], drawn as a water bath.
+    ///
+    /// The orientation the side panel uses, and the one a level reads best in.
+    /// See [`Painter::bath_meter`].
+    pub fn bath_meter_upward(&mut self, area: Rect, done: u32, total: u32, work: bath::Steep) {
+        self.steeping(area, done, total, work, Runs::Upward);
+    }
+
+    /// [`Painter::fire_meter`] and its upward twin, which differ only in which
+    /// way the bar runs.
+    fn burning(&mut self, area: Rect, done: u32, total: u32, burn: fire::Burn, runs: Runs) {
+        let area = area.intersection(self.area);
+        if area.is_empty() {
+            return;
+        }
+        let filled = filled_of(runs.steps(area), done, total);
+        let guttering = guttering(filled, done, burn);
+        for (step, lane, at) in runs.cells(area) {
+            let (glyph, depiction) = fire::cell(lane, step, filled, guttering, burn);
+            self.frame.set(
+                at,
+                Cell::new(glyph, Style::NORMAL.with_depiction(depiction)),
+            );
+        }
+    }
+
+    /// [`Painter::grind_meter`] and its upward twin. See [`Painter::burning`].
+    fn grinding(&mut self, area: Rect, done: u32, total: u32, work: grind::Grind, runs: Runs) {
+        let area = area.intersection(self.area);
+        if area.is_empty() {
+            return;
+        }
+        let steps = runs.steps(area);
+        let filled = filling(steps, done, total, work.working, work.advance);
+        for (step, lane, at) in runs.cells(area) {
+            let (glyph, style) = grind::cell(lane, step, filled, steps, work);
+            self.frame.set(at, Cell::new(glyph, style));
+        }
+    }
+
+    /// [`Painter::meter`], drawn as a flask combining two things.
+    ///
+    /// **Takes the two ingredients' colours**, unlike every other picture
+    /// painter, because the bar is three regions rather than one: the two inputs
+    /// shrinking and the mixture growing. It writes all three into the frame's
+    /// tint table itself — a caller cannot, because only this knows where the
+    /// bands fall at a given fill.
+    pub fn mix_meter(
+        &mut self,
+        area: Rect,
+        done: u32,
+        total: u32,
+        work: mix::Stir,
+        inputs: [Option<Wash>; 2],
+    ) {
+        self.stirring(area, done, total, work, inputs, Runs::Rightward);
+    }
+
+    /// [`Painter::meter_upward`], drawn as a flask. See [`Painter::mix_meter`].
+    pub fn mix_meter_upward(
+        &mut self,
+        area: Rect,
+        done: u32,
+        total: u32,
+        work: mix::Stir,
+        inputs: [Option<Wash>; 2],
+    ) {
+        self.stirring(area, done, total, work, inputs, Runs::Upward);
+    }
+
+    /// Both flask painters.
+    fn stirring(
+        &mut self,
+        area: Rect,
+        done: u32,
+        total: u32,
+        work: mix::Stir,
+        inputs: [Option<Wash>; 2],
+        runs: Runs,
+    ) {
+        let area = area.intersection(self.area);
+        if area.is_empty() {
+            return;
+        }
+        let steps = runs.steps(area);
+        // The creep applies only while it is being worked; a finished flask has
+        // no duration in progress to sample between.
+        let working = work.motion == mix::Motion::Stirring;
+        let filled = filling(steps, done, total, working, work.advance);
+
+        // The three bands, painted as tint regions. Collected as spans of `step`
+        // and converted to rectangles, because `Runs` owns the mapping from a
+        // step to a position and nothing else should re-derive it.
+        let mut band_of = vec![None; usize::from(steps)];
+        for (step, lane, at) in runs.cells(area) {
+            let (glyph, depiction, band) = mix::cell(lane, step, filled, steps, work);
+            if lane == 0 {
+                band_of[usize::from(step)] = band;
+            }
+            self.frame.set(
+                at,
+                Cell::new(glyph, Style::NORMAL.with_depiction(depiction)),
+            );
+        }
+        self.wash_bands(area, runs, &band_of, inputs);
+    }
+
+    /// Tint each of the flask's three bands with what it is made of.
+    ///
+    /// **Later regions win** (see [`Frame::tint_at`](crate::Frame::tint_at)), so
+    /// these are painted in order and each simply overwrites the last where they
+    /// meet — no gap arithmetic, and a band that has shrunk to nothing writes
+    /// nothing because its rectangle is empty.
+    fn wash_bands(
+        &mut self,
+        area: Rect,
+        runs: Runs,
+        band_of: &[Option<mix::Band>],
+        inputs: [Option<Wash>; 2],
+    ) {
+        let mixed = match (inputs[0], inputs[1]) {
+            // **Already a mixture: use it, do not blend it again.** A *finished*
+            // flask holds its product and its dregs, so blending the two would
+            // average `clarified-draught` with `brown` and the bar would change
+            // colour at the instant the run completed — the exact discontinuity
+            // authoring the draughts as mixtures exists to remove. The product
+            // carries the answer; this only has to not overwrite it.
+            (Some(first), _) if first.with.is_some() => Some(first),
+            // **The primaries, averaged.** Combining two things that are each
+            // already a mixture is not something §10.1's recipes do, and
+            // averaging four families would give mud rather than a colour a
+            // player could name.
+            (Some(first), Some(second)) => Some(Wash::mixing(first.tint, second.tint)),
+            // One ingredient in, or one untinted: there is nothing to average,
+            // so the mixture simply takes whichever colour is present.
+            (Some(only), None) | (None, Some(only)) => Some(only),
+            (None, None) => None,
+        };
+        let washes = [
+            (mix::Band::First, inputs[0]),
+            (mix::Band::Second, inputs[1]),
+            (mix::Band::Mixed, mixed),
+        ];
+        for (band, wash) in washes {
+            let Some(wash) = wash else { continue };
+            let steps: Vec<u16> = band_of
+                .iter()
+                .enumerate()
+                .filter(|(_, held)| **held == Some(band))
+                .filter_map(|(step, _)| u16::try_from(step).ok())
+                .collect();
+            let (Some(first), Some(last)) = (steps.first(), steps.last()) else {
+                continue;
+            };
+            self.frame.set_tint(runs.span(area, *first, *last), wash);
+        }
+    }
+
+    /// [`Painter::grind_meter`] and its upward twin, drawn as a water bath.
+    fn steeping(&mut self, area: Rect, done: u32, total: u32, work: bath::Steep, runs: Runs) {
+        let area = area.intersection(self.area);
+        if area.is_empty() {
+            return;
+        }
+        // **The creep applies while it is *working* and not while it is
+        // settling.** `filling`'s justification is a duration in progress —
+        // "an eight-tick digest is eight seconds of work" — and a finished bath
+        // has none, so there is nothing to sample between.
+        let working = work.motion == bath::Motion::Bubbling;
+        let filled = filling(runs.steps(area), done, total, working, work.advance);
+        for (step, lane, at) in runs.cells(area) {
+            let (glyph, depiction) = bath::cell(lane, step, filled, work);
+            self.frame.set(
+                at,
+                Cell::new(glyph, Style::NORMAL.with_depiction(depiction)),
+            );
+        }
+    }
+
+    /// Draw this region in a material's colour family.
+    ///
+    /// Silent and structural: a tint is a hint over `survey`, never a carrier
+    /// (see [`Tint`](crate::Tint)), so it writes nothing to the linear stream —
+    /// what a listener needs is the instrument's name and state, which the panel
+    /// says once for all of them.
+    ///
+    /// Clipped to this painter's own region, so a tint cannot colour a
+    /// neighbouring pane any more than a glyph can reach one.
+    pub fn tint(&mut self, area: Rect, wash: Wash) {
+        let area = area.intersection(self.area);
+        self.frame.set_tint(area, wash);
     }
 
     /// Speak something with no visual form of its own.
@@ -453,6 +734,81 @@ impl<'a> Painter<'a> {
     }
 }
 
+/// Which way a picture bar runs, and the axis mapping that follows from it.
+///
+/// **The four picture painters had this written out four times**, with the two
+/// axes swapped between the pairs — four places for the fill direction to go
+/// wrong independently, in a module whose own `meter_upward` doc records the
+/// panel once drawing one instrument two ways depending on which way the pane
+/// had split.
+///
+/// `step` always counts from the end the bar fills from and `lane` always runs
+/// across its thickness, so [`fire::cell`] and [`grind::cell`] can be written
+/// once for both orientations — which is the property this exists to keep.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Runs {
+    /// A row that fills from the left. The panel's `Top` layout.
+    Rightward,
+    /// A column that fills from the bottom. The panel's `Side` layout, and the
+    /// one the fire's metaphor was built for: the plume rises.
+    Upward,
+}
+
+impl Runs {
+    /// How long the bar is, in cells.
+    const fn steps(self, area: Rect) -> u16 {
+        match self {
+            Self::Rightward => area.cols,
+            Self::Upward => area.rows,
+        }
+    }
+
+    /// The rectangle covering steps `first..=last`, across the bar's full width.
+    ///
+    /// For a caller that needs a *region* rather than cells — the flask's three
+    /// bands, which are tinted separately. It lives here so the step-to-position
+    /// mapping stays in one place; a caller computing the rectangle itself would
+    /// be the fifth copy of the fill direction, which is what this type exists
+    /// to prevent.
+    const fn span(self, area: Rect, first: u16, last: u16) -> Rect {
+        let depth = last.saturating_sub(first).saturating_add(1);
+        match self {
+            Self::Rightward => {
+                Rect::new(area.col.saturating_add(first), area.row, depth, area.rows)
+            }
+            // Upward, so the *last* step is the topmost row.
+            Self::Upward => Rect::new(
+                area.col,
+                area.bottom().saturating_sub(1).saturating_sub(last),
+                area.cols,
+                depth,
+            ),
+        }
+    }
+
+    /// Every cell as `(step, lane, position)`.
+    fn cells(self, area: Rect) -> impl Iterator<Item = (u16, u16, Pos)> {
+        let (steps, lanes) = match self {
+            Self::Rightward => (area.cols, area.rows),
+            Self::Upward => (area.rows, area.cols),
+        };
+        (0..steps).flat_map(move |step| {
+            (0..lanes).map(move |lane| {
+                let at = match self {
+                    Self::Rightward => {
+                        Pos::new(area.col.saturating_add(step), area.row.saturating_add(lane))
+                    }
+                    Self::Upward => Pos::new(
+                        area.col.saturating_add(lane),
+                        area.bottom().saturating_sub(1).saturating_sub(step),
+                    ),
+                };
+                (step, lane, at)
+            })
+        })
+    }
+}
+
 /// How many of `steps` a meter fills.
 ///
 /// Widened so a long duration cannot overflow the multiply, and clamped so a
@@ -463,4 +819,319 @@ fn filled_of(steps: u16, done: u32, total: u32) -> u16 {
     }
     let scaled = u64::from(steps) * u64::from(done.min(total)) / u64::from(total);
     u16::try_from(scaled).unwrap_or(steps)
+}
+
+/// [`filled_of`], crept forward by `advance` of the way to the next reading.
+///
+/// **For bars that fill.** The sim turns at 1 Hz (§5.0) and reports whole ticks,
+/// so a meter read straight off it moves once a second in one jump. A duration
+/// action is continuous underneath that — the tick count is a *sample* of it —
+/// so drawing between samples is closer to the truth rather than further from
+/// it. See [`Grind::advance`](crate::Grind::advance).
+///
+/// A bar that *drains* would need the reading at `done - 1`; the athanor's fuel
+/// is the one of those and it does not use this.
+/// How much of a mortar's bar is settled bed — crept only if it is *running*.
+///
+/// **A bar creeps only while there is a next sample to creep toward.** At rest
+/// the panel has no quantity from the sim at all (`Charged`, `Fouled` and
+/// `Ready` all report `meter: None`), so `shell::panel` stands one in — and a
+/// stand-in of `0/1` fed to [`creeping`] predicts `1/1`, i.e. **the whole bar**.
+/// The result was an idle bowl grinding itself to completion and snapping back
+/// once a second, and a jammed one reading as `ready` for most of every second:
+/// exactly the misreport §10.1's panel exists to remove.
+///
+/// The creep's own justification is what rules it out here — "an eight-tick
+/// grind is eight seconds of work" is a claim about a *duration in progress*.
+/// Nothing is in progress in a bowl at rest, so there is nothing to sample
+/// between.
+///
+/// Takes `working` and `advance` loose rather than a `Grind`, because the bath
+/// wants the identical rule and is not one. The two instruments' structs are
+/// deliberately different shapes — a bath has no pour and no leavings in flight —
+/// and the thing they share is this arithmetic, not a type.
+fn filling(steps: u16, done: u32, total: u32, working: bool, advance: f32) -> u16 {
+    if working {
+        creeping(steps, done, total, advance)
+    } else {
+        filled_of(steps, done, total)
+    }
+}
+
+fn creeping(steps: u16, done: u32, total: u32, advance: f32) -> u16 {
+    let now = filled_of(steps, done, total);
+    let next = filled_of(steps, done.saturating_add(1), total);
+    now.saturating_add(crate::tween::mix(0, next.saturating_sub(now), advance))
+}
+
+/// Whether the fire has fuel the bar has rounded away.
+///
+/// The one state where the fire and the plain meter disagree, and deliberately:
+/// a hearth with a handful of ticks left divides to zero cells, and a bar drawn
+/// empty says *out*. "Still lit" against "cold" is exactly the distinction
+/// `kindle` turns on, so losing it to integer division would be the panel
+/// failing at the one job §10.1 gives it.
+const fn guttering(filled: u16, done: u32, burn: fire::Burn) -> bool {
+    burn.lit && filled == 0 && done > 0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::geometry::GridSize;
+
+    /// A hearth alight at `phase`, with no flare in it.
+    fn lit(phase: f32) -> fire::Burn {
+        fire::Burn {
+            phase,
+            flare: 0.0,
+            lit: true,
+        }
+    }
+
+    /// The glyphs of a one-row bar, plain and burning, for the same reading.
+    fn both(cols: u16, done: u32, total: u32, phase: f32) -> (Vec<char>, Vec<char>) {
+        let area = Rect::new(0, 0, cols, 1);
+        let read = |frame: &Frame| -> Vec<char> {
+            (0..cols)
+                .map(|col| frame.cell(Pos::new(col, 0)).map_or(' ', |cell| cell.glyph))
+                .collect()
+        };
+
+        let mut plain = Frame::new(GridSize::new(cols, 1));
+        plain.painter(area).meter(area, done, total, Style::NORMAL);
+
+        let mut burning = Frame::new(GridSize::new(cols, 1));
+        burning
+            .painter(area)
+            .fire_meter(area, done, total, lit(phase));
+
+        (read(&plain), read(&burning))
+    }
+
+    #[test]
+    fn every_meter_covers_the_rectangle_it_was_given() {
+        // Four painters draw §10.1's bars and they must agree about *where*, or
+        // the same rect is a two-row bar for one instrument and a one-row bar
+        // for the next. `meter` was the odd one out: it drew a single row
+        // however tall the rect was, while `meter_upward` filled its whole area
+        // and both animated meters filled theirs.
+        //
+        // Caught only because nothing passes a tall rect today — which is
+        // exactly how a divergence like this survives to the day something does.
+        let area = Rect::new(1, 1, 8, 3);
+        let painted = |draw: &dyn Fn(&mut Painter<'_>)| -> usize {
+            let mut frame = Frame::new(GridSize::new(10, 5));
+            draw(&mut frame.painter(area));
+            (0..10)
+                .flat_map(|col| (0..5).map(move |row| Pos::new(col, row)))
+                .filter(|at| frame.cell(*at).is_some_and(|cell| cell.glyph != ' '))
+                .count()
+        };
+
+        let cells = usize::from(area.cols) * usize::from(area.rows);
+        let solid: [(&str, &dyn Fn(&mut Painter<'_>)); 4] = [
+            ("meter", &|p| p.meter(area, 3, 8, Style::NORMAL)),
+            ("meter_upward", &|p| {
+                p.meter_upward(area, 3, 8, Style::NORMAL);
+            }),
+            ("grind_meter", &|p| {
+                p.grind_meter(area, 3, 8, grind::Grind::default());
+            }),
+            ("grind_meter_upward", &|p| {
+                p.grind_meter_upward(area, 3, 8, grind::Grind::default());
+            }),
+        ];
+        for (name, draw) in solid {
+            assert_eq!(painted(draw), cells, "{name} did not cover its rectangle");
+        }
+
+        // The two fire meters are the exception and it is the *point*: the plume
+        // is mostly air, so a burning bar is deliberately not solid. What has to
+        // hold for them is that nothing lands outside the rect.
+        let sparse: [(&str, &dyn Fn(&mut Painter<'_>)); 2] = [
+            ("fire_meter", &|p| p.fire_meter(area, 3, 8, lit(2.0))),
+            ("fire_meter_upward", &|p| {
+                p.fire_meter_upward(area, 3, 8, lit(2.0));
+            }),
+        ];
+        for (name, draw) in sparse {
+            let mut frame = Frame::new(GridSize::new(10, 5));
+            draw(&mut frame.painter(area));
+            let outside = (0..10)
+                .flat_map(|col| (0..5).map(move |row| Pos::new(col, row)))
+                .filter(|at| !area.contains(*at))
+                .filter(|at| frame.cell(*at).is_some_and(|cell| cell.glyph != ' '))
+                .count();
+            assert_eq!(outside, 0, "{name} painted outside its rectangle");
+        }
+    }
+
+    #[test]
+    fn a_burning_meter_reads_the_same_value_as_a_plain_one() {
+        // **The regression this file's own `meter_upward` doc warns about.** The
+        // panel once re-derived the fill arithmetic and drew one instrument two
+        // ways depending on which way the pane had split. A fire that computed
+        // its own length would be the same defect wearing a costume: the bar
+        // would say one thing with motion on and another with it off.
+        //
+        // Both take their length from `filled_of`, so this is a property rather
+        // than a coincidence — and this is what keeps it one.
+        // The two draw their empty halves differently — the plain meter lays
+        // down a `░` track, the fire leaves it clear so the smoke has somewhere
+        // to be — so the join is found as "the first cell that is not lit"
+        // rather than by looking for one glyph in both.
+        for total in [1u32, 7, 60, 600] {
+            for done in [0, total / 3, total / 2, total - 1, total] {
+                for tenths in [0u16, 3, 7, 13] {
+                    let phase = f32::from(tenths) / 10.0;
+                    let (plain, burning) = both(24, done, total, phase);
+
+                    let edge = |row: &[char]| {
+                        row.iter()
+                            .position(|glyph| !matches!(glyph, '█' | '▓'))
+                            .unwrap_or(row.len())
+                    };
+                    assert_eq!(
+                        edge(&plain),
+                        edge(&burning),
+                        "{done}/{total} at phase {phase}: the fire moved the value",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_filling_bar_creeps_between_the_worlds_ticks() {
+        // §5.0 turns the world at 1 Hz and reports whole ticks, so a meter read
+        // straight off it moves once a second in one jump. A duration action is
+        // continuous underneath that — the tick count is a *sample* — so the
+        // crept value is closer to the truth than the sample is.
+        //
+        // The two ends have to be exact, or the bar drifts out of step with the
+        // reading it is interpolating between: at zero it is the sim's own
+        // answer, at one it is the answer the sim is about to give.
+        for total in [6u32, 8, 60] {
+            for done in 0..total {
+                let (now, next) = (filled_of(32, done, total), filled_of(32, done + 1, total));
+                assert_eq!(creeping(32, done, total, 0.0), now, "{done}/{total} at 0");
+                assert_eq!(creeping(32, done, total, 1.0), next, "{done}/{total} at 1");
+
+                // ...and it never runs backwards or overshoots in between.
+                let mut last = now;
+                for tenth in 0..=10u16 {
+                    let at = creeping(32, done, total, f32::from(tenth) / 10.0);
+                    assert!(at >= last && at <= next, "{done}/{total}: {at} out of band");
+                    last = at;
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_bowl_at_rest_does_not_creep() {
+        // **The regression this file's own layer had no test for.** `grind`'s
+        // `a_bowl_at_rest_is_perfectly_still` sweeps `phase` with `filled`
+        // handed in directly — so it never reaches `creeping`, which lives up
+        // here and is driven by `advance`, a different clock.
+        //
+        // `shell::panel` stands in a `0/1` meter for the states the sim reports
+        // no quantity for, and `creeping` predicted `1/1` from it: **the whole
+        // bar**. An idle bowl ground itself to completion and snapped back once
+        // a second, and a fouled one read as `ready` for most of every second.
+        let idle = grind::Grind {
+            phase: 3.0,
+            working: false,
+            ..grind::Grind::default()
+        };
+        let area = Rect::new(0, 0, 2, 16);
+
+        let mut first = Frame::new(GridSize::new(2, 16));
+        first.painter(area).grind_meter_upward(area, 0, 1, idle);
+        let settled = first.to_text();
+
+        for tenth in 0..=10u16 {
+            let mut frame = Frame::new(GridSize::new(2, 16));
+            let advance = f32::from(tenth) / 10.0;
+            frame
+                .painter(area)
+                .grind_meter_upward(area, 0, 1, grind::Grind { advance, ..idle });
+            assert_eq!(
+                frame.to_text(),
+                settled,
+                "a resting bowl moved {advance} of the way through a tick",
+            );
+        }
+    }
+
+    #[test]
+    fn the_creep_cannot_run_past_a_finished_bar() {
+        // The last tick is the one where predicting `done + 1` would read past
+        // the end. `filled_of` clamps `done`, so the prediction is simply the
+        // full bar and the creep has nowhere to go.
+        for advance in [0.0, 0.5, 1.0] {
+            assert_eq!(creeping(16, 8, 8, advance), 16);
+            assert_eq!(creeping(16, 7, 8, 1.0), 16);
+        }
+    }
+
+    #[test]
+    fn a_fire_says_nothing_at_all() {
+        // The whole basis on which `Depiction` is allowed to exist: it carries
+        // no meaning, so it owes the linear stream nothing — and must therefore
+        // *add* nothing to it. A frame that spoke differently with the fire on
+        // would mean a listener's screen and a sighted player's had diverged,
+        // which is the one thing §14 does not permit.
+        //
+        // Compared against the plain meter rather than against emptiness,
+        // because `meter` is silent too and the point is that they match.
+        let area = Rect::new(0, 0, 24, 1);
+
+        let mut plain = Frame::new(GridSize::new(24, 1));
+        plain.painter(area).meter(area, 5, 16, Style::NORMAL);
+
+        let mut burning = Frame::new(GridSize::new(24, 1));
+        burning.painter(area).fire_meter(area, 5, 16, lit(0.7));
+
+        assert_eq!(
+            plain.speech().to_transcript(),
+            burning.speech().to_transcript(),
+            "the fire spoke",
+        );
+        assert!(burning.speech().is_empty(), "a silent meter said something");
+    }
+
+    #[test]
+    fn both_orientations_agree_about_where_the_fire_ends() {
+        // `meter` fills rightward and `meter_upward` fills from the bottom, and
+        // §10.1 picks between them by pane shape — so F4 must not change how
+        // much fuel the athanor appears to have.
+        let (across, up) = (Rect::new(0, 0, 16, 1), Rect::new(0, 0, 1, 16));
+
+        let mut horizontal = Frame::new(GridSize::new(16, 1));
+        horizontal
+            .painter(across)
+            .fire_meter(across, 5, 16, lit(0.4));
+        let lit_across = (0..16)
+            .filter(|col| {
+                horizontal
+                    .cell(Pos::new(*col, 0))
+                    .is_some_and(|cell| cell.glyph == '█' || cell.glyph == '▓')
+            })
+            .count();
+
+        let mut vertical = Frame::new(GridSize::new(1, 16));
+        vertical.painter(up).fire_meter_upward(up, 5, 16, lit(0.4));
+        let lit_up = (0..16)
+            .filter(|row| {
+                vertical
+                    .cell(Pos::new(0, *row))
+                    .is_some_and(|cell| cell.glyph == '█' || cell.glyph == '▓')
+            })
+            .count();
+
+        assert_eq!(lit_across, lit_up, "the two orientations disagree");
+        assert_eq!(lit_across, 5, "5 of 16 fuel should light 5 of 16 cells");
+    }
 }

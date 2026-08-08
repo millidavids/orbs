@@ -63,6 +63,8 @@ pub(crate) struct View<'a> {
     pub(crate) panel: &'a super::input::Panel,
     /// How far back through the transcript the player is looking.
     pub(crate) scroll: &'a super::input::Scroll,
+    /// Where the athanor's fire has reached, and whether it burns at all.
+    pub(crate) bench: &'a super::bench::Bench,
     /// The spell being edited, if the player is in the editor.
     ///
     /// `&mut` alone in this struct, because the editor's viewport follows the
@@ -93,6 +95,7 @@ pub(crate) fn paint(frame: &mut Frame, linear: &mut Linear, view: View<'_>) {
         ghost,
         panel,
         scroll,
+        bench,
         editing,
     } = view;
     let grid = frame.size();
@@ -152,6 +155,7 @@ pub(crate) fn paint(frame: &mut Frame, linear: &mut Linear, view: View<'_>) {
             carry_readings,
             panel,
             scroll,
+            bench,
         );
     } else {
         session(
@@ -163,6 +167,7 @@ pub(crate) fn paint(frame: &mut Frame, linear: &mut Linear, view: View<'_>) {
             reveal,
             panel,
             scroll,
+            bench,
         );
     }
     if let Some(second) = main.get(1) {
@@ -290,6 +295,7 @@ pub(super) fn session(
     reveal: &Reveal,
     panel: &super::input::Panel,
     scroll: &super::input::Scroll,
+    bench: &super::bench::Bench,
 ) {
     if pane.is_empty() {
         return;
@@ -366,7 +372,7 @@ pub(super) fn session(
     // than it is tall, across the top when it is taller than wide.
     let instruments = panel.instruments.as_slice();
     let split = super::panel::split(body, instruments);
-    super::panel::paint(&mut painter, split, instruments, &panel.domain);
+    super::panel::paint(&mut painter, split, instruments, &panel.domain, bench);
     body = split.rest;
 
     // The tower-wide production meter stays: it is the *pool*, not an

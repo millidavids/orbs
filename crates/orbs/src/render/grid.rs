@@ -165,12 +165,22 @@ pub(crate) fn build(frame: &Frame, theme: &Phosphor, scale: u16, showing: bool, 
                 continue;
             };
             let (x, y) = position(grid_offset(column), grid_offset(row));
+            // The material's colour family, if this cell falls in a tinted
+            // region. Per *region* rather than per cell — see `Frame::tint_at`
+            // for why a `Cell` does not carry one.
+            let at = orbs_render::Pos::new(
+                u16::try_from(column).unwrap_or(u16::MAX),
+                u16::try_from(row).unwrap_or(u16::MAX),
+            );
             geometry.push_cell(
                 x,
                 y,
                 cell_width,
                 cell_height,
-                theme.resolve(cell.style).to_linear().to_f32_array(),
+                theme
+                    .resolve_tinted(cell.style, frame.tint_at(at))
+                    .to_linear()
+                    .to_f32_array(),
                 atlas::uv(index, cell.style.presentation),
             );
         }

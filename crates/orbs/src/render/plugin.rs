@@ -245,6 +245,7 @@ struct ShellState<'w> {
     scroll: Res<'w, crate::shell::Scroll>,
     panes: Res<'w, crate::shell::PaneTransition>,
     reveal: Res<'w, crate::shell::Reveal>,
+    bench: Res<'w, crate::shell::Bench>,
     /// `ResMut` because the editor's viewport follows its caret, and how many
     /// lines fit is a fact only the painter has — see `Editor::scroll_to`.
     editing: ResMut<'w, crate::shell::Editing>,
@@ -275,6 +276,7 @@ fn repaint(
         scroll,
         panes,
         reveal,
+        bench,
         ref mut editing,
     } = shell;
     let frame = &mut canvas.frame;
@@ -299,6 +301,7 @@ fn repaint(
                 ghost: &ghost.0,
                 panel: &panel,
                 scroll: &scroll,
+                bench: &bench,
                 editing: editing.get_mut(),
             },
         );

@@ -3,7 +3,14 @@ resolver = "3"
 members = ["crates/*"]
 
 [workspace.package]
-version = "0.1.0"
+# **`0.<phase>.<step>` until release**, tracking docs/ROADMAP.md rather than the
+# public API — there is no public API and no consumer outside this workspace, so
+# the semver contract has nothing to describe yet. What a reader wants from the
+# number before release is *where in the plan is this*, and that is what it says.
+#
+# It becomes ordinary semver at 1.0, and the switch is one-way: DESIGN.md §19
+# records it so the jump from `0.<phase>` to `1.<minor>` is not read as a phase.
+version = "0.1.11"
 edition = "2024"
 # bevy_ecs 0.19 requires 1.95. Declaring it makes the resolver MSRV-aware and
 # turns "too old toolchain" into a clear error instead of a cryptic type failure.

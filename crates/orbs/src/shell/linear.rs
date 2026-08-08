@@ -69,6 +69,7 @@ pub(crate) fn paint(
     carry_readings: bool,
     panel: &super::input::Panel,
     scroll: &super::input::Scroll,
+    bench: &super::bench::Bench,
 ) {
     if pane.is_empty() {
         return;
@@ -90,6 +91,12 @@ pub(crate) fn paint(
         &super::reveal::Reveal::default(),
         panel,
         scroll,
+        // The real one, threaded rather than defaulted: `Bench::default()` reads
+        // the environment, and this runs every frame F5 is up. It changes
+        // nothing either way — an animated instrument has no speech, which is
+        // the whole of what this mirror is for — so the cheap correct thing is
+        // to draw the screen that is actually on screen.
+        bench,
     );
 
     let mut painter = frame.painter(pane);
@@ -201,6 +208,7 @@ mod tests {
             true,
             &crate::shell::Panel::default(),
             &crate::shell::Scroll::default(),
+            &crate::shell::Bench::default(),
         );
 
         let drawn = frame.to_text();
@@ -225,6 +233,7 @@ mod tests {
             true,
             &crate::shell::Panel::default(),
             &crate::shell::Scroll::default(),
+            &crate::shell::Bench::default(),
         );
 
         assert!(

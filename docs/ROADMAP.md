@@ -575,9 +575,8 @@ the loop.
         minutes of a loop whose whole point is not feeling like a chore. A
         placeholder the balance CLI sweeps.
         `stop`'s refund needed no work — the inputs never left the instrument
-        **See it:** ✅ `ORBS_DUMP="attend laboratory; move sage to
-        mortar_and_pestle; wield mortar_and_pestle; meditate 10; empty
-        mortar_and_pestle; move husks to mortar_and_pestle; purge
+        **See it:** ✅ `ORBS_DUMP="attend laboratory; grind sage; meditate 10;
+        empty mortar_and_pestle; move husks to mortar_and_pestle; purge
         mortar_and_pestle; meditate 5; survey mortar_and_pestle"` — the ground
         sage and its husks come out onto the shelf, and putting the husks back to
         be scoured takes ticks rather than a keystroke.
@@ -629,6 +628,124 @@ the loop.
         potion of clarity"` — the manual answers, then the full tree with **two
         routes to `clarified-draught`** listed before a single instrument is
         committed
+  8. ✅ **The athanor's bar burns** — the one instrument that literally is a
+        fire is drawn as one: flame glyphs in the filled portion, a plume that
+        rises through the empty one, on **per-theme colour ramps**. Its meter
+        reports fuel *remaining* where the others report ticks elapsed, so the
+        flame shrinks and the smoke grows with nothing arranging it.
+        This needed a colour family §4's closed palette does not have, so `Style`
+        gains a fourth channel, `Depiction` — **the one thing in that module that
+        means nothing**, which is exactly what makes it admissible under §14 and
+        is asserted by a test that a burning meter's linear stream is identical
+        to a plain one's. `Style::depicted()` refuses to paint over an accent.
+        The fire is **hottest at its base** and mellows into its tip: the bottom
+        half is solid `█` carrying all its motion in hue, `▓` starts about
+        halfway up and frays toward the tip, and **sparks** (`∙ ° ·`) come off
+        the top and rise through the plume, cooling as they go.
+        **The fire meter has no background track.** `░` was the empty fill and
+        is now the last of a puff of smoke pittering out, so the plume is sparse
+        and thins to nothing as it rises rather than sitting on a solid wall.
+        That fell out as a side effect: the boundary had been *relaxed* to let
+        `▓` reach the flame tip — `█`-or-`▓` against `░`, a 3:1 coverage step
+        where the plain meter draws 4:1 — and emptying the track made it `█` or
+        `▓` against nothing, stronger than it began. The forbidden join
+        throughout is `▓` against `▒`, one dither step, which the CRT's bloom
+        erases. The plain `meter` keeps its `░`: the other four instruments are
+        gauges, not fires.
+        **`FLIP_HZ = 6` is a recorded exemption from the 3–30 Hz band**, on the
+        grounds that the band is about flashes covering a quarter of the visual
+        field and this is a bar two cells wide — conditional on three mitigations
+        §19 names, any of which being removed brings the rate back down. Motion
+        rides `CrtSettings::on`, so the F3 that kills the tube for motion
+        sickness kills the shimmer too; the persistent per-effect toggle stays
+        with Phase 5's settings item above, which now has a real dependency
+        rather than a nominal one.
+        **A hearth has three states a gauge does not**, all §19: a **cold** one
+        smokes at the bottom and draws no track — it reports no meter at all, so
+        it is the one bar in the game with no quantity behind it, and without
+        this "out" looked like a row the panel forgot; a **guttering** one keeps
+        one faint `▓` ember when its fuel divides to zero cells, because "still
+        lit" against "cold" is exactly what `kindle` turns on; and lighting one
+        **flares** — the flame grows up out of the base to the full height of its
+        fuel over **one world tick**, burning at the top of the ramp where it has
+        just caught, with a shower of sparks. Fuel above the front is drawn as
+        *nothing*: an earlier pass drew it as dark flame, which is what "present
+        but not alight" literally is, and it filled the whole bar with dithered
+        orange the instant `kindle` landed. The bar redraws at frame rate and the
+        world advances at 1 Hz, so a tick is the longest an animation can run and
+        still finish before the fuel it burns ticks down. This is the one place
+        the fire shows less than its value, for one tick, on the same trade
+        `Reveal` and pane transitions already make — §14 is unharmed because the
+        linear stream says *burning* from the first frame.
+        **See it:** ✅ `ORBS_DUMP="attend laboratory; kindle charcoal; meditate
+        300" ORBS_FIRE_PHASE=0.17 cargo run -p orbs` — step the phase by a tick
+        (0.00 → 0.17 → 0.33) and a spark climbs a row each time, cooling `∙` →
+        `°`. `ORBS_GRID=80x60` for the horizontal bar, which the 80×22 default
+        never reaches. `attend laboratory` alone for the cold wisp; `meditate
+        597` for the guttering ember. `ORBS_FLARE=1` against `ORBS_FLARE=0` on a
+        half-burned bar shows the spark shower — a dump cannot show the flare's
+        colour, so `cargo run -p orbs-render --example screens` prints the heat
+        ramp as digits beside the glyphs, which is where `flaring` and `settled`
+        are actually distinguishable. **Colour still needs eyes on a window:**
+        run the game, `attend laboratory`, `kindle charcoal`, then `F2` through
+        all four tubes and `F3` to off
+  9. ✅ **The mortar breaks things down** — the second instrument to get a
+        picture, and the one that settled the shape for the remaining three. A
+        mortar does not fill a container, it **reduces**: the bar is one solid
+        block seen edge-on, it gives way at its underside, the pieces snow down
+        through a working gap, and they collect as a coarse bed at the bottom.
+        **The four shades are four states of one substance** — `█` whole, `▒░` in
+        pieces and in the air, `▓` broken and settled — which is what makes it
+        legible with no legend.
+        The block's underside sits a *fixed* gap above the bed, so it is **eaten
+        rather than pushed**: the bar stays full of material and what changes is
+        how much of it is broken. So a **loaded** tool is a solid bar of `█` and
+        a **finished** one is all `▓` — both states the sim reports `meter: None`
+        for, both previously drawing nothing at all, and `ready` holds until the
+        tool is emptied.
+        **There is no tool in the picture, and that was the third attempt.** `╥`
+        looks most like a pestle but is meaningless on the horizontal layout §10.1
+        reaches whenever the pane is taller than it is wide; `■` survives the
+        rotation and got its own cool ramp so it read as stone — and was still
+        wrong, because a mark from outside the fill vocabulary reads as an object
+        *visiting* the bar rather than as the material changing state. With two
+        cells to say something in, spending one on a tool costs the thing the bar
+        is about. `Depiction::Tool` and its four solved ramps went with it: an API
+        with no callers is unshaped (§15) — DESIGN.md §19.
+        **The fall is slower than the clock**, one cell every two ticks, which
+        puts every cell in the gap at 1.5 flashes a second — under the
+        photosensitive floor, so unlike the fire this needs no exemption. At the
+        full rate the debris streaks rather than falls, so the safe choice is
+        also the better-looking one. Tempo is meant to be the signature: the fire
+        shimmers fast, the mortar drifts, and the remaining three should each get
+        their own so what is running is legible without reading a word.
+        Two things moved to keep this honest: `Craft` into the sim, so a frontend
+        never matches on `"mortar_and_pestle"`; and the animation clock from
+        `shell::fire` to `shell::bench`, because five instruments must not have
+        five ideas of how fast a cell may change.
+        **The bed creeps between the world's ticks.** The sim turns at 1 Hz and
+        reports whole ticks, so a meter read straight off it jumps once a second.
+        The fix is not a faster tick — §5.0's rate is what makes duration scarce
+        — but the recognition that a tick count is a **sample** of a continuous
+        thing: an eight-tick grind is eight seconds of work, and at three and a
+        half seconds it really is seven-sixteenths done. Drawing between samples
+        is *closer* to the truth than the sample is. `Painter::creeping`
+        interpolates and the frontend supplies the fraction, read from the same
+        `Time<Fixed>` the sim steps on so the two cannot disagree about when a
+        tick lands — DESIGN.md §19.
+        **See it:** ✅ `ORBS_DUMP="attend laboratory; grind sage; meditate 3"
+        ORBS_FIRE_PHASE=0.33 cargo run -p orbs` — step the phase by two ticks
+        (0.00 → 0.33 → 0.67) and the debris falls a cell each time. `meditate 12`
+        for the finished bar, which holds full until `empty`.
+        `ORBS_TICK=0.0/0.5/1.0` walks the creep **inside one tick**, which a dump
+        otherwise cannot show at all: there is no `Time<Fixed>` in it, so every
+        bar would sit exactly on a tick boundary — the one jump this removes.
+        **The loaded bowl needs the long form**, `move sage to
+        mortar_and_pestle`: §19's per-instrument verbs are *move plus wield*, so
+        `grind` never leaves an instrument sitting `charged` — see the note under
+        that item.
+        `cargo run -p orbs-render --example screens` prints the whole stroke and
+        the lifecycle side by side, and both orientations
   - **Decisions, not execution.** The outcome may depend on *what the player
         chooses given the tower's state*; it must never depend on how fast or
         precisely they act. §5.1 mechanises "triage bandwidth, not typing speed",
@@ -883,9 +1000,8 @@ the loop.
       **Four had green tests over them, three of which asserted the bug** — see
       DESIGN.md §19 for the table and for the two findings that were checked and
       rejected.
-      **See it:** ✅ `ORBS_DUMP="attend laboratory; move sage to
-      mortar_and_pestle; wield mortar_and_pestle; meditate 12; move ground-sage
-      to balneum_mariae"` — the linear stream now says `laboratory:
+      **See it:** ✅ `ORBS_DUMP="attend laboratory; grind sage; meditate 12;
+      move ground-sage to balneum_mariae"` — the linear stream now says `laboratory:
       mortar_and_pestle fouled, balneum_mariae charged` where it said nothing at
       all, and
       `cargo run -p orbs-sim --example session` runs the whole §10.1 pipeline and
@@ -929,6 +1045,100 @@ the loop.
       **See it:** ✅ `ORBS_DUMP="attend laboratory; grind sage; meditate 12"` —
       three commands where four were needed, same result. ✅ the same verbs in
       `attend archive` say where they are not
+- [x] ✅ **The balneum mariae draws, and the fire stops changing colour** — the
+      third of §10.1's five instrument pictures, plus a correction to the first
+      two — DESIGN.md §19.
+
+      **The bath is a vessel of liquid, and the level is the reading.** Not *how
+      far along*: the sim reports no meter for a charged bath, so a progress bar
+      would draw it blank, which is exactly what an empty instrument looks like —
+      the invisible-state defect this panel exists to remove, reached from a new
+      direction. A charged vessel is a shallow layer, a finished one is full, and
+      sediment is a still band lying too low to be either.
+
+      **All of its motion is in the colour.** The glyph is `█` at every fill and
+      every phase, so the level survives greyscale on solid-against-blank — the
+      strongest join the alphabet has — and nothing in the picture can be
+      mistaken for a bubble. Its tempo is four shared-clock ticks per beat, the
+      slowest on the panel, which is both the signature a gentle heat should have
+      and a photosensitivity argument it does not have to make: 0.75 flashes a
+      second against a floor of 3.
+
+      **The fire is one orange ramp on every tube**, where it had been four. A
+      green fire does not read as a fire; it reads as the meter having changed
+      colour. That put hue on the monochrome theme, and §4's accessibility
+      promise moved to Phase 5's colour-vision filters — recorded there and in
+      §19, because it is a promise *deferred*, not dropped.
+
+      **See it:** ✅ `ORBS_BOOT=0 ORBS_DUMP="attend laboratory; kindle charcoal;
+      grind sage; meditate 9; empty mortar_and_pestle; digest ground-sage;
+      meditate 6"` — the vessel filling; step the last `meditate`. ✅ the same
+      with `move ground-sage to balneum_mariae` for a charged one, which is a
+      shallow layer rather than nothing. ✅ `cargo run -p orbs-render --example
+      screens` for the roil as `a`/`b`/`c` — a dump cannot show it, because the
+      glyph never changes. ✅ `cargo run -p orbs` and F7 through the themes: the
+      hearth burns the same orange on all four
+- [x] ✅ **Materials carry a colour, and an instrument's bar draws in it** — the
+      panel stops saying *something is in here* and starts saying *what* —
+      DESIGN.md §19.
+
+      Sage grinds pale green; leave the husks behind and the same bar turns
+      brown; the bath's liquid takes the colour of whatever is dissolved in it.
+      Authored in `content/materials.toml` against the eight families fixed in
+      `orbs_render::Tint`, and **an unknown name fails the load** — an untinted
+      material draws in the base hue too, so a silent fallback would make a typo
+      indistinguishable from an omission.
+
+      **It lives on the `Frame`, not on the `Cell`.** A tint is a property of
+      what is in an instrument, so every cell of one bar shares it — a per-cell
+      byte would spend 7,040 cells of a 160×44 grid to express a value that
+      varies across five of them, and take `Cell` from 8 bytes to 12. It is a
+      `(Rect, Tint)` side-table beside `Frame::magnified`, which is the same
+      shape for the same reason: informational, so both frontends get it.
+
+      **Two things it may never paint over.** An accent — a fouled instrument's
+      label stays red however brown its husks are — and the fire, which burns one
+      orange ramp on every tube (§19). Fuel is a tinted material like any other;
+      the flame simply does not consult it.
+
+      **See it:** ✅ `ORBS_BOOT=0 ORBS_DUMP="attend laboratory; move sage to
+      mortar_and_pestle"` prints `green 2×17` under the linear stream; the same
+      run ending `move ground-sage to dispensary` prints `brown`. A dump can
+      show the region but not the colour — ✅ `cargo run -p orbs` for that
+- [x] ✅ **The flask_and_rod mixes, and a finished bath keeps turning over** —
+      the fourth of §10.1's five instrument pictures — DESIGN.md §19.
+
+      **The flask is the only instrument that takes two inputs, and that is its
+      whole picture.** The vessel starts as two bands of ingredient and the
+      mixture grows from the floor as both are used up together — neither
+      consumed before the other is touched, because that would read as one
+      reagent then the next rather than as combining. The mixture's colour is
+      the **average** of its two ingredients rather than a third authored
+      colour: a colour between its neighbours reads as a mixture of them, and a
+      new one reads as a substitution.
+
+      That needed the tint channel to carry a *pair*, which is affordable
+      because it lives on the `Frame` per region rather than on the `Cell`
+      (`Wash`). A payload would have been unthinkable a byte per grid position
+      ago.
+
+      **A finished bath settles rather than freezing.** It has just spent its
+      run over a lit athanor and is still hot, so it goes on turning over at a
+      third the rate with a third the bubbles. `Charged` stays dead flat — the
+      at-rest rule was written about instruments that have *not started*, and
+      that is still absolute. The difference between the two is what the meter
+      cannot express, since the sim reports no quantity for either.
+
+      Also: rock salt is a cool off-white rather than a cream, sage is muted
+      (it is on screen more than the other seven tints together), and the ramp
+      narrowed from 1.92× to 1.39× per step so a material catching the light
+      stops reading as two materials.
+
+      **See it:** ✅ the eleven-command line in CLAUDE.md prints `green`, `bone`
+      and `green+bone` as three regions; step its last `meditate` and the
+      mixture grows as both bands shrink. ✅ `ORBS_DUMP="...; digest
+      ground-sage; meditate 20"` for a bath that has finished and is still
+      moving — a dump cannot show that, so ✅ `cargo run -p orbs` for the rate
 - [ ] Remaining sabotage surfaces (world, script text, trigger clocks)
       **See it:** `verify` each of the four surfaces and have it name the tampering
 - [ ] Third domain (scrying — the player's first discovery)
@@ -1045,6 +1255,34 @@ the loop.
 
 ## Phase 5 — Ship
 
+- [ ] **Colour-vision filters and a real monochrome mode** — ⚠ **this item now
+      carries a promise that used to be carried by a theme.** §4's monochrome
+      phosphor existed so *"a player with a colour vision deficiency loses
+      nothing"*, and `palette` tested that its base carried no hue at all. Two
+      decisions retired that: the athanor burns one orange ramp on every tube,
+      and materials carry a tint that hints at what is inside an instrument
+      (DESIGN.md §19). Monochrome is now a grey *aesthetic*, not a guarantee.
+
+      A theme was the wrong place for the guarantee anyway — it made the
+      accessible option also an aesthetic choice, so a player who wanted amber
+      had to give up the accommodation to get it. A **filter** is orthogonal to
+      the theme, which is what an accommodation should be.
+
+      Three filters (protanopia, deuteranopia, tritanopia) plus a true greyscale
+      mode, applied as a post-pass over the composited frame in the CRT shader —
+      *after* the phosphor and before the barrel, so it catches the fire, the
+      tints and the accent triad in one place rather than needing every palette
+      to be solved four more times.
+
+      **The accent triad must stay separable under every filter**, which is the
+      property `palette::the_accent_triad_is_separable_without_hue` already
+      asserts without hue at all; extend it per filter. The material tints are
+      allowed to collapse — they are a convenience over `survey`, never the
+      only carrier — but `danger`/`cost`/`success` are not.
+
+      **See it:** set each filter in turn with the laboratory on screen and a
+      breach in the transcript; the athanor still reads as fire, the accent
+      triad still reads as three things, and greyscale mode has no hue anywhere
 - [ ] Accessibility pass (see DESIGN.md §14)
       **See it:** play a full session with the CRT off, at every toggle
 - [ ] Screen-reader siege mode (ticks advance on player input)
