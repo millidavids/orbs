@@ -21,8 +21,8 @@ hide. Release posture: demo first, then full 1.0. No Early Access.
 | Phase | Months | Words | Status |
 |---|---|---|---|
 | 0. Vertical slice | 4 | ~3k | ✅ Closed · numeric gate **deferred** |
-| 0.5. Interlude | — | — | ✅ Closed · settings deferred to 5 |
-| 1. Core loop | 5 | ~15k | ⬜ |
+| 0.5. Interlude | — | — | ✅ **Closed, every box ticked** · settings moved to 5 |
+| 1. Core loop | 5 | ~15k | 🔶 In progress |
 | 2. Siege | 4 | ~15k | ⬜ |
 | 3a. Breadth | 4 | ~18k | ⬜ |
 | 3b. Remote hosts | 3 | ~12k | ⬜ |
@@ -414,15 +414,13 @@ defects — DESIGN.md §19.
       arithmetic, because the *reasoning* was wrong twice and that is worth not
       repeating
       **See it:** ✅ launch the game — it opens black and the prompt types itself
-- [ ] **Sticky skip, persisted CRT-off, reduce-motion** — ⏸ **Phase 5**, with
-      §15's settings screen. §4 asks for skip to be *"a sticky setting, not a
-      per-launch keypress"*; the keypress is the honest half-measure until there
-      is anywhere to persist a setting. No `serde`, no `toml`, nothing in the
-      workspace serialises anything yet.
 
-      §14's health warning goes with them, and is no longer urgent: with the
-      strike cut, nothing in the game flashes at all
-      **See it:** turn the tube off, relaunch, and it is still off
+**Phase 0.5 is closed.** Its one open item — sticky skip, persisted CRT-off,
+reduce-motion — was never Phase 0.5 work: it needs somewhere to persist a
+setting, and nothing in the workspace serialises anything. It has **moved to
+Phase 5** beside §15's settings screen, which is where the thing it depends on
+is built. A deferred item parked in a finished phase is a phase that never
+finishes.
 
 ---
 
@@ -1445,6 +1443,17 @@ the loop.
       **See it:** play a full session with the CRT off, at every toggle
 - [ ] Screen-reader siege mode (ticks advance on player input)
       **See it:** survive a siege with the screen off, by ear
+- [ ] **Sticky skip, persisted CRT-off, reduce-motion** — **moved here from
+      Phase 0.5**, where it was the one open item and never belonged: §4 asks for
+      skip to be *"a sticky setting, not a per-launch keypress"*, and the
+      keypress is the honest half-measure until there is anywhere to persist a
+      setting. No `serde`, no `toml`, nothing in the workspace serialises
+      anything yet — so it lands with the settings screen below rather than
+      before it.
+
+      §14's health warning goes with them, and is no longer urgent: with the
+      strike cut, nothing in the game flashes at all
+      **See it:** turn the tube off, relaunch, and it is still off
 - [ ] Options, remapping, all toggles
       **See it:** rebind every key and play with the result
 - [ ] Steam integration and depot
