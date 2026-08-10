@@ -8,7 +8,7 @@ If the two disagree, DESIGN.md wins and this file is wrong.
 > game. An item without a See it line is not started; an item whose line does not
 > work is not finished, however green its tests are. DESIGN.md §15, §19.
 
-Last updated: 2026-08-04 · **Phase 0 and 0.5 closed. Phase 1 next; the §15 gate is deferred, not passed**
+Last updated: 2026-08-10 · **Phase 0 and 0.5 closed. Phase 1 in progress; the §15 gate is deferred, not passed**
 
 ---
 
@@ -808,7 +808,9 @@ the loop.
         keystroke reaches no decision, and `boundaries.rs` forbids the sim from
         naming a layout type at all
       - **`:w` canonicalises**, walking a simulated position through the spell so
-        location-scoped verbs resolve. Places anchored by ID, stock never
+        location-scoped verbs resolve. Places anchored by ID, stock never —
+        *both since superseded: the file is never rewritten and the reading
+        happens at cast (§19), and the ID anchor was withdrawn*
       - **`Submissions` is an enum** — one `Wrote` entry per save, carrying the
         buffer as *typed*, with a replay test
       - **The runner**: own cwd, two-tier blocking, budget, verb allow-list,
@@ -817,8 +819,9 @@ the loop.
       **See it:** ✅ `ORBS_DUMP="attend laboratory; scribe brewing"`
       `ORBS_EDIT="edit\nkindle charcoal\ngrind the sage\nempty mortar_and_pestle\n<esc>\nquit"`
       `ORBS_THEN="invoke brewing; meditate 40"` — loose phrasing goes into the
-      editor, `peruse` reads it back canonicalised, and the spell brews
-      ground-sage while the player stands still
+      editor and the spell brews ground-sage while the player stands still.
+      `peruse` reads it back **as typed**; the orb's reading of it is `interpret`
+      in the editor (§19 — the file stopped being rewritten)
 
       **What is *not* done, stated plainly.** `bind` is still dark — standing
       automation is the Concentration item below. Conditionals, loops and
@@ -848,8 +851,8 @@ the loop.
         once. §8 forbids both refusing at save and halting at cast
       **See it:** ✅ write `repeat 2 / kindle charcoal / grind the sage / wait for
       the mortar / empty mortar_and_pestle / end` in the editor, `peruse` it back
-      indented with the commands canonicalised and the control words verbatim,
-      then `invoke` it and watch the loop run twice
+      exactly as typed (the buffer's own indentation and all), `interpret` it to
+      see the commands read, then `invoke` it and watch the loop run twice
       - **`stop <spell>`** — a spell could not be called off at all: `stop` took
         a `Place`, and nothing but running out of program removed `Running`,
         which an unbounded `repeat` never does. `stop` now takes a place **or** a
@@ -934,9 +937,9 @@ the loop.
 
       **See it:** ✅ `ORBS_DUMP="attend laboratory; scribe probe"`
       `ORBS_EDIT="edit\nrepeat 10\nif mortar is empty\ngrind sage\nelse\nempty mortar_and_pestle\nend\nend\n<esc>\nquit"`
-      `ORBS_THEN="peruse probe.spell; invoke probe; meditate 40"` — the file
-      reads back with the name resolved, and the loop alternates grinding and
-      emptying instead of only emptying
+      `ORBS_THEN="peruse probe.spell; invoke probe; meditate 40"` — the loop
+      alternates grinding and emptying instead of only emptying. The file reads
+      back as typed; `interpret` is where the resolved name is now shown (§19)
 - [x] ✅ **The orb no longer writes down a shorter command than it heard.**
       Reported as *"`grind sage` is truncated to `grind` when I close and reopen
       the editor"* — and it was, because `quit` saves and every visit
@@ -960,20 +963,175 @@ the loop.
       `ORBS_EDIT="edit\ngrind sage\n<esc>\nquit"`
       `ORBS_THEN="peruse keep.spell"` — the sage is spent before the spell is
       written, and `grind sage` still reads back whole (flagged, not truncated)
-- [ ] **Concentration** — the automation pool, counted in **bound spells** and
-      starting at **0**. Replaces §11.5's Attention pool, which counted actions
-      and started at 3; DESIGN.md §19 records the rename, the superseded numbers,
-      and why the ~8 ceiling is inherited from the old ~25 rather than invented.
-      A bound script holds a **whole slot** while bound; its in-flight actions
-      hold **fractions** of one, which is what keeps §11.5's multiplexing
-      counterweight pricing concurrency rather than pane count.
+- [x] ✅ **Saving says nothing, and a burning athanor is not idle.** Two reports
+      from playing, both about the editor. DESIGN.md §19 records them.
+      - **The transcript filled with saves.** The buffer writes itself out after
+        every pause in the typing, so `{name}: N lines, written down` — and its
+        `1 the orb could not read` companion — arrived every second or two;
+        sixteen copies behind the modal for one session. Both keys are gone with
+        no replacement: a line the orb could not read is named *individually,
+        with its number*, by the runner when the spell is cast. `spell_reloaded`
+        survives, once per editing session rather than once per write
+      - **`if athanor is idle` was yes while it burned.** The fire is `Burning`
+        and deliberately not `Working`, so `busy()` could not see it — `is idle`
+        said yes and `is working` said no about the same fire, with `at burning`
+        drawn on the panel beside them. Both words now ask the panel's own state,
+        which makes the word on screen and the word in a spell one fact
+
+      **See it:** ✅ `ORBS_BOOT=0 ORBS_DUMP="attend laboratory; scribe brewing"`
+      `ORBS_EDIT="edit\nkindle charcoal\ngrind the sage\nempty mortar_and_pestle\n<esc>\nquit"`
+      `ORBS_THEN="invoke brewing; meditate 40"` — one line for the `scribe` and
+      nothing at all for the save. ✅ `ORBS_BOOT=0 ORBS_DUMP="attend laboratory;
+      scribe tending"`
+      `ORBS_EDIT="edit\nif the athanor is working\nstop the athanor\nelse\nkindle charcoal\nend\n<esc>\nquit"`
+      `ORBS_THEN="kindle charcoal; invoke tending; meditate 4"` — the panel reads
+      `athanor banked`, so the spell took the `if` and not the `else`
+- [x] ✅ **`debug_spawn`, the alembic's bubbles, and a review of both** — three
+      things off the back of the spell-language work below. DESIGN.md §19 records
+      each; none is a roadmap box, so none advances the version.
+      - **`debug_spawn &lt;reagent&gt; [count]`** puts reagents in the dispensary from
+        wherever you are standing, so a state that costs forty ticks of grinding
+        is one line. **Not a `Verb`** — matched exactly, before the parser,
+        absent from `Verb::ALL` and from §6.1's tutorial, whose headline metric a
+        build-only word would corrupt. `cfg(debug_assertions)`, and the one test
+        that is `cfg(not(...))` runs under `cargo test --release` to assert the
+        door is shut. Known names only, on a tick boundary, and it says what it
+        did
+      - **The alembic throws bubbles into the air above its face**, which had
+        been refused twice — one reason was real (in the *sideways* layout
+        "above" is rightward, onto the athanor's own sparks) and is now handled
+        by drawing them only where the bar runs upward; the other did not survive
+        contact. The distillation is **four times longer** (56 ticks), and the
+        bubbles are measured from the **face** rather than from the bar's base,
+        so a rising level can never overtake them — which no tick count could
+        guarantee, since the bar grows with the window
+      - **A `/code-review high` found four live bugs**, all reproduced before
+        being fixed: `interpret` re-derived a rule `compile` already owned and
+        disagreed with it on both halves (every byproduct name painted red on a
+        working line; a reagent standing in for a place reported clean and then
+        failing at run time); `invoke not_written_yet` read back as
+        `invoke first_light.spell`, which is §19's rewriter bug on the surface
+        that replaced the rewriter; and `debug_spawn ash 0` spawned a node
+        holding nothing that could never be taken from
+
+      **See it:** ✅ `ORBS_BOOT=0 ORBS_GRID=80x40 ORBS_FIRE_PHASE=0.4
+      ORBS_DUMP="attend laboratory; kindle charcoal; debug_spawn
+      clarified-draught; distil clarified-draught; meditate 24"` — `°` above the
+      face in the `al` column, and the level far enough down to watch it climb.
+      ✅ `cargo run -p orbs-render --example screens` for eight rises side by
+      side. ✅ `cargo test --release -p orbs-sim --test debug_spawn`
+- [x] **The file is the player's, and `if` learned to say `and`** — reported as
+      *"I really don't like that the game edits a file and throws lines away"*,
+      and it did: the parser read the first `is` in a question and the rewriter
+      wrote what it had understood into the spell, so
+      `if a has x or b has x` was saved as `if a has x`. §19 had already recorded
+      three bugs of that shape, each closed by another special case in the
+      rewriter. This closes the class instead. DESIGN.md §8 is amended and §19
+      records it.
+      - **Canonicalisation moves from save to cast.** `write` stores the lines as
+        typed; `spell::compile` is the only route from text to a runnable
+        `Program`, and `Draft` is a separate type so nothing can run an
+        unresolved one. Cast is the better moment anyway: the names are fixed in
+        the world the spell is about to run in, with the player standing there
+      - **`not` > `and` > `or`, with `either … or …` as a bracket made of
+        words.** The bracket words take *operands*, not sub-questions — written
+        the obvious way the inner disjunction swallows the following `and` and
+        `either` stops grouping at all. `both` is accepted and inert. A shared
+        subject expands: `has sage and charcoal` is two questions about one shelf
+      - **Everything must be read, or nothing is.** A question that does not
+        consume every token returns `None`, and the line is kept, marked and
+        reported. Without that rule the half-read line just moves from the writer
+        into the reader, where it is harder to see
+      - **A spell resolves at `SPELL_SIMILARITY` = 850, and a tie refuses.**
+        `ground-salt` scored 819 against `ground-sage` — over the prompt's floor
+        of 600 — so a question could compile into one about a different reagent.
+        850 is where `fuzzy` already separates an abbreviation from a typo
+      - **An unanswerable question runs neither half** and names what it could not
+        place once per line per casting. It used to take the `else`, for ever
+      - **`interpret`**, a third editor word: the buffer as the orb reads it, on
+        request. A line it cannot read draws in `Role::Danger` with the count on
+        the status row
+      - **`SPELL_MARGIN` is 50, where it was 1** — which meant "refuse only on an
+        exact tie", a margin in name and a tie in behaviour. Nothing in the
+        shipped vocabulary lands between 1 and 54, so the two were
+        indistinguishable until one reagent was named close to another. 50 is the
+        room `sag` leaves, which must keep reaching `sage` past `sage-husks`
+      - **Two entries for one word are one candidate.** §6.1 registers a `Topic`
+        beside every reagent, so `ground-sage` is in the scene twice at identical
+        scores and the tie rule compared a name against a copy of itself —
+        `ground-sag` was refused as ambiguous with the thing it names
+      - **47 new tests**, three of which found real bugs on their first run: a
+        `has` operand swallowed the following clause, an unknown *thing* answered
+        no rather than being called a typo, and the duplicate-name refusal above
+
+      **See it:** ✅ `ORBS_BOOT=0 ORBS_DUMP="attend laboratory; scribe keep"`
+      `ORBS_EDIT="edit\ngrind the sage\nif the mortar is idle and the dispensary has sage\nempty the mortar\nend\n<esc>\nquit"`
+      `ORBS_THEN="peruse keep.spell"` — what goes in comes out, byte for byte.
+      ✅ `ORBS_BOOT=0 ORBS_GRID=100x30 ORBS_DUMP="attend laboratory; scribe check"`
+      `ORBS_EDIT="edit\nmake a potion of clarity\nif the mortr is bare\nsurvey\nend\nxyzzy plugh\n<esc>\ninterpret"`
+      — `recall clarity` where the loose phrasing was, and `2 the orb cannot
+      read` on the status row before that. ✅ the same without the trailing
+      `interpret` shows the count while you write. ✅ a spell's own records are in
+      the log rather than the pane, so
+      `ORBS_THEN="invoke broken; meditate 20; sift broken orb.log"` is how the
+      runner's report is read back
+- [x] **Concentration, experience, and `bind`** — the automation pool, counted in
+      **bound spells** and starting at **0**, and the currency that buys it.
+      Replaces §11.5's Attention pool, which counted actions and started at 3;
+      DESIGN.md §19 records the rename, the superseded numbers, and why the ~8
+      ceiling is inherited from the old ~25 rather than invented.
       **Concentration 1 is the game's turn**, not a step on a curve: until it is
       bought the tower is worked entirely by hand, so pillar 3's promise is
       something the player *earns* rather than something they are handed at
-      minute zero. It should be reachable inside the first hour.
-      **See it:** `bind` a spell at concentration 0 and be told the orb cannot
-      hold one yet; buy the level, `bind` it, walk away, come back to work done —
-      then `bind` a second and be made to choose which one to let go
+      minute zero.
+      - **Experience supersedes fragments as the progression currency.** Earned
+        by completing runs, weighted by the instrument — mortar 1, balneum 2,
+        flask 4, alembic 8, `divine` 1 — so each tier of tool is worth every use
+        of the one below. It accumulates and is never spent. §11.5's ~300-fragment
+        derivation and its unlock cadence are amended with it
+      - **16 is arrived at, not picked**: 1+2+1+4+8 is one clarity walked end to
+        end, so the player buys the level with exactly the potion the tutorial
+        teaches. The 30–45 minute anchor moves to ~2 minutes rather than the
+        price being inflated to meet it
+      - **An invocation ends when you leave its domain**, said in voice; a bound
+        spell does not. Narrowing `invoke`'s *cast* would have bought nothing —
+        the domain was already fixed at cast and the player's position was never
+        read again, so leaving a running invocation was free
+      - **A bound spell stands**, cast again when it runs off the end, or a slot
+        at capacity 1 is held by a spell doing nothing. The laps are **silent**;
+        the `bind` the player typed says itself once
+      - **Invariant 3 is struck** — a script action is not faster than a manual
+        one. Speed is a later upgrade; what automation sells is running while you
+        are elsewhere. The **fractional slot charge** is deferred to multiplex
+        capacity, which is what it exists to price
+      - `progression.toml` is validated against `recipes.toml` — the first
+        cross-content check in the project, and why it loads after recipes
+      - **30 new tests** across `tests/progression.rs` and `tests/binding.rs`,
+        every one driven through real runs: there is no public way to hand the sim
+        experience, so a test that skipped the work would test a state the game
+        cannot reach
+
+      **See it:** ✅ `ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="attend laboratory; kindle charcoal; grind sage; meditate 9; empty mortar_and_pestle; digest ground-sage; meditate 14; grind rock-salt; meditate 9; empty mortar_and_pestle; mix sage-tincture with ground-salt; meditate 12; distil clarified-draught; meditate 60; status"`
+      — `+8` on the alembic's yield line, then *"the orb can hold a spell now"*,
+      then `experience 16` / `concentration 1`.
+      ✅ `ORBS_BOOT=0 ORBS_DUMP="attend laboratory; invoke first_light; attend archive; meditate 6"`
+      — *"first_light.spell needed you there. it stops"*.
+      ✅ and the pair, which is the whole point:
+      `ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="attend laboratory; kindle charcoal; debug_spawn clarified-draught 2; distil clarified-draught; meditate 60; empty alembic; distil clarified-draught; meditate 60; scribe tending"`
+      `ORBS_EDIT="edit\ngrind sage\nempty mortar_and_pestle\n<esc>\nquit"`
+      `ORBS_THEN="bind tending; attend archive; meditate 40; status"` — experience
+      climbs 16 → 20 while the player stands in the archive, nothing says *needed
+      you there*, and the sidebar reads `held 1 of 1`. ✅ that row is **absent**
+      before the turn: `ORBS_DUMP=1 ORBS_GRID=100x36` has no `held` line
+- [ ] **The upgrade tree** — what the rest of the experience curve buys.
+      Ingredients, recipes, ley-line upgrades, further concentration and multiplex
+      steps, and §11's domain discoveries. Two things land with it that are
+      deferred above: the **fractional slot charge** (it prices multiplexing, so
+      it needs multiplexing) and a **speed** upgrade to replace struck invariant 3.
+      Also the first **content gate** — *"brew this to open that domain"* — which
+      is a second axis over experience rather than a replacement for it.
+      **See it:** cross a second threshold and be offered something you choose
+      between, rather than a level that arrives on its own
 - [x] **The prompt becomes a command line** — caret editing (←/→, Home/End,
       `Cmd+←/→` because a Mac has no Home key, Escape to clear, insert and delete
       at the caret), history on ↑/↓ **filtered by what is typed** with the prefix

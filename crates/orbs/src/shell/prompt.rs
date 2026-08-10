@@ -490,25 +490,39 @@ fn telemetry(frame: &mut Frame, sim: &Sim, screen: &Screen, pane: Rect) {
     painter.border(pane, Some("orb"), Style::DIM);
 
     let mut readings = Records::new();
-    let mut row = |name: &str, value: u64| {
-        readings
-            .push(RecordKind::Status)
-            .text(FieldName::Name, name)
-            .count(FieldName::Quantity, value)
-            .finish();
-    };
     // Ordered by what a glance most wants, because in Wide focus this pane is a
     // four-row strip (§9) and the table truncates. `status` is the full answer;
     // this is the glance.
-    row("tick", sim.tick().get());
-    if let Some(tier) = screen.fidelity {
-        row("tier", u64::from(tier.scale()));
+    row(&mut readings, "tick", sim.tick().get());
+    // §8: concentration is *"surfaced in `status` and in the sidebar — never a
+    // quiet log line"*. High, because at capacity it is the number a player is
+    // deciding against, and this pane is a four-row strip in Wide focus.
+    //
+    // **Absent until the orb has been taught to hold one.** §8 is explicit that
+    // concentration 0 "is not an exhaustion at all but the starting state", and a
+    // row reading `held 0 of 0` for the first two minutes would spend one of those
+    // four rows saying nothing. The row *appearing* is §11.5's turn.
+    let slots = sim.concentration();
+    if slots > 0 {
+        readings
+            .push(RecordKind::Status)
+            .text(FieldName::Name, "held")
+            .count(FieldName::Quantity, quantity(sim.bound().len()))
+            .text(FieldName::State, &format!("of {slots}"))
+            .finish();
     }
-    row("cols", u64::from(screen.grid.cols));
-    row("rows", u64::from(screen.grid.rows));
-    row("logged", quantity(sim.scrollback().records().len()));
-    row("queued", quantity(sim.pending().len()));
-    row("seed", sim.seed());
+    if let Some(tier) = screen.fidelity {
+        row(&mut readings, "tier", u64::from(tier.scale()));
+    }
+    row(&mut readings, "cols", u64::from(screen.grid.cols));
+    row(&mut readings, "rows", u64::from(screen.grid.rows));
+    row(
+        &mut readings,
+        "logged",
+        quantity(sim.scrollback().records().len()),
+    );
+    row(&mut readings, "queued", quantity(sim.pending().len()));
+    row(&mut readings, "seed", sim.seed());
 
     readings
         .push(RecordKind::Status)
@@ -517,6 +531,20 @@ fn telemetry(frame: &mut Frame, sim: &Sim, screen: &Screen, pane: Rect) {
         .finish();
 
     RecordView::table(&TELEMETRY).draw(&mut painter, pane.inset(1), readings.iter());
+}
+
+/// One named count in the telemetry pane.
+///
+/// A free function rather than a closure capturing the `Records`: the held row
+/// carries a *state* as well as a count, so it pushes directly, and a closure
+/// holding the borrow across it is the one arrangement that cannot interleave
+/// the two.
+fn row(readings: &mut Records, name: &str, value: u64) {
+    readings
+        .push(RecordKind::Status)
+        .text(FieldName::Name, name)
+        .count(FieldName::Quantity, value)
+        .finish();
 }
 
 /// §9's focus mode, as a word.

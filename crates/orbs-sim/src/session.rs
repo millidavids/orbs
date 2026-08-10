@@ -69,6 +69,15 @@ pub enum Queued {
         /// What the buffer held, before canonicalisation.
         lines: Vec<String>,
     },
+    /// A tester asking for reagents — see [`execute::debug`](crate::execute).
+    ///
+    /// **On the same queue, and that is the point.** A debug tool that mutated
+    /// the world from inside an input call would land off a tick boundary, which
+    /// is the one thing `session` is explicit that nothing may do: the state it
+    /// produced could not be reproduced from `(seed, submissions)`, and the tool
+    /// meant to help find bugs would be a source of them.
+    #[cfg(debug_assertions)]
+    Spawn(crate::execute::SpawnOrder),
 }
 
 /// Commands resolved but not yet run.
@@ -88,6 +97,12 @@ impl Pending {
     /// Queue a spell to be written on the next tick.
     pub fn write(&mut self, name: String, lines: Vec<String>) {
         self.0.push(Queued::Write { name, lines });
+    }
+
+    /// Queue a tester's spawn for the next tick.
+    #[cfg(debug_assertions)]
+    pub fn spawn(&mut self, order: crate::execute::SpawnOrder) {
+        self.0.push(Queued::Spawn(order));
     }
 
     /// How many commands are waiting.

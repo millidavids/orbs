@@ -143,7 +143,7 @@ wield_busy = "the {name} is at work. wait, or stop it"
 # the wrong thing" look identical.
 wield_empty = "the {name} is empty"
 wield_no_recipe = "the {name} can do nothing with {detail}"
-wield_done = "the {source} yields {name}, and leaves {detail}"
+wield_done = "the {source} yields {name}, and leaves {detail}  +{count}"
 
 # A run that lands on contents matching no recipe. Should not be reachable —
 # the lock sees to that — but `transmute` used to return silently here, which
@@ -170,6 +170,32 @@ damp_idle = "the athanor is already cold"
 wield_cold = "the {name} wants heat, and the athanor is cold"
 
 # ---------------------------------------------------------------------------
+# Experience and concentration (§11.5, §19). The work is worth something, and
+# what it is worth buys the orb the right to do the work for you.
+#
+# **The first thing in the game that opens rather than refuses**, so it names the
+# verb: a capability nobody can find is a capability nobody has, which is the
+# lesson `unfurl` is on the tutorial list for.
+# ---------------------------------------------------------------------------
+concentration_gained = "the orb can hold a spell now. bind one, and walk away"
+
+# ---------------------------------------------------------------------------
+# `debug_spawn` (§19). A tester's door: the **code** is `cfg(debug_assertions)`
+# and absent from a release build, but this file is compiled in whole, so these
+# four lines ship as text nothing can reach. Kept here anyway rather than moved
+# to string literals - four dead lines cost less than an exemption from rule 6,
+# and the width, shouting and CP437 lints all read this file.
+#
+# **Written in the orb's voice** for the same reason. §3's register has no
+# exception for tooling, and a line that shouts in a game that never shouts is a
+# line somebody has to remember not to screenshot.
+# ---------------------------------------------------------------------------
+debug_spawn_done = "the shelf finds it had {name} all along"
+debug_spawn_unknown = "nothing in the tower is called '{name}'"
+debug_spawn_nowhere = "there is no shelf here to put {name} on"
+debug_spawn_known = "the shelf could find: {name}"
+
+# ---------------------------------------------------------------------------
 # The spellbook (§8). Writing a spell, and the orb writing down what you meant.
 # ---------------------------------------------------------------------------
 
@@ -180,6 +206,9 @@ scribe_open = "you open {name}, written for the {source}"
 # Safe, and silent without this: the running copy keeps its own orders, so an
 # edit that seems to do nothing has in fact landed - on the next casting.
 scribe_running = "{name} is running. the orb reads along as you write"
+# **Once per editing session**, not once per save (§19). The buffer writes itself
+# out after every pause in the typing, so a line per write is this line every
+# couple of seconds - and what it has to teach is a fact about the session.
 spell_reloaded = "{name} changes under the orb's hand"
 
 # A spell is written *for* somewhere, so there is nowhere to write one from the
@@ -188,10 +217,11 @@ spell_reloaded = "{name} changes under the orb's hand"
 # scold - a player who has not found a domain yet does not know there are any.
 scribe_nowhere = "a spell is written for a place. go where the work is first"
 
-# Saving. §8: bind always succeeds, so a line the orb could not read is kept as
-# typed and counted rather than refused - a draft you cannot save is a dead end.
-scribe_done = "{name}: {count} lines, written down"
-scribe_unclear = "{name}: {count} lines, {detail} the orb could not read"
+# Saving says nothing at all, and there are no keys here for it (§19). It said
+# "{name}: {count} lines, written down" and a count of what it could not read -
+# once per pause in the typing, which is sixteen copies of itself behind the
+# modal for one editing session. A line the orb could not read is still named
+# individually, with its line number, by the runner when the spell is cast.
 
 # Reading back through the transcript (§19). The keys always worked; nothing
 # ever said so, and in a game with no mouse a key nobody can discover is a key
@@ -220,9 +250,25 @@ unfurl_keys = "pgup/pgdn  esc out"
 # buffer writes itself out a beat after you stop typing (§19): saving is not a
 # thing you do, and there is therefore nothing to throw away. What is left is
 # the only two decisions still the player's - write, or leave.
-editor_words = "edit  quit"
+#
+# **Three now.** `interpret` is the third, and it exists because the file stopped
+# being rewritten (§19): the orb's reading used to be visible in the saved spell,
+# and this is where it went. A validation step the player asks for.
+editor_words = "edit  interpret  quit"
 editor_editing = "esc to stop writing"
+editor_reading = "what the orb hears. esc to go back"
 editor_unknown = "the orb does not know '{detail}' - try edit or quit"
+# §14: a mark on a line is a fact carried only by colour, so the count is said.
+#
+# **No noun after the number**, which is what makes one line work for one and for
+# many: "{count} lines" gives "1 lines", and naming nothing gives "2 the orb
+# cannot read", which is not a sentence in any number. It drew as the second of
+# those for a while.
+#
+# The editor's status row is the tightest budget in the game - it shares a pane
+# that can be 48 cells wide with the caret position - so this is about as long as
+# it can be. The longer wording that says "of these" clipped at "interpret t".
+editor_unread = "the orb cannot read {count}. interpret to see"
 
 # On the title bar while an invocation of this spell is running, beside the
 # gutter's marker. The marker alone would be a fact carried only by a glyph in a
@@ -258,16 +304,21 @@ word_in_spell = "'{name}' is a word for spells, not for the orb"
 spell_unclosed = "{name} line {count}: nothing closed this, so the orb closed it"
 spell_stray_end = "{name} line {count}: an end with nothing open. ignored"
 spell_stray_else = "{name} line {count}: an else with no if before it. ignored"
-# **Not guessed at.** A condition the player did not write would decide what
-# their laboratory does while they are elsewhere, so an unreadable one simply
-# never holds - and says so rather than quietly always taking the else.
-spell_unreadable_if = "{name} line {count}: that question means nothing. answered no"
+# **Not guessed at, and no longer answered either.** A condition the player did
+# not write would decide what their laboratory does while they are elsewhere - so
+# an unreadable question decides nothing at all, and **neither** half runs. It
+# used to say "answered no", which sent every one of them down the else for ever.
+spell_unreadable_if = "{name} line {count}: that question means nothing. neither half runs"
 
 # A question about somewhere the tower does not have. §8's *Referent missing*,
 # and **not the same as the answer being no** - which is exactly the bug this
 # line exists to make impossible to have again. `if mortar is empty` compared
 # `mortar` against `mortar_and_pestle`, found nothing, answered no on every pass
 # and took the else for ever, saying not one word about it (§19).
+#
+# Said **once per line per casting**, not once per evaluation: a question inside
+# a repeat is asked every tick, and a name the tower cannot place is wrong on the
+# first turn exactly as it is on the four hundredth.
 spell_nowhere = "{name} line {count}: there is no {detail} here to ask about"
 spell_too_deep = "{name} is too many spells deep; the orb loses the thread"
 
@@ -290,3 +341,24 @@ spell_watching = "{name} watches for the {source}"
 # looking rather than by a test. `no_line_a_spell_can_say_has_a_hole_in_it` is
 # the test now.
 spell_gave_up = "{name} waited too long on the {detail}, and moved on"
+
+# ---------------------------------------------------------------------------
+# `bind` (§8, §11.5) - giving a spell to the orb to hold. What it buys is the
+# spell surviving you walking out of the room; an invocation does not.
+# ---------------------------------------------------------------------------
+bind_done = "the orb takes up {name}, and will hold it"
+bind_already = "the orb is already holding {name}"
+bind_released = "you let {name} go. the orb has room again"
+# **The first refusal in the game about what you have *earned*.** §6 forbids a
+# bare error, so it has to teach twice over: that holding a spell is a thing at
+# all, and that working is what buys it. A player at concentration 0 has no way
+# to find either by looking around.
+bind_untrained = "the orb cannot hold a spell yet. work, and it will learn to"
+# Naming what is held is the whole refusal: at concentration 1 this is the
+# sharpest decision in the game, and it cannot be made by a player who has to go
+# and look up what they are already holding.
+bind_full = "the orb holds {count}: {detail}. let one go first"
+# An invocation whose caster walked out. §19: an invoked spell "needs you
+# standing there", and this is the line that makes it true - the difference
+# `bind` sells, said at the moment it costs something.
+spell_unattended = "{name} needed you there. it stops"

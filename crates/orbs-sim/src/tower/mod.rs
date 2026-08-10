@@ -2,6 +2,7 @@
 
 mod boot;
 mod build;
+mod experience;
 mod heat;
 mod node;
 mod panel;
@@ -12,6 +13,7 @@ mod work;
 
 pub use boot::report;
 pub use build::raise;
+pub use experience::{Experience, concentration, credit, worth};
 pub use heat::{
     ATHANOR, Banked, Burning, banked, burn, burning, damp, find as find_athanor, kindle, lit,
     refuse_cold,
@@ -20,7 +22,7 @@ pub use node::{
     Cwd, Domain, Fixture, HeatSource, Held, Name, Nameable, NodeId, NodeIds, Operation, Protected,
     Store, children_of, domain_of, filesystem_root, path_of, root, where_at,
 };
-pub use panel::{Craft, Instrument, Meter, State, instruments};
+pub use panel::{Craft, Instrument, Meter, State, instruments, state_at};
 pub use sabotage::{Log, Poisoned, drift, emit_lines, poison, poisoned, verify};
 pub use scene::{Topics, rebuild, scene_at};
 pub use stock::{Stock, give, held, take};

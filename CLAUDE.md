@@ -376,9 +376,9 @@ what combining means.
 
 **The spell editor has two channels of its own.** `ORBS_EDIT` types into the
 editor a `scribe` opened — newline-separated keystrokes, in order. **The editor's
-own two states decide what a segment is**: it opens in *command* state so the
-first segment is a word (`edit` or `quit` — that is the whole vocabulary), `edit`
-drops into the buffer, and the token `<esc>` comes back out.
+own three states decide what a segment is**: it opens in *command* state so the
+first segment is a word (`edit`, `interpret` or `quit` — that is the whole
+vocabulary), `edit` drops into the buffer, and the token `<esc>` comes back out.
 
 **There is no `save`.** The buffer writes itself out a beat after the typing
 stops, and that pause is measured off `Time`, which a dump never advances. So in
@@ -398,16 +398,88 @@ ORBS_DUMP="attend laboratory; scribe brewing" \
 ORBS_EDIT="edit\nkindle charcoal\ngrind the sage\nempty mortar_and_pestle\n<esc>\nquit" \
 ORBS_THEN="invoke brewing; meditate 40" cargo run -p orbs
 
-# ...and what the orb wrote down, which is not what was typed.
+# ...and what the file holds, which is **exactly** what was typed (§19). The orb
+# never rewrites a spell; `peruse` gives you your own words back.
 ORBS_DUMP="attend laboratory; scribe morning" \
 ORBS_EDIT="edit\nmake a potion of clarity\n<esc>\nquit" \
 ORBS_THEN="peruse morning.spell" cargo run -p orbs
+
+# `interpret` is where the orb's reading lives now — the third editor word, and
+# the only place a *wrong* resolution can be seen before it runs. The status row
+# counts what it cannot read; drop the trailing `interpret` to see that instead.
+ORBS_BOOT=0 ORBS_GRID=100x30 ORBS_DUMP="attend laboratory; scribe check" \
+ORBS_EDIT="edit\nmake a potion of clarity\nif the mortr is bare\nsurvey\nend\nxyzzy plugh\n<esc>\ninterpret" \
+  cargo run -p orbs
 
 # Editing a spell while it runs — the marker in the gutter is the orb's place
 # in the file, and the save that lands a beat later is picked up mid-flight.
 ORBS_DUMP="attend laboratory; invoke brewing; meditate 3; scribe brewing" \
   cargo run -p orbs
 ```
+
+**`debug_spawn` skips the setup.** A state worth testing costs forty ticks of
+grinding to reach; this puts reagents straight in the dispensary, from wherever
+you are standing. Known names only (`Recipes::vocabulary` plus the fuels), and
+bare it lists them. It is **not a verb** — matched exactly, before the parser,
+absent from `Verb::ALL` and from the tutorial — and it is
+`cfg(debug_assertions)`, so a release build has no code for it at all.
+
+```bash
+ORBS_BOOT=0 ORBS_GRID=100x30 \
+  ORBS_DUMP="attend laboratory; debug_spawn ground-sage 3; survey dispensary" \
+  cargo run -p orbs
+
+# The gate itself, from the side that cannot be tested in a debug build.
+cargo test --release -p orbs-sim --test debug_spawn
+```
+
+**A spell's own records are in the log, not in the pane.** `prompt.rs` draws
+*"what the player did, not what their spells did"* — a `repeat` loop would
+otherwise push the player's last line off screen in seconds — so a dump that
+casts a spell and looks for its output on the transcript finds nothing and looks
+broken. `sift` or `peruse` the log, which is the same stream read another way:
+
+```bash
+ORBS_BOOT=0 ORBS_DUMP="attend laboratory; scribe broken" \
+ORBS_EDIT="edit\nrepeat 5\nif the mortr is idle\ngrind sage\nelse\nsurvey\nend\nend\n<esc>\nquit" \
+ORBS_THEN="invoke broken; meditate 20; sift broken orb.log" cargo run -p orbs
+```
+
+**`bind` costs 16 experience, and there is no way to grant it.** Concentration is
+derived from work completed, `debug_spawn` deliberately earns nothing, and no
+public API hands the sim a number — so reaching a slot in a dump means running
+two real distillations, or brewing one clarity end to end. The short route needs
+`kindle charcoal` (the alembic wants heat) and `empty alembic` between runs (a
+charged instrument will not take a second load):
+
+```bash
+# The curve: one clarity by hand. `+1` … `+8` on the yield lines, then
+# "the orb can hold a spell now", then experience 16 / concentration 1.
+ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="attend laboratory; kindle charcoal; \
+  grind sage; meditate 9; empty mortar_and_pestle; digest ground-sage; \
+  meditate 14; grind rock-salt; meditate 9; empty mortar_and_pestle; \
+  mix sage-tincture with ground-salt; meditate 12; distil clarified-draught; \
+  meditate 60; status" cargo run -p orbs
+
+# What `bind` buys, and it only reads as a pair. An **invocation** ends when you
+# walk out: "first_light.spell needed you there. it stops".
+ORBS_BOOT=0 ORBS_DUMP="attend laboratory; invoke first_light; attend archive; \
+  meditate 6" cargo run -p orbs
+
+# A **binding** does not. Experience climbs while the player stands in the
+# archive, and the sidebar reads `held 1 of 1` — a row that is *absent* until
+# the orb has been taught to hold one.
+ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="attend laboratory; kindle charcoal; \
+  debug_spawn clarified-draught 2; distil clarified-draught; meditate 60; \
+  empty alembic; distil clarified-draught; meditate 60; scribe tending" \
+ORBS_EDIT="edit\ngrind sage\nempty mortar_and_pestle\n<esc>\nquit" \
+ORBS_THEN="bind tending; attend archive; meditate 40; status" cargo run -p orbs
+```
+
+**The spell has to empty its own mortar.** A standing spell is cast again every
+time it runs off the end, so `first_light` bound would foul the mortar on its
+second pass and complain about it for ever — `grind sage` then `empty
+mortar_and_pestle` is the shortest loop that can actually lap.
 
 Each `;`-separated line goes through `submit` and a real `step`. Phosphor, the
 CRT curve and the blinking caret are frontend enrichment (rule 2) and are not in

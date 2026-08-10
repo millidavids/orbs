@@ -119,15 +119,31 @@ pub(crate) fn paint(
                 Style::DIM
             }),
         );
-        let line = Span::new(editor.visible(index, width));
-        painter.span(
-            Pos::new(text_col, y),
-            &if here {
-                line.with_style(Style::default().with_intensity(Intensity::Bright))
-            } else {
-                line
-            },
-        );
+        // **`interpret` draws the orb's reading in place of the line**, at the
+        // same numbers, so the two views line up under the eye. A line it cannot
+        // read shows as the player wrote it — there is nothing else honest to
+        // put there — and the mark below is what says so.
+        let reading = editor.reading(index);
+        let text = match (editor.mode(), reading) {
+            // Clipped through `arriving` like the buffer's own lines, which cuts
+            // on a **character** boundary — a byte slice can split `é` into
+            // something that is not a `str` and panic.
+            (Mode::Reading, Some(reading)) => {
+                orbs_render::arriving(&reading.heard, u32::from(width)).to_owned()
+            }
+            _ => editor.visible(index, width).to_owned(),
+        };
+        // **The fault is on the text, not in the gutter.** `GUTTER` is five cells
+        // and its own doc says a sixth would cost the 80-column floor; its one
+        // marker cell already holds the running-line `»`, and two marks in one
+        // cell needs a precedence rule that styling the line does not.
+        let unread = reading.is_some_and(|reading| reading.fault.is_some());
+        let style = match (here, unread) {
+            (_, true) => Style::default().with_role(Role::Danger),
+            (true, false) => Style::default().with_intensity(Intensity::Bright),
+            (false, false) => Style::default(),
+        };
+        painter.span(Pos::new(text_col, y), &Span::new(&text).with_style(style));
 
         if index == caret_row && editor.mode() == Mode::Editing {
             // Clamped: a caret past the right edge would land on the border, or
@@ -202,12 +218,22 @@ fn status(painter: &mut Painter<'_>, editor: &Editor, area: Rect, prose: &Prose)
     //
     // A complaint outranks the help, and a half-typed word outranks both — you
     // should always be able to see what you are typing.
+    // **The count outranks the help and yields to everything else.** A mark in a
+    // column is exactly the kind of visually-only fact §14 forbids, so the number
+    // of lines the orb cannot read is *said* — but not over a complaint the
+    // player just caused, and not over the word they are typing.
+    let unread = editor.unread();
     let (text, style) = match (editor.mode(), editor.complaint()) {
         (Mode::Command, _) if !editor.command().is_empty() => {
             (format!("> {}", editor.command()), Style::default())
         }
         (_, Some(Complaint::Unknown(word))) => (
             prose.line("editor_unknown", &[("detail", word)]),
+            Style::default().with_role(Role::Danger),
+        ),
+        (Mode::Reading, None) => (prose.line("editor_reading", &[]), Style::DIM),
+        (_, None) if unread > 0 => (
+            prose.line("editor_unread", &[("count", &unread.to_string())]),
             Style::default().with_role(Role::Danger),
         ),
         (Mode::Command, None) => (prose.line("editor_words", &[]), Style::DIM),

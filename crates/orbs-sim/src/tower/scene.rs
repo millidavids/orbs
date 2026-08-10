@@ -60,17 +60,19 @@ pub fn rebuild(world: &mut World) {
 ///
 /// # Why this is separate from [`rebuild`]
 ///
-/// §8 canonicalises a spell's lines at authoring time, *"because a script
-/// executes later, in a different world state, where live-state disambiguation
-/// is unavailable"* — and a spell's own lines move it around: `attend
-/// laboratory` then `grind sage` only resolves because the second line runs
-/// somewhere the first line went. Canonicalising against the scene the *player*
-/// is standing in would refuse every location-scoped verb in the file.
+/// A spell runs in **its own domain**, wherever the player happens to be
+/// standing — so every one of its lines is read against a scene that is not the
+/// live one. `grind sage` resolves in the laboratory and nowhere else (§7,
+/// `Scene::offers`), and a spell cast from the archive would lose every
+/// location-scoped verb in the file if it were read against the room the player
+/// is in.
 ///
-/// So the writer walks a simulated position through the lines and asks this at
-/// each one. It takes `&World` and **returns** rather than inserting, because
-/// the alternative — swap `Cwd`, call `rebuild`, swap back — would clobber the
-/// live `Scene` from inside an input call, and input touches only session state.
+/// So `spell::compile` asks this once, for the spell's domain, when the spell is
+/// cast; the runner asks it again per line, having swapped `Cwd` for exactly the
+/// length of one instruction. It takes `&World` and **returns** rather than
+/// inserting, because the alternative — swap `Cwd`, call `rebuild`, swap back —
+/// would clobber the live `Scene` from inside an input call, and input touches
+/// only session state.
 #[must_use]
 pub fn scene_at(world: &World, at: Entity) -> Scene {
     let cwd = Cwd(at);

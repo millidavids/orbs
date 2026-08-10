@@ -106,38 +106,63 @@ impl Scene {
     /// `castle gates` reaches `gates` when nothing is called "castle gates".
     #[must_use]
     pub fn best_match(&self, kind: NounKind, words: &[&str]) -> Option<NounMatch> {
+        // Ties resolve to whichever noun was registered first, so the result
+        // never depends on iteration luck — which `candidates` preserves by
+        // sorting stably.
+        self.candidates(kind, words).into_iter().next()
+    }
+
+    /// Everything `words` could be naming, best first.
+    ///
+    /// # Why the runner-up is worth keeping
+    ///
+    /// [`best_match`](Self::best_match) answers the prompt's question — *what
+    /// did they most likely mean* — and the player is standing there to see the
+    /// echo if it guessed wrong. A **spell** resolves its names with nobody
+    /// watching, so it needs the question this answers instead: *was there
+    /// anything else nearly as close?* With both products on the shelf, `ground`
+    /// is an equally good prefix of `ground-sage` and `ground-salt`, and picking
+    /// the first-registered one would be a coin flip deciding what a laboratory
+    /// does. See `spell::compile`.
+    ///
+    /// One entry per noun, at its best-scoring reading — the joined phrase and
+    /// each individual word are all tried, so `castle gates` reaches `gates`
+    /// when nothing is called "castle gates".
+    #[must_use]
+    pub fn candidates(&self, kind: NounKind, words: &[&str]) -> Vec<NounMatch> {
         if words.is_empty() {
-            return None;
+            return Vec::new();
         }
 
         let joined = words.join(" ");
-        let mut candidates: Vec<&str> = vec![joined.as_str()];
+        let mut phrases: Vec<&str> = vec![joined.as_str()];
         if words.len() > 1 {
-            candidates.extend_from_slice(words);
+            phrases.extend_from_slice(words);
         }
 
-        let mut best: Option<NounMatch> = None;
+        let mut found: Vec<NounMatch> = Vec::new();
         for noun in &self.nouns {
             if !kind.accepts(noun.kind) {
                 continue;
             }
-            for candidate in &candidates {
-                let score = score_against(noun, candidate);
-                if score < MIN_SIMILARITY {
-                    continue;
-                }
-                // Ties resolve to whichever noun was registered first, so the
-                // result never depends on iteration luck.
-                if best.as_ref().is_none_or(|found| score > found.score) {
-                    best = Some(NounMatch {
-                        name: noun.name.clone(),
-                        kind: noun.kind,
-                        score,
-                    });
-                }
-            }
+            let Some(score) = phrases
+                .iter()
+                .map(|phrase| score_against(noun, phrase))
+                .filter(|score| *score >= MIN_SIMILARITY)
+                .max()
+            else {
+                continue;
+            };
+            found.push(NounMatch {
+                name: noun.name.clone(),
+                kind: noun.kind,
+                score,
+            });
         }
-        best
+        // **Stable, so equal scores keep registration order** — the tie-break
+        // `best_match` has always had, and the fact `compile` detects a tie by.
+        found.sort_by_key(|found| std::cmp::Reverse(found.score));
+        found
     }
 }
 

@@ -144,6 +144,119 @@ pub(crate) fn roil(lane: u16, step: u16, phase: f32, motion: Motion) -> Roil {
     }
 }
 
+/// How many lengths of climb a bubble can be given.
+///
+/// Three, so one bubble in three is a short one, and the tallest gets
+/// [`CARRY`] cells. What varies the *look* is that they differ from each other;
+/// how far any of them actually gets is [`STAGE`].
+const STAGES: u16 = 3;
+
+/// How many cells one of those lengths is worth.
+///
+/// **Two, where it was one.** Each stage doubled, so every bubble rises exactly
+/// twice as far as it used to: two cells, four, or six. At one the whole
+/// vocabulary happened inside three cells of the face and the picture read as a
+/// fizz at the surface rather than as something leaving it — a bubble wants
+/// enough room to be seen going.
+const STAGE: u16 = 2;
+
+/// How far above the surface a bubble gets before it is gone.
+///
+/// Six cells, which is two seconds at [`RISE_EVERY`] — long enough to read as
+/// *leaving* and short enough that the air never fills up. A bubble is a thing
+/// that pops, and one that climbed the whole bar would be a plume, which is the
+/// athanor's picture and means something else.
+pub const CARRY: u16 = STAGES * STAGE;
+
+/// One air cell in this many carries a bubble, before lifetime thins them.
+///
+/// **Tuned by looking, at `screens`.** Sparse enough that every mark is a thing
+/// rather than a texture — every cell above the face is one the eye has to rule
+/// out as fill — and dense enough to read as a boil: at five, a two-lane column
+/// showed a bubble about a third of the time and the picture looked like a
+/// stray artefact rather than an instrument working.
+///
+/// With a life of one to [`CARRY`] cells over the top of it, this puts a little
+/// over one mark in the air at a time, thinning with height.
+const ESCAPE_ODDS: u32 = 3;
+
+/// A bubble that has broken the surface, `ahead` cells above it.
+///
+/// # Why the alembic has these and the balneum does not
+///
+/// [`roil`] already has bubbles: lighter cells rising through the liquid and
+/// going out at the surface, which is the balneum's whole motion. What the
+/// alembic adds is that some of them *get through* — distilling is a harder boil
+/// than a gentle digestion, and this is that difference drawn rather than
+/// argued. It is gated on `breaking` and on [`Motion::Bubbling`], so it means
+/// what the rest of the liquid vocabulary means: **over a lit athanor**, and
+/// only there.
+///
+/// # It rides the same clock the liquid does
+///
+/// A bubble that escaped is the same bubble that was rising a moment ago, so it
+/// keeps the liquid's own tempo and its own identity: `rising` gives a
+/// coordinate that is constant for one bubble while the tick and its height
+/// climb together, exactly as `fire::spark` does — and for the reason recorded
+/// there, its lifetime is read off that travelling coordinate rather than off a
+/// stationary one, which would be a fixed ceiling every bubble died at and would
+/// read as a hard edge.
+///
+/// # Measured from the surface, so the surface can never overtake it
+///
+/// **`ahead`, not the absolute cell.** The vessel is *filling* while this runs,
+/// and how fast depends on the recipe's length and on the height of a bar that
+/// grows with the window — so a bubble anchored in absolute space is overtaken
+/// by the rising face whenever `bar / ticks` beats one cell per
+/// [`RISE_EVERY`], which at the shipped durations it did, comfortably. What that
+/// looks like is bubbles being swallowed by the liquid they just left.
+///
+/// No tick count can fix that at every window size, so the frame does it
+/// instead: a bubble is *defined* as sitting so many cells above the face, and
+/// that number only grows. The liquid carries them up as it rises and they climb
+/// away from it on their own beat, which is what a boil does and is now true by
+/// construction rather than by tuning.
+///
+/// Returns the [`Roil`] rather than a style: what colour a piece of liquid is
+/// belongs with the rest of the liquid, and a bubble is liquid that has left.
+pub(crate) fn escaping(lane: u16, ahead: u16, phase: f32) -> Option<(char, Roil)> {
+    // **The face itself is never a bubble.** It is the cell the level is read
+    // off — solid against blank, the strongest join the alphabet has — and a
+    // mark on it would be the one place the picture and the value disagree.
+    if ahead == 0 {
+        return None;
+    }
+    let risen = shared_tick(phase) / RISE_EVERY;
+    let drift = rising(ahead, risen, RISE_SPAN);
+    // **Divided out, not shifted.** Presence and lifetime come from one hash, so
+    // they have to be taken from *independent* parts of it — the fire's sparks
+    // do exactly this (`seed / SPARK_ODDS % 7`) and this copied the shape without
+    // the division at first: `drift_noise` is eight bits wide, `seed >> 8` was
+    // therefore always zero, and every bubble had a life of exactly one cell.
+    // Which is a picture that blinks one row above the face and never rises —
+    // visible in `screens` the moment it was drawn, and in nothing else.
+    let seed = drift_noise(lane, drift);
+    if !seed.is_multiple_of(ESCAPE_ODDS) {
+        return None;
+    }
+    // How high this one gets, its own for life: one of [`STAGES`] lengths, each
+    // [`STAGE`] cells — so two, four or six.
+    let stage = 1 + u16::try_from((seed / ESCAPE_ODDS) % u32::from(STAGES)).unwrap_or(0);
+    let life = stage * STAGE;
+    if ahead > life {
+        return None;
+    }
+    // Thinning as it goes. `°` is a ring with something still in it, `·` is the
+    // last of it before it is gone — the fire's own two smallest marks, in the
+    // **liquid's** colours rather than the fire's, which is what keeps a bubble
+    // and a spark apart on a screen that holds both.
+    Some(if ahead * 2 <= life {
+        ('°', Roil::Stirred)
+    } else {
+        ('·', Roil::Still)
+    })
+}
+
 /// A shimmer that stays where it is, at `every` ticks a step.
 ///
 /// **Density is ordered as well as tempo**, and it has to be: a sweep of the

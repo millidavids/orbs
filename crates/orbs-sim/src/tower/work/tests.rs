@@ -711,7 +711,11 @@ fn a_whole_brew_runs_end_to_end_on_one_charcoal() {
     sim.step();
     sim.submit("wield alembic");
     sim.step();
-    sim.step_n(16);
+    // **The long stage.** A distillation is 56 ticks — four times what it was
+    // (§19), and by a wide margin the longest thing in the pipeline. The number
+    // here is the recipe's, not a round one: a fixed count that merely *happened*
+    // to be enough would go quiet the next time the recipe moved.
+    sim.step_n(60);
 
     sim.submit("attend alembic");
     sim.step();

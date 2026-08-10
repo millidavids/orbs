@@ -154,6 +154,63 @@ fn steeping() {
     println!("    reading *how far along* would draw it blank, which is exactly what");
     println!("    an empty instrument looks like. Sediment (▓, still, two cells deep)");
     println!("    lies too low to be mistaken for a level.");
+
+    distilling();
+}
+
+/// The alembic: the same vessel, boiling hard enough to throw bubbles out of it.
+///
+/// **The one part of the liquid picture that is a glyph rather than a colour**,
+/// so unlike the roil above it survives a text dump — which is why this section
+/// is short. What it is here for is the *sweep*: a bubble appears above the
+/// face, climbs a cell or three, and goes out, and one still frame cannot show
+/// that.
+fn distilling() {
+    const ROWS: u16 = 12;
+    let tick = 1.0 / orbs_render::FLIP_HZ;
+
+    println!("\n── The alembic — the same bath, boiling ──\n");
+    println!("    █ liquid   ° a bubble that got out   · the last of it\n");
+    println!("    A distillation is a harder boil than a digestion, so some of what");
+    println!("    rises through the liquid breaks the surface and leaves. The face");
+    println!("    itself is never marked: the level is read off solid-against-blank,");
+    println!("    and a bubble on that cell would put the picture and the value at");
+    println!("    odds on the one cell the value comes from.\n");
+
+    let mut columns = Vec::new();
+    for step in 0u16..8 {
+        let phase = f32::from(step * orbs_render::RISE_EVERY) * tick;
+        let mut frame = Frame::new(GridSize::new(2, ROWS));
+        let area = Rect::new(0, 0, 2, ROWS);
+        frame.painter(area).bath_meter_upward(
+            area,
+            5,
+            12,
+            Steep {
+                phase,
+                motion: orbs_render::Motion::Bubbling,
+                breaking: true,
+                ..Steep::default()
+            },
+        );
+        columns.push(frame);
+    }
+
+    for row in 0..ROWS {
+        let mut line = String::from("    ");
+        for frame in &columns {
+            for col in 0..2 {
+                let cell = frame.cell(Pos::new(col, row));
+                line.push(cell.map_or(' ', |cell| cell.glyph));
+            }
+            line.push_str("  ");
+        }
+        println!("{}", line.trim_end());
+    }
+    println!("\n    0   1   2   3   4   5   6   7   ← rises, three ticks each");
+    println!("    Only over a lit athanor, and only where the bar runs **upward**.");
+    println!("    In the side-by-side layout *above* is rightward, which would put");
+    println!("    these on the row over the athanor's own sparks — see `Steep::upward`.");
 }
 
 /// The mortar and pestle: a block broken down, across a fall and a lifecycle.

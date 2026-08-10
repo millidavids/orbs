@@ -30,7 +30,7 @@ use orbs_render::{FieldName, RecordKind, Role};
 
 use super::node::{Cwd, Name, children_of};
 use super::sabotage::poisoned;
-use crate::execute::is_live;
+use crate::execute::{is_gated, is_live};
 use crate::parser::Verb;
 use crate::rng::Rngs;
 use crate::session::Scrollback;
@@ -85,14 +85,18 @@ pub fn report(world: &mut World) {
             .finish();
     }
 
-    // §8.1: bound scripts are named here so automation cannot be forgotten. The
-    // script engine is Phase 1, so the honest report is that there are none —
-    // an absent section would leave a player unable to tell "none" from "not
-    // shown", and this line is what a Phase 1 script slots into.
+    // §8.1: bound scripts are named here so automation cannot be forgotten.
+    // **Counted now**, where it was hardcoded to nought against the day there
+    // was something to count — a boot report that said `bound 0` while the orb
+    // held a spell would be the forgotten-automation surface lying in the one
+    // place it exists to tell the truth.
+    let bound = crate::tower::spell::held(world).len();
+    let mut scrollback = world.resource_mut::<Scrollback>();
+    let records = scrollback.records_mut();
     records
         .push(RecordKind::Status)
         .text(FieldName::Name, "bound")
-        .count(FieldName::Quantity, 0)
+        .count(FieldName::Quantity, bound as u64)
         .finish();
 
     // The scaffold tutorial (§15). Facts, not a lesson: these are the words that
@@ -110,10 +114,17 @@ pub fn report(world: &mut World) {
     // — offering it there is the dead end this filter exists to avoid, one step
     // further in. `recall brewing` is what teaches them, from inside the
     // laboratory where they work.
-    for verb in Verb::ALL
+    // **And a verb the tower has not earned yet is left out too**, which is the
+    // same rule one step further in again: `bind` works, and at concentration 0
+    // it can only refuse. Offering it in the first thing a player reads would be
+    // the dead end this filter exists to avoid — see `execute::is_gated`.
+    let offered: Vec<Verb> = Verb::ALL
         .into_iter()
-        .filter(|verb| is_live(*verb) && !verb.is_operation())
-    {
+        .filter(|verb| is_live(*verb) && !verb.is_operation() && !is_gated(*verb, world))
+        .collect();
+    let mut scrollback = world.resource_mut::<Scrollback>();
+    let records = scrollback.records_mut();
+    for verb in offered {
         let mut entry = records.push(RecordKind::Entry);
         entry = entry.text(FieldName::Name, verb.canonical());
         // `status` and `undo` take nothing, and an empty field is not the same
@@ -166,7 +177,7 @@ mod tests {
         let sim = Sim::new(1);
         let listed = rows(&sim, RecordKind::Entry);
         for verb in Verb::ALL {
-            let offered = is_live(verb) && !verb.is_operation();
+            let offered = is_live(verb) && !verb.is_operation() && !is_gated(verb, sim.world());
             assert_eq!(
                 listed.iter().any(|name| name == verb.canonical()),
                 offered,

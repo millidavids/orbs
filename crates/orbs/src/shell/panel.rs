@@ -372,9 +372,12 @@ const fn bar_of(craft: Craft, state: State, heat: bool) -> Bar {
             _ => Bar::Plain,
         },
         // **The alembic is a vessel too**, and draws the balneum's picture with
-        // its bubbles breaking at the face. §10.1's five instruments now have
-        // five pictures; what distinguishes these two is the break and the
-        // colour of what is in them, not a second liquid vocabulary.
+        // its bubbles breaking at the face — and, where the bar runs upward,
+        // getting out: a distillation is a harder boil than a digestion, so some
+        // of what rises leaves the liquid (`Steep::upward`, §19). §10.1's five
+        // instruments now have five pictures; what distinguishes these two is
+        // the break, the escape and the colour of what is in them, not a second
+        // liquid vocabulary.
         //
         // Until this arm existed it fell to `Bar::Plain` — which is not
         // `meterless()`, so a *charged* or *ready* alembic drew *nothing at

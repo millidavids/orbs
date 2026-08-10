@@ -58,6 +58,15 @@ impl Fuels {
     pub fn get(&self, name: &str) -> Option<&Fuel> {
         self.by_name.get(name)
     }
+
+    /// Every burnable name, alphabetically.
+    ///
+    /// A `BTreeMap`, so the order is the names' own and **not the file's** —
+    /// stable across runs either way, which is what matters: this feeds a list a
+    /// tester reads and, through `debug_spawn`, a name they can type.
+    pub fn names(&self) -> impl Iterator<Item = &str> {
+        self.by_name.keys().map(String::as_str)
+    }
 }
 
 impl Default for Fuels {

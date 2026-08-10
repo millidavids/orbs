@@ -116,11 +116,18 @@ pub fn finish(world: &mut World) {
         let source = world
             .get::<Name>(place)
             .map_or_else(String::new, |name| name.0.clone());
+        // **The archive earns too.** This branch is the other kind of completed
+        // work — `divine` in one of the two rooms the game opens with — and
+        // leaving it at nothing would make half the opening game pay nothing at
+        // all. Keyed by the **verb**, because the archive has no instrument to
+        // key on; `progression.toml` documents that exception.
+        let earned = super::super::worth(world, working.verb.canonical());
         world
             .resource_mut::<Scrollback>()
             .records_mut()
             .push(RecordKind::Completion)
             .text(FieldName::Name, working.verb.canonical())
+            .count(FieldName::Quantity, earned)
             .text(FieldName::Detail, &subject)
             .text(FieldName::Source, &source)
             // Where it happened, always in the same field — what a spell reads
@@ -128,6 +135,8 @@ pub fn finish(world: &mut World) {
             .text(FieldName::At, &source)
             .role(Role::Success)
             .finish();
+        // After the sentence about the work, for the reason `transmute` gives.
+        super::super::credit(world, earned);
         world
             .resource_mut::<Scrollback>()
             .records_mut()

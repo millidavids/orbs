@@ -247,18 +247,32 @@ fn a_spell_does_not_move_the_player() {
     // **`attend` writes `Cwd`.** A spell containing one would otherwise teleport
     // the player, change their prompt, and change what they can name — while
     // they were standing somewhere else doing something else.
+    //
+    // **Bound, not invoked.** It used to invoke from the archive and assert the
+    // player stayed there — which now passes for a reason that is not this one:
+    // an invocation ends the moment its caster leaves (§19), so the spell would
+    // stop before it reached the `attend` and the test would prove nothing. A
+    // *held* spell is the one that runs while the player is elsewhere, so it is
+    // the one that could move them.
     let mut sim = with_spell("wander", &["attend laboratory", "survey"]);
+    crate::tower::credit(sim.world_mut(), 16);
+    sim.submit("bind wander");
+    sim.step();
+
     sim.submit("attend archive");
     sim.step();
     let before = sim.location();
-
-    sim.submit("invoke wander");
     sim.step_n(6);
 
     assert_eq!(
         sim.location(),
         before,
         "the spell walked the player out of the archive",
+    );
+    assert!(
+        mentioned(&sim, "will not do"),
+        "the spell's `attend` was allowed: {:?}",
+        said(&sim),
     );
 }
 
@@ -492,11 +506,13 @@ fn an_if_names_a_place_the_way_every_other_line_does() {
         said(&sim),
     );
 
-    // ...and the orb wrote down what it resolved, so `peruse` teaches the name.
+    // ...and the file still says what the player wrote. The resolution is the
+    // **program's**, made at cast; it used to be written into the spell, which
+    // taught the name at the cost of the file being the player's.
     assert_eq!(
         sim.spell("probe").as_deref().and_then(<[String]>::first),
-        Some(&"if mortar_and_pestle is empty".to_owned()),
-        "the orb kept the name it could not use",
+        Some(&"if mortar is empty".to_owned()),
+        "the orb rewrote the line it read",
     );
 }
 
@@ -612,90 +628,144 @@ fn a_reagent_the_shelf_has_run_out_of_is_still_written_down() {
 }
 
 #[test]
-fn canonicalising_still_drops_words_that_never_named_anything() {
-    // **The counterweight, and it is why the guard asks about reagents rather
-    // than about words.** Canonicalisation is *supposed* to discard: `make a
-    // potion of clarity` becomes `recall clarity` and `look around` becomes
-    // `survey`. A sweep for "did any word vanish" flags both — and they are the
-    // game's flagship plain-English phrasings, so the fix above would have
-    // broken the tutorial to save the editor.
+fn loose_phrasing_is_kept_in_the_file_and_understood_when_it_runs() {
+    // **Both halves, because the fix could have broken either.** The game's
+    // flagship plain-English phrasings — `make a potion of clarity`,
+    // `look around` — must still *run*, and they must no longer be **rewritten**
+    // into the file to do it. This asserted the rewrite until the file became
+    // the player's; what it asserts now is that giving that up cost the loose
+    // phrasing nothing.
     let mut sim = Sim::new(1);
     sim.submit("attend laboratory");
     sim.step();
-    sim.write_spell(
-        "phrase",
-        &[
-            "make a potion of clarity".to_owned(),
-            "look around".to_owned(),
-            "grind the sage".to_owned(),
-        ],
-    );
+    let typed = vec![
+        "make a potion of clarity".to_owned(),
+        "look around".to_owned(),
+        "grind the sage".to_owned(),
+    ];
+    sim.write_spell("phrase", &typed);
     sim.step();
 
-    assert_eq!(
-        sim.spell("phrase"),
-        Some(vec![
-            "recall clarity".to_owned(),
-            "survey".to_owned(),
-            "grind sage".to_owned(),
-        ]),
-        "the orb stopped writing down what the player meant",
-    );
+    assert_eq!(sim.spell("phrase"), Some(typed), "the orb rewrote the file");
+
+    sim.submit("invoke phrase");
+    sim.step_n(30);
     assert!(
-        !mentioned(&sim, "could not read"),
-        "a phrasing the game teaches was flagged: {:?}",
+        mentioned(&sim, "yields ground-sage"),
+        "the loose phrasing stopped working: {:?}",
         said(&sim),
     );
 }
 
 #[test]
-fn a_line_kept_verbatim_still_sits_in_its_block() {
-    // **Reported from a screenshot**: `grind sage` flush with `repeat` while
-    // everything around it was indented. Four branches keep a line's words — a
-    // spell naming another spell, an unreadable line, `attend`, and a dropped
-    // reagent — and every one wrote `line.trim()`, which keeps the words and
-    // throws the indentation away.
+fn saving_a_spell_says_nothing_at_all() {
+    // **Reported from a screenshot of sixteen identical lines.** The buffer
+    // writes itself out after every pause in the typing, so a sentence per save
+    // is a sentence every second or two — one editing session filled the
+    // transcript behind the modal with copies of `5 lines, written down`.
     //
-    // Structurally harmless: blocks are delimited by `repeat`/`if`/`else`/`end`
-    // and never by layout. Alarming to look at, which is worse than harmless in
-    // a file whose whole job is being read back — and it contradicted what this
-    // module already says, that the indentation is the orb's and not the
-    // player's.
-    //
-    // All four branches in one spell, because fixing one and missing three is
-    // exactly what happened.
+    // Nothing was lost with it: a line the orb could not read is named
+    // individually, with its number, when the spell is cast — which the tests
+    // below this one hold to.
     let mut sim = Sim::new(1);
     sim.submit("attend laboratory");
     sim.step();
-    // Spend the sage, so `grind sage` reaches the dropped-reagent branch.
-    sim.submit("grind sage");
-    sim.step_n(20);
+    let before = sim.scrollback().records().len();
 
     sim.write_spell(
-        "probe",
-        &[
-            "repeat".to_owned(),
-            "attend dispensary".to_owned(), // flagged: `attend` in a spell
-            "invoke somewhere_else".to_owned(), // verbatim: names a spell
-            "grind sage".to_owned(),        // flagged: the shelf is bare
-            "frobnicate the thing".to_owned(), // flagged: unreadable
-            "end".to_owned(),
-        ],
+        "quiet",
+        &["grind sage".to_owned(), "xyzzy plugh".to_owned()],
     );
     sim.step();
 
     assert_eq!(
-        sim.spell("probe"),
-        Some(vec![
-            "repeat".to_owned(),
-            "    attend dispensary".to_owned(),
-            "    invoke somewhere_else".to_owned(),
-            "    grind sage".to_owned(),
-            "    frobnicate the thing".to_owned(),
-            "end".to_owned(),
-        ]),
-        "a line the orb kept verbatim fell out of its block",
+        sim.spell("quiet"),
+        Some(vec!["grind sage".to_owned(), "xyzzy plugh".to_owned()]),
+        "the save did not land",
     );
+    assert_eq!(
+        sim.scrollback().records().len(),
+        before,
+        "a save put something in the transcript: {:?}",
+        said(&sim),
+    );
+}
+
+#[test]
+fn a_running_spell_says_it_reloaded_once_per_session_however_often_it_is_saved() {
+    // The one thing a save still says, and the reason it survived: editing a
+    // spell while it runs lands *now*, which is safe, invisible, and otherwise
+    // indistinguishable from being ignored.
+    //
+    // Once per session, though. The autosave fires on every pause, so a notice
+    // per write is the same noise this item removed, wearing a different
+    // sentence.
+    // Unbounded, so it is still running when the second session opens — a spell
+    // that had finished by then would report no reload for the honest reason,
+    // and the test would pass on the wrong evidence.
+    let looping: Vec<String> = ["repeat", "survey", "end"]
+        .iter()
+        .map(|line| (*line).to_owned())
+        .collect();
+    let mut sim = with_spell("watched", &["repeat", "survey", "end"]);
+    sim.submit("invoke watched");
+    sim.step();
+    sim.submit("scribe watched");
+    sim.step();
+
+    for _ in 0..3 {
+        sim.write_spell("watched", &looping);
+        sim.step();
+    }
+    let after_three_saves = said(&sim)
+        .iter()
+        .filter(|line| line.contains("under the orb's hand"))
+        .count();
+    assert_eq!(after_three_saves, 1, "{:?}", said(&sim));
+
+    // ...and reopening the editor is a new session, so it says it again.
+    sim.submit("scribe watched");
+    sim.step();
+    sim.write_spell("watched", &looping);
+    sim.step();
+    let after_reopening = said(&sim)
+        .iter()
+        .filter(|line| line.contains("under the orb's hand"))
+        .count();
+    assert_eq!(after_reopening, 2, "{:?}", said(&sim));
+}
+
+#[test]
+fn the_indentation_is_the_players_too() {
+    // **Reported from a screenshot**: `grind sage` flush with `repeat` while
+    // everything around it was indented, because the four branches that kept a
+    // line's words all wrote `line.trim()`. The orb re-indented what it rewrote
+    // and dropped the indent from what it did not, so the file disagreed with
+    // itself about where a line sat.
+    //
+    // Nothing re-indents now, which settles it in the other direction: the
+    // buffer indents as you type (`editor::reindent`), and what the buffer holds
+    // is what the file holds. This spell arrives through `write_spell` with no
+    // editor involved and with *deliberately unhelpful* layout, so the only way
+    // it can come back tidy is if something tidied it.
+    let mut sim = Sim::new(1);
+    sim.submit("attend laboratory");
+    sim.step();
+    sim.submit("grind sage");
+    sim.step_n(20);
+
+    let typed = vec![
+        "repeat".to_owned(),
+        "attend dispensary".to_owned(), // refused at run time, kept here
+        "        invoke somewhere_else".to_owned(), // over-indented, on purpose
+        "grind sage".to_owned(),        // the shelf is bare; still the line
+        "frobnicate the thing".to_owned(), // unreadable, still the line
+        "end".to_owned(),
+    ];
+    sim.write_spell("probe", &typed);
+    sim.step();
+
+    assert_eq!(sim.spell("probe"), Some(typed), "something tidied the file");
 }
 
 #[test]

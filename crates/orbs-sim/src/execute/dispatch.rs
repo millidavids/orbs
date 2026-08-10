@@ -47,6 +47,9 @@ pub fn run_pending(world: &mut World) {
             Queued::Write { name, lines } => {
                 scribe::write(world, &name, &lines);
             }
+            // A tester's door, absent from a release build entirely.
+            #[cfg(debug_assertions)]
+            Queued::Spawn(order) => super::debug::run(world, &order),
         }
     }
 }
@@ -88,6 +91,7 @@ fn execute(intent: &Intent, world: &mut World) {
         Verb::Recall => recall::recall(intent, world),
         Verb::Scribe => scribe::scribe(intent, world),
         Verb::Invoke => tower::spell::invoke(intent, world),
+        Verb::Bind => tower::spell::bind(intent, world),
         Verb::Purge => pipeline::purge(intent, world),
         _ => acknowledge(intent.verb, world),
     }
@@ -114,13 +118,18 @@ fn execute(intent: &Intent, world: &mut World) {
 /// important than the raw resolution rate — so the report names what works, and
 /// this is where "works" is written down.
 ///
-/// One of the six is worse than a dead end. Phase 0 has no scripts in it, so
-/// `bind`'s only slot is unfillable, and the documented `find`/`bind` collision
-/// in the parser's vocabulary table then hands the line to `sift` unopposed:
-/// `bind night_watch` searches the session log and reports success.
-/// That resolution is correct — it stops being reachable the moment Phase 1 puts
-/// a script in scope — but a tutorial that offers `bind` today is teaching a line
-/// that silently runs a different command.
+/// One of the six was worse than a dead end. With no scripts in scope `bind`'s
+/// only slot was unfillable, and the documented `find`/`bind` collision in the
+/// parser's vocabulary table then handed the line to `sift` unopposed: `bind
+/// night_watch` searched the session log and reported success. That is fixed by
+/// there being scripts to name, not by this list.
+///
+/// # Live is not the same as available
+///
+/// [`is_gated`] is the second question, and `bind` is the first verb to need it:
+/// it works, and it refuses until the tower has earned somewhere to put a spell.
+/// The scaffold asks both, because a word that can only refuse is the dead end
+/// this list exists to keep off it.
 #[must_use]
 pub const fn is_live(verb: Verb) -> bool {
     matches!(
@@ -143,6 +152,12 @@ pub const fn is_live(verb: Verb) -> bool {
             | Verb::Recall
             | Verb::Scribe
             | Verb::Invoke
+            // **Live, and gated.** Working and being *available* are different
+            // questions now: `bind` does everything it will ever do, and refuses
+            // until the tower has earned the concentration to hold a spell. See
+            // [`is_gated`], which is what keeps it off the boot report until it
+            // can do something.
+            | Verb::Bind
             | Verb::Divine
             | Verb::Purge
             | Verb::Verify
@@ -152,6 +167,27 @@ pub const fn is_live(verb: Verb) -> bool {
             // discover problem it was added to solve — one level up.
             | Verb::Unfurl
     )
+}
+
+/// Whether `verb` works but is not available *yet*.
+///
+/// The companion to [`is_live`], and the difference between *"nobody built
+/// this"* and *"you have not earned it"*. Both keep a word off §15's scaffold
+/// list and for the same reason — a tutorial that names a verb which can only
+/// refuse spends the gate's most important metric, the dead-end rate, on
+/// something the player cannot act on.
+///
+/// **A question about the world, so not `const`.** The gate moves: `bind` is
+/// unavailable at concentration 0 and available for ever after, and the boot
+/// report is written before a player has earned anything.
+#[must_use]
+pub fn is_gated(verb: Verb, world: &World) -> bool {
+    match verb {
+        // §11.5's turn: the tower is worked entirely by hand until the orb has
+        // somewhere to put a spell.
+        Verb::Bind => tower::concentration(world) == 0,
+        _ => false,
+    }
 }
 
 /// Let time pass.
@@ -184,12 +220,20 @@ fn status(world: &mut World) {
     let seed = world.resource::<Rngs>().master_seed();
     let logged = world.resource::<Scrollback>().records().len();
     let queued = world.resource::<Pending>().len();
+    // §11.5's two progression numbers, and the only place they are *both*
+    // readable. `concentration` is derived from `experience`, so the pair is one
+    // fact twice — which is the point of showing them together: a player looking
+    // at 12 wants to know what 16 buys.
+    let earned = world.resource::<tower::Experience>().get();
+    let held = tower::concentration(world);
 
     let mut scrollback = world.resource_mut::<Scrollback>();
     let rows = scrollback.records_mut();
     for (name, value) in [
         ("tick", tick),
         ("seed", seed),
+        ("experience", earned),
+        ("concentration", quantity(held)),
         ("logged", quantity(logged)),
         ("queued", quantity(queued)),
     ] {

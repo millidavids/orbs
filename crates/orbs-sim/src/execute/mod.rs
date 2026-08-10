@@ -22,6 +22,8 @@
 //! **No prose in any of them.** Rule 6 and §12 put authored text in content
 //! files; these emit facts and let a later layer wrap sentences around them.
 
+#[cfg(debug_assertions)]
+mod debug;
 mod dispatch;
 mod files;
 mod navigate;
@@ -33,9 +35,12 @@ mod unfurl;
 #[cfg(test)]
 mod tests;
 
-pub use dispatch::{LOG, MAX_MEDITATE, execute_one, is_live, run_pending};
+#[cfg(debug_assertions)]
+pub use debug::{Order as SpawnOrder, SPAWN, order as spawn_order};
+pub use dispatch::{LOG, MAX_MEDITATE, execute_one, is_gated, is_live, run_pending};
 pub use navigate::find_domain;
-pub use scribe::{Opening, Request, Written, canonicalise, write};
+pub(crate) use scribe::Reloaded;
+pub use scribe::{Opening, Request, write};
 pub use unfurl::Unfurling;
 
 use dispatch::{acknowledge, missing};

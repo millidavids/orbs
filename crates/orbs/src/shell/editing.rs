@@ -98,7 +98,11 @@ pub(crate) fn open_requested(mut tower: ResMut<Tower>, mut editing: ResMut<Editi
     let Some(request) = tower.opening() else {
         return;
     };
-    editing.open(Editor::open(&request.name, &request.domain, &request.lines));
+    let mut editor = Editor::open(&request.name, &request.domain, &request.lines);
+    // **Read before the first keystroke**, so a spell opened with a fault in it
+    // says so on the way in rather than after the first pause in the typing.
+    editor.set_reading(tower.sim().read_spell(&request.domain, &request.lines));
+    editing.open(editor);
 }
 
 /// Write the buffer out once the player has stopped typing, and keep the
@@ -120,7 +124,17 @@ pub(crate) fn autosave(time: Res<Time>, mut editing: ResMut<Editing>, mut tower:
 
     if editor.settle(time.delta_secs()) {
         let (name, lines) = (editor.name().to_owned(), editor.lines().to_vec());
+        let domain = editor.domain().to_owned();
         editor.saved();
+        // **On the same beat as the save, not every frame.** Reading a buffer
+        // means parsing it and resolving every name in it against the room; at
+        // 60 Hz that is sixty parses a second to answer a question that can only
+        // change when a key is pressed. The pause the save waits for is exactly
+        // the moment the answer might have changed.
+        let reading = tower.sim().read_spell(&domain, &lines);
+        if let Some(editor) = editing.get_mut() {
+            editor.set_reading(reading);
+        }
         tower.write_spell(&name, &lines);
     }
 }

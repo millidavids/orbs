@@ -52,14 +52,30 @@ pub const PATIENCE: u64 = 120;
 /// **silently**. Depth-limiting makes runaway recursion loud and diagnosable.
 pub const MAX_DEPTH: u8 = 3;
 
-/// How deep the runner currently is, while it is running something.
+/// The spell whose instruction is running, for anything that instruction casts.
 ///
 /// Set around one instruction and cleared after, exactly as the script's
-/// position is. `invoke` reads it to know whether *it* is
-/// being called by a spell or typed by a player, which the intent alone cannot
-/// say: both arrive through the same dispatch, which is the point (§13).
+/// position is. `invoke` reads it to know whether *it* is being called by a
+/// spell or typed by a player, which the intent alone cannot say: both arrive
+/// through the same dispatch, which is the point (§13).
+///
+/// **`None` means a player typed the line themselves.**
 #[derive(Resource, Debug, Default, Clone, Copy)]
-pub struct Depth(pub Option<u8>);
+pub struct Caller(pub Option<Casting>);
+
+/// What a nested cast inherits from the run that asked for it.
+///
+/// A struct rather than the bare depth it started as, because a second fact
+/// turned out to travel the same road and a second resource set beside the
+/// first is two things that must be cleared together — the drift this module
+/// already refuses for `Cwd`.
+#[derive(Debug, Clone, Copy)]
+pub struct Casting {
+    /// How many `invoke`s deep the caller already is.
+    pub depth: u8,
+    /// Whether the caller runs without the player standing there.
+    pub unattended: bool,
+}
 
 /// A spell the orb is working through.
 #[derive(Component, Debug, Clone)]
@@ -97,6 +113,19 @@ pub struct Running {
     pub seen: u64,
     /// How many `invoke`s deep this is.
     pub depth: u8,
+    /// Whether this run survives the player leaving the domain it runs in.
+    ///
+    /// **Not the same question as `Bound`**, and conflating them was a bug: a
+    /// bound spell that `invoke`s another gives its child a `Running` and no
+    /// `Bound` — the child is not held, it is a step of something that is — so
+    /// asking about the component ended the child the moment the player walked
+    /// out, in exactly the walk-away case `bind` exists to sell.
+    ///
+    /// Set at cast from the caller ([`Casting`]): a binding is unattended, a
+    /// standing recast is, and anything either of them casts inherits it. What
+    /// a *player* invokes is attended, and so is everything it invokes — or the
+    /// child would outlive the parent the player's own departure just ended.
+    pub unattended: bool,
     /// The domain this spell runs in.
     ///
     /// **Fixed, not walked.** A spell is written for a domain and works there;
@@ -107,6 +136,18 @@ pub struct Running {
     pub at: NodeId,
     /// When the current instruction first found itself blocked.
     pub waiting_since: Option<Tick>,
+    /// Lines this casting has already complained about a missing name on.
+    ///
+    /// **Once per line per cast.** A question inside a `repeat` is asked every
+    /// turn, and a name the tower cannot place is wrong on the first turn in
+    /// exactly the way it is wrong on the four hundredth — so saying it once is
+    /// the report, and saying it every time is a fault of its own. Cleared when
+    /// the spell is cast and when its text changes under it, so a name that goes
+    /// missing *later* is still heard about.
+    ///
+    /// A `Vec` rather than a set because it holds one entry per broken line of
+    /// one spell, and its order is part of a deterministic session.
+    pub said: Vec<usize>,
 }
 
 /// Work every running spell forward.
@@ -128,6 +169,25 @@ pub fn advance(world: &mut World) {
     running.sort_unstable_by_key(|(_, spell)| *spell);
 
     for (entity, _) in running {
+        // **An invocation needs you standing there, and this is what makes that
+        // true.** §19 has always said an invoked spell *"needs you standing
+        // there"*, and nothing enforced it: the domain is fixed at cast and the
+        // player's position was never read again, so walking out and leaving one
+        // running was free. That left `bind` with nothing to sell — the one
+        // thing §8 says it adds was already there for nothing.
+        //
+        // A **bound** spell is exactly the one that survives this, which is the
+        // whole of what concentration buys — and so is anything a bound spell
+        // casts. See [`Running::unattended`]: asking about the `Bound`
+        // *component* here killed a held spell's nested `invoke` on the tick the
+        // player walked out, because only the parent wears the component.
+        if !world
+            .get::<Running>(entity)
+            .is_some_and(|state| state.unattended)
+            && left_it(world, entity)
+        {
+            continue;
+        }
         // **Everything this spell emits is marked as its doing**, set once here
         // rather than at the emit sites — a spell's output *is* what the ordinary
         // commands emit, so there is nothing at those sites to change and every
@@ -149,6 +209,45 @@ pub fn advance(world: &mut World) {
     }
 }
 
+/// Whether the player has walked out on this invocation, ending it if so.
+///
+/// **Compared by domain, not by node.** `attend alembic` stands the player at a
+/// fixture *inside* the laboratory, and a spell running there is one they are
+/// watching — asking whether the two entities are equal would stop an invocation
+/// every time its owner leaned over an instrument.
+fn left_it(world: &mut World, entity: Entity) -> bool {
+    let Some(state) = world.get::<Running>(entity) else {
+        return false;
+    };
+    let at = state.at;
+    let Some(home) = node_of(world, at) else {
+        return false;
+    };
+    let cwd = world.resource::<Cwd>().0;
+    if tower::domain_of(world, cwd).unwrap_or(cwd) == home {
+        return false;
+    }
+
+    let named = world
+        .get::<Running>(entity)
+        .map(|state| spell_name(world, state))
+        .unwrap_or_default();
+    world.entity_mut(entity).remove::<Running>();
+    let message = world
+        .resource::<Prose>()
+        .line("spell_unattended", &[("name", &named)]);
+    world
+        .resource_mut::<Scrollback>()
+        .records_mut()
+        .push(RecordKind::Completion)
+        .text(FieldName::Name, Verb::Invoke.canonical())
+        .text(FieldName::Path, &named)
+        .text(FieldName::Message, &message)
+        .role(Role::Cost)
+        .finish();
+    true
+}
+
 /// Credit everything pushed from now on to `spell`, or to nobody.
 fn set_attribution(world: &mut World, spell: Option<&str>) {
     world
@@ -164,7 +263,7 @@ fn step_one(world: &mut World, entity: Entity) {
             return;
         };
 
-        let Some(step) = super::program::at(&state.program.body, &state.pc).cloned() else {
+        let Some(step) = super::program::at(state.program.body(), &state.pc).cloned() else {
             finish(world, entity, &state);
             return;
         };
@@ -210,31 +309,45 @@ fn step_one(world: &mut World, entity: Entity) {
             // The spell's own domain, for the length of the question. `Cwd` is
             // how a place is found, exactly as it is for a command.
             let player = world.resource::<Cwd>().0;
-            let answer = node_of(world, state.at).and_then(|at| {
+            let asked = node_of(world, state.at).and_then(|at| {
                 world.insert_resource(Cwd(at));
-                let answer = condition
+                let asked = condition
                     .as_ref()
-                    .and_then(|condition| super::watch::holds(world, condition));
+                    .map(|condition| super::watch::holds(world, condition));
                 world.insert_resource(Cwd(player));
-                answer
+                asked
             });
+            let (answer, missing) = asked.unwrap_or((None, Vec::new()));
 
             // **`None` is a third answer, and it has to be said out loud.** The
             // question named a place the tower does not have — §8's *Referent
-            // missing*, not the answer being no. Reported per evaluation, like
-            // every other line-level failure: §8's taxonomy is titled *"scripts
-            // always log and never halt"*, and this one used to do neither.
+            // missing*, not the answer being no.
             //
-            // A condition that could not be *read* is a different fault with its
-            // own line, said once when the spell was cast, so it is not repeated.
-            if answer.is_none()
-                && let Some(condition) = condition.as_ref()
-            {
-                let missing = condition.place().to_owned();
-                say_failure(world, &state, "spell_nowhere", &missing, Role::Danger);
+            // **Once per line per cast.** It was once per *evaluation*, which is
+            // right for a spell that asks a question and stops and wrong for one
+            // that asks it inside a `repeat`: a single bad name emitted a Danger
+            // record every tick for as long as the spell ran. What a player needs
+            // is to be told, not to be told again. `said` is cleared when the
+            // spell is cast and when its text changes, so a fix is heard about.
+            if !missing.is_empty() && !already_said(world, entity, step.line) {
+                say_failure(
+                    world,
+                    &state,
+                    "spell_nowhere",
+                    &missing.join(", "),
+                    Role::Danger,
+                );
             }
 
-            let holds = answer.unwrap_or(false);
+            // **Neither half, when nobody can answer.** It used to fall through
+            // to `else`, which is worse than useless: a spell with one bad name
+            // took the same branch for ever and looked exactly like a condition
+            // someone had inverted — §19's own words for the last bug here. A
+            // question the orb cannot answer decides nothing.
+            let Some(holds) = answer else {
+                advance_pc(world, entity);
+                continue;
+            };
             let half = if holds { body } else { otherwise };
             if half.is_empty() {
                 advance_pc(world, entity);
@@ -273,7 +386,10 @@ fn step_one(world: &mut World, entity: Entity) {
             return;
         };
         world.insert_resource(Cwd(at));
-        world.insert_resource(Depth(Some(state.depth)));
+        world.insert_resource(Caller(Some(Casting {
+            depth: state.depth,
+            unattended: state.unattended,
+        })));
 
         let outcome = run_line(world, entity, &state, &line);
 
@@ -281,7 +397,7 @@ fn step_one(world: &mut World, entity: Entity) {
         // spell's domain is fixed, so where the instruction left `Cwd` is not a
         // fact worth keeping. It was, while `attend` walked.
         world.insert_resource(Cwd(player));
-        world.insert_resource(Depth(None));
+        world.insert_resource(Caller(None));
 
         if outcome == Progress::Blocked {
             return;
@@ -455,7 +571,7 @@ fn wait(world: &mut World, entity: Entity, state: &Running, blocked: &Blocked) -
 ///
 /// `execute::is_live` is the wrong instrument for this: it answers *"does this
 /// verb work"*, which is a different question that happens to overlap today.
-const fn may_issue(verb: Verb) -> bool {
+pub(super) const fn may_issue(verb: Verb) -> bool {
     !matches!(
         verb,
         // A spell does not walk. It is written **for** a domain and works
@@ -491,8 +607,24 @@ const fn may_issue(verb: Verb) -> bool {
 /// numbered zero, which no file has.
 #[must_use]
 pub fn line_of(state: &Running) -> Option<u64> {
-    super::program::at(&state.program.body, &state.pc)
+    super::program::at(state.program.body(), &state.pc)
         .map(|step| u64::try_from(step.line).unwrap_or(0))
+}
+
+/// Whether this casting has already complained about `line`, marking it said.
+///
+/// See [`Running::said`]. Marking on the way past rather than at the call site
+/// keeps the two halves — "have we said it" and "we have now" — from drifting
+/// apart, which is what a separate setter invites.
+fn already_said(world: &mut World, entity: Entity, line: usize) -> bool {
+    let Some(mut running) = world.get_mut::<Running>(entity) else {
+        return false;
+    };
+    if running.said.contains(&line) {
+        return true;
+    }
+    running.said.push(line);
+    false
 }
 
 /// The entity a stable identity names.
@@ -523,7 +655,7 @@ fn advance_pc(world: &mut World, entity: Entity) {
     };
     if let Some(mut running) = world.get_mut::<Running>(entity) {
         let Running { pc, loops, .. } = &mut *running;
-        if !super::program::step_past(&program.body, pc, loops) {
+        if !super::program::step_past(program.body(), pc, loops) {
             // Off the end. `at` will return `None` next time round and the
             // spell finishes there, so there is one place that ends a spell.
             pc.clear();
@@ -532,8 +664,23 @@ fn advance_pc(world: &mut World, entity: Entity) {
 }
 
 /// The spell has run out of lines.
+///
+/// **Silent for a held spell, because it has not finished.** `bind::stand` casts
+/// it again on the next tick, so *"tending.spell is finished"* would be a
+/// sentence contradicted a tick later, once per lap, for as long as it is held —
+/// and with the recast itself already silent, a finish with no beginning reads
+/// like the orb letting go. A binding ends when the player says `stop`, which
+/// says so in those words.
 fn finish(world: &mut World, entity: Entity, state: &Running) {
     let name = spell_name(world, state);
+    if let Some(mut bound) = world.get_mut::<super::Bound>(entity) {
+        // What this lap has already complained about, kept for the next one —
+        // see [`Bound::said`]. The component outlives the run; the rationing has
+        // to outlive it with the component or it is no rationing at all.
+        bound.said = state.said.clone();
+        world.entity_mut(entity).remove::<Running>();
+        return;
+    }
     let message = world
         .resource::<Prose>()
         .line("spell_done", &[("name", &name)]);

@@ -1,0 +1,55 @@
+# What work is worth, and what it buys (DESIGN.md §11.5, §19).
+#
+# The whole progression curve in one file, so the balance harness sweeps one
+# thing rather than hunting numbers through Rust. Everything here reaches a
+# decision — a weight changes what a run earns and a threshold gates a verb — so
+# unlike `materials.toml` this is **not hot-reloadable**: it loads once with
+# `recipes.toml` and `spells.toml`, because swapping it mid-session would break
+# replay from `(seed, submissions)`.
+#
+# ## Experience accumulates and is never spent
+#
+# It only ever rises, and an upgrade opens when the total passes its number and
+# stays open. That is why it is a `u64` and why a save carries one value: there
+# is no balance to track and nothing to regret having spent.
+
+# ---------------------------------------------------------------------------
+# What a completed run is worth, by the instrument that did it.
+#
+# **Binary, so each tier of tool is worth every use of the one below it.** An
+# alembic run pays what eight mortar runs pay, which is what makes finishing the
+# chain worth more than repeating its first step.
+#
+# Keys are instrument names and are checked against `recipes.toml` at load: a
+# name with no recipes would silently earn nothing, which looks exactly like an
+# instrument nobody has tuned yet.
+# ---------------------------------------------------------------------------
+[earns]
+mortar_and_pestle = 1
+balneum_mariae = 2
+flask_and_rod = 4
+alembic = 8
+
+# The archive, which is a domain rather than an instrument. Leaving it at zero
+# would make one of the two rooms the game opens with pay nothing at all - and
+# §10 calls the archive the domain played most.
+divine = 1
+
+# ---------------------------------------------------------------------------
+# What experience buys. `concentration` is how many spells the orb can hold at
+# once, and the tower is worked entirely by hand until the first one.
+#
+# **16 is one clarity**, arrived at rather than picked: grind 1, digest 2, grind
+# 1, mix 4, distil 8. The player does the whole loop by hand once, and the reward
+# is not having to do it again - which is pillar 3's promise landing as a
+# mechanic rather than as a premise.
+#
+# §11.5's "first bound script in 30-45 minutes" is amended by this (§19): one
+# clarity is about two minutes, and automation arrives early.
+#
+# One threshold, because there is nothing yet for a second to open. The rest of
+# the tree - ingredients, recipes, ley lines, domains - is its own item, and this
+# file is where its numbers will go.
+# ---------------------------------------------------------------------------
+[concentration]
+levels = [16]

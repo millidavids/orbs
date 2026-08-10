@@ -89,14 +89,55 @@ pub struct Complaint {
     pub key: &'static str,
 }
 
-/// A spell, as something that can be run.
+/// A spell's text, read as a shape — before any name in it has been resolved.
+///
+/// **Not runnable, and the type is what says so.** A draft's questions still
+/// hold the words the player typed (`the mortar`, `the shelf`), which
+/// [`holds`](super::holds) compares exactly and would find nothing for. Running
+/// one would give a spell whose every condition answered "there is no such
+/// place" — the exact silent failure §19 records as *"it looked exactly like the
+/// condition being inverted"*.
+///
+/// [`compile`](super::compile) turns one into a [`Program`], and nothing else
+/// can. That is a weaker guarantee than it sounds — `Program::new` is reachable
+/// from anywhere in this module — but it is the one that matters, because the
+/// callers that would otherwise reach for the parser directly (`invoke`,
+/// `scribe`'s reload) are *outside* it and now cannot.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct Program {
+pub struct Draft {
     /// What it does.
     pub body: Block,
     /// What the orb had to fix, if anything. **Never a refusal** — see the
     /// module docs.
     pub complaints: Vec<Complaint>,
+}
+
+/// A spell, as something that can be run: read, and with its names resolved.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Program {
+    body: Block,
+    complaints: Vec<Complaint>,
+}
+
+impl Program {
+    /// Assemble one. `pub(super)` so [`compile`](super::compile) is the only
+    /// route from text to something runnable.
+    #[must_use]
+    pub(super) const fn new(body: Block, complaints: Vec<Complaint>) -> Self {
+        Self { body, complaints }
+    }
+
+    /// What it does.
+    #[must_use]
+    pub const fn body(&self) -> &Block {
+        &self.body
+    }
+
+    /// What the orb had to fix to read it.
+    #[must_use]
+    pub fn complaints(&self) -> &[Complaint] {
+        &self.complaints
+    }
 }
 
 /// A block being read, and what it will become when its `end` arrives.
@@ -129,9 +170,13 @@ struct Nesting {
     body: Block,
 }
 
-/// Read `lines` as a program.
+/// Read `lines` as a shape, resolving nothing.
+///
+/// `pub(super)` deliberately: the way in from outside this module is
+/// [`compile`](super::compile), which does this and then fixes the names. See
+/// [`Draft`].
 #[must_use]
-pub fn parse(lines: &[String]) -> Program {
+pub(super) fn read(lines: &[String]) -> Draft {
     let mut complaints = Vec::new();
     let mut open = vec![Nesting {
         line: 0,
@@ -227,7 +272,7 @@ pub fn parse(lines: &[String]) -> Program {
         close(&mut open, frame);
     }
 
-    Program {
+    Draft {
         // **No `expect`.** The outermost block cannot be popped by the loops
         // above — both are guarded on `len() > 1` — but writing that as a panic
         // would be a claim the compiler cannot check and a crash if it ever
@@ -429,7 +474,7 @@ mod tests {
 
     #[test]
     fn a_flat_spell_is_a_list_of_commands() {
-        let program = parse(&lines(&["kindle charcoal", "grind sage"]));
+        let program = read(&lines(&["kindle charcoal", "grind sage"]));
         assert_eq!(
             kinds(&program.body),
             [
@@ -444,13 +489,13 @@ mod tests {
     fn wait_names_the_thing_with_the_filler_gone() {
         // `wait for the mortar` names the mortar. Through §6's own filler table,
         // so `the` means here what it means everywhere.
-        let program = parse(&lines(&["wait for the mortar"]));
+        let program = read(&lines(&["wait for the mortar"]));
         assert_eq!(kinds(&program.body), [Kind::Wait("mortar".to_owned())]);
     }
 
     #[test]
     fn repeat_encloses_what_it_repeats() {
-        let program = parse(&lines(&[
+        let program = read(&lines(&[
             "repeat 3",
             "grind sage",
             "wait for mortar",
@@ -478,7 +523,7 @@ mod tests {
         // Safe because the execution budget bounds a tick — a `repeat` with no
         // `wait` in it spends its budget and stops, wasting itself rather than
         // hanging the game.
-        let program = parse(&lines(&["repeat", "kindle charcoal", "end"]));
+        let program = read(&lines(&["repeat", "kindle charcoal", "end"]));
         let Kind::Repeat { times, .. } = &program.body[0].kind else {
             panic!("not a repeat: {:?}", program.body);
         };
@@ -487,7 +532,7 @@ mod tests {
 
     #[test]
     fn blocks_nest() {
-        let program = parse(&lines(&[
+        let program = read(&lines(&[
             "repeat 2",
             "repeat 3",
             "grind sage",
@@ -508,7 +553,7 @@ mod tests {
         // §8 leaves exactly one answer: the save cannot refuse (*"bind always
         // succeeds"*) and the cast may not halt (*"scripts always log and never
         // halt"*), so the spell runs as if the player had finished typing it.
-        let program = parse(&lines(&["repeat 2", "grind sage"]));
+        let program = read(&lines(&["repeat 2", "grind sage"]));
 
         assert!(
             matches!(program.body[0].kind, Kind::Repeat { .. }),
@@ -521,7 +566,7 @@ mod tests {
 
     #[test]
     fn a_stray_end_is_dropped_and_said_once() {
-        let program = parse(&lines(&["grind sage", "end"]));
+        let program = read(&lines(&["grind sage", "end"]));
         assert_eq!(
             kinds(&program.body),
             [Kind::Command("grind sage".to_owned())]
@@ -533,18 +578,23 @@ mod tests {
 
     #[test]
     fn comments_and_blank_lines_are_not_steps() {
-        let program = parse(&lines(&["# the morning round", "", "grind sage"]));
+        let program = read(&lines(&["# the morning round", "", "grind sage"]));
         assert_eq!(program.body.len(), 1);
     }
 
     /// Every command a program runs, in order, with a step budget.
-    fn run(program: &Program, budget: usize) -> Vec<String> {
+    ///
+    /// Walks a [`Draft`] rather than a [`Program`], because what is under test
+    /// here is the *shape* — `at`, `step_past` and the branch arithmetic — and
+    /// none of it looks at a name. Resolution is `compile`'s, and it has its own
+    /// tests against a real world.
+    fn run(program: &Draft, budget: usize) -> Vec<String> {
         run_with(program, budget, true)
     }
 
     #[test]
     fn a_repeat_runs_its_body_the_stated_number_of_times() {
-        let program = parse(&lines(&["repeat 3", "grind sage", "end", "survey"]));
+        let program = read(&lines(&["repeat 3", "grind sage", "end", "survey"]));
         assert_eq!(
             run(&program, 20),
             ["grind sage", "grind sage", "grind sage", "survey"],
@@ -553,7 +603,7 @@ mod tests {
 
     #[test]
     fn nested_repeats_multiply() {
-        let program = parse(&lines(&[
+        let program = read(&lines(&[
             "repeat 2",
             "repeat 3",
             "grind sage",
@@ -565,7 +615,7 @@ mod tests {
 
     #[test]
     fn a_repeat_once_is_the_body_once() {
-        let program = parse(&lines(&["repeat 1", "grind sage", "end", "survey"]));
+        let program = read(&lines(&["repeat 1", "grind sage", "end", "survey"]));
         assert_eq!(run(&program, 20), ["grind sage", "survey"]);
     }
 
@@ -577,7 +627,7 @@ mod tests {
         // One step of the budget goes on **entering** the block, which is what
         // makes that guard real: a body that spent nothing would otherwise spin
         // for ever inside one tick.
-        let program = parse(&lines(&["repeat", "grind sage", "end"]));
+        let program = read(&lines(&["repeat", "grind sage", "end"]));
         assert_eq!(run(&program, 5).len(), 4, "5 steps: 1 to enter, 4 to run");
         assert_eq!(run(&program, 40).len(), 39, "and it never finishes");
     }
@@ -587,12 +637,12 @@ mod tests {
         // `repeat 2` with nothing in it must finish rather than loop on an empty
         // block — the path runs off the end immediately and has to keep walking
         // out, which is why closing a block re-checks rather than returning.
-        let program = parse(&lines(&["repeat 2", "end", "survey"]));
+        let program = read(&lines(&["repeat 2", "end", "survey"]));
         assert_eq!(run(&program, 20), ["survey"]);
     }
 
     /// Run a program, taking `holds` for every condition.
-    fn run_with(program: &Program, budget: usize, holds: bool) -> Vec<String> {
+    fn run_with(program: &Draft, budget: usize, holds: bool) -> Vec<String> {
         let mut pc = vec![0];
         let mut loops = Vec::new();
         let mut out = Vec::new();
@@ -634,7 +684,7 @@ mod tests {
 
     #[test]
     fn an_if_reads_as_a_question_about_a_place() {
-        let program = parse(&lines(&["if the dispensary has sage", "grind sage", "end"]));
+        let program = read(&lines(&["if the dispensary has sage", "grind sage", "end"]));
         let Kind::If { condition, .. } = &program.body[0].kind else {
             panic!("not an if: {:?}", program.body);
         };
@@ -653,7 +703,7 @@ mod tests {
         // elements going in, so walking out has to pop two — pop one and the
         // path lands on the *other* half and runs it as well, which looks like
         // an `if` that executes both sides.
-        let program = parse(&lines(&[
+        let program = read(&lines(&[
             "if the dispensary has sage",
             "grind sage",
             "else",
@@ -668,7 +718,7 @@ mod tests {
 
     #[test]
     fn an_if_with_no_else_skips_to_what_follows() {
-        let program = parse(&lines(&[
+        let program = read(&lines(&[
             "if the mortar is idle",
             "grind sage",
             "end",
@@ -680,7 +730,7 @@ mod tests {
 
     #[test]
     fn an_if_inside_a_repeat_runs_every_turn() {
-        let program = parse(&lines(&[
+        let program = read(&lines(&[
             "repeat 3",
             "if the mortar is idle",
             "grind sage",
@@ -695,7 +745,7 @@ mod tests {
     fn a_question_the_orb_cannot_read_answers_no() {
         // Guessing would be worse than refusing: a condition the player did not
         // write, deciding what their laboratory does while they are elsewhere.
-        let program = parse(&lines(&["if the moon is gibbous", "grind sage", "end"]));
+        let program = read(&lines(&["if the moon is gibbous", "grind sage", "end"]));
         let Kind::If { condition, .. } = &program.body[0].kind else {
             panic!("not an if");
         };
@@ -706,7 +756,7 @@ mod tests {
 
     #[test]
     fn an_else_with_no_if_is_reported_rather_than_starting_a_branch() {
-        let program = parse(&lines(&["repeat 2", "grind sage", "else", "end"]));
+        let program = read(&lines(&["repeat 2", "grind sage", "else", "end"]));
         assert_eq!(program.complaints[0].key, "spell_stray_else");
         assert_eq!(run_with(&program, 20, true).len(), 2, "the loop still ran");
     }
@@ -717,7 +767,7 @@ mod tests {
         // detected by counting — the honest consequence of one closing word,
         // taken knowingly for learnability. What must not happen is a panic or a
         // dropped body.
-        let program = parse(&lines(&["repeat 2", "grind sage", "end", "end"]));
+        let program = read(&lines(&["repeat 2", "grind sage", "end", "end"]));
         assert!(matches!(program.body[0].kind, Kind::Repeat { .. }));
         assert_eq!(program.complaints.len(), 1, "the stray end went unreported");
     }

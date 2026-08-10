@@ -52,6 +52,14 @@ impl Sim {
     /// harness diverged, we would not find out until Phase 3."* The seam is left
     /// open because closing it would cost the ordering test its only handle, not
     /// because a frontend may reach through it.
+    ///
+    /// # Panics
+    ///
+    /// If the built-in content files disagree with each other — today, if
+    /// `progression.toml` does not price every instrument `recipes.toml` names.
+    /// Both ship inside the binary, so this is a build-time authoring error that
+    /// no input can reach, and it fails the same way `load::builtin` fails a
+    /// malformed file rather than starting a tower whose work is worth nothing.
     #[must_use]
     pub fn with_schedule(seed: u64, build: impl FnOnce(&mut Schedule)) -> Self {
         let mut world = World::new();
@@ -90,9 +98,27 @@ impl Sim {
         // `(seed, submissions)`. Read once, here, and never again — the player's
         // own edits go through the world, not through this.
         world.init_resource::<Spells>();
+        // The progression curve is in the recipes' tier, not the materials':
+        // a weight decides what a run earns and a threshold gates a verb, so
+        // both reach decisions and a mid-session swap would break replay.
+        //
+        // **Checked against the recipes, which is why it loads after them.** Its
+        // keys are instrument names and nothing in Rust knows what those are —
+        // `materials.toml` validates against an enum and had no such ordering.
+        // The panic is the same one `load::builtin` uses for a malformed file,
+        // and for the same reason: authoring the two files to disagree is a
+        // build-time error that `the_builtin_curve_prices_every_instrument`
+        // fails on first.
+        let curve = crate::content::Progression::default();
+        if let Err(error) = curve.check(&world.resource::<Recipes>().instruments()) {
+            panic!("the built-in content is authored with the crate: {error}");
+        }
+        world.insert_resource(curve);
+        world.init_resource::<tower::Experience>();
         world.init_resource::<crate::execute::Opening>();
+        world.init_resource::<crate::execute::Reloaded>();
         world.init_resource::<crate::execute::Unfurling>();
-        world.init_resource::<tower::spell::Depth>();
+        world.init_resource::<tower::spell::Caller>();
 
         // Its **own** schedule, run before the caller's. Adding `run_pending`
         // to the same schedule and relying on insertion order would be an
@@ -115,12 +141,18 @@ impl Sim {
         // stage on the same tick the previous one landed, which is a free tick
         // no manual player gets — §8's speed advantage arriving by accident, and
         // arriving at concentration 0 where §19 says nothing may.
+        // `spell::stand` **last**, so a bound spell that ran off the end this
+        // tick is cast again on the next one rather than inside the same pass.
+        // Standing it up before `advance` would give a held spell two goes at
+        // the budget in one tick — §8's speed advantage arriving by the back
+        // door, at concentration 1 where §19 says nothing may.
         schedule.add_systems(
             (
                 tower::spell::advance,
                 tower::burn,
                 tower::finish,
                 tower::drift,
+                tower::spell::stand,
             )
                 .chain(),
         );
@@ -218,6 +250,17 @@ impl Sim {
         // Anything else walks away from the question. §6 forbids a modal
         // prompt, so leaving one unanswered must cost nothing.
         self.world.resource_mut::<Choices>().clear();
+
+        // **A tester's door, and only in a build a tester runs.** Matched
+        // exactly and checked before the parser, in the same shape spell words
+        // use — `debug_spawn` is not in §6's vocabulary, so the fuzzy matcher
+        // must never see it and `Verb::ALL` must never grow it. Absent from a
+        // release binary entirely; there, this is an ordinary unresolvable line.
+        #[cfg(debug_assertions)]
+        if let Some(order) = crate::execute::spawn_order(line) {
+            self.debug_spawn(line, order);
+            return;
+        }
 
         // `analyse` rather than `resolve`: it keeps every scored reading, which
         // is what §6's *"the parser must explain itself"* means in practice and
@@ -317,6 +360,72 @@ impl Sim {
             .and_then(|entity| entity.get::<tower::Held>().map(|held| held.0.clone()))
     }
 
+    /// Everything the player has earned by working (§11.5).
+    #[must_use]
+    pub fn experience(&self) -> u64 {
+        self.world.resource::<tower::Experience>().get()
+    }
+
+    /// How many spells the orb can hold at once.
+    ///
+    /// **Derived from [`experience`](Self::experience)**, so this is a reading
+    /// rather than a second piece of state — see `tower::experience`.
+    #[must_use]
+    pub fn concentration(&self) -> usize {
+        tower::concentration(&self.world)
+    }
+
+    /// The spells the orb is holding, named, in the order the tower keeps them.
+    ///
+    /// §8 wants concentration *"surfaced in `status` and in the sidebar — never a
+    /// quiet log line"*, and a count alone cannot answer the question a player at
+    /// capacity is actually asking, which is **which one**.
+    #[must_use]
+    pub fn bound(&self) -> Vec<String> {
+        tower::spell::held(&self.world)
+    }
+
+    /// Which domain `name` was written for, if the tower has it.
+    ///
+    /// **The fact that survives the file being the player's.** A spell's home is
+    /// what its lines are read against at cast, and it is a component rather than
+    /// anything in the text — so nothing about the text can tell you whether a
+    /// save from the archive re-homed a laboratory spell. This can.
+    #[must_use]
+    pub fn spell_domain(&self, name: &str) -> Option<String> {
+        let wanted = crate::content::with_extension(name);
+        self.world
+            .iter_entities()
+            .find(|entity| {
+                entity.get::<tower::Nameable>().map(|kind| kind.0)
+                    == Some(crate::parser::NounKind::Script)
+                    && entity
+                        .get::<tower::Name>()
+                        .is_some_and(|node| node.0 == wanted)
+            })
+            .and_then(|entity| entity.get::<tower::Domain>().map(|domain| domain.0.clone()))
+    }
+
+    /// How the orb reads `lines`, if they were a spell for `domain`.
+    ///
+    /// # The editor's half of "report it, do not rewrite it"
+    ///
+    /// Nothing rewrites a spell any more, so the only way a player learns what
+    /// the orb heard — or that it heard nothing — is to be **told**. Being told
+    /// at cast is true and late; this is the same answer at the moment they can
+    /// act on it.
+    ///
+    /// It is the sim's decision rather than the frontend's (rule 2): what a line
+    /// means is the spell language, and a frontend working it out for itself
+    /// would be a second parser to keep in step with this one.
+    ///
+    /// Pure, and over the **buffer** rather than the saved file, so the answer
+    /// tracks what is on screen rather than what was last written.
+    #[must_use]
+    pub fn read_spell(&self, domain: &str, lines: &[String]) -> Vec<crate::tower::spell::Reading> {
+        crate::tower::spell::interpret(&self.world, domain, lines)
+    }
+
     /// Which line of `name` a running invocation is on, if one is running.
     ///
     /// **What the editor draws its marker from.** A spell being edited while it
@@ -374,6 +483,27 @@ impl Sim {
         self.world
             .resource_mut::<crate::execute::Unfurling>()
             .take()
+    }
+
+    /// Queue a tester's `debug_spawn`, on the next tick like everything else.
+    ///
+    /// Recorded in the scrollback and in `Submissions` — so a debug session
+    /// replays in a debug build — but **not** in the parse trace, for the reason
+    /// [`choose`](Self::choose) gives below: `debug_spawn` is not a phrasing, and
+    /// counting it as one would dilute §15's first metric with inputs that were
+    /// never a test of the parser. It is not even in the vocabulary being
+    /// measured.
+    #[cfg(debug_assertions)]
+    fn debug_spawn(&mut self, line: &str, order: crate::execute::SpawnOrder) {
+        let tick = *self.world.resource::<Tick>();
+        self.world
+            .resource_mut::<Scrollback>()
+            .records_mut()
+            .push(RecordKind::Input)
+            .text(orbs_render::FieldName::Message, line)
+            .finish();
+        self.world.resource_mut::<Submissions>().push(tick, line);
+        self.world.resource_mut::<Pending>().spawn(order);
     }
 
     /// Answer a numbered prompt.

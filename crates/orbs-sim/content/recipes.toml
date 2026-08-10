@@ -121,11 +121,16 @@ ticks = 8
 # alembic - distillation. Needs heat. The only instrument that yields a potion.
 # ---------------------------------------------------------------------------
 
+# **The long one, and the only stage that is.** Four times what it was: a
+# distillation is the last thing that happens to a brew and the one worth
+# watching, and at fourteen ticks it was over before the picture had said
+# anything. It is also what makes the vessel read: the liquid now climbs slower
+# than the bubbles rising through it, which is the right way round for a boil.
 [[alembic]]
 input = "clarified-draught"
 output = "clarity"
 leaves = "phlegm"
-ticks = 14
+ticks = 56
 potion = true
 heat = true
 

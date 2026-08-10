@@ -228,16 +228,23 @@ pub(crate) fn run(seed: u64, wizard: Option<String>) -> bool {
             // and belongs to the `scribe` that started it; replaying it here
             // types the whole script a second time into a buffer that already
             // holds it. That is not hypothetical — it is what this did first
-            // time, and the dump reported `9 lines, 1 the orb could not read`
-            // for a three-line spell.
+            // time, and the dump reported a three-line spell as nine lines with
+            // one the orb could not read. **A save says nothing now** (§19), so
+            // the same mistake would show up only as a doubled file under
+            // `peruse` — which is why this comment outlived the message.
             editing = editing.or_else(|| open(&mut sim));
         }
-        // The running-line marker. In the game this is pushed in each frame by
-        // `editing::autosave`; a dump builds no `App` and advances no `Time`, so
-        // it is done here from the same accessor — the same reason the panel
-        // below is computed rather than left empty.
+        // The running-line marker, and how the orb reads the buffer. In the game
+        // both are pushed in by `editing::autosave`; a dump builds no `App` and
+        // advances no `Time`, so they are done here from the same accessors —
+        // the same reason the panel below is computed rather than left empty.
+        //
+        // **The reading especially.** Without it `interpret` draws an empty page
+        // and the marks never appear, which is a See-it line that looks like it
+        // works and proves nothing — worse than no picture at all.
         if let Some(editor) = editing.as_mut() {
             editor.set_running_line(sim.running_line(editor.name()));
+            editor.set_reading(sim.read_spell(editor.domain(), editor.lines()));
         }
         // A dump builds no `App`, so the two cached resources have nobody to
         // fill them: they are computed here from the same functions the systems

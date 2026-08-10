@@ -120,15 +120,32 @@ pub struct Steep {
     /// the topmost cell of liquid reaches the brightest step on the bubble beat
     /// — a break at the face.
     ///
-    /// **At the surface, never above it.** Marks past the fill were the obvious
-    /// reading of "bubbles pop out of the liquid" and were rejected twice over:
-    /// the panel's horizontal layout turns *above* into *rightward*, putting
-    /// them on the row directly over the athanor's plume doing the identical
-    /// thing; and the only round glyphs CP437 has are the fire's sparks, which
-    /// §19 already refused this vocabulary once for the balneum. Doing it at the
-    /// face costs no glyph and leaves the value boundary at solid-against-blank,
-    /// which is the strongest join the alphabet has. DESIGN.md §19.
+    /// **At the surface, and above it where above is up** — see
+    /// [`upward`](Self::upward).
     pub breaking: bool,
+    /// Whether the bar runs upward, so that past the fill is *above* it.
+    ///
+    /// # The one thing in this picture that depends on the layout
+    ///
+    /// Bubbles escaping into the air above the face were asked for, and were
+    /// twice refused before that: the panel has two layouts, and in the
+    /// horizontal one *above* becomes **rightward** — putting the marks on the
+    /// row directly over the athanor's, whose sparks and smoke occupy exactly
+    /// that region past *its* fill. Two adjacent rows, sparse marks past the
+    /// fill on both, meaning different things.
+    ///
+    /// In the **upward** layout that objection does not apply: each instrument
+    /// is a column, so the athanor's sparks are in the column *beside* the
+    /// alembic rather than the row below it, and the air above the alembic's
+    /// face is the alembic's own. So the bubbles are drawn there and nowhere
+    /// else, and the picture legitimately differs by orientation — because what
+    /// is *adjacent* to it differs by orientation, which is the only thing the
+    /// objection was ever about.
+    ///
+    /// The two orientations otherwise share every cell of this, which is the
+    /// property `cell` exists to keep. This is the exception, and it is one flag
+    /// wide.
+    pub upward: bool,
 }
 
 /// One cell of a bath's bar.
@@ -159,6 +176,16 @@ pub(crate) fn cell(lane: u16, step: u16, filled: u16, work: Steep) -> (char, Dep
     // indistinguishable from an empty one. See [`FLOOR`].
     let level = filled.max(FLOOR);
     if step >= level {
+        // **The air above the face**, where a hard enough boil throws something
+        // into it. Only the alembic (`breaking`), only over a lit athanor
+        // (`Bubbling`), and only where above is up — see [`Steep::upward`].
+        if work.breaking
+            && work.upward
+            && work.motion == Motion::Bubbling
+            && let Some((glyph, roil)) = liquid::escaping(lane, step - level, work.phase)
+        {
+            return (glyph, Depiction::liquid(roil));
+        }
         return (' ', Depiction::None);
     }
 
@@ -205,6 +232,9 @@ mod tests {
 
     #[test]
     fn the_vessel_is_solid_to_its_surface_and_empty_above() {
+        // A **bath**: `working` sets neither `breaking` nor `upward`, so nothing
+        // leaves the liquid here. The alembic's air is not empty and its version
+        // of this property is `a_bubble_never_touches_the_reading`.
         // §14, and the easiest version of it any instrument has: the level is
         // read off solid-against-blank, which is the strongest join the alphabet
         // has and the one the fire's flame front is also pinned to. Nothing in
@@ -331,6 +361,169 @@ mod tests {
     fn the_same_phase_always_draws_the_same_bath() {
         for phase in [0.0, 0.37, 4.0, 23.9] {
             assert_eq!(bar(16, 5, working(phase)), bar(16, 5, working(phase)));
+        }
+    }
+
+    /// An alembic distilling over a lit athanor, in the upward layout.
+    fn distilling(phase: f32) -> Steep {
+        Steep {
+            phase,
+            motion: Motion::Bubbling,
+            breaking: true,
+            upward: true,
+            ..Steep::default()
+        }
+    }
+
+    #[test]
+    fn the_boil_throws_bubbles_into_the_air_above_the_face() {
+        // The alembic's picture, and the thing that separates it from a bath at
+        // more than one cell: a distillation is hard enough that some of what
+        // rises gets *out*.
+        let seen: Vec<(char, Depiction)> = sweep()
+            .flat_map(|phase| {
+                (8..16u16)
+                    .map(move |step| cell(0, step, 8, distilling(phase)))
+                    .collect::<Vec<_>>()
+            })
+            .filter(|(glyph, _)| *glyph != ' ')
+            .collect();
+
+        assert!(!seen.is_empty(), "nothing ever left the liquid");
+        // In the liquid's own colours, never the fire's. The two share these
+        // glyphs and sit in neighbouring columns, so the ramp is what tells a
+        // bubble from a spark.
+        for (glyph, depiction) in &seen {
+            assert!(matches!(glyph, '°' | '·'), "{glyph:?} is not a bubble");
+            assert!(
+                matches!(
+                    depiction,
+                    Depiction::LiquidStill | Depiction::LiquidStirred | Depiction::LiquidRolling
+                ),
+                "a bubble drew in {depiction:?}, which is not liquid",
+            );
+        }
+    }
+
+    #[test]
+    fn a_bubble_never_touches_the_reading() {
+        // **§14, and the property the whole picture is pinned to.** The level is
+        // solid-against-blank; a mark that reached the face — or that was `█` —
+        // would put the value and the picture at odds on the one cell the value
+        // is read from. Swept over every fill, because a boundary bug is a bug
+        // at one fill and invisible at the rest.
+        for phase in sweep() {
+            for filled in 1..16u16 {
+                for step in 0..16u16 {
+                    let (glyph, _) = cell(0, step, filled, distilling(phase));
+                    if step < filled {
+                        assert_eq!(glyph, '█', "the liquid broke up at {step} of {filled}");
+                    } else {
+                        assert_ne!(glyph, '█', "a bubble read as fill at {step} of {filled}");
+                    }
+                }
+                // ...and the topmost liquid cell is still liquid, so the join is
+                // exactly where `filled_of` put it.
+                assert_eq!(cell(0, filled - 1, filled, distilling(phase)).0, '█');
+            }
+        }
+    }
+
+    #[test]
+    fn nothing_escapes_from_a_vessel_that_is_not_a_boiling_alembic() {
+        // Three gates, and each is a different picture being protected: the
+        // balneum's gentle digestion (`breaking`), a vessel whose fire has gone
+        // out (`Bubbling`), and the horizontal layout, where *above* would be
+        // rightward and land on the athanor's row (`upward`).
+        for phase in sweep() {
+            for (name, work) in [
+                (
+                    "a balneum",
+                    Steep {
+                        breaking: false,
+                        ..distilling(phase)
+                    },
+                ),
+                (
+                    "a cold alembic",
+                    Steep {
+                        motion: Motion::Drifting,
+                        ..distilling(phase)
+                    },
+                ),
+                (
+                    "a still alembic",
+                    Steep {
+                        motion: Motion::Standing,
+                        ..distilling(phase)
+                    },
+                ),
+                (
+                    "the sideways layout",
+                    Steep {
+                        upward: false,
+                        ..distilling(phase)
+                    },
+                ),
+            ] {
+                for step in 8..16u16 {
+                    assert_eq!(
+                        cell(0, step, 8, work).0,
+                        ' ',
+                        "{name} threw a bubble at {step}, phase {phase}",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_rising_face_can_never_overtake_a_bubble() {
+        // **What "the bubbles rise faster than the brew" means as a property.**
+        // The level climbs `bar / ticks` cells a tick and the bar grows with the
+        // window, so no recipe duration can outrun a bubble at every size — at
+        // the shipped ones it did not come close, and what that looks like is
+        // bubbles being swallowed by the liquid they just left.
+        //
+        // So the air is measured from the **face**: the same bubbles stand at
+        // the same heights above it whatever the level is, which means a rising
+        // level carries them rather than catching them. Asserted by holding the
+        // phase and moving the fill — if any of this were anchored in absolute
+        // space, these would differ.
+        for phase in sweep() {
+            let air = |filled: u16| -> Vec<char> {
+                (0..=crate::liquid::CARRY + 1)
+                    .map(|ahead| cell(0, filled + ahead, filled, distilling(phase)).0)
+                    .collect()
+            };
+            let first = air(1);
+            for filled in 2..24u16 {
+                assert_eq!(
+                    air(filled),
+                    first,
+                    "the air above the face changed with the level at phase {phase}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_bubble_pops_rather_than_climbing_out_of_the_vessel() {
+        // A mark that kept going would stop being a bubble and start being a
+        // plume — which the athanor next door already draws, and means something
+        // else. `CARRY` is the ceiling and this is what holds it.
+        for phase in sweep() {
+            for step in 8..24u16 {
+                let (glyph, _) = cell(0, step, 8, distilling(phase));
+                if step - 8 > crate::liquid::CARRY {
+                    assert_eq!(
+                        glyph,
+                        ' ',
+                        "a bubble got {} cells up at phase {phase}",
+                        step - 8,
+                    );
+                }
+            }
         }
     }
 }

@@ -6,7 +6,9 @@
 //! `execute::dispatch`'s own docs call it *"the one file every phase must
 //! edit"*, which is not a place to put a second responsibility.
 
+mod bind;
 mod block;
+mod compile;
 mod invoke;
 mod program;
 mod run;
@@ -15,8 +17,12 @@ mod watch;
 #[cfg(test)]
 mod tests;
 
+pub use bind::{Bound, bind, held, stand};
 pub use block::{Blocked, would_block};
+pub use compile::{
+    Fault, Reading, SPELL_MARGIN, SPELL_SIMILARITY, candidates, compile, interpret, read,
+};
 pub use invoke::{invoke, stop_spell};
-pub use program::{Block, Complaint, Kind, Loop, Program, Step, parse};
-pub use run::{Depth, MAX_DEPTH, PATIENCE, Running, SCRIPT_BUDGET, advance, line_of};
+pub use program::{Block, Complaint, Draft, Kind, Loop, Program, Step};
+pub use run::{Caller, Casting, MAX_DEPTH, PATIENCE, Running, SCRIPT_BUDGET, advance, line_of};
 pub use watch::{Event, holds, watch};

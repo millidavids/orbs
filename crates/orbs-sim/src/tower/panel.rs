@@ -142,6 +142,37 @@ pub enum State {
 }
 
 impl State {
+    /// Whether the instrument is in the middle of something.
+    ///
+    /// # What `is idle` and `is working` ask, and why they ask it here
+    ///
+    /// A spell's two words are complements — `if athanor is idle` and
+    /// `if athanor is working` must never both answer yes — so there is one
+    /// question, asked once, and this is it.
+    ///
+    /// It was `busy()`, which reads [`Working`](super::Working) and
+    /// [`Triaging`](super::Triaging) and is the right answer for the four
+    /// instruments that consume Focus. **The athanor is not one of them**: its
+    /// fire is [`Burning`](super::Burning), deliberately not `Working`, because
+    /// nothing counting the production pool may see it (§10.1 — the athanor is
+    /// infrastructure, not a stage). So `if athanor is idle` answered *yes*
+    /// while it was burning charcoal, which is how it was reported, and
+    /// `if athanor is working` answered no at the same moment — a fire in plain
+    /// view on the panel, invisible to the only two words that ask about it.
+    ///
+    /// Asking the panel's own state instead ties the spell language to the word
+    /// on screen: `at burning` in the pane and `athanor is working` in a spell
+    /// are now the same fact, and a state added later cannot be busy for one and
+    /// idle for the other.
+    ///
+    /// `Banked` is **not** busy. A damped fire is fuel put by, not work in
+    /// progress, and a spell waiting for the athanor to be free should not wait
+    /// on it for ever.
+    #[must_use]
+    pub const fn is_busy(self) -> bool {
+        matches!(self, Self::Working | Self::Scouring | Self::Burning)
+    }
+
     /// The word a reader hears and a column shows.
     #[must_use]
     pub const fn label(self) -> &'static str {
@@ -199,6 +230,25 @@ pub fn instruments(world: &World) -> Vec<Instrument> {
         });
     }
     panel
+}
+
+/// What one place is doing, in the panel's own words.
+///
+/// The same derivation the pane draws, for anything that needs the word without
+/// the row — [`spell::holds`](super::spell::holds) asking whether a place is
+/// idle, and nothing else so far. **The same derivation** is the point: a second
+/// answer to "is this instrument busy" is a second answer that can disagree, and
+/// the last one did — see [`State::is_busy`].
+///
+/// A place that is not an instrument at all answers from what it holds, which is
+/// what makes `if dispensary is empty` a sentence rather than a special case.
+#[must_use]
+pub fn state_at(world: &World, node: Entity) -> State {
+    let now = *world.resource::<Tick>();
+    let name = world
+        .get::<Name>(node)
+        .map_or_else(String::new, |name| name.0.clone());
+    read(world, node, &name, now).0
 }
 
 /// A two-letter form of an instrument's name, for a narrow column.

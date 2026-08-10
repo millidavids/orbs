@@ -147,6 +147,18 @@ impl Recipes {
         })
     }
 
+    /// Every instrument the recipes name, alphabetically.
+    ///
+    /// **The authority on what an instrument is**, for content that has to agree
+    /// with this file — `progression.toml` prices work by instrument, and a key
+    /// there matching nothing here would earn nothing while looking deliberate.
+    /// A `BTreeMap`, so the order is stable and an error message reads the same
+    /// every run.
+    #[must_use]
+    pub fn instruments(&self) -> Vec<&str> {
+        self.by_instrument.keys().map(String::as_str).collect()
+    }
+
     /// Every recipe an instrument knows, for the manual.
     #[must_use]
     pub fn for_instrument(&self, instrument: &str) -> &[Recipe] {
@@ -197,6 +209,30 @@ impl Recipes {
         out.sort_unstable();
         out.dedup();
         out
+    }
+
+    /// What kind of noun `name` is when it exists in the world.
+    ///
+    /// **The rule `produce` applies, asked by name instead of by recipe.** A
+    /// finished potion is an [`Essence`](crate::parser::NounKind::Essence) —
+    /// §10.1's *quality* a recipe yields — and everything else is crafting
+    /// stock. `produce` knows which because it has the recipe it just ran in
+    /// hand; anything working from a name alone (`debug_spawn`) has to ask.
+    ///
+    /// A name no recipe produces is stock: that is every input and every
+    /// byproduct, which is what most of the vocabulary is.
+    #[must_use]
+    pub fn kind_of(&self, name: &str) -> crate::parser::NounKind {
+        let potion = self
+            .by_instrument
+            .values()
+            .flatten()
+            .any(|recipe| recipe.output == name && recipe.potion);
+        if potion {
+            crate::parser::NounKind::Essence
+        } else {
+            crate::parser::NounKind::Reagent
+        }
     }
 
     /// Every distinct output any instrument can produce.

@@ -144,7 +144,15 @@ fn sample(verb: Verb) -> (&'static str, &'static str) {
         Verb::Purge => ("laboratory", "purge laboratory.log"),
         Verb::Divine => ("archive", "divine sigil-iv"),
         Verb::Scribe => ("tower", "scribe night_watch"),
-        Verb::Bind => ("tower", "bind night_watch"),
+        // **A spell the tower actually has.** It named `night_watch`, which does
+        // not exist — harmless while `bind` was dark and a test of nothing the
+        // moment it went live: the refusal would have been *"there is no such
+        // spell"* rather than the verb doing its work.
+        //
+        // It still refuses here, at concentration 0, and that **is** the verb
+        // working: this table asks whether the world answered, and *"the orb
+        // cannot hold a spell yet"* is the world answering.
+        Verb::Bind => ("tower", "bind first_light"),
         Verb::Invoke => ("tower", "invoke night_watch"),
         Verb::Unfurl => ("tower", "unfurl"),
     }

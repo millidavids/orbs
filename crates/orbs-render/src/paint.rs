@@ -296,6 +296,14 @@ impl<'a> Painter<'a> {
     /// **all** of the bath's motion is in its colour, so the level survives
     /// greyscale with nothing to argue about.
     pub fn bath_meter(&mut self, area: Rect, done: u32, total: u32, work: bath::Steep) {
+        // **The orientation is the painter's to know, not the caller's.** A
+        // caller that had to set `upward` itself could set it wrong, and the one
+        // thing it decides — whether bubbles break into the air above the face —
+        // would then be drawn sideways. See [`bath::Steep::upward`].
+        let work = bath::Steep {
+            upward: false,
+            ..work
+        };
         self.steeping(area, done, total, work, Runs::Rightward);
     }
 
@@ -304,6 +312,10 @@ impl<'a> Painter<'a> {
     /// The orientation the side panel uses, and the one a level reads best in.
     /// See [`Painter::bath_meter`].
     pub fn bath_meter_upward(&mut self, area: Rect, done: u32, total: u32, work: bath::Steep) {
+        let work = bath::Steep {
+            upward: true,
+            ..work
+        };
         self.steeping(area, done, total, work, Runs::Upward);
     }
 

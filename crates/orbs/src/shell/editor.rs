@@ -1,4 +1,4 @@
-//! The spell editor: two states, and words rather than punctuation.
+//! The spell editor: three states, and words rather than punctuation.
 //!
 //! DESIGN.md §8 has the player keeping their spellbook in their own editor and
 //! hot-reloading it. That needs files on disk and a watcher, which is later
@@ -6,11 +6,17 @@
 //! first keeps the two aligned — what a save does here is what `:w` in vim will
 //! have to do there.
 //!
-//! # Two states, and you start in the one that cannot lose your work
+//! # Three states, and you start in the one that cannot lose your work
 //!
-//! [`Mode::Command`] is where the editor opens. You type **words** — `edit` and
-//! `quit`, which is all of them — and they do what they say. [`Mode::Editing`]
-//! is where keystrokes go into the spell, and `Esc` comes back.
+//! [`Mode::Command`] is where the editor opens. You type **words** — `edit`,
+//! `interpret` and `quit`, which is all of them — and they do what they say.
+//! [`Mode::Editing`] is where keystrokes go into the spell, and `Esc` comes
+//! back.
+//!
+//! [`Mode::Reading`] is the third and the newest. The file stopped being
+//! rewritten when it is saved (§19), which is what a player asked for — and it
+//! took away the only place the orb's reading was ever visible. `interpret`
+//! is where that went: the buffer, line for line, as the orb hears it.
 //!
 //! # There is no `save`
 //!
@@ -68,6 +74,20 @@ pub(crate) enum Mode {
     Command,
     /// Typing into the spell.
     Editing,
+    /// Reading the orb's reading of it, rather than the spell itself.
+    ///
+    /// # The one place a *wrong* reading can be seen
+    ///
+    /// The file is no longer rewritten when it is saved, which is what a player
+    /// asked for and is right — but it took away the only surface that ever
+    /// showed what the orb had heard. A resolution that **fails** is reported;
+    /// one that succeeds *wrongly* — `the shelf` reaching a different shelf, a
+    /// near-miss name landing on its neighbour — has nowhere to show at all.
+    ///
+    /// So `interpret` is a validation step the player asks for: the buffer, line
+    /// for line, as the orb reads it. `<esc>` comes back. It changes nothing and
+    /// saves nothing, which is what makes it safe to reach for.
+    Reading,
 }
 
 /// What the player is editing, if anything.
@@ -115,6 +135,18 @@ pub(crate) struct Editor {
     /// nothing about the sim, which is what keeps it on this side of the
     /// boundary at all.
     running_line: Option<u64>,
+    /// How the orb reads the buffer, line for line.
+    ///
+    /// Pushed in like [`running_line`](Self::running_line) and for the same
+    /// reason: what a line *means* is the sim's decision (rule 2), and a buffer
+    /// that worked it out for itself would be a second parser.
+    ///
+    /// Refreshed when the buffer settles rather than every frame — see
+    /// `editing::autosave`. One reading per line, so `reading[i]` belongs to
+    /// `lines[i]`; a buffer edited since the last refresh may be one line longer
+    /// than its reading, which is why every use of it is indexed rather than
+    /// zipped.
+    reading: Vec<orbs_sim::Reading>,
 }
 
 /// How long the player must stop typing before the spell is written out.
@@ -163,7 +195,11 @@ pub(crate) enum Outcome {
 /// `sur` means `survey` outside. Kept unambiguous in their first letter, so no
 /// prefix is ever a coin flip — the property
 /// `no_two_editor_words_share_a_first_letter` holds them to.
-const WORDS: &[(&str, Word)] = &[("edit", Word::Edit), ("quit", Word::Quit)];
+const WORDS: &[(&str, Word)] = &[
+    ("edit", Word::Edit),
+    ("interpret", Word::Interpret),
+    ("quit", Word::Quit),
+];
 
 /// The vim shorthand, matched **exactly** and never advertised.
 ///
@@ -195,6 +231,8 @@ const SHORTHAND: &[(&str, Word)] = &[
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Word {
     Edit,
+    /// Show the buffer as the orb reads it — see [`Mode::Reading`].
+    Interpret,
     Quit,
     /// Write it out now rather than waiting for the pause.
     ///
@@ -228,6 +266,7 @@ impl Editor {
             complaint: None,
             quiet_for: None,
             running_line: None,
+            reading: Vec::new(),
         }
     }
 
@@ -263,6 +302,28 @@ impl Editor {
     /// Tell the buffer where a running invocation has reached.
     pub(crate) const fn set_running_line(&mut self, line: Option<u64>) {
         self.running_line = line;
+    }
+
+    /// Tell the buffer how the orb reads it.
+    pub(crate) fn set_reading(&mut self, reading: Vec<orbs_sim::Reading>) {
+        self.reading = reading;
+    }
+
+    /// How the orb reads the line at `index`, if it has read that far.
+    pub(crate) fn reading(&self, index: usize) -> Option<&orbs_sim::Reading> {
+        self.reading.get(index)
+    }
+
+    /// How many lines the orb cannot read.
+    ///
+    /// The number on the status row: §14 will not have a mark in a gutter be the
+    /// only way to know, and *"one line the orb cannot read"* is the spoken form
+    /// of a column of them.
+    pub(crate) fn unread(&self) -> usize {
+        self.reading
+            .iter()
+            .filter(|reading| reading.fault.is_some())
+            .count()
     }
 
     /// The spell being edited.
@@ -315,17 +376,26 @@ impl Editor {
     /// **Disarms the settle clock too.** It cleared only `dirty`, and `settle`
     /// keys off `quiet_for` alone — so an explicit `w` wrote the buffer and then
     /// the debounce wrote it *again* half a second later: two submissions in the
-    /// replay stream, two `scribe_done` records, and two program swaps under a
-    /// running invocation, for one save.
+    /// replay stream and two program swaps under a running invocation, for one
+    /// save. It was two records in the transcript as well, back when a save said
+    /// anything at all — that noise is why saving is silent now (§19).
     pub(crate) const fn saved(&mut self) {
         self.dirty = false;
         self.quiet_for = None;
     }
 
     /// Note that the buffer just changed, restarting the settle clock.
-    const fn touched(&mut self) {
+    ///
+    /// **The reading goes with it.** `reading[i]` belongs to `lines[i]`, and
+    /// inserting or deleting a line shifts every reading below it — so the
+    /// danger marks in the gutter paint on the wrong lines, and `interpret`
+    /// shows the wrong sentences, until the next settle refreshes them. Half a
+    /// second of *no* marks is a pane catching up; half a second of marks
+    /// pointing at the wrong line is the pane lying.
+    fn touched(&mut self) {
         self.dirty = true;
         self.quiet_for = Some(0.0);
+        self.reading.clear();
     }
 
     /// Keep the caret inside a window `rows` tall.
@@ -382,6 +452,10 @@ impl Editor {
         match self.mode {
             Mode::Command => self.command.push_str(&text),
             Mode::Editing => self.insert(&text),
+            // **A reading takes no text.** It is a view of the buffer, not a
+            // second buffer, and a keystroke that appeared to go somewhere here
+            // would be a keystroke the player could not find again.
+            Mode::Reading => {}
         }
     }
 
@@ -439,6 +513,9 @@ impl Editor {
                 self.touched();
                 None
             }
+            // Nothing to run and nothing to split. `<esc>` is the way out, which
+            // the status row says.
+            Mode::Reading => None,
         }
     }
 
@@ -513,9 +590,19 @@ impl Editor {
     /// four columns in, and without this getting back out costs the four
     /// keypresses the indent just saved.
     pub(crate) fn backspace(&mut self) {
-        if self.mode == Mode::Command {
-            self.command.pop();
-            return;
+        match self.mode {
+            Mode::Command => {
+                self.command.pop();
+                return;
+            }
+            // **A reading deletes nothing**, the same rule `type_text` and
+            // `enter` already follow: it is a view of the buffer, not a second
+            // one. This fell through to the buffer, so a player who opened
+            // `interpret` to check the orb's reading and tapped Backspace out of
+            // habit deleted a character from a spell they could not see change —
+            // and the settle clock wrote the damage out a beat later.
+            Mode::Reading => return,
+            Mode::Editing => {}
         }
         if let Some(back) = self.outdent() {
             let from = self.offset(self.column - back);
@@ -566,6 +653,10 @@ impl Editor {
         match word(&typed) {
             Some(Word::Edit) => {
                 self.mode = Mode::Editing;
+                None
+            }
+            Some(Word::Interpret) => {
+                self.mode = Mode::Reading;
                 None
             }
             Some(Word::Save) => Some(Outcome::Save),
@@ -722,11 +813,99 @@ mod tests {
     }
 
     #[test]
-    fn the_two_words_do_what_they_say() {
+    fn the_three_words_do_what_they_say() {
         let mut editor = editor();
         assert_eq!(say(&mut editor, "quit"), Some(Outcome::SaveAndClose));
         assert_eq!(say(&mut editor, "edit"), None);
         assert_eq!(editor.mode(), Mode::Editing);
+        editor.escape();
+        assert_eq!(say(&mut editor, "interpret"), None);
+        assert_eq!(editor.mode(), Mode::Reading);
+    }
+
+    #[test]
+    fn a_reading_is_a_view_and_never_a_second_buffer() {
+        // **The failure this exists to catch is silent.** A keystroke that
+        // appeared to land in the reading would be a keystroke the player cannot
+        // find again — the buffer is what gets saved, and it would not be in it.
+        let mut editor = editor();
+        say(&mut editor, "edit");
+        editor.type_text("grind sage");
+        editor.escape();
+        let before = editor.lines().to_vec();
+        // A clean baseline, so `is_dirty` below is about the reading rather than
+        // about the real edit above it.
+        editor.saved();
+
+        say(&mut editor, "interpret");
+        editor.type_text("this must go nowhere");
+        assert_eq!(editor.enter(), None, "the reading ran something");
+        assert_eq!(editor.lines(), before, "a keystroke reached the buffer");
+
+        // **Backspace too**, which fell through to the buffer while `type_text`
+        // and `enter` did not: a player who opened `interpret` to check the orb's
+        // reading and tapped it out of habit deleted a character from a spell
+        // they could not see change, and the settle clock wrote the damage out.
+        // Twice, because the first would only reach the indent.
+        editor.backspace();
+        editor.backspace();
+        assert_eq!(editor.lines(), before, "backspace edited the buffer");
+        assert!(!editor.is_dirty(), "a reading marked the buffer as touched");
+
+        // ...and `esc` is the way out, as the status row says.
+        editor.escape();
+        assert_eq!(editor.mode(), Mode::Command);
+    }
+
+    #[test]
+    fn editing_drops_the_reading_rather_than_pointing_it_at_the_wrong_lines() {
+        // `reading[i]` belongs to `lines[i]`, and inserting a line shifts every
+        // reading below it. Half a second of *no* marks is a pane catching up;
+        // half a second of marks on the wrong lines is the pane lying, and the
+        // player is looking straight at it while they type.
+        let mut editor = editor();
+        say(&mut editor, "edit");
+        editor.type_text("grind sage");
+        editor.set_reading(vec![reading(1, "grind sage", Some("spell_missing"))]);
+        assert_eq!(editor.unread(), 1);
+
+        editor.enter();
+        editor.type_text("empty mortar_and_pestle");
+        assert_eq!(
+            editor.unread(),
+            0,
+            "a stale reading survived the line it described moving",
+        );
+        assert!(editor.reading(0).is_none(), "the marks outlived the edit");
+    }
+
+    #[test]
+    fn the_count_of_unread_lines_is_the_readings_and_nothing_else() {
+        // The number the status row says, and the one §14 needs because a mark
+        // on a line is otherwise carried by colour alone.
+        let mut editor = editor();
+        assert_eq!(editor.unread(), 0, "an unread buffer reported faults");
+
+        editor.set_reading(vec![
+            reading(1, "grind sage", None),
+            reading(2, "xyzzy plugh", Some("spell_missing")),
+            reading(3, "if mortr is idle", Some("spell_nowhere")),
+        ]);
+        assert_eq!(editor.unread(), 2);
+        assert_eq!(
+            editor.reading(0).map(|read| read.heard.as_str()),
+            Some("grind sage")
+        );
+        assert!(editor.reading(9).is_none(), "it read past the end");
+    }
+
+    /// One line of a reading, as the sim would hand it over.
+    fn reading(line: usize, heard: &str, fault: Option<&'static str>) -> orbs_sim::Reading {
+        orbs_sim::Reading {
+            line,
+            heard: heard.to_owned(),
+            fault: fault.map(|key| orbs_sim::Fault { key, detail: None }),
+        }
     }
 
     #[test]

@@ -13,9 +13,13 @@
 //! durations, occupies the **same** production slot, and needs you standing
 //! there watching it.
 //!
-//! What `bind` will add is the two things that matter: the spell running
-//! **unattended**, and §8's script speed advantage. Both arrive together with
-//! Concentration, which is what keeps that purchase the game's turn.
+//! What `bind` adds is **running unattended**, and that is the whole of it:
+//! §11.5's invariant about a script action being faster than a manual one was
+//! struck when `bind` was built (§19), so a binding sells one thing rather than
+//! two. It is still the game's turn, because *walk away and come back to work
+//! done* is the sentence pillar 3 is made of — and because "needs you standing
+//! there" above was an assertion nothing enforced until `bind` gave it something
+//! to be true against. See [`Running::unattended`](super::Running::unattended).
 //!
 //! It also gives the player a way to **test** a spell before committing a
 //! Concentration slot to it — which at concentration 1, where binding a second
@@ -45,8 +49,8 @@ pub fn invoke(intent: &Intent, world: &mut World) {
     // exhausting it makes every subsequent instruction *Budget starved*, which
     // logs at high verbosity only, so all automation would stop **silently**.
     // Depth-limiting makes runaway recursion loud and diagnosable.
-    let depth = world.resource::<super::run::Depth>().0;
-    if depth.is_some_and(|depth| depth + 1 >= super::MAX_DEPTH) {
+    let caller = world.resource::<super::run::Caller>().0;
+    if caller.is_some_and(|caller| caller.depth + 1 >= super::MAX_DEPTH) {
         say(world, "spell_too_deep", &wanted, Role::Danger);
         return;
     }
@@ -72,6 +76,36 @@ pub fn invoke(intent: &Intent, world: &mut World) {
         return;
     }
 
+    cast(world, node, &wanted, Role::Success, "spell_begun", false);
+}
+
+/// Put a spell into flight, however it was asked for.
+///
+/// **One door, shared by `invoke` and `bind`.** They differ in what they *buy* —
+/// an invocation ends when the player leaves, a binding does not — and not at
+/// all in how a spell is started. Two copies of this would be two places for the
+/// compile step, the depth counter and the complaint report to drift apart.
+///
+/// `announce` is the prose key for "it has begun", or **empty** for a cast
+/// nobody asked for: a bound spell standing up again on its own says nothing,
+/// because one line per lap is the noise §19 cut back from the editor's saves.
+///
+/// **An empty `announce` is also what makes a lap a lap** rather than a fresh
+/// beginning — see `said` below, which is carried over rather than cleared.
+///
+/// `held` says the orb is holding this spell, which is the one thing the two
+/// doors genuinely differ on. A parameter rather than a look at the `Bound`
+/// component, because `bind` casts *before* it would be able to read it back and
+/// because a spell cast by a held spell is unattended without being held itself.
+pub(super) fn cast(
+    world: &mut World,
+    node: Entity,
+    wanted: &str,
+    role: Role,
+    announce: &str,
+    held: bool,
+) {
+    let caller = world.resource::<super::run::Caller>().0;
     let Some(spell) = world.get::<NodeId>(node).copied() else {
         return;
     };
@@ -81,14 +115,17 @@ pub fn invoke(intent: &Intent, world: &mut World) {
     //
     // Not acting at a distance in §19's sense — that rule is about *typing* a
     // command at a room you are not in. Casting a spell you already wrote is a
-    // different act, and `bind` is still what makes it unattended.
-    let Some(at) = world
+    // different act, and `bind` is what makes it survive you walking out.
+    let Some(at_place) = world
         .get::<Domain>(node)
         .cloned()
         .and_then(|Domain(named)| crate::execute::find_domain(world, &named))
-        .and_then(|place| world.get::<NodeId>(place).copied())
     else {
-        say(world, "spell_homeless", &wanted, Role::Danger);
+        say(world, "spell_homeless", wanted, Role::Danger);
+        return;
+    };
+    let Some(at) = world.get::<NodeId>(at_place).copied() else {
+        say(world, "spell_homeless", wanted, Role::Danger);
         return;
     };
 
@@ -100,9 +137,35 @@ pub fn invoke(intent: &Intent, world: &mut World) {
         .get::<Held>(node)
         .map(|held| held.0.clone())
         .unwrap_or_default();
-    let program = super::program::parse(&lines);
-    let complaints = program.complaints.clone();
+    // **Compiled, not merely parsed.** This is where the loose phrasing in the
+    // file becomes the tower's own names — the moment §8 asks for and the file
+    // no longer provides, since it holds exactly what the player typed.
+    let program = super::compile(world, at_place, &lines);
+    let complaints = program.complaints().to_vec();
     let seen = world.resource::<Scrollback>().records().sequence();
+
+    // **Carried across a lap, cleared for a beginning.** `said` rations a bad
+    // name to one report per line per casting, and a standing spell is cast
+    // again every time it runs off the end — so clearing it here put the
+    // rationing back to square one twice a second, which is the failure it
+    // exists to prevent arriving through the fix for a different one. A lap is
+    // not a new casting; `scribe` clears it when the *text* changes, which is
+    // the event that makes a name worth complaining about again.
+    //
+    // Read off `Bound`, not off `Running`: `finish` removes the run between
+    // laps, so the run is exactly the thing that cannot carry it.
+    let already = if announce.is_empty() {
+        world
+            .get::<super::Bound>(node)
+            .map(|bound| bound.said.clone())
+            .unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+    // A spell the player invoked needs them standing there; one a bound spell
+    // set going does not, and neither does a binding itself. See
+    // [`Running::unattended`].
+    let unattended = held || caller.is_some_and(|caller| caller.unattended);
 
     world.entity_mut(node).insert(Running {
         spell,
@@ -110,26 +173,39 @@ pub fn invoke(intent: &Intent, world: &mut World) {
         pc: vec![0],
         loops: Vec::new(),
         seen,
-        depth: depth.map_or(0, |depth| depth + 1),
+        depth: caller.map_or(0, |caller| caller.depth + 1),
         at,
         waiting_since: None,
+        said: already,
+        unattended,
     });
-    say(world, "spell_begun", &wanted, Role::Success);
+    if !announce.is_empty() {
+        say(world, announce, wanted, role);
+    }
 
     // What the orb had to fix to read it. Said **after** it begins, because the
     // spell runs either way — §8 forbids both refusing at save and halting at
     // cast, so this is a report rather than a rejection.
+    //
+    // **Only when the cast was asked for.** A bound spell recompiles on every
+    // lap, and a spell with an unreadable line would otherwise print the same
+    // complaint for as long as it is held — the failure the once-per-cast
+    // rationing on `Running::said` exists to stop, arriving through the recast
+    // that resets it.
+    if announce.is_empty() {
+        return;
+    }
     for complaint in complaints {
         let message = world.resource::<Prose>().line(
             complaint.key,
-            &[("name", &wanted), ("count", &complaint.line.to_string())],
+            &[("name", wanted), ("count", &complaint.line.to_string())],
         );
         world
             .resource_mut::<Scrollback>()
             .records_mut()
             .push(RecordKind::Completion)
             .text(FieldName::Name, Verb::Invoke.canonical())
-            .text(FieldName::Path, &wanted)
+            .text(FieldName::Path, wanted)
             .count(FieldName::Quantity, complaint.line as u64)
             .text(FieldName::Message, &message)
             .role(Role::Cost)
@@ -159,12 +235,23 @@ pub fn stop_spell(world: &mut World, named: &str) -> bool {
     let Some(node) = find(world, &wanted) else {
         return false;
     };
+    // **Released first, or it stands straight back up.** `stand` casts every
+    // bound spell that is not running, so removing `Running` from a held spell
+    // would put it back on the next tick — the player would type `stop` and
+    // watch nothing happen. Letting go is what `stop` means for a spell the orb
+    // is holding, which is also how a slot is freed for another (§11.5).
+    let released = super::bind::release(world, node, &wanted);
+
     if world.get::<Running>(node).is_none() {
-        say(world, "spell_not_running", &wanted, Role::Cost);
+        if !released {
+            say(world, "spell_not_running", &wanted, Role::Cost);
+        }
         return true;
     }
     world.entity_mut(node).remove::<Running>();
-    say(world, "spell_stopped", &wanted, Role::Success);
+    if !released {
+        say(world, "spell_stopped", &wanted, Role::Success);
+    }
     true
 }
 

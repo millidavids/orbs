@@ -215,6 +215,11 @@ impl Bench {
             spent,
             leavings,
             breaking,
+            // **The painter's, not the bench's.** `bath_meter` and its upward
+            // twin each set this from the orientation they *are*, so a caller
+            // cannot get it wrong — and this side of the boundary has no idea
+            // which way the pane runs anyway.
+            upward: false,
         }
     }
 

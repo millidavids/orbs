@@ -111,15 +111,28 @@ pub(super) fn transmute(world: &mut World, place: Entity) {
         }
     }
 
+    // **The one place a run has succeeded.** Every other exit from this function
+    // is a run that ended without making anything, and `land::finish` also runs
+    // for a scour — so this is where work becomes experience (§11.5). It goes on
+    // the line the run is already writing rather than pushing a second record: a
+    // run says what it made, and what it earned belongs in that sentence.
+    let earned = super::super::worth(world, &name);
+
     let message = world.resource::<Prose>().line(
         "wield_done",
-        &[("source", &name), ("name", &output), ("detail", &leaves)],
+        &[
+            ("source", &name),
+            ("name", &output),
+            ("detail", &leaves),
+            ("count", &earned.to_string()),
+        ],
     );
     world
         .resource_mut::<Scrollback>()
         .records_mut()
         .push(RecordKind::Completion)
         .text(FieldName::Name, &output)
+        .count(FieldName::Quantity, earned)
         // The byproduct is the state the instrument is left in — and a *fact*,
         // so not `Detail`, which is prose a view draws in front of the message.
         .text(FieldName::State, &leaves)
@@ -131,6 +144,11 @@ pub(super) fn transmute(world: &mut World, place: Entity) {
         .text(FieldName::Message, &message)
         .role(Role::Success)
         .finish();
+
+    // **After the sentence about the run, never before it.** A level bought by
+    // this run is a consequence of it, and announcing the reward first reads as
+    // the orb answering a question nobody asked.
+    super::super::credit(world, earned);
 }
 
 // `siphon` lived here and is **retired** (§19). It lifted the `Product` out of

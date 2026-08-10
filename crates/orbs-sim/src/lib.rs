@@ -27,4 +27,5 @@ pub use session::{
 };
 pub use sim::Sim;
 pub use tick::Tick;
+pub use tower::spell::{Fault, Reading};
 pub use tower::{Cwd, NodeId};
