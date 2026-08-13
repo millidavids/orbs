@@ -192,6 +192,13 @@ pub(crate) struct Panel {
     pub(crate) instruments: Vec<orbs_sim::tower::Instrument>,
     /// That place's leaf name, for the panel's spoken summary.
     pub(crate) domain: String,
+    /// The labyrinth the player is standing over, if there is one.
+    ///
+    /// **On the same tick clock as the instruments, and it belongs here for the
+    /// same reason.** A 49-cell `Vec` rebuilt at 60 Hz would be the allocation
+    /// this resource exists to stop; rebuilt once a second it is exactly as
+    /// fresh as the world it describes, because the world moves at 1 Hz too.
+    pub(crate) labyrinth: Option<orbs_render::Labyrinth>,
 }
 
 /// Re-read the panel from the world.
@@ -199,6 +206,7 @@ pub(crate) fn refresh_panel(mut panel: ResMut<Panel>, tower: Res<Tower>) {
     let sim = tower.sim();
     panel.instruments = sim.instruments();
     panel.domain = orbs_sim::parser::leaf(&sim.location()).to_owned();
+    panel.labyrinth = sim.labyrinth();
 }
 
 /// A line the player finished.
@@ -333,6 +341,8 @@ pub(crate) fn type_into_line(
     mut offered: ResMut<Offered>,
     mut submitted: MessageWriter<SubmittedMessage>,
     editing: Res<super::editing::Editing>,
+    loom: Res<super::Loom>,
+    walk: Res<super::Walk>,
     scroll: Res<Scroll>,
     quiet: Res<Quiet>,
 ) {
@@ -346,7 +356,18 @@ pub(crate) fn type_into_line(
     // then pressing Escape put every one of those characters into the prompt,
     // and the test that found it had been written to check something else.
     // Clearing the cursor is what actually throws a keystroke away.
-    if editing.is_open() || scroll.is_reading() {
+    //
+    // **Four terms, and the prediction this comment used to make has come
+    // true.** It said the shape's ceiling was five and that the fix — a single
+    // `Focus` owner rather than a predicate per surface — was worth doing before
+    // the fifth arrived. `wander` is the fourth and it is the last one that goes
+    // in here: a fifth surface refactors this first.
+    //
+    // The reason it is worth naming rather than living with is that each term is
+    // a place to *forget*. A surface added without its term does not fail
+    // loudly; it types into an invisible prompt while the player looks at
+    // something else, and the characters arrive later.
+    if editing.is_open() || loom.is_open() || walk.is_open() || scroll.is_reading() {
         keys.clear();
         return;
     }

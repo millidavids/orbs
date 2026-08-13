@@ -134,3 +134,15 @@ with = "grey"
 # From `weak-tincture`, which is plain green — so this one is not a mixture.
 [haste]
 tint = "green"
+
+# The archive's fragment, and what four of them make. One family, one colour: a
+# scroll is what its fragments become, which is the same rule the flask's
+# products follow.
+[fragment]
+tint = "gold"
+
+[spell-scroll]
+tint = "gold"
+
+[chaff]
+tint = "brown"

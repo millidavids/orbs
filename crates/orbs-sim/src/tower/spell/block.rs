@@ -119,7 +119,7 @@ pub fn would_block(world: &mut World, intent: &Intent) -> Option<Blocked> {
 /// slot and finish within the tick — §9's triage band exists so short work still
 /// runs during a brew.
 const fn begins_work(verb: Verb) -> bool {
-    verb.is_operation() || matches!(verb, Verb::Wield | Verb::Divine | Verb::Purge)
+    verb.is_operation() || matches!(verb, Verb::Wield | Verb::Research | Verb::Purge)
 }
 
 /// Every instrument `intent` needs to find idle, where the script is standing.

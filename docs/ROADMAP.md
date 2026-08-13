@@ -29,6 +29,7 @@ hide. Release posture: demo first, then full 1.0. No Early Access.
 | 3c. Engine upgrade | 1 | — | ⬜ |
 | 4. Onboarding + demo | 4 | ~20k | ⬜ |
 | 5. Ship | 3 | ~5k | ⬜ |
+| **Standing** | — | — | ♾ Never closes, and blocks no phase |
 
 ---
 
@@ -156,7 +157,7 @@ that names its phase gets revisited when the phase arrives; one that says
 - [x] **Naming pass** for the slice's 16 commands — run against the implemented
       vocabulary, not by eye. Found a canonical collision between the two core
       brewing verbs (`decoct`/`decant`, 667), a `dec-` prefix shared three ways,
-      and four names over the length rule. `decant`→`siphon`, `decipher`→`divine`,
+      and four names over the length rule. `decant`→`siphon`, `decipher`→`research`,
       `inscribe`→`scribe`; old words kept as synonyms. Canonical collisions 1→0,
       prefix ambiguity 1→0, synonym collisions 7→3 all claimed. Now enforced
       continuously by `crates/orbs-sim/tests/naming.rs` — DESIGN.md §6.1, §19
@@ -299,7 +300,7 @@ that names its phase gets revisited when the phase arrives; one that says
       adding nouns is what makes ambiguity reachable and the gate weighs zero
       dead ends above the resolution rate
       **See it:** `attend laboratory`, `make a potion of clarity` → `decoct clarity`
-      with a meter; `divine sigil-iv` while it brews → refused, naming what holds
+      with a meter; `research` while it brews → refused, naming what holds
       the slot; `decoct nonsense` → a numbered prompt you answer with a digit
 - [x] **Log-poisoning sabotage** on brewing logs, via `peruse` / `sift` / `verify`
       — a seeded roll every `DRIFT_INTERVAL` ticks poisons a log; the tell is
@@ -529,7 +530,7 @@ the loop.
         16→18. Retiring `decoct` repoints five claimed words at `grimoire`,
         registers recipes as `Topic` nouns beside their `Essence`, and touches
         ~22 files including a doctest and the `ORBS_DUMP` examples in CLAUDE.md
-        and SETUP.md. `DECOCT_TICKS` goes with it; `work::begin` keeps `divine`
+        and SETUP.md. `DECOCT_TICKS` goes with it; `work::begin` keeps `research`
         as a caller. One slot each from the global pool; `meditate` **stalls**
         rather than auto-advancing; a finished-but-uncollected tool **releases
         its slot**, or a capacity-1 player who walks away is soft-locked
@@ -1084,7 +1085,7 @@ the loop.
       minute zero.
       - **Experience supersedes fragments as the progression currency.** Earned
         by completing runs, weighted by the instrument — mortar 1, balneum 2,
-        flask 4, alembic 8, `divine` 1 — so each tier of tool is worth every use
+        flask 4, alembic 8, `research` 1 — so each tier of tool is worth every use
         of the one below. It accumulates and is never spent. §11.5's ~300-fragment
         derivation and its unlock cadence are amended with it
       - **16 is arrived at, not picked**: 1+2+1+4+8 is one clarity walked end to
@@ -1121,15 +1122,94 @@ the loop.
       climbs 16 → 20 while the player stands in the archive, nothing says *needed
       you there*, and the sidebar reads `held 1 of 1`. ✅ that row is **absent**
       before the turn: `ORBS_DUMP=1 ORBS_GRID=100x36` has no `held` line
-- [ ] **The upgrade tree** — what the rest of the experience curve buys.
-      Ingredients, recipes, ley-line upgrades, further concentration and multiplex
-      steps, and §11's domain discoveries. Two things land with it that are
-      deferred above: the **fractional slot charge** (it prices multiplexing, so
-      it needs multiplexing) and a **speed** upgrade to replace struck invariant 3.
-      Also the first **content gate** — *"brew this to open that domain"* — which
-      is a second axis over experience rather than a replacement for it.
-      **See it:** cross a second threshold and be offered something you choose
-      between, rather than a level that arrives on its own
+- [x] **`weave` — the Ley Line, Mastery, and a surface for progression.**
+      Concentration 1 arrived on its own and `status` printed two numbers with
+      nothing saying what they were for. This is the screen, **read-only**: it
+      does **not** close the item above, which needs a node worth choosing.
+      - **Two tracks, replacing §11.5's placeholder.** *"Ley-line upgrades and
+        grimoire rank"* named two sources of Concentration and had no mechanical
+        content anywhere. **The Ley Line** is the straight path — passing a step
+        *is* the grant — and **Mastery** branches, a tier opening and giving one
+        of its nodes. `grimoire rank` is dropped: `/grimoire` is already the
+        player's spellbook
+      - **No points; experience is still never spent.** A tier opening costs
+        nothing and taking one of its nodes closes it, which is a choice without
+        a balance to regret
+      - **`ascend` failed the scorer at 667 against `attend`** — computed before
+        the name was picked. `weave` is 200 against `wield`, 400 against `write`,
+        `wea` free. **No `tree` synonym**: in a game whose premise is a
+        filesystem, it means *list this directory*, and no fuzzy test catches a
+        collision of meaning. **`may_issue` refuses it**, or `repeat 100 / weave`
+        is a soft-lock
+      - **A bar, then two tracks running right.** Progression runs rightward and
+        the screen says so three times: the bar fills right, the Ley Line runs
+        right, Mastery's tiers run right. Siblings stack **downward**, which is
+        the other meaning — rightward is progress, downward is a choice. **The
+        first version was a vertical list and was replaced for being one**: it
+        fit, and it did not say what it was for
+      - **The bar is a fixed hundred and both tracks are drawn under it at the
+        same width**, so a node's position *is* its cost —
+        `─────[•]───────` with the fill either past it or not, and Mastery
+        forking off a trunk at 24 with a line from each node to *its own*
+        successor at 40. Measured against the *next* threshold instead, the bar
+        emptied itself the instant the player earned something, which is when it
+        should look most like progress; at a fixed stride, a tier at 24 sat five
+        cells from a tier at 40 and said they were adjacent
+      - **The session pane is ~48 columns, not 80** — panes tile side by side
+        above the 100×28 deep-focus floor, so the 80-column floor is the
+        *widest* case. What a node *is* lives in a **details panel** in the
+        bottom right rather than beside every node, which is what lets the
+        picture fit and the words stay readable
+      - **The panel says `unlocked` and `active` separately**, because they are
+        different questions: a mastery node can be unlocked and idle (nobody
+        chose it) or unlocked and idle for ever (a sibling took the tier's one
+        choice). `Locked` draws the same for *not earned yet* and *already
+        spent* on purpose, so `unlocked` is a field rather than a reading of the
+        glyph — one says *work more*, the other says *you chose otherwise*
+      - **`●` is not in CP437**, so "taken" would have drawn as nothing and
+        collapsed the one distinction §14 says must not be colour-only. `• ○ · ─`,
+        checked against the table. Nodes are drawn silently and `announce` their
+        total and state as **words**, so a reader is not handed a bare glyph
+      - **The way in is a word.** `ley`/`mastery` go into a track and hand the
+        arrows over, as `edit` drops into the editor's buffer; an arrow at the
+        command line does nothing. Reported as *"my first key press was being
+        ignored"* — which was also a **real bug**: `chord_is_stale` means *accept
+        this key*, and this screen read it as *drop it*, swallowing one keystroke
+        every time it opened after a pause
+      - **Every node is framed `[○]`; the aimed one is `«○»` and Bright** — two
+        carriers, because brightness alone failed outright (an aimed `○` is
+        already Bright and identical to its sibling) and §14 forbids the
+        difference being colour. The aim is an identity, not an index, so a tier
+        opening under it unplaces it rather than moving it
+      - `progression.toml` gains three rules and `deny_unknown_fields`, which is
+        the one that mattered: with both tracks defaulted, the **old**
+        `[concentration]` section parsed into a tower with no curve at all
+
+      **See it:** ✅ `ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="weave"` — the bar
+      reads `0 of 100`, the ley line draws `─────[·]───` with `16` under its one
+      station, and both mastery tiers are `[·]`.
+      ✅ after one clarity the station fills to `[•]` and the bar reads
+      `16 of 100` — the long brew line from the item above with `weave` on the
+      end. The bar's scale does **not** move; the fill does.
+      ✅ a tier **opening**, which is the closest v1 gets to the mechanic:
+      `ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="attend laboratory; kindle charcoal; debug_spawn clarified-draught 3; distil clarified-draught; meditate 60; empty alembic; distil clarified-draught; meditate 60; empty alembic; distil clarified-draught; meditate 60; weave"`
+      — the tier at 24 becomes `[○]` and the details panel reads `unlocked` /
+      `inactive`, which is the pair a single word could not have carried.
+      ✅ aim and take, on the same line plus
+      `ORBS_WEAVE="mastery\n<down>\ntake"` — `«○»` moves to the sibling below and
+      the refusal names `tbi_b`, so typing kept the aim. `<right>` walks to *its
+      own* successor at 40, which is the other axis.
+      ✅ and the arrows refusing to move before a word:
+      `ORBS_WEAVE="<down>\n<right>"` leaves the aim unplaced and the details
+      panel reads *"say ley or mastery"*.
+      ✅ `ORBS_WEAVE="ley\ntake"` on an earned step says *"concentration is yours
+      already"* — not *"nothing behind it yet"*, which is what it said about the
+      game's one real grant while the panel beside it read `active`.
+      ✅ both widths: `ORBS_GRID=80x22` (one wide pane) and `ORBS_GRID=100x28`
+      (the narrowest tiled pane).
+      ✅ `cargo run -p orbs-render --example screens` draws it at 48×18 — the
+      narrowest *and* shortest the painter accepts — and prints the linear
+      stream, where every state appears as a word (`16: taken`, `24: open`)
 - [x] **The prompt becomes a command line** — caret editing (←/→, Home/End,
       `Cmd+←/→` because a Mac has no Home key, Escape to clear, insert and delete
       at the caret), history on ↑/↓ **filtered by what is typed** with the prefix
@@ -1297,6 +1377,183 @@ the loop.
       moving — a dump cannot show that, so ✅ `cargo run -p orbs` for the rate
 - [ ] Remaining sabotage surfaces (world, script text, trigger clocks)
       **See it:** `verify` each of the four surfaces and have it name the tampering
+- [x] **The archive is a maze, and the world holds the search** — §10 calls the
+      domain *bespoke* and *"stales fastest"*, and it was five entities with a
+      verb that consumed nothing and produced nothing. `research` now resolves a
+      labyrinth out of the lectern, `follow` threads it, the way out gives up a
+      fragment, and four fragments make a scroll.
+      - **A search, automatable, with no grammar change.** Trémaux needs no
+        memory beyond marks in the passages, so the cells mark themselves and the
+        four ways publish what is adjacent. That is DFS performed physically —
+        the marks are the visited set, the head is the stack pointer
+      - **One thing had to give and it was the vocabulary.** `compile` resolves a
+        condition's names at *cast*, which is when no cell is `walked` — so every
+        `if` compiled to a dead branch. `NounKind::Sense` plus five words the
+        scene always offers is the whole fix
+      - **`step` scores 750 against `stop`, `tread` 800 against `read`.** `follow`
+        is 429. It is the 21st tower-wide verb and is recorded as a **debt**: it
+        belongs to the archive, but a fixture carries one `Operation` and the
+        lectern spends it on `research`
+      - The instrument retired three defects at once — no completion sentence, an
+        unstoppable run, no `recall` — and with them `DIVINE_TICKS`,
+        `pipeline::work` and `progression::DIVINE`
+
+      **See it:** ✅ `ORBS_BOOT=0 ORBS_DUMP="attend archive; research; survey north; follow east"`
+      — a labyrinth resolves, `survey north` shows a reading, the reading moves.
+      ✅ `cargo test -p orbs-sim --test solver` — a Trémaux solver's every
+      condition survives the cast, the readings resolve with no maze open, and a
+      misspelled `walkd` is still refused.
+      ⬜ a scroll that does something — the item below
+- [x] **The map that fills in** — `orbs-render/src/maze.rs`, CP437-checked, drawn
+      by `orbs/src/shell/labyrinth.rs` beside the instrument panel whenever a maze
+      is open. Walls only where the reading has *stood*, `▒` walked once, `░`
+      finished with, `☼` the head, `Ω` the way out, and blank for floor nobody has
+      walked — the walls around it already say a corridor is there. **Columns, never rows**, whichever way the panel runs: taking
+      rows under a `Top` panel leaves the deep-focus floor a five-row transcript.
+      It refuses rather than truncates, because a maze drawn short is a wrong maze.
+
+      **See it:** ✅ `ORBS_BOOT=0 ORBS_DUMP="attend archive; research"` — one mark
+      alone in the dark.
+      ✅ `ORBS_BOOT=0 ORBS_GRID=160x45 ORBS_DUMP="attend archive; research; follow
+      east; follow east"` — the fog opening as it goes, at the narrowest grid that
+      draws it.
+      ✅ `cargo run -p orbs-render --example screens` — three states through the
+      real painter rather than a replica, because this picture lives in the render
+      crate and can be called rather than imitated.
+      ✅ **watching a spell solve it**, which is what the map is for — write the
+      four-way solver from `tests/solver.rs`, then
+      `ORBS_THEN="invoke threading; meditate 300"`. `▒`, `░` where it backtracked,
+      `☼` mid-flight, fog still ahead of it.
+- [x] **A solver that actually finishes one** — the acceptance test every other
+      test in `tests/solver.rs` was standing in for. *Survives the cast* had been
+      quietly doing duty for *reaches the exit*, and they are not the same claim:
+      the obvious flat ladder of sixteen `if`s parses, casts clean, walks two
+      cells and then **oscillates for ever**, because the `passage` tier steps
+      into a fresh cell and the `walked` tier steps back out of it four lines
+      later in the same lap. `else` is what fixes it — one move per lap by
+      construction — and that is now written down where the next person will
+      write a solver.
+      **See it:** ✅ `cargo test -p orbs-sim --test solver` — twelve seeds, each
+      swept to a shard, worst 5123 ticks against a pinned budget of 6500.
+- [x] **`wander`** — the arrow keys walking the labyrinth, because nobody solves
+      a maze by typing `follow east` a hundred times. The **22nd tower-wide
+      verb**, which `verb.rs` argues for rather than merely counts: the seat is
+      `unfurl`'s (a surface with no other way in) and the debt is `follow`'s (a
+      domain's word wearing a tower-wide coat until a second verb can be scoped
+      to an instrument). Both retire together.
+
+      **Walking takes the pane; watching does not.** `wander` covers the session
+      pane like the editor — maze centred, walked count and keys beneath — because
+      the prompt is dead while the arrows have the keys and a screen that still
+      looks like a session offers something it cannot do. A *spell* solving one
+      keeps the map inline beside a live transcript: same picture, different
+      activity, and only one of them owns the keyboard.
+
+      **An arrow moves the reading on the frame it is pressed.** `Sim::walk` is a
+      third entry point beside `submit` and `step`, and consumes **no tick** — so
+      a player walks as fast as they can press and no brew advances while they
+      do. Three versions went through the prompt's queue first: per-keystroke
+      submission walks at the speed of the *keyboard* (thirty cells on one tick
+      from a held arrow), and one aim then a bounded burst walk at the speed of
+      the *world*, which is a wait rather than a minigame. The queue was solving
+      the wrong problem.
+
+      Replay survives because `Submission::Walked` records *when* — a typed line
+      executes at the start of the next tick, a walk has already executed — and
+      the driver now lives on `Sim` rather than being hand-written at each of the
+      three call sites that had a copy.
+
+      **See it:** ✅ `ORBS_BOOT=0 ORBS_GRID=160x45 ORBS_DUMP="attend archive;
+      research; wander" ORBS_WALK="<right>\n<right>\n<down>\n<down>\n<left>"` — the
+      pane is the maze, the border reads `walking`, and the footer counts.
+      ✅ `ORBS_BOOT=0 ORBS_DUMP="attend archive; wander"` — refused, and it names
+      `research` as the way in.
+      ✅ `cargo test -p orbs shell::wandering` — a press moves the reading with no
+      tick stepped anywhere in the test, and the keys come back when a spell
+      closes the maze.
+      ✅ `cargo test -p orbs-sim --lib session` — a hand-walked maze replays to the
+      same cell, and walking costs no world time.
+- [x] **A wall is a square, so a step is one character** — three defects, all
+      found by looking at the screen with the tests green, and all the same
+      geometry underneath. The map drew an open wall segment as a blank, so a
+      path read `▒ ▒ ▒ ▒` — *every other cell visited*. Filling the corridors
+      fixed that and left `·` dots on every known-but-unwalked square, two per
+      unexplored way out. And a cell-to-cell step still moved the reading **two
+      characters**, because cells with walls *between* them draw `2w+1` across.
+
+      No drawing fixes the last one: one character per cell loses the walls, and
+      two corridors side by side would merge into a block. So the grid changed —
+      15×15 squares, a wall is one of them, the corridor between two cells is
+      somewhere you stand. The painter lost its odd/even split entirely, and a
+      solver takes about twice as long (1233 ticks worst, was 677), which is
+      paid by bound spells rather than by a player.
+      **See it:** ✅ `ORBS_BOOT=0 ORBS_GRID=160x45 ORBS_DUMP="attend archive;
+      research; wander" ORBS_WALK="<right>"` — the head moves **one** character.
+      ✅ `cargo run -p orbs-render --example screens` — a maze that reads as a
+      maze.
+      ✅ `cargo test -p orbs-render maze` and `cargo test -p orbs-sim --lib maze`
+- [x] **16×16, a denser carve, and `back`** — the maze is 176 cells in a 33×23 picture, carved by randomised Prim's rather than a recursive backtracker:
+      short passages, frequent junctions, many small dead ends, instead of a few
+      very long corridors. The map is **refused** at the 80×22 and 100×28 floors
+      because 35 rows will not fit there, so See-it lines that want the picture
+      ask for `ORBS_GRID=160x45`.
+
+      **It broke automation, and that is how we learnt the solver was never a
+      solver.** The four-tier ladder reads like Trémaux and is not — Trémaux
+      turns back *by the passage it came along*, and nothing in §8's language
+      could say which that was. At a junction where two ways read alike, a fixed
+      compass order sends the reading back where it came from and it **cycles**.
+      Measured: 4 of 8 at 16×16, and 1 of 12 on Prim's mazes at 7×7. The
+      acceptance test had been proving it about the only mazes the flaw survived.
+
+      One word fixes it: `back`, the way last come from, published as a *second*
+      child on that direction. A five-rung ladder solves 12 of 12 on both
+      generators at both sizes, in at most 708 steps.
+      **See it:** ✅ `cargo test -p orbs-sim --test solver` — twelve seeds swept,
+      worst 5123 ticks against a pinned 6500.
+      ✅ `ORBS_BOOT=0 ORBS_GRID=160x45 ORBS_DUMP="attend archive; research"` — a
+      33×23 block, dark but for one mark.
+      ✅ `ORBS_BOOT=0 ORBS_DUMP="attend archive; research; wander"
+      ORBS_WALK="<right>\n<right>\n<right>"` at the 80×22 floor — a window on
+      the maze rather than no map at all.
+- [x] **One generic fragment, not four named ones** — the yield was
+      `shard-of-dawn`/`noon`/`dusk`/`night`, drawn at random. Two things were
+      wrong. Collecting a set was **coupon-collector attrition** — 4·(1+½+⅓+¼) ≈
+      8.3 solves for one scroll, with no decision in it, since you could not aim
+      for the one you lacked; that is §10's *"a duration and no decision
+      content"* reappearing in the collection loop instead of the command. And
+      **nothing in the game ever said what one was**: no prose, no `recall`
+      topic, four invented names standing in for a decision nobody made.
+
+      One `fragment`, four of it, one generic `spell-scroll`, and no roll at all.
+      Specific fragments for specific spells is the intended shape and will want
+      distinct names again; until those spells exist this is the honest
+      placeholder. It cost `Recipe::count` — see below.
+      **See it:** ✅ `ORBS_BOOT=0 ORBS_DUMP="attend archive; research"` then solve
+      and `survey lectern` — `fragment = 1`, and the panel reads `gathering`.
+      ✅ `cargo test -p orbs-sim --test solver`
+- [x] **A recipe can want more than one of something** — `Recipe::count`,
+      defaulting to 1. What an instrument holds is a node per *name* with a stock
+      count on it, so `inputs = ["fragment", "fragment", "fragment", "fragment"]`
+      reads like it should work and cannot. Expanding a held stack into one name
+      per unit was the other candidate and breaks something already shipping: the
+      mortar holding **two** sage against a one-sage recipe reads `charged` and
+      fires, which is what *"charged a unit at a time, so a run spends a unit"*
+      means. So the recipe says how many it wants, the match asks for at least
+      that many, and `transmute` spends exactly that many.
+
+      It also collapsed three hand-built copies of "what is in this instrument"
+      into `tower::holdings`, all of which dropped the count on the floor —
+      invisible until a recipe wanted more than one.
+      **See it:** ✅ `cargo test -p orbs-sim --lib recipe`
+      ✅ `ORBS_BOOT=0 ORBS_DUMP="attend laboratory; move sage to
+      mortar_and_pestle; move sage to mortar_and_pestle; wield
+      mortar_and_pestle"` — still fires, and leaves one sage behind.
+- [ ] **Scrolls that do something** — `spell-scroll` assembles and is then an
+      object with no use, which is §19's third finding against this item conceded
+      rather than dodged. Haste for brewing is the cheapest first use, and it is
+      also where the generic fragment becomes specific ones.
+      **See it:** spend a scroll and watch a brew run shorter
 - [ ] Third domain (scrying — the player's first discovery)
       **See it:** discover it in play rather than starting with it
 - [ ] Minimal apprenticeship + **continuous non-terminal-user playtesting**
@@ -1365,7 +1622,7 @@ the loop.
         depiction of the verb is exactly that: read the fragment, learn `grep`,
         the grimoire grows. A bespoke puzzle is an ambition **increase**, not a
         debt, and it is better bought when it is known what it gates
-      **See it:** `divine` a fragment and gain a verb you did not have
+      **See it:** `research` a fragment and gain a verb you did not have
 - [ ] Full drift
       **See it:** return after a long absence to scripts that have gone subtly wrong
 - [ ] Offline progression + its unlock
@@ -1460,6 +1717,51 @@ the loop.
       **See it:** install from Steam on a clean machine and launch it
 - [ ] Polish
       **See it:** a full playthrough on the shipping build, start to end
+
+---
+
+## Standing — work that rides with the content
+
+**Nothing here is scheduled, and nothing here may block a phase.** That is the
+whole reason the section exists.
+
+An item that *cannot close* does not belong in a numbered phase. Sitting in one,
+it does not track work — it holds the phase open for ever, and a phase that can
+never be finished stops being a plan and becomes a list. This has now happened
+twice: the settings item sat open in Phase 0.5 waiting for somewhere to persist a
+setting, and the upgrade tree sat open in Phase 1 waiting for content that no
+Phase 1 item produces. The first was moved to the phase that builds what it
+needs; the second had no such phase, because it is not waiting on one thing — it
+is waiting on **all of them**.
+
+So: when an item is deferred because a *later phase* builds what it needs, move
+it to that phase. When it accretes instead — a little more of it true with every
+content item, never all of it true — move it here.
+
+- [ ] **The upgrade tree grows with the content.** The surface is built
+      (`weave`, Phase 1) and a node is a row in `progression.toml` plus a line in
+      `prose.toml` — **no Rust**. So the tree is not a thing to schedule; it is
+      what every later content item leaves behind. A domain that ships brings the
+      tier that unlocks it, a recipe brings its own step, and the curve fills in
+      as there is something to put on it.
+
+      **One piece of engineering is left in here and should not be lost in the
+      accretion: the first real node.** It turns `take` from a refusal into a
+      grant, and it carries what the read-only version deliberately left out — the
+      mutator, a `Submission` variant, the queued effect on a tick boundary. It is
+      also the only place the choose-between mechanic can be *seen* rather than
+      tested, so it is the one item in this section with a See-it line worth
+      writing down. Schedule it with whichever content first has two things worth
+      choosing between.
+
+      Also waiting on content, and named so they are not rediscovered: the
+      **fractional slot charge** (it prices multiplexing, so it needs
+      multiplexing), a **speed** upgrade to replace struck invariant 3, the first
+      **content gate** — *"brew this to open that domain"* — and `SCALE` in
+      `loom.rs`, a provisional round hundred that becomes a derived number once
+      the curve reaches it.
+      **See it:** cross a threshold, be offered two nodes, take one, and watch
+      the other close — rather than a level that arrives on its own
 
 ---
 

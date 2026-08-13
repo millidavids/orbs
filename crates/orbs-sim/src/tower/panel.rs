@@ -62,6 +62,8 @@ pub enum Craft {
     /// Not an operation at all — shared heat the others draw on. The athanor,
     /// which is why it is the one instrument taking no Focus (§10.1).
     Heating,
+    /// Threading a labyrinth. The archive's lectern (§10, `tower::maze`).
+    Reading,
     /// A fixture with no recipe of its own.
     Idle,
 }
@@ -125,6 +127,16 @@ pub enum State {
     Empty,
     /// Holding something, not started.
     Charged,
+    /// Holding part of what a recipe wants, and waiting for the rest.
+    ///
+    /// **The lectern is why this exists.** Its only recipe is an exact match on
+    /// four distinct shards, so one, two or three of them matched nothing and
+    /// fell through to [`Fouled`](Self::Fouled) — the panel telling a player
+    /// collecting a set that their lectern *will not start*, which is the exact
+    /// confusion the panel was built to remove. [`Charged`](Self::Charged) would
+    /// be the opposite lie: it means wield it and it runs, and three shards do
+    /// not.
+    Gathering,
     /// Running.
     Working,
     /// Being cleared — §9's triage slot.
@@ -179,6 +191,7 @@ impl State {
         match self {
             Self::Empty => "empty",
             Self::Charged => "charged",
+            Self::Gathering => "gathering",
             Self::Working => "working",
             Self::Scouring => "scouring",
             Self::Ready => "ready",
@@ -208,6 +221,13 @@ pub fn instruments(world: &World) -> Vec<Instrument> {
         .into_iter()
         .filter(|node| world.get::<Fixture>(*node).is_some())
         .filter(|node| world.get::<super::Store>(*node).is_none())
+        // **And not a reading.** The archive's four ways are places so a spell
+        // can name them (`if north has passage` needs `north` to be a
+        // `NounKind::Place`), and being places makes them fixtures — but a
+        // compass bearing is not an instrument and has no meter, so four rows
+        // reading `empty` for ever would teach the eye to skip the panel, which
+        // is the same argument that keeps the dispensary off it.
+        .filter(|node| world.get::<super::Reading>(*node).is_none())
         .collect();
 
     let mut panel = Vec::with_capacity(fixtures.len());
@@ -318,6 +338,7 @@ fn craft_of(world: &World, node: Entity) -> Craft {
         Some(crate::parser::Verb::Digest) => Craft::Digesting,
         Some(crate::parser::Verb::Mix) => Craft::Combining,
         Some(crate::parser::Verb::Distil) => Craft::Distilling,
+        Some(crate::parser::Verb::Research) => Craft::Reading,
         // `Kindle` is the heat source's, and it answered above. Anything else is
         // a fixture with no operation of its own — the dispensary, a shelf.
         _ => Craft::Idle,
@@ -328,6 +349,15 @@ fn craft_of(world: &World, node: Entity) -> Craft {
 fn read(world: &World, node: Entity, name: &str, now: Tick) -> (State, Option<Meter>) {
     if let Some(work) = world.get::<super::Working>(node) {
         let (done, total) = work.progress(now);
+        return (State::Working, Some(Meter { done, total }));
+    }
+    // **A labyrinth is work, and says so** — even though it takes no production
+    // slot. `if lectern is working` is how a solver asks whether its maze is
+    // still open, and the meter is cells walked against cells there are: the
+    // only honest measure a maze has, because how long it takes is what the
+    // player's rule decides.
+    if let Some(maze) = world.get::<super::Maze>(node) {
+        let (done, total) = maze.explored();
         return (State::Working, Some(Meter { done, total }));
     }
     if let Some(triage) = world.get::<super::Triaging>(node) {
@@ -391,16 +421,18 @@ fn read(world: &World, node: Entity, name: &str, now: Tick) -> (State, Option<Me
     // charged and ready to go, and `speak()` filtered `Charged` out of its
     // utterance entirely. That is precisely the confusion the panel exists to
     // remove: "a fouled instrument read as *it will not start*".
-    let holding: Vec<String> = held
-        .iter()
-        .filter_map(|held| world.get::<Name>(*held).map(|name| name.0.clone()))
-        .collect();
-    if world
-        .resource::<crate::content::Recipes>()
-        .matching(name, &holding)
-        .is_some()
-    {
+    let holding = super::holdings(world, node);
+    let recipes = world.resource::<crate::content::Recipes>();
+    if recipes.matching(name, &holding).is_some() {
         return (State::Charged, None);
+    }
+    // **Part of a recipe is not leavings.** The lectern wants four distinct
+    // shards, so one, two or three of them matched nothing and fell through to
+    // `Fouled` — the panel telling a player *collecting a set* that their
+    // instrument will not start, which is the confusion this whole column exists
+    // to remove.
+    if recipes.gathering(name, &holding) {
+        return (State::Gathering, None);
     }
     (State::Fouled, None)
 }
@@ -450,16 +482,25 @@ mod tests {
     }
 
     #[test]
-    fn there_is_no_panel_outside_the_laboratory() {
+    fn the_panel_is_a_fact_about_where_you_stand() {
         // The panel belongs to *where you are*, so a frontend never has to
         // decide whether to show it.
         let mut sim = Sim::new(1);
         sim.step();
         assert!(panel(&mut sim).is_empty(), "the tower root has instruments");
 
+        // **The archive has exactly one**, and that is what retired three
+        // defects at once: a completion with no sentence, a run `stop` could
+        // not reach, and a domain that drew nothing. The property this test
+        // actually encodes — that the panel belongs to *where you are* — is
+        // measured at the root, which has no instruments and never will.
         sim.submit("attend archive");
         sim.step();
-        assert!(panel(&mut sim).is_empty(), "the archive has instruments");
+        assert_eq!(panel(&mut sim).len(), 1, "the archive lost its lectern");
+
+        sim.submit("attend tower");
+        sim.step();
+        assert!(panel(&mut sim).is_empty(), "the root has instruments");
     }
 
     #[test]

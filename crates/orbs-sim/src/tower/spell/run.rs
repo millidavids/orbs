@@ -588,6 +588,18 @@ pub(super) const fn may_issue(verb: Verb) -> bool {
             // holding one seizes the prompt on the orb's clock — and inside a
             // `repeat` it re-seizes faster than Escape can give it back.
             | Verb::Unfurl
+            // And `weave` opens a whole screen, which is the same objection with
+            // more of the window behind it. `repeat 100 / weave` is a soft-lock.
+            | Verb::Weave
+            // `wander` draws no screen at all, and is refused for the same
+            // reason all the same: it makes the prompt dead, so Escape is the
+            // only way out — and a spell re-taking the arrows every lap would
+            // be racing the player for the one key that ends it.
+            //
+            // **`follow` is deliberately *not* here.** Walking the maze is the
+            // whole point of automating the archive; what a spell may not do is
+            // decide who is holding the keyboard.
+            | Verb::Wander
     )
 }
 

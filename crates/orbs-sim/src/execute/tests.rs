@@ -142,7 +142,11 @@ fn sample(verb: Verb) -> (&'static str, &'static str) {
         // that made it. The mortar is empty here, and the refusal that
         // yields is still the world answering rather than acknowledging.
         Verb::Purge => ("laboratory", "purge laboratory.log"),
-        Verb::Divine => ("archive", "divine sigil-iv"),
+        // No argument: `divine` takes `NOTHING` since it opens a labyrinth
+        // rather than deciphering a named fragment. The parser fixtures were
+        // migrated when the signature changed and this one was missed, so it had
+        // been feeding a noun to a verb with no slot for it.
+        Verb::Research => ("archive", "research"),
         Verb::Scribe => ("tower", "scribe night_watch"),
         // **A spell the tower actually has.** It named `night_watch`, which does
         // not exist — harmless while `bind` was dark and a test of nothing the
@@ -155,6 +159,9 @@ fn sample(verb: Verb) -> (&'static str, &'static str) {
         Verb::Bind => ("tower", "bind first_light"),
         Verb::Invoke => ("tower", "invoke night_watch"),
         Verb::Unfurl => ("tower", "unfurl"),
+        Verb::Weave => ("tower", "weave"),
+        Verb::Follow => ("archive", "follow north"),
+        Verb::Wander => ("archive", "wander"),
     }
 }
 

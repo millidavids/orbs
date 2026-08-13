@@ -27,6 +27,7 @@
 
 use bevy_ecs::prelude::*;
 
+use super::maze::Sense;
 use super::node::{Cwd, Fixture, Name, Nameable, children_of, path_of};
 use crate::execute::LOG;
 use crate::parser::{NounKind, Scene};
@@ -136,6 +137,27 @@ pub fn scene_at(world: &World, at: Entity) -> Scene {
         {
             scene = scene.with(NounKind::Script, &name.0);
         }
+    }
+
+    // **The maze's readings, always, whether or not a maze is open.**
+    //
+    // These are the words a solver's `if` names — `if north has passage and not
+    // north has walked` — and they have to resolve at the moment the spell is
+    // **cast**, which is exactly when none of them is true of anything.
+    // `spell::compile` resolves a condition's names against the room as it is,
+    // and nulls the whole condition for a name it cannot place; that guard is
+    // right (§19: `has ground-slat` answered "no" for ever) and it cannot tell a
+    // not-yet-existing state from a typo. So the scene offers the vocabulary
+    // rather than the instances.
+    //
+    // **Stable is the point.** `bind::stand` recasts a held spell every lap, so
+    // a solver must compile identically every time — a vocabulary that came and
+    // went with the maze would make a bound spell work on some laps and not
+    // others, with nothing on screen saying why.
+    // `back` rides with the readings: it is a word a solver names in an `if`,
+    // so it has to resolve at *cast* exactly as they do.
+    for reading in Sense::ALL.into_iter().chain([super::maze::BACK]) {
+        scene = scene.with(NounKind::Sense, reading);
     }
 
     // Every place, wherever the player is. Depth-first from the root, children

@@ -32,6 +32,7 @@ use crate::frame::Frame;
 use crate::geometry::{Pos, Rect};
 use crate::grind;
 use crate::linear::UtteranceKind;
+use crate::maze::{self, Labyrinth};
 use crate::mix;
 use crate::span::Span;
 use crate::style::{Presentation, Role, Style, Wash};
@@ -502,6 +503,37 @@ impl<'a> Painter<'a> {
     pub fn tint(&mut self, area: Rect, wash: Wash) {
         let area = area.intersection(self.area);
         self.frame.set_tint(area, wash);
+    }
+
+    /// Draw a labyrinth, centred in `area` at its natural size.
+    ///
+    /// Returns whether anything was drawn — false only for a region with no room
+    /// at all. A region too small for the whole maze gets a **window onto it,
+    /// centred on the reading**, which pans as the reading walks; see
+    /// `maze::viewport` for why that replaced refusing outright.
+    ///
+    /// **Structural and silent**, like [`Painter::fill`] and the instrument
+    /// meters. What a listener needs is the four readings and how much has been
+    /// walked, and both are already in the panel's one utterance — a second
+    /// continuous announcement would be the *"progress announcements: completion
+    /// only"* rule (§14) broken by the very surface that most wants to break it.
+    pub fn labyrinth(&mut self, area: Rect, maze: &Labyrinth) -> bool {
+        let area = area.intersection(self.area);
+        let Some((at, from_x, from_y)) = maze::viewport(maze, area) else {
+            return false;
+        };
+        for row in 0..at.rows {
+            for col in 0..at.cols {
+                let (glyph, style) =
+                    maze::cell(maze, col.saturating_add(from_x), row.saturating_add(from_y));
+                self.put_cell(
+                    Pos::new(at.col.saturating_add(col), at.row.saturating_add(row)),
+                    glyph,
+                    style,
+                );
+            }
+        }
+        true
     }
 
     /// Speak something with no visual form of its own.

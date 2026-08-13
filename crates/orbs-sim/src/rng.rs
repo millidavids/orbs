@@ -33,11 +33,13 @@ pub enum RngStream {
     Yield,
     /// Trace accrual jitter.
     Trace,
+    /// The archive's labyrinths (§10, `tower::maze`).
+    Archive,
 }
 
 impl RngStream {
     /// Number of distinct streams. Must equal the variant count.
-    pub const COUNT: usize = 6;
+    pub const COUNT: usize = 7;
 
     /// Fixed index into [`Rngs::streams`].
     ///
@@ -52,6 +54,10 @@ impl RngStream {
             Self::Drift => 3,
             Self::Yield => 4,
             Self::Trace => 5,
+            // **A new highest index, never inserted.** `derive_stream_seed`
+            // folds the index in, so renumbering would silently remap every
+            // stream and invalidate every existing replay.
+            Self::Archive => 6,
         }
     }
 }
@@ -116,6 +122,7 @@ mod tests {
         RngStream::Drift,
         RngStream::Yield,
         RngStream::Trace,
+        RngStream::Archive,
     ];
 
     #[test]

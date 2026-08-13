@@ -378,7 +378,19 @@ mod tests {
         let mut log = ParseLog::new();
         log.push(ParseRecord::new(0, input, Mode::Calm, &analysis));
 
+        // **Every row has the header's shape**, which is the property — not the
+        // number of rows. Counting them made this a test of how many candidates
+        // the parser happened to find, so it broke the day a verb stopped taking
+        // an argument and could complete on its own.
         let tsv = log.to_tsv();
-        assert_eq!(tsv.lines().count(), 2, "one header plus one row: {tsv:?}");
+        let mut lines = tsv.lines();
+        let columns = lines.next().expect("no header").matches('\t').count();
+        for line in lines {
+            assert_eq!(
+                line.matches('\t').count(),
+                columns,
+                "a row broke the shape: {line:?}",
+            );
+        }
     }
 }

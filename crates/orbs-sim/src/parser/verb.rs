@@ -67,6 +67,20 @@ pub enum NounKind {
     /// Not [`Any`](Self::Any): `Any` searches every category, so `scribe sage`
     /// would quietly create a spell named after a reagent.
     Name,
+    /// What the archive's maze reports about the cell you are reading.
+    ///
+    /// `passage`, `wall`, `walked`, `twice`, `exit` — the words a solver's `if`
+    /// names. **A kind of their own, and no slot asks for one**, so a sense can
+    /// never fill a `Reagent` or a `Fragment` by accident while
+    /// [`Any`](Self::Any) still finds it. That last part is the whole reason the
+    /// kind exists: `spell::compile` resolves a condition's names against the
+    /// room *as it is at that instant*, and no cell is `walked` at the moment a
+    /// solver is cast — so without a kind the scene always offers, every `if` in
+    /// it would compile to a branch that takes neither half.
+    ///
+    /// **Not [`Topic`](Self::Topic)**, which `recall` reads: `recall walked`
+    /// would resolve and then find no manual entry.
+    Sense,
     /// Anything with text in it — `peruse orb.log`, `peruse night_watch.spell`.
     ///
     /// A **slot** kind, never a noun's own: nothing in the tower *is* a
@@ -118,6 +132,7 @@ impl NounKind {
             Self::Script => "script",
             Self::Count => "count",
             Self::Name => "name",
+            Self::Sense => "reading",
             // What the orb asks for, not what the type is called. "Which
             // readable?" is not a sentence; a spell is a file you read.
             Self::Readable => "file",
@@ -238,7 +253,9 @@ const TWO_REAGENTS: &[Slot] = &[
     Slot::optional(NounKind::Reagent),
 ];
 
-const FRAGMENT: &[Slot] = &[Slot::required(NounKind::Fragment)];
+/// One of the archive's four readings. A `Place`, because that is the only kind
+/// the place half of a spell's question resolves against.
+const WAY: &[Slot] = &[Slot::required(NounKind::Place)];
 const SCRIPT: &[Slot] = &[Slot::required(NounKind::Script)];
 // `scribe` coins a name rather than naming something that exists — see
 // `NounKind::Name`. `bind` and `invoke` keep `SCRIPT`, because a spell they name
@@ -332,18 +349,58 @@ pub enum Verb {
     /// holds rather than shelving it.
     Purge,
     /// Research a fragment.
-    Divine,
+    Research,
     /// Author a script.
     Scribe,
     /// Attach a script to a trigger.
     Bind,
     /// Run a script or spell.
     Invoke,
+    /// Move the archive's reading one cell through a maze (§10, `tower::maze`).
+    ///
+    /// **Not `step`, which scores 750 against `stop`** — over `MIN_SIMILARITY`,
+    /// and a typo that stopped a run instead of advancing it would cost the
+    /// whole maze. `tread` was the next candidate and scores **800 against
+    /// `read`**, which `peruse` claims. `follow` is 429 against its nearest and
+    /// shares no three-character prefix with anything.
+    Follow,
+    /// Look at what the work has bought (§11.5).
+    ///
+    /// **The twentieth tower-wide word, and it needs the argument `unfurl`
+    /// made.** §6.1 wants this set smaller, not larger, and `unfurl` earned its
+    /// seat by being the only way to reach a surface that already existed.
+    /// Progression is the opposite case and lands in the same place: the surface
+    /// does *not* exist, `status` prints two numbers with no sense of what they
+    /// are for, and §11.5's own turn — buying the first Concentration — arrives
+    /// as one line that was never chosen. A track nobody can look at is a track
+    /// nobody is on.
+    ///
+    /// **Not `ascend`**, which was the obvious name and collides: two edits from
+    /// `attend` in a six-letter word is 667, over `MIN_SIMILARITY`. `weave`
+    /// scores 200 against `wield` and 400 against `write` — the only other `w`
+    /// words in the vocabulary — and `wea` is a free three-character prefix.
+    Weave,
+    /// Give the arrow keys the archive's labyrinth (§10, §19).
+    ///
+    /// **The twenty-second tower-wide word, and it is `unfurl`'s argument
+    /// again**: the surface has no other way in, and in a mouseless game a word
+    /// is the only way to reach one. What it reaches is a maze a player would
+    /// otherwise walk with a hundred `follow` lines — the map is on screen the
+    /// whole time either way, so this buys the *keys* and nothing else.
+    ///
+    /// **The naming sweep was unusually brutal here**, and the near misses are
+    /// worth keeping because every one of them is the obvious word: `thread` is
+    /// 667 against `read`, `stride` 667 against `scribe`, `delve` 600 against
+    /// `weave`, `trace` 600 against `twice` — a reading permanently in scope in
+    /// the very room this works in — and `pace` 750 against `page`. `enter` and
+    /// `walk` are already taken, by `attend` and by `follow`. `wander` is 500 at
+    /// worst and `wan` is a free three-character prefix.
+    Wander,
 }
 
 impl Verb {
     /// Every verb in the Phase 0 vocabulary.
-    pub const ALL: [Self; 24] = [
+    pub const ALL: [Self; 27] = [
         Self::Attend,
         Self::Survey,
         Self::Peruse,
@@ -364,10 +421,16 @@ impl Verb {
         Self::Empty,
         Self::Stop,
         Self::Purge,
-        Self::Divine,
+        Self::Research,
         Self::Scribe,
         Self::Bind,
         Self::Invoke,
+        // **Appended, deliberately.** `the_tolerated_collision_set_is_pinned`
+        // walks pairs in this order, so inserting anywhere else would reorder
+        // the pinned set without changing a single score.
+        Self::Weave,
+        Self::Follow,
+        Self::Wander,
     ];
 
     /// The longest a canonical verb may be.
@@ -379,12 +442,16 @@ impl Verb {
     /// and the two 8-character names that had *no* such defence — `decipher`
     /// and `inscribe` — were shortened instead.
     ///
-    /// **`meditate` is now the only one that spends the eighth character**,
-    /// since `grimoire` became `recall` (§19). The limit stays at 8 rather than
-    /// tightening to 7, because tightening it would forbid a word no verb
-    /// currently wants while costing `meditate` the name that makes it feel
-    /// like a thing a wizard does — and §6.1's rule was always about the words
-    /// you type a thousand times, which this is not one of.
+    /// **`meditate` and `research` are the two that spend the eighth
+    /// character.** `meditate` kept it because it is the name that makes the
+    /// verb feel like a thing a wizard does; `research` because the archive is
+    /// a room of shelves and the word for what you do at a lectern is not
+    /// shorter. Both are words you type occasionally rather than a thousand
+    /// times, which is what §6.1's rule was always about — and `res` reaches
+    /// this one, so the typing cost is three characters either way.
+    ///
+    /// The limit stays at 8 rather than tightening to 7: tightening would
+    /// forbid a word no verb currently wants, at the cost of two that do.
     pub const MAX_CANONICAL_LEN: usize = 8;
 
     /// What this verb wants after it, as a single word.
@@ -424,10 +491,13 @@ impl Verb {
             Self::Empty => "empty",
             Self::Stop => "stop",
             Self::Purge => "purge",
-            Self::Divine => "divine",
+            Self::Research => "research",
             Self::Scribe => "scribe",
             Self::Bind => "bind",
             Self::Invoke => "invoke",
+            Self::Weave => "weave",
+            Self::Follow => "follow",
+            Self::Wander => "wander",
         }
     }
 
@@ -469,10 +539,14 @@ impl Verb {
     ///
     /// **Spelled out, not `{state}ing` in a template.** `content/prose.toml` built
     /// this by appending a literal `ing` to [`canonical`](Self::canonical), which
-    /// reads fine for `wield` and produces **"divineing"** for the one other verb
+    /// reads fine for `wield` and produced **"divineing"** for the one other verb
     /// that can hold the production slot. English inflection is not string
     /// concatenation, and the authored-line tests lint the template rather than
     /// the interpolated result, so nothing caught it.
+    ///
+    /// That verb is `research` now, whose naive form happens to be right — which
+    /// is exactly why the table stays: the next `-e` verb would bring the bug
+    /// back and the example that proves it is a rename away from vanishing.
     ///
     /// It lives here beside `canonical` because it is the same class of thing —
     /// a form of the vocabulary word — rather than an authored sentence.
@@ -499,10 +573,13 @@ impl Verb {
             Self::Empty => "emptying",
             Self::Stop => "stopping",
             Self::Purge => "purging",
-            Self::Divine => "divining",
+            Self::Research => "researching",
             Self::Scribe => "scribing",
             Self::Bind => "binding",
             Self::Invoke => "invoking",
+            Self::Weave => "weaving",
+            Self::Follow => "following",
+            Self::Wander => "wandering",
         }
     }
 
@@ -514,7 +591,19 @@ impl Verb {
             Self::Survey => PLACE_OPTIONAL,
             Self::Peruse => READABLE,
             Self::Sift => PATTERN_AND_FILE,
-            Self::Status | Self::Undo | Self::Unfurl => NOTHING,
+            // **`divine` takes nothing now.** It named a fragment while it was
+            // a twelve-tick command that consumed nothing; it opens a labyrinth
+            // on the lectern, and there is only one lectern to open one at.
+            // `wander` joins them for the reason `weave` did: it opens a
+            // surface, and a surface is not something you name an argument for.
+            Self::Status
+            | Self::Undo
+            | Self::Unfurl
+            | Self::Weave
+            | Self::Research
+            | Self::Wander => NOTHING,
+            // A way, which is a place — see `Role::Reading`.
+            Self::Follow => WAY,
             Self::Recall => TOPIC,
             Self::Verify | Self::Purge => ANYTHING,
             Self::Meditate => COUNT,
@@ -531,7 +620,7 @@ impl Verb {
             // relights what is banked, which is the end of every script loop.
             Self::Grind | Self::Digest | Self::Distil | Self::Kindle => ONE_REAGENT,
             Self::Mix => TWO_REAGENTS,
-            Self::Divine => FRAGMENT,
+
             Self::Scribe => SPELL_NAME,
             Self::Bind | Self::Invoke => SCRIPT,
         }
@@ -635,7 +724,48 @@ mod tests {
         // has always scrolled the transcript and nothing ever said so. A
         // vocabulary getting smaller is the direction §6.1 wants, and a word
         // that makes a mouseless game navigable is the exception it allows for.
-        assert_eq!(tower_wide.count(), 19);
+        //
+        // **`weave` is the second, and it is the opposite case landing in the
+        // same place.** `unfurl` reached a surface that existed; this one has no
+        // surface at all. Progression is two numbers in `status` with nothing
+        // saying what they are for, and §11.5's own turn — buying the first
+        // Concentration — arrives as a single line that was never chosen. A
+        // track nobody can look at is a track nobody is on, and in a mouseless
+        // game a word is the only way to look.
+        //
+        // **`follow` is the third, and it is the first that is a *domain's* word
+        // wearing a tower-wide coat.** It walks the archive's maze and means
+        // nothing anywhere else, so by rights it would be an operation scoped to
+        // the lectern — except `Scene::offering` derives scope from the
+        // `Operation` component and a fixture carries exactly one, which the
+        // lectern spends on `divine`. Scoping a *second* verb to one instrument
+        // is the missing mechanism, and until it exists this word is global and
+        // should be counted as a debt rather than a seat earned.
+        //
+        // **`wander` is the fourth, and it is both of the above at once** — so
+        // it is worth saying which half buys the seat and which half is owed.
+        //
+        // The seat is `unfurl`'s: the map draws whenever a maze is open, but
+        // *who owns the arrow keys* has no other way to be said, and a maze
+        // walked by typing `follow east` a hundred times is a chore rather than
+        // a minigame. That is the same exception §6.1 allows — a word that makes
+        // a mouseless game navigable.
+        //
+        // The debt is `follow`'s, unchanged and not doubled: this is a domain's
+        // word wearing a tower-wide coat for exactly one reason, that
+        // `Scene::offering` derives scope from the `Operation` component and the
+        // lectern spends its only one on `divine`. Both retire together the day
+        // a second verb can be scoped to an instrument. Two words waiting on one
+        // mechanism is an argument for building the mechanism; it is not an
+        // argument for a third.
+        //
+        // **22 is a number to defend, not a budget to spend**: the next word
+        // added here needs an argument of this shape, or the count is a ceiling
+        // nobody kept. `wander` is the last one this reasoning stretches to —
+        // the archive now has both the word it needs and the debt it owes, and a
+        // fifth would mean the missing mechanism had been deferred once too
+        // often.
+        assert_eq!(tower_wide.count(), 22);
 
         // One per instrument the laboratory raises: `grind`, `digest`, `mix`,
         // `distil` and the athanor's `kindle`.

@@ -37,7 +37,7 @@
 #
 # `{state}` is `Verb::participle`, already inflected. It used to be
 # `{state}ing` over `Verb::canonical`, which reads correctly for `wield` and
-# gave "the archive is busy divineing" for the only other verb that can hold
+# gave "the archive is busy researching" for the only other verb that can hold
 # the slot.
 work_busy = "the {source} is busy {state}. wait for it, or stop it"
 
@@ -239,6 +239,96 @@ unfurl_begins = "you unfurl the record"
 # line in the file. §3's no-shouting rule is about the file, not the neighbours.
 unfurl_keys = "pgup/pgdn  esc out"
 
+# The weave screen (§11.5, §19). Progression had no surface at all: `status`
+# printed two numbers and nothing said what they were for.
+#
+# **The opening line names the next threshold**, because that is the fact a
+# player who typed this wanted and it is what survives in the transcript after
+# the screen is closed. A tower with nothing left to open gets the second line -
+# the first would name a target of 0, which reads as reached.
+#
+# `{quantity}` is the earned total, which is what `FieldName::Quantity` on the
+# record carries too - the two named the opposite things once, which is a trap
+# for whoever authors the next line here.
+weave_begins = "{quantity} earned. the next turning is at {detail}"
+weave_begins_topped_out = "{quantity} earned, and the orb has learned all it can for now"
+
+# The screen's own furniture. Terse: the session pane is about 48 cells wide once
+# two panes tile side by side, which is the width this is authored against - not
+# the 80-column floor, which is the *widest* single-pane case.
+weave_words = "ley  mastery  take  quit"
+weave_browsing = "arrows move   take   esc back"
+weave_ley = "ley line"
+weave_mastery = "mastery"
+weave_title = "weave"
+# The bar is spoken as a sentence, never as a row of blocks - §14 names progress
+# bars specifically, and `Painter::progress` takes the sentence for this.
+#
+# **Against a fixed scale, not the next turning.** Retargeting emptied the bar
+# at the moment the player earned something, which is the one instant it should
+# have looked like progress - and a constant scale is what lets the ley line be
+# drawn beneath it at the same width, so a step's position on the line is its
+# cost read against the same cells.
+weave_bar = "{quantity} experience of {detail}"
+# The details panel before anything is aimed at. Not blank: a panel that is
+# sometimes full and sometimes empty reads as a screen that has broken.
+weave_aim_first = "say ley or mastery"
+weave_details = "details"
+weave_at = "costs {count}"
+# **Two facts, and they are not the same fact.** `unlocked` is whether the tower
+# has earned enough to reach it; `active` is whether what it grants is in effect.
+# A ley line step is both at once - passing one is taking it - but a mastery node
+# can be unlocked and idle (nobody chose it) or unlocked and idle for ever (a
+# sibling took the tier's one choice).
+#
+# All four fit half of a 30-cell panel, which is what they are authored against.
+weave_unlocked = "unlocked"
+weave_locked_state = "locked"
+weave_active = "active"
+weave_inactive = "inactive"
+# The pane is under the screen's floor. It has to say so rather than draw a
+# blank, because this surface holds the keyboard and `esc` does not close it -
+# a blank pane with the keys held is a player with no visible way out.
+weave_too_small = "the pane is too small for the weave. quit, or press F4"
+# `take` on a node nothing is behind yet. Every authored node is a marker, and
+# saying so plainly is better than a refusal that sounds like a rule.
+#
+# **All of these fit 46 cells**, which is the status row's whole width in a
+# 48-column pane. Longer is silently cut mid-word - the first draft of the line
+# below ended "...nothing is" and stopped, which reads as a bug in the orb.
+weave_nothing_behind = "{name} is a marker. nothing behind it yet"
+# **Says "opens at", not "its tier opens at".** A ley line step has no tier, and
+# this line answers for both tracks - the first wording told a player about a
+# tier that does not exist wherever the step they aimed at was on the line.
+weave_locked = "{name} is shut until {count}"
+weave_spent = "you took {name} from this tier already"
+# **Held already, which is not the same as empty.** A ley line step is taken by
+# being passed, so this is the one refusal about something the tower really has -
+# and `weave_nothing_behind` answered it at first, calling the game's one real
+# grant a marker one row under a panel saying `active`.
+weave_already = "{name} is yours already"
+weave_nothing_here = "point at something first, or name it"
+weave_unknown = "the orb weaves nothing called {name}"
+
+# One sentence per node id, keyed by the id in `progression.toml`. The **id** is
+# a decision and lives there; the **sentence** is prose and lives here, which is
+# the same split `recipes.toml` makes with the lines about what a recipe yields.
+#
+# Every one of these is a marker today. They are authored anyway, because a row
+# on the screen with no sentence under it is a row that looks broken - and
+# because the first real node replaces a line here rather than adding the idea
+# of one.
+#
+# **Authored to fit 28 cells**, which is the details panel's width inside its
+# border. Longer is clipped mid-word, and a sentence that stops at "while you
+# are" reads as a bug in the orb rather than as a pane that ran out of room.
+weave_node_tbi_a = "not taught yet"
+weave_node_tbi_b = "nor this"
+weave_node_tbi_c = "a deeper turning, unwritten"
+weave_node_tbi_d = "another, equally so"
+# What the Ley Line's one step gives, said as a capability rather than a number.
+weave_node_concentration = "hold a spell while away"
+
 # The editor's own furniture. Terse: these sit on one row of a pane that may be
 # 80 cells wide, beside the filename and the position.
 #
@@ -362,3 +452,49 @@ bind_full = "the orb holds {count}: {detail}. let one go first"
 # standing there", and this is the line that makes it true - the difference
 # `bind` sells, said at the moment it costs something.
 spell_unattended = "{name} needed you there. it stops"
+
+# ---------------------------------------------------------------------------
+# The archive's labyrinth (§10, §19).
+#
+# `research` (`divine` until the archive got its name right) opened nothing and
+# produced nothing for two phases; it now resolves a
+# maze out of the shelf, and `follow` threads it. The three defects that came
+# with the old verb - a completion with no sentence, a run that could not be
+# stopped, a domain with no manual entry - are gone because the domain has an
+# instrument, not because they were patched.
+# ---------------------------------------------------------------------------
+research_opens = "the page resolves into a labyrinth. the way out is somewhere in it"
+research_already = "a reading is already open. follow it, or stop the lectern"
+research_nowhere = "there is no lectern here"
+research_solved = "the labyrinth gives up {name}"
+follow_done = "the reading goes {name}"
+follow_wall = "there is no way {name}"
+follow_unopened = "nothing is open to follow. research first"
+follow_nowhere = "follow which way? north, east, south or west"
+
+# What the archive is for, and what its verb does - the two manual entries the
+# domain has never had.
+recall_archive = "research opens a labyrinth, follow threads it. four make a scroll"
+recall_research = "follow north, east, south or west. the ways say what is beside you"
+attend_reading = "that is a way the reading can go, not a room you can stand in"
+research_abandoned = "you let the labyrinth close"
+
+# The map's own border. `Painter::border` announces a title as a heading, which
+# is the whole of what the picture says to a listener - the four ways are what
+# `survey` answers and the progress is on the lectern's panel row, so a second
+# continuous utterance here would be the "completion only" rule (S14) broken by
+# the one surface that most wants to break it.
+maze_title = "labyrinth"
+maze_title_walking = "walking"
+
+# `wander` - the arrow keys take the maze. The map is already on screen either
+# way, so what this word buys is the keys, and the refusals have to name the two
+# things that must be true first.
+wander_opens = "you step into the labyrinth. the arrows walk it"
+wander_unopened = "there is no labyrinth to walk. research one first"
+wander_nowhere = "there is no lectern here to walk a labyrinth at"
+maze_keys = "arrows walk   esc leaves"
+maze_walked = "walked {quantity} of {detail}"
+
+# `recall wander` - the manual entry.
+recall_wander = "arrows walk the labyrinth, esc gives the prompt back"

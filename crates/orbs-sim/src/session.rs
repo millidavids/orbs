@@ -282,6 +282,22 @@ pub enum Submission {
         /// rather than trusting one recorded alongside it.
         lines: Vec<String>,
     },
+    /// One cell of the archive's labyrinth, walked by hand (§10, §19).
+    ///
+    /// # Why this is not a [`Typed`](Self::Typed) `follow east`
+    ///
+    /// Because the two run at different moments, and a replay that could not
+    /// tell them apart would put this one a tick out. A typed line is *queued*
+    /// and executes at the start of the next tick; an arrow in `wander` mode
+    /// executes **immediately**, so it lands after the step of the tick it is
+    /// recorded against rather than before the next one.
+    ///
+    /// That is the whole of the difference and it is recoverable from the
+    /// variant alone: replay a tick, then apply the walks recorded against it,
+    /// in list order. Nothing else about the pairing is ambiguous, because the
+    /// prompt is dead while the arrows have the maze — so a tick can never
+    /// contain both a walk and a typed line.
+    Walked(String),
 }
 
 /// Everything the player did, with the tick it landed on.
@@ -308,6 +324,14 @@ impl Submissions {
                 lines: lines.to_vec(),
             },
         ));
+    }
+
+    /// Note that a cell was walked by hand during `tick`.
+    ///
+    /// Unlike [`push`](Self::push) this one has *already happened* by the time
+    /// it is recorded. See [`Submission::Walked`].
+    pub fn walked(&mut self, tick: Tick, way: &str) {
+        self.0.push((tick, Submission::Walked(way.to_owned())));
     }
 
     /// Everything, in order.
@@ -461,6 +485,8 @@ mod tests {
         // The property `Submission::Wrote` exists for, and the one revision 3 of
         // the plan asserted without testing. A `Wrote` entry nothing replays is
         // a shape with no consumer.
+        //
+        // See `Sim::replay` for what each variant means about *when*.
         let mut live = Sim::new(9);
         live.submit("attend laboratory");
         live.step();
@@ -472,12 +498,7 @@ mod tests {
             while replayed.tick() < tick {
                 replayed.step();
             }
-            match submission {
-                Submission::Typed(line) => replayed.submit(&line),
-                Submission::Wrote { name, lines } => {
-                    replayed.write_spell(&name, &lines);
-                }
-            }
+            replayed.replay(submission);
         }
         while replayed.tick() < live.tick() {
             replayed.step();
@@ -486,6 +507,75 @@ mod tests {
         let spell_of = |sim: &Sim| -> Option<Vec<String>> { sim.spell("morning") };
         assert_eq!(spell_of(&live), spell_of(&replayed));
         assert!(spell_of(&live).is_some(), "the spell was never written");
+    }
+
+    /// A way that is actually open from where the reading stands.
+    fn a_way_out(maze: &orbs_render::Labyrinth) -> Option<crate::tower::Way> {
+        crate::tower::Way::ALL
+            .into_iter()
+            .enumerate()
+            .find_map(|(index, way)| maze.open(index).then_some(way))
+    }
+
+    #[test]
+    fn a_labyrinth_walked_by_hand_replays_to_the_same_cell() {
+        // **The claim `Sim::walk` makes, tested rather than argued.** It is the
+        // third entry point and the only one that does not go through the tick,
+        // so it is the one that could quietly put a replay a step out — and a
+        // maze is the ideal witness, because being one cell wrong is visible
+        // rather than subtle.
+        let mut live = Sim::new(4);
+        live.submit("attend archive");
+        live.step();
+        live.submit("research");
+        live.step();
+
+        // Several presses inside one tick, then a tick, then more — the shape a
+        // player actually produces, and the shape a per-tick queue could not.
+        for round in 0..3 {
+            for _ in 0..4 {
+                let Some(maze) = live.labyrinth() else { break };
+                let Some(way) = a_way_out(&maze) else { break };
+                live.walk(way);
+            }
+            let _ = round;
+            live.step();
+        }
+
+        let mut replayed = Sim::new(4);
+        for (tick, submission) in live.submissions().all().to_vec() {
+            while replayed.tick() < tick {
+                replayed.step();
+            }
+            replayed.replay(submission);
+        }
+        while replayed.tick() < live.tick() {
+            replayed.step();
+        }
+
+        let at = |sim: &Sim| sim.labyrinth().map(|maze| (maze.at, maze.explored()));
+        assert!(at(&live).is_some(), "the walk never opened a maze");
+        assert_eq!(at(&live), at(&replayed), "the replay walked somewhere else");
+    }
+
+    #[test]
+    fn walking_by_hand_costs_no_world_time() {
+        // The other half of what the third entry point promises: a player
+        // standing in a maze is not a player whose brews are running down. If
+        // this ever ticks, `wander` has quietly become a way to pass time.
+        let mut sim = Sim::new(4);
+        sim.submit("attend archive");
+        sim.step();
+        sim.submit("research");
+        sim.step();
+
+        let before = sim.tick();
+        for _ in 0..8 {
+            let Some(maze) = sim.labyrinth() else { break };
+            let Some(way) = a_way_out(&maze) else { break };
+            sim.walk(way);
+        }
+        assert_eq!(sim.tick(), before, "walking advanced the world clock");
     }
 
     #[test]
@@ -507,15 +597,17 @@ mod tests {
 
     /// Ask something the orb cannot settle, in the archive where the fragments are.
     ///
-    /// Was `decoct nonsense` against the laboratory's three essences, until
-    /// `decoct` was retired (§19). The archive's three fragments are the same
-    /// shape of question and are not going anywhere — what is under test is the
-    /// numbered prompt, not the domain.
+    /// Was `decoct nonsense` against the laboratory's three essences until
+    /// `decoct` was retired (§19), then `divine nonsense` against the archive's
+    /// three fragments until `divine` stopped taking one — it opens a labyrinth
+    /// now. The dispensary's three reagents are the same shape of
+    /// question, and `move` is the verb whose first slot is *required* — which
+    /// is what makes the prompt appear at all.
     fn asked(seed: u64) -> Sim {
         let mut sim = Sim::new(seed);
-        sim.submit("attend archive");
+        sim.submit("attend laboratory");
         sim.step();
-        sim.submit("divine nonsense");
+        sim.submit("move nonsense");
         sim.step();
         sim
     }
@@ -534,7 +626,7 @@ mod tests {
 
         sim.step();
         assert!(
-            messages(&sim).iter().any(|line| line == "divine sigil-ix"),
+            messages(&sim).iter().any(|line| line == "move rock-salt"),
             "{:?}",
             messages(&sim),
         );
@@ -553,7 +645,7 @@ mod tests {
 
         sim.submit("1");
         sim.step();
-        assert!(messages(&sim).iter().any(|line| line == "divine sigil-iv"));
+        assert!(messages(&sim).iter().any(|line| line.starts_with("move ")));
     }
 
     #[test]

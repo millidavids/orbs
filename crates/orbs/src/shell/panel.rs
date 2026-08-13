@@ -45,8 +45,13 @@ use super::bench::Bench;
 /// to tell them what to type.
 const NAME: u16 = 18;
 
-/// Cells for the state word. `scouring` is the longest.
-const STATE: u16 = 9;
+/// Cells for the state word, gap included.
+///
+/// **`gathering` is nine and the column reserved nine**, so the word ran
+/// straight into the bar with nothing between them — the same off-by-the-gap
+/// [`NAME`] records, in the column next to it. Ten is the longest word plus the
+/// space after it.
+const STATE: u16 = 10;
 
 /// Cells one instrument's column takes when the panel runs down the side.
 ///
@@ -189,6 +194,13 @@ enum Bar {
     Fire,
     /// A hearth gone out: a wisp of smoke off the bottom and nothing else.
     Cold,
+    /// A labyrinth on the lectern, and how much of it has been walked.
+    ///
+    /// **Meterless**, unlike [`Plain`](Self::Plain): a lectern with no maze open
+    /// reports no meter at all, and `Plain` in that state draws *nothing* — the
+    /// defect this file records shipping twice already. A reading that has not
+    /// begun is an empty gauge, not an absent row.
+    Read,
     /// A mortar: a block being broken down, or a bowl standing.
     Grind {
         /// Whether the block is being worked.
@@ -228,7 +240,7 @@ impl Bar {
     const fn meterless(&self) -> bool {
         matches!(
             self,
-            Self::Cold | Self::Grind { .. } | Self::Bath { .. } | Self::Mix { .. }
+            Self::Cold | Self::Read | Self::Grind { .. } | Self::Bath { .. } | Self::Mix { .. }
         )
     }
 }
@@ -265,6 +277,9 @@ const fn bar_of(craft: Craft, state: State, heat: bool) -> Bar {
     // every variant makes the next instrument's picture a compile error in this
     // file rather than a blank column in the game.
     match craft {
+        // Every state, one bar. A maze has no stages — it is open or it is not,
+        // and the gauge says how much of it has been seen either way.
+        Craft::Reading => Bar::Read,
         Craft::Heating => match state {
             State::Burning => Bar::Fire,
             State::Cold => Bar::Cold,
@@ -277,7 +292,7 @@ const fn bar_of(craft: Craft, state: State, heat: bool) -> Bar {
                 working: true,
                 spent: false,
             },
-            State::Charged | State::Ready => Bar::Grind {
+            State::Charged | State::Gathering | State::Ready => Bar::Grind {
                 working: false,
                 spent: false,
             },
@@ -325,7 +340,7 @@ const fn bar_of(craft: Craft, state: State, heat: bool) -> Bar {
                 leavings: true,
                 breaking: false,
             },
-            State::Charged => Bar::Bath {
+            State::Charged | State::Gathering => Bar::Bath {
                 motion: Motion::Standing,
                 spent: false,
                 leavings: false,
@@ -359,7 +374,7 @@ const fn bar_of(craft: Craft, state: State, heat: bool) -> Bar {
                 spent: false,
                 leavings: true,
             },
-            State::Charged => Bar::Mix {
+            State::Charged | State::Gathering => Bar::Mix {
                 motion: Motion::Standing,
                 spent: false,
                 leavings: false,
@@ -402,7 +417,7 @@ const fn bar_of(craft: Craft, state: State, heat: bool) -> Bar {
                 leavings: true,
                 breaking: true,
             },
-            State::Charged => Bar::Bath {
+            State::Charged | State::Gathering => Bar::Bath {
                 motion: Motion::Standing,
                 spent: false,
                 leavings: false,
@@ -499,6 +514,12 @@ fn draw(
     match (kind, upward) {
         (Bar::Plain, true) => painter.meter_upward(at, done, total, style),
         (Bar::Plain, false) => painter.meter(at, done, total, style),
+        // **The plain gauge, deliberately.** A labyrinth's picture is the map
+        // (its own item); what belongs on the panel is *how much has been
+        // walked*, and a bespoke glyph vocabulary here would be a second, worse
+        // drawing of the same fact in a column two cells wide.
+        (Bar::Read, true) => painter.meter_upward(at, done, total, style),
+        (Bar::Read, false) => painter.meter(at, done, total, style),
         (Bar::Fire, true) => painter.fire_meter_upward(at, done, total, bench.burn(true)),
         (Bar::Fire, false) => painter.fire_meter(at, done, total, bench.burn(true)),
         (Bar::Cold, true) => painter.fire_meter_upward(at, done, total, bench.burn(false)),

@@ -35,6 +35,27 @@ pub(super) fn attend(intent: &Intent, world: &mut World) {
         return;
     };
 
+    // **A compass bearing is not a room.** The archive's four ways have to be
+    // `NounKind::Place` — that is the only kind the place half of a spell's
+    // question resolves against, so `if north has passage` cannot be written
+    // otherwise — and being places made them somewhere you could stand. §19
+    // names walking into one as the sign the maze had become a second spatial
+    // system, which §7's filesystem already is.
+    if world.get::<tower::Reading>(node).is_some() {
+        let message = world
+            .resource::<crate::content::Prose>()
+            .line("attend_reading", &[]);
+        world
+            .resource_mut::<Scrollback>()
+            .records_mut()
+            .push(RecordKind::Completion)
+            .text(FieldName::Name, Verb::Attend.canonical())
+            .text(FieldName::Message, &message)
+            .role(Role::Cost)
+            .finish();
+        return;
+    }
+
     world.insert_resource(Cwd(node));
     let path = tower::path_of(world, node);
     world

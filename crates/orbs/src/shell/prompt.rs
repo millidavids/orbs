@@ -22,6 +22,7 @@ use super::line::Line;
 use super::linear::Linear;
 use super::reveal::Reveal;
 use super::screen::Screen;
+use super::tapestry::Tapestry;
 use super::transition::PaneTransition;
 
 /// Columns the telemetry pane shows.
@@ -71,6 +72,19 @@ pub(crate) struct View<'a> {
     /// caret and only the painter knows how tall the pane is — see
     /// `Editor::scroll_to`. Everything else here is read-only and stays so.
     pub(crate) editing: Option<&'a mut Editor>,
+    /// The weave screen, if the player has it open.
+    ///
+    /// Read-only, unlike `editing`: this surface has no viewport that follows a
+    /// caret, so the painter has nothing to tell it.
+    pub(crate) weaving: Option<&'a Tapestry>,
+    /// Whether the arrow keys are walking the archive's labyrinth.
+    ///
+    /// **A flag rather than a borrow**, unlike the two above it, because this
+    /// surface holds no state of its own — the maze is the sim's and arrives
+    /// through `panel`, and where the arrows are pointed is `Walk`'s. All this
+    /// says is who owns the keyboard, which is what decides whether the maze is
+    /// drawn over the pane or beside the transcript.
+    pub(crate) walking: bool,
 }
 
 /// Paint the session into `frame`.
@@ -97,6 +111,8 @@ pub(crate) fn paint(frame: &mut Frame, linear: &mut Linear, view: View<'_>) {
         scroll,
         bench,
         editing,
+        weaving,
+        walking,
     } = view;
     let grid = frame.size();
     // The prompt spends a second row at the finest tier, so it keeps its pixel
@@ -132,6 +148,19 @@ pub(crate) fn paint(frame: &mut Frame, linear: &mut Linear, view: View<'_>) {
     // would hand the player a second pane for free — the thing the multiplex
     // track sells. You go and write, and while you are writing that is what the
     // window shows.
+    // **The weave screen takes it on the same terms**, and is checked first
+    // only because the two cannot both be open: `weave` is refused from a spell
+    // and the prompt is dead while either has the keyboard, so there is no route
+    // that opens one over the other. An order is still needed, and the newer
+    // surface losing silently would be the harder bug to see.
+    if let Some(tapestry) = weaving {
+        super::loom::paint(frame, tapestry, first, sim.prose());
+        if let Some(second) = main.get(1) {
+            telemetry(frame, sim, screen, *second);
+        }
+        return;
+    }
+
     if let Some(editor) = editing {
         if let Some((col, row)) = super::sheet::paint(frame, editor, first, sim.prose()) {
             frame.set_cursor(Some(Pos::new(col, row)));
@@ -142,6 +171,27 @@ pub(crate) fn paint(frame: &mut Frame, linear: &mut Linear, view: View<'_>) {
         // No prompt row: the prompt is dead while the editor has the keyboard
         // (`editing::not_editing`), and drawing a caret it cannot accept a
         // keystroke into is the clearest possible lie about where typing goes.
+        return;
+    }
+
+    // **The maze, when the arrows have it.** Third of three modal branches, and
+    // it cannot coexist with either above: `wander` needs the prompt to be
+    // typed, and the prompt is dead while the editor or the loom has the keys.
+    //
+    // The map itself is *not* gated on this — `session` draws it beside the
+    // transcript whenever a maze is open, which is what makes a spell's solving
+    // watchable. What this branch adds is the pane, and only for the player who
+    // is walking it themselves.
+    if walking && let Some(maze) = panel.labyrinth.as_ref() {
+        let mut painter = frame.painter(first);
+        super::labyrinth::paint_alone(&mut painter, first, maze, sim.prose());
+        if let Some(second) = main.get(1) {
+            telemetry(frame, sim, screen, *second);
+        }
+        // No prompt row and no caret, exactly as the editor leaves none: every
+        // keystroke is discarded while this is open, and a caret is the game's
+        // one promise about where typing lands.
+        frame.set_cursor(None);
         return;
     }
 
@@ -180,6 +230,7 @@ pub(crate) fn paint(frame: &mut Frame, linear: &mut Linear, view: View<'_>) {
     // frames in 60 where none of its inputs moved.
     let (list_area, prompt_area) = split_input(layout.input(), listing);
     candidates(frame, list_area, offered);
+
     input_line(frame, prompt_area, line, &sim.prompt(), ghost);
 }
 
@@ -374,6 +425,17 @@ pub(super) fn session(
     let split = super::panel::split(body, instruments);
     super::panel::paint(&mut painter, split, instruments, &panel.domain, bench);
     body = split.rest;
+
+    // §10's map, beside the panel and inboard of it. **Second, deliberately:**
+    // whichever split runs first takes its slice from the whole body and hands
+    // on the rest, so the second is the one whose refusal can fire — and an
+    // instrument row is load-bearing where a map is a convenience. Running this
+    // first would also put it outboard of the panel, which is the wrong side.
+    let map = super::labyrinth::split(body, panel.labyrinth.as_ref());
+    if let Some(maze) = panel.labyrinth.as_ref() {
+        super::labyrinth::paint(&mut painter, map.area, maze, sim.prose());
+    }
+    body = map.rest;
 
     // The tower-wide production meter stays: it is the *pool*, not an
     // instrument, and it is what says the slot is spent wherever it was spent.

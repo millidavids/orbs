@@ -557,7 +557,7 @@ The Phase 0 vocabulary (16 commands), canonical arcane with synonym registers:
 | `decoct <essence>` | Brew a potion — **retired in Phase 1, see below** | — | brew, make, mix, distil |
 | `empty <place>` | Turn a tool out into the dispensary | — | unload, collect, decant, pour |
 | `purge <target>` | Destroy waste or spoilage | `rm` | clean, dump, "get rid of" |
-| `divine <frag>` | Research a fragment | — | decipher, study, translate |
+| `research` | Open a labyrinth on the lectern | — | divine, decipher, study, translate |
 | `scribe <name>` | Open a spell in the editor, making it if new | `vi`, `edit` | inscribe, author |
 | `bind <script>` | Attach a script to a trigger | `cron` | schedule, automate |
 | `invoke <script>` | Run a script or spell | `run`, `exec`, `./` | cast, do |
@@ -565,7 +565,7 @@ The Phase 0 vocabulary (16 commands), canonical arcane with synonym registers:
 Every row resolves from all three registers; the echo always shows column one.
 
 **Three canonical names changed in the Phase 0 naming pass** (§19) —
-`decant`→`siphon`, `decipher`→`divine`, `inscribe`→`scribe`. Every original stays
+`decant`→`siphon`, `decipher`→`research`, `inscribe`→`scribe`. Every original stays
 in the table as a plain-English synonym, so nothing a player learned stops
 working. That is not courtesy: a released word does not stop resolving, it
 resolves to whatever it is nearest, and `decant` unclaimed lands on `decoct`.
@@ -1169,9 +1169,9 @@ rendering decision — precisely what the paragraph below warns against. Per-act
 upkeep keeps capacity 4 meaningful if that cut is ever taken.
 
 **Concentration is decoupled from multiplex capacity as a progression track.** The
-pool grows via ley-line upgrades and grimoire rank, so capping multiplexing for
-legibility reasons (§4, cut-line item 6) does not silently cap the game's core
-progression as a side effect of a rendering decision.
+pool grows along **the Ley Line** (§11.5), so capping multiplexing for legibility
+reasons (§4, cut-line item 6) does not silently cap the game's core progression
+as a side effect of a rendering decision.
 
 **Pane count and content are identical at every fidelity tier and window size.**
 Tier 2 renders the same four panes with the same information as the strip-pane
@@ -1412,7 +1412,7 @@ because automation is *non-blocking*.
 |---|---|---|
 | **Domain panes** (breadth) | 2 of 7 | One per activity discovered; all 7 by ~hour 10 |
 | **Focus / multiplex capacity** (depth) | 1 | 2 at ~1.5h, 3 at ~5h, 4 at ~10h |
-| **Concentration** (automation) | **0** — everything by hand | **1** at 16 experience — one clarity, brewed by hand; **~8** by the soft ending, via ley-line upgrades and grimoire rank |
+| **Concentration** (automation) | **0** — everything by hand | **1** at 16 experience — one clarity, brewed by hand; **~8** by the soft ending, along **the Ley Line** (below) |
 
 **Concentration starts at zero, and the first level is the game's turn.** Until it
 is bought the tower is worked entirely by hand: the player can `scribe` a spell
@@ -1463,7 +1463,7 @@ One completed run earns by the instrument that did it, doubling per tier:
 | `balneum_mariae` | **2** | |
 | `flask_and_rod` | **4** | |
 | `alembic` | **8** | |
-| `divine` (archive) | **1** | one of the two opening domains; at zero, half the opening would be dead progression |
+| `research` (archive) | **1** | one of the two opening domains; at zero, half the opening would be dead progression |
 
 Binary, so **each tier of tool is worth every use of the one below** — the next
 rung always pays more than grinding the last one forever, without the number
@@ -1480,6 +1480,39 @@ no recipe, and the debug reagent spawn all earn nothing.
 **Content gates are future work, not built.** *"Brew this to open that domain"* is
 the shape §11's discovery loop wants, and it is a second axis over experience
 rather than a replacement for it.
+
+### The two tracks: the Ley Line and Mastery
+
+**This replaces *"ley-line upgrades and grimoire rank"***, which named two
+sources of Concentration and gave neither any mechanical content — inherited
+verbatim from the draft-7 economy session, when the pool was still called
+Attention, and carried through three amendments untouched. `grimoire rank` is
+**dropped** (§19): `/grimoire` is already the directory holding the player's
+spells, and a rank of the same name would make one word mean both the book you
+write in and a number beside it.
+
+| | |
+|---|---|
+| **The Ley Line** | The straight path. Predefined steps in order, and **passing one is the grant** — there is no choice in it and no moment where a step is reachable but unheld. Concentration lives here |
+| **Mastery** | The branching tree. A tier opens when the total passes it and gives exactly **one** of its nodes, so the tier opening is the grant and *which node* is the decision |
+
+**This is what lets experience stay unspendable while still offering a choice.**
+The ROADMAP asks that a player *"be offered something you choose between, rather
+than a level that arrives on its own"*, and the obvious way to get that — a
+spendable points balance — would contradict *"accumulates and is never spent"*
+above and add something a player can spend and then regret. A tier opening costs
+nothing; taking one of its nodes closes it. A save carries one `u64` and a list
+of taken ids.
+
+**Both are authored in `progression.toml`** and are drawn by `weave` (§6.1), which
+is the only surface progression has. A node's **id** is a decision and lives in
+that file; its **sentence** is prose and lives in `prose.toml` keyed by the id.
+
+**Nothing is behind a Mastery node yet.** Every one is authored as a marker and
+`take` refuses in voice, because the first real node is a balance question and
+the screen is not. What it buys is that the *shape* is visible from inside the
+game before anything is behind it: a player who reaches 24 watches a tier open
+and learns that a choice is coming.
 
 ### Mana — a fixed siege budget
 
@@ -1607,12 +1640,12 @@ concurrency**.
 | Resource | Produced by | Consumed by | Role |
 |---|---|---|---|
 | **Concurrency** | Focus panes (§9) | Duration-actions in flight | The real throttle on what you do by hand |
-| **Mana** | Passive regeneration, ley-line upgrades | Invocations, script upkeep, repairs | The throttle on action |
+| **Mana** | Passive regeneration, Ley Line steps | Invocations, script upkeep, repairs | The throttle on action |
 | **Reagents** | Brewing, sieges (exclusive tiers) | Potions, enchantments, repairs | Crafting economy |
 | **Fragments** | Sieges, hidden directories, remote hosts | Research in `archive/` | Discovery gate |
 | **Experience** | Completed runs, weighted by instrument | **Nothing — it only rises** | Progression gate |
 | **Integrity** | Repair, warding | Damaged by sieges, decay, aberrations | Tower health, persistent |
-| **Concentration** | Experience thresholds; later ley-line upgrades and grimoire rank (**not** pane count) | Shared pool across all bound scripts | Caps total automation |
+| **Concentration** | The Ley Line, against experience (**not** pane count) | Shared pool across all bound scripts | Caps total automation |
 
 **Concentration is a shared pool, not a per-script bound.** Draft 5 described
 both; they are different mechanisms with different balance behaviour. A shared
@@ -2243,6 +2276,767 @@ domains are settled (brewing + archive), and the fragment trickle has a rate
 
 ## 19. Decisions log
 
+### The archive is a maze, and the world holds the search
+
+§10 calls the archive **bespoke** — *"played most, and stales fastest"* — and
+named a resource sink only as the budget fallback. It was five entities and a
+verb that consumed nothing, produced nothing and could be run on the same sigil
+for ever. It is now a labyrinth: `research` resolves one out of the lectern,
+`follow` threads it, the way out gives up a shard, and four shards make a scroll
+(`Recipes::matching`, so the assembly half needed **no new mechanism**).
+
+#### The finding the whole design rests on
+
+§8's language has no variables, no counters and no numeric comparison. A maze
+solved by *searching* would be the one room in the game that permanently defeats
+pillar 3 — you could never teach the orb to do it.
+
+**Unless the maze holds the search's state.** Trémaux's algorithm needs no memory
+beyond marks in the passages, so the cells mark themselves and the four ways
+publish what is adjacent as ordinary nodes. A solver is then a rule, not a
+search, and it is **depth-first search performed physically**: the marks are the
+visited set and turning back is the stack pop, because the reading head *is* the
+stack pointer.
+
+This is the strongest defence §19's refusal of numeric comparison has, and it
+belongs where the next person is tempted: **the language did not need to grow,
+the world needed to remember.**
+
+#### One thing had to give, and it was the vocabulary
+
+The claim was first made as *"no change at all"*, and that was wrong.
+`spell::compile` resolves a condition's names against the room **as it is at that
+instant**, and nulls the whole condition for a name it cannot place — a guard
+added because `has ground-slat` answered "no" for ever. No cell is `walked` at
+the moment a solver is *cast*, which is exactly when its names must resolve, so
+every `if` compiled to a branch taking neither half. `bind::stand` recasts every
+lap, so the deadness would have changed lap to lap.
+
+The fix is `NounKind::Sense` and a fixed vocabulary the scene always offers —
+`passage`, `wall`, `walked`, `twice`, `exit`. **A kind no slot asks for**, so a
+reading can never fill a `Reagent` by accident while `Any` still finds it. The
+four ways are `Role::Reading` places: they have to be `NounKind::Place` because
+that is the only kind the place half resolves against, and being places is why
+they need `Protected` and their own exclusion from the instrument panel.
+
+`tests/solver.rs` was written **before the generator, the verb or the picture**,
+and pins all of it — including that a misspelled `walkd` is still refused, so
+offering a vocabulary did not buy resolution by disabling the guard that made it
+necessary.
+
+#### The naming, and what it cost
+
+**`step` scores 750 against `stop`** — over `MIN_SIMILARITY`, and a typo that
+stopped a run instead of advancing it would cost the whole maze. **`tread` scores
+800 against `read`**, which `peruse` claims. `follow` is 429 against its nearest
+and shares no three-character prefix. All three computed before the name was
+chosen, which is the practice `wield`/`kindle` set.
+
+**`follow` is the 21st tower-wide verb and is recorded as a debt.** It means
+nothing outside the archive and by rights would be an operation scoped to the
+lectern — but `Scene::offering` derives scope from the `Operation` component and
+a fixture carries exactly one, which the lectern spends on `research`. **Scoping a
+second verb to one instrument is the missing mechanism**, and until it exists
+this word is global.
+
+#### What the instrument retired
+
+`research`'s completion had no `Message`, a running `research` could not be stopped
+(`stop` finds its target through `Fixture`), and `recall archive` reached
+nothing. All three were one absence — the archive had no instrument — and the
+first and third went when it got a lectern.
+
+**The second did not, and the first telling of this entry said it had.** `research`
+inserts no `Working` at all now, because reading takes no production slot — so
+`stop lectern` found an instrument, had nothing to stop, and said so. The defect
+was not retired; it was made *moot*, which is a different thing and reads the
+same from outside. It is fixed properly now: `stop` on a lectern holding a
+labyrinth **abandons** it, which is also the answer to a player stuck in a maze
+they cannot solve. A claim that a defect is gone is worth exactly as much as the
+test under it, and this one had none. With them went
+`DIVINE_TICKS`, `pipeline::work`, `progression::DIVINE` and its escape from
+`check`, and the verb-keyed earn: **the archive pays through its instrument now,
+like every other room.**
+
+`research` also stopped taking a fragment. It named one while it was a twelve-tick
+command that consumed one; it opens a labyrinth, and there is one lectern to open
+one at.
+
+#### Two shapes borrowed, and what each cost
+
+**The four ways are places you cannot go.** They must be `NounKind::Place`,
+because that is the only kind the place half of a spell's question resolves
+against — without it `if north has passage` cannot be written at all. But scene
+places are attendable, so `attend north` walked into a compass bearing until an
+explicit refusal was added. That is the second spatial system this design was
+warned against, arriving by default rather than by drift, and it is held off by
+one guard on one component.
+
+**A labyrinth reports as `Working` with a meter of floor walked.** It takes no
+production slot, so `Working` here is the *panel's* state rather than the
+component — which is what lets a solver ask `if lectern is working` to know
+whether its maze is still open. The meter is the only honest one a maze has: a
+brew knows its duration before it starts and a maze does not, because how long it
+takes is what the player's rule decides. What can be reported is how much has
+been seen, and that only ever grows, which is what a bar must do.
+
+`Craft::Reading` takes `Bar::Read`, which is **meterless** — unlike `Bar::Plain`,
+which draws *nothing* when an instrument reports no meter. That defect has
+shipped twice in `shell/panel.rs` and is documented there twice; a lectern with
+no maze open is exactly the state that would have made it three.
+
+#### And a slot it deliberately does not take
+
+**Opening a maze holds no production slot.** `CAPACITY` is 1 and `PATIENCE` is
+120, and a solve is hundreds of ticks — a solver holding the tower's one slot
+would starve every other spell into `spell_gave_up`, which is precisely the
+bind-it-and-go-and-brew case the design sells. Reading is not a *run*, the same
+argument `start` makes for the athanor.
+
+#### A solver that reaches the exit, which nothing had shown
+
+`tests/solver.rs` shipped with the maze and pinned four things, every one of them
+about the **cast**: that a Trémaux solver's conditions survive `compile::fix`,
+that the readings resolve with no maze open, that `walkd` is still refused, that
+the spell writes and casts end to end. Read together they look like proof that a
+player can automate the archive. They are not. *Survives the cast* had been
+quietly standing in for *reaches the exit*, and the two are different claims —
+the pillar the whole domain rests on was the one thing untested.
+
+It was not idle worry. **The obvious solver does not work.** Sixteen `if`s in a
+row — take the way out, else an unwalked passage, else the least-walked way back,
+four ways per tier — parses, casts with no fault, walks two cells and then
+oscillates for ever. The `passage` tier steps into a fresh cell and the `walked`
+tier, four lines later *in the same lap*, reads the cell just left and steps
+straight back. Guarding the retreat behind *nowhere new to go* moves the pendulum
+down a tier rather than removing it: the `walked` rung steps back and the `twice`
+rung returns.
+
+**`else` is what fixes it**, and the reason is worth stating plainly because it
+is the first real lesson §8's language teaches. A ladder of `if`s is *read* as
+"the first line that matches, and then stop" — and it does not mean that. It
+means "every line that matches, in order, against a world the earlier lines have
+already changed". `else` is how the language says the thing the shape implies:
+one move per lap, by construction. Twelve seeds now sweep to a shard, worst 677
+ticks against a pinned budget of 900.
+
+This is also the sharpest argument yet for §15's *"tests prove code does what it
+was written to do; they cannot prove it is the code worth writing"*. Four green
+tests, all correct, all testing the wrong half.
+
+### The map, and the fog being the reading's own knowledge
+
+The archive's maze was complete in the sim and invisible in the game. A bound
+solver working for four hundred ticks showed a two-cell gauge creeping up the
+panel — §10.1's `bar_of` conceded as much, drawing the plain gauge *because* "a
+labyrinth's picture is the map (its own item)". It is now `orbs-render/src/maze.rs`,
+placed by `orbs/src/shell/labyrinth.rs`.
+
+**Three decisions carried the item.**
+
+**The picture lives in `orbs-render` and the sim builds one.** `orbs-sim` depends
+on the render crate and never the reverse, so a `Labyrinth` description crossing
+the boundary is the only arrangement available — and it is the better one anyway:
+`Maze` keeps its cells private, and the fog is decided in exactly one place
+(`Maze::view`) rather than in each frontend's painter. `Instrument`'s `Wash` is
+the same shape and the precedent for it.
+
+**A wall is drawn only where the reading has *stood*.** Not a difficulty setting
+— it is precisely what the four `survey` readings told the player, so the map
+carries nothing the linear stream lacks (rule 2) and a player with squared paper
+could have drawn it themselves. Two kinds of knowing had to be kept apart to say
+that, and collapsing them loses the interesting one: a cell you have **stood in**
+proves its four walls, while a cell a walked neighbour merely **opens onto** is
+one you were told about — `north has passage` — so it is on the map with nothing
+known about its own walls. The first draft made the second mean the first, which
+is defensible right up until you notice the picture then has no way to say *there
+is somewhere through there I have not been*, which is the one thing a player
+reads a map for.
+
+**Columns, never rows.** The instrument panel takes a side or a strip depending
+on the pane's shape, and following it is the obvious thing and wrong: under a
+`Top` panel the map would take rows, and 17 rows out of 22 leaves the deep-focus
+floor a five-row transcript — a map that ate the thing it exists to be read
+beside. One orientation-independent rule covers every grid the game runs at. It
+is also why the map splits **after** the panel: whichever runs second is the one
+whose refusal can fire, and an instrument row is load-bearing where a map is a
+convenience.
+
+Two smaller ones, both recorded because the alternative looks reasonable.
+**It refuses rather than truncates** — a maze drawn short is not a smaller maze,
+it is a wrong one, which is the same reason `research` bounds the generator's width.
+And **it says nothing continuously**: the border title is announced as a heading,
+the four ways are what `survey` answers, and the walked count is on the lectern's
+own panel row, so a second per-frame utterance would be §14's *"progress
+announcements: completion only"* broken by the surface that most wants to break
+it.
+
+### `wander` — the 22nd tower-wide verb, and what it is not
+
+Walking a maze meant typing `follow east` fifty to a hundred times. `wander`
+gives the arrow keys the labyrinth.
+
+**The seat and the debt are two different arguments and both have to be made.**
+`verb.rs` records that 21 was "a number to defend, not a budget to spend", and
+this word is `unfurl`'s case and `follow`'s case at once. The seat is `unfurl`'s:
+who owns the arrow keys has no other way to be said, and §6.1's exception is
+exactly for a word that makes a mouseless game navigable. The debt is `follow`'s,
+unchanged and **not doubled**: this is a domain's word wearing a tower-wide coat
+for one reason, that `Scene::offering` derives scope from the `Operation`
+component and the lectern spends its only one on `research`. Two words waiting on
+one missing mechanism is an argument for building the mechanism. It is not an
+argument for a third, and the count now says so.
+
+**Bare `follow` was the alternative, and was declined rather than overlooked.**
+It costs no vocabulary — `follow` is already tower-wide and already has a
+no-argument branch — but it would make `follow east` and `follow` do
+categorically different things, one walking a cell and one seizing the keyboard,
+and making the slot optional loses the numbered prompt that a required slot gives
+every other verb. Recorded so it is not re-proposed as an oversight.
+
+**It opens no surface.** The map draws whenever a maze is open, which is what
+makes a bound solver watchable for nothing, so the word changes only who the
+arrows belong to — and walking a maze by hand and watching a spell walk it are
+deliberately the same picture.
+
+Three consequences, each of which had a plausible wrong answer.
+
+**An arrow is a submission, not a move.** Pressing right writes `follow east`
+into the ordinary stream, so there is no second walking implementation, no
+frontend reaching into the world, and `(seed, submissions)` replays a
+hand-walked maze exactly as it replays a spell-walked one.
+
+**The queue was never the problem; the tick was.** Three versions went through
+`submit`, and the first two are worth keeping because they bracket the answer.
+Submitting per keystroke walks at the speed of the *keyboard* — `Pending` is
+drained whole at tick start and key repeat is unfiltered, so a held arrow was
+about thirty cells at once. Keeping one aim and replacing it, then a bounded
+burst, walks at the speed of the *world*, and a maze at 1 Hz is a wait rather
+than a minigame. No amount of queueing fixes that, because the queue was solving
+the wrong problem.
+
+So `Sim::walk` is a **third entry point**, alongside `submit` and `step`, and it
+is the narrowest one that answers the question: it moves the reading and nothing
+else. **No tick is consumed** — no brew advances, no fire burns down, no spell
+runs — so a player walks as fast as they can press, and standing in a maze costs
+world time only in the sense that they are standing there doing it.
+
+Three doors is one more than this document has ever wanted, so it is worth being
+explicit about what keeps it honest.
+
+**Replay is not weakened, and the recording is why.** A typed line is recorded
+against the tick it was *queued* on and executes at the start of the next; a walk
+executes immediately, so it lands after that tick's step. Both are exact, and
+`Submission::Walked` is what lets a driver tell them apart rather than guess.
+A tick can never hold both kinds, because the prompt is dead while the arrows
+have the maze. This is tested rather than argued — a hand-walked maze replays to
+the same cell — and the replay driver now lives on `Sim` rather than being
+hand-written at each call site, which it was in three places.
+
+**One body, two clocks.** `follow` and `Sim::walk` both go through
+`research::tread`, so a hand-walked maze and a spell-walked one cannot disagree
+about a wall or about what reaching the exit is worth.
+
+**And the balance question it raises, stated rather than dodged**: walking by
+hand is now much faster than a bound solver, which took 677 ticks at worst. That
+does not make automation pointless, because the value of a bound spell was never
+speed — it is that it works while you are somewhere else brewing. But if the
+archive ever needs the two to be closer, the lever is here and this paragraph is
+where to look for it.
+
+**Walking takes the pane; watching does not.** Adding the fourth term to
+`type_into_line`'s guard makes the prompt dead, and this document already has the
+rule from the editor — drawing a caret that cannot accept a keystroke is the
+clearest possible lie about where typing goes. The first version kept the
+transcript and replaced only the input row, on the argument that a player wants
+the running commentary. In practice standing in a maze is a *mode*, and a screen
+that still looks like a session is offering something it cannot do. So `wander`
+now takes the whole pane like the editor, with the maze centred and the walked
+count and the keys beneath it.
+
+**The two views are the split that matters**, and it is worth naming: a spell's
+solving stays inline beside a live transcript, because watching and doing are
+different activities and only one of them owns the keyboard. The picture is the
+same picture; what differs is how much of the screen the player has given up.
+
+The consequence to state rather than discover: **Escape is the only way out**,
+since `attend` needs the prompt, so "the player walks out of the archive while
+wandering" is unreachable rather than handled.
+
+#### The corridors, and a picture that lied about progress
+
+The map's first version drew an open wall segment as a blank. Every cell has a
+wall line on either side of it, so a walked path came out `▒ ▒ ▒ ▒` — mark, gap,
+mark, gap — and read as *every other cell has been visited*. It was reported by
+looking at it, which is the whole of §15's argument in one line: the code was
+correct, the tests were green, and the drawing was saying something false.
+
+An open passage now carries the corridor's own mark, so a walked run is solid.
+**The lesser of the two cells' marks**, because a passage has been used at most
+as often as the cell it leads to — a corridor claiming `once` between a
+once-cell and a five-cell would report a route nobody took.
+
+**And what the reading has only been *told* about draws nothing at all**, which
+is the other half of the same lesson and was got wrong the same way. A cell a
+walked neighbour opened onto had a `·`, and so did the corridor leading to it —
+so every unexplored way out of the region cost **two** dots, and a head with
+three ways out sat in a small constellation of them. It was defended as *the
+frontier reading as frontier*, and on a screen it read as speckle: the gap in the
+wall already says a passage is there, so the dots were the same fact drawn three
+times. The frontier is the hole in the outline.
+
+The exit survives the cut because it is a *different* fact rather than more of
+the same one, and it is the one thing `Chamber::seen` still decides.
+
+#### The fog is gone, and what it cost to remove
+
+The map drew only what the reading had stood in or beside — exactly what the four
+`survey` readings answer, which is what let it claim to carry no information the
+linear stream lacked. It now draws the maze **whole** from the moment `research`
+opens one.
+
+**The trade is §14's and it is the one asymmetry that rule exists to prevent**: a
+sighted player can now see more than a listener can. It is stated here rather
+than quietly absorbed. Two things make it survivable. A *spell* still solves the
+maze from the four readings alone, so pillar 3 is untouched and the domain's
+automation is exactly as reachable as it was. And walking by hand is now a
+routing problem rather than a feel-along-the-wall one, which is a better minigame
+and the reason for the change.
+
+If the asymmetry does bite, the repair is a **spoken bearing to the exit** — a
+listener would then have *more* than the fog ever gave them — rather than a
+return to fog. Recorded so the next person reaches for that first.
+
+Unwalked floor still draws as nothing, which is not a remnant of the fog: the
+walls around a corridor are on screen, so the corridor is the gap in them, and a
+glyph there would be a third way of saying what the wall already says. That is
+what the `·` was.
+
+#### 16×16, a denser carve, and the solver that was never a solver
+
+The maze went to **16×11 cells** — 33×23 squares, 192 cells, four times the
+floor — and the generator from a recursive backtracker to **randomised Prim's**.
+A backtracker carves one long path and turns only when it has to, so its mazes
+are a few very long corridors with the odd stub; Prim's grows outward from
+everywhere at once and gives short passages, frequent junctions and many small
+dead ends. That is the difference between a maze you read at a glance and one
+you have to walk.
+
+The first version of this refused to draw at all where the whole picture would
+not fit — the rule the map had always had, on the argument that half a maze is
+not a smaller maze but a wrong one. That held while a maze was 15 squares and
+fitted everywhere; at 33 it meant the map simply **vanished** from the 80×22 and
+100×28 floors, which is not honest, it is absent. A player at a small window got
+nothing rather than the part of the maze they were standing in.
+
+So a short pane gets a **window centred on the reading**, clamped inside the
+maze so it never shows emptiness past the edge, and walking pans it. When the
+whole picture fits, the window is the whole picture and nothing moves — the
+common case is still a still. Only a keyhole, under nine columns, is refused:
+below that there is no junction to read and the transcript is the better use of
+them.
+
+**And it broke automation, which is how we found out the solver was never a
+solver.**
+
+The four-tier ladder — exit, unwalked, walked, twice — reads like Trémaux and is
+not. Trémaux's actual rule is *"when you arrive at a junction you have seen
+before **by the passage you came along**, turn back"*, and nothing in §8's
+language could say which passage that was. Without it, at a junction where two
+ways read alike, a fixed compass order sends the reading back where it came from
+and it **cycles for ever**. It solved 7×7 backtracker mazes and nothing harder:
+measured across a sweep, 4 of 8 at 16×16, and 1 of 12 on Prim's mazes at 7×7.
+
+Not slow — cycling. Which means the acceptance test that proved a solver reaches
+the exit had been proving it about the only mazes the flaw survived, and the
+archive's automation pillar was resting on the generator being weak.
+
+**The fix is one word: `back`.** The way the reading last came from, published as
+a *second* child on that direction — a way can be `walked` and the way you came
+at once, and the two answer different questions, so it is not a fifth `Sense`. A
+five-rung ladder that excludes it in the middle and retreats along it last solves
+every maze tried: both generators, both sizes, 12 of 12, in at most 708 steps.
+
+This was already written down as a future Mastery unlock — §19's solving ladder
+lists *"a heading, and relative senses"* as the rung after auto-marks. It turns
+out the *first* rung was never complete without it, and a bigger maze is what
+made that visible. §15 again: the tests were green and the code was correct, and
+the thing being tested was easier than the thing being claimed.
+
+**Sixteen by eleven rather than sixteen square**, because a character cell is
+8×16 pixels: a grid square is a tall rectangle on screen, so equal counts draw as
+a portrait maze. 33×23 characters is 264 by 368 pixels against 33×33's 264 by
+528.
+
+It came down twice, and the second time was **clipping rather than taste**.
+Whatever a pane cannot fit is shown as a window that pans, which is right at a
+small grid and reads as *the bottom is cut off* at a large one — the two are the
+same code and only one of them is what a player expects. The block a map wants is
+`2 × HEIGHT + 3` rows, so that is the number to check against a pane before
+reaching for the constant again.
+
+#### A wall is a square, so a step is one character
+
+The maze was 7×7 *cells* with the walls **between** them. That has to draw
+`2w+1` characters across — a cell, a wall line, a cell — so one step moved the
+reading **two characters**, and it was reported the way it looked: *"I still seem
+to be moving two spaces at a time."*
+
+The reading was exactly right, and there is no fix at the drawing end. Dropping
+to one character per cell loses the walls entirely: two corridors running side by
+side with a wall between them would merge into a block, which is worse than the
+complaint. The geometry had to change instead. **A wall is now a square of its
+own**, the corridor between two cells is somewhere you stand, and the picture
+*is* the grid — 15×15 squares, one character each.
+
+Three things fell out of it, and two are improvements.
+
+**The painter got simpler.** There is no odd/even split any more — no `interior`,
+no `segment`, no `corner`, no lesser-of-two-marks rule for a corridor. `cell()`
+is an index and a match.
+
+**The meter counts floor, not squares.** Wall is most of the grid and none of the
+walk, so counting the whole grid would peg the bar near a third before the
+reading had gone anywhere.
+
+**And a solver takes about twice as long** — 1233 ticks at worst across twelve
+seeds, against 677 before — because every cell-to-cell move is now two steps.
+That is the price of the picture reading correctly, and it is paid by bound
+spells, which run unattended, rather than by a player, who walks at the speed of
+their own keyboard. If it ever needs to come back down, the lever is `WIDTH`.
+
+#### One generic fragment, and a recipe that can want four of it
+
+The maze yielded one of `shard-of-dawn`, `-noon`, `-dusk`, `-night`, drawn
+uniformly, and four distinct ones made a scroll. Two things were wrong with it,
+and the second is the one that matters.
+
+**Nothing in the game ever said what a shard was.** No prose, no `recall` topic
+— `recall shard-of-dawn` offered *archive*, *brewing*, *clarified-draught*,
+*clarity* instead. The four names were invented to fill an array, not decided.
+§19 already has the rule that covers this: *"names are not prose… the moment a
+fragment needs deciphered text, that text belongs in Phase 1's content file, and
+needing it is the signal Phase 1 has been imported early."* A player asking what
+one is *is* that signal.
+
+**And collecting a set was attrition with no decision in it.** Four
+interchangeable uniform draws is the coupon-collector problem: 4·(1 + ½ + ⅓ + ¼)
+≈ **8.3 solves** for one scroll. You could not aim for the one you lacked, and a
+maze whose shard you already held was worth exactly as much as one you did not.
+That is §10's objection to the *old* `research` — a duration with no decision
+content — reappearing one level up, in the collection loop instead of the
+command, which is the harder place to see it.
+
+So: one `fragment`, four of it, one generic `spell-scroll`, and no roll at all.
+Specific fragments for specific spells is the intended shape and will want
+distinct names again — at which point they will also want a reason to prefer one
+maze over another, or the attrition comes back with better names on it.
+
+**The cost was `Recipe::count`, and the alternative was worse.** What an
+instrument holds is a node per *name* carrying a stock count, so
+`inputs = ["fragment", "fragment", "fragment", "fragment"]` reads like it should
+work and cannot — four fragments are one entry. The other candidate, expanding a
+held stack into one name per unit, breaks something already shipping: the mortar
+holding **two** sage against a one-sage recipe reads `charged` and fires, which
+is exactly what *"charged a unit at a time, so a run spends a unit"* means. So
+the recipe says how many it wants, the match asks for **at least** that many, and
+`transmute` spends that many rather than a literal one.
+
+It also collapsed three hand-built copies of *what is in this instrument* into
+`tower::holdings` — all three had been dropping the stock count, which is
+invisible right up until a recipe wants more than one of something.
+
+#### What the review of the archive found
+
+A `high` review of the whole arc found twelve things. Four are worth recording
+because each is a rule already written down being broken somewhere new.
+
+**The readings outlived their maze.** `refresh` ran *before* the solved `Maze`
+was removed, so the four ways kept the solved position's readings for ever:
+`survey north` answered `passage` with no labyrinth open. The cost lands on
+exactly the thing the archive is for — a bound solver read them, fired its
+`follow` tier every lap and was told *"research first"* for the rest of its
+`repeat`. `pipeline::stop` had the order right all along.
+
+**Every one of `follow`'s records was filed under `research`.** Both verbs shared
+one `say`, which stamped `FieldName::Name` with `Verb::Research`, so `sift follow
+orb.log` returned the echo of the typed line and *not* what happened — for the
+archive's most-used word. Rule 4 makes the record the source and every view a
+reading of it; a record filed under the wrong verb is that source lying, and the
+verb is passed in now.
+
+**Solving a maze rolled from the laboratory's stream.** The shard draw used
+`RngStream::Yield`, so walking a labyrinth changed a player's subsequent brew
+yields — the cross-subsystem coupling per-stream RNG exists to prevent, in the
+same change that added `RngStream::Archive` and then did not use it here.
+
+**`State::Gathering` is new, and the panel needed a fifth word.** The lectern's
+only recipe is an exact match on four distinct shards, so one, two or three of
+them matched nothing and fell through to `Fouled` — the panel telling a player
+mid-collection that their instrument *will not start*, which is the confusion
+that column was built to remove. `Charged` would have been the opposite lie: it
+means wield it and it runs. So `Recipes::gathering` asks whether what is held is
+a proper sub-multiset of some recipe's inputs, and the flask holding one of two
+ingredients gets the same correction for free.
+
+Two smaller ones with the same shape. `stop lectern` abandoned the maze and
+`return`ed, leaving a scroll assembly running — the lectern is the first
+instrument that can be doing two things at once. And `wander`'s Escape handler
+`continue`d rather than breaking, so arrows later in the *same* keyboard batch
+still walked the reading after the player had left the mode.
+
+**And three doc blocks had been split by insertion**, each leaving the function
+below it undocumented and its own text attached to the wrong thing — one of them
+claiming behaviour the body contradicted. §19 already records this exact defect
+once, for `dump.rs`'s `woven`/`opened` pair. Inserting a documented item directly
+above another one is the shape that causes it, and it is worth checking for by
+eye every time.
+
+**And the guard's own prediction has come true.** `type_into_line`'s comment said
+the boolean's ceiling was five and that a single `Focus` owner was worth building
+before the fifth surface arrived. `wander` is the fourth and is the last one that
+goes in as a term: a fifth refactors it first. The reason is that each term is a
+place to *forget*, and forgetting one does not fail loudly — it types into an
+invisible prompt while the player is looking at something else.
+
+
+### `weave` — the Ley Line, Mastery, and a surface for progression
+
+Concentration 1 shipped and arrives **on its own**: brew a clarity, read one
+line, and nothing was ever chosen. `status` printed `experience 20` and
+`concentration 1` and that was the whole of it — two numbers with nothing saying
+what they are for, what is next, or what it costs. **The first thing to build was
+the surface, not more upgrades.**
+
+#### The two tracks, and what they replace
+
+§11.5 named *"ley-line upgrades and grimoire rank"* as the two sources of
+Concentration and **neither had any mechanical content anywhere in the
+document**. They were inherited verbatim from the draft-7 economy session, when
+the pool was still called Attention, and survived three amendments untouched.
+The tree is where they get their first definition, and one of them does not
+survive it.
+
+| | |
+|---|---|
+| **The Ley Line** | The straight path. Predefined steps, and **passing one is the grant** — no choice, and no moment where a step is reachable but unheld. It is `[concentration].levels` with a name and a `grants` on each entry, so `concentration(u64)` is the same reading it always was |
+| **Mastery** | The branching tree. A tier opens on a total and gives exactly **one** of its nodes |
+| **`grimoire rank` is dropped** | `/grimoire` is already the directory holding the player's spells. A *rank* of the same name would make one word mean the book you write in and a number beside it — the collision §19 already refused when `grimoire` stopped being a verb |
+| **No points, and experience is still never spent** | A tier opening costs nothing; taking one of its nodes closes it. That satisfies the ROADMAP's *"offered something you choose between"* without contradicting §11.5's *"accumulates and is never spent"*, and without adding a balance a player can spend and then regret |
+
+#### `weave`, and the name that failed
+
+**`ascend` was the obvious name and does not survive the scorer**: two edits from
+`attend` in a six-letter word is **667**, over `MIN_SIMILARITY`, and
+`no_two_canonical_names_fuzzy_match_each_other` refuses it. `weave` scores **200**
+against `wield` and **400** against `write` — the only other `w` words in the
+vocabulary — and `wea` is a free three-character prefix. Computed before the name
+was chosen rather than discovered by a failing test, which is the practice §19
+records for `wield`/`kindle`.
+
+**No shell synonym, and `tree` in particular is refused.** In a game whose
+premise is a filesystem that *is* your duties (§7), `tree` means *list this
+directory*: a player who types it means `survey`, and it would resolve at 1000
+and take over the screen. That is the call the table already makes for `less` and
+`read` against `unfurl` — and no fuzzy test catches a collision of *meaning*, so
+it has to be made by hand. `status` has no shell synonym either, so nothing is
+owed.
+
+**The twentieth tower-wide verb needs the argument `unfurl` made**, and it is the
+opposite case landing in the same place: `unfurl` earned its seat by being the
+only way to reach a surface that *already existed*, and this one has no surface
+at all. A track nobody can look at is a track nobody is on. **20 is a number to
+defend, not a budget to spend** — the test says so beside the count.
+
+**And `may_issue` refuses it**, beside `scribe` and `unfurl`. It opens a whole
+screen, which is that objection with more of the window behind it: `repeat 100 /
+weave` is a soft-lock. `may_issue` is a `matches!`, so nothing catches this at
+compile time and the test drives a real cast.
+
+#### The tree is not an item; it is what content leaves behind
+
+Settled after the screen was built and looked at: **the upgrade tree expands as
+the game gains content, rather than landing as a piece of work of its own.** A
+node is a row in `progression.toml` and a line in `prose.toml`, and the painter
+reads whatever is there — so a domain that ships brings the tier that unlocks it,
+a recipe brings its own step, and the curve fills in as there is something to put
+on it.
+
+That is a scheduling decision as much as a design one, and it is the honest way
+round: a tree authored ahead of the content would be a set of promises about
+things nobody has built, and the balance question it exists to answer cannot be
+asked until there is something to balance. What was worth building early is the
+**surface**, because progression with nowhere to look at it is progression the
+player cannot act on.
+
+One thing stays scheduled: **the first real node**, which turns `take` from a
+refusal into a grant and brings the pieces v1 left out — the mutator, a
+`Submission` variant, the queued effect on a tick boundary. It is the one place
+the choose-between mechanic can be seen rather than tested.
+
+#### And a roadmap rule, because this is the second time
+
+**An item that cannot close does not belong in a numbered phase.** Sitting in
+one it does not track work — it holds the phase open for ever, and a phase that
+can never be finished has stopped being a plan and become a list.
+
+Twice now. The settings item (sticky skip, persisted CRT-off, reduce-motion) sat
+open in Phase 0.5 waiting for somewhere to persist a setting, which no Phase 0.5
+item builds; it moved to Phase 5, beside the settings screen it depends on. The
+upgrade tree then sat open in Phase 1 waiting for content, and had no such phase
+to move to — because it is not waiting on one thing, it is waiting on all of
+them.
+
+So the ROADMAP gains a **Standing** section, and the rule that sorts into it:
+when an item is deferred because a *later phase* builds what it needs, move it to
+that phase; when it accretes instead — a little more of it true with every
+content item, never all of it true — it goes to Standing. **Nothing in Standing
+may block a phase**, which is the property the section exists to guarantee.
+
+#### v1 is read-only, deliberately
+
+Every Mastery node is authored as a marker and `take` refuses in voice. **That is
+not a scope cut**: it is what keeps the irreversible-choice machinery — a cursor
+identity at commit, a confirm, a `Submission` variant, the queued effect on a
+tick boundary that `Sim::write_spell` already has — out of an item with nothing
+to commit. It lands with the first real node, which is where it can be exercised.
+
+What ships is the shape, visible from inside the game before anything is behind
+it: a player who reaches 24 watches a tier open and learns a choice is coming.
+
+#### The shape: a bar, then two chains running right
+
+**Progression runs rightward, and the screen says so three times over** — the
+experience bar fills right, the Ley Line runs right, and Mastery's tiers run
+right. A tier's nodes stack **downward**, which is the other axis and the other
+meaning: rightward is progress, downward is a choice. The Ley Line, having no
+choices, is one node tall everywhere, and that *is* the difference between the
+two tracks rather than a special case in the painter.
+
+**The first version was a vertical list and was replaced for being one.** It drew
+what you had as a set of rows, and a player reading it could not see that the
+thing was a *track* at all — reported as *"the UI is confusing; I thought we were
+doing a horizontal progress."* The list was chosen to fit 48 columns and it did
+fit; it simply did not say what it was for.
+
+**The bar is measured against a fixed hundred**, and the Ley Line is drawn
+underneath it across the same cells — so **a step's position on the line is its
+cost**, read against the same scale. A step at 16 stands a sixth of the way along
+and the fill either has reached it or has not; the two rows are one picture, and
+that is what the fixed scale buys.
+
+It was briefly measured against the *next* threshold instead, which is worse in
+the one way that matters: the bar emptied itself every time a step was passed —
+at the exact instant the player had earned something, the thing meant to show
+progress reset to nothing. A constant scale only ever grows. The hundred is
+provisional and deliberately round; the curve does not reach it yet, and when it
+does the number becomes derived rather than chosen.
+
+**Both tracks are lines, not rows of glyphs, and both are placed at cost.**
+Drawing a step as a separate mark said *"here are some things"*; drawing an
+unbroken run with stations standing on it says *"here is a road, and these are
+the places along it"*. Mastery is the same road with a fork in it: one trunk, a
+branch into the first tier, and a line from each node to **its own** successor —
+which is what makes it a tree rather than two rows of unrelated marks, because
+what a tree draws is *reachability* and reachability is the lines.
+
+Mastery's tiers were briefly at a fixed stride, five cells apart whatever they
+cost. That put a tier at 24 and a tier at 40 side by side and said they were
+adjacent, when the second is nearly twice the work. Position is the cheapest true
+thing a track can say, and spending it on even spacing is spending it on nothing.
+
+**The names live under the cursor, not on the nodes.** At 48 columns a sentence
+cannot sit beside every node, and abbreviating them all would make the screen a
+puzzle. A node is a glyph and a total; what it *is* goes in a **details panel**
+in the bottom right, for the one thing you are aimed at. That is what lets the
+picture fit and the words stay readable at the same time. The panel sits under
+the tracks rather than beside them, because a track runs the full width of the
+pane and anything alongside one would be sharing cells with the road.
+
+**It says two things, and they are not the same thing.** *Unlocked* is whether
+the tower has earned enough to reach a node; *active* is whether what it grants
+is in effect. A Ley Line step is both at once — passing one *is* taking it — but
+a Mastery node can be unlocked and idle because nobody has chosen it, or unlocked
+and idle for ever because a sibling took the tier's one choice. `Standing::Locked`
+draws the same for a total not yet reached and a tier already spent, deliberately
+— neither can be had — so `unlocked` is a **field on the node rather than a
+reading of the glyph**. One says *work more* and the other says *you chose
+otherwise*, and a panel that could not tell them apart would send a player to
+earn something they have already earned.
+
+#### Three things the screen had to be told about the window
+
+- **The session pane is ~48 columns, not 80.** `DEEP_FOCUS_FLOOR` is 100×28 and
+  panes tile side by side above it, so **the 80×22 floor is the *widest*
+  single-pane case**, not the narrowest. Everything is authored against 48 — and
+  the list version was not, so a sentence ran into the state column and a row
+  read *"hold a spell while you are **locked**"*, a phrase in no file.
+  `screens.rs` draws it at 48 for this reason.
+- **`●` is not in CP437.** The renderer skips what it cannot draw, so "taken"
+  would have rendered as *nothing* — silently collapsing the one distinction §14
+  says must not be carried by colour alone. `•` (0x07), `○` (0x09), `·` (0xFA)
+  and `─` (0xC4) are in the table and were checked against it. Same class as the
+  em-dash CLAUDE.md records.
+- **A glyph is not a description.** `Painter::span` pushes its literal text into
+  the speech stream, so a reader would hear "`○`" and be told nothing. The nodes
+  are drawn with `Painter::glyphs`, which writes no speech, and each one
+  `announce`s `{total}: {state}` as words — the division `Painter::meter` already
+  makes, whose doc says a silent caller *owes* the listener an utterance.
+
+#### The way in is a word, and the arrows wait for it
+
+**`ley` and `mastery` go *into* a track**, place the cursor on its first node and
+hand the arrows over; `<esc>` comes back. That is `edit` dropping into the
+editor's buffer, and it is the model this screen was corrected to: the first
+version let the arrows work immediately, and *"my first key press was being
+ignored"* was the report. An arrow at the command line now does nothing on
+purpose — a screen where the arrows are sometimes navigation and sometimes
+nothing, depending on what you last typed, answers differently to the same key.
+
+**The dropped keystroke was a real bug and a self-inflicted one.**
+`input::chord_is_stale` means *the modifier is a ghost — accept this keystroke as
+plain text*, and this screen read it as *drop this keystroke*. One swallowed key
+every time the screen was opened after a pause, which is exactly when it is
+opened. The prompt and the editor both have it the right way round; paraphrasing
+a guard instead of copying it is what put it in backwards.
+
+**Typing while aiming was a second dead end, caught by a test.** Browsing
+swallowed text the way the editor's reading state does, so a player who aimed at
+a node and typed `take` got nothing with nothing saying why. A printable
+character now steps back to the command line and **keeps the aim**, which is the
+flow the arrows exist for. Still safe, because typing *leaves* browsing and only
+`Enter` in browsing commits.
+
+**Every node is framed, and the aimed one is framed differently *and* brightly.**
+A node standing on a line needs to read as a station rather than as a break in
+it, so all of them draw as `[○]`; the aimed one swaps the pair for `«○»` and
+draws its glyph Bright. Two carriers for one fact, and each is doing a job the
+other cannot: brightness alone failed outright — an aimed `○` is already Bright
+and identical to its sibling — and §14 forbids the difference being colour, so
+the frame is what survives greyscale while the brightness is what the eye finds
+first. The frame overwrites one cell of the run on each side, which is why every
+line is drawn before any node.
+
+**And it is an identity, never an index.** The world ticks behind the screen, so
+a tier opening changes what is on it — an index would come to point at a
+different node. It unplaces when its id is no longer drawn, which is the rule
+extracted from `Editor::reading`: a view that survives its subject lies.
+
+#### And the content file grew a third rule
+
+`progression.toml` already refused an unsorted track and an `[earns]` key naming
+no instrument. It now also refuses a `grants` nothing implements and a duplicate
+node id — an id is what a taken node is stored as and what its sentence is keyed
+by, so two entries sharing one make taking either take both.
+
+**`deny_unknown_fields` was the one that mattered.** Both tracks are
+`serde(default)` so a file may omit them, which meant the *old* `[concentration]
+levels = [16]` parsed happily into a tower with **no curve at all** — every
+threshold gone, no verb refusing, and the file correct on its face. Two tests in
+that module were silently exercising an empty track before it was added. The
+regression test that made this visible was written **before** the restructure and
+run after it, which is the only ordering that could have caught it.
+
 ### Experience, Concentration 1, and `bind` — the game's turn, built
 
 §11.5 calls the first Concentration level *"the moment the game becomes the game
@@ -2262,7 +3056,7 @@ progression runs on **experience**, earned by completing runs, and fragments kee
 |---|---|
 | **It accumulates and is never spent** | A `u64` that only rises; a threshold passed stays passed. One value in a save, no balance to keep, nothing to spend and then regret |
 | **Weighted by the instrument that did the work** | mortar **1**, balneum **2**, flask **4**, alembic **8** — binary, so each tier of tool is worth every use of the one below, and the next rung always beats grinding the last one forever |
-| **The archive earns too** | `divine` is worth 1. It is a duration action in one of the two opening domains; at zero, half the opening would be dead progression |
+| **The archive earns too** | `research` is worth 1. It is a duration action in one of the two opening domains; at zero, half the opening would be dead progression |
 | **Only work that succeeded** | Not a scour, not a refusal, not a run that matched no recipe, and **not `debug_spawn`** — the one path that makes reagents without work, which is exactly why it must not pay |
 | **Content gates are named, not built** | *"brew this to open that domain"* is a second axis over experience, not a replacement for it |
 
@@ -4467,7 +5261,7 @@ same slot and cut, on three findings:
 
 | | |
 |---|---|
-| Its "see it" line is **already Phase 3a's** | *"`divine` a fragment and gain a verb you did not have."* That needs `Verb::ALL` to stop being a fixed sixteen, the synonym table to stop being `const`, `is_live` to stop being a `const fn`, and the boot tutorial to read all three dynamically — plus §18's unstarted naming pass. That is the discovery loop pulled forward two phases, not a minigame |
+| Its "see it" line is **already Phase 3a's** | *"`research` a fragment and gain a verb you did not have."* That needs `Verb::ALL` to stop being a fixed sixteen, the synonym table to stop being `const`, `is_live` to stop being a `const fn`, and the boot tutorial to read all three dynamically — plus §18's unstarted naming pass. That is the discovery loop pulled forward two phases, not a minigame |
 | §10 **pre-authorises the cheap version** | *"decipherment becomes mostly a resource sink with occasional authored set-pieces"* — and §7's only depiction of the verb is exactly that. A bespoke puzzle is an ambition increase, not a debt being paid |
 | It is better bought later | The archive gates all discovery. What the puzzle should feel like depends on what it unlocks, and nothing is unlockable yet |
 
@@ -5248,7 +6042,7 @@ rather than the parser. Phase 0 therefore sits at §11.5's routine end:
 | Action | Ticks | Why |
 |---|---|---|
 | `decoct` | 20 | Long enough that the slot is felt, short enough to fit a scenario twice |
-| `divine` | 12 | §10 makes archive the domain played most and returned to between other work |
+| `research` | 12 | §10 makes archive the domain played most and returned to between other work |
 
 These are the **first constants `orbs-balance` will sweep** (§11.5, Phase 1). They
 are placeholders with a reason, not measurements.
@@ -5577,8 +6371,8 @@ up defects the design table had carried since draft 4.
 | Finding | Decision |
 |---|---|
 | **`decoct` and `decant` collide.** Two edits apart, scoring 667 against a 600 threshold, and they are the two core verbs of brewing — a Phase 0 domain. In a siege §6 forbids a blocking prompt, so a near-typo would be resolved by the parser's best guess: brewing when the player meant to collect | **`decant` → `siphon`.** Alchemically exact, six characters, zero collisions. `decant` is **kept as a plain synonym** — releasing it would be worse than the collision, because an unclaimed `decant` resolves to `decoct` |
-| **`dec` prefixed three verbs** — `decoct`, `decant`, `decipher` — so the natural abbreviation for the brewing domain meant three different things | **`decipher` → `divine`.** Also clears a length violation. No three-character prefix reaches more than one **canonical** name. Across *synonyms* `dec` still reaches three verbs, because the old words are deliberately kept; that prompts, which is the right answer for a genuinely ambiguous abbreviation. `aut` and `ins` are ambiguous for the same reason. All three are pinned by test |
-| **Four canonical names exceeded the ≤7 rule**: `grimoire`, `meditate`, `decipher`, `inscribe` | **`inscribe` → `scribe`** (same root, same meaning, two characters shorter) and `decipher` → `divine` as above. **`grimoire` and `meditate` are kept**, and the ceiling is codified at **8**: they are the two most in-world names in the set, abbreviation covers the typing cost, and §6.1 already wrote the rule as "ideally" |
+| **`dec` prefixed three verbs** — `decoct`, `decant`, `decipher` — so the natural abbreviation for the brewing domain meant three different things | **`decipher` → `research`.** Also clears a length violation. No three-character prefix reaches more than one **canonical** name. Across *synonyms* `dec` still reaches three verbs, because the old words are deliberately kept; that prompts, which is the right answer for a genuinely ambiguous abbreviation. `aut` and `ins` are ambiguous for the same reason. All three are pinned by test |
+| **Four canonical names exceeded the ≤7 rule**: `grimoire`, `meditate`, `decipher`, `inscribe` | **`inscribe` → `scribe`** (same root, same meaning, two characters shorter) and `decipher` → `research` as above. **`grimoire` and `meditate` are kept**, and the ceiling is codified at **8**: they are the two most in-world names in the set, abbreviation covers the typing cost, and §6.1 already wrote the rule as "ideally" |
 | **Seven cross-verb synonym collisions.** `find`/`bind` at 750, `make`/`take` at 750, `decode`/`decoct` at 667, and others | **All kept and claimed.** Dropping them was the pass's own worst mistake and was caught in review: a released word does not stop resolving. Unclaimed, `find` resolved to `bind`, `take` and `decode` to `decoct`, and `write` — deleted by accident — to `meditate`, every one with `Clear` confidence and no prompt. `find`/`bind` at 750 is *worse* than the 667 that justified renaming a canonical verb |
 | **An exact verb match could lose to an approximate one.** `take clarity` resolved to `decoct clarity` — brewing — because `take` reaches `make` at 750 and `clarity` is an essence, even though `take` *names* siphon at 1000 | Ranking is now **exactness first, then score**. A word the player actually typed outranks one that merely resembles it; argument fit still decides between readings of equal exactness |
 | Result | Canonical collisions **1 → 0**. Canonical three-character prefix ambiguity **1 → 0**. Seven synonym collisions remain and are pinned — that is the correct number, because the fix for a collision is to *claim* both spellings, not to release one |

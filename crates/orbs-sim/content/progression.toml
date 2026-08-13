@@ -30,14 +30,21 @@ balneum_mariae = 2
 flask_and_rod = 4
 alembic = 8
 
-# The archive, which is a domain rather than an instrument. Leaving it at zero
-# would make one of the two rooms the game opens with pay nothing at all - and
-# §10 calls the archive the domain played most.
-divine = 1
+# The archive, whose instrument is the lectern. A maze is minutes of walking
+# against the mortar's eight ticks, so it pays what the flask does.
+lectern = 4
 
 # ---------------------------------------------------------------------------
-# What experience buys. `concentration` is how many spells the orb can hold at
-# once, and the tower is worked entirely by hand until the first one.
+# THE LEY LINE - the straight path.
+#
+# Predefined, in order, with no choice anywhere in it: a step opens when the
+# total passes `at`, and passing it *is* the grant. Experience is never spent
+# (see above), so there is nothing to decide and nothing to save up for.
+#
+# `grants` is checked against a closed set at load. A word nothing implements
+# would give the step nothing, which reads exactly like a step authored as a
+# marker - and the track would stop half way up with this file correct on its
+# face. Today the set is one word.
 #
 # **16 is one clarity**, arrived at rather than picked: grind 1, digest 2, grind
 # 1, mix 4, distil 8. The player does the whole loop by hand once, and the reward
@@ -47,9 +54,34 @@ divine = 1
 # §11.5's "first bound script in 30-45 minutes" is amended by this (§19): one
 # clarity is about two minutes, and automation arrives early.
 #
-# One threshold, because there is nothing yet for a second to open. The rest of
-# the tree - ingredients, recipes, ley lines, domains - is its own item, and this
-# file is where its numbers will go.
+# One step, because there is nothing yet for a second to grant. `weave` draws
+# this list, so a step added here appears on the screen without any code.
 # ---------------------------------------------------------------------------
-[concentration]
-levels = [16]
+[[ley_line]]
+at = 16
+grants = "concentration"
+
+# ---------------------------------------------------------------------------
+# MASTERY - the branching tree.
+#
+# A tier opens when the total passes `at`, and gives exactly **one** of its
+# nodes. That is what makes it a choice rather than a schedule, and it is why
+# experience can stay unspendable: the tier opening is the grant, and which node
+# you take is the decision.
+#
+# **Every node here is a marker.** `tbi` is authored, drawn and refused - there
+# is nothing behind any of them yet, and the first real one is its own item.
+# They are here so the shape is visible from inside the game: a player who
+# reaches 24 sees a tier open and sees that a choice is coming.
+#
+# Ids are decisions, not prose - they are what a taken node is stored as, and
+# what its sentence in `prose.toml` is keyed by. `check` refuses a duplicate,
+# because two entries with one id make taking either take both.
+# ---------------------------------------------------------------------------
+[[mastery]]
+at = 24
+nodes = ["tbi_a", "tbi_b"]
+
+[[mastery]]
+at = 40
+nodes = ["tbi_c", "tbi_d"]

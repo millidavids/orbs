@@ -369,10 +369,7 @@ fn start(world: &mut World, at: Entity, name: &str, verb: Verb) {
         return;
     }
 
-    let holding: Vec<String> = tower::contents(world, at)
-        .into_iter()
-        .filter_map(|node| world.get::<tower::Name>(node).map(|held| held.0.clone()))
-        .collect();
+    let holding = tower::holdings(world, at);
 
     // §10.1: the *material's state* decides what an instrument can do, so a
     // refusal has to say what is in there — otherwise "nothing happens" is
@@ -387,7 +384,11 @@ fn start(world: &mut World, at: Entity, name: &str, verb: Verb) {
         } else {
             "wield_no_recipe"
         };
-        let listed = holding.join(", ");
+        let listed = holding
+            .iter()
+            .map(|(name, _)| name.as_str())
+            .collect::<Vec<_>>()
+            .join(", ");
         let message = world
             .resource::<Prose>()
             .line(key, &[("name", name), ("detail", &listed)]);
@@ -590,43 +591,41 @@ pub(super) fn stop(intent: &Intent, world: &mut World) {
             tower::damp(world, at);
         }
         Some((at, _)) => {
+            // **A labyrinth is abandoned, not merely un-run.** `divine` inserts
+            // no `Working` — reading takes no production slot — so without this
+            // `stop lectern` would find an instrument, do nothing, and say so:
+            // the un-stoppable `divine` §19 records, still true and now harder
+            // to see because the verb had changed underneath it.
+            //
+            // **And it does not `return`.** The lectern is the first instrument
+            // that can be doing two things at once — assembling a scroll takes
+            // twenty ticks of `Working`, and a maze can be open across all of
+            // them — so stopping only the maze left the run going and made the
+            // player type `stop lectern` a second time to reach it. One `stop`
+            // ends what is happening here, whatever is happening.
+            if world.get::<tower::Maze>(at).is_some() {
+                world.entity_mut(at).remove::<tower::Maze>();
+                super::research::refresh(world);
+                let message = world
+                    .resource::<crate::content::Prose>()
+                    .line("research_abandoned", &[]);
+                world
+                    .resource_mut::<Scrollback>()
+                    .records_mut()
+                    .push(RecordKind::Completion)
+                    .text(FieldName::Name, Verb::Stop.canonical())
+                    .text(FieldName::Message, &message)
+                    .role(Role::Cost)
+                    .finish();
+                // Nothing else to stop unless a run is also under way.
+                if world.get::<tower::Working>(at).is_none() {
+                    return;
+                }
+            }
             tower::stop(world, at);
         }
         None => missing(Verb::Stop, &name, world),
     }
-}
-
-/// Start something that takes time.
-///
-/// §5.0: issuing is free and instant; the *action* occupies a slot for its
-/// duration, and that concurrency is the whole economy. The subject must be
-/// where the player is standing — §7 puts a domain's belongings in the domain,
-/// which is why `divine` resolves in the archive and nowhere else.
-pub(super) fn work(intent: &Intent, world: &mut World, ticks: u64) {
-    let Some(target) = intent
-        .arguments
-        .first()
-        .map(|argument| argument.value.clone())
-    else {
-        acknowledge(intent.verb, world);
-        return;
-    };
-
-    let cwd = world.resource::<Cwd>().0;
-    let Some(subject) = tower::children_of(world, cwd)
-        .into_iter()
-        .find(|node| {
-            world
-                .get::<tower::Name>(*node)
-                .is_some_and(|n| n.0 == target)
-        })
-        .and_then(|node| world.get::<tower::NodeId>(node).copied())
-    else {
-        missing(intent.verb, &target, world);
-        return;
-    };
-
-    tower::begin(world, cwd, intent.verb, subject, ticks);
 }
 
 /// Destroy something where you stand.

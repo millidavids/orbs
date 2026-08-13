@@ -51,15 +51,19 @@ pub(super) fn transmute(world: &mut World, place: Entity) {
         .get::<Name>(place)
         .map_or_else(String::new, |name| name.0.clone());
     let held = contents(world, place);
-    let holding: Vec<String> = held
-        .iter()
-        .filter_map(|node| world.get::<Name>(*node).map(|n| n.0.clone()))
-        .collect();
+    let holding = super::super::stock::holdings(world, place);
 
     let made = world
         .resource::<Recipes>()
         .matching(&name, &holding)
-        .map(|recipe| (recipe.output.clone(), recipe.leaves.clone(), recipe.potion));
+        .map(|recipe| {
+            (
+                recipe.output.clone(),
+                recipe.leaves.clone(),
+                recipe.potion,
+                recipe.count,
+            )
+        });
 
     // A recipe that stopped matching mid-run should not be reachable — the lock
     // sees to that — but leaving the contents alone is the only safe answer if it
@@ -71,7 +75,7 @@ pub(super) fn transmute(world: &mut World, place: Entity) {
     // no record at all: the echo appeared and then nothing, ever — no completion,
     // no refusal, no message. §14 announces completions, and a run ending is a
     // completion whether or not it produced anything.
-    let Some((output, leaves, potion)) = made else {
+    let Some((output, leaves, potion, count)) = made else {
         let message = world
             .resource::<Prose>()
             .line("wield_nothing", &[("name", &name)]);
@@ -79,15 +83,16 @@ pub(super) fn transmute(world: &mut World, place: Entity) {
         return;
     };
 
-    // **One of each input, not everything in the vessel.** The instrument is
-    // charged a unit at a time now, so a run spends a unit — and what is left
-    // over stays where it is rather than being destroyed by a recipe that never
-    // asked for it.
+    // **What the recipe asked for, not everything in the vessel.** The instrument
+    // is charged a unit at a time, so a run spends what the recipe wants and no
+    // more — what is left over stays where it is rather than being destroyed by a
+    // recipe that never asked for it. That was a literal `1` until a recipe could
+    // want four of something; `Recipe::count` is now the number.
     for node in held {
         let Some(name) = world.get::<Name>(node).map(|name| name.0.clone()) else {
             continue;
         };
-        super::super::stock::take(world, place, &name, 1);
+        super::super::stock::take(world, place, &name, count);
     }
     // A finished potion is an `Essence`; everything else is crafting stock. The
     // byproduct is always stock — §10.1 gives every one of them a use.

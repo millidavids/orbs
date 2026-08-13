@@ -73,6 +73,33 @@ impl Tower {
         self.0.is_unfurling()
     }
 
+    /// Whether `weave` has asked for the progression screen, **without**
+    /// mutating. See [`Tower::has_opening`].
+    pub(crate) fn has_weaving(&self) -> bool {
+        self.0.has_weaving()
+    }
+
+    /// Take `weave`'s pending request, if there is one.
+    pub(crate) fn weaving(&mut self) -> bool {
+        self.0.weaving()
+    }
+
+    /// Whether `wander` has asked for the arrow keys, **without** mutating.
+    /// See [`Tower::has_opening`].
+    pub(crate) fn has_wandering(&self) -> bool {
+        self.0.has_wandering()
+    }
+
+    /// Take `wander`'s pending request, if there is one.
+    pub(crate) fn wandering(&mut self) -> bool {
+        self.0.wandering()
+    }
+
+    /// Walk the labyrinth one cell, now. See [`orbs_sim::Sim::walk`].
+    pub(crate) fn walk(&mut self, way: orbs_sim::tower::Way) -> bool {
+        self.0.walk(way)
+    }
+
     /// Save a spell out of the editor.
     ///
     /// The editor's whole contribution to the world. Keystrokes never reach the

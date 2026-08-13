@@ -56,6 +56,8 @@ impl Plugin for ShellPlugin {
             .init_resource::<Reveal>()
             .init_resource::<super::Bench>()
             .init_resource::<super::Editing>()
+            .init_resource::<super::Loom>()
+            .init_resource::<super::Walk>()
             .add_message::<SubmittedMessage>()
             .add_systems(Startup, (spawn_camera, track_window).chain())
             // **Not** gated on `booted`, and not in the input set. A focus loss
@@ -100,6 +102,30 @@ impl Plugin for ShellPlugin {
                     // the frame a player types on counts toward the pause they
                     // have not taken yet.
                     super::editing::autosave.run_if(super::editing::editing),
+                    // The weave screen, on the same terms: gated by a run
+                    // condition because it *consumes* keys, while the prompt
+                    // below always runs because it has to discard them.
+                    super::weaving::open_requested.run_if(resource_changed::<crate::sim::Tower>),
+                    super::weaving::type_into_loom
+                        .run_if(on_message::<KeyboardInput>)
+                        .run_if(super::weaving::weaving),
+                    // **Unconditional while it is open**, like `autosave`: the
+                    // world ticks behind the screen, so a threshold crossed
+                    // while a player is looking should land while they look.
+                    super::weaving::refresh.run_if(super::weaving::weaving),
+                    // The labyrinth's arrows, on the same terms as the two
+                    // above. It owns no pane — the map draws whether or not
+                    // anybody said the word — so what is gated here is only the
+                    // keyboard.
+                    super::wandering::open_requested.run_if(resource_changed::<crate::sim::Tower>),
+                    super::wandering::type_into_maze
+                        .run_if(on_message::<KeyboardInput>)
+                        .run_if(super::wandering::walking),
+                    // Unconditional while it is open, like `autosave` and the
+                    // loom's `refresh`: a spell can close the maze from under
+                    // the player, and holding the keyboard over a pane with no
+                    // map on it is the worst of the three ways that ends.
+                    super::wandering::close_when_gone.run_if(super::wandering::walking),
                     // **No `not_editing` here.** It has to *run* to throw the
                     // keystrokes away — a reader that never runs keeps its
                     // cursor, and everything typed while another surface had the

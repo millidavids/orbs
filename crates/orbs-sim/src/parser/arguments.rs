@@ -286,8 +286,11 @@ mod tests {
     #[test]
     fn a_required_slot_with_nothing_to_fill_it_is_reported() {
         // This is what turns into the numbered prompt of §6.
-        let filled = fill(Verb::Divine, &words(&[]), &tower());
-        assert_eq!(filled.missing.map(|m| m.kind), Some(NounKind::Fragment));
+        // **`invoke`, not `divine`.** `divine` took a fragment while it was a
+        // twelve-tick command that consumed one; it opens a labyrinth now and
+        // takes nothing, so it stopped being an example of a required slot.
+        let filled = fill(Verb::Invoke, &words(&[]), &tower());
+        assert_eq!(filled.missing.map(|m| m.kind), Some(NounKind::Script));
         assert!(filled.arguments().is_empty());
     }
 
@@ -307,10 +310,10 @@ mod tests {
 
     #[test]
     fn a_noun_that_does_not_exist_does_not_fill_its_slot() {
-        // Far enough from `sigil-iv` not to be read as a typo for it — the
-        // parser is meant to forgive slips, and `sigil-xx` is one.
-        let filled = fill(Verb::Divine, &words(&["quicksilver"]), &tower());
-        assert_eq!(filled.missing.map(|m| m.kind), Some(NounKind::Fragment));
+        // Far enough from any spell's name not to be read as a typo for one —
+        // the parser is meant to forgive slips, and a near-miss is one.
+        let filled = fill(Verb::Invoke, &words(&["quicksilver"]), &tower());
+        assert_eq!(filled.missing.map(|m| m.kind), Some(NounKind::Script));
     }
 
     #[test]

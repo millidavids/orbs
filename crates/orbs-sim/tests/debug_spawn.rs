@@ -297,10 +297,7 @@ fn a_session_that_used_it_still_replays() {
         while replayed.tick() < tick {
             replayed.step();
         }
-        match submission {
-            orbs_sim::Submission::Typed(line) => replayed.submit(&line),
-            orbs_sim::Submission::Wrote { name, lines } => replayed.write_spell(&name, &lines),
-        }
+        replayed.replay(submission);
     }
     while replayed.tick() < live.tick() {
         replayed.step();

@@ -43,6 +43,15 @@ ticks = 8
 
 # Ash is a byproduct that grinds down into something the flask wants, which is
 # what keeps the athanor's waste from being pure litter.
+# Chaff is what a scroll's assembly leaves, and the mortar takes it down to the
+# same potash ash becomes — §10.1's rule that every byproduct has a use, applied
+# to the archive's waste rather than the athanor's.
+[[mortar_and_pestle]]
+input = "chaff"
+output = "potash"
+leaves = "husks"
+ticks = 6
+
 [[mortar_and_pestle]]
 input = "ash"
 output = "potash"
@@ -153,3 +162,28 @@ heat = true
 # ---------------------------------------------------------------------------
 # athanor - fuel, not recipes. Arrives with step 4.
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# lectern - the archive. Assembly, not transformation.
+#
+# Four fragments make a scroll, and the fragments come from solving labyrinths
+# rather than from a shelf. **One generic fragment, deliberately**: the four were
+# `shard-of-dawn`/`noon`/`dusk`/`night`, drawn at random, which made collecting a
+# set coupon-collector attrition - 8.3 solves on average, and no decision anywhere
+# in it, since you could not aim for the one you lacked. The names were also
+# invented rather than designed, and nothing in the game ever said what one was.
+#
+# Specific fragments for specific spells are the intended shape and will want
+# distinct names again; until they exist, one name is the honest placeholder.
+#
+# `count` is what makes four-of-one work at all: what an instrument holds is a
+# node per *name* with a stock count on it, so four fragments are one entry.
+#
+# No heat: a lectern is not an instrument you light.
+# ---------------------------------------------------------------------------
+[[lectern]]
+input = "fragment"
+count = 4
+output = "spell-scroll"
+leaves = "chaff"
+ticks = 20

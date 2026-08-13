@@ -52,6 +52,23 @@ pub struct Recipe {
     /// yet would otherwise silently become a potion.
     #[serde(default)]
     pub potion: bool,
+    /// How many of **each** input this consumes. One unless the file says so.
+    ///
+    /// # Why a count rather than the input repeated
+    ///
+    /// `inputs = ["fragment", "fragment", "fragment", "fragment"]` reads like it
+    /// should work and cannot: what an instrument holds is a *node per name* with
+    /// a [`Stock`](crate::tower::Stock) count on it, so four fragments are one
+    /// entry, not four. The alternative — expanding a held stack into one name
+    /// per unit — breaks something that already works: an instrument may hold two
+    /// sage against a one-sage recipe and still be `charged`, which is what
+    /// *"charged a unit at a time, so a run spends a unit"* means.
+    ///
+    /// So the recipe says how many it wants and the match asks for **at least**
+    /// that many. Two sage still fires a one-sage recipe and leaves one behind;
+    /// two fragments do not fire a four-fragment one.
+    #[serde(default = "one")]
+    pub count: u32,
     /// Whether this needs the athanor alight (§10.1).
     ///
     /// **In the content file, for the same reason `potion` is.** This was a
@@ -66,6 +83,11 @@ pub struct Recipe {
     /// wants heat: an instrument may well gain a cold recipe later.
     #[serde(default)]
     pub heat: bool,
+}
+
+/// The default for [`Recipe::count`]: a recipe wants one of each input.
+const fn one() -> u32 {
+    1
 }
 
 impl Recipe {
@@ -128,14 +150,23 @@ impl Recipes {
     /// wanting `[a, b]` fires on `[b, a]`, and does *not* fire when a third
     /// thing is also in there. Requiring an exact match is what makes clearing
     /// an instrument part of the loop rather than an optional tidy.
+    /// `held` is what the instrument contains: each name once, with how many
+    /// units of it are there. See [`Recipe::count`] for why the count is carried
+    /// rather than the name repeated.
     #[must_use]
-    pub fn matching(&self, instrument: &str, held: &[String]) -> Option<&Recipe> {
+    pub fn matching(&self, instrument: &str, held: &[(String, u32)]) -> Option<&Recipe> {
         self.by_instrument.get(instrument)?.iter().find(|recipe| {
             let mut wanted: Vec<&str> = recipe.inputs();
             if wanted.len() != held.len() {
                 return false;
             }
-            for item in held {
+            for (item, units) in held {
+                // **At least, not exactly.** Two sage fires a one-sage recipe and
+                // leaves one behind — the behaviour that was already shipping
+                // before recipes could ask for more than one.
+                if *units < recipe.count {
+                    return false;
+                }
                 match wanted.iter().position(|want| *want == item.as_str()) {
                     Some(at) => {
                         wanted.swap_remove(at);
@@ -144,6 +175,46 @@ impl Recipes {
                 }
             }
             wanted.is_empty()
+        })
+    }
+
+    /// Whether what is held is *part* of a recipe rather than none of one.
+    ///
+    /// **The complement of [`matching`](Self::matching), and the panel needs
+    /// both.** An instrument holding nothing a recipe wants is fouled; one
+    /// holding a proper subset of a recipe's inputs is collecting a set, and
+    /// telling the player it will not start is exactly wrong. The lectern is the
+    /// first instrument this can happen to — it wants four distinct shards, so
+    /// three of them matched nothing — but any multi-input recipe has it.
+    ///
+    /// **Two ways to be part-way there**, and the lectern reaches both: fewer
+    /// *kinds* than a recipe names, or every kind but not enough of one.
+    #[must_use]
+    pub fn gathering(&self, instrument: &str, held: &[(String, u32)]) -> bool {
+        if held.is_empty() {
+            return false;
+        }
+        self.by_instrument.get(instrument).is_some_and(|recipes| {
+            recipes.iter().any(|recipe| {
+                let mut wanted: Vec<&str> = recipe.inputs();
+                if held.len() > wanted.len() {
+                    return false;
+                }
+                // Short of a kind, or short of a count of one — either way the
+                // player is collecting rather than holding leavings.
+                let short = held.len() < wanted.len()
+                    || held.iter().any(|(_, units)| *units < recipe.count);
+                short
+                    && held.iter().all(|(item, _)| {
+                        wanted
+                            .iter()
+                            .position(|want| *want == item.as_str())
+                            .is_some_and(|at| {
+                                wanted.swap_remove(at);
+                                true
+                            })
+                    })
+            })
         })
     }
 
@@ -270,7 +341,7 @@ mod tests {
     #[test]
     fn a_single_input_recipe_matches_its_reagent() {
         let recipes = Recipes::builtin();
-        let held = vec!["sage".to_owned()];
+        let held = vec![("sage".to_owned(), 1)];
         let recipe = recipes
             .matching("mortar_and_pestle", &held)
             .expect("sage grinds");
@@ -283,8 +354,14 @@ mod tests {
         // What is *in* an instrument has no order a player controls, so a recipe
         // that only fired one way round would be a coin flip on charge order.
         let recipes = Recipes::builtin();
-        let forward = vec!["sage-tincture".to_owned(), "ground-salt".to_owned()];
-        let backward = vec!["ground-salt".to_owned(), "sage-tincture".to_owned()];
+        let forward = vec![
+            ("sage-tincture".to_owned(), 1),
+            ("ground-salt".to_owned(), 1),
+        ];
+        let backward = vec![
+            ("ground-salt".to_owned(), 1),
+            ("sage-tincture".to_owned(), 1),
+        ];
         assert_eq!(
             recipes
                 .matching("flask_and_rod", &forward)
@@ -301,7 +378,7 @@ mod tests {
         // Exact-multiset matching is what makes clearing part of §10.1's loop.
         // Leave the husks in and the mortar does not know what you want.
         let recipes = Recipes::builtin();
-        let held = vec!["sage".to_owned(), "husks".to_owned()];
+        let held = vec![("sage".to_owned(), 1), ("husks".to_owned(), 1)];
         assert!(recipes.matching("mortar_and_pestle", &held).is_none());
     }
 
@@ -315,7 +392,7 @@ mod tests {
     fn the_wrong_instrument_matches_nothing() {
         // Sequencing is the puzzle: sage grinds, it does not distil.
         let recipes = Recipes::builtin();
-        let held = vec!["sage".to_owned()];
+        let held = vec![("sage".to_owned(), 1)];
         assert!(recipes.matching("alembic", &held).is_none());
     }
 

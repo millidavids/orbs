@@ -123,6 +123,37 @@ const EDIT: &str = "ORBS_EDIT";
 /// ```
 const THEN: &str = "ORBS_THEN";
 
+/// Keystrokes for the weave screen a `weave` in `ORBS_DUMP` opened.
+///
+/// `\n`-separated, and **every segment is a whole thing** — a word, or one of
+/// the arrow tokens. Unlike `ORBS_EDIT` there is no buffer, so nothing is typed a
+/// character at a time and no Enter is ever implied between segments: a word runs
+/// when its segment ends, and an arrow moves the cursor and runs nothing.
+///
+/// **The arrows do nothing until a word has gone into a track**, exactly as they
+/// do in the game — `ley` or `mastery` is what hands them over, the way `edit`
+/// drops into the editor's buffer.
+///
+/// ```text
+/// ORBS_DUMP="weave" ORBS_WEAVE="mastery\n<right>\ntake" cargo run -p orbs
+/// ```
+const WEAVE: &str = "ORBS_WEAVE";
+
+/// Arrow presses for the labyrinth a `wander` in `ORBS_DUMP` took the keys for.
+///
+/// `\n`-separated, one of `<up>`, `<right>`, `<down>`, `<left>` per segment.
+/// Anything else ends the walk, the way Escape does.
+///
+/// **No tick per token**, because there is none in the game either: an arrow
+/// goes through `Sim::walk`, which moves the reading and advances no clock. A
+/// dump that stepped between presses would show a world eight seconds older than
+/// the one a player would be looking at.
+///
+/// ```text
+/// ORBS_DUMP="attend archive; divine; wander" ORBS_WALK="<right>\n<down>" cargo run -p orbs
+/// ```
+const WALK: &str = "ORBS_WALK";
+
 /// Commands are separated by this, so one shell word can drive a session.
 const SEPARATOR: char = ';';
 
@@ -212,6 +243,13 @@ pub(crate) fn run(seed: u64, wizard: Option<String>) -> bool {
         // is about could only be looked at by a person sitting in front of a
         // window, which is the position `ORBS_DUMP` exists to get out of.
         let mut editing = opened(&mut sim);
+        // ...and the same for a `weave`. Taken before `ORBS_THEN` runs, so a
+        // dump can open the screen and then keep issuing commands behind it —
+        // which is what the world ticking behind a modal surface looks like.
+        let mut weaving = woven(&mut sim);
+        // ...and the same for a `wander`, except that this one owns no surface,
+        // so what it produces is a flag and some steps already walked.
+        let mut walking = walked(&mut sim);
         // Commands to run *after* the editing session. A `:w` queues its write
         // for the next tick like every other effect, so a `peruse` typed in
         // `ORBS_DUMP` runs before the spell exists — it would offer the other
@@ -233,6 +271,13 @@ pub(crate) fn run(seed: u64, wizard: Option<String>) -> bool {
             // the same mistake would show up only as a doubled file under
             // `peruse` — which is why this comment outlived the message.
             editing = editing.or_else(|| open(&mut sim));
+            weaving = weaving.or_else(|| woven(&mut sim));
+            walking |= walked(&mut sim);
+        }
+        // The world may have moved while the screen was up — `ORBS_THEN` steps.
+        // In the game `weaving::refresh` runs every frame for exactly this.
+        if let Some(screen) = weaving.as_mut() {
+            screen.refresh(sim.experience(), sim.ley_line(), sim.mastery());
         }
         // The running-line marker, and how the orb reads the buffer. In the game
         // both are pushed in by `editing::autosave`; a dump builds no `App` and
@@ -256,6 +301,7 @@ pub(crate) fn run(seed: u64, wizard: Option<String>) -> bool {
         let panel = super::input::Panel {
             instruments: sim.instruments(),
             domain: orbs_sim::parser::leaf(&sim.location()).to_owned(),
+            labyrinth: sim.labyrinth(),
         };
         super::prompt::paint(
             &mut frame,
@@ -282,6 +328,8 @@ pub(crate) fn run(seed: u64, wizard: Option<String>) -> bool {
                 // plume climbs, the pestle falls. See CLAUDE.md.
                 bench: &bench(),
                 editing: editing.as_mut(),
+                weaving: weaving.as_ref(),
+                walking,
             },
         );
     } else {
@@ -538,6 +586,95 @@ fn opened(sim: &mut orbs_sim::Sim) -> Option<super::Editor> {
         }
     }
     Some(editor)
+}
+
+/// The arrow keys a `wander` in the dump asked for, with `ORBS_WALK` played into
+/// them.
+///
+/// **Through `Sim::walk`, the same door a key press goes through**, for the
+/// reason [`opened`] gives: a second implementation would let the dump and the
+/// game disagree — here about how much of the world has moved, since walking
+/// costs no tick and `submit`/`step` would cost one an arrow.
+///
+/// Returns whether the arrows ended up with the maze, which is what the status
+/// row draws from.
+fn walked(sim: &mut orbs_sim::Sim) -> bool {
+    if !sim.wandering() {
+        return false;
+    }
+    let Ok(script) = std::env::var(WALK) else {
+        return true;
+    };
+    for segment in script.replace("\\n", "\n").split('\n') {
+        // The four tokens a keyboard has and a shell word does not.
+        let way = match segment.trim() {
+            "" => continue,
+            "<up>" => orbs_sim::tower::Way::North,
+            "<right>" => orbs_sim::tower::Way::East,
+            "<down>" => orbs_sim::tower::Way::South,
+            "<left>" => orbs_sim::tower::Way::West,
+            // Anything else ends the walk, which is what Escape does.
+            _ => return false,
+        };
+        // **`walk`, not `submit` and `step`.** The first version did the latter
+        // and quietly showed a different game: a tick per arrow meant a dump of
+        // eight presses had advanced the world eight seconds, so a brew could
+        // finish and a fire burn down inside what is meant to be a still.
+        if !sim.walk(way) {
+            return false;
+        }
+    }
+    true
+}
+
+/// The weave screen a `weave` in the dump asked for, with `ORBS_WEAVE` played
+/// into it.
+///
+/// **Through the same `Tapestry` methods the key handler calls**, for the reason
+/// [`opened`] gives: a second implementation would let the dump and the game
+/// disagree about what a keystroke does.
+///
+/// The reading is pushed in first and again at the end. In the game
+/// `weaving::refresh` does it every frame; a dump builds no `App`, so the screen
+/// would otherwise draw a tapestry with no tracks in it — and the words below
+/// need the tracks to have anything to point at.
+fn woven(sim: &mut orbs_sim::Sim) -> Option<super::Tapestry> {
+    if !sim.weaving() {
+        return None;
+    }
+    let mut screen = super::Tapestry::default();
+    let refresh = |screen: &mut super::Tapestry| {
+        screen.refresh(sim.experience(), sim.ley_line(), sim.mastery());
+    };
+    refresh(&mut screen);
+
+    let Ok(script) = std::env::var(WEAVE) else {
+        return Some(screen);
+    };
+    for segment in script.replace("\\n", "\n").split('\n') {
+        match segment.trim() {
+            "" => continue,
+            // The five tokens a keyboard has and a shell word does not.
+            "<esc>" => screen.escape(),
+            "<up>" => screen.step(0, -1),
+            "<down>" => screen.step(0, 1),
+            "<left>" => screen.step(-1, 0),
+            "<right>" => screen.step(1, 0),
+            word => {
+                for character in word.chars() {
+                    screen.type_text(&character.to_string());
+                }
+                // **Enter is implied at the end of a segment and nowhere else.**
+                // There is no buffer here, so unlike the editor there is no state
+                // in which a segment means anything but "a word, now run it".
+                if screen.enter() == Some(super::WeaveOutcome::Close) {
+                    return None;
+                }
+            }
+        }
+    }
+    refresh(&mut screen);
+    Some(screen)
 }
 
 /// The grid to draw into, from `ORBS_GRID` or §4's floor.

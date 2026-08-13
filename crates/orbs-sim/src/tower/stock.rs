@@ -68,6 +68,35 @@ pub fn find(world: &World, place: Entity, named: &str) -> Option<Entity> {
         .find(|node| world.get::<Name>(*node).is_some_and(|name| name.0 == named))
 }
 
+/// What `place` holds: each name once, with how many units of it are there.
+///
+/// **The shape [`Recipes::matching`](crate::content::Recipes::matching) needs**,
+/// and the one place it is derived. Three callers built the name list by hand and
+/// all three dropped the count on the floor, which is invisible until a recipe
+/// wants more than one of something — see [`Recipe::count`](crate::content::Recipe::count).
+///
+/// [`Endless`](Stock::Endless) reports [`u32::MAX`]: the tower always has more, so
+/// no count can be short of it.
+/// `&World`, not `&mut`: `contents` is `children_of` with a mutable borrow it
+/// does not use, and demanding one here would keep this out of `panel::read`,
+/// which is the caller that most needs it to be the same rule.
+#[must_use]
+pub fn holdings(world: &World, place: Entity) -> Vec<(String, u32)> {
+    super::children_of(world, place)
+        .into_iter()
+        .filter_map(|node| {
+            let name = world.get::<Name>(node)?.0.clone();
+            let units = match world.get::<Stock>(node).copied() {
+                Some(Stock::Endless) => u32::MAX,
+                Some(Stock::Counted(count)) => count,
+                // Not stock at all — a file, a spell. Present, and one of it.
+                None => 1,
+            };
+            Some((name, units))
+        })
+        .collect()
+}
+
 /// How much of `named` is in `place`.
 #[must_use]
 pub fn held(world: &World, place: Entity, named: &str) -> Option<Stock> {

@@ -13,7 +13,7 @@ use crate::execute::run_pending;
 use crate::parser::{Mode, ParseLog, ParseRecord, Resolution, Scene, analyse, report};
 use crate::rng::Rngs;
 use crate::schedule::new_sim_schedule;
-use crate::session::{Choices, Pending, Scrollback, Skip, Submissions, Wizard};
+use crate::session::{Choices, Pending, Scrollback, Skip, Submission, Submissions, Wizard};
 use crate::tick::Tick;
 use crate::tower::{self, NodeIds};
 
@@ -115,9 +115,12 @@ impl Sim {
         }
         world.insert_resource(curve);
         world.init_resource::<tower::Experience>();
+        world.init_resource::<tower::Taken>();
         world.init_resource::<crate::execute::Opening>();
         world.init_resource::<crate::execute::Reloaded>();
         world.init_resource::<crate::execute::Unfurling>();
+        world.init_resource::<crate::execute::Weaving>();
+        world.init_resource::<crate::execute::Wandering>();
         world.init_resource::<tower::spell::Caller>();
 
         // Its **own** schedule, run before the caller's. Adding `run_pending`
@@ -485,6 +488,119 @@ impl Sim {
             .take()
     }
 
+    /// Whether `weave` has asked for the progression screen.
+    ///
+    /// **Peeked** rather than taken, so a system can decide whether to run
+    /// without stamping the resource's change tick — see [`Sim::has_opening`],
+    /// which exists for a defect this pair prevents.
+    #[must_use]
+    pub fn has_weaving(&self) -> bool {
+        self.world.resource::<crate::execute::Weaving>().pending()
+    }
+
+    /// Take `weave`'s pending request, if there is one.
+    pub fn weaving(&mut self) -> bool {
+        self.world.resource_mut::<crate::execute::Weaving>().take()
+    }
+
+    /// Walk the archive's labyrinth one cell, **now** (§10, §19).
+    ///
+    /// # The third entry point, and why the tick was the wrong clock
+    ///
+    /// [`Sim::submit`] queues and [`Sim::step`] advances, and for two phases
+    /// those were the only two doors. An arrow key went through `submit`, which
+    /// meant a step landed on the next tick — a second away — and a maze walked
+    /// at 1 Hz is not a minigame, it is a wait. Queueing the presses gave the
+    /// player their keys back and did not make the maze any faster to walk.
+    ///
+    /// So this is a door of its own, and it is the *narrowest* one that answers
+    /// the problem: it moves the reading and nothing else. **No tick is
+    /// consumed** — no brew advances, no fire burns down, no spell runs — so
+    /// walking a maze by hand costs world time only in the sense that the player
+    /// is standing there doing it.
+    ///
+    /// # Replay is not weakened, and the reason is the recording
+    ///
+    /// A typed line is recorded against the tick it was *queued* on and executes
+    /// at the start of the next; this executes immediately, so it lands after
+    /// that tick's step. Both are exact, and they are told apart by
+    /// [`Submission::Walked`](crate::session::Submission::Walked) rather than by
+    /// a driver having to guess: replay a tick, then apply the walks recorded
+    /// against it in list order. A tick can never hold both kinds, because the
+    /// prompt is dead while the arrows have the maze.
+    ///
+    /// Returns whether there was a labyrinth to walk at all.
+    pub fn walk(&mut self, way: tower::Way) -> bool {
+        let Some(lectern) = crate::execute::lectern(&self.world) else {
+            return false;
+        };
+        if self.world.get::<tower::Maze>(lectern).is_none() {
+            return false;
+        }
+        let tick = *self.world.resource::<Tick>();
+        self.world
+            .resource_mut::<Submissions>()
+            .walked(tick, way.word());
+        // **The same body `follow` runs**, so a hand-walked maze and a
+        // spell-walked one cannot disagree about a wall or about what reaching
+        // the exit is worth.
+        crate::execute::tread(&mut self.world, way);
+        true
+    }
+
+    /// Apply one recorded submission, with this sim already on its tick.
+    ///
+    /// **The replay driver, owned here rather than written out by each caller.**
+    /// It was three hand-written `match`es across two test files and a third in
+    /// the session tests, which is three chances to disagree about what a
+    /// variant means — and what a variant means is precisely *when it ran*:
+    ///
+    /// - [`Typed`](Submission::Typed) was queued during its tick and executes at
+    ///   the start of the next.
+    /// - [`Wrote`](Submission::Wrote) is the same: a save queues like any effect.
+    /// - [`Walked`](Submission::Walked) already ran, during its tick, after that
+    ///   tick's step — because [`Sim::walk`] does not wait for a clock.
+    ///
+    /// Standing on the recorded tick and calling this is correct for all three,
+    /// and adding a fourth kind is now a change in one place that the compiler
+    /// insists on rather than three it does not.
+    pub fn replay(&mut self, submission: Submission) {
+        match submission {
+            Submission::Typed(line) => self.submit(&line),
+            Submission::Wrote { name, lines } => self.write_spell(&name, &lines),
+            Submission::Walked(word) => {
+                if let Some(way) = tower::Way::ALL.into_iter().find(|way| way.word() == word) {
+                    self.walk(way);
+                }
+            }
+        }
+    }
+
+    /// Whether `wander` has asked for the arrow keys (§10, §19).
+    #[must_use]
+    pub fn has_wandering(&self) -> bool {
+        self.world.resource::<crate::execute::Wandering>().pending()
+    }
+
+    /// Take `wander`'s pending request, if there is one.
+    pub fn wandering(&mut self) -> bool {
+        self.world
+            .resource_mut::<crate::execute::Wandering>()
+            .take()
+    }
+
+    /// The Ley Line, against what the tower has earned (§11.5).
+    #[must_use]
+    pub fn ley_line(&self) -> Vec<tower::Node> {
+        tower::ley_line(&self.world)
+    }
+
+    /// Mastery's tiers, in order, each with its nodes.
+    #[must_use]
+    pub fn mastery(&self) -> Vec<Vec<tower::Node>> {
+        tower::mastery(&self.world)
+    }
+
     /// Queue a tester's `debug_spawn`, on the next tick like everything else.
     ///
     /// Recorded in the scrollback and in `Submissions` — so a debug session
@@ -594,6 +710,25 @@ impl Sim {
     #[must_use]
     pub fn instruments(&self) -> Vec<tower::Instrument> {
         tower::instruments(&self.world)
+    }
+
+    /// The labyrinth the player is standing over, if there is one (§10, §19).
+    ///
+    /// **`None` everywhere but an archive with a maze open**, and for the same
+    /// reason [`Sim::instruments`] is empty outside the laboratory: it goes
+    /// through the lectern, which is found relative to `Cwd`. So the map is a
+    /// property of where the player is, and a frontend cannot carry it out of
+    /// the room and show something `survey` would not.
+    ///
+    /// Built fresh rather than cached, and called once a tick by the frontend's
+    /// panel — a 49-cell `Vec` at 1 Hz, against `Instrument`'s recorded
+    /// objection to allocating *per frame*, which is a different rate entirely.
+    #[must_use]
+    pub fn labyrinth(&self) -> Option<orbs_render::Labyrinth> {
+        let lectern = crate::execute::lectern(&self.world)?;
+        self.world
+            .get::<tower::Maze>(lectern)
+            .map(tower::Maze::view)
     }
 
     /// The readings the orb is waiting for the player to pick between (§6).

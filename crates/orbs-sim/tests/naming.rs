@@ -61,6 +61,11 @@ const fn sample_argument(verb: Verb) -> &'static str {
         // is *not* in the scene, so this measures the naming rather than a
         // lucky match against something the fixture happens to hold.
         NounKind::Name => "morning",
+        // A reading of the archive's maze. Never a slot's kind — no verb asks
+        // for one, which is the whole reason the kind exists (see `NounKind`) —
+        // so this arm is unreachable and says so rather than inventing a sample
+        // that would go untested.
+        NounKind::Sense => "passage",
         // A slot kind, never a noun's own, so the sample is a noun that *fills*
         // one. The log, not the spell: this exercises the ordinary reading and
         // leaves `peruse night_watch` to the tests that are about spells.
@@ -276,6 +281,18 @@ fn the_tolerated_collision_set_is_pinned() {
             // domain scoping was added for.
             ("find", "grind"),
             ("find", "bind"),
+            // **`search` (sift) vs `research`, at 750 — the highest score this
+            // list tolerates**, above `decoct`/`decant`'s 667, and the exact
+            // score that got `step` rejected against `stop`. It is kept, and the
+            // difference from `step` is what the *whole* spelling does rather
+            // than what the pair scores: `step` and `stop` are both four
+            // letters, so a typo in either lands nearer the other. Here every
+            // spelling a player produces resolves to the verb they meant —
+            // `search` and `research` are exact, `serch` is 834 to *sift* and
+            // 625 to research, `reserch` is 875 to *research* and 572 to search.
+            // The two words diverge at the front, which is where a fuzzy match
+            // is decided.
+            ("search", "research"),
             ("audit", "edit"),
             // `("wait", "write")` **left this set**, and the set is one shorter
             // than it was. `wait` was `meditate`'s shell synonym; §8 needed it
@@ -339,9 +356,16 @@ fn ambiguous_synonym_prefixes_are_known() {
         ambiguous,
         [
             ("aut", vec!["bind", "scribe"]),
-            ("dec", vec!["divine", "empty", "recall"]),
+            ("dec", vec!["empty", "recall", "research"]),
             ("ins", vec!["scribe", "verify"]),
-            ("tra", vec!["divine", "move"]),
+            // **`res` is `research`'s own prefix, and `rest` wins it.** `rest`
+            // is `meditate`'s, four letters to `research`'s eight, so the
+            // coverage half of the prefix score puts it ahead (962 to 906) and
+            // three characters reach *meditate*. That is the right way round:
+            // `rest` is a whole word a player means, `res` is an abbreviation
+            // they are part-way through, and `rese` already separates them.
+            ("res", vec!["meditate", "research"]),
+            ("tra", vec!["move", "research"]),
         ],
         "the set of ambiguous synonym prefixes changed"
     );
@@ -385,8 +409,16 @@ fn the_words_the_naming_pass_replaced_still_resolve() {
         // nearest, and the two nearest here are `purge` and `stop`. Somebody who
         // learned `decant` still gets the thing that takes stuff out of a tool.
         ("decant alembic", "empty alembic"),
-        ("decipher sigil-iv", "divine sigil-iv"),
-        ("divine sigil-iv", "divine sigil-iv"),
+        // `divine` takes no argument now: it opens a labyrinth on the lectern
+        // rather than consuming a fragment (§10, §19). The *word* is what this
+        // test is about, and `decipher` still reaches it.
+        ("decipher", "research"),
+        // **`divine` was the canonical until the archive got its name right.**
+        // A room of shelves and readings is somewhere you look things up, not
+        // somewhere you guess; `divine` is kept because a word the game taught
+        // is a word it owes an answer to.
+        ("divine", "research"),
+        ("research", "research"),
         ("inscribe night_watch", "scribe night_watch"),
         ("scribe night_watch", "scribe night_watch"),
         // Retired in Phase 1 (§19) and still claimed, pointed at the recipe.

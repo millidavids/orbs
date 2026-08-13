@@ -81,8 +81,54 @@ const BRANCHES: &[Branch] = &[
             ),
             Holding::new(NounKind::File, &["archive.log"]),
         ],
+        places: ARCHIVE,
+        role: None,
+        operation: None,
+    },
+];
+
+/// The archive's one instrument, and the four ways its reading can go.
+///
+/// The lectern is where a maze is opened and where fragments are assembled, and
+/// giving the archive a fixture at all is what retires three defects at once:
+/// `divine`'s completion had no sentence, a running `divine` could not be
+/// stopped (`stop` finds its target through `Fixture`), and the domain drew no
+/// panel. None of the three was worth patching separately — they were one
+/// absence.
+const ARCHIVE: &[Branch] = &[
+    Branch {
+        name: "lectern",
+        holds: &[],
         places: &[],
         role: None,
+        operation: Some(Verb::Research),
+    },
+    Branch {
+        name: "north",
+        holds: &[],
+        places: &[],
+        role: Some(Role::Reading),
+        operation: None,
+    },
+    Branch {
+        name: "east",
+        holds: &[],
+        places: &[],
+        role: Some(Role::Reading),
+        operation: None,
+    },
+    Branch {
+        name: "south",
+        holds: &[],
+        places: &[],
+        role: Some(Role::Reading),
+        operation: None,
+    },
+    Branch {
+        name: "west",
+        holds: &[],
+        places: &[],
+        role: Some(Role::Reading),
         operation: None,
     },
 ];
@@ -179,6 +225,16 @@ enum Role {
     Heat,
     /// A shelf of stock: the fallback a `move` falls back to.
     Store,
+    /// One of the four ways the archive's reading can go.
+    ///
+    /// A **place**, because `spell::compile` resolves the place half of a
+    /// question against `NounKind::Place` and nothing else — `if north has
+    /// passage` cannot be written unless `north` is one. That is also why it is
+    /// a `Role` rather than a bare fixture: a place in the scene is a place you
+    /// can `attend`, and walking into a compass bearing is not a thing the
+    /// wizard does. The role is what `attend` refuses on, and what keeps these
+    /// four off the instrument panel.
+    Reading,
 }
 
 struct Holding {
@@ -310,6 +366,15 @@ fn raise_branch(world: &mut World, parent: Entity, branch: &Branch, protect: boo
             // emptied rather than deleted; a shelf of stock is safe by refusing.
             world.entity_mut(at).insert((super::Store, Protected));
         }
+        Some(Role::Reading) => {
+            // **`Protected` too.** `purge north` would otherwise scour a
+            // direction — despawning the reading the maze had just written and
+            // leaving a solver asking a question about a place that had gone
+            // quiet, which reads exactly like a wall. The same argument the
+            // dispensary's makes: a thing the loop depends on is safe by
+            // refusing, not by being emptied.
+            world.entity_mut(at).insert((super::Reading, Protected));
+        }
         None => {}
     }
 
@@ -344,6 +409,15 @@ fn is_log(name: &str) -> bool {
     std::path::Path::new(name)
         .extension()
         .is_some_and(|extension| extension.eq_ignore_ascii_case("log"))
+}
+
+/// Put one reading inside one of the archive's four ways.
+///
+/// The maze's whole output channel: what a spell's `if north has passage` asks
+/// about. A node rather than a component, because `watch::holds` answers `has`
+/// by looking for a **named child**, which is the one read the language has.
+pub fn raise_reading(world: &mut World, at: Entity, word: &str) -> Entity {
+    spawn(world, Some(at), word, NounKind::Sense)
 }
 
 /// Spawn one node under `parent`, in order.

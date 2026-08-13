@@ -15,9 +15,9 @@
 //! less, the setting would become a difficulty choice."*
 
 use orbs_render::{
-    Burn, Depiction, DisplayMode, Fidelity, FieldName, Frame, GridSize, Grind, Intensity, Outcome,
-    Painter, Pos, Presentation, RecordKind, RecordView, Records, Rect, Role, ScreenLayout,
-    ScreenRequest, Sift, Span, Steep, Style, UtteranceKind,
+    Burn, Depiction, DisplayMode, Fidelity, FieldName, Frame, GridSize, Grind, Intensity,
+    Labyrinth, Outcome, Painter, Pos, Presentation, RecordKind, RecordView, Records, Rect, Role,
+    ScreenLayout, ScreenRequest, Sift, Span, Square, Steep, Style, UtteranceKind,
 };
 
 /// The wizard's name is world state (`orbs_sim::Wizard`), which this crate does
@@ -55,6 +55,35 @@ fn main() {
     let editor = editor_screen(GridSize::new(80, 22));
     show("The spell editor at the 80×22 floor (§8)", &editor);
     speak(&editor);
+
+    // **48, which is the session pane once two of them tile.** The 80-column
+    // floor is the widest this surface ever gets, so checking it there would
+    // check the easy case — see `weave_screen`.
+    // **48×18 — the narrowest *and* shortest this surface will draw at.** The
+    // width is a tiled session pane; the height is `loom::MIN_ROWS`, below which
+    // the real painter refuses rather than drawing something misleading.
+    let weave = weave_screen(GridSize::new(48, 18));
+    show(
+        "The weave screen at the width a tiled pane gives it (§11.5)",
+        &weave,
+    );
+    speak(&weave);
+
+    // 35×35 — the block the archive's map takes, at its natural size. Three
+    // states, because the fog is the whole mechanic and one of them is not
+    // enough to see it. The grid is 33 squares across (`2 × 16 + 1`), and the
+    // snake through it is 511 squares long.
+    for (caption, walked) in [
+        ("unopened — one mark in the dark (§10)", 0),
+        ("part walked — a lit region growing out of it", 120),
+        (
+            "all but the last square — once, twice, and the way out",
+            511,
+        ),
+    ] {
+        let map = labyrinth_screen(GridSize::new(35, 35), walked);
+        show(&format!("The labyrinth, {caption}"), &map);
+    }
 
     burning();
     grinding();
@@ -557,6 +586,212 @@ fn editor_screen(grid: GridSize) -> Frame {
     );
 
     frame.set_cursor(Some(Pos::new(1 + GUTTER + 10, 3)));
+    frame
+}
+
+/// The archive's map, drawn by the painter the game actually uses (§10, §19).
+///
+/// **Not a replica, unlike [`weave_screen`].** The weave screen is drawn in
+/// `orbs`, which this crate cannot reach, so that one is redrawn by hand and can
+/// drift. The maze picture lives *here*, so this calls straight into
+/// [`Painter::labyrinth`] and cannot disagree with the game about a single
+/// square.
+///
+/// `walked` is how far along a snake through the grid the reading has gone,
+/// which is enough to exercise every glyph: fog, the two marks, and the way out.
+fn labyrinth_screen(grid: GridSize, walked: usize) -> Frame {
+    let (span_x, span_y): (usize, usize) = (33, 23);
+    let mut squares = vec![
+        Square {
+            wall: true,
+            marks: 0,
+        };
+        span_x * span_y
+    ];
+
+    // A boustrophedon corridor: along an odd row, down through the wall at the
+    // end, back along the next. Every floor square reachable, which is what lets
+    // one number choose how much is lit.
+    let mut path: Vec<usize> = Vec::new();
+    for band in 0..(span_y / 2) {
+        let row = 2 * band + 1;
+        let rightward = band % 2 == 0;
+        for step in 1..span_x - 1 {
+            let col = if rightward { step } else { span_x - 1 - step };
+            path.push(row * span_x + col);
+        }
+        if band + 1 < span_y / 2 {
+            let turn = if rightward { span_x - 2 } else { 1 };
+            path.push((row + 1) * span_x + turn);
+        }
+    }
+    for index in &path {
+        squares[*index].wall = false;
+    }
+
+    // Walk it, marking as the maze does — the first stretch twice, so the
+    // finished-with glyph appears rather than being a claim in a doc comment.
+    for (step, index) in path.iter().take(walked).enumerate() {
+        squares[*index].marks = if step < walked / 3 { 2 } else { 1 };
+    }
+    let at = path
+        .get(walked.saturating_sub(1))
+        .copied()
+        .unwrap_or(path[0]);
+    squares[at].marks = squares[at].marks.max(1);
+
+    let maze = Labyrinth {
+        squares,
+        width: u16::try_from(span_x).unwrap_or(u16::MAX),
+        at,
+        exit: *path.last().unwrap_or(&0),
+    };
+
+    let mut frame = Frame::new(grid);
+    let area = Rect::new(0, 0, grid.cols, grid.rows);
+    let mut painter = frame.painter(area);
+    painter.border(area, Some("labyrinth"), Style::DIM);
+    painter.labyrinth(area.inset(1), &maze);
+    frame
+}
+
+/// The weave screen at the width it actually gets (§11.5).
+///
+/// **48 columns, not 80.** `DEEP_FOCUS_FLOOR` is 100×28 and panes tile side by
+/// side above it, so the session pane is half the grid — the 80-column floor is
+/// the *widest* single-pane case. Every sentence on this screen is authored
+/// against the number below, and this is the cheapest place to find out when one
+/// stops fitting, because it builds a Frame without a sim.
+///
+/// The real painter is `orbs::shell::loom`. If this stops fitting, so has that.
+fn weave_screen(grid: GridSize) -> Frame {
+    let mut frame = Frame::new(grid);
+    let area = Rect::new(0, 0, grid.cols, grid.rows);
+    let mut painter = frame.painter(area);
+    painter.border(area, Some("weave"), Style::DIM);
+
+    // **Progression runs rightward**, and the screen says so three times: the
+    // bar fills right, the Ley Line runs right, and Mastery's tiers run right.
+    // A tier's siblings stack *downward*, which is the other axis and the other
+    // meaning — rightward is progress, downward is a choice.
+    let label = "24 of 100";
+    let width = grid
+        .cols
+        .saturating_sub(u16::try_from(label.len()).unwrap_or(9) + 3);
+    painter.progress(
+        Rect::new(1, 1, width, 1),
+        24,
+        100,
+        Style::default().with_role(Role::Success),
+        "24 experience of 100",
+    );
+    painter.span(Pos::new(width + 2, 1), &Span::new(label));
+
+    // **The Ley Line is one line with its steps standing on it**, drawn across
+    // the same cells the bar above uses — so a step at 16 stands one sixth along
+    // and the fill either has reached it or has not. The two rows are one
+    // picture, which is why the bar's scale is a fixed hundred.
+    painter.span(
+        Pos::new(1, 3),
+        &Span::new("ley line").with_style(Style::DIM),
+    );
+    painter.glyphs(
+        Pos::new(1, 4),
+        &"\u{2500}".repeat(usize::from(width)),
+        Style::DIM,
+    );
+    let at = 2 + u16::try_from(16 * u32::from(width.saturating_sub(3)) / 100).unwrap_or(0);
+    painter.glyphs(Pos::new(at - 1, 4), "[", Style::DIM);
+    painter.glyphs(Pos::new(at, 4), "\u{2022}", Style::default());
+    painter.glyphs(Pos::new(at + 1, 4), "]", Style::DIM);
+    // **The glyph is drawn silently and the state is said as a word**, which is
+    // the §14 property this screen exists to check: `Painter::span` would push
+    // `•` itself into the stream and tell a listener nothing. The real painter
+    // does exactly this — see `loom::glyph`.
+    painter.announce(UtteranceKind::TableRow, Role::Normal, "16: taken");
+    painter.span(Pos::new(at - 1, 5), &Span::new("16").with_style(Style::DIM));
+
+    // **Mastery is placed at cost too**, on the same cells: one trunk forking
+    // into the first tier, then a line from each node to *its own* successor —
+    // which is what makes it a tree rather than two rows of unrelated marks.
+    // `«»` marks the aimed node, and it is Bright as well: the frame survives
+    // greyscale, the brightness is what the eye finds first.
+    painter.span(Pos::new(1, 7), &Span::new("mastery").with_style(Style::DIM));
+    let along = |cost: u32| 2 + u16::try_from(cost * u32::from(width - 3) / 100).unwrap_or(0);
+    painter.glyphs(
+        Pos::new(1, 8),
+        &"\u{2500}".repeat(usize::from(along(24) - 3)),
+        Style::DIM,
+    );
+    painter.glyphs(Pos::new(along(24) - 2, 8), "\u{252c}", Style::DIM);
+    painter.glyphs(Pos::new(along(24) - 2, 9), "\u{2514}", Style::DIM);
+    for row in [8u16, 9] {
+        painter.glyphs(
+            Pos::new(along(24) + 2, row),
+            &"\u{2500}".repeat(usize::from(along(40) - along(24) - 3)),
+            Style::DIM,
+        );
+    }
+    for (cost, glyph) in [(24u32, "\u{25cb}"), (40, "\u{b7}")] {
+        let x = along(cost);
+        for row in [8u16, 9] {
+            // The aimed one is the lower node of the first tier.
+            let (open, close) = if cost == 24 && row == 9 {
+                ("\u{ab}", "\u{bb}")
+            } else {
+                ("[", "]")
+            };
+            painter.glyphs(Pos::new(x - 1, row), open, Style::DIM);
+            painter.glyphs(Pos::new(x, row), glyph, Style::default());
+            painter.glyphs(Pos::new(x + 1, row), close, Style::DIM);
+            let state = if cost == 24 { "open" } else { "locked" };
+            painter.announce(
+                UtteranceKind::TableRow,
+                Role::Normal,
+                &format!("{cost}: {state}"),
+            );
+        }
+        painter.span(
+            Pos::new(x - 1, 10),
+            &Span::new(&cost.to_string()).with_style(Style::DIM),
+        );
+    }
+
+    // **The details panel**, bottom right: what the aimed node is, what it
+    // costs, and the two facts that are not the same fact. *Unlocked* is whether
+    // it can be reached; *active* is whether what it grants is in effect. A
+    // mastery node can be unlocked and idle because nobody chose it, or unlocked
+    // and idle for ever because a sibling took the tier's one choice.
+    let panel = Rect::new(
+        grid.cols.saturating_sub(31),
+        grid.rows.saturating_sub(7),
+        30,
+        5,
+    );
+    painter.border(panel, Some("details"), Style::DIM);
+    painter.span(
+        Pos::new(panel.col + 1, panel.row + 1),
+        &Span::new("not taught yet"),
+    );
+    painter.span(
+        Pos::new(panel.col + 1, panel.row + 2),
+        &Span::new("costs 24").with_style(Style::DIM),
+    );
+    painter.span(
+        Pos::new(panel.col + 1, panel.row + 3),
+        &Span::new("unlocked").with_style(Style::default().with_role(Role::Success)),
+    );
+    painter.span(
+        Pos::new(panel.col + panel.cols - 9, panel.row + 3),
+        &Span::new("inactive").with_style(Style::DIM),
+    );
+
+    // The row that must never be blank: §6 forbids a dead end, and at the
+    // command line this row is the whole interface.
+    painter.span(
+        Pos::new(1, grid.rows.saturating_sub(2)),
+        &Span::new("ley  mastery  take  quit").with_style(Style::DIM),
+    );
     frame
 }
 

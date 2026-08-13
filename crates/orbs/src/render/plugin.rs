@@ -249,6 +249,13 @@ struct ShellState<'w> {
     /// `ResMut` because the editor's viewport follows its caret, and how many
     /// lines fit is a fact only the painter has — see `Editor::scroll_to`.
     editing: ResMut<'w, crate::shell::Editing>,
+    /// `ResMut` only to reach `get_mut`; the painter tells this surface nothing.
+    weaving: ResMut<'w, crate::shell::Loom>,
+    /// Whether the arrows are walking the archive's labyrinth.
+    ///
+    /// `Res`, not `ResMut`: this one owns no pane, so there is nothing for the
+    /// painter to hand back to it.
+    walk: Res<'w, crate::shell::Walk>,
 }
 
 /// Paint the screen into the `Frame`.
@@ -278,6 +285,8 @@ fn repaint(
         reveal,
         bench,
         ref mut editing,
+        ref mut weaving,
+        walk,
     } = shell;
     let frame = &mut canvas.frame;
     frame.reset(screen.grid);
@@ -303,6 +312,8 @@ fn repaint(
                 scroll: &scroll,
                 bench: &bench,
                 editing: editing.get_mut(),
+                weaving: weaving.get_mut().map(|screen| &*screen),
+                walking: walk.is_open(),
             },
         );
     } else {

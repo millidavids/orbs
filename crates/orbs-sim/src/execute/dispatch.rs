@@ -75,10 +75,13 @@ fn execute(intent: &Intent, world: &mut World) {
         Verb::Meditate => meditate(intent, world),
         Verb::Status => status(world),
         Verb::Unfurl => super::unfurl::unfurl(world),
+        Verb::Weave => super::weave::weave(world),
         Verb::Peruse => files::peruse(intent, world),
         Verb::Sift => files::sift(intent, world),
         Verb::Verify => files::verify(intent, world),
-        Verb::Divine => pipeline::work(intent, world, tower::DIVINE_TICKS),
+        Verb::Research => super::research::research(intent, world),
+        Verb::Follow => super::research::follow(intent, world),
+        Verb::Wander => super::wander::wander(world),
         Verb::Move => pipeline::carry(intent, world),
         Verb::Wield => pipeline::wield(intent, world),
         // §10.1's per-instrument verbs. One arm, because the instrument is found
@@ -158,7 +161,7 @@ pub const fn is_live(verb: Verb) -> bool {
             // [`is_gated`], which is what keeps it off the boot report until it
             // can do something.
             | Verb::Bind
-            | Verb::Divine
+            | Verb::Research
             | Verb::Purge
             | Verb::Verify
             // **The one word whose whole reason for existing is being found.**
@@ -166,6 +169,17 @@ pub const fn is_live(verb: Verb) -> bool {
             // launch teaches from, would be exactly the affordance-nobody-can-
             // discover problem it was added to solve — one level up.
             | Verb::Unfurl
+            // **Live and never gated**, unlike `bind` below. At experience 0 it
+            // shows the first threshold named and nothing taken, which is the
+            // onboarding value rather than a dead end — a new player learns what
+            // the work is *for*. There is no total at which it can only refuse.
+            | Verb::Weave
+            | Verb::Follow
+            // Live, and it refuses in two states rather than being gated by
+            // one: there is no lectern here, or no labyrinth open yet. Both
+            // name the way forward, so neither is the dead end this list
+            // exists to keep off the scaffold.
+            | Verb::Wander
     )
 }
 

@@ -28,4 +28,4 @@ pub use session::{
 pub use sim::Sim;
 pub use tick::Tick;
 pub use tower::spell::{Fault, Reading};
-pub use tower::{Cwd, NodeId};
+pub use tower::{Cwd, Name, Node, NodeId, Standing, children_of};

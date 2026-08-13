@@ -98,6 +98,7 @@ mod linear;
 // Public for its module docs: it is the one place that decides what motion
 // *means* across the two vessels, and both `Steep` and `Stir` point at it.
 pub mod liquid;
+mod maze;
 mod mix;
 mod paint;
 mod pulse;
@@ -121,6 +122,7 @@ pub use layout::{
 };
 pub use linear::{Speech, Utterance, UtteranceKind};
 pub use liquid::{DRIFT_EVERY, Motion, RISE_EVERY, STIR_EVERY};
+pub use maze::{Labyrinth, Square};
 pub use mix::{Band, Stir};
 pub use paint::Painter;
 pub use pulse::{CYCLE_SECS, FLIP_HZ};

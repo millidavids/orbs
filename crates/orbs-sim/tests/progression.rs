@@ -117,15 +117,70 @@ fn one_clarity_is_exactly_the_first_threshold() {
 fn the_archive_earns_too() {
     // One of the two rooms the game opens with, and §10 calls it the domain
     // played most. At nothing it would be dead progression for half the opening.
+    //
+    // **Solved rather than merely opened.** `divine` used to hold the slot for
+    // twelve ticks and pay for it; it now opens a labyrinth, and what earns is
+    // reaching the way out — so this walks one, by the same Trémaux rule a
+    // player writes as a spell: prefer a passage nobody has walked, and fall
+    // back to the least-walked way out.
     let mut sim = Sim::new(1);
-    run(&mut sim, &["attend archive", "divine sigil-i"]);
-    sim.step_n(16);
+    run(&mut sim, &["attend archive", "research"]);
+
+    for _ in 0..4000 {
+        if sim.experience() > 0 {
+            break;
+        }
+        let Some(way) = choose(&sim) else { break };
+        run(&mut sim, &[&format!("follow {way}")]);
+    }
 
     assert!(
         sim.experience() > 0,
         "the archive earned nothing: {:?}",
-        messages(&sim),
+        messages(&sim).last(),
     );
+}
+
+/// The next way a Trémaux solver would take, read off the four readings.
+fn choose(sim: &Sim) -> Option<&'static str> {
+    let ways = ["north", "east", "south", "west"];
+    // **Five rungs, and the last two are what make it terminate.** The four-rung
+    // version is not Tremaux and only ever solved small mazes: at a junction
+    // where two ways read alike, a fixed compass order sends it back where it
+    // came from and it cycles. `back` is the word that breaks the tie, and it is
+    // a *second* fact about a way rather than a fifth reading — see
+    // `orbs_sim::tower::maze::BACK`.
+    for word in ["exit", "passage"] {
+        if let Some(way) = ways.into_iter().find(|way| reads(sim, way, word)) {
+            return Some(way);
+        }
+    }
+    for word in ["walked", "twice"] {
+        if let Some(way) = ways
+            .into_iter()
+            .find(|way| reads(sim, way, word) && !reads(sim, way, "back"))
+        {
+            return Some(way);
+        }
+    }
+    ways.into_iter().find(|way| reads(sim, way, "back"))
+}
+
+/// Whether one way answers to `word` — a reading, or `back`.
+fn reads(sim: &Sim, way: &str, word: &str) -> bool {
+    let world = sim.world();
+    let cwd = world.resource::<orbs_sim::Cwd>().0;
+    let Some(node) = orbs_sim::children_of(world, cwd).into_iter().find(|node| {
+        world
+            .get::<orbs_sim::Name>(*node)
+            .is_some_and(|name| name.0 == way)
+    }) else {
+        return false;
+    };
+    orbs_sim::children_of(world, node)
+        .into_iter()
+        .filter_map(|held| world.get::<orbs_sim::Name>(held))
+        .any(|name| name.0 == word)
 }
 
 #[test]
@@ -224,10 +279,7 @@ fn the_same_work_earns_the_same_on_a_replay() {
         while replayed.tick() < tick {
             replayed.step();
         }
-        match submission {
-            orbs_sim::Submission::Typed(line) => replayed.submit(&line),
-            orbs_sim::Submission::Wrote { name, lines } => replayed.write_spell(&name, &lines),
-        }
+        replayed.replay(submission);
     }
     while replayed.tick() < live.tick() {
         replayed.step();

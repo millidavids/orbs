@@ -29,8 +29,11 @@ mod files;
 mod navigate;
 mod pipeline;
 mod recall;
+mod research;
 mod scribe;
 mod unfurl;
+mod wander;
+mod weave;
 
 #[cfg(test)]
 mod tests;
@@ -38,9 +41,14 @@ mod tests;
 #[cfg(debug_assertions)]
 pub use debug::{Order as SpawnOrder, SPAWN, order as spawn_order};
 pub use dispatch::{LOG, MAX_MEDITATE, execute_one, is_gated, is_live, run_pending};
+// Crate-internal: `Sim::labyrinth` needs it and `divine` is a private module, so
+// the re-export is what makes it nameable rather than what makes it public.
 pub use navigate::find_domain;
+pub(crate) use research::{lectern, tread};
 pub(crate) use scribe::Reloaded;
 pub use scribe::{Opening, Request, write};
 pub use unfurl::Unfurling;
+pub use wander::Wandering;
+pub use weave::Weaving;
 
 use dispatch::{acknowledge, missing};

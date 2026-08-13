@@ -195,7 +195,7 @@ fn every_verb_is_reachable_from_plain_english() {
         // `stop`, the pair this room can least afford to confuse.
         ("collect laboratory", Verb::Empty),
         ("get rid of sludge", Verb::Purge),
-        ("study sigil-iv", Verb::Divine),
+        ("study sigil-iv", Verb::Research),
         ("author night_watch", Verb::Scribe),
         ("schedule night_watch", Verb::Bind),
         ("cast night_watch", Verb::Invoke),

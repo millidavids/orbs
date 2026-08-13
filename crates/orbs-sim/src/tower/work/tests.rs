@@ -340,7 +340,7 @@ fn the_tower_has_one_production_slot_not_one_per_domain() {
 
     sim.submit("attend archive");
     sim.step();
-    sim.submit("divine sigil-iv");
+    sim.submit("research");
     sim.step();
 
     assert_eq!(

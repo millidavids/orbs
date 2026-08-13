@@ -130,6 +130,17 @@ pub struct Operation(pub crate::parser::Verb);
 #[derive(Component, Debug, Clone, Copy)]
 pub struct Store;
 
+/// One of the four ways the archive's reading can go — see `tower::maze`.
+///
+/// **A place that is not somewhere you go.** It has to be a `NounKind::Place`,
+/// because that is the only kind the place half of a spell's question resolves
+/// against; without it `if north has passage` cannot be written at all. But a
+/// compass bearing is not a room, so this is what `attend` refuses on and what
+/// keeps the four off the instrument panel — the same shape as [`Store`], which
+/// exists because a shelf is not an instrument.
+#[derive(Component, Debug, Clone, Copy)]
+pub struct Reading;
+
 /// A file whose text is **stored**, rather than derived from the record stream.
 ///
 /// # Why this is not how `orb.log` works, and must not become it

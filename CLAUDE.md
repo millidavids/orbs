@@ -481,6 +481,122 @@ time it runs off the end, so `first_light` bound would foul the mortar on its
 second pass and complain about it for ever — `grind sage` then `empty
 mortar_and_pestle` is the shortest loop that can actually lap.
 
+**`weave` opens the progression screen, and `ORBS_WEAVE` types at it.**
+Newline-separated like `ORBS_EDIT`, but **every segment is a whole thing** — a
+word, or one of `<up>` / `<down>` / `<left>` / `<right>` / `<esc>`. There is no
+buffer, so nothing is typed a character at a time and Enter is implied at the end
+of a segment and nowhere else.
+
+**The arrows do nothing until a word has gone into a track.** `ley` or `mastery`
+is what hands them over, the way `edit` drops into the editor's buffer — so a
+dump that opens the screen and presses an arrow is testing the refusal, not the
+movement. **Left/right walks the track; up/down picks between a tier's
+siblings** — rightward is progress, downward is a choice.
+
+**The session pane is ~48 columns, not 80.** Panes tile side by side above the
+100×28 deep-focus floor, so `ORBS_GRID=80x22` is the *widest* this surface ever
+gets and `100x28` is the narrowest. Both are worth a look; the narrow one is
+where a sentence stops fitting.
+
+```bash
+# Nothing earned: the bar reads `0 of 100`, the ley line's one station draws
+# `[·]` (untaken) with its cost `16` under it, and mastery's tier is `[·]` too.
+# **The bar is against a fixed SCALE of 100, not against the next threshold** —
+# this line used to claim `0 of 16` and an `opens at`, and neither was ever on
+# screen. A See-it line that describes a different screen is worse than none.
+ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="weave" cargo run -p orbs
+
+# A tier **opening**, which is the only place the choose-between shape shows.
+# Three alembic runs are 24. `empty alembic` between them, as always.
+ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="attend laboratory; kindle charcoal; \
+  debug_spawn clarified-draught 3; distil clarified-draught; meditate 60; \
+  empty alembic; distil clarified-draught; meditate 60; empty alembic; \
+  distil clarified-draught; meditate 60; weave" cargo run -p orbs
+
+# Aim with the arrows, then type the word — `«○»` moves and the refusal names
+# the node you aimed at, which is what proves typing kept the aim.
+ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="weave" \
+  ORBS_WEAVE="mastery\n<down>\ntake" cargo run -p orbs
+
+# ...and the arrows before a word, which must move nothing and say what to do.
+ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="weave" \
+  ORBS_WEAVE="<down>\n<right>" cargo run -p orbs
+```
+
+**Nothing is takeable yet and that is deliberate** — every Mastery node is
+authored as a marker, so `take` always refuses in voice. A dump looking for a
+node to change state is looking for the next item.
+
+**The archive draws a map, and `wander` gives it the arrow keys.** The map is
+*not* gated on the word — it draws whenever a maze is open, which is what makes a
+bound solver watchable — so `research` alone is enough to see it. `wander` only
+decides who the arrows belong to, and `ORBS_WALK` presses them:
+
+```bash
+# The maze whole, with one mark in it. **There is no fog** (§19) — every wall is
+# on screen from the moment it opens; what fills in as you walk is the marks.
+ORBS_BOOT=0 ORBS_GRID=160x45 ORBS_DUMP="attend archive; research" cargo run -p orbs
+
+# ...opening as it goes. `▒` walked once, `░` finished with, `☼` the reading,
+# `Ω` the way out once a walked cell is beside it.
+ORBS_BOOT=0 ORBS_GRID=160x45 \
+  ORBS_DUMP="attend archive; research; follow east; follow east" cargo run -p orbs
+
+# The arrows. `wander` takes the **whole pane** — maze centred, count and keys
+# beneath, no transcript and no prompt. A spell solving one keeps the map inline.
+ORBS_BOOT=0 ORBS_GRID=160x45 ORBS_DUMP="attend archive; research; wander" \
+  ORBS_WALK="<right>\n<right>\n<down>\n<down>\n<left>" cargo run -p orbs
+```
+
+**An arrow moves the reading immediately and consumes no tick.** `Sim::walk` is a
+**third entry point** beside `submit` and `step` — the only thing in the game
+that reaches the world without a tick boundary — so a player walks as fast as
+they can press and no brew advances while they do. Three versions went through
+the prompt's queue first; all were some flavour of too slow, because the queue
+was solving the wrong problem.
+
+`ORBS_WALK` therefore steps **nothing**: check `tick` in the telemetry pane after
+a long walk and it should be exactly what it was before. If a dump of eight
+presses has advanced the clock eight seconds, something has gone back through
+`submit`.
+
+**Replay still holds**, and `Submission::Walked` is what makes it hold: it says
+*when* — a typed line executes at the start of the next tick, a walk has already
+executed. Use `Sim::replay` rather than matching on `Submission` by hand; three
+test files had their own copy of that match and they are one now.
+
+**Watching a spell solve it is the point of the map**, and the solver is fifty
+lines, so build it rather than typing it. `else` is load-bearing — a flat ladder
+of sixteen `if`s casts clean and oscillates for ever (§19):
+
+```bash
+python3 -c '
+lines = ["edit", "repeat 400"]
+for r in ("exit","passage","walked","twice"):
+    for w in ("north","east","south","west"):
+        lines += [f"if {w} has {r}", f"follow {w}", "else"]
+lines += ["end"]*17 + ["<esc>", "quit"]
+print("\\n".join(lines), end="")' > /tmp/solver.txt
+ORBS_BOOT=0 ORBS_GRID=160x45 ORBS_DUMP="attend archive; research; scribe threading" \
+  ORBS_EDIT="$(cat /tmp/solver.txt)" \
+  ORBS_THEN="invoke threading; meditate 300" cargo run -p orbs
+```
+
+**The maze is a 15×15 grid of squares, one character each** — a wall is a square,
+not a line between two cells, so **one arrow press moves one character**. It was
+cells with the walls between them, which draws `2w+1` across and moved the
+reading two characters a step.
+
+**The inline map refuses rather than truncating**, and it takes **columns, never
+rows** — taking rows under a `Top` panel leaves the deep-focus floor a five-row
+transcript. `panel::split` runs first so the instrument panel always wins the
+pane. If a grid is too small the map simply is not there, which is correct and
+not a bug.
+
+**A walked path is a solid run of `▒`**, because the corridor squares are walked
+too. A dump showing marks with gaps between them is showing a regression to the
+old cells-and-wall-lines geometry, not a maze.
+
 Each `;`-separated line goes through `submit` and a real `step`. Phosphor, the
 CRT curve and the blinking caret are frontend enrichment (rule 2) and are not in
 a Frame — those still need eyes on a window.

@@ -277,11 +277,18 @@ pub const SYNONYMS: &[Synonym] = &[
     // Was `decipher`: eight characters, and the third member of a `dec-` prefix.
     // `decipher` and `decode` are both kept — `decode` reaches `decoct` at 667,
     // so releasing it would make "decode this fragment" brew a potion.
-    syn(Verb::Divine, Register::Arcane, &["divine"]),
-    syn(Verb::Divine, Register::Plain, &["decipher"]),
-    syn(Verb::Divine, Register::Plain, &["decode"]),
-    syn(Verb::Divine, Register::Plain, &["study"]),
-    syn(Verb::Divine, Register::Plain, &["translate"]),
+    syn(Verb::Research, Register::Arcane, &["research"]),
+    // **`divine` was the canonical and is kept as a word.** The archive is a
+    // room of shelves and readings, and what you do at a lectern is look things
+    // up — `research` says that and `divine` says a wizard guessing. Every
+    // rename in this table keeps the old spelling working (see
+    // `the_words_the_naming_pass_replaced_still_resolve`), because a word the
+    // game taught is a word the game owes an answer to.
+    syn(Verb::Research, Register::Arcane, &["divine"]),
+    syn(Verb::Research, Register::Plain, &["decipher"]),
+    syn(Verb::Research, Register::Plain, &["decode"]),
+    syn(Verb::Research, Register::Plain, &["study"]),
+    syn(Verb::Research, Register::Plain, &["translate"]),
     // scribe — author a script
     //
     // Was `inscribe`: same root, same meaning, two characters shorter. `write`
@@ -304,6 +311,46 @@ pub const SYNONYMS: &[Synonym] = &[
     syn(Verb::Invoke, Register::Shell, &["./"]),
     syn(Verb::Invoke, Register::Plain, &["cast"]),
     syn(Verb::Invoke, Register::Plain, &["do"]),
+    // weave — look at what the work has bought
+    //
+    // **No shell register, and `tree` in particular is refused.** `status` has
+    // none either, so nothing is owed. And in a game whose premise is that the
+    // filesystem *is* your duties (§7), `tree` means *list this directory* —
+    // a player who types it means `survey`, and it would resolve at 1000 and
+    // take over the screen instead. This is the same call the entries above make
+    // for `less` and `read`: no fuzzy test catches a collision of *meaning*, so
+    // the table has to.
+    //
+    // `progress` is the plain word a newcomer reaches for, and `talents` and
+    // `upgrades` are what they would call the thing after playing anything else.
+    // All three verified clean: none scores 600 against any synonym in either
+    // direction, and `wea`, `pro`, `tal` and `upg` are unclaimed prefixes.
+    syn(Verb::Weave, Register::Arcane, &["weave"]),
+    syn(Verb::Weave, Register::Plain, &["progress"]),
+    syn(Verb::Weave, Register::Plain, &["talents"]),
+    syn(Verb::Weave, Register::Plain, &["upgrades"]),
+    // follow — move the archive's reading one cell (§10, `tower::maze`)
+    //
+    // **Not `step`** (750 against `stop`) and **not `tread`** (800 against
+    // `read`, which `peruse` claims). `follow` is 429 against its nearest and
+    // shares no three-character prefix with anything — and it is what a player
+    // says about a passage.
+    syn(Verb::Follow, Register::Arcane, &["follow"]),
+    syn(Verb::Follow, Register::Plain, &["walk"]),
+    // wander — give the arrow keys the labyrinth (§10, §19)
+    //
+    // **The obvious words are all taken or too close.** `enter` is `attend`'s
+    // and `walk` is `follow`'s own; `thread` is 667 against `read`, `stride` 667
+    // against `scribe`, `delve` 600 against `weave`, `trace` 600 against `twice`
+    // — a reading in scope in this very room — and `pace` 750 against `page`.
+    //
+    // `wander` and `roam` both come in at 500 at worst, over the whole synonym
+    // table in both directions, and `wan` and `roa` are unclaimed prefixes.
+    // `roam`'s nearest are `read` and `rm`; two edits from the destructive verb
+    // in a four-letter word is the shape this vocabulary has twice refused, so
+    // it is the *plain* register only and never the word the orb answers in.
+    syn(Verb::Wander, Register::Arcane, &["wander"]),
+    syn(Verb::Wander, Register::Plain, &["roam"]),
 ];
 
 /// The most words any single phrase spans. Bounds the longest-match window.
