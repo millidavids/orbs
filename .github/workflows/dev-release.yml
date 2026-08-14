@@ -1,0 +1,139 @@
+name: Dev Release
+
+# The `dev` half of the two-branch flow, adapted from court_wizard.
+#
+# **What it is for:** work accumulates on `dev`, and the version block in
+# `docs/CHANGELOG.md` is opened and extended there. This run is what says the
+# tip of `dev` is fit to promote — so that `release.yml`, on the fast-forward
+# into `main`, is promoting something already known good rather than finding out
+# for the first time.
+#
+# In court_wizard this job also builds Windows, Linux and a signed universal
+# macOS app and uploads all three depots to the Steam `staging` branch, which is
+# what a play-tester installs before promotion. **That half is commented out
+# below rather than deleted**: there is no steamworks integration yet, so there
+# is nothing to package and no channel to publish to. When there is, uncomment
+# it and the flow it belongs to is already the right shape.
+#
+# Until then a dev release is cheap — the gate and nothing else — so unlike
+# court_wizard's there is no reason to avoid running it.
+
+on:
+  push:
+    branches:
+      - dev
+  workflow_dispatch:
+
+concurrency:
+  group: dev-release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    name: Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable channel (pinned)
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+
+      - name: Install Linux build dependencies
+        # Bevy's linux backends. Needed for `cargo build -p orbs` to *link*,
+        # which is the step CLAUDE.md singles out as the one `cargo check` does
+        # not replace.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev pkg-config
+
+      # CLAUDE.md's gate, verbatim and in the same order.
+      - name: Format
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Test
+        run: cargo test --workspace
+
+      - name: Docs
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo doc --workspace --no-deps
+
+      - name: Link the game
+        run: cargo build -p orbs
+
+      - name: The screens example
+        # CLAUDE.md: "It has already found bugs that the full test suite did
+        # not." It costs seconds and it exercises the real Frame path.
+        run: cargo run -p orbs-render --example screens > /dev/null
+
+  # ---------------------------------------------------------------------------
+  # STEAM — commented out until there is a steamworks integration to package.
+  #
+  # Restoring this is the point at which `dev` stops meaning "gated" and starts
+  # meaning "installable from the staging branch", which is the whole reason
+  # court_wizard promotes rather than builds at release time. Two things have to
+  # come back together: the build matrix here, and `release.yml`'s
+  # `locate-dev-build` job, which reuses *these* artifacts so the bytes players
+  # get are the bytes someone play-tested.
+  #
+  # Needs secrets STEAM_USER / STEAM_PASS / STEAM_CONFIG_VDF, an appid, and the
+  # depot layout in scripts/. macOS additionally needs the Apple signing
+  # identity and notarisation, which is the slow leg — hours, not minutes.
+  #
+  # build:
+  #   name: Build (${{ matrix.platform }})
+  #   needs: gate
+  #   runs-on: ${{ matrix.runner }}
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       include:
+  #         - { platform: windows, runner: ubuntu-latest, target: x86_64-pc-windows-gnu,    suffix: windows }
+  #         - { platform: linux,   runner: ubuntu-latest, target: x86_64-unknown-linux-gnu, suffix: linux }
+  #   steps:
+  #     - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+  #     - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8
+  #       with:
+  #         targets: ${{ matrix.target }}
+  #     - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+  #       with:
+  #         key: ${{ matrix.target }}
+  #     - name: Install MinGW (Windows cross-compile)
+  #       if: matrix.platform == 'windows'
+  #       run: sudo apt-get install -y --no-install-recommends gcc-mingw-w64-x86-64
+  #     - name: Build and package
+  #       run: ./scripts/package.sh ${{ matrix.platform }}
+  #     - name: Upload artifact
+  #       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+  #       with:
+  #         name: orbs-${{ matrix.platform }}
+  #         path: orbs-v*-${{ matrix.suffix }}.zip
+  #         if-no-files-found: error
+  #         retention-days: 14
+  #
+  # steam-upload:
+  #   name: Upload to Steam staging
+  #   needs: build
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+  #     - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+  #       with:
+  #         path: artifacts
+  #     - name: Upload all depots as one build
+  #       env:
+  #         STEAM_USER: ${{ secrets.STEAM_USER }}
+  #         STEAM_PASS: ${{ secrets.STEAM_PASS }}
+  #         STEAM_CONFIG_VDF: ${{ secrets.STEAM_CONFIG_VDF }}
+  #       run: ./scripts/upload_to_steam.sh staging
+  # ---------------------------------------------------------------------------

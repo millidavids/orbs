@@ -11,17 +11,24 @@
 //!
 //! # What is stored, and why it is the pane *count*
 //!
-//! Not the rectangles. Deep focus raises fidelity a step, so `F4` resizes the
-//! **whole grid** — 80×22 becomes 160×45 — and rectangles captured before that
-//! describe a screen that no longer exists. Storing the counts and re-deriving
-//! both layouts against the current grid every frame means a grid change costs
-//! nothing and needs no special case.
+//! Not the rectangles — and the reason has changed, which is worth saying
+//! because the code did not.
 //!
-//! It also settles the harder question the design raised: the target grid is
-//! adopted **instantly** and only the split animates. Interpolating between
-//! layouts computed against two different grids is not a meaningful operation,
-//! and animating a grid resize is a different and much larger feature than the
-//! one being built.
+//! It used to be that a rectangle went stale under you: `F4` raised fidelity a
+//! step and resized the **whole grid**, 80×22 to 160×45, so anything captured
+//! before the press described a screen that no longer existed. Storing counts
+//! and re-deriving both layouts every frame made a grid change cost nothing and
+//! need no special case.
+//!
+//! §19 fixed the grid, so that hazard is gone and this is simply the smaller
+//! state: two numbers rather than eight rectangles, interpolated by
+//! `tween::panes` against a grid that is the same on both sides of the press.
+//! The design's harder question stays answered the same way — only the split
+//! animates.
+//!
+//! It is still doing something. The siege multiplex is what will move the count
+//! from two to four (see `plugin::PANES`), and a pane arriving between one frame
+//! and the next was the defect this was built for.
 
 use bevy::prelude::Resource;
 use orbs_render::{DisplayMode, GridSize, ScreenLayout, ScreenRequest};
@@ -147,7 +154,8 @@ mod tests {
     use super::*;
     use orbs_render::Rect;
 
-    const WIDE_GRID: GridSize = GridSize::new(160, 45);
+    /// The grid, which is the only one the game has now.
+    const WIDE_GRID: GridSize = orbs_render::GRID;
 
     fn at(transition: &PaneTransition, mode: DisplayMode) -> Vec<Rect> {
         transition.layout(WIDE_GRID, mode, 1).main().to_vec()

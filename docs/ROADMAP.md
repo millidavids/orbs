@@ -80,7 +80,7 @@ and every one of those now names a phase rather than an oversight.
 | Parser — 16 commands, 3 registers | ✅ type at it | — |
 | Naming pass — synonyms, canonical echo | ✅ the echo answers in canonical arcane | — |
 | Record model, `RecordView` | ✅ every line on screen is a record | — |
-| Fidelity tiers | ✅ tier and grid in the border; drag the window | — |
+| ~~Fidelity tiers~~ → a fixed 4:3 picture | ✅ drag the window: `scale` moves, `cols`/`rows` do not | — |
 | `Speech` linear stream | ✅ `F5` shows the session pane as a reader hears it | — |
 | CP437 repertoire enforcement | ✅ the prompt refuses what it cannot draw | — |
 | Parse instrumentation (`ParseLog`, TSV) | ✅ every line traced; `F6` exports | — |
@@ -163,16 +163,20 @@ that names its phase gets revisited when the phase arrives; one that says
       continuously by `crates/orbs-sim/tests/naming.rs` — DESIGN.md §6.1, §19
       **See it:** ✅ type any register at the prompt and read the canonical echo
       come back
-- [x] **Cell-grid text renderer** — glyph atlas + single-mesh quads, integer
-      fidelity tiers. One draw call at any grid size; **227 µs to rebuild the
-      worst-case 160×45 grid in release**, 1.4% of a 60 Hz frame, so §4's
-      cell-index-texture alternative is not needed. No custom shader: the atlas
-      carries coverage in alpha and stock `ColorMaterial` multiplies by vertex
-      colour. Camera fixed to *physical* pixels so integer scaling survives to
-      the framebuffer. Four themes — amber (default), green, muted violet and a
-      monochrome light-grey — contrast-solved rather than eyeballed. `ORBS_CAPTURE=1 cargo run -p orbs` screenshots it
+- [x] **Cell-grid text renderer** — glyph atlas + single-mesh quads. One draw
+      call at any grid size; **227 µs to rebuild the worst-case grid in
+      release**, 1.4% of a 60 Hz frame, so §4's cell-index-texture alternative is
+      not needed. (Measured at 160×45, which was then the largest grid a window
+      could produce; the worst case is now the fixed 120×45 — 5400 quads against
+      7200, so the headroom only grew.) No custom shader: the atlas carries
+      coverage in alpha and stock `ColorMaterial` multiplies by vertex colour.
+      The camera letterboxes a fixed 4:3 picture with `ScalingMode::AutoMin`, so
+      the mesh is emitted in virtual pixels and scaled once. Four themes — amber
+      (default), green, muted violet and a monochrome light-grey —
+      contrast-solved rather than eyeballed. `ORBS_CAPTURE=1 cargo run -p orbs` screenshots it
       **See it:** ✅ it is what you look at. `F2` cycles themes; drag the window
-      and the tier and grid in the border change
+      and the `scale` row in the telemetry pane moves while `cols` and `rows`
+      hold at 120×45
 - [x] **CRT port** — barrel, scanlines, aperture grille, vignette, chromatic
       aberration, flicker, rounded corners, phosphor glow, desaturation, flash.
       **The shader ported; the surrounding Rust did not exist to port** — Bevy
@@ -249,9 +253,10 @@ that names its phase gets revisited when the phase arrives; one that says
       shape described a frame it had already replaced. Both surfaced from
       building a surface and looking at it — which is the entire argument for
       the gate
-  - **Fidelity tiers** — resize the window and watch the grid re-derive. A
-        readout of tier, cell scale, and grid size on screen, so §9's table is
-        something you can walk through with a mouse instead of read
+  - **~~Fidelity tiers~~ the picture** — resize the window and watch the grid
+        *not* re-derive. A readout of cell scale and grid size on screen, so
+        §19's fixed 4:3 picture is something you can walk through with a mouse
+        instead of read
   - **Frame boundary / layout** — a real multi-pane screen driven by
         `ScreenLayout`, and the Deep ↔ Wide focus switch (§9) on a key. The
         `screens` example already proves both; the game has never drawn either
@@ -1633,6 +1638,46 @@ the loop.
       **See it:** ✅ `ORBS_BOOT=0 ORBS_DUMP="attend laboratory; recall distil"`
       ✅ `cargo test -p orbs-sim --lib recall` — the three lints
       ✅ every verb: `for v in attend survey peruse ...; do ORBS_DUMP="recall $v"`
+- [x] **A fixed 4:3 picture — the grid stops following the window** — the window
+      used to decide the *cell count*: 1280×720 gave 160×45, 1920×1080 gave
+      120×33, so every pane, border and wrapped sentence was recomputed against a
+      grid moving under it. Now the grid is **120×45, always**, and the window
+      decides only how big a cell is.
+
+      **The aspect is a property of the grid, not something imposed on it.** A
+      cell is 8×16, so 4:3 forces `cols : rows = 8 : 3` and a const assertion
+      fails the build if a future edit leaves that line. 120×45 is 960×720 at
+      native size — and **720 divides 720, 1080, 1440 and 2160**, which is why it
+      beat 160×60: the common display heights land on ×1.0, ×1.5, ×2.0 and ×3.0
+      instead of ×0.75, ×1.125, ×1.5 and ×2.25.
+
+      **`ScalingMode::AutoMin { 960, 720 }` is the whole letterbox** — one line
+      on the camera, which re-derives on resize by itself. So `fit_camera` is
+      gone, `grid::build` lost its scale parameter, and the mesh is emitted in
+      virtual pixels. `Fidelity` is deleted entirely; `DEEP_FOCUS_FLOOR` is kept
+      because `ORBS_DUMP` still chooses a pane count for an arbitrary
+      `ORBS_GRID`, but `drive_panes`' branch on it became `const PANES: u8 = 2`.
+
+      **What it cost, recorded rather than buried:** `F4` no longer changes text
+      size, so §9's claim that Wide focus is the large-text mode goes with it and
+      the game owes a font-scale setting (§19). And a `BODIES` table transcribed
+      from traced geometry had gone stale silently — every test over it still
+      passed, because a wrong rectangle is still a rectangle — so it now carries
+      an assertion against the layout it was traced from.
+      **See it:** ✅ `cargo run -p orbs`, then drag the window wide, tall and
+      square: the picture stays 4:3 and centred, the bars grow on one axis only,
+      **no text reflows**, and the log prints one `scale` line per resize.
+      ✅ the telemetry pane's `scale` row moves while `cols`/`rows` hold at
+      120×45; `F4` changes the split and neither of the others.
+      ✅ `ORBS_BOOT=0 ORBS_DUMP="attend laboratory; survey"` — 120×45 is the
+      dump's default now, because a dump that is not the game's screen is an
+      instrument reading the wrong thing.
+      ✅ `ORBS_BOOT=0 ORBS_GRID=80x22 ORBS_DUMP="attend laboratory; survey"` —
+      the authoring floor, which is all `ORBS_GRID` is for now.
+      ✅ `ORBS_GRID=40x10 ORBS_DUMP=1 cargo run -p orbs` — the too-small screen
+      by grid; drag below 960×720 for the same screen by scale.
+      ✅ `cargo run -p orbs-render --example screens` — the scale table that
+      replaced §9's tier table, and the worst case at the smallest legible glyph.
 - [ ] **Scrolls that do something** — `spell-scroll` assembles and is then an
       object with no use, which is §19's third finding against this item conceded
       rather than dodged. Haste for brewing is the cheapest first use, and it is

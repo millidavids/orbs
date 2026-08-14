@@ -12,6 +12,12 @@
 //! under both frontends. That is what makes §9's parity rule enforceable rather
 //! than aspirational: *"pane count and content are identical at every fidelity
 //! tier and window size."*
+//!
+//! Since the grid became a constant ([`GRID`](crate::GRID)) that rule is nearly
+//! free under the Bevy frontend — a resize changes the size of a cell and not
+//! the number of them, so every rectangle here is computed once and never moves.
+//! It still earns its keep for `orbs-tui`, whose grid is whatever the terminal
+//! is, and for `ORBS_GRID`.
 
 use crate::geometry::{GridSize, Rect};
 use crate::tiling;
@@ -55,13 +61,23 @@ pub const DEEP_FOCUS_FLOOR: GridSize = GridSize::new(100, 28);
 /// information, and synergies; only the rendering differs. If strips ever showed
 /// less, the setting would become a difficulty choice and a player who needs
 /// large text would be paying for it in capability.
+///
+/// **It no longer changes the size of the text**, and §9 is superseded on that
+/// point. Deep focus used to raise fidelity a step — the grid followed the
+/// window, so a denser grid was where the cells for four panes came from. §19
+/// fixed the grid at [`GRID`](crate::GRID), which has room for all four either
+/// way, and left this as what its name says: how the main window divides.
+///
+/// The consequence is a debt, not a saving. Wide focus was §9's large-text
+/// affordance, and the game has no other; §19 names a font-scale setting as the
+/// replacement it owes.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DisplayMode {
-    /// Fidelity rises one step; every pane is drawn at full size in a grid.
+    /// Every pane is drawn at full size, tiled in a grid.
     #[default]
     Deep,
-    /// Fidelity stays put; the focused pane keeps its size and the rest become
-    /// compact strips. Suits large text, small windows, handhelds, TVs.
+    /// The focused pane keeps its size and the rest become compact strips.
+    /// Suits small windows, handhelds and TVs.
     Wide,
 }
 
@@ -95,15 +111,19 @@ pub struct ScreenRequest {
     pub mode: DisplayMode,
     /// Rows the input line occupies. At least 1.
     ///
-    /// Two at the finest fidelity, so the prompt keeps its **pixel** height when
-    /// the cells shrink — see [`Fidelity::input_rows`](crate::Fidelity::input_rows).
-    /// A frontend that does not care passes 1 and gets what it always got.
+    /// Two means the prompt is drawn at double size into half the columns — see
+    /// [`INPUT_ROWS`](crate::INPUT_ROWS), which is what the frontends pass. A
+    /// caller that does not care passes 1 and gets a plain single row.
     pub input_rows: u16,
 }
 
 impl ScreenRequest {
     /// A request for a single main pane and no sidebar — the opening state, and
     /// the shape of the boot report (§4).
+    ///
+    /// Takes the grid rather than assuming [`GRID`](crate::GRID) because
+    /// `ORBS_GRID` and the `screens` example lay out against the authoring floor,
+    /// which is a grid no window produces.
     #[must_use]
     pub const fn single(grid: GridSize) -> Self {
         Self {
@@ -111,16 +131,7 @@ impl ScreenRequest {
             main_panes: 1,
             sidebar_panes: 0,
             mode: DisplayMode::default_for(grid),
-            input_rows: 1,
-        }
-    }
-
-    /// The same, with the input line sized for a fidelity tier.
-    #[must_use]
-    pub fn single_at(grid: GridSize, fidelity: Option<crate::Fidelity>) -> Self {
-        Self {
-            input_rows: fidelity.map_or(1, crate::Fidelity::input_rows),
-            ..Self::single(grid)
+            input_rows: crate::INPUT_ROWS,
         }
     }
 }
@@ -185,11 +196,10 @@ impl ScreenLayout {
         // costs one column of eighty. `orbs-tui` pays a cell it does not need,
         // and that is the right trade: an invisible gutter in a terminal beats
         // divergent layouts between frontends, which §9's parity rule forbids.
-        // The input's *height in rows* varies with fidelity, because its height
-        // in **pixels** should not. Fine cells make everything smaller including
-        // the one line the player reads on every frame, so at the finest tier it
-        // spends a second row and stays the size it was. See
-        // [`Fidelity::input_rows`](crate::Fidelity::input_rows).
+        // The input line's rows come from [`INPUT_ROWS`](crate::INPUT_ROWS),
+        // which is 1: the same size as the transcript above it. Two would mean
+        // double-size glyphs into half the columns, which is what a fidelity
+        // tier used to buy back and now just magnifies.
         let input_rows = request.input_rows.max(1).min(grid.rows);
         let above_input = grid.rows - input_rows;
         layout.input = Rect::new(1, above_input, grid.cols.saturating_sub(2), input_rows);
@@ -272,7 +282,7 @@ impl ScreenLayout {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fidelity::MIN_GRID;
+    use crate::viewport::MIN_GRID;
 
     fn request(cols: u16, rows: u16, main: u8, side: u8, mode: DisplayMode) -> ScreenRequest {
         ScreenRequest {

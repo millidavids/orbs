@@ -49,6 +49,8 @@ struct StoredRecord {
     len: usize,
     /// The authored linear variant (§3), if one was supplied.
     spoken: Option<(usize, usize)>,
+    /// Logged, but not drawn in the transcript. See [`RecordBuilder::quiet`].
+    quiet: bool,
 }
 
 /// A sequence of records, in emit order.
@@ -153,9 +155,14 @@ impl Records {
     /// several presses, and the reveal indexed a sequence it was not drawing.
     ///
     /// Anything that needs "what the player sees" asks here.
+    ///
+    /// **Two reasons to skip, one rule.** A record is undrawn because it was a
+    /// spell's rather than the player's ([`FieldName::Spell`]), or because the
+    /// screen already says it ([`RecordBuilder::quiet`]). Both are "in the log,
+    /// not in the pane"; neither is a deletion.
     pub fn drawn(&self) -> impl Iterator<Item = Record<'_>> + Clone {
         self.iter()
-            .filter(|record| record.field(FieldName::Spell).is_none())
+            .filter(|record| record.field(FieldName::Spell).is_none() && !record.is_quiet())
     }
 
     /// How many records a transcript would draw.
@@ -232,6 +239,7 @@ impl Records {
             presentation,
             faithful: true,
             spoken: None,
+            quiet: false,
         }
     }
 
@@ -258,6 +266,13 @@ impl<'a> Record<'a> {
     #[must_use]
     pub fn kind(&self) -> RecordKind {
         self.stored().kind
+    }
+
+    /// Whether this was logged without being drawn — see
+    /// [`RecordBuilder::quiet`].
+    #[must_use]
+    pub fn is_quiet(&self) -> bool {
+        self.stored().quiet
     }
 
     /// What it means (§14: never carried by colour alone).
@@ -540,9 +555,33 @@ pub struct RecordBuilder<'a> {
     /// asks for one explicitly — see [`RecordBuilder::finish`].
     faithful: bool,
     spoken: Option<(usize, usize)>,
+    quiet: bool,
 }
 
 impl RecordBuilder<'_> {
+    /// Log this, but keep it out of the transcript.
+    ///
+    /// **For a fact the screen is already showing.** The archive's `follow`
+    /// emitted *"the reading goes north"* on every step, and a maze is hundreds
+    /// of steps — so walking one buried the pane in a line-per-press restating
+    /// what the map had just drawn. The picture is the report; the sentence was
+    /// the same fact twice, and the second copy was the one that scrolled the
+    /// player's own typing away.
+    ///
+    /// **Not a deletion.** §3 forbids unlogged output, and this is emitted,
+    /// stored, `sift`-able and spoken exactly as before — `peruse archive.log`
+    /// reads every step. It is the same "log, not pane" rule
+    /// [`FieldName::Spell`] already carries, for the second reason there is to
+    /// invoke it: that one is *whose* doing, this one is *worth drawing*.
+    ///
+    /// Reach for it only where something else on screen already says this. A
+    /// refusal is never quiet — `follow` into a wall stays drawn, because
+    /// nothing moves and the map reports nothing at all.
+    pub const fn quiet(mut self) -> Self {
+        self.quiet = true;
+        self
+    }
+
     /// Add a text field.
     pub fn text(self, name: FieldName, value: &str) -> Self {
         let (start, end) = self.stream.intern(value);
@@ -648,6 +687,7 @@ impl RecordBuilder<'_> {
             first,
             len: self.stream.fields.len() - first,
             spoken: self.spoken,
+            quiet: self.quiet,
         });
     }
 }

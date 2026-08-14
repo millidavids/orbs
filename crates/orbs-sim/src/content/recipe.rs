@@ -282,6 +282,39 @@ impl Recipes {
         out
     }
 
+    /// Every substance the laboratory has a **word** for.
+    ///
+    /// The union of [`vocabulary`](Self::vocabulary) and the fuels, rather than
+    /// either half: `vocabulary` is every name a recipe can produce or consume
+    /// and misses fuel, because the athanor transforms nothing and so has no
+    /// recipe — which is exactly the reagent a tester reaches for first.
+    ///
+    /// **A word, not a thing on a shelf**, and that distinction is the whole
+    /// point. `ground-sage` is a word the laboratory knows whether or not any
+    /// exists right now, which is what lets the parser tell *"there is none
+    /// here"* from *"you have mistyped something"* — see `Scene::knowing`. It was
+    /// telling neither, and `digest ground-sage` on an empty shelf quietly
+    /// digested **ground-salt** instead: two characters apart in eleven, well
+    /// inside the typo band, and a wrong action rather than a refusal (§19).
+    #[must_use]
+    pub fn substances(world: &bevy_ecs::world::World) -> Vec<String> {
+        let mut names: Vec<String> = world
+            .resource::<Self>()
+            .vocabulary()
+            .into_iter()
+            .map(str::to_owned)
+            .collect();
+        names.extend(
+            world
+                .resource::<crate::content::Fuels>()
+                .names()
+                .map(str::to_owned),
+        );
+        names.sort_unstable();
+        names.dedup();
+        names
+    }
+
     /// What kind of noun `name` is when it exists in the world.
     ///
     /// **The rule `produce` applies, asked by name instead of by recipe.** A

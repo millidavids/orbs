@@ -230,23 +230,154 @@ Build profiles are specified in DESIGN.md §13 (dev `opt-level = 1`, release
 
 ## 4. CI and release
 
-Mirrors `court_wizard`'s proven workflows:
+**Two branches, two workflows, no binaries.** `court_wizard`'s pipeline with the
+Steam half **commented out rather than deleted** — see the block at the foot of
+`release.yml` for what returns and what has to move when it does.
 
-| Target | Runner | Notes |
-|---|---|---|
-| `x86_64-pc-windows-gnu` | `ubuntu-latest` | Cross-compiled |
-| `x86_64-unknown-linux-gnu` | `ubuntu-latest` | Needs the apt deps above |
-| `aarch64` + `x86_64-apple-darwin` | `macos-latest` | Universal via `lipo`, signed + notarised with `rcodesign`, **release only** |
+### `dev` — where the work is
 
-Workflows: `build.yml`, `macos-release.yml`, `release.yml`, `steam-upload.yml`.
+Every commit lands on `dev`. Pushing it runs
+**`.github/workflows/dev-release.yml`**, which is [CLAUDE.md](../CLAUDE.md)'s
+gate and nothing else: fmt, clippy, test, doc, `cargo build -p orbs`, and the
+`screens` example. Minutes, no artifacts, cheap enough to run on every push.
 
-macOS is built only for releases because signing and notarisation are slow.
+In `court_wizard` this job also builds three platforms and uploads them to the
+Steam `staging` branch, which is what a play-tester installs before promotion.
+Until that returns, **nothing sits on a channel to be play-tested** — that is the
+real cost of the commented-out half, and promotion is not gated on a human having
+tried the build.
 
-**Distribution note:** the ship artifact is *not* a single file. Steam integration
-means `libsteam_api.{so,dylib,dll}` sits beside the executable, which is why
-`.cargo/config.toml` carries rpath flags (`$ORIGIN` on Linux, `@loader_path` on
-macOS). Assets are compiled in, so there is no loose `assets/` directory at
-runtime.
+### `main` — releases only
+
+`main` is reached **only by fast-forwarding `dev`**. A push to it runs
+**`.github/workflows/release.yml`**:
+
+1. **Read the version** from `Cargo.toml`.
+2. **Look for a `## [v<version>]` block** in `docs/CHANGELOG.md`. **No block
+   means this is not a release** — the run ends green having done nothing. This
+   is the opt-in, and it is what lets the per-step version bumps reach `main`
+   without announcing every step of a phase.
+3. **Run the gate**, again. `court_wizard` reruns nothing because it reuses the
+   artifacts `dev-release.yml` already built for this exact SHA; with nothing to
+   reuse, this is what stops a promotion shipping a commit that only *looked*
+   green on `dev`. It comes out when Steam goes in.
+4. **Tag and release**, with the body taken from the changelog block.
+5. **Announce** to Discord and Bluesky.
+
+Announcing happens here only because there is no Steam. `court_wizard` announces
+from a separate scheduled workflow, since a successful promotion request means a
+phone prompt was *sent*, not that players have the build — announcing on that
+would advertise a release one untapped notification away. When Steam returns, so
+does that split.
+
+`workflow_dispatch` takes a `force` input that ignores the tag-exists guard.
+**It re-announces** — without a Steam promotion to be idempotent about, there was
+nothing to build a marker tag around.
+
+### Doing it
+
+`/game-release` — no argument to fold work into the open changelog block on
+`dev`, `consolidate` to rewrite that block into the net change, `main` to
+promote. `.claude/skills/game-release/SKILL.md` is the procedure, including the
+preconditions promotion checks.
+
+### Secrets
+
+All optional; a missing one **skips its step** rather than failing the release.
+
+| Secret | Used for |
+|---|---|
+| `DISCORD_WEBHOOK_URL` | the release embed |
+| `BLUESKY_USERNAME` | handle, e.g. `orbs.bsky.social` |
+| `BLUESKY_APP_PASSWORD` | an app password from Bluesky settings — never the account password |
+
+Bluesky is `continue-on-error`: an outage or a rotated password must not fail a
+release that has already been tagged and posted to Discord.
+
+### The changelog format is load-bearing
+
+[docs/CHANGELOG.md](CHANGELOG.md) is where the GitHub Release body, the Discord
+embed and the Bluesky post all come from. A version's block looks like this —
+with `v` and the version matching `Cargo.toml` exactly:
+
+> `## [v0.1.24] - 2026-08-14`
+> `### Description`
+> One sentence: the public hook, and the whole of the Bluesky post.
+> `### Added` / `### Changed` / `### Fixed`
+> Then `- **Thing** — what it means for a player.` bullets under each.
+
+Four rules the tooling depends on:
+
+- **The header is matched literally at the start of a line.** The block is
+  selected by version rather than "the newest", so a `force` dispatch on an older
+  release still ships the right notes.
+- **`### Description` must be followed by another `### ` section.** The Bluesky
+  script reads from the Description heading until the next one, so a block whose
+  bullets sit directly under the description posts the bullets too — a 300-
+  grapheme post truncated mid-sentence. Keep-a-Changelog's `Added`/`Changed`/
+  `Fixed` are what terminate it.
+- **`### Description` is one short paragraph.** Bluesky's hard limit is 300
+  graphemes and the title and links take ~42 of them. Longer is truncated on a
+  word boundary — survivable, but it reads as an accident. If the section is
+  missing entirely the script falls back to the first bullet's bolded lead-in
+  rather than failing a release that is already tagged.
+- **Nothing else in that file may begin a line with `## [`.** This is why the
+  format lives here and not there: a fenced code sample in the changelog showing
+  the format was matched as the newest release, and the dry run posted the
+  documentation instead of the release notes.
+
+#### Before 1.0, the Description is a dev log
+
+**It must say the game is in development, and it must read as a log of work
+rather than as patch notes.** The whole of it is published as a Bluesky post, and
+a post that reads like patch notes for a game nobody can buy is announcing a
+product that does not exist. Someone arriving cold should be able to tell in the
+first clause that this is a thing being built.
+
+```markdown
+### Description
+In development — a dev log, not patch notes. The orb became a proper 4:3
+monitor: the grid is fixed now, so resizing scales the text instead of reflowing
+every pane. Labyrinths got properly random, too.
+```
+
+Write it as *what got worked on*, in a builder's voice — the bullets below it
+carry the detail. Two or three things, the most interesting first; a version that
+touched one area says so in one sentence.
+
+**This switches at 1.0**, with the version scheme (`0.<phase>.<step>` → ordinary
+semver, DESIGN.md §19). From then the Description is the release's public hook
+for people who can play it, written for someone who has never heard of the game,
+and the dev-log framing goes. That is the same one-way switch, and it should
+happen in the same commit.
+
+Both of the middle two were found by running `--dry-run`, not by reading the
+script. Run it.
+
+Check a post before trusting it — the script renders and exits without
+contacting Bluesky:
+
+```bash
+python3 scripts/post_to_bluesky.py --version 0.1.24 --dry-run
+```
+
+It prints the grapheme count against the limit and each link facet with the text
+it actually covers, because AT Protocol facet offsets are *byte* offsets and this
+changelog is full of em-dashes.
+
+### Not yet: packaging
+
+No macOS signing and no Steam upload, because there is no steamworks integration
+to package around. The shape is already in place, commented, in both workflows:
+the build matrix and depot upload in `dev-release.yml`, and `locate-dev-build` +
+`steam-request-promotion` + the BBCode announcement in `release.yml`.
+`court_wizard`'s `macos-release.yml` and `steam-promote.yml` are the two that
+have no stub here yet.
+
+Restoring it changes three things beyond uncommenting: `release.yml`'s own gate
+job goes away (there are artifacts to reuse), promotion stops being the end of
+the story, and **announcing moves out into a promotion-watching workflow** for
+the reason given above.
 
 ---
 

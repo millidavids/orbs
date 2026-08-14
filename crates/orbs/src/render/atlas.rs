@@ -65,9 +65,19 @@ pub(crate) struct GlyphAtlas {
 
 /// The UV rectangle for a glyph, as `(u0, v0, u1, v1)`.
 ///
-/// Half-texel insets are deliberately absent: sampling is Nearest and the cell
-/// grid is integer-scaled, so a texel is never interpolated across a glyph
-/// boundary and the exact edges are correct.
+/// Half-texel insets are deliberately absent, and what that rests on has
+/// narrowed. It used to be that sampling was Nearest *and* the cell grid was
+/// integer-scaled, so no texel was ever interpolated at all. Magnification is
+/// still Nearest, so an upscaled glyph is exact whether or not the scale is a
+/// whole number — the sampler picks one texel per fragment and a cell edge falls
+/// where it falls.
+///
+/// **Minification is the case with no inset to protect it**, because bilinear
+/// there would reach a neighbouring glyph's column: the atlas packs 8×16 cells
+/// edge to edge with no padding. That is survivable only because it is
+/// unreachable above `MIN_SCALE` — below the floor the game draws the
+/// "window too small" card and nothing else. Adding padding here is the price of
+/// ever wanting a sub-native picture for real.
 pub(crate) fn uv(index: u8, presentation: Presentation) -> (f32, f32, f32, f32) {
     let column = f32::from(u16::from(index) % 16);
     let row = f32::from(u16::from(index) / 16);
@@ -126,11 +136,21 @@ pub(crate) fn build(images: &mut Assets<Image>) -> GlyphAtlas {
         RenderAssetUsages::RENDER_WORLD,
     );
 
-    // Nearest, always. A bitmap font filtered bilinearly is a blurred bitmap
-    // font, and DESIGN.md §4 is explicit that legibility is the product.
+    // **Nearest going up, Linear coming down**, and the asymmetry is the point.
+    //
+    // A bitmap font filtered bilinearly is a blurred bitmap font, and DESIGN.md
+    // §4 is explicit that legibility is the product — so magnification, which is
+    // every window at or above `MIN_SCALE`, stays Nearest.
+    //
+    // Minification is the opposite problem. Nearest *drops* whole source columns
+    // rather than softening them, so an 8-pixel glyph squeezed into 6 loses two
+    // of its strokes and which two depends on where the letter sits — the same
+    // word becomes a different smear at every position. That is only reachable
+    // below the floor, where all the game draws is the "window too small" card,
+    // and a soft card beats a broken one. See `uv` for what has no inset.
     image.sampler = ImageSampler::Descriptor(ImageSamplerDescriptor {
         mag_filter: ImageFilterMode::Nearest,
-        min_filter: ImageFilterMode::Nearest,
+        min_filter: ImageFilterMode::Linear,
         mipmap_filter: ImageFilterMode::Nearest,
         ..default()
     });

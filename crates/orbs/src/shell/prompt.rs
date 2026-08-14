@@ -115,9 +115,10 @@ pub(crate) fn paint(frame: &mut Frame, linear: &mut Linear, view: View<'_>) {
         walking,
     } = view;
     let grid = frame.size();
-    // The prompt spends a second row at the finest tier, so it keeps its pixel
-    // height when the cells shrink (§9).
-    let input_rows = screen.fidelity.map_or(1, orbs_render::Fidelity::input_rows);
+    // The prompt spends a second row so it can be drawn at double size — see
+    // `orbs_render::INPUT_ROWS`, which is a constant now that a resize cannot
+    // change how many cells there are to spend.
+    let input_rows = orbs_render::INPUT_ROWS;
     // A Tab listing takes a row **from the layout**, so the pane above shrinks by
     // one for as long as it is up. Drawing it at `input.row - 1` instead put it
     // exactly on the session pane's bottom border, because `compute` hands the
@@ -310,14 +311,11 @@ fn candidates(frame: &mut Frame, area: Rect, offered: &super::input::Offered) {
 /// Takes no `Sim`: the boot screen draws nothing from the world. It used to, for
 /// a prompt that is no longer painted here, and the parameter survived as a
 /// `let _ = sim;` that two call sites still threaded an argument through for.
-pub(crate) fn paint_booting(
-    frame: &mut Frame,
-    screen: &Screen,
-    stage: crate::boot::Stage,
-    progress: f32,
-) {
+/// Takes no `Screen` either, for the same reason one step on: it wanted a
+/// fidelity tier to size the input line, and there is no longer such a thing.
+pub(crate) fn paint_booting(frame: &mut Frame, stage: crate::boot::Stage, progress: f32) {
     let grid = frame.size();
-    let layout = ScreenLayout::compute(&ScreenRequest::single_at(grid, screen.fidelity));
+    let layout = ScreenLayout::compute(&ScreenRequest::single(grid));
     let pane = layout.main().first().copied().unwrap_or(Rect::EMPTY);
 
     if stage.has_frame() {
@@ -395,10 +393,10 @@ pub(super) fn session(
     };
     let title = if carry_readings {
         format!(
-            "{}  tick {}  tier {}  {}x{}  {}  {hint}",
+            "{}  tick {}  {:.2}x  {}x{}  {}  {hint}",
             sim.location(),
             sim.tick().get(),
-            screen.fidelity.map_or(0, orbs_render::Fidelity::scale),
+            screen.scale(),
             screen.grid.cols,
             screen.grid.rows,
             focus(screen),
@@ -540,10 +538,11 @@ fn to_u32(ticks: u64) -> u32 {
 /// because the record said they were counts, not because this function did.
 ///
 /// This is the playability gate for three subsystems at once (§15). A changing
-/// **tick** is the only visible proof the sim runs; **tier and grid** make §9's
-/// fidelity table something you walk through by dragging a window edge; and the
-/// **focus mode** is §9's setting, which the design requires be overridable at
-/// any time.
+/// **tick** is the only visible proof the sim runs; **scale against a fixed
+/// grid** is what you walk through by dragging a window edge, and the pair is
+/// the whole of §19's change in one row each — one number moves, the other two
+/// do not; and the **focus mode** is §9's setting, which the design requires be
+/// overridable at any time.
 fn telemetry(frame: &mut Frame, sim: &Sim, screen: &Screen, pane: Rect) {
     if pane.is_empty() {
         return;
@@ -573,9 +572,15 @@ fn telemetry(frame: &mut Frame, sim: &Sim, screen: &Screen, pane: Rect) {
             .text(FieldName::State, &format!("of {slots}"))
             .finish();
     }
-    if let Some(tier) = screen.fidelity {
-        row(&mut readings, "tier", u64::from(tier.scale()));
-    }
+    // **The scale, where the tier used to be**, and it is the reading that
+    // earns its row now: `cols` and `rows` are constants, so this is the only
+    // one of the three that moves when the window does. A `Quantity` cannot
+    // carry `1.5`, so it goes in the state field the way `held` does.
+    readings
+        .push(RecordKind::Status)
+        .text(FieldName::Name, "scale")
+        .text(FieldName::State, &format!("{:.2}x", screen.scale()))
+        .finish();
     row(&mut readings, "cols", u64::from(screen.grid.cols));
     row(&mut readings, "rows", u64::from(screen.grid.rows));
     row(
@@ -626,14 +631,15 @@ fn input_line(frame: &mut Frame, area: Rect, line: &Line, prompt: &str, ghost: &
     if area.is_empty() {
         return;
     }
-    // Two rows means **double-size glyphs**, not a spare row. A blank row above
-    // a 32-pixel prompt leaves it exactly as hard to read; what the line needs
-    // is to be bigger than the transcript it sits under.
+    // Two rows would mean **double-size glyphs**, not a spare row: at 2× a
+    // glyph fills two cells across as well as down, so the text is written into
+    // *half* the columns and the frontend draws it into all of them. That
+    // halving is why the region lives on the `Frame` rather than in the
+    // renderer — it changes what fits.
     //
-    // At 2× a glyph fills two cells across as well as down, so the text is
-    // written into *half* the columns and the frontend draws it into all of
-    // them. That halving is why the region lives on the `Frame` rather than in
-    // the renderer: it changes what fits.
+    // **`INPUT_ROWS` is 1, so this is false today.** Inferred from the rect
+    // rather than read from the constant, because the Tab listing splits these
+    // rows and the prompt should follow what it is actually given.
     let big = area.rows >= 2;
     let row = area.row;
     let width = if big { area.cols / 2 } else { area.cols };

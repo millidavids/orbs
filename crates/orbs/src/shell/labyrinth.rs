@@ -195,15 +195,44 @@ mod tests {
 
     /// The session-pane body at a grid, given the panel's width.
     ///
-    /// The four cases the See-it lines actually run at. Taken from the traced
+    /// The cases the See-it lines actually run at. Taken from the traced
     /// geometry rather than recomputed here, because what is under test is this
-    /// module's arithmetic and not the layout's.
+    /// module's arithmetic and not the layout's — but see
+    /// [`the_games_body_is_still_the_one_transcribed_here`], which is what stops
+    /// that transcription rotting the way it did when the grid was fixed.
     const BODIES: [(&str, u16, u16); 2] = [
-        // The running game at 1280x720: 160x45 Wide, two panes, `Side` panel.
-        ("the game", 154, 37),
+        // The running game: 120x45 Wide, two panes, no panel in the archive.
+        ("the game", 118, 38),
         // `ORBS_GRID=160x45` as a dump: two panes, `Top` panel.
         ("a wide dump", 78, 39),
     ];
+
+    /// The transcription above, checked against the layout it was traced from.
+    ///
+    /// `BODIES[0]` went stale silently when the grid stopped following the
+    /// window — it still described a 160-column game that no longer existed, and
+    /// every test over it passed, because a wrong rectangle is still a
+    /// rectangle. The grid is a constant now, so the real number is reachable
+    /// from a test and there is no reason to take the comment's word for it.
+    #[test]
+    fn the_games_body_is_still_the_one_transcribed_here() {
+        // The chain `prompt::paint` walks: the grid, two panes, Wide, the input
+        // line's rows — then the first pane, inset by its border. The archive
+        // carries no instruments, so `panel::split` hands the body straight on
+        // and the map is the next to take a slice.
+        let layout = orbs_render::ScreenLayout::compute(&orbs_render::ScreenRequest {
+            main_panes: 2,
+            mode: orbs_render::DisplayMode::Wide,
+            ..orbs_render::ScreenRequest::single(orbs_render::GRID)
+        });
+        let body = layout.main()[0].inset(1);
+
+        assert_eq!(
+            (body.cols, body.rows),
+            (BODIES[0].1, BODIES[0].2),
+            "the game's session pane moved; re-trace BODIES[0]",
+        );
+    }
 
     /// Panes the whole 33×23 picture does not fit in, which get a window on it.
     ///
@@ -256,7 +285,7 @@ mod tests {
 
     #[test]
     fn a_short_pane_shrinks_the_block_rather_than_overflowing() {
-        let short = split(Rect::new(0, 0, 154, 20), Some(&maze()));
+        let short = split(Rect::new(0, 0, 118, 20), Some(&maze()));
         assert_eq!(short.area.rows, 20, "the block did not shrink to the pane");
         assert!(short.rest.cols >= TRANSCRIPT_FLOOR);
     }
@@ -272,7 +301,7 @@ mod tests {
 
     #[test]
     fn no_maze_takes_nothing() {
-        let pane = Rect::new(0, 0, 154, 37);
+        let pane = Rect::new(0, 0, 118, 38);
         assert_eq!(split(pane, None).rest, pane);
     }
 

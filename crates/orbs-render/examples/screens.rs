@@ -15,8 +15,8 @@
 //! less, the setting would become a difficulty choice."*
 
 use orbs_render::{
-    Burn, Depiction, DisplayMode, Fidelity, FieldName, Frame, GridSize, Grind, Intensity,
-    Labyrinth, Outcome, Painter, Pos, Presentation, RecordKind, RecordView, Records, Rect, Role,
+    Burn, Depiction, DisplayMode, FieldName, Frame, GRID, GridSize, Grind, Intensity, Labyrinth,
+    Outcome, PICTURE, Painter, Pos, Presentation, RecordKind, RecordView, Records, Rect, Role,
     ScreenLayout, ScreenRequest, Sift, Span, Square, Steep, Style, UtteranceKind,
 };
 
@@ -29,14 +29,21 @@ fn main() {
     lint_prose();
 
     let boot = boot_report(GridSize::new(80, 22));
-    show("Boot report — 80×22, tier 1 (DESIGN.md §4)", &boot);
+    show(
+        "Boot report — 80×22, the authoring floor (DESIGN.md §4)",
+        &boot,
+    );
     speak(&boot);
 
-    let deep = siege(GridSize::new(120, 33), DisplayMode::Deep);
-    show("Siege — Deep focus, 120×33 (tier 2 at 1080p)", &deep);
+    // **The grid the game draws**, both times. These used to be two different
+    // grids because the focus mode changed the fidelity tier and so the cell
+    // count; §19 fixed the grid, so the pair is now what it always claimed to
+    // be — the same screen divided two ways.
+    let deep = siege(GRID, DisplayMode::Deep);
+    show("Siege — Deep focus, the 120×45 grid", &deep);
 
-    let wide = siege(GridSize::new(80, 22), DisplayMode::Wide);
-    show("Siege — Wide focus, 80×22 (tier 1, large text)", &wide);
+    let wide = siege(GRID, DisplayMode::Wide);
+    show("Siege — Wide focus, the same 120×45 grid", &wide);
     speak(&wide);
 
     parity(&deep, &wide);
@@ -56,12 +63,12 @@ fn main() {
     show("The spell editor at the 80×22 floor (§8)", &editor);
     speak(&editor);
 
-    // **48, which is the session pane once two of them tile.** The 80-column
-    // floor is the widest this surface ever gets, so checking it there would
-    // check the easy case — see `weave_screen`.
-    // **48×18 — the narrowest *and* shortest this surface will draw at.** The
-    // width is a tiled session pane; the height is `loom::MIN_ROWS`, below which
-    // the real painter refuses rather than drawing something misleading.
+    // **48×18 — narrower *and* shorter than this surface will now draw at.** A
+    // tiled session pane is 60 columns since the grid was fixed at 120×45, and
+    // the height is `loom::MIN_ROWS`, below which the real painter refuses
+    // rather than drawing something misleading. Kept at 48 deliberately: it was
+    // the real width and is now a margin, and a surface authored against the
+    // tighter number keeps working when the grid is next revisited.
     let weave = weave_screen(GridSize::new(48, 18));
     show(
         "The weave screen at the width a tiled pane gives it (§11.5)",
@@ -804,10 +811,16 @@ fn weave_screen(grid: GridSize) -> Frame {
 /// DESIGN.md §15 asks for *"tier 2 at minimum supported window, four panes,
 /// siege in progress, peak-threat CRT, eldritch active, tester must spot a
 /// single-character sabotage tell"* — and, in the same breath, for the item to
-/// **establish the minimum window at which tier 2 is offered**. That number is
-/// derived here rather than written down: §19's standing lesson from four failed
-/// attempts at the CRT overscan is *compute the constant, do not reason about
-/// it*.
+/// **establish the minimum window at which tier 2 is offered**.
+///
+/// **The question changed with §19's fixed grid and the answer is now easier.**
+/// There are no tiers: the grid is [`GRID`] on every window, so the worst case
+/// is not "the smallest window that can still host four panes" but simply four
+/// panes, because that is the same screen everywhere. What the window decides is
+/// the *glyph*, and the hard case there is the smallest one the game will draw
+/// rather than refuse — [`minimum_window`], derived rather than written down,
+/// because §19's standing lesson from four failed attempts at the CRT overscan
+/// is *compute the constant, do not reason about it*.
 ///
 /// Two of the six conditions are not in a [`Frame`] and cannot be. Peak-threat
 /// CRT and the phosphor are frontend enrichment — rule 2 — so they are read on
@@ -816,31 +829,31 @@ fn weave_screen(grid: GridSize) -> Frame {
 /// ever draws. The final judgement is a human one; this prepares it and cannot
 /// make it.
 fn worst_case() {
-    let window = minimum_window_for_tier_two();
-    let one = Fidelity::tier_one(window).expect("the floor fits by construction");
-    let two = one.deep().expect("tier two by construction");
-    let grid = two.grid(window);
-    let (cell_width, cell_height) = two.cell_pixels();
+    let window = minimum_window();
+    let grid = GRID;
+    let scale = orbs_render::scale_for(window);
+    let cell_width = f32::from(orbs_render::CELL_WIDTH) * scale;
+    let cell_height = f32::from(orbs_render::CELL_HEIGHT) * scale;
 
     println!("\nWorst-case legibility — DESIGN.md §15\n");
     println!(
-        "  minimum window offering tier 2   {}x{}",
+        "  smallest window the game will draw on   {}x{}",
         window.0, window.1
     );
     println!(
-        "    tier 1  {}x cell -> {:?}",
-        one.scale(),
-        one.grid(window)
+        "  the picture, always                     {}x{} px -> {}x{} cells",
+        PICTURE.0, PICTURE.1, grid.cols, grid.rows,
     );
     println!(
-        "    tier 2  {two_scale}x cell -> {grid:?}",
-        two_scale = two.scale()
+        "  glyph there                             {cell_width}x{cell_height} physical pixels"
     );
-    println!("  glyph at tier 2                  {cell_width}x{cell_height} physical pixels");
-    println!("  a one-character tell is          {cell_width} pixels wide\n");
+    println!("  a one-character tell is                 {cell_width} pixels wide\n");
 
     let frame = siege(grid, DisplayMode::Deep);
-    show("Worst case — four panes, tier 2, siege, eldritch", &frame);
+    show(
+        "Worst case — four panes, smallest glyph, siege, eldritch",
+        &frame,
+    );
 
     // §8.1's structural tell, at the smallest glyph the game draws. The forged
     // line differs from the genuine one by a single space, which is the whole
@@ -879,33 +892,30 @@ fn worst_case() {
     );
 }
 
-/// The smallest window at which §9's tier 2 exists at all.
+/// The smallest window the game will draw on rather than refuse.
 ///
-/// Tier 2 is [`Fidelity::deep`] of tier 1, and `deep` is `None` at scale 1 —
-/// so the question is really "when does tier 1 stop being the finest scale",
-/// and the answer is a search rather than a constant anyone should retype.
+/// Below [`MIN_SCALE`] the frontend paints a "window too small" card instead —
+/// minification drops strokes out of an 8×16 bitmap rather than shrinking it —
+/// so this is the boundary, and the glyph here is the smallest one a player can
+/// be asked to read.
 ///
-/// Searched per axis. A grid's columns depend only on the window's width and its
-/// rows only on its height, so the smallest qualifying window is the pair of
-/// per-axis minima; searching both at once would be a slower way to the same
-/// number.
-fn minimum_window_for_tier_two() -> (u32, u32) {
+/// A search rather than a constant anyone should retype, and searched **per
+/// axis**: [`scale_for`](orbs_render::scale_for) takes the smaller of the two
+/// ratios, so the smallest qualifying window is the pair of per-axis minima and
+/// searching both at once would be a slower way to the same number.
+fn minimum_window() -> (u32, u32) {
     /// Past any window a 2026 desktop will present, and small enough to search
     /// exhaustively in microseconds.
     const LIMIT: u32 = 8192;
 
-    let offers_tier_two = |window: (u32, u32)| {
-        Fidelity::tier_one(window)
-            .and_then(Fidelity::deep)
-            .is_some()
-    };
+    let drawable = |window: (u32, u32)| orbs_render::scale_for(window) >= orbs_render::MIN_SCALE;
 
     let width = (1..=LIMIT)
-        .find(|width| offers_tier_two((*width, LIMIT)))
-        .expect("some width offers tier 2");
+        .find(|width| drawable((*width, LIMIT)))
+        .expect("some width is drawable");
     let height = (1..=LIMIT)
-        .find(|height| offers_tier_two((LIMIT, *height)))
-        .expect("some height offers tier 2");
+        .find(|height| drawable((LIMIT, *height)))
+        .expect("some height is drawable");
     (width, height)
 }
 
@@ -1438,29 +1448,44 @@ fn lint_prose() {
 }
 
 fn tier_table() {
-    println!("\nFidelity — window pixels to grid cells (DESIGN.md §9)\n");
-    for window in [(1920u32, 1080u32), (2560, 1440), (1280, 720)] {
-        let Some(one) = Fidelity::tier_one(window) else {
-            println!("  {window:?}  below the 80×22 floor");
+    // What replaced §9's fidelity table (§19). It used to have a grid per
+    // window; now the grid is the same in every row and the *glyph* is what
+    // moves, which is the whole change in one printout. The bars are the 4:3
+    // letterbox — a row with none of them is a window that is already 4:3.
+    println!("\nThe picture — one grid, and how big a cell of it is (DESIGN.md §19)\n");
+    println!(
+        "  the grid is always {}×{}, i.e. {PICTURE:?} px\n",
+        GRID.cols, GRID.rows
+    );
+    for window in [
+        (1280u32, 720u32),
+        (1920, 1080),
+        (2560, 1440),
+        (3840, 2160),
+        (1366, 768),
+        (960, 720),
+        (800, 600),
+    ] {
+        let scale = orbs_render::scale_for(window);
+        if scale < orbs_render::MIN_SCALE {
+            println!(
+                "  {:>5}×{:<5}  {scale:.3}× — too small to draw",
+                window.0, window.1
+            );
             continue;
-        };
-        let two = one.deep();
-        let deep = two.map_or_else(
-            || "unavailable".to_owned(),
-            |tier| {
-                let grid = tier.grid(window);
-                format!("{}× → {}×{}", tier.scale(), grid.cols, grid.rows)
-            },
-        );
-        let grid = one.grid(window);
+        }
+        let (across, down) = (f32::from(PICTURE.0) * scale, f32::from(PICTURE.1) * scale);
         println!(
-            "  {:>5}×{:<5}  tier 1: {}× → {}×{:<3}  tier 2: {}",
+            "  {:>5}×{:<5}  {scale:.3}× → {}×{} px glyph, picture {across:.0}×{down:.0}, \
+             bars {:.0}×{:.0}",
             window.0,
             window.1,
-            one.scale(),
-            grid.cols,
-            grid.rows,
-            deep
+            f32::from(orbs_render::CELL_WIDTH) * scale,
+            f32::from(orbs_render::CELL_HEIGHT) * scale,
+            // Clamped off zero, so an exactly-4:3 window prints `0` rather than
+            // the `-0` a float subtraction leaves behind.
+            ((orbs_render::pixels(window.0) - across) / 2.0).max(0.0),
+            ((orbs_render::pixels(window.1) - down) / 2.0).max(0.0),
         );
     }
 }

@@ -13,7 +13,7 @@
 //! In the mesh, and nowhere else. Each attribute's `Vec` is taken out, refilled,
 //! and handed back, so a steady-state frame allocates nothing. An earlier version
 //! kept a parallel `GridBuffers` and *cloned* it into the mesh every frame —
-//! ~1.2 MB of allocation at a 160×45 grid, which defeated the reuse it was
+//! ~900 kB of allocation at the 120×45 grid, which defeated the reuse it was
 //! written for, and which the reuse test could not see because it only inspected
 //! the staging copy.
 //!
@@ -131,20 +131,28 @@ impl Geometry {
 /// wide margin, and a quad that samples a fully transparent texel is pure cost.
 ///
 /// `showing` is the caret's blink phase — see [`Blink`](super::blink::Blink).
-pub(crate) fn build(frame: &Frame, theme: &Phosphor, scale: u16, showing: bool, mesh: &mut Mesh) {
+///
+/// # One world unit is one **virtual** pixel
+///
+/// A cell is always 8×16 units, whatever the window. Fitting that to real pixels
+/// is the camera's job — `ScalingMode::AutoMin`, set in `shell::screen`'s
+/// `spawn_camera`, letterboxes the whole picture — so there is no scale factor
+/// here at all. This used to take one, back when the grid was derived from the
+/// window and the cell had to be grown to match.
+pub(crate) fn build(frame: &Frame, theme: &Phosphor, showing: bool, mesh: &mut Mesh) {
     let mut geometry = Geometry::reclaim(mesh);
 
     let grid = frame.size();
-    let cell_width = f32::from(CELL_WIDTH) * f32::from(scale);
-    let cell_height = f32::from(CELL_HEIGHT) * f32::from(scale);
+    let cell_width = f32::from(CELL_WIDTH);
+    let cell_height = f32::from(CELL_HEIGHT);
     let left = -(f32::from(grid.cols) * cell_width) / 2.0;
     let top = (f32::from(grid.rows) * cell_height) / 2.0;
 
     let position = |column: f32, row: f32| (left + column * cell_width, top - row * cell_height);
 
-    // A region the `Frame` marked for double-size drawing — the prompt at fine
-    // fidelity (§9). Its cells are skipped here and drawn below at 2×, so one
-    // row of them fills two rows and twice the columns.
+    // A region the `Frame` marked for double-size drawing — the prompt. Its
+    // cells are skipped here and drawn below at 2×, so one row of them fills two
+    // rows and twice the columns.
     let magnified = frame.magnified();
     let inside = |column: usize, row: usize| {
         magnified.is_some_and(|area| {
@@ -359,24 +367,24 @@ mod tests {
         frame
     }
 
-    fn built(frame: &Frame, scale: u16) -> Mesh {
+    fn built(frame: &Frame) -> Mesh {
         let mut mesh = empty_mesh();
-        build(frame, &MUTED_VIOLET, scale, true, &mut mesh);
+        build(frame, &MUTED_VIOLET, true, &mut mesh);
         mesh
     }
 
     #[test]
     fn one_quad_per_visible_cell() {
-        assert_eq!(quads(&built(&frame_with("abc", 10, 1), 1)), 3);
+        assert_eq!(quads(&built(&frame_with("abc", 10, 1))), 3);
     }
 
     #[test]
     fn blank_cells_cost_nothing() {
         // A space is the commonest glyph on screen; drawing a transparent quad
         // for every one of them would be most of the grid.
-        assert_eq!(quads(&built(&Frame::new(GridSize::new(80, 22)), 1)), 0);
+        assert_eq!(quads(&built(&Frame::new(GridSize::new(80, 22)))), 0);
         assert_eq!(
-            quads(&built(&frame_with("a b", 80, 22), 1)),
+            quads(&built(&frame_with("a b", 80, 22))),
             2,
             "the space between should not be drawn"
         );
@@ -384,14 +392,13 @@ mod tests {
 
     #[test]
     fn a_magnified_row_is_drawn_once_at_double_size() {
-        // The prompt at fine fidelity. One row of cells, quads twice the size —
-        // no second cell ratio and no second font, which is what keeps the grid
-        // one grid.
+        // The prompt. One row of cells, quads twice the size — no second cell
+        // ratio and no second font, which is what keeps the grid one grid.
         let mut frame = frame_with("abc", 10, 2);
-        let plain = quads(&built(&frame, 1));
+        let plain = quads(&built(&frame));
 
         frame.set_magnified(Some(orbs_render::Rect::new(0, 0, 3, 1)));
-        let magnified = built(&frame, 1);
+        let magnified = built(&frame);
 
         assert_eq!(
             quads(&magnified),
@@ -419,7 +426,7 @@ mod tests {
         // reads as a smear rather than as text.
         let mut frame = frame_with("ab", 10, 2);
         frame.set_magnified(Some(orbs_render::Rect::new(0, 0, 2, 1)));
-        let corners = positions(&built(&frame, 1));
+        let corners = positions(&built(&frame));
 
         let first = corners[0][0];
         let second = corners[4][0];
@@ -435,10 +442,10 @@ mod tests {
         // `Frame` carries a cursor. A frontend that dropped it would show a
         // different screen from one that did not.
         let mut frame = frame_with("ab", 10, 1);
-        let without = quads(&built(&frame, 1));
+        let without = quads(&built(&frame));
 
         frame.set_cursor(Some(Pos::new(3, 0)));
-        assert_eq!(quads(&built(&frame, 1)), without + 1);
+        assert_eq!(quads(&built(&frame)), without + 1);
     }
 
     #[test]
@@ -447,12 +454,12 @@ mod tests {
         frame.set_cursor(Some(Pos::new(99, 99)));
         // `Frame::set_cursor` refuses positions off the grid, so there is
         // nothing extra to draw.
-        assert_eq!(quads(&built(&frame, 1)), 2);
+        assert_eq!(quads(&built(&frame)), 2);
     }
 
     #[test]
     fn the_grid_is_centred_on_the_origin() {
-        let mesh = built(&frame_with("a", 1, 1), 1);
+        let mesh = built(&frame_with("a", 1, 1));
         let points = positions(&mesh);
         let xs: Vec<f32> = points.iter().map(|p| p[0]).collect();
         let ys: Vec<f32> = points.iter().map(|p| p[1]).collect();
@@ -471,30 +478,34 @@ mod tests {
         frame
             .painter(frame.area())
             .span(Pos::new(0, 0), &Span::new("a"));
-        let top = positions(&built(&frame, 1))[0][1];
+        let top = positions(&built(&frame))[0][1];
 
         let mut frame = Frame::new(GridSize::new(2, 2));
         frame
             .painter(frame.area())
             .span(Pos::new(0, 1), &Span::new("a"));
-        let below = positions(&built(&frame, 1))[0][1];
+        let below = positions(&built(&frame))[0][1];
 
         assert!(top > below, "row 0 should sit above row 1");
     }
 
     #[test]
-    fn scale_multiplies_the_cell_size_exactly() {
-        // Integer scaling is what keeps a bitmap font crisp (§4).
-        let single = positions(&built(&frame_with("a", 4, 1), 1));
-        let triple = positions(&built(&frame_with("a", 4, 1), 3));
+    fn a_cell_is_always_one_bitmap_cell_of_world() {
+        // The mesh is emitted in **virtual** pixels and the camera scales it, so
+        // there is no scale factor here to get wrong. This used to assert that
+        // an integer scale multiplied the cell exactly; the property that
+        // replaced it is that the cell never changes at all.
+        let positions = positions(&built(&frame_with("a", 4, 1)));
+        let width = positions[1][0] - positions[0][0];
+        let height = positions[0][1] - positions[2][1];
 
-        let width = |p: &[[f32; 3]]| p[1][0] - p[0][0];
-        assert!((width(&triple) - width(&single) * 3.0).abs() < 0.001);
+        assert!((width - f32::from(CELL_WIDTH)).abs() < 0.001, "{width}");
+        assert!((height - f32::from(CELL_HEIGHT)).abs() < 0.001, "{height}");
     }
 
     #[test]
     fn every_quad_has_four_vertices_and_six_indices() {
-        let mesh = built(&frame_with("hello", 10, 1), 2);
+        let mesh = built(&frame_with("hello", 10, 1));
         assert_eq!(positions(&mesh).len(), quads(&mesh) * 4);
         assert_eq!(colours(&mesh).len(), positions(&mesh).len());
         assert_eq!(index_count(&mesh), quads(&mesh) * 6);
@@ -503,14 +514,14 @@ mod tests {
     /// The bug the previous version shipped with.
     ///
     /// It kept a staging buffer, cloned it into the mesh every frame, and
-    /// asserted only that the *staging* buffer kept its capacity — so ~1.2 MB of
+    /// asserted only that the *staging* buffer kept its capacity — so ~900 kB of
     /// per-frame allocation passed a test named for reuse.
     #[test]
     fn rebuilding_allocates_nothing() {
         let mut mesh = empty_mesh();
         let frame = frame_with("something reasonably long", 40, 1);
 
-        build(&frame, &MUTED_VIOLET, 1, true, &mut mesh);
+        build(&frame, &MUTED_VIOLET, true, &mut mesh);
         let capacity = match mesh.attribute(Mesh::ATTRIBUTE_POSITION) {
             Some(VertexAttributeValues::Float32x3(values)) => values.capacity(),
             _ => 0,
@@ -518,7 +529,7 @@ mod tests {
         assert!(capacity > 0);
 
         for _ in 0..8 {
-            build(&frame, &MUTED_VIOLET, 1, true, &mut mesh);
+            build(&frame, &MUTED_VIOLET, true, &mut mesh);
         }
 
         let after = match mesh.attribute(Mesh::ATTRIBUTE_POSITION) {
@@ -538,7 +549,7 @@ mod tests {
             .resolve(Style::DANGER)
             .to_linear()
             .to_f32_array();
-        assert_eq!(colours(&built(&frame, 1))[0], expected);
+        assert_eq!(colours(&built(&frame))[0], expected);
     }
 
     /// §4 warns that a full grid redrawing under a real-time siege is what the
@@ -549,11 +560,16 @@ mod tests {
     /// roughly an order of magnitude faster. It is here to catch a regression in
     /// kind — an allocation per cell, a per-glyph lookup — not to certify a
     /// frame budget.
+    ///
+    /// **The worst case is now a constant.** It used to be whatever grid the
+    /// largest plausible window produced — 160×45 — and is now
+    /// [`orbs_render::GRID`] itself, because no window makes it any bigger.
     #[test]
     fn rebuilding_the_worst_case_grid_is_not_a_frame_cost() {
-        let mut frame = Frame::new(GridSize::new(160, 45));
-        let row = "X".repeat(160);
-        for y in 0..45 {
+        let grid = orbs_render::GRID;
+        let mut frame = Frame::new(grid);
+        let row = "X".repeat(usize::from(grid.cols));
+        for y in 0..grid.rows {
             frame
                 .painter(frame.area())
                 .span(Pos::new(0, y), &Span::new(&row));
@@ -561,13 +577,16 @@ mod tests {
 
         let mut mesh = empty_mesh();
         // Warm the allocations, as a running frame would have them.
-        build(&frame, &MUTED_VIOLET, 1, true, &mut mesh);
-        assert_eq!(quads(&mesh), 160 * 45);
+        build(&frame, &MUTED_VIOLET, true, &mut mesh);
+        assert_eq!(
+            quads(&mesh),
+            usize::from(grid.cols) * usize::from(grid.rows)
+        );
 
         let rounds = 20;
         let start = std::time::Instant::now();
         for _ in 0..rounds {
-            build(&frame, &MUTED_VIOLET, 1, true, &mut mesh);
+            build(&frame, &MUTED_VIOLET, true, &mut mesh);
         }
         let each = start.elapsed() / rounds;
 

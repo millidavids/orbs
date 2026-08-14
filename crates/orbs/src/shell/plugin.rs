@@ -6,8 +6,6 @@ use bevy::input::keyboard::KeyboardInput;
 use bevy::prelude::*;
 use bevy::window::WindowResized;
 
-use orbs_render::DEEP_FOCUS_FLOOR;
-
 use super::input::{SubmittedMessage, type_into_line};
 use super::line::Line;
 use super::linear::Linear;
@@ -275,17 +273,24 @@ fn finish_reveal(mut reveal: ResMut<Reveal>) {
 /// The pane count was derived inside `paint` every frame, which is why a pane
 /// used to appear between one frame and the next. It is decided here instead so
 /// that a *change* in it is something with a beginning.
-fn drive_panes(screen: Res<Screen>, time: Res<Time>, mut panes: ResMut<PaneTransition>) {
-    // A second pane only where there is room for one. At the 80×22 floor a
-    // secondary pane is a four-row strip (§9) — a border, a header and one row —
-    // which is why §9 sets `DEEP_FOCUS_FLOOR` in the first place.
-    panes.retarget(if screen.grid.fits(DEEP_FOCUS_FLOOR) {
-        2
-    } else {
-        1
-    });
+fn drive_panes(time: Res<Time>, mut panes: ResMut<PaneTransition>) {
+    panes.retarget(PANES);
     panes.advance(time.delta_secs());
 }
+
+/// Panes the main window holds outside a siege.
+///
+/// **A constant, since the grid became one.** This was
+/// `screen.grid.fits(DEEP_FOCUS_FLOOR)` — a second pane only where there was
+/// room for one, because a resize could take the room away. The grid no longer
+/// moves and clears that floor by construction, so the test could only ever
+/// answer yes, and a condition that cannot fail is a lie in the shape of a test.
+///
+/// The decision it encoded is not gone: `ORBS_DUMP` can still be handed a grid
+/// below the floor, and `dump.rs` still asks. §9 caps the count at four, and the
+/// siege multiplex is what raises it — which is why `PaneTransition` survives
+/// with nothing left to animate here.
+const PANES: u8 = 2;
 
 /// Hand a finished line to the sim.
 ///
@@ -1109,11 +1114,17 @@ mod tests {
     }
 
     #[test]
-    fn f4_switches_focus_and_buys_the_cells_a_second_pane_needs() {
-        // §9 requires the focus mode be overridable at any time. The switch is
-        // also the only way to reach a second pane at all — `tier_one` sizes the
-        // grid to ~80×22 at every window size, so Deep focus stepping fidelity
-        // finer is where the cells come from.
+    fn f4_switches_focus_without_moving_the_grid() {
+        // §9 requires the focus mode be overridable at any time, so it is a key
+        // rather than a heuristic, and this is the end-to-end proof the key
+        // reaches `cycle_mode`.
+        //
+        // **It used to assert that Deep focus bought cells**, because the grid
+        // was derived from the window and Deep dropped a fidelity tier to make
+        // room for a second pane. §19 fixed the grid; there is one grid now, and
+        // both modes have room for every pane §9 allows. What survives is the
+        // half that was always the point — the split changes — plus the new
+        // guarantee that nothing else does.
         let mut app = App::new();
         app.add_plugins((
             MinimalPlugins,
@@ -1138,27 +1149,28 @@ mod tests {
         let after = *app.world().resource::<Screen>();
         assert_ne!(after.mode, before.mode, "F4 did not reach `cycle_mode`");
 
-        // Compared by *mode* rather than by direction. A comfortable default
-        // tier means a window this size already starts in Deep focus, so F4
-        // moves it to Wide and the cell count goes down — which is the same
-        // mechanism seen from the other end. Asserting "after has more cells"
-        // only held while the default was the coarsest tier that fit.
-        let (deep, wide) = if after.mode == orbs_render::DisplayMode::Deep {
-            (after, before)
-        } else {
-            (before, after)
-        };
-        assert!(
-            deep.grid.cols > wide.grid.cols,
-            "deep focus buys no cells over wide: {:?} -> {:?}",
-            wide.grid,
-            deep.grid,
+        assert_eq!(
+            after.grid, before.grid,
+            "F4 moved the grid, which is what a fixed grid exists to prevent",
         );
-        let after = deep;
+        assert_eq!(after.scale(), before.scale(), "F4 resized the glyphs");
         assert!(
             after.grid.fits(orbs_render::DEEP_FOCUS_FLOOR),
-            "deep focus still cannot host a second pane: {:?}",
+            "the fixed grid cannot host a second pane: {:?}",
             after.grid,
+        );
+        // ...and what actually changed: the split the two modes ask the tiler
+        // for. Without this the test would pass on a `cycle_mode` that only set
+        // a field nobody reads.
+        let request = |screen: Screen| orbs_render::ScreenRequest {
+            main_panes: PANES,
+            mode: screen.mode,
+            ..orbs_render::ScreenRequest::single(screen.grid)
+        };
+        assert_ne!(
+            orbs_render::ScreenLayout::compute(&request(before)).main(),
+            orbs_render::ScreenLayout::compute(&request(after)).main(),
+            "the two focus modes tile identically, so F4 does nothing visible",
         );
     }
 

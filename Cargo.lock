@@ -3436,7 +3436,7 @@ dependencies = [
 
 [[package]]
 name = "orbs"
-version = "0.1.23"
+version = "0.1.24"
 dependencies = [
  "bevy",
  "notify",
@@ -3446,18 +3446,18 @@ dependencies = [
 
 [[package]]
 name = "orbs-balance"
-version = "0.1.23"
+version = "0.1.24"
 dependencies = [
  "orbs-sim",
 ]
 
 [[package]]
 name = "orbs-render"
-version = "0.1.23"
+version = "0.1.24"
 
 [[package]]
 name = "orbs-sim"
-version = "0.1.23"
+version = "0.1.24"
 dependencies = [
  "bevy_ecs",
  "orbs-render",
@@ -3470,7 +3470,7 @@ dependencies = [
 
 [[package]]
 name = "orbs-tui"
-version = "0.1.23"
+version = "0.1.24"
 dependencies = [
  "orbs-render",
  "orbs-sim",

@@ -5,7 +5,7 @@
 //! the linear stream that says the same thing without pixels.
 //!
 //! Frontends receive `&Frame` and rasterise. They may add enrichment the other
-//! frontend cannot reproduce — CRT effects, audio, fidelity tiers — provided it
+//! frontend cannot reproduce — CRT effects, audio — provided it
 //! carries **no information absent from the Frame** (DESIGN.md §13). The moment a
 //! frontend conveys something the Frame does not, the other frontend is playing a
 //! worse game rather than wearing a different skin.
@@ -19,7 +19,7 @@ use crate::style::Wash;
 /// One screen's worth of cells, plus its linearisation.
 ///
 /// Reuse a single `Frame` across ticks via [`Frame::reset`] rather than building
-/// a new one; the grid can reach 160×45 and a siege redraws it every frame.
+/// a new one; the grid is 120×45 and a siege redraws it every frame.
 #[derive(Debug, Default, Clone)]
 pub struct Frame {
     grid: GridSize,
@@ -42,9 +42,10 @@ impl Frame {
 
     /// Blank the frame and resize it, keeping the existing allocations.
     ///
-    /// Called once per rendered frame. Resizing is cheap and normal: the grid
-    /// changes whenever the window resizes or multiplexing shifts the fidelity
-    /// tier (§9).
+    /// Called once per rendered frame. Under the Bevy frontend the grid is
+    /// [`GRID`](crate::GRID) every time, so this is a blank rather than a
+    /// resize; `orbs-tui` and `ORBS_GRID` are what still change it, and resizing
+    /// is cheap because the allocations are kept.
     pub fn reset(&mut self, grid: GridSize) {
         self.grid = grid;
         self.cells.clear();
@@ -121,10 +122,16 @@ impl Frame {
 
     /// A region whose glyphs are drawn at **double size**.
     ///
-    /// One row of cells, occupying two rows and twice the columns on screen. The
-    /// prompt uses it at fine fidelity: a 32-pixel line is the thing you are
-    /// typing into rendered at the size of the transcript around it, and giving
-    /// it a blank row for company makes it no easier to read.
+    /// One row of cells, occupying two rows and twice the columns on screen.
+    ///
+    /// **Nothing in the game sets this today.** The prompt did, while
+    /// [`INPUT_ROWS`](crate::INPUT_ROWS) was 2 — a second row spent to keep the
+    /// line's *pixel* height when a finer fidelity tier shrank the cells. §19
+    /// fixed the grid, so there is no tier to compensate for and the doubling
+    /// became plain magnification: a prompt twice the transcript's size at every
+    /// window, and typing into half the columns. It is one constant from coming
+    /// back, and the mechanism is kept for that rather than for a caller it does
+    /// not have.
     ///
     /// This lives on the `Frame` rather than in the frontend because it is
     /// **informational**, not decoration: at double width a line holds half the

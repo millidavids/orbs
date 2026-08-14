@@ -1,18 +1,16 @@
 //! Registration for the cell renderer.
 
-use bevy::camera::{Projection, ScalingMode};
 use bevy::input::common_conditions::input_just_pressed;
 use bevy::prelude::*;
 use bevy::render::view::screenshot::{Screenshot, save_to_disk};
 use bevy::sprite_render::{AlphaMode2d, ColorMaterial, MeshMaterial2d};
-use bevy::window::WindowResized;
 use orbs_render::Frame;
 
 use super::atlas::{self, GlyphAtlas};
 use super::blink::{self, Blink};
 use super::grid;
 use super::palette::{self, Phosphor};
-use crate::crt::CellSize;
+use crate::crt::Tube;
 use crate::shell::Screen;
 use crate::sim::Tower;
 
@@ -23,7 +21,7 @@ struct CellGrid;
 /// The frame being painted, reused every frame.
 ///
 /// `Frame`'s own documentation says to reset rather than reallocate — the grid
-/// reaches 160×45 and a siege redraws it every frame. The vertex buffers live in
+/// is 120×45 and a siege redraws it every frame. The vertex buffers live in
 /// the mesh itself; see [`super::grid`].
 #[derive(Resource, Default)]
 pub(crate) struct Canvas {
@@ -50,11 +48,10 @@ impl Plugin for RenderPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Canvas>()
             .init_resource::<Theme>()
-            .init_resource::<CellSize>()
+            .init_resource::<Tube>()
             .init_resource::<Blink>()
             .add_systems(PreStartup, build_atlas)
             .add_systems(Startup, spawn_grid.after(build_atlas))
-            .add_systems(Startup, fit_camera.after(spawn_grid))
             .add_systems(
                 Update,
                 (
@@ -67,9 +64,6 @@ impl Plugin for RenderPlugin {
                         .run_if(input_just_pressed(KeyCode::F12))
                         .run_if(crate::boot::booted),
                     auto_capture.run_if(resource_exists::<AutoCapture>),
-                    // The projection only needs revisiting when the window
-                    // changes; every Update system carries a guard (CLAUDE.md).
-                    fit_camera.run_if(on_message::<WindowResized>),
                     // The background only moves when the theme does.
                     tint_background.run_if(resource_changed::<Theme>),
                     blink::tick,
@@ -192,37 +186,6 @@ const fn atlas_ready(atlas: Option<Res<GlyphAtlas>>) -> bool {
     atlas.is_some()
 }
 
-/// Make one world unit one **physical** pixel.
-///
-/// Bevy's default 2D projection works in logical pixels, which on a 2× display
-/// would stretch every glyph across four physical pixels — a blurred bitmap
-/// font, which §4 calls out as the thing legibility cannot survive. Fixing the
-/// projection to the physical size keeps the integer cell scale honest all the
-/// way to the framebuffer.
-fn fit_camera(
-    window: Option<Single<&Window, With<bevy::window::PrimaryWindow>>>,
-    camera: Option<Single<&mut Projection, With<Camera2d>>>,
-) {
-    let (Some(window), Some(mut projection)) = (window, camera) else {
-        return;
-    };
-    // A window wider than 65535 physical pixels is not a case worth carrying
-    // arithmetic for; clamping keeps the conversion exact.
-    let width = u16::try_from(window.physical_width())
-        .unwrap_or(u16::MAX)
-        .max(1);
-    let height = u16::try_from(window.physical_height())
-        .unwrap_or(u16::MAX)
-        .max(1);
-
-    if let Projection::Orthographic(orthographic) = &mut **projection {
-        orthographic.scaling_mode = ScalingMode::Fixed {
-            width: f32::from(width),
-            height: f32::from(height),
-        };
-    }
-}
-
 /// Keep the room behind the orb matching the active phosphor.
 fn tint_background(theme: Res<Theme>, mut clear: ResMut<ClearColor>) {
     clear.0 = theme.0.background.into();
@@ -295,7 +258,7 @@ fn repaint(
     if let Some(boot) = booting {
         // The orb waking up. It paints the parts of the screen that exist yet
         // and nothing else, so `Dark` really is dark — see `boot::stage`.
-        crate::shell::paint_booting(frame, &screen, boot.stage(), boot.progress());
+        crate::shell::paint_booting(frame, boot.stage(), boot.progress());
     } else if screen.is_hostable() {
         crate::shell::paint(
             frame,
@@ -330,7 +293,7 @@ fn rasterise(
     theme: Res<Theme>,
     blink: Res<Blink>,
     canvas: Res<Canvas>,
-    mut cell: ResMut<CellSize>,
+    mut tube: ResMut<Tube>,
     mut meshes: ResMut<Assets<Mesh>>,
     grid_mesh: Option<Single<&Mesh2d, With<CellGrid>>>,
     mut drew_something: Local<bool>,
@@ -367,15 +330,34 @@ fn rasterise(
         return;
     };
 
-    let scale = screen.fidelity.map_or(1, |tier| u16::from(tier.scale()));
-
     // §9: the CRT's scanline and grille frequencies re-derive against the active
-    // cell size. Publishing it here is what keeps them in step through a
-    // fidelity-tier change.
-    *cell = CellSize {
-        width: f32::from(orbs_render::CELL_WIDTH) * f32::from(scale),
-        height: f32::from(orbs_render::CELL_HEIGHT) * f32::from(scale),
+    // cell size. Publishing it here is what keeps them landing on real pixels as
+    // the window is dragged — the mesh is drawn in *virtual* pixels and the
+    // projection scales it, so this is the only place the physical size of a
+    // cell is known.
+    //
+    // The fill is the same arithmetic one level up: how much of the window the
+    // 4:3 picture covers. The shader needs it to know where the **tube** is, so
+    // the curve and the bezel belong to the monitor rather than to the window
+    // (§19). A window already 4:3 fills both axes and the bars are zero wide.
+    let scale = screen.scale();
+    let window = (
+        orbs_render::pixels(screen.window.0),
+        orbs_render::pixels(screen.window.1),
+    );
+    let picture = (
+        f32::from(orbs_render::PICTURE.0) * scale,
+        f32::from(orbs_render::PICTURE.1) * scale,
+    );
+    *tube = Tube {
+        width: f32::from(orbs_render::CELL_WIDTH) * scale,
+        height: f32::from(orbs_render::CELL_HEIGHT) * scale,
+        // `max(1.0, …)` on the divisor, not a clamp on the result: before the
+        // first `WindowResized` the window is `(0, 0)` and this would be a
+        // division by zero published straight into a uniform.
+        fill_x: (picture.0 / window.0.max(1.0)).clamp(0.0, 1.0),
+        fill_y: (picture.1 / window.1.max(1.0)).clamp(0.0, 1.0),
     };
 
-    grid::build(&canvas.frame, &theme.0, scale, blink.showing(), &mut mesh);
+    grid::build(&canvas.frame, &theme.0, blink.showing(), &mut mesh);
 }

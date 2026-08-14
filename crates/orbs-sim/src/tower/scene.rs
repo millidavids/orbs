@@ -105,6 +105,12 @@ pub fn scene_at(world: &World, at: Entity) -> Scene {
             scene = scene.with(NounKind::Topic, output);
         }
     }
+
+    // Every substance the laboratory has a **word** for, which is not the same
+    // list as what is here — that is the point. It stops one real name being
+    // fuzzed into another when the first is out of stock; see `Scene::knowing`
+    // for the `digest ground-sage` defect that named it.
+    scene = scene.knowing(crate::content::Recipes::substances(world));
     {
         let topics = world.resource::<Topics>();
         for topic in &topics.0 {

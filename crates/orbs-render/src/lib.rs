@@ -1,8 +1,9 @@
 //! Frame / cell-buffer, layout, and semantic styling.
 //!
 //! `orbs-render` decides *what appears and where*. Frontends decide only *how a
-//! cell is drawn*, and may add enrichment the others cannot reproduce (CRT
-//! effects, audio, fidelity tiers) provided that enrichment carries no
+//! cell is drawn* — and how big, which is why the grid is a constant here and
+//! the letterbox is the frontend's. They may add enrichment the others cannot
+//! reproduce (CRT effects, audio) provided that enrichment carries no
 //! information absent from the Frame. See CLAUDE.md, architectural rule 2.
 //!
 //! # The pipeline
@@ -42,20 +43,20 @@
 //!
 //! ```
 //! use orbs_render::{
-//!     DisplayMode, Fidelity, Frame, Pos, ScreenLayout, ScreenRequest, Span, Style,
-//!     UtteranceKind,
+//!     DisplayMode, Frame, GRID, INPUT_ROWS, Pos, ScreenLayout, ScreenRequest, Span,
+//!     Style, UtteranceKind,
 //! };
 //!
-//! let window = (1920, 1080);
-//! let tier = Fidelity::tier_one(window).expect("1080p hosts the floor");
-//! let grid = tier.grid(window);
+//! // The grid is a constant: the window decides how big a cell is, not how
+//! // many there are. Nothing in this crate consults a window at all.
+//! let grid = GRID;
 //!
 //! let layout = ScreenLayout::compute(&ScreenRequest {
 //!     grid,
 //!     main_panes: 2,
 //!     sidebar_panes: 1,
 //!     mode: DisplayMode::Deep,
-//!     input_rows: tier.input_rows(),
+//!     input_rows: INPUT_ROWS,
 //! });
 //!
 //! let mut frame = Frame::new(grid);
@@ -88,7 +89,6 @@ pub mod record;
 
 mod bath;
 mod cell;
-mod fidelity;
 mod fire;
 mod frame;
 mod geometry;
@@ -106,12 +106,12 @@ mod span;
 mod style;
 mod tiling;
 mod tween;
+mod viewport;
 mod wrap;
 
 pub use bath::Steep;
 pub use cell::Cell;
 pub use cp437::{REPLACEMENT, cp437_glyph, cp437_index, is_renderable};
-pub use fidelity::{CELL_HEIGHT, CELL_WIDTH, Fidelity, MIN_GRID};
 pub use fire::Burn;
 pub use frame::Frame;
 pub use geometry::{GridSize, Pos, Rect};
@@ -132,6 +132,9 @@ pub use record::{
 };
 pub use span::Span;
 pub use style::{Density, Depiction, Heat, Intensity, Presentation, Roil, Role, Style, Tint, Wash};
+pub use viewport::{
+    CELL_HEIGHT, CELL_WIDTH, GRID, INPUT_ROWS, MIN_GRID, MIN_SCALE, PICTURE, pixels, scale_for,
+};
 
 /// The first `cells` characters of `text` — what has arrived, if it is arriving.
 ///

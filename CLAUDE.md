@@ -27,6 +27,7 @@ such.
 | [docs/DESIGN.md](docs/DESIGN.md) | The design. Authoritative for everything |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | Phase status checklist — *derived* from DESIGN.md §15 |
 | [docs/SETUP.md](docs/SETUP.md) | Toolchain, skills, build/test/CI procedures |
+| [docs/CHANGELOG.md](docs/CHANGELOG.md) | Release notes — **and the source the GitHub Release, Discord and Bluesky all read from**. Its format is load-bearing; SETUP.md §4 has the rules |
 
 ## Technology Stack
 
@@ -146,10 +147,30 @@ user-level `rust-skills` install.
 
 ## Git Workflow
 
-- **Never commit or push without explicit approval.** Ask, then wait.
+**All work happens on `dev`. `main` is releases only.**
+
+- **`dev` is the working branch.** Every commit lands here — features,
+  corrections, docs, tooling. Push to `dev` freely (with approval); it triggers
+  `dev-release.yml`, which is CLAUDE.md's gate and nothing else.
+- **`main` is reached only by fast-forwarding `dev`**, never by committing to it
+  and never by a merge commit. A push to `main` is a **release**: it tags the
+  version, publishes a GitHub Release, and posts to Discord and Bluesky. There is
+  no such thing as a quiet push to `main`.
+- **A release is opt-in, and the opt-in is a changelog block.** `release.yml`
+  reads `docs/CHANGELOG.md` first: no `## [v<version>]` block for the version in
+  `Cargo.toml` means "ordinary work", and the run ends green having done nothing.
+  This is what lets the per-step version bumps below reach `main` without
+  announcing every step of a phase.
+- **`/game-release` is how all three happen.** No argument folds the work into
+  the open changelog block on `dev`; `consolidate` rewrites that block into the
+  net change; `main` fast-forwards and promotes. Read
+  `.claude/skills/game-release/SKILL.md` before doing any of it by hand.
+- **Never commit or push without explicit approval.** Ask, then wait — and
+  approval for one is not approval for the next.
 - Commit messages: no AI/agent attribution of any kind — no `Co-Authored-By`,
   no generated-with footers, no session URLs.
-- Branch from `main`; JIRA-style prefixes are not used on this project.
+- JIRA-style prefixes are not used on this project. A release commit is
+  `v<version>: <what shipped>`.
 
 ## Working Practice
 
@@ -271,11 +292,17 @@ The screenshot path needs a composited window, and without one it writes a valid
 PNG of a **black rectangle** — the renderer fine, the picture proving nothing.
 That is worse than no picture, because it looks like evidence. `ORBS_DUMP` draws
 the same frame through the real `paint`, `Sim` and `ScreenLayout` into a `Frame`
-nobody rasterises, then prints it with its linear stream beneath:
+nobody rasterises, then prints it with its linear stream beneath.
+
+**A dump draws the game's own grid, 120×45, and `ORBS_GRID` is now only for the
+80×22 authoring floor.** The grid stopped following the window (§19), so there is
+one grid and a dump showing any other is an instrument reading a screen nobody
+has. What a dump still cannot show is the *fit* — it builds no `App`, so it has
+no camera and no projection, and the 4:3 letterbox needs a window and eyes.
 
 ```bash
 ORBS_DUMP="attend laboratory; grind sage; meditate 12; empty mortar_and_pestle" cargo run -p orbs
-ORBS_DUMP=1 ORBS_GRID=160x44 cargo run -p orbs   # the worst-case grid
+ORBS_DUMP=1 ORBS_GRID=80x22 cargo run -p orbs    # the 80×22 authoring floor
 ORBS_DUMP=1 ORBS_BOOT=post cargo run -p orbs     # a boot stage as text
 ORBS_BOOT=0 cargo run -p orbs                    # skip the boot sequence
 ORBS_LINE="grind sa" ORBS_DUMP=1 cargo run -p orbs   # ...with a line half-typed
@@ -343,7 +370,7 @@ ORBS_BOOT=0 ORBS_DUMP="attend laboratory; grind sage; meditate 9; \
 ```
 ```text
 -- tinted regions (DESIGN.md §19) --
-  green    2×17 at 64,2        ← and `brown` after the husks are all that is left
+  green    30×1 at 29,1        ← and `brown` after the husks are all that is left
 ```
 
 Colours are authored in `crates/orbs-sim/content/materials.toml` against the
@@ -357,17 +384,17 @@ ingredients becoming one thing — and reaching it means running the first three
 stages, because the flask combines what the mortar and the bath hand it:
 
 ```bash
-ORBS_BOOT=0 ORBS_GRID=80x60 ORBS_DUMP="attend laboratory; kindle charcoal; \
+ORBS_BOOT=0 ORBS_DUMP="attend laboratory; kindle charcoal; \
   grind sage; meditate 9; empty mortar_and_pestle; digest ground-sage; \
   meditate 14; siphon balneum_mariae; grind rock-salt; meditate 9; \
   empty mortar_and_pestle; mix sage-tincture with ground-salt; meditate 5" \
   cargo run -p orbs
 ```
 ```text
-flask_and_rod  working  ██████████████████████████████▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
-  green      11×1 at 58,3     ← the two ingredients, shrinking together
-  bone       10×1 at 69,3
-  green+bone 30×1 at 28,3     ← the mixture, growing from the fill end
+flask_and_rod  working  ▓▓████████████████▓▓▓▓▓▓▓▓▓▓▓▓
+  green      6×1 at 47,3      ← the two ingredients, shrinking together
+  bone       6×1 at 53,3
+  green+bone 18×1 at 29,3     ← the mixture, growing from the fill end
 ```
 
 Step the last `meditate` and the mixture grows while both bands shrink at the
@@ -510,10 +537,10 @@ dump that opens the screen and presses an arrow is testing the refusal, not the
 movement. **Left/right walks the track; up/down picks between a tier's
 siblings** — rightward is progress, downward is a choice.
 
-**The session pane is ~48 columns, not 80.** Panes tile side by side above the
-100×28 deep-focus floor, so `ORBS_GRID=80x22` is the *widest* this surface ever
-gets and `100x28` is the narrowest. Both are worth a look; the narrow one is
-where a sentence stops fitting.
+**The session pane is 60 columns, not 120.** Panes tile side by side, so the
+grid's width is never this surface's. `ORBS_GRID=80x22` is narrower still and is
+where a sentence stops fitting — worth a look, even though the game itself no
+longer reaches it.
 
 ```bash
 # Nothing earned: the bar reads `0 of 100`, the ley line's one station draws
@@ -550,19 +577,55 @@ bound solver watchable — so `research` alone is enough to see it. `wander` onl
 decides who the arrows belong to, and `ORBS_WALK` presses them:
 
 ```bash
-# The maze whole, with one mark in it. **There is no fog** (§19) — every wall is
-# on screen from the moment it opens; what fills in as you walk is the marks.
-ORBS_BOOT=0 ORBS_GRID=160x45 ORBS_DUMP="attend archive; research" cargo run -p orbs
+# The maze beside the transcript. **There is no fog** (§19) — every wall is on
+# screen from the moment it opens; what fills in as you walk is the marks.
+# **It pans** at the game's own grid: a session pane is 58 columns and the whole
+# picture wants 35, which does not leave the transcript its floor, so the block
+# shows the part the reading is standing in. That is the designed fallback, not a
+# defect — see `labyrinth::split`.
+ORBS_BOOT=0 ORBS_DUMP="attend archive; research" cargo run -p orbs
 
 # ...opening as it goes. `▒` walked once, `░` finished with, `☼` the reading,
 # `Ω` the way out once a walked cell is beside it.
-ORBS_BOOT=0 ORBS_GRID=160x45 \
-  ORBS_DUMP="attend archive; research; follow east; follow east" cargo run -p orbs
+ORBS_BOOT=0 ORBS_DUMP="attend archive; research; follow east; follow east" \
+  cargo run -p orbs
 
-# The arrows. `wander` takes the **whole pane** — maze centred, count and keys
-# beneath, no transcript and no prompt. A spell solving one keeps the map inline.
-ORBS_BOOT=0 ORBS_GRID=160x45 ORBS_DUMP="attend archive; research; wander" \
+# The arrows, and **the only place the whole maze is on screen at once**:
+# `wander` takes the whole pane — maze centred, count and keys beneath, no
+# transcript and no prompt. A spell solving one keeps the map inline, panning.
+ORBS_BOOT=0 ORBS_DUMP="attend archive; research; wander" \
   ORBS_WALK="<right>\n<right>\n<down>\n<down>\n<left>" cargo run -p orbs
+```
+
+**`ORBS_SEED` is how you see a *second* maze.** The reading starts in a random
+corner and the way out is drawn against a weighting that leans on the opposing
+one (§19), so one dump is one sample and proves nothing about either. Without
+this the binary is seed `0x0B5` for ever: three dumps taken to check the
+randomisation came back identical and read as a failure, and they were three
+copies of the same seed.
+
+```bash
+ORBS_SEED=3  ORBS_BOOT=0 ORBS_DUMP="attend archive; research; wander" cargo run -p orbs
+ORBS_SEED=11 ORBS_BOOT=0 ORBS_DUMP="attend archive; research; wander" cargo run -p orbs
+```
+
+It applies to the whole world, not just the archive — everything generated is
+one seed's worth of evidence per run. The *distribution* is not something a dump
+can show at all, so it is a test: `cargo test -p orbs-sim --lib research`.
+
+**A step is in the log, not the transcript** (§19). The map already shows the
+reading move, so `follow`'s success is `quiet` — emitted, stored and spoken as
+ever, and filtered out of the pane by `Records::drawn`. A dump looking for *"the
+reading goes"* on the transcript will not find it and is not broken; a **wall**
+is still drawn, because nothing moves and the map reports nothing.
+
+```bash
+ORBS_SEED=3 ORBS_BOOT=0 ORBS_GRID=100x40 ORBS_DUMP="attend archive; research; \
+  follow west; follow west; peruse archive.log" cargo run -p orbs
+```
+```text
+tick: 2, message: the reading goes west
+tick: 3, message: the reading goes west
 ```
 
 **An arrow moves the reading immediately and consumes no tick.** `Sim::walk` is a
@@ -594,7 +657,7 @@ for r in ("exit","passage","walked","twice"):
         lines += [f"if {w} has {r}", f"follow {w}", "else"]
 lines += ["end"]*17 + ["<esc>", "quit"]
 print("\\n".join(lines), end="")' > /tmp/solver.txt
-ORBS_BOOT=0 ORBS_GRID=160x45 ORBS_DUMP="attend archive; research; scribe threading" \
+ORBS_BOOT=0 ORBS_DUMP="attend archive; research; scribe threading" \
   ORBS_EDIT="$(cat /tmp/solver.txt)" \
   ORBS_THEN="invoke threading; meditate 300" cargo run -p orbs
 ```
@@ -617,6 +680,40 @@ old cells-and-wall-lines geometry, not a maze.
 Each `;`-separated line goes through `submit` and a real `step`. Phosphor, the
 CRT curve and the blinking caret are frontend enrichment (rule 2) and are not in
 a Frame — those still need eyes on a window.
+
+**So does the 4:3 fit, and it is the one thing here with no text gate at all.**
+The grid is fixed at 120×45 and the window only scales it (§19), so what a resize
+changes is a *projection* — and a dump builds no `App`, so it has no camera and
+no projection to change. Drag the window instead:
+
+```bash
+cargo run -p orbs      # then drag it wide, tall, and square
+```
+
+- the picture stays 4:3 and centred; bars grow on one axis, never both
+- **no text reflows** — the same words stay on the same rows throughout, which is
+  the whole point and is what a resize used to break
+- the telemetry pane's `scale` row tracks the drag while `cols` and `rows` hold
+- one `window … -> scale … -> grid 120×45` line per resize in the log
+
+`ORBS_CAPTURE=1` earns its keep here for once, because the bars are pixels and
+nothing else: a real window does composite under a normal desktop session, and
+this is the case where the black rectangle would be the *answer* rather than the
+failure. Check the picture is 4:3 by measuring it, not by trusting it.
+
+**And crop a corner before believing the tube.** The CRT's shaped terms — barrel,
+vignette, edge mask, rounded bezel — are all in *tube* space, so they belong to
+the 4:3 picture and the bars are the dark room. A full-window screenshot is too
+small to show whether the corner is actually round: the bezel spent a version
+rounding the unwarped tube rect, whose corners are outside the picture, so it
+did nothing at any radius and nobody saw. One crop settled it.
+
+```python
+python3 -c "
+from PIL import Image
+im = Image.open('orbs-screenshot.png')
+im.crop((240,840,700,1080)).resize((1380,720), Image.NEAREST).save('/tmp/corner.png')"
+```
 
 `ORBS_BOOT` takes `dark`, `frame` or `post` for the dump, and `0` to skip the
 sequence in the running game. Boot happens once per launch and runs for

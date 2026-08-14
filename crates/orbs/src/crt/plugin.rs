@@ -89,7 +89,7 @@ fn after(current: CrtSettings) -> (CrtSettings, &'static str) {
 fn extract(
     settings: Extract<Query<&CrtSettings>>,
     time: Extract<Res<Time>>,
-    cell: Extract<Res<CellSize>>,
+    tube: Extract<Res<Tube>>,
     mut commands: Commands,
 ) {
     let Some(settings) = settings.iter().next() else {
@@ -98,22 +98,47 @@ fn extract(
     commands.insert_resource(ExtractedCrt(CrtUniform::new(
         *settings,
         time.elapsed_secs(),
-        (cell.width, cell.height),
+        **tube,
     )));
 }
 
-/// Physical pixels per cell, published by the renderer for the CRT to read.
+/// The tube's geometry in the window, published by the renderer for the CRT.
+///
+/// Two facts, and the shader needs both for the same reason: **the tube is the
+/// 4:3 picture, not the window.** Everything periodic divides the cell size so
+/// the pattern lands identically inside every glyph (§9); everything *shaped* —
+/// the barrel curve, the vignette, the rounded bezel — is measured against
+/// [`fill`](Self::fill_x), so the curve belongs to the monitor rather than to
+/// whatever rectangle the player dragged.
+///
+/// This was `CellSize` and carried only the first pair. §19's fixed grid made
+/// the window and the picture different rectangles for the first time, and a
+/// shader that knew only about the window curved the letterbox bars along with
+/// the phosphor.
 #[derive(Resource, Debug, Clone, Copy)]
-pub struct CellSize {
+pub struct Tube {
+    /// Physical pixels per cell, horizontally and vertically.
     pub width: f32,
     pub height: f32,
+    /// The picture's share of the window on each axis, in `(0, 1]`.
+    ///
+    /// One of the two is always 1.0 — the picture fits inside on both axes and
+    /// touches on at least one — and the other is what the bars eat. The picture
+    /// is centred, so the shader derives its origin as `(1 - fill) / 2` rather
+    /// than being told: `ScalingMode::AutoMin` centres on `viewport_origin`,
+    /// which defaults to the middle.
+    pub fill_x: f32,
+    pub fill_y: f32,
 }
 
-impl Default for CellSize {
+impl Default for Tube {
+    /// A window exactly the size of the picture: native cells, no bars.
     fn default() -> Self {
         Self {
             width: f32::from(orbs_render::CELL_WIDTH),
             height: f32::from(orbs_render::CELL_HEIGHT),
+            fill_x: 1.0,
+            fill_y: 1.0,
         }
     }
 }

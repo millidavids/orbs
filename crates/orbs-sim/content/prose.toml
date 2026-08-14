@@ -704,7 +704,7 @@ man_purge_gloss = "destroy something"
 man_purge_1 = "it does not come back. empty is what you want if"
 man_purge_2 = "you meant to clear a tool and keep the leavings"
 man_purge_3 = "the tower itself and its domains are refused"
-man_purge_eg1 = "purge chaff, when nothing is going to want it"
+man_purge_eg1 = "purge dust, when nothing is going to want it"
 man_purge_also = "empty, stop, verify"
 
 man_research_use = "research"

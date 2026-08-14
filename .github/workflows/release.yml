@@ -1,0 +1,416 @@
+name: Release
+
+# The `main` half of the two-branch flow. **This workflow ships no binaries.**
+#
+# `main` is reached by fast-forwarding `dev` onto it — see the `game-release`
+# skill — so the commit here is one `dev-release.yml` has already gated, and the
+# version block in docs/CHANGELOG.md was written on `dev` before that.
+#
+# Adapted from court_wizard, with the Steam half **commented out rather than
+# deleted** (see the block at the end). That subtraction changes one thing about
+# the shape: court_wizard announces from a *separate scheduled workflow*, because
+# setting a Steam build live needs a human to tap a prompt on their phone, so
+# "released" and "players have it" are hours apart and only the second is worth
+# announcing. Without Steam the release is atomic — the tag is the artefact — so
+# announcing happens in this same run, and the `promoted/` + `announced/` marker
+# tags that made an async promotion resumable are gone with the thing they
+# tracked. They come back with it.
+#
+# What it does:
+#   1. read the version from Cargo.toml, and decide whether this is a release
+#      at all — a changelog block is the opt-in
+#   2. run the project's own gate, because a tag on a broken commit is worse
+#      than no tag
+#   3. tag + GitHub Release, with the body from docs/CHANGELOG.md
+#   4. post to Discord and Bluesky
+#
+# Step 2 is court_wizard's one real omission here: there, release.yml reruns
+# nothing because it reuses the artifacts dev-release.yml already built and
+# tested for this exact SHA. With no artifacts there is nothing to reuse, so the
+# gate runs again. It is ~10 minutes and it means a promotion cannot ship a
+# commit that only *looked* green on dev.
+#
+# Secrets, all optional — a missing one skips its step rather than failing:
+#   DISCORD_WEBHOOK_URL
+#   BLUESKY_USERNAME       handle, e.g. orbs.bsky.social
+#   BLUESKY_APP_PASSWORD   an app password, never the account password
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      force:
+        description: >-
+          Re-run even if the tag already exists. Re-announces: without a Steam
+          promotion to be idempotent about, nothing else stops a second post.
+        required: false
+        type: boolean
+        default: false
+
+# A second push to main while the first release is still tagging would race for
+# the same tag. Queue instead, and never cancel a run that may already have
+# announced.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get_version.outputs.version }}
+      should_release: ${{ steps.check_tag.outputs.should_release }}
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Extract version from Cargo.toml
+        id: get_version
+        run: |
+          set -euo pipefail
+          # `[workspace.package]`'s version, which every crate inherits. The
+          # first `^version = ` in the file is that one; the guard below is what
+          # catches it moving rather than letting an empty tag through.
+          VERSION=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+          if [ -z "$VERSION" ]; then
+            echo "::error::No version found in Cargo.toml."
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Version: $VERSION"
+
+      - name: Decide whether this is a release
+        id: check_tag
+        env:
+          VERSION: ${{ steps.get_version.outputs.version }}
+          FORCE: ${{ inputs.force }}
+        run: |
+          set -euo pipefail
+
+          # **A changelog block is the opt-in, and its absence is not an error.**
+          #
+          # CLAUDE.md bumps the version on every roadmap *step*, so most versions
+          # are internal progress rather than something to announce. Failing here
+          # would put a red X on main for the ordinary case of doing work; always
+          # releasing would post to Discord and Bluesky several times a phase.
+          #
+          # So writing the block is the deliberate act that says "ship this" —
+          # which is the same design court_wizard uses from the other end, where
+          # dev-release.yml only builds on pushes that touch the changelog.
+          # `/game-release` is the skill that writes it.
+          if ! grep -qF "## [v$VERSION]" docs/CHANGELOG.md; then
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            echo "No '## [v$VERSION]' block in docs/CHANGELOG.md — not a release."
+            {
+              echo "### v$VERSION: no release"
+              echo ""
+              echo "\`docs/CHANGELOG.md\` has no \`## [v$VERSION]\` block, so this push is"
+              echo "ordinary work rather than a release. Run \`/game-release\` to write one."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          if [ "$FORCE" = "true" ]; then
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+            echo "force=true — ignoring the tag-exists guard"
+          elif git rev-parse "v$VERSION" >/dev/null 2>&1; then
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            echo "Tag v$VERSION already exists, skipping release"
+          else
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+            echo "Releasing v$VERSION"
+          fi
+
+  gate:
+    # CLAUDE.md's gate, verbatim and in the same order. court_wizard has no
+    # equivalent step here because its release only ever *promotes* a build that
+    # dev-release.yml already built and tested. Nothing has built this commit, so
+    # the choice is to run the gate or to tag on trust.
+    needs: check-version
+    if: needs.check-version.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable channel (pinned)
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+
+      - name: Install Linux build dependencies
+        # Bevy's linux backends. Needed for `cargo build -p orbs` to *link*,
+        # which is the step CLAUDE.md singles out as the one `cargo check` does
+        # not replace.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev pkg-config
+
+      - name: Format
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Test
+        run: cargo test --workspace
+
+      - name: Docs
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo doc --workspace --no-deps
+
+      - name: Link the game
+        run: cargo build -p orbs
+
+  release:
+    needs: [check-version, gate]
+    if: needs.check-version.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      title: ${{ steps.changelog.outputs.title }}
+      body: ${{ steps.changelog.outputs.body }}
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Extract the changelog block
+        id: changelog
+        env:
+          VERSION: ${{ needs.check-version.outputs.version }}
+        run: |
+          set -euo pipefail
+          # **Selected by version, not "the top block".** They are the same in
+          # the normal flow, but a `force` dispatch can target an older release
+          # while the changelog has moved on, and announcing the top block there
+          # would ship the wrong notes.
+          #
+          # Literal prefix matching rather than a regex: a version is full of
+          # dots, and escaping "## [v0.1.24]" into an awk regex is a reliable way
+          # to silently match nothing.
+          title=$(sed -n "s/^## \[v$VERSION\] - \(.*\)/v$VERSION - \1/p" docs/CHANGELOG.md | head -1)
+          body=$(awk -v hdr="## [v$VERSION]" '
+              index($0, hdr) == 1 { inblock = 1; next }
+              inblock && index($0, "## [") == 1 { exit }
+              inblock { print }
+            ' docs/CHANGELOG.md)
+          if [ -z "$title" ] || [ -z "$body" ]; then
+            echo "::error::No changelog block for v$VERSION in docs/CHANGELOG.md."
+            exit 1
+          fi
+          # Trim leading and trailing blank lines.
+          body=$(echo "$body" | sed '/./,$!d' | sed -e :a -e '/^[[:space:]]*$/d;N;ba')
+          # Discord's embed description hard-limits at 4096 characters. Trimmed
+          # with python so multi-byte characters count correctly — this changelog
+          # is full of em-dashes — ending on a clean line break.
+          body=$(printf '%s' "$body" | python3 -c 'import sys; s = sys.stdin.read(); s = (s[:3990].rsplit(chr(10), 1)[0] + chr(10) + "…") if len(s) > 4000 else s; sys.stdout.write(s)')
+          echo "title=$title" >> "$GITHUB_OUTPUT"
+          # Random delimiter: a changelog body can contain anything, including a
+          # line that looks like a heredoc terminator.
+          EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
+          echo "body<<$EOF" >> "$GITHUB_OUTPUT"
+          echo "$body" >> "$GITHUB_OUTPUT"
+          echo "$EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Create and push tag
+        env:
+          VERSION: ${{ needs.check-version.outputs.version }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+            echo "Tag v$VERSION already exists (force re-run) — keeping it"
+          else
+            git tag -a "v$VERSION" -m "Release v$VERSION"
+            git push origin "v$VERSION"
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
+        with:
+          tag_name: v${{ needs.check-version.outputs.version }}
+          name: v${{ needs.check-version.outputs.version }}
+          body: ${{ steps.changelog.outputs.body }}
+
+  announce:
+    # Immediately after the release, because without Steam there is nothing
+    # between "tagged" and "anyone can have it". court_wizard waits because its
+    # build is one untapped phone prompt away from the players.
+    needs: [check-version, release]
+    if: needs.check-version.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    env:
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+      BLUESKY_USERNAME: ${{ secrets.BLUESKY_USERNAME }}
+      BLUESKY_APP_PASSWORD: ${{ secrets.BLUESKY_APP_PASSWORD }}
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+
+      - name: Post to Discord
+        if: env.DISCORD_WEBHOOK_URL != ''
+        env:
+          FULL_TITLE: ${{ needs.release.outputs.title }}
+          BODY: ${{ needs.release.outputs.body }}
+          VERSION: ${{ needs.check-version.outputs.version }}
+          GAME_SITE: https://orbs.blackhearthgames.com
+          STUDIO_SITE: https://blackhearthgames.com
+        run: |
+          set -euo pipefail
+          # **The embed names the game.** It used to title itself `v0.1.24 -
+          # <date>` and nothing else, which reads fine in a channel dedicated to
+          # one game and is anonymous anywhere else — a webhook can be pointed at
+          # a shared studio channel, and a version number alone does not say
+          # whose.
+          #
+          # `url` is what makes the title clickable; Discord has no way to link
+          # part of a title, so the whole `O.R.B.S. v0.1.24 - <date>` points at
+          # the GitHub release for that tag. Built from `github.server_url` and
+          # `github.repository` rather than hardcoded, so a fork or a rename does
+          # not silently 404.
+          #
+          # **No Steam link**, because there is no store page — see the commented
+          # block at the foot of this file. When it exists, add it first in the
+          # list to match court_wizard:
+          #   [Steam](https://store.steampowered.com/app/<appid>/) ·
+          release_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/v$VERSION"
+          links="[Website]($GAME_SITE) · [Studio]($STUDIO_SITE) · [Source]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY)"
+          payload=$(jq -n \
+            --arg title "O.R.B.S. $FULL_TITLE" \
+            --arg url "$release_url" \
+            --arg desc "$BODY" \
+            --arg links "$links" \
+            '{embeds: [{
+               title: $title,
+               url: $url,
+               description: $desc,
+               color: 16744448,
+               fields: [{name: "Links", value: $links}]
+             }]}')
+          curl -sS --fail-with-body -H "Content-Type: application/json" \
+            -d "$payload" "$DISCORD_WEBHOOK_URL"
+
+      # `continue-on-error` on purpose: a Bluesky outage or a rotated app
+      # password must not fail a release that has already been tagged and
+      # announced on Discord. The post is the least recoverable-from thing here
+      # and the least important.
+      - name: Post to Bluesky
+        if: env.BLUESKY_USERNAME != '' && env.BLUESKY_APP_PASSWORD != ''
+        continue-on-error: true
+        env:
+          VERSION: ${{ needs.check-version.outputs.version }}
+        run: python3 scripts/post_to_bluesky.py --version "$VERSION"
+
+      - name: Summary
+        env:
+          VERSION: ${{ needs.check-version.outputs.version }}
+        run: |
+          {
+            echo "### v$VERSION released"
+            echo ""
+            echo "Tagged, released, and announced wherever a secret was set."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+# =============================================================================
+# STEAM — commented out until there is a steamworks integration to promote.
+#
+# Restoring this changes the shape of the whole flow, not just this file, so the
+# reasoning is kept here rather than rewritten from scratch later:
+#
+#   * `locate-dev-build` exists so the release ships **the bytes someone
+#     play-tested**. dev-release.yml built and uploaded this exact SHA to the
+#     Steam `staging` branch; promotion fast-forwards `main` onto that very
+#     commit, which is how the SHAs match and the run can be found. Freshly
+#     building here would attach different bytes than players receive.
+#     Restoring it also lets the `gate` job above go away — that job only exists
+#     because there is currently nothing to reuse.
+#
+#   * `steam-request-promotion` **cannot complete unattended**, and that is
+#     Valve's design, not a bug: since Oct 2023, assigning a build to the default
+#     branch of a released app sends an authorization prompt to the Steam Mobile
+#     app. HTTP 201 is the NORMAL response and means "pending your confirmation"
+#     — not "done". What the job actually buys is picking the right build id,
+#     which is where dashboard mistakes happen.
+#
+#   * **Announcing must move out of this workflow** when that lands. A
+#     successful promotion request means a prompt was sent, not that players
+#     have the build — announcing on it would advertise a release that is one
+#     untapped notification away, and if the prompt were declined it would never
+#     arrive at all. court_wizard has a separate steam-promote.yml that retries
+#     the request, watches for the build to actually go live, and only then posts
+#     to Discord, using `promoted/v<version>` and `announced/v<version>` tags to
+#     stay idempotent across its scheduled runs.
+#
+# Needs: secrets STEAM_PUBLISHER_API_KEY / STEAM_PUBLISH_STEAMID, the composite
+# actions .github/actions/steam-build-id and .github/actions/steam-promote, an
+# appid, and scripts/changelog_to_bbcode.sh.
+#
+#   locate-dev-build:
+#     needs: check-version
+#     if: needs.check-version.outputs.should_release == 'true'
+#     runs-on: ubuntu-latest
+#     timeout-minutes: 330
+#     permissions:
+#       actions: read
+#     outputs:
+#       run_id: ${{ steps.find.outputs.run_id }}
+#     steps:
+#       - name: Find and await the dev-release run for this commit
+#         id: find
+#         env:
+#           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#         run: |
+#           # Polls rather than one-shot: the run may still be in progress, and a
+#           # dev release can legitimately be minutes old at promotion time.
+#           # Tolerates a few consecutive API failures so a transient blip during
+#           # a multi-hour poll is not misreported as "no dev-release run exists".
+#           ...
+#
+#   steam-request-promotion:
+#     needs: [check-version, locate-dev-build, release]
+#     if: needs.check-version.outputs.should_release == 'true' && vars.STEAM_DEPLOY == 'true'
+#     runs-on: ubuntu-latest
+#     environment: steam-promotion   # add required reviewers, or this buys nothing
+#     permissions:
+#       contents: write
+#     steps:
+#       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+#       - name: Resolve the Steam build id
+#         id: build
+#         uses: ./.github/actions/steam-build-id
+#         with:
+#           publisher-api-key: ${{ secrets.STEAM_PUBLISHER_API_KEY }}
+#           app-id: '<appid>'
+#           run-id: ${{ needs.locate-dev-build.outputs.run_id }}
+#       - name: Set the staging build live on default
+#         uses: ./.github/actions/steam-promote
+#         with:
+#           publisher-api-key: ${{ secrets.STEAM_PUBLISHER_API_KEY }}
+#           steamid: ${{ secrets.STEAM_PUBLISH_STEAMID }}
+#           app-id: '<appid>'
+#           build-id: ${{ steps.build.outputs.build-id }}
+#           version: ${{ needs.check-version.outputs.version }}
+#
+#   steam-announcement:
+#     # Steamworks has no supported API for creating events, so render the patch
+#     # notes as BBCode and hand them over for pasting.
+#     needs: [check-version, release]
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+#       - run: ./scripts/changelog_to_bbcode.sh > steam-announcement.bbcode
+#       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+#         with:
+#           name: steam-announcement
+#           path: steam-announcement.bbcode
+# =============================================================================

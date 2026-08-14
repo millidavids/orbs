@@ -20,18 +20,41 @@ mod sim;
 use bevy::prelude::*;
 use bevy::window::WindowResolution;
 
-/// 1280×720 is the smallest window that hosts the 80×22 floor, at a 2× cell
-/// (DESIGN.md §4, §9). Starting here means the floor is exercised on every run
-/// rather than only when someone thinks to test it.
+/// 1280×720 puts the 960×720 picture at **exactly** native cell size — scale
+/// 1.0, an 8×16 glyph — with 160 pixels of bar down each side.
+///
+/// Both halves are deliberate (DESIGN.md §4, §19). Native size is the sharpest
+/// the game ever is, so it is what a first look should get; and the bars mean
+/// the 4:3 letterbox is exercised on every run rather than only when someone
+/// thinks to drag the window.
 const INITIAL_WINDOW: (u32, u32) = (1280, 720);
 
 /// The seed the game starts from until saves exist.
 const SEED: u64 = 0x0B5;
 
+/// The seed, or `ORBS_SEED`'s if it names a number.
+///
+/// **A See-it affordance, not a setting.** Anything the world *generates* — the
+/// archive's labyrinths first, sabotage and sieges later — is one seed's worth of
+/// evidence per run, and one sample cannot show a distribution. Three dumps of
+/// the same maze looked like proof that randomising it had failed; they were
+/// three copies of one seed.
+///
+/// Tests sweep seeds directly through `Sim::new` and always could. This is the
+/// same reach from outside the binary, so a person can look rather than trust a
+/// test — which is the whole of §15's gate.
+fn seed() -> u64 {
+    std::env::var("ORBS_SEED")
+        .ok()
+        .and_then(|value| value.trim().parse().ok())
+        .unwrap_or(SEED)
+}
+
 fn main() -> AppExit {
+    let seed = seed();
     // Before the App, because the whole value of it is needing none of the App.
     // See `shell::dump`.
-    if shell::dump(SEED, wizard()) {
+    if shell::dump(seed, wizard()) {
         return AppExit::Success;
     }
 
@@ -53,7 +76,7 @@ fn main() -> AppExit {
         .insert_resource(ClearColor(Color::srgb(0.10, 0.06, 0.15)))
         .add_plugins((
             sim::SimPlugin {
-                seed: SEED,
+                seed,
                 wizard: wizard(),
             },
             render::RenderPlugin,

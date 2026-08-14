@@ -43,11 +43,12 @@ ticks = 8
 
 # Ash is a byproduct that grinds down into something the flask wants, which is
 # what keeps the athanor's waste from being pure litter.
-# Chaff is what a scroll's assembly leaves, and the mortar takes it down to the
-# same potash ash becomes — §10.1's rule that every byproduct has a use, applied
-# to the archive's waste rather than the athanor's.
+# Dust is what a scroll's assembly leaves - what comes off tomes and scrolls that
+# have sat unread - and the mortar takes it down to the same potash ash becomes:
+# §10.1's rule that every byproduct has a use, applied to the archive's waste
+# rather than the athanor's.
 [[mortar_and_pestle]]
-input = "chaff"
+input = "dust"
 output = "potash"
 leaves = "husks"
 ticks = 6
@@ -179,11 +180,16 @@ heat = true
 # `count` is what makes four-of-one work at all: what an instrument holds is a
 # node per *name* with a stock count on it, so four fragments are one entry.
 #
+# It leaves dust, which is the archive's own kind of waste: assembling a scroll
+# means clearing off tomes that have sat unread, and what comes away is grey
+# rather than the brown of the laboratory's spent stalks. It was `chaff`, which
+# is threshed husk - a granary's leaving, not a library's.
+#
 # No heat: a lectern is not an instrument you light.
 # ---------------------------------------------------------------------------
 [[lectern]]
 input = "fragment"
 count = 4
 output = "spell-scroll"
-leaves = "chaff"
+leaves = "dust"
 ticks = 20

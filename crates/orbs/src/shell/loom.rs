@@ -24,9 +24,9 @@
 //!
 //! # The names live in the details panel, not on the nodes
 //!
-//! The session pane is about 48 columns — `DEEP_FOCUS_FLOOR` is 100×28 and panes
-//! tile side by side above it, so the 80×22 floor is the *widest* single-pane
-//! case. Nothing survives putting a sentence beside every node at that width.
+//! The session pane is 60 columns in Deep focus — the grid is 120×45 and two
+//! panes tile side by side — and the 80×22 authoring floor is narrower still.
+//! Nothing survives putting a sentence beside every node at that width.
 //!
 //! So a node is a glyph and its total, and what it *is* goes in a boxed panel in
 //! the bottom right, for the one thing you are aimed at. That is what makes the

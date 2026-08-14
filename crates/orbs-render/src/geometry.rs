@@ -1,7 +1,8 @@
 //! Grid coordinates.
 //!
 //! Everything here counts *cells*, never pixels. Pixels are a frontend concern
-//! and appear only in [`crate::Fidelity`], which converts between the two.
+//! and appear only in [`crate::viewport`](crate::scale_for), which says how big
+//! a cell is on a given window — never how many of them there are.
 //!
 //! All rectangles are in absolute grid coordinates. Sub-regions are not
 //! re-based, so a [`Rect`] handed out by layout can be passed straight to a

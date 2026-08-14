@@ -48,7 +48,11 @@ fn the_sim_never_reaches_for_the_painter() {
     // Rule 2. The sim emits records; deciding where a record lands on the grid
     // is `orbs-render`'s job and a frontend's after that. If this ever needs to
     // change, it is a design decision for DESIGN.md §19, not a use statement.
-    const FORBIDDEN: [&str; 4] = ["Painter", "Frame", "ScreenLayout", "Fidelity"];
+    // `Fidelity` was the fifth until §19 fixed the grid and deleted it. Guarding
+    // a name that cannot exist is a boundary test quietly getting weaker, so it
+    // is replaced by what took its place: `scale_for` is the pixel arithmetic
+    // now, and `GRID` is the constant a sim reaching for layout would grab.
+    const FORBIDDEN: [&str; 5] = ["Painter", "Frame", "ScreenLayout", "scale_for", "GRID"];
 
     for path in sources() {
         let source = fs::read_to_string(&path).unwrap_or_else(|error| panic!("{path:?}: {error}"));

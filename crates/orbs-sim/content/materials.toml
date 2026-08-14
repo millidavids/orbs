@@ -144,5 +144,8 @@ tint = "gold"
 [spell-scroll]
 tint = "gold"
 
-[chaff]
-tint = "brown"
+# Grey, with ash and phlegm, rather than brown with the plant waste. This is what
+# comes off tomes and scrolls that have sat unread - the archive's dirt is old
+# paper and stone dust, not spent stalks.
+[dust]
+tint = "grey"

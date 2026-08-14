@@ -44,6 +44,7 @@ pub struct NounMatch {
 pub struct Scene {
     nouns: Vec<Noun>,
     operations: Vec<Verb>,
+    known: Vec<String>,
 }
 
 impl Scene {
@@ -79,6 +80,43 @@ impl Scene {
     pub fn offering(mut self, verb: Verb) -> Self {
         self.operations.push(verb);
         self
+    }
+
+    /// Teach the scene every substance the laboratory has a **word** for,
+    /// whether or not any is here.
+    ///
+    /// # What this buys, and why fuzzy matching needed a brake
+    ///
+    /// Fuzzy matching exists for *typos*, and a typo is by definition not a
+    /// word. `ground-sage` and `ground-salt` differ by two characters in eleven,
+    /// which scores 819 against a 600 threshold — so with no ground-sage on the
+    /// shelf, `digest ground-sage` resolved to `digest ground-salt`, echoed it,
+    /// and moved the salt into the bath, which could then do nothing with it.
+    /// One candidate scored, so it won outright and ran at `Confidence::Clear`:
+    /// a silent wrong action, which §6 ranks below a refusal.
+    ///
+    /// The rule this installs: **a phrase that is itself a known substance only
+    /// ever matches exactly.** Typos still fuzz — `ground-slat` is not a word,
+    /// so it still reaches `ground-salt` — and abbreviations still prefix, since
+    /// `ground-sa` is not a word either and remains an honest tie between the
+    /// two. What stops is one real name being read as a different real name.
+    ///
+    /// It is the live-parser half of a rule `spell::compile` already applied:
+    /// `fix` falls back to the recipe vocabulary precisely so a spell can tell
+    /// *"there is none here"* from *"you have mistyped something"*. The prompt
+    /// could not, and §19 records that the two halves disagreeing is how the
+    /// `has ground-slat` defect survived in the first place.
+    #[must_use]
+    pub fn knowing(mut self, names: impl IntoIterator<Item = String>) -> Self {
+        self.known.extend(names);
+        self
+    }
+
+    /// Whether `phrase` is a substance the laboratory has a word for.
+    fn is_known(&self, phrase: &str) -> bool {
+        self.known
+            .iter()
+            .any(|word| word.eq_ignore_ascii_case(phrase))
     }
 
     /// Whether a per-instrument verb has its instrument here.
@@ -147,7 +185,17 @@ impl Scene {
             }
             let Some(score) = phrases
                 .iter()
-                .map(|phrase| score_against(noun, phrase))
+                .map(|phrase| {
+                    let score = score_against(noun, phrase);
+                    // A word only ever matches itself. See `knowing`: fuzzing a
+                    // real substance into a *different* real substance is how
+                    // `digest ground-sage` came to digest ground-salt.
+                    if score < fuzzy::EXACT && self.is_known(phrase) {
+                        0
+                    } else {
+                        score
+                    }
+                })
                 .filter(|score| *score >= MIN_SIMILARITY)
                 .max()
             else {
@@ -195,6 +243,70 @@ mod tests {
             .with(NounKind::Essence, "clarity")
             .with(NounKind::Essence, "warding")
             .with(NounKind::Script, "night_watch")
+    }
+
+    /// A shelf holding only the salt, in a laboratory that has a word for both.
+    fn shelf() -> Scene {
+        Scene::new()
+            .with(NounKind::Reagent, "ground-salt")
+            .knowing(["ground-sage".to_owned(), "ground-salt".to_owned()])
+    }
+
+    #[test]
+    fn a_real_name_is_never_read_as_a_different_real_name() {
+        // The defect this whole rule exists for. `ground-sage` and
+        // `ground-salt` are two characters apart in eleven, which scores 819
+        // against a threshold of 600 — so with no ground-sage on the shelf,
+        // `digest ground-sage` resolved to `digest ground-salt`, echoed it, and
+        // moved the salt into the bath. One candidate scored, so it won outright
+        // and ran at full confidence: a silent wrong action, which §6 ranks
+        // below a refusal.
+        assert!(
+            fuzzy::is_near("ground-sage", "ground-salt"),
+            "the premise is gone: these are no longer close enough to collide",
+        );
+        assert!(
+            shelf()
+                .candidates(NounKind::Any, &["ground-sage"])
+                .is_empty(),
+            "a known name reached a different known name",
+        );
+    }
+
+    #[test]
+    fn a_typo_still_reaches_the_thing_it_misspells() {
+        // The other half, and the reason the rule is *"a word only matches
+        // itself"* rather than *"turn fuzzy matching off"*. `ground-slat` is not
+        // a word, so it is a typo and still resolves.
+        let found = shelf().best_match(NounKind::Any, &["ground-slat"]);
+        assert_eq!(
+            found.map(|found| found.name).as_deref(),
+            Some("ground-salt")
+        );
+    }
+
+    #[test]
+    fn an_abbreviation_still_reaches_what_it_abbreviates() {
+        // `ground-sa` is not a word either, so prefix matching is untouched —
+        // which matters because it is how a player types at all.
+        let found = shelf().best_match(NounKind::Any, &["ground-sa"]);
+        assert_eq!(
+            found.map(|found| found.name).as_deref(),
+            Some("ground-salt")
+        );
+    }
+
+    #[test]
+    fn a_known_name_still_matches_itself_when_it_is_here() {
+        // The rule tightens fuzzy matching, not exact matching. Stated because
+        // "only ever matches exactly" would be a plausible way to break this.
+        let found = shelf()
+            .with(NounKind::Reagent, "ground-sage")
+            .best_match(NounKind::Any, &["ground-sage"]);
+        assert_eq!(
+            found.map(|found| found.name).as_deref(),
+            Some("ground-sage")
+        );
     }
 
     #[test]

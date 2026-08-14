@@ -148,25 +148,43 @@ accessibility pipeline):
   systems degrade legibility simultaneously at peak threat and the test must
   exercise all three at once.
 
-  It must also establish **the minimum window at which tier 2 is offered at all** —
-  below that, and at high accessibility font scales, the default multiplex display
-  mode switches to Wide focus (§9). The player can override either way.
+  It must also establish **the minimum window the picture is legible on**.
+  *(Superseded, §19: this read "the minimum window at which tier 2 is offered at
+  all" while the grid followed the window. There are no tiers; the number is now
+  `MIN_SCALE` and is derived by `screens.rs::minimum_window`, which puts it at
+  960×720.)*
 - It hardcodes a 16:9 letterbox and a 1080 scanline reference.
+  *(Half-superseded, §19: the letterbox is now ours and deliberate, at 4:3. The
+  criticism that stands is the hardcoding — the scanline reference re-derives
+  against the live cell size.)*
 
 Already built in court_wizard and creditable to §14: `colorblind_correction.wgsl`,
 `high_contrast.wgsl`, and an accessibility render pipeline.
 
 ### Grid model
 
-**Reflow at integer fidelity tiers, with a declared minimum of 80×22.** Cell size
-is an integer multiple of the 8×16 bitmap cell — required for a crisp bitmap font —
-and the multiplier is chosen so tier 1 lands near 80×22 on any common window.
-Engaging multiplexing drops the multiplier by one step, roughly doubling available
-cells (§9). All layout is authored against the 80×22 floor and must be responsive.
+**A fixed 120×45 grid in a 4:3 picture, scaled continuously to the window.**
+*(§19, superseding the reflow model below.)* The cell is 8×16, so 4:3 forces
+`cols : rows = 8 : 3` and the picture is 960×720 at native size. A window decides
+only how big a cell is — `min(W/960, H/720)`, letterboxed on the other axis by
+`ScalingMode::AutoMin` — so a resize moves no pane, no border and no sentence.
+720 divides 720, 1080, 1440 and 2160, so the common display heights are ×1.0,
+×1.5, ×2.0 and ×3.0. All layout is still authored against the 80×22 floor, which
+survives as the `ORBS_GRID` check.
 
-Fixed scaling without reflow would make large accessibility font scales
-unreadable; this model keeps the floor legible while letting the orb resolve more
-detail on demand.
+*The superseded model, kept because §9 and the phase history are written against
+it:* **reflow at integer fidelity tiers, with a declared minimum of 80×22.** Cell
+size was an integer multiple of the 8×16 bitmap cell and the multiplier was
+chosen so tier 1 landed near 80×22 on any common window; engaging multiplexing
+dropped it a step, roughly doubling available cells (§9).
+
+Its stated justification was that *"fixed scaling without reflow would make large
+accessibility font scales unreadable; this model keeps the floor legible while
+letting the orb resolve more detail on demand."* **That cost is real and is now
+owed.** Fixing the grid removes the only text-size control the game had, and §19
+records a font-scale setting — a second authored grid on the 8:3 line, 80×30 —
+as the affordance that replaces it. Until that ships, the game has one text size
+per window size and no way to ask for another.
 
 **Text renderer.** New work — court_wizard's `bevy_text`/`bevy_ui` TTF path will
 not hold a full grid redrawing under a real-time siege. Single mesh with glyph
@@ -1018,6 +1036,17 @@ concentration level a real unlock rather than a raised ceiling.
 - **The sidebar** holds every other unlocked pane, minimised to a single line.
   Awareness only, **not commandable**.
 - **One input line, always at the bottom.**
+
+> **Superseded in full by §19's fixed grid.** Everything from here to the end of
+> the tier table describes a screen the game no longer has: there is one grid,
+> `F4` changes only how the main window divides, and no key or window size
+> changes the size of the text. It is kept because the arguments below — four
+> panes as the cap, ~60×16 as the workable pane, parity between the two display
+> modes — all survive, and because the phase history refers to it.
+>
+> The replacement in one line: **120×45, always, at `min(W/960, H/720)`.** Four
+> panes tile at 60×21, which clears the 60×16 this section calls workable, so the
+> mechanism the tiers existed to fund is funded by the grid instead.
 
 **Multiplexing raises the screen's fidelity.** The game begins at a low-fidelity,
 large-text grid — a true old terminal. Engaging multiplexing zooms the orb out:
@@ -6730,7 +6759,128 @@ Two findings from actually rendering these screens rather than only testing them
 | Script vs manual, same domain | Both allowed; different resources; contend only for reagents and mana, manual wins |
 | Hostile host retaliation | **None.** Trace is the entire risk model |
 
-### Fidelity tiers — added draft 8
+### A step is logged, not drawn (Phase 1, §10)
+
+*"The reading goes north"*, once per step, in a maze that is hundreds of steps.
+The pane filled with a line-per-press restating what the map had just drawn, and
+the copy that scrolled away was the player's own typing.
+
+| Question | Decision |
+|---|---|
+| The rule | **The map is the report.** Where the screen already shows a fact, the sentence saying it is the same fact twice. `follow`'s success is now `RecordBuilder::quiet` — emitted, stored, `sift`-able, spoken, and filtered out of the transcript |
+| Not a deletion | §3 forbids unlogged output. The record is unchanged in every respect except that `Records::drawn` skips it, which is the same *"log, not pane"* rule `FieldName::Spell` already carried. `drawn` now has two reasons to skip: whose doing it was, and whether it is worth drawing |
+| A wall stays drawn | Deliberate, and the reason the fix is not *"make `follow` silent"*. A refusal moves nothing, so the map reports nothing at all — a press that did nothing has to say so (§6). Both halves are tests |
+| **The log it names was empty** | Found on the way: `files::in_domain` decides a domain's log by matching `Source`, `Path` or `Origin` against the domain and everything standing in it, and the archive's completions set **none of the three**. `peruse archive.log` returned nothing after a walk, and had done since the archive was built. Drawn records got away with it because the pane was a second surface; a quiet one has no second surface, so this had to be fixed before the rest was honest. The lectern now goes in `Source`, as `work::produce` and `work::slot` already file theirs |
+
+The near-miss worth recording: hushing a record whose log never held it would
+have moved the steps from *noisy* to *nowhere*, and a test that only checked the
+pane would have passed.
+
+**See it:**
+
+```bash
+# Steps do not reach the transcript; a wall still does.
+ORBS_SEED=3 ORBS_BOOT=0 ORBS_DUMP="attend archive; research; \
+  follow west; follow west" cargo run -p orbs
+
+# ...and they are in the log, with the tick each happened on.
+ORBS_SEED=3 ORBS_BOOT=0 ORBS_GRID=100x40 ORBS_DUMP="attend archive; research; \
+  follow west; follow west; peruse archive.log" cargo run -p orbs
+```
+
+### Three fixed things in the labyrinth, made random (Phase 1, §10)
+
+*"The path to the end is always relatively the same."* The maze itself was
+already randomised — Prim's, uniform frontier draw — but three things around it
+were constants, and between them they made one errand wearing different walls.
+
+| Question | Decision |
+|---|---|
+| The reading's corner | **Uniform across all four.** It was the top-left cell on every seed |
+| The way out | **Drawn against a weighting, not placed.** It was the bottom-right square on every seed, so paired with a fixed start it was the same diagonal every time. Weight is `(reach − away + 1)³` on Manhattan distance from the corner *opposing the start*, with the reading's own cell at weight 0 so the exit is never underfoot |
+| Why cubed | Measured, not liked. Over 16×11 it lands within 8 of the opposing corner **63%** of the time, median 7, with a 13% tail past 12. Squared is barely a lean — mid-maze about as often as far — which is *"the errand is always the same length"* wearing different clothes. Six is the old fixed corner with extra steps |
+| Prim's seed cell | **Random, and decoupled from both endpoints.** It was cell 0. Prim's grows outward from its seed, so the seed is the centre of a radial structure — growing every maze from the same cell the walk *started* at meant the walk always began by unwinding the oldest, straightest part. This is the change that answers the complaint most directly: the tree was random and the journey was not |
+| Replay | Three new draws on the archive's stream, in fixed order, and `CORNERS` is a fixed table because a roll into it has to mean the same corner for a given seed for ever. Per-subsystem streams mean nothing else shifts (§3) |
+
+**`ORBS_SEED` was added to see it, and the omission was load-bearing.** Anything
+the world *generates* is one seed's worth of evidence per run, and the binary had
+no way to be anything but seed `0x0B5`. Three dumps taken to check the
+randomisation came out identical and looked like proof it had failed; they were
+three copies of one seed. Tests swept seeds through `Sim::new` and always could —
+this is the same reach from outside, so a person can look rather than trust a
+test, which is the whole of §15's gate.
+
+**See it:**
+
+```bash
+# Two seeds, two corners, two ways out. `☼` the reading, `Ω` the way out.
+ORBS_SEED=3  ORBS_BOOT=0 ORBS_DUMP="attend archive; research; wander" cargo run -p orbs
+ORBS_SEED=11 ORBS_BOOT=0 ORBS_DUMP="attend archive; research; wander" cargo run -p orbs
+
+# ...and the distribution, which no single dump can show.
+cargo test -p orbs-sim --lib research
+cargo test -p orbs-sim --test solver   # every swept seed is still solvable
+```
+
+### A word only ever matches itself (Phase 1, parser correctness)
+
+`digest ground-sage`, with no ground-sage on the shelf, digested **ground-salt**
+— echoed it, moved it into the balneum mariae, and then reported that the bath
+could do nothing with it. A silent wrong action, which §6 ranks below a refusal.
+
+| Question | Decision |
+|---|---|
+| Why did it happen? | The two names differ by two characters in eleven, which `similarity` scores **819** against a `MIN_SIMILARITY` of 600 — comfortably inside the typo band. Only one candidate scored, so it won outright at `Confidence::Clear` and ran without a prompt. Nothing was wrong with the fuzzy scoring; it was being asked the wrong question |
+| The rule | **Fuzzy matching is for typos, and a typo is by definition not a word.** A phrase that is itself a name the laboratory knows now only ever matches *exactly*. `Scene` carries that vocabulary (`Scene::knowing`), separately from what is in the room |
+| What still works | Typos still fuzz — `ground-slat` is not a word, so it still reaches `ground-salt`. Abbreviations still prefix — `ground-sa` is not a word either. An exact name still matches itself when it is present. All four are tests, because "only ever matches exactly" is a plausible way to break the third |
+| Where the vocabulary comes from | `Recipes::substances` — the recipe vocabulary **union the fuels**, because the athanor transforms nothing and so has no recipe, and charcoal is exactly the reagent a tester reaches for first. This was `debug_spawn`'s private helper; it is shared now, and the parser's use is the load-bearing one |
+| Why this is a *second* half | `spell::compile::fix` already applied this rule, falling back to the recipe vocabulary so a spell could tell *"there is none here"* from *"you have mistyped something"*. The prompt could not. §19 already records the two halves disagreeing as how the `has ground-slat` defect survived — this is the same disagreement found from the other side |
+| **Still owed** | The word is now *dropped* rather than misread: `digest ground-sage` echoes `digest` and reports the bath is empty. Better than the wrong action and still not the answer, which is *"there is no ground-sage here"*. `digest`'s reagent slot is **optional** (bare `digest` is meaningful), so the miss produces no `Incomplete` and nothing reports it. The shape to follow is `Resolution::Elsewhere` and `InSpell` — both exist because *"I do not know that word"* would lie about a word the game taught the player, and a known substance that is out of stock is the same lie about a noun |
+
+**See it:**
+
+```bash
+# The defect, refused. The echo shows `digest` — the word was not understood.
+ORBS_BOOT=0 ORBS_DUMP="attend laboratory; debug_spawn ground-salt 2; \
+  digest ground-sage" cargo run -p orbs
+
+# ...and the typo it must not stop forgiving.
+ORBS_BOOT=0 ORBS_DUMP="attend laboratory; debug_spawn ground-salt 2; \
+  digest ground-slat" cargo run -p orbs
+```
+
+### A fixed 4:3 picture — supersedes the fidelity tiers (Phase 1, `0.1.24`)
+
+The window used to decide the grid: `tier_one` picked the largest integer cell
+scale whose grid still cleared a floor, and the cell *count* fell out of the
+division — 1280×720 gave 160×45, 1920×1080 gave 120×33. Every pane, border, the
+prompt's row count and the maze viewport were recomputed against a grid that
+moved under them, and half a dozen constants existed only to manage that motion.
+
+**The grid is now a constant and the window decides only how big a cell is.**
+
+| Question | Decision |
+|---|---|
+| Why is 120×45 the grid? | A cell is 8×16, so a 4:3 *picture* forces `cols : rows = 8 : 3` — the aspect is a property of the grid, not something imposed on it. 120×45 is 960×720 at native size: the same 45 rows the game already drew at its default window, 40 columns narrower. Four panes tile at 60×21, past the 60×16 §9 calls workable, so the mechanism the tiers funded is funded by the grid instead |
+| Why not 160×60, the next step up? | It was chosen first and reversed on the arithmetic. **720 divides 720, 1080, 1440 and 2160**; 960 divides none of them. At 160×60 the four commonest display heights land on ×0.75, ×1.125, ×1.5 and ×2.25 — 1080p, the modal desktop size, loses 44% of its glyph height against the old model and every size is an irregular fraction. At 120×45 they are ×1.0, ×1.5, ×2.0, ×3.0, three of them pixel-exact |
+| Integer steps or continuous fit? | **Continuous.** Integer-only scaling is crisp everywhere but fills the window nowhere: 1080p and 720p land on the same step, so a maximised 1080p window would show the picture at a third of the screen. The cost is that ×1.5 duplicates some pixel columns and not others — a *regular* 2,1,2,1 alternation, masked by the CRT bloom |
+| Who does the letterbox? | `ScalingMode::AutoMin { 960, 720 }` on the camera, and nothing else. It shows at least the picture in the window's own aspect and centres it, so the mesh stays in virtual pixels and `grid::build` lost its scale parameter entirely. It re-derives on `WindowResized` by itself, which is why it is set at camera spawn rather than by a guarded system — a projection left unset draws *correctly* at the opening window and wrong everywhere else |
+| Where do the bars go? | **Outside the tube — they are the dark room, not part of the glass.** The CRT is still a full-screen pass, but every *shaped* term in it (barrel, vignette, edge mask, bezel) is measured in **tube space**: the 4:3 picture remapped to 0..1, published as `Tube::fill_x`/`fill_y`. Everything outside falls out black for free, with no extra mask and no branch. This shipped for one version measured in window space, which curved the bars along with the phosphor and made the "monitor" whatever rectangle the player had dragged — on a wide window, a letterbox-shaped tube nobody ever built. §4's *"no 16:9 letterbox, the grid fills the window"* is reversed on both halves |
+| The rounded bezel had never worked | It rounded the **unwarped** tube rect, whose corners lie outside the visible picture because the barrel warp insets it — so the radius did nothing at any value and the picture kept a hard 90° corner. Now the edge mask *is* the rounded-box SDF: one boundary, aspect-corrected so the corners are round rather than 4:3-elliptical. **A screenshot cropped to a corner is what found this**; the constant looked correct and the arithmetic around it was fine |
+| The radius is a computed bound | `0.027` of the short axis — the largest that loses no cell, and rule 2 is why it is a bound rather than a taste. The mask is evaluated on the *texture* coordinate, so a cell's own grid position is what gets tested; the binding one is the session pane's border corner at `(0, 0)`. `0.09` looked right and ate the `d` of the prompt. A test reimplements the shader's SDF and asserts both that no corner cell is lost and that 10% more radius *would* lose one, so the bound is known tight rather than merely safe |
+| What did `F4` cost? | Deep focus used to drop a fidelity tier as well as re-dividing the panes. It cannot now; `F4` is purely `tiling::deep` against `tiling::wide`. **§9 sold Wide focus as the large-text mode and that is gone with it** — see the debt row below |
+| Sub-native windows | Minification *drops* strokes out of an 8×16 bitmap rather than shrinking it, so below `MIN_SCALE` (960×720) the game draws the "window too small" card. The atlas sampler is `mag: Nearest, min: Linear`, so what is below the floor degrades soft rather than broken — and the missing half-texel inset stays survivable only because minification is unreachable above it |
+| `is_hostable` has two halves now | The grid can be below the 80×22 authoring floor, which only `ORBS_GRID` can produce; or the window can be below `MIN_SCALE`, which is what a player reaches by dragging. They used to be the same test, because a small window *was* a small grid |
+| `DEEP_FOCUS_FLOOR` kept, the branch removed | The game clears it by construction, so `drive_panes` became `const PANES: u8 = 2` — a condition that cannot fail is a lie in the shape of a test. The constant stays because `ORBS_DUMP` still chooses a pane count for an arbitrary `ORBS_GRID`, and *"two panes only above the floor"* is a live decision there |
+| `INPUT_ROWS` is a constant, and it is **1** | It used to be derived: a second row bought back the pixel height a finer tier took away, `32s ≤ 16(s+1) ⇔ s ≤ 1`. With one grid there is no tier to compensate for, so a second row stopped being compensation and became magnification — a prompt twice the transcript's size at *every* window and three times again at 4K. Shipped at 2 and reverted on sight, which is what the risk register predicted. It also cost the player half the line: at 2× the text is written into half the columns, so a 120-column grid gave 60 cells to type into and now gives 118 |
+| The magnified path has no caller now | `Frame::set_magnified` and the renderer's 2× pass are reachable only by setting `INPUT_ROWS` back to 2. Kept rather than deleted **because that is the whole retreat** — one constant — and not on the grounds of a future consumer: the font-scale setting this owes would change the *grid* (80×30, also on the 8:3 line) rather than magnify one row, so it is not the mechanism that would revive this. If the prompt size is settled, deleting it is the honest follow-up |
+| A resize constraint | **Considered and dropped.** `WindowResizeConstraints` is logical pixels while `WindowResolution::new` is physical, so on a 2× display a floor expressed in it would exceed the initial window and the game could not open at its stated size. `paint_too_small` is the guard, and it is physical-unit correct |
+| The debt this owes | §4 justified reflow with *"fixed scaling without reflow would make large accessibility font scales unreadable"*, and that objection is correct. The game now has **one text size per window size and no way to ask for another**. The replacement is a font-scale setting choosing between authored grids on the 8:3 line — 80×30 is the large-text one — which is a Phase 5 settings item, not a tier |
+
+`INITIAL_WINDOW` stays 1280×720: it is ×1.0 exactly, so the game opens at native
+cell size *and* with visible bars, exercising the letterbox on every run.
+
+### Fidelity tiers — added draft 8 (superseded above)
 
 | Question | Decision |
 |---|---|

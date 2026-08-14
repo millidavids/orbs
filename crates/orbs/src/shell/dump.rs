@@ -21,7 +21,7 @@
 //! ORBS_DUMP=1 ORBS_GRID=120x33 cargo run -p orbs
 //! ```
 
-use orbs_render::{DisplayMode, Fidelity, Frame, GridSize};
+use orbs_render::{DisplayMode, Frame, GridSize};
 use orbs_sim::Sim;
 
 use super::line::Line;
@@ -157,9 +157,15 @@ const WALK: &str = "ORBS_WALK";
 /// Commands are separated by this, so one shell word can drive a session.
 const SEPARATOR: char = ';';
 
-/// The grid a dump uses unless asked otherwise: §4's floor, where everything is
-/// tightest and a layout bug shows first.
-const DEFAULT_GRID: GridSize = GridSize { cols: 80, rows: 22 };
+/// The grid a dump uses unless asked otherwise: **the one the game draws**.
+///
+/// This was §4's 80×22 floor, on the grounds that a layout bug shows first where
+/// everything is tightest. That reasoning was sound while the grid followed the
+/// window and the floor was a screen the game could genuinely be at; now the
+/// game is 120×45 always, and a dump showing anything else is an instrument
+/// reading a screen nobody has. `ORBS_GRID=80x22` is the floor check, and is
+/// what CLAUDE.md's See-it lines use when width is the thing under test.
+const DEFAULT_GRID: GridSize = orbs_render::GRID;
 
 /// Draw one frame as text if `ORBS_DUMP` asked for it.
 ///
@@ -201,17 +207,19 @@ pub(crate) fn run(seed: u64, wizard: Option<String>) -> bool {
 
     let grid = grid();
     let screen = Screen {
-        // **The tier the grid implies, not a fixed one.** This pinned
-        // `tier_one((1280, 720))` under a comment claiming the tier was inert —
-        // and it stopped being inert the moment the prompt learned to take two
-        // rows at a fine tier, because `paint` reads `Fidelity::input_rows`. So
-        // every dump reserved a magnified prompt, halved the input viewport, and
-        // labelled itself with a tier its `ORBS_GRID` could never produce: a tool
-        // CLAUDE.md sells as drawing "the same frame the game draws" was drawing
-        // a combination the game cannot reach, which hides exactly the layout
-        // bugs it exists to find.
-        fidelity: Fidelity::for_grid(grid),
         grid,
+        // The window the picture is native on. A dump has no window at all, and
+        // this is the honest stand-in: scale 1.0, which is what the game opens
+        // at, so `is_hostable` turns entirely on the *grid* here — the half of
+        // it `ORBS_GRID` can still move.
+        window: (
+            u32::from(orbs_render::PICTURE.0),
+            u32::from(orbs_render::PICTURE.1),
+        ),
+        // Still derived, unlike the running game's. `ORBS_GRID` can ask for the
+        // 80×22 authoring floor, where §9 puts the readings in the border title
+        // rather than a second pane, and that decision has to keep working
+        // somewhere now that the game itself always clears the floor.
         mode: DisplayMode::default_for(grid),
     };
 
@@ -221,7 +229,7 @@ pub(crate) fn run(seed: u64, wizard: Option<String>) -> bool {
     // this the sequence could only be checked by a person sitting in front of it
     // — which is exactly the position `ORBS_DUMP` exists to get out of.
     if let Some((stage, progress)) = requested_stage() {
-        super::prompt::paint_booting(&mut frame, &screen, stage, progress);
+        super::prompt::paint_booting(&mut frame, stage, progress);
         print(&frame);
         return true;
     }

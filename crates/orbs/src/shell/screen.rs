@@ -1,78 +1,91 @@
-//! The window, and the cell grid it resolves to.
+//! The window, and how big a cell of the fixed grid is on it.
 //!
-//! DESIGN.md §4: cell size is an integer multiple of the 8×16 bitmap cell, and
-//! the multiplier is chosen so tier 1 lands near 80×22 on any common window.
-//! That arithmetic lives in `orbs-render` because layout is computed against the
-//! grid; this module only feeds it the window's pixels and holds the answer.
+//! DESIGN.md §4 and §19: the picture is **4:3** and the grid is a constant
+//! ([`orbs_render::GRID`]), so a window decides the *size* of a cell and never
+//! the number of them. This module feeds `orbs-render` the window's pixels and
+//! holds the answer; the letterbox itself is the camera's, in
+//! [`spawn_camera`].
+//!
+//! This used to resolve a fidelity tier — an integer scale picked so the grid
+//! landed near 80×22 whatever the window — which meant every resize moved every
+//! rectangle on screen. §19 records why that went.
 
+use bevy::camera::ScalingMode;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
-use orbs_render::{DisplayMode, Fidelity, GridSize, MIN_GRID};
+use orbs_render::{DisplayMode, GRID, GridSize, MIN_GRID, MIN_SCALE};
 
-/// The grid the current window resolves to.
-#[derive(Resource, Debug, Default, Clone, Copy, PartialEq, Eq)]
+/// The window, and the grid drawn on it.
+#[derive(Resource, Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Screen {
-    /// The active tier, or `None` when the window cannot host the 80×22 floor.
-    pub(crate) fidelity: Option<Fidelity>,
-    /// Cells available at that tier.
+    /// Cells. Always [`GRID`] under this frontend; a field rather than a
+    /// constant because `paint` and `ORBS_DUMP` read it the same way, and a dump
+    /// can be handed the authoring floor instead.
     pub(crate) grid: GridSize,
     /// How the main window divides among its panes.
     ///
     /// §9 makes this a **setting, not a heuristic**: both modes grant identical
     /// capacity, panes, information and synergies, and the player may override
-    /// the default at any time including mid-siege. The window size only picks
-    /// where it starts.
+    /// the default at any time including mid-siege.
     pub(crate) mode: DisplayMode,
+    /// The window in physical pixels — everything [`Screen::scale`] needs.
+    ///
+    /// **The pixels, not the scale.** A resolved `f32` would cost this `Eq`,
+    /// which [`track_window`] leans on twice: once to skip a repaint when
+    /// nothing moved, and once as the "has the player chosen a mode yet?"
+    /// sentinel.
+    pub(crate) window: (u32, u32),
+}
+
+impl Default for Screen {
+    /// Before any window has been seen.
+    ///
+    /// **Spelled out rather than derived**, because [`DisplayMode`]'s own
+    /// derived default is `Deep` and this frontend opens Wide (§9). A derive
+    /// here would silently disagree with [`Screen::for_window`].
+    fn default() -> Self {
+        Self {
+            grid: GRID,
+            mode: DisplayMode::Wide,
+            window: (0, 0),
+        }
+    }
 }
 
 impl Screen {
+    /// Physical pixels per virtual pixel — how big a cell is drawn.
+    ///
+    /// The same number `ScalingMode::AutoMin` reaches inside the projection; see
+    /// [`orbs_render::scale_for`] for why it is computed twice in two units.
+    pub(crate) fn scale(self) -> f32 {
+        orbs_render::scale_for(self.window)
+    }
+
     /// Whether the window can host the game at all.
     ///
     /// `false` is a real state to render — a "window too small" screen — not a
     /// reason to panic. See `ScreenLayout::compute`.
-    pub(crate) const fn is_hostable(self) -> bool {
-        self.grid.fits(MIN_GRID)
+    ///
+    /// **Two ways to fail, one screen**, and both are reachable. The grid can be
+    /// below the authoring floor, which only `ORBS_GRID` can now produce; or the
+    /// window can be too small for the glyphs to be letters, which is the case a
+    /// player reaches by dragging. Before the grid was fixed the first test was
+    /// the only one there was, because a small window *was* a small grid.
+    pub(crate) fn is_hostable(self) -> bool {
+        self.grid.fits(MIN_GRID) && self.scale() >= MIN_SCALE
     }
 
     /// Resolve a window, keeping `mode` if the player has already chosen one.
     ///
-    /// **Deep focus raises fidelity one step** (§9): *"fidelity rises one step;
-    /// every pane is drawn at full size in a grid."* That is not a detail — it is
-    /// the whole mechanism. `tier_one` returns the largest scale that still fits
-    /// 80×22, so a bigger window buys a bigger glyph rather than more cells, and
-    /// the grid sits near 80×22 at every window size. Multiplexing needs cells,
-    /// and `Fidelity::deep` is where they come from.
-    ///
-    /// `deep()` was built and tested in the Frame-boundary item and never called
-    /// by the game, so until now Deep focus could not actually be reached on any
-    /// window — the layout had the cells for one pane and no more.
+    /// The grid does not enter into it. **Wide by default, always** — §9's two
+    /// panes are hostable from the first frame, so `F4` works immediately rather
+    /// than needing a bigger window, and there is nothing left for a heuristic
+    /// to decide.
     fn for_window(pixels: (u32, u32), mode: Option<DisplayMode>) -> Self {
-        let base = Fidelity::tier_one(pixels);
-        // **Wide by default, always.** This used to be
-        // `DisplayMode::default_for(tier.grid(pixels))`, which is a tautology:
-        // `tier_one` *aims* at `PREFERRED_GRID`, and `PREFERRED_GRID` **is**
-        // `DEEP_FOCUS_FLOOR`, so whenever tier one succeeds its grid fits the
-        // floor by construction and the answer is `Deep` every time. `deep()`
-        // then dropped a **second** tier, and the game opened two steps finer
-        // than the tier table says: 1920×1080 came up at 240×67 with 8×16 pixel
-        // glyphs where 120×33 at 16×32 was intended.
-        //
-        // Aiming tier one at the Deep floor already bought what that default was
-        // reaching for — §9's two panes are hostable from the first frame, so
-        // `F4` works immediately rather than needing a bigger window. Choosing
-        // Deep as well spent the affordance twice.
-        let mode = mode.unwrap_or(DisplayMode::Wide);
-
-        // `deep()` is `None` at the finest scale — there is no smaller whole-pixel
-        // step, so Deep focus is simply unavailable there and Wide serves instead.
-        let fidelity = match mode {
-            DisplayMode::Deep => base.and_then(Fidelity::deep).or(base),
-            DisplayMode::Wide => base,
-        };
         Self {
-            fidelity,
-            grid: fidelity.map_or_else(GridSize::default, |tier| tier.grid(pixels)),
-            mode,
+            grid: GRID,
+            mode: mode.unwrap_or(DisplayMode::Wide),
+            window: pixels,
         }
     }
 
@@ -93,46 +106,67 @@ impl Screen {
 /// Flip the focus mode.
 ///
 /// Both modes grant identical capacity, panes, information and synergies (§9);
-/// only the rendering differs. What changes on screen is the glyph size and how
-/// the panes are divided, never what the game will let you do.
-pub(crate) fn cycle_mode(
-    window: Option<Single<&Window, With<PrimaryWindow>>>,
-    mut screen: ResMut<Screen>,
-) {
-    let Some(window) = window else {
-        return;
-    };
-    let wanted = screen.flipped();
-    *screen = Screen::for_window(
-        (window.physical_width(), window.physical_height()),
-        Some(wanted),
-    );
+/// only the rendering differs.
+///
+/// **It no longer changes the glyph size**, and that is the one thing this
+/// change cost. Deep focus used to drop a fidelity tier as well as re-dividing
+/// the panes, roughly doubling the cells; with one grid there is no tier to
+/// drop, so `F4` is purely `tiling::deep` against `tiling::wide`. §19 records
+/// what that owes back — §9 sold Wide focus as the large-text mode, and the
+/// affordance that replaces it is a font-scale setting, not this key.
+pub(crate) fn cycle_mode(mut screen: ResMut<Screen>) {
+    screen.mode = screen.flipped();
     info!(
-        "focus {:?} -> tier {}x -> grid {}x{}",
-        screen.mode,
-        screen.fidelity.map_or(0, orbs_render::Fidelity::scale),
-        screen.grid.cols,
-        screen.grid.rows,
+        "focus {:?} -> grid {}x{}",
+        screen.mode, GRID.cols, GRID.rows
     );
 }
 
-/// The camera every frontend screen is drawn through.
+/// The camera every frontend screen is drawn through — **and the letterbox**.
 pub(crate) fn spawn_camera(mut commands: Commands) {
     // The CRT is a property of the camera it curves (§4).
     //
-    // MSAA is off deliberately: every edge on screen is a bitmap glyph on an
-    // integer-scaled grid, so there is nothing to antialias that is not supposed
-    // to be hard, and multisampling can only soften the font §4 says legibility
-    // depends on.
+    // MSAA is off deliberately: every edge on screen is the border of a bitmap
+    // glyph, and adjacent cells abut exactly, so there is nothing to antialias
+    // that is not supposed to be hard. Multisampling can only soften the font §4
+    // says legibility depends on.
     //
     // It is *not* why the CRT used to flash — that was the pass missing its
     // system set (see `crt::plugin`). Turning MSAA off changed the odds enough
     // to look like a fix under screenshot sampling, which is a good reminder
     // that "the symptom went away in my measurement" is not a diagnosis.
-    commands.spawn((Camera2d, Msaa::Off, crate::crt::CrtSettings::default()));
+    commands.spawn((
+        Camera2d,
+        // **This one line is the 4:3 letterbox.** `AutoMin` shows at least this
+        // much world in the window's own aspect and centres it on
+        // `viewport_origin`, which defaults to the middle — so the picture is
+        // scaled by `min(W/960, H/720)`, centred, with bars on whichever axis
+        // has room to spare. `grid::build` emits its mesh in virtual pixels
+        // around the origin, so nothing else has to know.
+        //
+        // It re-derives itself: `bevy_render`'s `camera_system` re-runs
+        // `update` on `WindowResized` and `WindowScaleFactorChanged`. That is
+        // why it is set once here rather than by a system with a resize guard —
+        // a projection left unset draws *correctly* at the opening window and
+        // wrong everywhere else, which is the worst way for this to fail.
+        Projection::Orthographic(OrthographicProjection {
+            scaling_mode: ScalingMode::AutoMin {
+                min_width: f32::from(orbs_render::PICTURE.0),
+                min_height: f32::from(orbs_render::PICTURE.1),
+            },
+            ..OrthographicProjection::default_2d()
+        }),
+        Msaa::Off,
+        crate::crt::CrtSettings::default(),
+    ));
 }
 
-/// Recompute the grid whenever the window changes size.
+/// Note the window's size whenever it changes.
+///
+/// **It no longer recomputes anything.** The grid is fixed and the projection
+/// letterboxes itself, so all this does is keep [`Screen::window`] current for
+/// the two things that still read physical pixels: the CRT's cell size, which
+/// keeps the scanlines landing on real pixels, and [`Screen::is_hostable`].
 pub(crate) fn track_window(
     window: Option<Single<&Window, With<PrimaryWindow>>>,
     mut screen: ResMut<Screen>,
@@ -143,29 +177,32 @@ pub(crate) fn track_window(
 
     // The mode is a setting, so a resize must not silently undo the player's
     // choice — it is carried through rather than re-derived.
-    let chosen = (*screen != Screen::default()).then_some(screen.mode);
+    let chosen = (screen.window != (0, 0)).then_some(screen.mode);
     let next = Screen::for_window((window.physical_width(), window.physical_height()), chosen);
     if next == *screen {
         return;
     }
     *screen = next;
 
-    match next.fidelity {
-        Some(tier) if next.is_hostable() => info!(
-            "window {}×{} -> tier {}× -> grid {}×{}",
-            window.physical_width(),
-            window.physical_height(),
-            tier.scale(),
+    if next.is_hostable() {
+        info!(
+            "window {}×{} -> scale {:.3}× -> grid {}×{}",
+            next.window.0,
+            next.window.1,
+            next.scale(),
             next.grid.cols,
             next.grid.rows,
-        ),
-        _ => warn!(
-            "window {}×{} is below the {}×{} floor",
-            window.physical_width(),
-            window.physical_height(),
-            MIN_GRID.cols,
-            MIN_GRID.rows,
-        ),
+        );
+    } else {
+        warn!(
+            "window {}×{} is scale {:.3}×, below the {MIN_SCALE}× floor — \
+             the picture wants {}×{}",
+            next.window.0,
+            next.window.1,
+            next.scale(),
+            orbs_render::PICTURE.0,
+            orbs_render::PICTURE.1,
+        );
     }
 }
 
@@ -173,77 +210,103 @@ pub(crate) fn track_window(
 mod tests {
     use super::*;
 
+    use orbs_render::{ScreenLayout, ScreenRequest};
+
     #[test]
-    fn the_grid_keeps_its_tier_at_every_common_size() {
-        // A safe-area margin was tried here first, to keep the barrel warp from
-        // eating the outermost column. It worked and it was wrong: `tier_one`
-        // returns the *largest* scale that still fits 80×22, so the floor has
-        // zero headroom and shrinking the pixel budget drops a whole tier — the
-        // 1280×720 default fell from 2× to 1×, i.e. 8×16 physical-pixel glyphs.
-        // Smaller text everywhere is a worse defect than a lost column, and it
-        // puts the game off §9's tier table.
-        //
-        // The warp is normalised in `crt.wgsl` instead, which costs no cells.
-        // The table moved one step finer when `tier_one` gained a *preferred*
-        // grid: aiming only at the 80×22 floor gave a 4K display exactly as much
-        // text as a 720p one, drawn in 48×96-pixel glyphs. The relationship §9
-        // asks for is unchanged — a bigger window still buys a bigger glyph, and
-        // `deep()` still buys the cells multiplexing needs — the whole table just
-        // sits one step down.
-        for (window, scale) in [
-            ((1280u32, 720u32), 1),
-            ((1920, 1080), 2),
-            ((2560, 1440), 3),
-            ((3840, 2160), 4),
+    fn every_window_gets_the_same_grid() {
+        // The request, stated as an assertion: the window buys a bigger glyph
+        // and never more cells. This replaces the tier table §9 used to carry,
+        // which said the opposite in four rows.
+        for window in [
+            (1280u32, 720u32),
+            (1920, 1080),
+            (2560, 1440),
+            (3840, 2160),
+            (3440, 1440),
+            (800, 1200),
+            (320, 200),
         ] {
             let screen = Screen::for_window(window, Some(DisplayMode::Wide));
-            assert_eq!(
-                screen.fidelity.expect("hosted").scale(),
-                scale,
-                "{window:?} left §9's tier table",
-            );
-            assert!(screen.is_hostable(), "{window:?} lost the 80x22 floor");
+            assert_eq!(screen.grid, GRID, "{window:?} moved the grid");
         }
     }
 
     #[test]
-    fn deep_focus_buys_the_cells_that_multiplexing_needs() {
-        // §9: "fidelity rises one step; every pane is drawn at full size in a
-        // grid." `tier_one` returns the largest scale that fits 80×22, so a
-        // bigger window buys a bigger glyph and not more cells — Deep focus is
-        // where the cells come from, and without this the layout could never
-        // host more than one pane at any window size.
-        for window in [(1920u32, 1080u32), (2560, 1440), (3024, 1834)] {
-            let wide = Screen::for_window(window, Some(DisplayMode::Wide));
-            let deep = Screen::for_window(window, Some(DisplayMode::Deep));
+    fn a_resize_moves_no_rectangle() {
+        // **This is the whole point of the change.** Panes, borders and the
+        // prompt are laid out once and never again: at three very different
+        // windows the layout is identical, so nothing reflows and no sentence
+        // that fitted stops fitting.
+        let layout = |window| {
+            let screen = Screen::for_window(window, Some(DisplayMode::Wide));
+            ScreenLayout::compute(&ScreenRequest {
+                main_panes: 2,
+                ..ScreenRequest::single(screen.grid)
+            })
+        };
 
-            assert!(
-                deep.grid.cols > wide.grid.cols && deep.grid.rows > wide.grid.rows,
-                "{window:?}: deep {:?} is no roomier than wide {:?}",
-                deep.grid,
-                wide.grid,
-            );
-            assert!(deep.is_hostable(), "{window:?}: deep lost the floor");
-            assert!(
-                deep.grid.fits(orbs_render::DEEP_FOCUS_FLOOR),
-                "{window:?}: deep {:?} cannot host a second pane",
-                deep.grid,
-            );
+        let opening = layout((1280u32, 720u32));
+        assert_eq!(opening, layout((3840, 2160)), "4K reflowed the screen");
+        assert_eq!(opening, layout((800, 1200)), "a tall window reflowed it");
+    }
+
+    #[test]
+    fn the_glyph_grows_with_the_window_even_though_the_grid_does_not() {
+        // The other half of the same bargain, and the reason 720 was chosen for
+        // the picture's height: the common display heights are whole multiples
+        // of it, so three of these four are pixel-exact.
+        for (window, scale) in [
+            ((1280u32, 720u32), 1.0),
+            ((1920, 1080), 1.5),
+            ((2560, 1440), 2.0),
+            ((3840, 2160), 3.0),
+        ] {
+            let screen = Screen::for_window(window, Some(DisplayMode::Wide));
+            assert_eq!(screen.scale(), scale, "{window:?} left the scale table");
+            assert!(screen.is_hostable(), "{window:?} is below the floor");
         }
     }
 
     #[test]
-    fn the_finest_scale_falls_back_to_wide_rather_than_failing() {
-        // `Fidelity::deep` is `None` at scale 1: there is no smaller whole-pixel
-        // step. Deep focus is simply unavailable there.
-        let smallest = Screen::for_window((640, 352), Some(DisplayMode::Deep));
-        assert_eq!(smallest.fidelity.map(orbs_render::Fidelity::scale), Some(1));
-        assert!(smallest.is_hostable());
+    fn focus_changes_the_split_and_not_the_grid() {
+        // What `F4` cost. It used to drop a fidelity tier as well, so the two
+        // modes had different grids; now only the tiling differs.
+        let window = (1920u32, 1080);
+        let wide = Screen::for_window(window, Some(DisplayMode::Wide));
+        let deep = Screen::for_window(window, Some(DisplayMode::Deep));
+
+        assert_eq!(wide.grid, deep.grid);
+        assert_eq!(wide.scale(), deep.scale());
+        assert_ne!(wide.mode, deep.mode);
     }
 
     #[test]
-    fn a_window_too_small_is_still_reported_rather_than_hidden() {
-        let tiny = Screen::for_window((320, 200), None);
-        assert!(!tiny.is_hostable());
+    fn both_halves_of_the_hostable_test_are_reachable() {
+        // A window too small for letters, which is what a player reaches by
+        // dragging...
+        let squinting = Screen::for_window((640, 480), None);
+        assert!(squinting.grid.fits(MIN_GRID), "the grid is fixed and fits");
+        assert!(
+            !squinting.is_hostable(),
+            "scale {} passed",
+            squinting.scale()
+        );
+
+        // ...and a grid below the authoring floor, which only `ORBS_GRID` can
+        // now produce. Before the grid was fixed these were the same test.
+        let cramped = Screen {
+            grid: GridSize::new(40, 10),
+            ..Screen::for_window((1280, 720), None)
+        };
+        assert!(cramped.scale() >= MIN_SCALE, "the window is fine");
+        assert!(!cramped.is_hostable(), "a 40x10 grid passed");
+    }
+
+    #[test]
+    fn the_default_opens_wide_rather_than_deep() {
+        // `DisplayMode`'s own derived default is `Deep`, so `Screen`'s `Default`
+        // is written out. This is that trap, as a test.
+        assert_eq!(Screen::default().mode, DisplayMode::Wide);
+        assert_eq!(Screen::default().grid, GRID);
     }
 }

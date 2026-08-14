@@ -45,7 +45,7 @@
 use bevy_ecs::prelude::*;
 use orbs_render::{FieldName, RecordKind, Role};
 
-use crate::content::{Fuels, Prose, Recipes};
+use crate::content::{Prose, Recipes};
 use crate::session::Scrollback;
 use crate::tower::{self, Store};
 
@@ -179,24 +179,14 @@ fn dispensary(world: &World) -> Option<Entity> {
     None
 }
 
-/// Every name that can be spawned: everything the recipes name, and everything
-/// that burns.
+/// Every name that can be spawned.
 ///
-/// The union rather than either half. `Recipes::vocabulary` is *"every name any
-/// recipe can produce or consume"* and misses fuel, because the athanor
-/// transforms nothing and so has no recipe — which is exactly the reagent a
-/// tester reaches for first.
+/// [`Recipes::substances`] — this was the same union written out here, and it
+/// stopped being debug-only when the parser needed it too. The parser's use is
+/// the load-bearing one: a word that is a real substance must not be fuzzed into
+/// a *different* real substance (§19).
 fn known(world: &World) -> Vec<String> {
-    let mut names: Vec<String> = world
-        .resource::<Recipes>()
-        .vocabulary()
-        .into_iter()
-        .map(str::to_owned)
-        .collect();
-    names.extend(world.resource::<Fuels>().names().map(str::to_owned));
-    names.sort_unstable();
-    names.dedup();
-    names
+    Recipes::substances(world)
 }
 
 /// Say what happened. §3 forbids unlogged output, and a debug tool is not
