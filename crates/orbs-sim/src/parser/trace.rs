@@ -289,11 +289,7 @@ impl ParseLog {
 }
 
 const fn register_label(register: Register) -> &'static str {
-    match register {
-        Register::Arcane => "arcane",
-        Register::Shell => "shell",
-        Register::Plain => "plain",
-    }
+    register.label()
 }
 
 /// Keep one record on one row. Players type tabs and newlines by accident.
@@ -307,8 +303,18 @@ mod tests {
     use crate::parser::{NounKind, Scene, analyse};
 
     fn tower() -> Scene {
-        // Recipes are `Topic` nouns (§6.1), which is what a bare `brew` now
-        // enumerates — `decoct` is retired and its words point at the manual.
+        // Recipes are `Topic` nouns (§6.1). `purge` is the ambiguity fixture:
+        // it takes `NounKind::Any`, required, so a bare one enumerates every
+        // noun in the room.
+        //
+        // **It was a bare `brew`**, which is a `recall` synonym — and `recall`'s
+        // slot became optional so that `help` would list the vocabulary instead
+        // of asking a lost player to pick between four arbitrary subjects (§19,
+        // `TOPIC_OPTIONAL`). A bare `brew` now resolves at 1000, which is right
+        // and left these three testing nothing. What they are *about* — that the
+        // log tallies ambiguity apart from resolution, counts a forced siege
+        // reading separately, and keeps the losing candidates — is unchanged, so
+        // only the fixture moved.
         Scene::new()
             .with(NounKind::Topic, "clarity")
             .with(NounKind::Topic, "warding")
@@ -327,7 +333,7 @@ mod tests {
 
     #[test]
     fn outcomes_are_tallied_for_the_gate() {
-        let log = log_of(&["recall clarity", "brew", "xyzzy"], Mode::Calm);
+        let log = log_of(&["recall clarity", "purge", "xyzzy"], Mode::Calm);
         assert_eq!(log.resolved(), 1);
         assert_eq!(log.ambiguous(), 1);
         assert_eq!(log.unresolved(), 1);
@@ -337,7 +343,7 @@ mod tests {
     fn forced_resolutions_are_counted_separately() {
         // A high forced rate means siege play is guessing, which the aggregate
         // "resolved" number would hide.
-        let log = log_of(&["brew"], Mode::Siege);
+        let log = log_of(&["purge"], Mode::Siege);
         assert_eq!(log.resolved(), 1);
         assert_eq!(log.forced(), 1);
     }
@@ -345,10 +351,10 @@ mod tests {
     #[test]
     fn every_candidate_survives_into_the_export() {
         // Clustering needs the losers, not just the winner.
-        let log = log_of(&["brew"], Mode::Calm);
+        let log = log_of(&["purge"], Mode::Calm);
         let tsv = log.to_tsv();
-        assert!(tsv.contains("recall clarity"), "{tsv}");
-        assert!(tsv.contains("recall warding"), "{tsv}");
+        assert!(tsv.contains("purge clarity"), "{tsv}");
+        assert!(tsv.contains("purge warding"), "{tsv}");
     }
 
     #[test]

@@ -271,23 +271,27 @@ fn a_place_can_be_named_by_its_leaf_or_its_path() {
 fn a_missing_argument_becomes_a_numbered_prompt() {
     // §6's worked example: a bare verb yields a numbered list of what could
     // fill it, rather than an error.
-    let resolution = resolve("brew", &tower(), Mode::Calm);
+    //
+    // **The fixture was a bare `brew`**, a `recall` synonym, until `recall`'s
+    // slot became optional so that `help` could list the vocabulary rather than
+    // ask a lost player to pick between four arbitrary subjects (§19,
+    // `TOPIC_OPTIONAL`). `purge` is the fixture now — a required
+    // `NounKind::Any` — and what is under test is unchanged: a verb that *needs*
+    // an argument asks for one instead of failing.
+    let resolution = resolve("purge", &tower(), Mode::Calm);
     let Resolution::Ambiguous { candidates } = resolution else {
         panic!("expected a prompt, got {resolution:?}");
     };
 
     let offered: Vec<String> = candidates.iter().map(|c| c.intent.echo()).collect();
-    assert!(
-        offered.contains(&"recall clarity".to_owned()),
-        "{offered:?}"
-    );
+    assert!(offered.contains(&"purge archive".to_owned()), "{offered:?}");
 }
 
 #[test]
 fn disambiguation_never_blocks_during_a_siege() {
     // §6: a modal wait would make ambiguous phrasing cost siege time, which is
     // exactly the typing pressure §14 forbids.
-    let resolution = resolve("brew", &tower(), Mode::Siege);
+    let resolution = resolve("purge", &tower(), Mode::Siege);
     let Resolution::Resolved { intent, confidence } = resolution else {
         panic!("a siege must never block: {resolution:?}");
     };
@@ -297,7 +301,7 @@ fn disambiguation_never_blocks_during_a_siege() {
         Confidence::Forced,
         "the echo must offer correction"
     );
-    assert_eq!(intent.verb, Verb::Recall);
+    assert_eq!(intent.verb, Verb::Purge);
 }
 
 #[test]

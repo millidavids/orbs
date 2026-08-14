@@ -481,6 +481,23 @@ time it runs off the end, so `first_light` bound would foul the mortar on its
 second pass and complain about it for ever — `grind sage` then `empty
 mortar_and_pestle` is the shortest loop that can actually lap.
 
+**`recall` bare is the manual's overview, and `help`/`man`/`?` all reach it.**
+It lists what resolves *where you are standing* — `execute::offered`, the same
+filter the boot report uses — grouped by `Verb::group()`. Check it at the floor,
+because a 25-verb listing is most of the transcript at 80×22 and that is where it
+has to read:
+
+```bash
+ORBS_BOOT=0 ORBS_DUMP="attend laboratory; help" cargo run -p orbs
+ORBS_BOOT=0 ORBS_DUMP="attend archive; help" cargo run -p orbs   # no grind
+```
+
+**A bare verb that needs an argument still asks.** `recall` is the exception and
+`TOPIC_OPTIONAL` is why (§19): it is `survey`'s shape, because bare and
+argumented are the same act at two scopes. If you need an *ambiguity* fixture in
+a test, use `purge` — `brew` was one until `recall`'s slot changed, and three
+tests were silently left asserting nothing.
+
 **`weave` opens the progression screen, and `ORBS_WEAVE` types at it.**
 Newline-separated like `ORBS_EDIT`, but **every segment is a whole thing** — a
 word, or one of `<up>` / `<down>` / `<left>` / `<right>` / `<esc>`. There is no

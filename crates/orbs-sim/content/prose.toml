@@ -111,7 +111,6 @@ recall_brewing = "kindle, grind, digest, mix, distil - then empty, or purge the 
 # The manual is where a player looks for a word they half-remember, so the verb
 # that exists *because* an affordance was undiscoverable had better be findable
 # in the one place built for finding things.
-recall_unfurl = "read back through the record: pgup/pgdn move, esc returns"
 
 # A recipe, written as instructions rather than as a table.
 #
@@ -475,7 +474,6 @@ follow_nowhere = "follow which way? north, east, south or west"
 # What the archive is for, and what its verb does - the two manual entries the
 # domain has never had.
 recall_archive = "research opens a labyrinth, follow threads it. four make a scroll"
-recall_research = "follow north, east, south or west. the ways say what is beside you"
 attend_reading = "that is a way the reading can go, not a room you can stand in"
 research_abandoned = "you let the labyrinth close"
 
@@ -497,4 +495,262 @@ maze_keys = "arrows walk   esc leaves"
 maze_walked = "walked {quantity} of {detail}"
 
 # `recall wander` - the manual entry.
-recall_wander = "arrows walk the labyrinth, esc gives the prompt back"
+
+# ---------------------------------------------------------------------------
+# The manual (S6.1, S19). `recall` bare lists what works here; `recall <topic>`
+# answers on one thing.
+#
+# **`man_`, not `recall_`.** `Prose::topics` strips `recall_` to decide what is
+# nameable, so a key under that prefix becomes a subject a player can ask about
+# - which is how `step_or` once became one. Only whole subjects earn `recall_`.
+#
+# Headings are lower case like everything else: the tube is the only thing on
+# screen and a capitalised word would be shouting (S3).
+# ---------------------------------------------------------------------------
+man_group_getting = "finding your way"
+man_group_work = "the work"
+man_group_spells = "spells"
+man_group_orb = "the orb"
+man_group_careful = "careful"
+
+# The pointer out of the room. Without it the listing reads as *this is the
+# vocabulary* rather than *this is the vocabulary here*.
+man_elsewhere = "other rooms have words of their own. attend one and ask again"
+
+# The page headings. Lower case like everything else (S3).
+man_page_what = "what it does"
+man_page_like = "for instance"
+man_page_said = "also said"
+# One way of saying a verb. A label, never a column aligned with spaces (S14).
+man_said = "{kind}: {name}"
+man_page_also = "see also"
+
+# ---------------------------------------------------------------------------
+# The pages themselves. Four kinds of line per verb:
+#
+#   _use    the synopsis. **Authored, not generated** - `signature()` carries no
+#           connectives, so a generated `move` would read `move reagent place
+#           place`. A test asserts this names every required slot instead.
+#   _gloss  one line saying what it is for. Also the overview's summary.
+#   _1.._n  what it does, at length. Stop numbering and the page stops reading.
+#   _eg1..  one sentence each, never a column aligned with spaces (S14).
+#   _also   where to look next.
+#
+# Budget ~55 cells, not the lint's 70: a 67-character line already wraps at the
+# 80x22 floor.
+# ---------------------------------------------------------------------------
+
+man_recall_use = "recall [topic]"
+man_recall_gloss = "ask the orb what it knows"
+man_recall_1 = "bare, it lists every word that works where you stand"
+man_recall_2 = "given a command, it opens that command's page"
+man_recall_3 = "given a potion, it walks every route that makes one"
+man_recall_eg1 = "recall clarity names each step and what it leaves behind"
+man_recall_eg2 = "recall grind is this page, for the mortar's own word"
+man_recall_also = "status, unfurl, verify"
+
+man_grind_use = "grind <reagent>"
+man_grind_gloss = "crush a reagent in the mortar"
+man_grind_1 = "puts the reagent in the mortar and works the pestle"
+man_grind_2 = "one word where move then wield were two, because the"
+man_grind_3 = "mortar is the only tool it will ever reach for"
+man_grind_eg1 = "grind sage leaves ground-sage, and husks beside it"
+man_grind_also = "digest, empty, recall brewing"
+
+man_wander_use = "wander"
+man_wander_gloss = "walk the labyrinth by hand"
+man_wander_1 = "the arrows take the maze; esc gives the prompt back"
+man_wander_2 = "a step is a step, and costs the tower no time at all"
+man_wander_3 = "a spell walks it with follow, which is the slow way"
+man_wander_eg1 = "research opens one, then wander, then hold a direction"
+man_wander_also = "research, follow, recall archive"
+
+man_attend_use = "attend <place>"
+man_attend_gloss = "go somewhere in the tower"
+man_attend_1 = "paths are places; walking to one is how you reach"
+man_attend_2 = "what is in it, because a domain's belongings are"
+man_attend_3 = "nameable only from inside it"
+man_attend_eg1 = "attend laboratory, and the instruments answer to you"
+man_attend_eg2 = "attend tower goes back up to the landing"
+man_attend_also = "survey, status"
+
+man_survey_use = "survey [place]"
+man_survey_gloss = "list what is here, or what is there"
+man_survey_1 = "bare, it reads the room you are standing in"
+man_survey_2 = "given a place, it reads that one without walking"
+man_survey_3 = "an instrument shows what is inside it"
+man_survey_eg1 = "survey alembic says whether a draught is waiting"
+man_survey_also = "attend, peruse, status"
+
+man_peruse_use = "peruse <file>"
+man_peruse_gloss = "read a file or a spell"
+man_peruse_1 = "logs and spells both; a spell is a file you read"
+man_peruse_2 = "orb.log is everything the orb has ever said, and"
+man_peruse_3 = "each domain keeps its own view of that one stream"
+man_peruse_eg1 = "peruse orb.log, then sift it for the part you want"
+man_peruse_also = "sift, unfurl, verify"
+
+man_sift_use = "sift <pattern> <file>"
+man_sift_gloss = "keep only the lines that match"
+man_sift_1 = "the tower's grep. the pattern is plain text, and"
+man_sift_2 = "what comes back is the count and the lines"
+man_sift_3 = "a spell's own work goes to the log, not the screen,"
+man_sift_4 = "so this is how you read what a bound spell did"
+man_sift_eg1 = "sift grind orb.log finds every turn of the pestle"
+man_sift_also = "peruse, unfurl, verify"
+
+man_status_use = "status"
+man_status_gloss = "how the tower stands"
+man_status_1 = "the tick, what you have earned, and what is held"
+man_status_2 = "one glance rather than a walk through every room"
+man_status_eg1 = "status after a brew shows the experience it paid"
+man_status_also = "survey, weave, verify"
+
+man_verify_use = "verify <name>"
+man_verify_gloss = "check something for tampering"
+man_verify_1 = "a siege corrupts what it can reach, quietly"
+man_verify_2 = "this is how you find out before you trust it"
+man_verify_eg1 = "verify orb.log says whether the record was touched"
+man_verify_also = "peruse, sift, status"
+
+man_undo_use = "undo"
+man_undo_gloss = "take back the last command"
+man_undo_1 = "not built yet. the word resolves and does nothing,"
+man_undo_2 = "which is worth knowing before you rely on it"
+man_undo_3 = "until it lands, stop is what interrupts a run"
+man_undo_also = "stop, empty"
+
+man_unfurl_use = "unfurl"
+man_unfurl_gloss = "read back through the record"
+man_unfurl_1 = "the transcript takes the keyboard: pgup and pgdn"
+man_unfurl_2 = "move, esc gives the prompt back"
+man_unfurl_3 = "for what scrolled away while you were elsewhere"
+man_unfurl_eg1 = "unfurl after a long meditate, to see what happened"
+man_unfurl_also = "peruse, sift"
+
+man_meditate_use = "meditate <count>"
+man_meditate_gloss = "let the tower run without you"
+man_meditate_1 = "time passes a tick a second whether you type or not"
+man_meditate_2 = "this spends it in one go, so a long brew finishes"
+man_meditate_3 = "while you wait rather than while you watch"
+man_meditate_eg1 = "meditate 40 is long enough for most single stages"
+man_meditate_also = "status, wield, invoke"
+
+man_move_use = "move <reagent> to <place>"
+man_move_gloss = "carry something from one place to another"
+man_move_1 = "takes a unit, not the pile, so what is left stays"
+man_move_2 = "an instrument at work will not be charged or raided"
+man_move_3 = "each stage's own word does this and the wield in one"
+man_move_eg1 = "move sage to mortar_and_pestle, then wield it"
+man_move_eg2 = "or grind sage, which is both of those at once"
+man_move_also = "wield, empty, grind"
+
+man_wield_use = "wield <place>"
+man_wield_gloss = "set an instrument working"
+man_wield_1 = "runs whatever recipe matches what is inside it"
+man_wield_2 = "the instrument locks until it finishes or is stopped"
+man_wield_3 = "the lectern assembles four fragments into a scroll"
+man_wield_eg1 = "wield lectern with four fragments in it"
+man_wield_also = "move, stop, empty"
+
+man_empty_use = "empty <place>"
+man_empty_gloss = "turn an instrument out into the store"
+man_empty_1 = "keeps what was in it. every byproduct has a use,"
+man_empty_2 = "so clearing a tool is not the same as destroying"
+man_empty_3 = "what it holds, which is what purge is for"
+man_empty_eg1 = "empty mortar_and_pestle before you grind again"
+man_empty_also = "purge, move, wield"
+
+man_digest_use = "digest <reagent>"
+man_digest_gloss = "steep a reagent in the water bath"
+man_digest_1 = "gentle heat over the athanor, so it wants a fire"
+man_digest_2 = "ground stock becomes a tincture in the bath"
+man_digest_eg1 = "kindle charcoal first, then digest ground-sage"
+man_digest_also = "grind, kindle, mix"
+
+man_mix_use = "mix <reagent> with <reagent>"
+man_mix_gloss = "combine two reagents in the flask"
+man_mix_1 = "the only stage that takes two things at once"
+man_mix_2 = "the bar shows both bands shrinking as they join"
+man_mix_eg1 = "mix sage-tincture with ground-salt"
+man_mix_also = "digest, distil, recall brewing"
+
+man_distil_use = "distil <reagent>"
+man_distil_gloss = "draw a potion off in the alembic"
+man_distil_1 = "the last stage. what comes out is a potion rather"
+man_distil_2 = "than more stock, which is where a route ends"
+man_distil_3 = "needs the athanor alight"
+man_distil_eg1 = "distil clarified-draught, and wait out the run"
+man_distil_also = "mix, kindle, recall clarity"
+
+man_kindle_use = "kindle <reagent>"
+man_kindle_gloss = "light the athanor"
+man_kindle_1 = "shared heat. the bath and the alembic both draw on"
+man_kindle_2 = "it, and neither will start while it is cold"
+man_kindle_3 = "it takes no production slot, being infrastructure"
+man_kindle_eg1 = "kindle charcoal, and the hearth catches"
+man_kindle_also = "digest, distil"
+
+man_stop_use = "stop <place>"
+man_stop_gloss = "halt what is running"
+man_stop_1 = "an instrument mid-run, or a spell mid-flight"
+man_stop_2 = "at the lectern it abandons the labyrinth as well"
+man_stop_3 = "what was being made is lost; what was in it is not"
+man_stop_eg1 = "stop threading ends a spell that will not settle"
+man_stop_also = "purge, empty, invoke"
+
+man_purge_use = "purge <name>"
+man_purge_gloss = "destroy something"
+man_purge_1 = "it does not come back. empty is what you want if"
+man_purge_2 = "you meant to clear a tool and keep the leavings"
+man_purge_3 = "the tower itself and its domains are refused"
+man_purge_eg1 = "purge chaff, when nothing is going to want it"
+man_purge_also = "empty, stop, verify"
+
+man_research_use = "research"
+man_research_gloss = "open a labyrinth on the lectern"
+man_research_1 = "the archive's work. a maze resolves out of the"
+man_research_2 = "shelf, and reaching its way out gives a fragment"
+man_research_3 = "four fragments on the lectern make a scroll"
+man_research_eg1 = "research, then wander to walk it yourself"
+man_research_also = "follow, wander, wield, recall archive"
+
+man_follow_use = "follow <way>"
+man_follow_gloss = "move the reading one square"
+man_follow_1 = "north, east, south or west. the reading moves,"
+man_follow_2 = "never you, so the tower keeps one idea of where"
+man_follow_3 = "you are. this is the word a solving spell writes"
+man_follow_eg1 = "follow east, if east is not a wall"
+man_follow_also = "research, wander, survey"
+
+man_scribe_use = "scribe <name>"
+man_scribe_gloss = "write a spell"
+man_scribe_1 = "opens a page for the room you are standing in"
+man_scribe_2 = "edit types into it, esc comes out, quit saves"
+man_scribe_3 = "interpret shows how the orb reads what you wrote"
+man_scribe_eg1 = "scribe morning, then edit, then a line at a time"
+man_scribe_also = "invoke, bind, peruse"
+
+man_bind_use = "bind <script>"
+man_bind_gloss = "have the orb hold a spell"
+man_bind_1 = "a bound spell keeps running when you walk away,"
+man_bind_2 = "which an invoked one does not. it also laps"
+man_bind_3 = "costs concentration, which the work earns"
+man_bind_eg1 = "bind tending, then go and brew something else"
+man_bind_also = "invoke, weave, scribe"
+
+man_invoke_use = "invoke <script>"
+man_invoke_gloss = "cast a spell once"
+man_invoke_1 = "runs a line a tick until it reaches the end"
+man_invoke_2 = "it needs you in the room; leave and it stops"
+man_invoke_3 = "stop ends one that will not settle"
+man_invoke_eg1 = "invoke first_light and watch the panel move"
+man_invoke_also = "bind, scribe, stop"
+
+man_weave_use = "weave"
+man_weave_gloss = "look at what the work has bought"
+man_weave_1 = "the ley line runs straight and is bought for you"
+man_weave_2 = "mastery branches, and a tier is a choice of one"
+man_weave_3 = "ley or mastery hands the arrows over; esc leaves"
+man_weave_eg1 = "weave, then mastery, then the arrows to look about"
+man_weave_also = "status, bind"

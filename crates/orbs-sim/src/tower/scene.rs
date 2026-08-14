@@ -112,6 +112,19 @@ pub fn scene_at(world: &World, at: Entity) -> Scene {
         }
     }
 
+    // **Every verb, as something the manual can be asked about.** `recall grind`
+    // has to resolve, and `NounKind::Command` is what makes that possible without
+    // widening `NounKind::Any` — see the kind's own doc for the three places 27
+    // canonicals leak through if they are registered as `Topic` instead.
+    //
+    // **Nameable from everywhere, unlike the overview's listing.** A bare
+    // `recall` shows what works in this room (§7); a *page* answers from
+    // anywhere, because a manual you can only read in the right room has a lock
+    // on it. Places and spells already have this exemption for the same reason.
+    for verb in crate::parser::Verb::ALL {
+        scene = scene.with(NounKind::Command, verb.canonical());
+    }
+
     // **Every spell, wherever the player is standing.**
     //
     // The same exemption places have, for the same reason. Without it a `.spell`

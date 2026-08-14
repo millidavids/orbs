@@ -66,6 +66,9 @@ const fn sample_argument(verb: Verb) -> &'static str {
         // so this arm is unreachable and says so rather than inventing a sample
         // that would go untested.
         NounKind::Sense => "passage",
+        // A verb's own name, reachable only from `Subject` — which is what
+        // `recall` takes, so the sample is a command.
+        NounKind::Command | NounKind::Subject => "grind",
         // A slot kind, never a noun's own, so the sample is a noun that *fills*
         // one. The log, not the spell: this exercises the ordinary reading and
         // leaves `peruse night_watch` to the tests that are about spells.
@@ -430,4 +433,123 @@ fn the_words_the_naming_pass_replaced_still_resolve() {
             .map_or_else(|| "<unresolved>".to_owned(), orbs_sim::parser::Intent::echo);
         assert_eq!(echo, expected, "{input:?}");
     }
+}
+
+/// The readings a bare command offers, in the order the prompt shows them.
+fn offered(sim: &orbs_sim::Sim) -> Vec<String> {
+    let choices = sim.choices();
+    (1..=choices.len())
+        .filter_map(|at| choices.pick(at))
+        .map(orbs_sim::parser::Intent::echo)
+        .collect()
+}
+
+#[test]
+fn a_bare_anything_verb_offers_the_same_four_readings() {
+    // **Pinned before the noun space moves, not after.** `verify` and `purge`
+    // take `NounKind::Any`, so their numbered prompt is every noun in the room
+    // sorted by `Argument`'s derived `Ord` — (kind, value, slot). Adding a noun
+    // *kind* reorders it, and adding nouns to an existing kind changes which
+    // four surface, with nothing on screen saying so.
+    //
+    // The manual is about to want `recall <verb>` to resolve, and the obvious
+    // way to get it — registering all 27 canonicals as `NounKind::Topic` — would
+    // move this list. That is why it is written down first: `Topic` is reachable
+    // from `Any`, so a change made for the manual would silently land here.
+    for verb in ["purge", "verify"] {
+        let mut sim = orbs_sim::Sim::new(1);
+        sim.submit("attend laboratory");
+        sim.step();
+        sim.submit(verb);
+        sim.step();
+
+        assert_eq!(
+            offered(&sim),
+            [
+                format!("{verb} grimoire"),
+                format!("{verb} tower"),
+                format!("{verb} archive"),
+                format!("{verb} east"),
+            ],
+            "the readings a bare `{verb}` offers moved",
+        );
+    }
+}
+
+#[test]
+fn a_verb_name_is_a_subject_and_nothing_else() {
+    // **The whole reason `NounKind::Command` exists.** `recall grind` has to
+    // resolve, and the obvious way — registering 27 canonicals as `Topic` —
+    // leaks them into everything `NounKind::Any` reaches. So the kind is
+    // reachable from exactly one slot kind and from no other.
+    use orbs_sim::parser::NounKind;
+    assert!(
+        !NounKind::Any.accepts(NounKind::Command),
+        "`verify` and `purge` can reach a verb's own name",
+    );
+    assert!(NounKind::Subject.accepts(NounKind::Command));
+    assert!(NounKind::Subject.accepts(NounKind::Topic));
+    for slot in [
+        NounKind::Readable,
+        NounKind::Stoppable,
+        NounKind::Place,
+        NounKind::Reagent,
+        NounKind::Script,
+    ] {
+        assert!(
+            !slot.accepts(NounKind::Command),
+            "{slot:?} reaches a command",
+        );
+    }
+}
+
+#[test]
+fn a_verb_name_never_reaches_a_destructive_slot() {
+    // The end the kind exists to prevent, driven rather than asserted against
+    // `accepts`. `purge` takes `NounKind::Any` and a verb word is not a surface
+    // it can act on, so `purge grind` must fall through to the numbered prompt —
+    // asking *which*, offering the same four readings a bare `purge` does, with
+    // no `grind` among them.
+    let mut sim = orbs_sim::Sim::new(1);
+    sim.submit("attend laboratory");
+    sim.step();
+    sim.submit("purge grind");
+    sim.step();
+
+    assert_eq!(
+        offered(&sim),
+        [
+            "purge grimoire".to_owned(),
+            "purge tower".to_owned(),
+            "purge archive".to_owned(),
+            "purge east".to_owned(),
+        ],
+        "a verb name moved the readings a destructive verb offers",
+    );
+}
+
+#[test]
+fn a_spell_cannot_name_a_verb_as_a_thing() {
+    // **`compile::fix` resolves a condition's names through `NounKind::Any`**, so
+    // a verb registered as a `Topic` would make `if the dispensary has grind`
+    // compile clean and answer *no* for ever — which is verbatim the
+    // `has ground-slat` defect that module was rewritten to kill. It has to be
+    // refused instead.
+    let mut sim = orbs_sim::Sim::new(1);
+    sim.submit("attend laboratory");
+    sim.step();
+
+    let reading = sim.read_spell(
+        "laboratory",
+        &[
+            "if the dispensary has grind".to_owned(),
+            "survey".to_owned(),
+            "end".to_owned(),
+        ],
+    );
+    assert!(
+        reading[0].fault.is_some(),
+        "a spell named a verb as a thing and was believed: {:?}",
+        reading[0],
+    );
 }

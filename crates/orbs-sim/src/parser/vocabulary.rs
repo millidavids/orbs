@@ -353,6 +353,40 @@ pub const SYNONYMS: &[Synonym] = &[
     syn(Verb::Wander, Register::Plain, &["roam"]),
 ];
 
+impl Register {
+    /// The word for this dialect, as the manual names it.
+    ///
+    /// It lived privately in `parser::trace`, which exports a column of them for
+    /// the balance gate. One table now, because the manual prints the same words
+    /// and two copies could disagree about what a register is called.
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Arcane => "arcane",
+            Self::Shell => "shell",
+            Self::Plain => "plain",
+        }
+    }
+}
+
+/// Every way of saying `verb`, in register order, canonical first.
+///
+/// **An accessor, because there was none.** Three sites filtered the flat table
+/// inline and the manual would have been a fourth — and unlike those three, it
+/// prints the result, so a phrase joined differently would be visible.
+#[must_use]
+pub fn synonyms_of(verb: Verb) -> Vec<(Register, String)> {
+    let mut out: Vec<(Register, String)> = SYNONYMS
+        .iter()
+        .filter(|entry| entry.verb == verb)
+        .map(|entry| (entry.register, entry.words.join(" ")))
+        .collect();
+    // `Register` derives `Ord` in declaration order — arcane, shell, plain —
+    // which is the order the mastery arc runs in and so the order to read them.
+    out.sort();
+    out
+}
+
 /// The most words any single phrase spans. Bounds the longest-match window.
 pub const LONGEST_PHRASE: usize = 3;
 

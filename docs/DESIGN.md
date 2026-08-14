@@ -2588,6 +2588,171 @@ times. The frontier is the hole in the outline.
 The exit survives the cut because it is a *different* fact rather than more of
 the same one, and it is the one thing `Chamber::seen` still decides.
 
+### The manual, and `help` asking a question instead of answering one
+
+`help`, `man` and `?` have been synonyms of `recall` since §6.1's register table.
+Typing any of them opened a **numbered prompt** offering `archive`, `brewing`,
+`clarified-draught` and `clarity` — the four alphabetically-first manual
+subjects, chosen by nothing.
+
+The cause is a parser rule doing exactly what it says. `recall`'s slot was
+`Slot::required(NounKind::Topic)`, and a required slot with fillers cannot yield
+an argument-less intent: `resolve::collect` pushes one candidate per filler, they
+tie, `analyse` returns `Ambiguous`. The scene always has topics, so the
+no-argument branch in `execute::recall` was **unreachable code** — which is why
+the first draft of the plan for this proposed rewriting it and would have changed
+nothing on screen.
+
+So this was never a missing feature. It was §6's *no bare error* failing at the
+one command whose whole job is answering the question, and it survived because no
+test ever asked what `help` did.
+
+**`recall` takes `TOPIC_OPTIONAL`, and that needs answering rather than
+assuming.** §19 records making a slot optional as *declined* for bare `follow`,
+on the grounds that it loses the numbered prompt a required slot gives every
+other verb. The difference is `survey`: `follow` bare and `follow east` are
+categorically different acts — one walks a cell, one seizes the keyboard —
+where `survey` bare and `survey alembic` are the **same act at two scopes**,
+which is precisely what `recall` and `recall grind` are. And the prompt being
+lost was never a disambiguation: nothing had been typed to disambiguate, so it
+offered four arbitrary subjects rather than four readings of an input.
+
+**Three fixtures moved, and that is the change proving itself.** `brew` is a
+`recall` synonym and was the ambiguity fixture in `parser::trace` and
+`tests/parsing.rs` — a bare `brew` now resolves at full confidence, so those
+tests were left asserting nothing. What they are *about* is unchanged; the
+fixture is `purge`, a required `NounKind::Any`.
+
+**The overview cost no render code.** `RecordKind::Section` stacks and draws as a
+`[heading]`; `Entry` tiles across the pane. `survey` already emits exactly that
+pair, so a clap-shaped listing was two existing shapes in a new order — and
+because the entries are records rather than a formatted string, `sift` still
+works on them and §14 hears one utterance per verb instead of a wall of spacing.
+
+**One filter, shared.** `execute::offered` — live, ungated, in scope — was
+written out inside `boot.rs`. Two copies of that rule is two chances for the
+tutorial a player reads at launch to disagree with the manual they ask for a
+minute later. Its scoping half generalises what the report hardcoded: at the
+tower root an empty scene offers no operations, so `Scene::offers` and
+`!is_operation()` name the same list.
+
+**`Verb::group()` is a table, not a derivation.** The predicates that exist group
+by the wrong thing — `is_operation` is about scope, `transmutes` about the
+pipeline. What a lost player wants is sorted by what they are trying to do, which
+is a judgement. It also gives `is_destructive` its first reader: it had none, and
+a test now asserts the `Careful` group and that predicate name the same two
+verbs rather than one being trusted.
+
+**Known and left alone**: `research`, `follow` and `wander` list in the
+laboratory, where they refuse. They are tower-wide because `Scene::offering`
+derives scope from the `Operation` component and a fixture carries one, which the
+lectern spends on `research` — the debt §19 already records against `follow`. The
+overview makes it *visible* rather than causing it, and it retires when a second
+verb can be scoped to an instrument.
+
+#### The manual, written
+
+Five sentences of documentation became 27 pages — ~170 authored lines, and the
+first time the game can answer *what does this word do* from inside itself.
+
+**The lints check that a page exists, fits and points somewhere real. They cannot
+check it is worth reading**, which is the whole risk of this item and the reason
+it was reviewed by reading dumps at the 80x22 floor rather than by reading the
+diff. What they do catch is drift: a verb added later fails the completeness lint
+as well as `Verb::group`'s wildcard-free match, a synopsis that stops naming its
+required slots fails, and a `see also` naming a word the parser lacks fails —
+which is worse than pointing nowhere, because a player types it.
+
+**Two pages say what a lint could not.** `undo` is in `Verb::ALL` and not in
+`is_live`, so the word resolves and does nothing; its page says so and sends the
+reader to `stop`. `bind` is gated at concentration 0; its page says what it
+costs. The overview omits both, as `boot.rs` does, because a word that can only
+refuse is a dead end in a listing — but the *manual* should explain what exists,
+and §15 weighs the dead-end rate above the raw resolution rate.
+
+**`follow` is exempt from the synopsis check**, and the exemption is a debt
+rather than an oversight. Its slot is `NounKind::Place` because the place half of
+a spell's condition resolves against exactly that kind, which is why the four
+ways are places a player cannot stand in. So `follow <place>` is honest about the
+implementation and wrong for a player, who is choosing a direction — the
+synopsis reads `follow <way>` and the test asserts *that* instead. It goes when
+the ways stop needing to be places.
+
+#### A page that read as a wall, and the three things making it one
+
+The first manual pages drew as a solid block. Reported by looking at one, with
+every lint green — the lines fitted, drew in CP437 and pointed at real words, and
+none of that is the same as reading well. Three causes, and only one of them was
+in the manual.
+
+**Prose is capped at 70 cells, so a description is written in pieces — and
+emitting those pieces as separate records made them *hard* line breaks.** In a
+100-column pane a paragraph written at ~50 came out as ragged strips down the
+left. The pieces are joined into one record now and the pane wraps it to whatever
+width it actually has, which is what `RecordView` was already for.
+
+**Every record took the same lead**, so `[what it does]` sat flush with its own
+body and the page had no hierarchy at all. A `Section` draws at the margin now
+and everything else keeps its two cells — outdenting the heading is the same
+shape as indenting the content and costs no cells. `survey`'s `[place]` headings
+got it too, which is the tell that it was the render layer's problem rather than
+the manual's.
+
+**A row per synonym made the vocabulary longer than the description.** `attend`
+has five spellings, four of them plain. One row per *register* now, phrases
+joined — arcane first, because that is what the echo teaches.
+
+The lesson is the same one §15 keeps making, one layer up: the lints could check
+that a page exists, fits and points somewhere real, and none of them could check
+that it was *shaped* like a page. That needed eyes on a screen.
+
+#### `NounKind::Command`, and the kind that had to be unreachable
+
+`recall grind` has to resolve, and the obvious way is to register every verb
+canonical as a `NounKind::Topic` beside the recipe outputs — which is exactly
+what recipes already do. It is wrong, and `NounKind`'s own doc had already said
+so about a different word: *"not `Topic`, which `recall` reads: `recall walked`
+would resolve and then find no manual entry."*
+
+The reason is that `Any` reaches `Topic`, and three things read `Any`:
+
+- **Tab** offers what a slot accepts, so `purge gr` would have suggested `grind`
+  — a word the parser refuses, which is the dead end §15 weighs above the raw
+  resolution rate.
+- **`spell::compile`** resolves a condition's *thing* names through `Any`, so
+  `if the dispensary has grind` would have compiled clean and answered *no* for
+  ever. That is verbatim the `has ground-slat` defect `compile::fix` was
+  rewritten to kill.
+- **The numbered prompt** orders by (kind, value, slot), so inserting 27 nouns
+  would have moved which four readings a bare `purge` offers, silently.
+
+So `Command` is a noun kind **`Any` does not accept**, reachable from exactly one
+slot kind — `Subject`, which takes `Topic | Command`, the shape `Readable`
+(File|Script) and `Stoppable` already have.
+
+**It is the `Sense` argument run backwards**, which is worth noticing. `Sense`
+needs `Any` to find it, so a spell's `if` can name a reading that does not exist
+yet; `Command` needs `Any` *not* to, so a spell cannot name a verb as a thing.
+Two kinds, one mechanism, opposite requirements — which is the case for a slot
+kind rather than a wider `Any`.
+
+**The bare-`purge` prompt was pinned before any of this moved.** A test written
+in the previous step records the four readings it offers; the guard here is that
+they are unchanged. That is the only way a silent reordering could have been
+caught, and it had to exist first.
+
+**Pages are readable from anywhere; the overview is scoped.** A manual you can
+only read in the room the tool is in has a lock on it, and §7's rule is about
+*acting* — places and spells already carry the same exemption. So `recall grind`
+answers from the archive while a bare `recall` there does not list `grind`. The
+asymmetry is deliberate and is written down because it reads as a bug otherwise.
+
+**Three subjects were retired to make room.** `recall_unfurl`, `recall_research`
+and `recall_wander` made those three verbs `Topic` nouns already, so the page
+branch would have shadowed a working answer while `complete::nouns` — which does
+not dedupe — offered the word twice. Their prose moved into `man_*` and the keys
+are gone.
+
 #### The fog is gone, and what it cost to remove
 
 The map drew only what the reading had stood in or beside — exactly what the four

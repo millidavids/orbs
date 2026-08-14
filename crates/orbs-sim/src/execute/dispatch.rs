@@ -183,6 +183,32 @@ pub const fn is_live(verb: Verb) -> bool {
     )
 }
 
+/// Every verb worth offering where the player is standing.
+///
+/// **One filter, shared.** The boot report and `recall`'s overview list the same
+/// thing for the same reasons, and two copies of *live, ungated, in scope* is two
+/// chances for the tutorial a player reads at launch to disagree with the manual
+/// they ask for a minute later.
+///
+/// Three exclusions, each of them the same rule one step further in — a word
+/// that can only refuse is worse than a word that is absent:
+///
+/// - not [`is_live`]: nobody has built it, so it acknowledges and does nothing.
+/// - [`is_gated`]: it works and the tower has not earned it, like `bind` at
+///   concentration 0.
+/// - not offered by the [`Scene`](crate::parser::Scene): a per-instrument verb
+///   whose instrument is elsewhere. At the tower root this is exactly the
+///   `!is_operation()` the boot report used to hardcode, because an empty scene
+///   offers no operations — so generalising it changed no list.
+#[must_use]
+pub fn offered(world: &World) -> Vec<Verb> {
+    let scene = world.resource::<crate::parser::Scene>();
+    Verb::ALL
+        .into_iter()
+        .filter(|verb| is_live(*verb) && !is_gated(*verb, world) && scene.offers(*verb))
+        .collect()
+}
+
 /// Whether `verb` works but is not available *yet*.
 ///
 /// The companion to [`is_live`], and the difference between *"nobody built

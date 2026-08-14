@@ -1549,6 +1549,90 @@ the loop.
       ✅ `ORBS_BOOT=0 ORBS_DUMP="attend laboratory; move sage to
       mortar_and_pestle; move sage to mortar_and_pestle; wield
       mortar_and_pestle"` — still fires, and leaves one sage behind.
+- [x] **The manual, part one: `help` lists what works here** — **moved from
+      Phase 4**, where it sat as *"In-world grimoire (`help` / `man`)"*, because
+      §15's onboarding risk plan names it as item 3 and the gate it feeds is
+      Phase 1's. One box, moved rather than duplicated, as the settings item was
+      moved to Phase 5.
+
+      **It began as a parser defect, not a missing feature.** `help`, `man` and
+      `?` were already synonyms of `recall`, whose slot was a *required* topic —
+      and a required slot with fillers never yields an argument-less intent, so
+      every filler tied and `analyse` returned `Ambiguous`. A lost player typing
+      `help` was asked to pick between `archive`, `brewing`, `clarified-draught`
+      and `clarity`. §6 forbids a bare error; this was that rule failing at the
+      one command whose whole job is answering the question, and nothing caught
+      it because no test asked what `help` did.
+
+      `recall` now takes `TOPIC_OPTIONAL` — `survey`'s shape, not the bare-`follow`
+      shape §19 declined, because bare and argumented are *the same act at two
+      scopes* rather than two different acts. The overview is `RecordKind::Section`
+      per group and `Entry` per verb, which `survey` already emits and the tiler
+      already packs, so it cost no render code. `Verb::group()` is a new const
+      table with no wildcard; the listing itself is `execute::offered`, extracted
+      so the boot report and the manual cannot drift.
+
+      **See it:** ✅ `ORBS_BOOT=0 ORBS_DUMP="attend laboratory; help"` — five
+      headings at the 80×22 floor, `grind` among them.
+      ✅ `ORBS_BOOT=0 ORBS_DUMP="attend archive; help"` — no `grind`, because it
+      does not resolve there.
+      ✅ `cargo test -p orbs-sim --lib recall`
+- [x] **The manual, part two: `recall <verb>` is a page** — synopsis, what it
+      does, examples, the other ways to say it, and see-also. `Section` headings
+      over `Message` lines, because a page is instructions and `Message` wraps
+      where `Entry` tiles; `unfurl` pages it for free, searching by record.
+
+      **`NounKind::Command`, not `Topic`**, and the difference is three leaks.
+      `Any` reaches `Topic`, so 27 canonicals registered there would have put
+      verb words into tab completion (`purge grind`), into `compile::fix` — where
+      `if the dispensary has grind` would compile clean and answer *no* for ever,
+      verbatim the `has ground-slat` defect — and into the bare-`purge` prompt,
+      whose order is (kind, value, slot). So the kind is reachable from exactly
+      one *slot* kind, `Subject`, and `Any` refuses it. All three are tested by
+      driving them, not by asserting `accepts`.
+
+      **The pages are readable anywhere; the overview is not.** Deliberate: a
+      manual you can only read in the right room has a lock on it, and places and
+      spells already carry the same exemption.
+
+      The synonyms come off `SYNONYMS` so they cannot go stale. The **synopsis is
+      authored** — `signature()` holds no connectives, so a generated `move` would
+      read `move reagent place place` — with a test asserting it opens with the
+      verb and names every required slot.
+      **See it:** ✅ `ORBS_BOOT=0 ORBS_DUMP="attend archive; recall grind"` — the
+      mortar's page, read from a room the mortar is not in.
+      ✅ `cargo test -p orbs-sim --test naming` — the three leaks, driven.
+- [x] **The manual, part three: every verb has a page** — 27 of them, ~170 lines
+      of authored prose, and the game went from five sentences of documentation
+      to a manual you can read from inside it.
+
+      **Three lints hold it up**, because prose is the one thing tests cannot
+      judge. `every_verb_has_a_page` requires `_use`, `_gloss` and `_1` for all
+      of `Verb::ALL`, so a verb added later fails here as well as in
+      `Verb::group`. `a_synopsis_names_every_slot_its_signature_requires` keeps
+      the authored synopsis from drifting from the signature it describes.
+      `a_page_never_claims_a_word_that_is_not_there` checks every `see also`
+      against the vocabulary — a manual pointing at a word the parser lacks is
+      worse than one pointing nowhere, because the player types it.
+
+      Two pages say something a lint could not: `undo` says it is **not built**
+      and names `stop` instead, and `bind` says what it costs. §15 wants the
+      dead-end rate low, and a page that admits a word does nothing is the
+      cheapest way to keep a player out of one.
+
+      **`follow` is exempt from the synopsis check**, with the reason written in:
+      its slot is a `Place` because the place half of a spell's condition
+      resolves against that kind, which is why the four ways are places you
+      cannot stand in. `follow <place>` would be honest about the implementation
+      and wrong for a player choosing a direction.
+      **A page is sections, not a block**, and it took a screenshot to see it:
+      the description is joined into one record so the pane wraps it rather than
+      the author hard-wrapping at 50; `Section` draws at the margin so a heading
+      outdents from its own body; and synonyms are a row per register rather than
+      per phrase. `survey`'s headings got the same for free.
+      **See it:** ✅ `ORBS_BOOT=0 ORBS_DUMP="attend laboratory; recall distil"`
+      ✅ `cargo test -p orbs-sim --lib recall` — the three lints
+      ✅ every verb: `for v in attend survey peruse ...; do ORBS_DUMP="recall $v"`
 - [ ] **Scrolls that do something** — `spell-scroll` assembles and is then an
       object with no use, which is §19's third finding against this item conceded
       rather than dodged. Haste for brewing is the cheapest first use, and it is
@@ -1656,8 +1740,6 @@ the loop.
       **See it:** a non-terminal player reaches hour two unaided, watched
 - [ ] Progressive reveal throughout
       **See it:** nothing on screen at minute one that has not been earned
-- [ ] In-world grimoire (`help` / `man`)
-      **See it:** get unstuck from inside the game, without alt-tabbing
 - [ ] Soft ending
       **See it:** reach it, and want to keep playing anyway
 - [ ] **Demo + capsule + trailer** — the trailer leads on CRT *motion*, which a

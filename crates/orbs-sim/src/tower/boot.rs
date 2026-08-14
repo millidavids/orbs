@@ -30,8 +30,6 @@ use orbs_render::{FieldName, RecordKind, Role};
 
 use super::node::{Cwd, Name, children_of};
 use super::sabotage::poisoned;
-use crate::execute::{is_gated, is_live};
-use crate::parser::Verb;
 use crate::rng::Rngs;
 use crate::session::Scrollback;
 use crate::tick::Tick;
@@ -103,25 +101,14 @@ pub fn report(world: &mut World) {
     // work, which is the smallest thing that stops the gate measuring a tester's
     // guesswork instead of the vocabulary.
     //
-    // *Work*, not *exist*. Six of §6.1's sixteen only acknowledge in Phase 0, and
-    // offering those to a tester would spend the gate's most important metric —
-    // the dead-end rate — on things nobody built yet. See
-    // [`is_live`](crate::execute::is_live) for which, and for the one that is
-    // worse than a dead end.
-    //
-    // A **domain's own** verbs are left out. The boot report is written before
-    // the player has gone anywhere, and `grind` is not a word at the tower root
-    // — offering it there is the dead end this filter exists to avoid, one step
-    // further in. `recall brewing` is what teaches them, from inside the
-    // laboratory where they work.
-    // **And a verb the tower has not earned yet is left out too**, which is the
-    // same rule one step further in again: `bind` works, and at concentration 0
-    // it can only refuse. Offering it in the first thing a player reads would be
-    // the dead end this filter exists to avoid — see `execute::is_gated`.
-    let offered: Vec<Verb> = Verb::ALL
-        .into_iter()
-        .filter(|verb| is_live(*verb) && !verb.is_operation() && !is_gated(*verb, world))
-        .collect();
+    // **`execute::offered`, shared with `recall`'s overview**, which is where the
+    // three exclusions are argued. It was this same filter written out here, and
+    // two copies of *live, ungated, in scope* is two chances for the tutorial a
+    // player reads at launch to disagree with the manual they ask for a minute
+    // later. Its scoping half generalises what this hardcoded: at the tower root
+    // an empty scene offers no operations, so `Scene::offers` and
+    // `!is_operation()` name the same list.
+    let offered = crate::execute::offered(world);
     let mut scrollback = world.resource_mut::<Scrollback>();
     let records = scrollback.records_mut();
     for verb in offered {
@@ -141,6 +128,8 @@ pub fn report(world: &mut World) {
 mod tests {
     use super::*;
     use crate::Sim;
+    use crate::execute::{is_gated, is_live, offered};
+    use crate::parser::Verb;
 
     fn rows(sim: &Sim, kind: RecordKind) -> Vec<String> {
         sim.scrollback()
@@ -176,18 +165,29 @@ mod tests {
         // dead end this list exists to avoid.
         let sim = Sim::new(1);
         let listed = rows(&sim, RecordKind::Entry);
+        // **The rule restated, not the function called.** `execute::offered` is
+        // what the report uses; asserting against it would only prove the report
+        // calls what it calls. This says what the list *means* — and the
+        // `!is_operation()` half is the form the report hardcoded before the
+        // filter was shared, so agreeing here is what pins that generalising to
+        // `Scene::offers` changed no list at the root.
+        // ...and the shared filter agrees with that rule, at the root where the
+        // report is written. `recall`'s overview calls the same function in rooms
+        // that *do* offer operations, which is the half this cannot see.
+        let shared: Vec<&str> = offered(sim.world())
+            .into_iter()
+            .map(Verb::canonical)
+            .collect();
+        assert_eq!(shared, listed, "the report and `execute::offered` disagree");
+
         for verb in Verb::ALL {
-            let offered = is_live(verb) && !verb.is_operation() && !is_gated(verb, sim.world());
+            let wanted = is_live(verb) && !verb.is_operation() && !is_gated(verb, sim.world());
             assert_eq!(
                 listed.iter().any(|name| name == verb.canonical()),
-                offered,
+                wanted,
                 "{} is offered by the boot report but {}",
                 verb.canonical(),
-                if offered {
-                    "should be"
-                } else {
-                    "should not be"
-                },
+                if wanted { "should be" } else { "should not be" },
             );
         }
     }

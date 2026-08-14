@@ -35,12 +35,12 @@ use bevy_ecs::prelude::*;
 use orbs_render::{FieldName, RecordKind, Role};
 
 use crate::content::{Prose, Recipe, Recipes};
-use crate::parser::{Intent, Verb};
+use crate::parser::{Group, Intent, Verb, synonyms_of};
 use crate::session::Scrollback;
 use crate::tower::{self, Name, Store};
 
+use super::missing;
 use super::navigate::root;
-use super::{acknowledge, missing};
 
 /// How deep a route may go before the walk gives up.
 ///
@@ -49,6 +49,211 @@ use super::{acknowledge, missing};
 /// recipe table cannot recurse until the stack goes.
 const MAX_DEPTH: usize = 16;
 
+/// One command, at length.
+///
+/// # Sections, and what each is made of
+///
+/// The synopsis and description are authored; the ways of saying it are read off
+/// `SYNONYMS`. That split is deliberate: `signature()` carries no connectives —
+/// `move` is `[Reagent, Place?, Place]` with no `to` in it — so a generated
+/// synopsis would read `move reagent place place`, which nobody types. A test
+/// keeps the authored line honest instead, by asserting it names every required
+/// slot.
+///
+/// `RecordKind::Message` throughout, not `Entry`: a page is instructions, and
+/// `Message` wraps where `Entry` tiles. `recall.rs`'s route walk already makes
+/// that argument. Long pages page for free, because `unfurl` searches by record.
+fn page(world: &mut World, verb: Verb) {
+    let canonical = verb.canonical();
+
+    // The synopsis, and the one line saying what it is for. Both authored; a
+    // missing key draws as the key itself, which is how `Prose::line` makes an
+    // omission visible rather than blank.
+    for key in [
+        format!("man_{canonical}_use"),
+        format!("man_{canonical}_gloss"),
+    ] {
+        say(world, canonical, &key);
+    }
+
+    // **Joined into one record, not one per authored line.** Prose is capped at
+    // 70 cells by the width lint, so a description has to be written in pieces —
+    // but emitting those pieces as separate records makes them *hard* line
+    // breaks, and a page in a 100-column pane came out as ragged 50-cell strips
+    // with a wall of text where its paragraphs should be. One record wraps to
+    // whatever the pane actually is.
+    section(world, "man_page_what");
+    let body: Vec<String> = (1..=MAX_LINES)
+        .map(|line| format!("man_{canonical}_{line}"))
+        .take_while(|key| world.resource::<Prose>().has(key))
+        .map(|key| world.resource::<Prose>().line(&key, &[]))
+        .collect();
+    if !body.is_empty() {
+        line(world, canonical, &body.join(" "));
+    }
+
+    let examples: Vec<String> = (1..=MAX_LINES)
+        .map(|n| format!("man_{canonical}_eg{n}"))
+        .take_while(|key| world.resource::<Prose>().has(key))
+        .collect();
+    if !examples.is_empty() {
+        section(world, "man_page_like");
+        for key in examples {
+            say(world, canonical, &key);
+        }
+    }
+
+    // **One row per register, not one per phrase.** `attend` has five spellings
+    // and four of them are plain, so a row each made the section longer than the
+    // description it followed.
+    //
+    // Read off the table, so it cannot go stale. Arcane first, because that is
+    // what the echo teaches and what an expert types.
+    section(world, "man_page_said");
+    let mut by_register: Vec<(crate::parser::Register, Vec<String>)> = Vec::new();
+    for (register, phrase) in synonyms_of(verb) {
+        match by_register.last_mut() {
+            Some((last, phrases)) if *last == register => phrases.push(phrase),
+            _ => by_register.push((register, vec![phrase])),
+        }
+    }
+    for (register, phrases) in by_register {
+        let phrase = phrases.join(", ");
+        // **The arrangement is authored**, like every route step: a `Message`
+        // draws its message and nothing else, so composing `"arcane  grind"` in
+        // Rust would be a frontend decision made in the sim (rule 4) *and* a
+        // sentence in source (rule 6). The fields stay fields, so `sift` still
+        // works on them.
+        let said = world
+            .resource::<Prose>()
+            .line("man_said", &[("kind", register.label()), ("name", &phrase)]);
+        world
+            .resource_mut::<Scrollback>()
+            .records_mut()
+            .push(RecordKind::Message)
+            .text(FieldName::Name, canonical)
+            .text(FieldName::Kind, register.label())
+            .text(FieldName::Message, &said)
+            .finish();
+    }
+
+    let also = format!("man_{canonical}_also");
+    if world.resource::<Prose>().has(&also) {
+        section(world, "man_page_also");
+        say(world, canonical, &also);
+    }
+}
+
+/// How many description or example lines a page may carry.
+///
+/// A page is read in a transcript pane, not a browser. Eight is already more
+/// than fits at the 80x22 floor without scrolling, so the cap is a backstop
+/// against an authored run with no end rather than a budget anyone reaches.
+const MAX_LINES: usize = 8;
+
+/// A page heading.
+fn section(world: &mut World, key: &str) {
+    let heading = world.resource::<Prose>().line(key, &[]);
+    world
+        .resource_mut::<Scrollback>()
+        .records_mut()
+        .push(RecordKind::Section)
+        .text(FieldName::Kind, &heading)
+        .finish();
+}
+
+/// One line of a page, already composed.
+fn line(world: &mut World, canonical: &str, message: &str) {
+    world
+        .resource_mut::<Scrollback>()
+        .records_mut()
+        .push(RecordKind::Message)
+        .text(FieldName::Name, canonical)
+        .text(FieldName::Message, message)
+        .finish();
+}
+
+/// One authored line of a page.
+fn say(world: &mut World, canonical: &str, key: &str) {
+    let message = world.resource::<Prose>().line(key, &[]);
+    world
+        .resource_mut::<Scrollback>()
+        .records_mut()
+        .push(RecordKind::Message)
+        .text(FieldName::Name, canonical)
+        .text(FieldName::Message, &message)
+        .finish();
+}
+
+/// Everything you can type where you are standing, grouped.
+///
+/// # Why this is `Section` + `Entry` and not a formatted string
+///
+/// `RecordKind::Section` stacks and draws as a `[heading]`; `RecordKind::Entry`
+/// **tiles**, packing across whatever width the pane has. `survey` already emits
+/// exactly this pair, so a clap-shaped listing needed no render code at all —
+/// and because the entries are records rather than a string, `sift` still works
+/// on them and §14 hears one utterance per verb rather than a wall of spacing.
+///
+/// # It lists what works *here*
+///
+/// [`offered`](super::offered) is the boot report's own filter: live, ungated,
+/// and in scope. `grind` appears in the laboratory and not in the archive, which
+/// is §7 and is the rule Tab already follows — offering a word the parser would
+/// refuse is the dead end §15 weighs above the raw resolution rate.
+///
+/// So the listing is *narrower* than the manual: `recall grind` will answer from
+/// anywhere, because a manual you can only read in the right room has a lock on
+/// it. That asymmetry is deliberate and recorded in §19.
+fn overview(world: &mut World) {
+    let offered = super::offered(world);
+
+    for group in Group::ALL {
+        let members: Vec<Verb> = offered
+            .iter()
+            .copied()
+            .filter(|verb| verb.group() == group)
+            .collect();
+        // A heading over nothing is furniture. The archive has no spells in it
+        // and no destructive verb the room has earned, and printing empty
+        // sections would make the overview mostly headings.
+        if members.is_empty() {
+            continue;
+        }
+
+        let heading = world.resource::<Prose>().line(group.key(), &[]);
+        let mut scrollback = world.resource_mut::<Scrollback>();
+        let records = scrollback.records_mut();
+        records
+            .push(RecordKind::Section)
+            .text(FieldName::Kind, &heading)
+            .finish();
+        for verb in members {
+            let mut entry = records
+                .push(RecordKind::Entry)
+                .text(FieldName::Name, verb.canonical());
+            // An empty field is not an absent one: it draws as trailing blanks
+            // and speaks as a labelled silence. `status` and `undo` take nothing.
+            if !verb.signature_label().is_empty() {
+                entry = entry.text(FieldName::Kind, verb.signature_label());
+            }
+            entry.finish();
+        }
+    }
+
+    // The pointer out. Without it the overview reads as *this is the vocabulary*
+    // rather than *this is the vocabulary here*, and a player standing in the
+    // archive would never learn the laboratory has words of its own.
+    let message = world.resource::<Prose>().line("man_elsewhere", &[]);
+    world
+        .resource_mut::<Scrollback>()
+        .records_mut()
+        .push(RecordKind::Message)
+        .text(FieldName::Name, Verb::Recall.canonical())
+        .text(FieldName::Message, &message)
+        .finish();
+}
+
 /// Show how a thing is made, and every way there is to make it.
 pub(super) fn recall(intent: &Intent, world: &mut World) {
     let Some(topic) = intent
@@ -56,9 +261,25 @@ pub(super) fn recall(intent: &Intent, world: &mut World) {
         .first()
         .map(|argument| argument.value.clone())
     else {
-        acknowledge(Verb::Recall, world);
+        // **The overview, and this branch was unreachable until the slot became
+        // optional.** A required slot with fillers never yields an argument-less
+        // intent — every filler ties and `analyse` returns `Ambiguous` — so bare
+        // `recall` opened a numbered prompt offering the four
+        // alphabetically-first subjects. `help`, `man` and `?` all land here, so
+        // that was §6's no-bare-error rule failing at the one command whose job
+        // is answering the question. See `TOPIC_OPTIONAL`.
+        overview(world);
         return;
     };
+
+    // **The manual's own pages, before the recipe walk.** A verb canonical is a
+    // `NounKind::Command` and nothing else, so this cannot shadow a recipe — but
+    // it is checked first anyway, because the day a recipe is named after a verb
+    // the page is what the player meant.
+    if let Some(verb) = Verb::ALL.into_iter().find(|verb| verb.canonical() == topic) {
+        page(world, verb);
+        return;
+    }
 
     let plan = plan(world, &topic);
     if plan.is_empty() {
@@ -321,4 +542,272 @@ fn stocked(world: &World) -> BTreeSet<String> {
 /// A count as a record value, saturating rather than wrapping.
 fn to_count(value: usize) -> u64 {
     u64::try_from(value).unwrap_or(u64::MAX)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Sim;
+
+    /// Every record the orb has drawn, as its rendered line.
+    fn drawn(sim: &Sim) -> Vec<(RecordKind, String)> {
+        sim.scrollback()
+            .records()
+            .iter()
+            .map(|record| (record.kind(), record.to_line()))
+            .collect()
+    }
+
+    fn run(sim: &mut Sim, line: &str) {
+        sim.submit(line);
+        sim.step();
+    }
+
+    #[test]
+    fn a_bare_recall_lists_the_vocabulary_rather_than_asking_which_topic() {
+        // **The defect the manual starts from, and nothing caught it.** A
+        // required slot with fillers never yields an argument-less intent, so
+        // bare `recall` returned `Ambiguous` and offered the four
+        // alphabetically-first subjects — and `help`, `man` and `?` all land
+        // here. §6 forbids a bare error; asking a lost player to choose between
+        // `archive`, `brewing`, `clarified-draught` and `clarity` is that rule
+        // failing at the one command whose job is answering the question.
+        let mut sim = Sim::new(1);
+        run(&mut sim, "attend laboratory");
+        let before = sim.scrollback().records().len();
+        run(&mut sim, "help");
+
+        assert!(
+            sim.choices().is_empty(),
+            "`help` asked which topic instead of answering",
+        );
+        let after: Vec<_> = drawn(&sim).split_off(before);
+        assert!(
+            after.iter().any(|(kind, _)| *kind == RecordKind::Section),
+            "no headings: {after:?}",
+        );
+        assert!(
+            after.iter().any(|(_, line)| line.starts_with("grind")),
+            "the laboratory's own work was not listed: {after:?}",
+        );
+    }
+
+    #[test]
+    fn the_overview_lists_what_resolves_here_and_nothing_else() {
+        // Both directions, in two rooms. The listing is `execute::offered`, which
+        // is the boot report's filter — so this is also what stops the tutorial a
+        // player reads at launch disagreeing with the manual a minute later.
+        for (place, wanted, unwanted) in [
+            ("laboratory", "grind", "kindle-nothing"),
+            ("archive", "research", "grind"),
+        ] {
+            let mut sim = Sim::new(1);
+            run(&mut sim, &format!("attend {place}"));
+            let before = sim.scrollback().records().len();
+            run(&mut sim, "recall");
+            let after: Vec<_> = drawn(&sim).split_off(before);
+
+            let listed: Vec<&str> = after
+                .iter()
+                .filter(|(kind, _)| *kind == RecordKind::Entry)
+                .filter_map(|(_, line)| line.split_whitespace().next())
+                .collect();
+            assert!(listed.contains(&wanted), "{place}: no {wanted}: {listed:?}");
+            assert!(
+                !listed.contains(&unwanted),
+                "{place}: offered {unwanted}, which would not resolve here",
+            );
+            // Nothing gated and nothing dark. `bind` refuses at concentration 0
+            // and `undo` is not built; either would be a dead end in the first
+            // thing a lost player reads.
+            assert!(!listed.contains(&"bind"), "{place}: offered a gated verb");
+            assert!(!listed.contains(&"undo"), "{place}: offered a dark verb");
+        }
+    }
+
+    #[test]
+    fn every_word_for_the_manual_reaches_the_same_answer() {
+        // `help`, `man` and `?` are synonyms of `recall` (§6.1's registers), and
+        // the overview is the answer a player gets from all four spellings.
+        let mut baseline = Sim::new(1);
+        run(&mut baseline, "recall");
+        let expected = drawn(&baseline);
+
+        for word in ["help", "man", "?"] {
+            let mut sim = Sim::new(1);
+            run(&mut sim, word);
+            assert_eq!(
+                drawn(&sim).len(),
+                expected.len(),
+                "`{word}` answered differently from `recall`",
+            );
+        }
+    }
+
+    #[test]
+    fn every_group_the_table_names_has_a_heading_authored() {
+        // A group with no prose draws its own key — `Prose::line` returns the key
+        // for a miss, deliberately, so the failure is visible rather than blank.
+        // This makes it a test failure instead.
+        let prose = crate::content::Prose::builtin();
+        for group in Group::ALL {
+            assert!(
+                prose.has(group.key()),
+                "{} has no authored heading",
+                group.key(),
+            );
+        }
+        assert!(prose.has("man_elsewhere"));
+    }
+
+    #[test]
+    fn the_manual_registers_no_subjects_of_its_own() {
+        // `Prose::topics` strips `recall_` to decide what is *nameable*, which is
+        // how `step_or` once became a subject nobody authored (§19). The manual's
+        // own furniture is under `man_`, so none of it may appear.
+        let prose = crate::content::Prose::builtin();
+        let leaked: Vec<&str> = prose
+            .topics()
+            .into_iter()
+            .filter(|topic| topic.starts_with("group_") || *topic == "elsewhere")
+            .collect();
+        assert!(leaked.is_empty(), "the manual leaked subjects: {leaked:?}");
+    }
+
+    #[test]
+    fn a_page_a_verb_has_is_the_page_it_gets() {
+        // Only three are written so far, so this is not the completeness lint —
+        // it is the shape. A page names itself, says what it is for, and reads
+        // its synonyms off the table rather than out of prose.
+        let mut sim = Sim::new(1);
+        run(&mut sim, "attend archive");
+        let before = sim.scrollback().records().len();
+        run(&mut sim, "recall grind");
+        let lines: Vec<String> = drawn(&sim)
+            .split_off(before)
+            .into_iter()
+            .map(|(_, l)| l)
+            .collect();
+        let page = lines.join("\n");
+
+        // Readable from the archive, where `grind` itself does not resolve. A
+        // manual you can only read in the right room has a lock on it.
+        assert!(page.contains("grind <reagent>"), "no synopsis: {page}");
+        assert!(page.contains("crush a reagent"), "no gloss: {page}");
+        // Off `SYNONYMS`, so it cannot go stale when a word is added.
+        assert!(page.contains("arcane: grind"), "no registers: {page}");
+        assert!(page.contains("plain: crush"), "no plain form: {page}");
+    }
+
+    #[test]
+    fn a_synopsis_names_every_slot_its_signature_requires() {
+        // **The authored line, kept honest.** `signature()` carries no
+        // connectives — `move` is `[Reagent, Place?, Place]` with no `to` — so a
+        // generated synopsis would read `move reagent place place`, which nobody
+        // types. It is written instead, and this is what stops it drifting from
+        // the signature it describes.
+        let prose = crate::content::Prose::builtin();
+        for verb in Verb::ALL {
+            let key = format!("man_{}_use", verb.canonical());
+            let line = prose.line(&key, &[]);
+            assert!(
+                line.starts_with(verb.canonical()),
+                "{key} does not open with the word it documents: {line:?}",
+            );
+            // **`follow` is exempt, and the exemption is the recorded debt.**
+            // Its slot is a `Place` because the place half of a spell's
+            // condition resolves against exactly that kind, which is why the
+            // four ways are places you cannot stand in (§19). `follow <place>`
+            // would be honest about the implementation and wrong for a player,
+            // who is choosing a direction. The exemption goes when the ways stop
+            // needing to be places.
+            if verb == Verb::Follow {
+                assert!(line.contains("way"), "{key} lost its direction: {line:?}");
+                continue;
+            }
+            for slot in verb.signature().iter().filter(|slot| slot.required) {
+                assert!(
+                    line.contains(slot.kind.label()),
+                    "{key} never names its required {}: {line:?}",
+                    slot.kind.label(),
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn every_verb_has_a_page() {
+        // **The completeness lint**, and what stops the manual rotting as verbs
+        // are added: a new verb is already a compile error in `Verb::group`, and
+        // this makes it a test failure in the prose too.
+        //
+        // Three keys are required and the rest are optional, because a page's
+        // length should follow what there is to say. `_use` and `_gloss` are the
+        // two lines the overview and the header both need; `_1` is the shortest
+        // honest answer to *what does it do*.
+        let prose = crate::content::Prose::builtin();
+        for verb in Verb::ALL {
+            let canonical = verb.canonical();
+            for suffix in ["use", "gloss", "1"] {
+                let key = format!("man_{canonical}_{suffix}");
+                assert!(prose.has(&key), "{canonical} has no {key}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_page_never_claims_a_word_that_is_not_there() {
+        // Every `see also` names real vocabulary. A manual pointing at a word
+        // the parser does not have is worse than one that points nowhere,
+        // because the player types it and lands in the dead end §15 weighs
+        // heaviest.
+        let prose = crate::content::Prose::builtin();
+        let known: Vec<&str> = Verb::ALL.iter().map(|verb| verb.canonical()).collect();
+        for verb in Verb::ALL {
+            let key = format!("man_{}_also", verb.canonical());
+            if !prose.has(&key) {
+                continue;
+            }
+            for word in prose.line(&key, &[]).split(',') {
+                // `recall <topic>` entries point at a subject, not a verb; the
+                // first word is what has to exist.
+                let Some(first) = word.split_whitespace().next() else {
+                    continue;
+                };
+                assert!(
+                    known.contains(&first),
+                    "{key} points at {first:?}, which is not a word",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_careful_group_is_exactly_the_destructive_verbs() {
+        // `is_destructive` had no reader at all until the manual wanted one. Two
+        // lists that must not drift, so they are checked against each other
+        // rather than one being derived and the other trusted.
+        for verb in Verb::ALL {
+            assert_eq!(
+                verb.group() == Group::Careful,
+                verb.is_destructive(),
+                "{} is grouped and marked differently",
+                verb.canonical(),
+            );
+        }
+    }
+
+    #[test]
+    fn no_verb_is_left_out_of_the_overview() {
+        // `Verb::group` has no wildcard, so a new verb is a compile error there —
+        // but a verb put in a group nobody prints would compile and simply not be
+        // there. This is what catches that.
+        for verb in Verb::ALL {
+            assert!(
+                Group::ALL.contains(&verb.group()),
+                "{} is in a group the overview never prints",
+                verb.canonical(),
+            );
+        }
+    }
 }

@@ -477,6 +477,8 @@ fn draw_lines<'r>(
             // annotation — so speaking them would be saying it twice.
             if record.kind() == RecordKind::Input {
                 col = col.saturating_add(painter.glyphs(Pos::new(col, row), prompt, style));
+            } else if record.kind() == RecordKind::Section {
+                // No marker and no lead: see `lead_for`.
             } else {
                 if let Some(marker) = record.marker() {
                     painter.glyphs(Pos::new(col, row), marker.encode_utf8(&mut [0; 4]), style);
@@ -601,6 +603,12 @@ fn lead_for(record: &Record<'_>, prompt: Option<&str>) -> u16 {
         Some(prompt) if record.kind() == RecordKind::Input => {
             u16::try_from(prompt.chars().count()).unwrap_or(u16::MAX)
         }
+        // **A heading sits at the margin, so what follows reads as under it.**
+        // Every record took the same lead, which put `[what it does]` flush with
+        // its own body and made a manual page a wall of text rather than
+        // sections. Outdenting the heading is the same shape as indenting the
+        // content and costs no cells; `survey`'s `[place]` gets it too.
+        Some(_) if record.kind() == RecordKind::Section => 0,
         Some(_) => MARKER_WIDTH,
     }
 }

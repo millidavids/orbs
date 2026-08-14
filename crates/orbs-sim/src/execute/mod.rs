@@ -40,7 +40,7 @@ mod tests;
 
 #[cfg(debug_assertions)]
 pub use debug::{Order as SpawnOrder, SPAWN, order as spawn_order};
-pub use dispatch::{LOG, MAX_MEDITATE, execute_one, is_gated, is_live, run_pending};
+pub use dispatch::{LOG, MAX_MEDITATE, execute_one, is_gated, is_live, offered, run_pending};
 // Crate-internal: `Sim::labyrinth` needs it and `divine` is a private module, so
 // the re-export is what makes it nameable rather than what makes it public.
 pub use navigate::find_domain;

@@ -107,8 +107,85 @@ pub enum NounKind {
     /// way back — §6's dead end, arrived at from a direction the parser could
     /// not see.
     Stoppable,
+    /// A verb's own name, so `recall grind` can be asked about.
+    ///
+    /// # Why not [`Topic`](Self::Topic), which `recall` already reads
+    ///
+    /// Because [`Any`](Self::Any) reaches `Topic`, and registering 27 canonicals
+    /// there would have leaked them into three places at once:
+    ///
+    /// - **Tab** would offer `purge grind`. `complete::nouns` filters by
+    ///   `accepts`, and offering a word the parser would refuse is the dead end
+    ///   §15 weighs above the raw resolution rate.
+    /// - **`spell::compile`** resolves a condition's names through `Any`, so
+    ///   `if the dispensary has grind` would compile clean and answer *no* for
+    ///   ever — verbatim the `has ground-slat` defect that module was rewritten
+    ///   to kill.
+    /// - **The numbered prompt** for a bare `purge` would reorder: `Argument`'s
+    ///   `Ord` is (kind, value, slot), so inserting a kind moves which four
+    ///   readings surface, silently.
+    ///
+    /// This is the same argument [`Sense`](Self::Sense) makes, one step further:
+    /// `Sense` needs `Any` to find it so a spell's `if` can name a reading, and
+    /// this needs `Any` **not** to. So the kind is reachable from exactly one
+    /// slot kind, [`Subject`](Self::Subject), and from nothing else.
+    Command,
     /// Anything nameable — `verify` and `purge` accept any surface.
     Any,
+    /// What the manual can answer on: a topic, or a command.
+    ///
+    /// A **slot** kind, never a noun's own, like [`Readable`](Self::Readable)
+    /// and [`Stoppable`](Self::Stoppable). It is what lets `recall` reach both
+    /// `recall brewing` and `recall grind` without widening `Any`.
+    Subject,
+}
+
+/// Which part of the manual a verb belongs under.
+///
+/// **A table, not a derivation.** The predicates that already exist — the ones a
+/// reader might reach for — group by the wrong thing: `is_operation` is about
+/// *scope*, `transmutes` about the pipeline. What a lost player wants is sorted
+/// by what they are trying to do, and that is a judgement rather than a
+/// consequence, so it is written down.
+///
+/// Order here is the order the overview prints, which is the order a player
+/// needs them: find your way about, then do the work, then teach the orb, then
+/// ask the orb, and last the two that destroy something.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Group {
+    /// Reaching and reading: where you are, what is here, what it says.
+    Getting,
+    /// The work of a domain — everything that moves or makes.
+    Work,
+    /// Writing and running spells (§8).
+    Spells,
+    /// Asking the orb about itself, and about time.
+    Orb,
+    /// The two that destroy something. See [`Verb::is_destructive`].
+    Careful,
+}
+
+impl Group {
+    /// Every group, in the order the overview prints them.
+    pub const ALL: [Self; 5] = [
+        Self::Getting,
+        Self::Work,
+        Self::Spells,
+        Self::Orb,
+        Self::Careful,
+    ];
+
+    /// The prose key naming this group.
+    #[must_use]
+    pub const fn key(self) -> &'static str {
+        match self {
+            Self::Getting => "man_group_getting",
+            Self::Work => "man_group_work",
+            Self::Spells => "man_group_spells",
+            Self::Orb => "man_group_orb",
+            Self::Careful => "man_group_careful",
+        }
+    }
 }
 
 impl NounKind {
@@ -140,6 +217,10 @@ impl NounKind {
             // thing that is working, and both an instrument and a spell are.
             Self::Stoppable => "place",
             Self::Any => "name",
+            Self::Command => "command",
+            // What the orb asks for, not what the type is called: "which
+            // subject?" is the question, and a command is one of the answers.
+            Self::Subject => "topic",
         }
     }
 
@@ -155,9 +236,14 @@ impl NounKind {
     #[must_use]
     pub const fn accepts(self, noun: Self) -> bool {
         match self {
-            Self::Any => true,
+            // **Everything except a command.** `Any` is `verify` and `purge`,
+            // and a verb's own name is not a surface either can act on — see
+            // [`Command`](Self::Command) for the three places that leak through
+            // if it is.
+            Self::Any => !matches!(noun, Self::Command),
             Self::Readable => matches!(noun, Self::File | Self::Script),
             Self::Stoppable => matches!(noun, Self::Place | Self::Script),
+            Self::Subject => matches!(noun, Self::Topic | Self::Command),
             // `as u8` because `PartialEq::eq` is not const and a fieldless enum
             // casts cleanly. Writing the other ten arms out would be a table
             // that says only "equal" eleven times.
@@ -207,7 +293,28 @@ const PATTERN_AND_FILE: &[Slot] = &[
     Slot::required(NounKind::Pattern),
     Slot::required(NounKind::File),
 ];
-const TOPIC: &[Slot] = &[Slot::required(NounKind::Topic)];
+/// `recall [topic]` — optional, and it is `survey`'s shape rather than a
+/// weakening.
+///
+/// # Why the slot gave up being required
+///
+/// A required slot with fillers can never yield an argument-less intent:
+/// `resolve::collect` pushes one candidate per filler, they all tie, and
+/// `analyse` returns `Ambiguous`. The scene always has topics, so **bare
+/// `recall` opened a numbered prompt offering the four alphabetically-first
+/// manual subjects** — and `help`, `man` and `?` are all synonyms of it. §6
+/// forbids a bare error; a lost player typing `help` and being asked to pick
+/// between `archive`, `brewing`, `clarified-draught` and `clarity` is that rule
+/// failing at the one command whose whole job is answering the question.
+///
+/// **§19 declined exactly this for bare `follow`, and the difference is
+/// `survey`.** `follow` bare and `follow east` are categorically different acts
+/// — one walks a cell, one seizes the keyboard — where `survey` bare and
+/// `survey alembic` are the *same act at two scopes*, which is what `recall` and
+/// `recall grind` are. The numbered prompt a required slot is said to buy was
+/// never a disambiguation here either: nothing was typed to disambiguate, so it
+/// offered four arbitrary subjects rather than four readings of an input.
+const TOPIC_OPTIONAL: &[Slot] = &[Slot::optional(NounKind::Subject)];
 const ANYTHING: &[Slot] = &[Slot::required(NounKind::Any)];
 const COUNT: &[Slot] = &[Slot::required(NounKind::Count)];
 // `VESSEL` was `siphon`'s signature, when a finished brew sat in one. §10.1 puts
@@ -454,6 +561,46 @@ impl Verb {
     /// forbid a word no verb currently wants, at the cost of two that do.
     pub const MAX_CANONICAL_LEN: usize = 8;
 
+    /// Which part of the manual this verb is listed under.
+    ///
+    /// **No wildcard**, like every other table here: a verb added later is a
+    /// compile error in this file rather than one silently missing from the
+    /// overview. That matters more than usual, because a verb assigned to a
+    /// group nobody prints would compile and simply not be there.
+    #[must_use]
+    pub const fn group(self) -> Group {
+        match self {
+            Self::Attend | Self::Survey | Self::Peruse | Self::Sift | Self::Verify => {
+                Group::Getting
+            }
+            // Everything that moves or makes, including the archive's: `research`
+            // and `follow` are the lectern's work exactly as `grind` is the
+            // mortar's, and a player looking for what to *do* here wants them in
+            // one place rather than sorted by which room they happen to be in.
+            Self::Move
+            | Self::Wield
+            | Self::Empty
+            | Self::Grind
+            | Self::Digest
+            | Self::Mix
+            | Self::Distil
+            | Self::Kindle
+            | Self::Research
+            | Self::Follow
+            | Self::Wander => Group::Work,
+            Self::Scribe | Self::Bind | Self::Invoke => Group::Spells,
+            Self::Status
+            | Self::Recall
+            | Self::Undo
+            | Self::Unfurl
+            | Self::Weave
+            | Self::Meditate => Group::Orb,
+            // Kept in step with `is_destructive`, which had no reader until now
+            // — a test asserts the two agree rather than trusting this list.
+            Self::Purge | Self::Stop => Group::Careful,
+        }
+    }
+
     /// What this verb wants after it, as a single word.
     ///
     /// §6 forbids a bare error, and a listing owes the same courtesy: a verb
@@ -604,7 +751,7 @@ impl Verb {
             | Self::Wander => NOTHING,
             // A way, which is a place — see `Role::Reading`.
             Self::Follow => WAY,
-            Self::Recall => TOPIC,
+            Self::Recall => TOPIC_OPTIONAL,
             Self::Verify | Self::Purge => ANYTHING,
             Self::Meditate => COUNT,
             Self::Move => MOVE,

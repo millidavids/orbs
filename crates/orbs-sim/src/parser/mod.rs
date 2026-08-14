@@ -56,5 +56,5 @@ pub use spellword::{
     INDENT, SpellWord, argument as spell_argument, indent_around, leading as spell_word,
 };
 pub use trace::{Outcome, ParseLog, ParseRecord};
-pub use verb::{NounKind, Slot, Verb};
-pub use vocabulary::{Register, SYNONYMS, Synonym};
+pub use verb::{Group, NounKind, Slot, Verb};
+pub use vocabulary::{Register, SYNONYMS, Synonym, synonyms_of};
