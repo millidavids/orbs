@@ -185,6 +185,96 @@ fn say(world: &mut World, canonical: &str, key: &str) {
         .finish();
 }
 
+/// The subject that answers *what can I write in a spell, here*.
+///
+/// A `recall_` key of the same name is what makes it nameable, exactly as a
+/// material's page does.
+const SCRIPTING: &str = "scripting";
+
+/// What a spell is made of, and what this room lets one ask about.
+///
+/// # Three sections, and only the last one moves
+///
+/// The **words** and the **question shapes** are the same in every room, because
+/// the grammar is. What changes is what a question can *name*: the laboratory's
+/// instruments answer `is idle`, the archive's four ways answer `has passage`,
+/// and a player standing in one has no way to discover the other's vocabulary by
+/// guessing at it.
+///
+/// So the third section is built from the room, the same way [`overview`] builds
+/// its verb list from [`offered`](super::offered) — one rule, applied twice,
+/// rather than a second idea of what *here* means.
+fn scripting(world: &mut World) {
+    let cwd = world.resource::<tower::Cwd>().0;
+    let places: Vec<String> = tower::children_of(world, cwd)
+        .into_iter()
+        .filter(|node| world.get::<tower::Fixture>(*node).is_some())
+        .filter_map(|node| world.get::<tower::Name>(node).map(|name| name.0.clone()))
+        .collect();
+    // The readings belong to a way, so they are listed where there are ways —
+    // they resolve everywhere (a solver's `if` names them at cast, when no maze
+    // is open), but naming them in the laboratory would be teaching a word the
+    // room can never answer.
+    let readings = tower::children_of(world, cwd)
+        .into_iter()
+        .any(|node| world.get::<tower::Reading>(node).is_some());
+
+    say(world, SCRIPTING, "recall_scripting");
+
+    section(world, "man_scripting_words");
+    for word in crate::parser::SpellWord::ALL {
+        entry(world, word.canonical(), spell_word_shape(word));
+    }
+
+    section(world, "man_scripting_asking");
+    for key in SHAPES {
+        let line = world.resource::<Prose>().line(key, &[]);
+        entry(world, &line, "");
+    }
+
+    section(world, "man_scripting_here");
+    for place in places {
+        entry(world, &place, "");
+    }
+    if readings {
+        for word in tower::maze::readings() {
+            entry(world, word, "");
+        }
+    }
+}
+
+/// The shapes a question takes, in the order they are worth learning.
+const SHAPES: [&str; 4] = [
+    "man_scripting_shape_is",
+    "man_scripting_shape_has",
+    "man_scripting_shape_count",
+    "man_scripting_shape_join",
+];
+
+/// What a control word takes after it, for the listing.
+const fn spell_word_shape(word: crate::parser::SpellWord) -> &'static str {
+    match word {
+        crate::parser::SpellWord::Repeat => "<count>",
+        crate::parser::SpellWord::Until | crate::parser::SpellWord::If => "<question>",
+        crate::parser::SpellWord::Wait => "<thing>",
+        crate::parser::SpellWord::Else | crate::parser::SpellWord::End => "",
+    }
+}
+
+/// One row under a section: a name, and what follows it.
+fn entry(world: &mut World, name: &str, shape: &str) {
+    let mut records = world.resource_mut::<Scrollback>();
+    let records = records.records_mut();
+    let row = records.push(RecordKind::Entry).text(FieldName::Name, name);
+    // An empty field is not an absent one — it draws as trailing blanks and
+    // speaks as a labelled silence, which is why `overview` guards the same way.
+    if shape.is_empty() {
+        row.finish();
+    } else {
+        row.text(FieldName::Kind, shape).finish();
+    }
+}
+
 /// Everything you can type where you are standing, grouped.
 ///
 /// # Why this is `Section` + `Entry` and not a formatted string
@@ -221,23 +311,13 @@ fn overview(world: &mut World) {
             continue;
         }
 
-        let heading = world.resource::<Prose>().line(group.key(), &[]);
-        let mut scrollback = world.resource_mut::<Scrollback>();
-        let records = scrollback.records_mut();
-        records
-            .push(RecordKind::Section)
-            .text(FieldName::Kind, &heading)
-            .finish();
+        section(world, group.key());
+        // Through the shared [`entry`], which carries the empty-field rule —
+        // `status` and `undo` take no argument, and an empty `Kind` draws as
+        // trailing blanks and speaks as a labelled silence. It was written out
+        // here *and* in `entry`, which is two homes for one rule.
         for verb in members {
-            let mut entry = records
-                .push(RecordKind::Entry)
-                .text(FieldName::Name, verb.canonical());
-            // An empty field is not an absent one: it draws as trailing blanks
-            // and speaks as a labelled silence. `status` and `undo` take nothing.
-            if !verb.signature_label().is_empty() {
-                entry = entry.text(FieldName::Kind, verb.signature_label());
-            }
-            entry.finish();
+            entry(world, verb.canonical(), verb.signature_label());
         }
     }
 
@@ -278,6 +358,17 @@ pub(super) fn recall(intent: &Intent, world: &mut World) {
     // the page is what the player meant.
     if let Some(verb) = Verb::ALL.into_iter().find(|verb| verb.canonical() == topic) {
         page(world, verb);
+        return;
+    }
+
+    // **The one page about the language rather than about the tower**, and it is
+    // scoped like the overview above: the grammar is the same everywhere, what a
+    // question can *name* is not. Before this, nothing in the game taught the
+    // spell vocabulary at all — control words are outside `Verb::ALL`, so
+    // `recall repeat` reached nothing and a player had no way to find out what an
+    // `if` could ask.
+    if topic == SCRIPTING {
+        scripting(world);
         return;
     }
 
@@ -771,6 +862,39 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn every_word_a_spell_is_written_with_has_a_page() {
+        // **The gap an audit against seven other languages found**, and it was
+        // in the docs rather than the code: every one of them ships a reference,
+        // and ours had none. Control words are outside `Verb::ALL`, so the verb
+        // lint below could never have covered them — `recall repeat` reached
+        // nothing at all, and a player had no way to discover what an `if` could
+        // ask.
+        //
+        // The readings are the same shape of hole one noun space over: they are
+        // `NounKind::Sense` rather than materials, so `every_material_has_a_page`
+        // does not see them either, and `recall marks` answered with a *scoping*
+        // message about other rooms — a dead end wearing a wrong reason.
+        let prose = crate::content::Prose::builtin();
+        for word in crate::parser::SpellWord::ALL {
+            assert!(
+                prose.has(&format!("recall_{}", word.canonical())),
+                "`{}` is a word a spell is written with and the manual cannot \
+                 say what it does",
+                word.canonical(),
+            );
+        }
+        for reading in crate::tower::maze::readings() {
+            assert!(
+                prose.has(&format!("recall_{reading}")),
+                "`{reading}` is a word a solver's `if` names and the manual \
+                 cannot say what it means",
+            );
+        }
+        // And the page that ties them to a room.
+        assert!(prose.has("recall_scripting"));
     }
 
     #[test]

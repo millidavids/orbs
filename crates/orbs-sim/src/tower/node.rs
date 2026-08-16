@@ -146,7 +146,7 @@ pub struct Store;
 /// # The exemption, stated as one
 ///
 /// §7 is *"you can only name what is where you are"*, and `tower::scene`
-/// records that acting on another **domain** at a distance is Phase 2's unlock.
+/// records that acting on another **domain** at a distance is Phase 7's unlock.
 /// This is a deliberate hole in that rule, and it is narrow: places, spells and
 /// the maze's readings already have the same one, for the same reason — a
 /// spellbook you carry is not a shelf you walk to, and neither is a bandolier.

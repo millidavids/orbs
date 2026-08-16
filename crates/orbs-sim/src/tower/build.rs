@@ -2,7 +2,7 @@
 //!
 //! DESIGN.md §15 fixes the slice at **brewing and archive** — the two starting
 //! domains — so only those two branches exist. The other five arrive with §10's
-//! breadth item in Phase 3a.
+//! breadth item in Phase 9a.
 //!
 //! # Names are not prose
 //!
@@ -19,6 +19,7 @@
 use bevy_ecs::prelude::*;
 
 use super::node::{Cwd, Fixture, Name, Nameable, NodeIds, Protected};
+use super::stock::Stock;
 use crate::parser::{NounKind, Verb};
 
 /// The tower. Protected: §7 guards catastrophic targets in character.
@@ -321,7 +322,7 @@ struct Branch {
 /// **A component, not a name comparison.** Six sites branched on `name ==
 /// ATHANOR` or `name != DISPENSARY` — `wield`, `stop`, the panel's state reader,
 /// the panel's own filter, `heat::find` and `reachable` — with nothing binding
-/// them together. §10 puts five more domains in Phase 3a, and the day a second
+/// them together. §10 puts five more domains in Phase 9a, and the day a second
 /// room gets a forge, `wield forge` would have started a `Working` run with no
 /// recipe instead of lighting it, `stop` would have refused to bank its fuel, and
 /// the panel would have drawn a filling meter where a draining one belongs. Six
@@ -384,7 +385,7 @@ impl Holding {
 /// Called from `Sim::new`, never by a frontend: if the Bevy build, `orbs-tui`
 /// and `orbs-balance` each built their own world they could diverge, which is
 /// the failure §13 exists to prevent — *"if the live game and the CLI harness
-/// diverged, we would not find out until Phase 3."*
+/// diverged, we would not find out until Phase 9."*
 pub fn raise(world: &mut World) {
     // **The filesystem root is nameless**, and that is what makes the whole
     // restructure free: `path_of` collects a segment only where a `Name` is
@@ -535,6 +536,26 @@ fn is_log(name: &str) -> bool {
 /// by looking for a **named child**, which is the one read the language has.
 pub fn raise_reading(world: &mut World, at: Entity, word: &str) -> Entity {
     spawn(world, Some(at), word, NounKind::Sense)
+}
+
+/// Put one reading inside a way, carrying a number.
+///
+/// `marks` is the only one, and the count rides on `Stock` because that is
+/// where a quantity lives — so `has 2 or more marks` is answered by the same
+/// arithmetic that answers `has 4 fragment`, rather than by a second notion of
+/// how many of something there is.
+///
+/// Still `NounKind::Sense`, which matters twice: `holdings` skips those, so a
+/// counted reading cannot enter the multiset a recipe matches against; and the
+/// scene keeps offering the word at cast, when no maze is open.
+///
+/// **Never called with nought.** A pile that reaches zero is despawned
+/// everywhere else in the tower; see `maze::MARKS` for why an unwalked way
+/// simply has no count instead.
+pub fn raise_count(world: &mut World, at: Entity, word: &str, count: u32) -> Entity {
+    let node = raise_reading(world, at, word);
+    world.entity_mut(node).insert(Stock::Counted(count));
+    node
 }
 
 /// Spawn one node under `parent`, in order.

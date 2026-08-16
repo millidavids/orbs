@@ -103,7 +103,7 @@ pub fn verify(world: &mut World, target: Entity) {
 /// tampered one stands out against.
 ///
 /// §5.3 caps aberration arrival so repairs cannot spiral; the full adversarial
-/// model is Phase 2, and this is the single surface §15 asks Phase 0 to exercise.
+/// model is Phase 8, and this is the single surface §15 asks Phase 0 to exercise.
 const DRIFT_INTERVAL: u64 = 300;
 
 /// Interfere with something, occasionally.

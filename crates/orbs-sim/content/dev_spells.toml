@@ -1,0 +1,208 @@
+# Known-good spells for a tester, in the builds a tester runs (DESIGN.md §19).
+#
+# **Not player-facing, and that is the whole point.** `spells.toml` ships
+# `first_light` deliberately unfinished because §12 wants the player to finish
+# the first automation themselves — *"it stops before the interesting part on
+# purpose"*. A working maze solver handed over the same way would be the answer
+# to the archive's central puzzle, `back` included, which DESIGN.md §19 records
+# was only found by measuring twenty mazes.
+#
+# So these are reached by `debug_spell`, which is `cfg(debug_assertions)` like
+# `debug_spawn`. This file is `include_str!`'d under the same `cfg`, so a release
+# build has neither the word nor the text.
+#
+# **Parsed separately from `Spells`, never merged into it.** The `Spells`
+# resource is spawned into `/grimoire` at construction, so merging would put
+# these on the shelf before anybody asked for them — changing `peruse`, the
+# scene's `Script` nouns and the boot report, in the one build where a tester is
+# trying to see what the game does.
+#
+# Lines are written the way a player would type them, loose phrasing and all,
+# and are canonicalised on the way in like any other spell.
+
+# The ladder that solves a maze, whichever errand it is on.
+#
+# **Twenty-four rungs in six tiers**, and the order is the whole algorithm:
+#
+#   spoil             — something to gather, only a gleaning maze publishes it
+#   exit              — the way out, only an ordinary maze publishes it
+#   passage           — floor nobody has walked
+#   1 or fewer marks — walked least, and not the way you came
+#   2 or more marks  — walked most, and not the way you came
+#   back              — the way you came, and only when there is nothing else
+#
+# **The two middle tiers compare a number**, where they used to name `walked` and
+# `twice`. Those were two buckets over a count the maze had all along, so a
+# square walked nine times read exactly like one walked twice and the ladder
+# could not prefer the less-trodden of two ways it had both already seen.
+#
+# **`and not <way> has wall` is on the `or fewer` rung and nowhere else**, and it
+# is load-bearing. A comparison answers truthfully about absence, so a thing that
+# is not there counts as nought — right for a shelf, where `2 or fewer sage` with
+# no sage is exactly what a restock guard means, and fatal here, because a wall
+# publishes no count and would satisfy every `or fewer` rung in the maze. The
+# `or more` rung needs no guard: nought is never two.
+#
+# **`spoil` and `exit` are both here, which is what makes one file serve both
+# errands.** A gleaning maze withdraws the way out entirely and an ordinary one
+# scatters nothing, so the tier that does not apply is simply never true — no
+# branch on the errand is needed, and `if the stacks has gleaning` is available
+# for a spell that wants to do something *else* per errand.
+#
+# **`and not <way> has back` is what makes this a solver rather than something
+# that resembles one.** Trémaux's rule is *"turn back only when you must"*, and
+# without the `back` exclusion a fixed compass order sends the reading straight
+# where it came from at any junction where two ways read alike, and it cycles for
+# ever. §19 records that the four-tier ladder without it solved 7x7 backtracker
+# mazes and nothing harder.
+#
+# **`else` throughout, not twenty-four bare `if`s.** A flat ladder casts clean
+# and oscillates: the passage tier steps into a fresh cell and four lines later
+# the same lap reads the cell just left as walked and steps straight back.
+# `else` is what says *"the first rung that matches, then stop"*.
+#
+# **It solves the maze in front of it and stops there.** An earlier draft opened
+# the next one itself — `if the stacks is idle / research / end` at the top — and
+# it was the wrong thing twice over: a tester cannot see *one* walk's yield
+# because the count keeps climbing, and a test asserting "five spoils ended the
+# walk" reads fourteen. Re-issuing `research` is one word; a ladder that cannot
+# be observed for a single maze is not much of an instrument.
+#
+# **`repeat until the stacks is idle` is the bound, and it used to be a guess.**
+# This said `repeat 20000` — a figure chosen to outlast the longest gleaning walk
+# because the language had no way to say *until the maze closes* — and the
+# surplus laps then spun doing nothing once it had. That guessed constant is what
+# `until` exists to delete.
+#
+# 20000 laps outlast the longest gleaning walk. An exit walk finishes early and
+# the surplus laps find nothing to do, which costs ticks and nothing else.
+[threading]
+domain = "archive"
+lines = [
+    "repeat until the stacks is idle",
+    "if north has spoil",
+    "follow north",
+    "else",
+    "if east has spoil",
+    "follow east",
+    "else",
+    "if south has spoil",
+    "follow south",
+    "else",
+    "if west has spoil",
+    "follow west",
+    "else",
+    "if north has exit",
+    "follow north",
+    "else",
+    "if east has exit",
+    "follow east",
+    "else",
+    "if south has exit",
+    "follow south",
+    "else",
+    "if west has exit",
+    "follow west",
+    "else",
+    "if north has passage",
+    "follow north",
+    "else",
+    "if east has passage",
+    "follow east",
+    "else",
+    "if south has passage",
+    "follow south",
+    "else",
+    "if west has passage",
+    "follow west",
+    "else",
+    "if north has 1 or fewer marks and not north has back and not north has wall",
+    "follow north",
+    "else",
+    "if east has 1 or fewer marks and not east has back and not east has wall",
+    "follow east",
+    "else",
+    "if south has 1 or fewer marks and not south has back and not south has wall",
+    "follow south",
+    "else",
+    "if west has 1 or fewer marks and not west has back and not west has wall",
+    "follow west",
+    "else",
+    "if north has 2 or more marks and not north has back",
+    "follow north",
+    "else",
+    "if east has 2 or more marks and not east has back",
+    "follow east",
+    "else",
+    "if south has 2 or more marks and not south has back",
+    "follow south",
+    "else",
+    "if west has 2 or more marks and not west has back",
+    "follow west",
+    "else",
+    "if north has back",
+    "follow north",
+    "else",
+    "if east has back",
+    "follow east",
+    "else",
+    "if south has back",
+    "follow south",
+    "else",
+    "if west has back",
+    "follow west",
+    "else",
+    "end",
+    "end",
+    "end",
+    "end",
+    "end",
+    "end",
+    "end",
+    "end",
+    "end",
+    "end",
+    "end",
+    "end",
+    "end",
+    "end",
+    "end",
+    "end",
+    "end",
+    "end",
+    "end",
+    "end",
+    "end",
+    "end",
+    "end",
+    "end",
+    "end",
+]
+
+# Four fragments into the lectern, and the scroll they make.
+#
+# **The counted `has` is the whole point of this one.** Without it a spell cannot
+# tell one fragment from four, so the only way to write this was `repeat 4 / move
+# / end` fired blind — which moves whatever is there, wields a short lectern, and
+# logs *"the lectern can do nothing with fragment"* on every lap for ever. The
+# guard makes the spell wait instead, in silence, until there is enough.
+#
+# **At least four, not exactly four**, which is why a fifth fragment does not
+# stop it: a walk pays into the cabinet while this is running, and a guard that
+# only fired at exactly four would jam the moment the solver got ahead of it.
+#
+# The scroll is left in the lectern for `empty lectern`, deliberately: emptying
+# from inside the loop would make the spell wait out its own twenty-tick
+# assembly every lap.
+[assembling]
+domain = "archive"
+lines = [
+    "repeat 200",
+    "if the cabinet has 4 fragment",
+    "repeat 4",
+    "move fragment to lectern",
+    "end",
+    "wield lectern",
+    "end",
+    "end",
+]

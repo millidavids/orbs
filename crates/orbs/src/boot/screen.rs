@@ -417,7 +417,7 @@ mod tests {
 
     #[test]
     fn the_bevy_version_is_the_one_the_manifest_pins() {
-        // CLAUDE.md pins Bevy exactly and upgrading is a deliberate Phase 3c
+        // CLAUDE.md pins Bevy exactly and upgrading is a deliberate Phase 9c
         // act. This is what stops the splash drifting away from the manifest
         // silently when that window arrives.
         let manifest = include_str!("../../Cargo.toml");

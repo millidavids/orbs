@@ -135,7 +135,7 @@ impl Tower {
 
     /// Step the tonal register through its three treatments.
     ///
-    /// A preview of §3's eldritch register, which Phase 2 drives from threat.
+    /// A preview of §3's eldritch register, which Phase 8 drives from threat.
     /// It is here now because the three typefaces and §3's corruption exemption
     /// had no player-facing surface at all — they were proven by a `println!` in
     /// an example, which is not the same as having been looked at.

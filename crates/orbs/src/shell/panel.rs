@@ -147,7 +147,7 @@ pub(crate) fn split(area: Rect, instruments: &[Instrument]) -> Split {
 /// `domain` is where the player is standing, for the spoken summary — passed in
 /// rather than written here, because a frontend must not be the thing that
 /// decides a place name (rule 2). It was the literal `"laboratory"`, next to a
-/// pane title drawn from the real location: the moment §10's Phase 3a adds a
+/// pane title drawn from the real location: the moment §10's Phase 9a adds a
 /// second instrumented room, a sighted player would read `/tower/workshop` in the
 /// border while a screen-reader user heard "laboratory: forge burning".
 pub(crate) fn paint(
@@ -465,7 +465,7 @@ const fn stand_in(state: State) -> Meter {
 /// would be the second place that decides what "lit" means. Found by
 /// [`Craft::Heating`] rather than by name or by state, for the reason
 /// `bench::hearth` records: `Burning` is the heat source's word today and a
-/// forge in Phase 3a would claim it too.
+/// forge in Phase 9a would claim it too.
 ///
 /// It is the bath's whole distinction — see `bar_of`.
 fn burning(instruments: &[Instrument]) -> bool {

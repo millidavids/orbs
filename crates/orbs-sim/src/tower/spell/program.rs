@@ -60,6 +60,18 @@ pub enum Kind {
         /// `repeat` with no `wait` in it spends its budget and stops, so it
         /// wastes itself rather than hanging the game.
         times: Option<u32>,
+        /// The question that ends it, if it is bounded by one instead.
+        ///
+        /// **Asked before the first pass and again at the end of each**, which
+        /// is Autonauts' rule and makes `repeat until <already true>` run zero
+        /// times rather than one. A do-while would be the other choice and it is
+        /// the wrong one: a guard that cannot prevent the first pass is not a
+        /// guard, and the first pass is where a spell does damage.
+        ///
+        /// **Never set alongside `times`.** Two bounds on one loop is a
+        /// semantics nobody asked for and a thing to teach; `repeat 5 until X`
+        /// is refused at parse, naming the line.
+        until: Option<crate::parser::Condition>,
         /// What to do each time.
         body: Block,
     },
@@ -147,6 +159,7 @@ enum Open {
     Spell,
     Repeat {
         times: Option<u32>,
+        until: Option<Condition>,
     },
     If {
         condition: Option<Condition>,
@@ -192,12 +205,63 @@ pub(super) fn read(lines: &[String]) -> Draft {
         let at = index + 1;
 
         match spell_word(trimmed) {
-            Some(SpellWord::Repeat) => open.push(Nesting {
+            Some(SpellWord::Repeat) => {
+                let argument = spell_argument(trimmed);
+                // **One bound per loop.** `repeat` alone is unbounded, `repeat 5`
+                // counts, `repeat until X` asks — and `repeat 5 until X` is two
+                // bounds whose interaction would be a rule to teach for a shape
+                // nobody reaches for. Refused by name rather than resolved by
+                // precedence, which is the same call `debug_spawn` makes about a
+                // count it cannot read.
+                let counted = count_of(argument);
+                // **The word anywhere, not just in front.** `repeat 5 until X`
+                // has `until` in second place, so looking only at the head would
+                // read it as `repeat 5` and drop the rest in silence — the quiet
+                // reinterpretation this file refuses everywhere else.
+                let mentions = argument
+                    .split_whitespace()
+                    .any(|word| word.eq_ignore_ascii_case(SpellWord::Until.canonical()));
+                let guard = guard_of(argument);
+                // **A bound the orb cannot read makes the loop run nought times,
+                // not for ever.** `(None, None)` is `Loop::Repeat(None)`, which
+                // `step_past` loops unbounded — so a typo in a guard produced the
+                // exact opposite of what `spell_two_bounds` and
+                // `spell_unreadable_until` both say, and worse than either. A
+                // player who mistypes one word got an infinite loop and a message
+                // reading *"the repeat stops"*.
+                //
+                // `Some(0)` is stepped past by the runner without entering, which
+                // is the same treatment `repeat 0` gets and is what the prose
+                // describes.
+                let refused = (Some(0), None);
+                let (times, until) = if mentions && counted.is_some() {
+                    complaints.push(Complaint {
+                        line: at,
+                        key: "spell_two_bounds",
+                    });
+                    refused
+                } else if mentions && guard.is_none() {
+                    // Either the question would not parse, or `until` is buried
+                    // somewhere it cannot be read from. Both are a bound the
+                    // player wrote and the orb cannot use, and an unbounded loop
+                    // is not a safe thing to guess at.
+                    complaints.push(Complaint {
+                        line: at,
+                        key: "spell_unreadable_until",
+                    });
+                    refused
+                } else {
+                    (counted, guard)
+                };
+                open.push(Nesting {
+                    line: at,
+                    kind: Open::Repeat { times, until },
+                    body: Vec::new(),
+                });
+            }
+            Some(SpellWord::Until) => complaints.push(Complaint {
                 line: at,
-                kind: Open::Repeat {
-                    times: count_of(spell_argument(trimmed)),
-                },
-                body: Vec::new(),
+                key: "spell_stray_until",
             }),
             Some(SpellWord::If) => {
                 let condition = crate::parser::condition(spell_argument(trimmed));
@@ -335,7 +399,17 @@ pub fn at<'a>(body: &'a Block, pc: &[usize]) -> Option<&'a Step> {
 /// suspended spell from a `pc` alone would resume every enclosing loop from its
 /// first iteration — §8 requires in-flight state be serialisable, and a spell
 /// inside a loop is exactly that.
-pub fn step_past(body: &Block, pc: &mut Vec<usize>, loops: &mut Vec<Loop>) -> bool {
+/// `again` is asked whether a loop that still has turns left may take one, with
+/// the path pointing at the `repeat` itself. A loop with no `until` answers yes;
+/// this is the only thing in the walker that consults the world, and it is a
+/// closure rather than a `&World` parameter because `step_past` is otherwise
+/// pure and its three test callers have no world to give it.
+pub fn step_past(
+    body: &Block,
+    pc: &mut Vec<usize>,
+    loops: &mut Vec<Loop>,
+    mut again: impl FnMut(&[usize]) -> bool,
+) -> bool {
     if pc.is_empty() {
         return false;
     }
@@ -352,14 +426,18 @@ pub fn step_past(body: &Block, pc: &mut Vec<usize>, loops: &mut Vec<Loop>) -> bo
         }
         pc.pop();
         match loops.pop() {
-            // Unbounded, or more to go: back to the top of this block.
-            Some(Loop::Repeat(None)) => {
-                loops.push(Loop::Repeat(None));
-                pc.push(0);
-                return true;
-            }
-            Some(Loop::Repeat(Some(left))) if left > 1 => {
-                loops.push(Loop::Repeat(Some(left - 1)));
+            // Unbounded, or more to go: back to the top of this block — **and
+            // only if the guard still says so**. `again` is asked with the path
+            // pointing at the `repeat` itself, which is how the caller finds the
+            // step and its `until`; a loop with no guard answers yes and behaves
+            // exactly as it always did.
+            //
+            // **Asked after the count, never before it.** `repeat 3 until X` is
+            // refused at parse, so the two never meet here — but short-circuiting
+            // keeps an exhausted loop from putting a question to the world on its
+            // way out, which would be a read nobody asked for.
+            Some(Loop::Repeat(left)) if left.is_none_or(|turns| turns > 1) && again(pc) => {
+                loops.push(Loop::Repeat(left.map(|turns| turns - 1)));
                 pc.push(0);
                 return true;
             }
@@ -415,8 +493,9 @@ fn push(open: &mut [Nesting], line: usize, kind: Kind) {
 fn close(open: &mut [Nesting], frame: Nesting) {
     let line = frame.line;
     let kind = match frame.kind {
-        Open::Repeat { times } => Kind::Repeat {
+        Open::Repeat { times, until } => Kind::Repeat {
             times,
+            until,
             body: frame.body,
         },
         Open::If { condition, taken } => match taken {
@@ -439,11 +518,44 @@ fn close(open: &mut [Nesting], frame: Nesting) {
 
 /// `repeat 3` → `Some(3)`; a bare `repeat` → `None`.
 ///
-/// A word that is not a number is **not** an error: `repeat until the mortar`
-/// would be a reasonable thing to try, and reading it as an unbounded loop is
-/// closer to what was meant than refusing the line.
+/// A word that is not a number is **not** an error, and it used to be this
+/// function's job to say why — the doc here named `repeat until the mortar` as
+/// *"a reasonable thing to try"* that was read as an unbounded loop because the
+/// language had no `until`. It has one now, so that case is handled properly
+/// above and this stays lenient only for the rest.
 fn count_of(argument: &str) -> Option<u32> {
     argument.split_whitespace().next()?.parse().ok()
+}
+
+/// What follows `until` in a `repeat`'s argument, if it opens with one.
+///
+/// **The word must be first.** `repeat until X` is the shape; anything else with
+/// `until` buried in it is a question the player wrote oddly, and finding the
+/// word anywhere would make `repeat 3 until` and `repeat the until room` both
+/// mean something. §6's rule is that the orb says what it could not read.
+fn after_until(argument: &str) -> Option<&str> {
+    // **Case-folded, because every other control word is.** `spell_word`
+    // lowercases the first word, so `Repeat Until the mortar is idle` is
+    // recognised as a repeat — and this then failed to see its own keyword,
+    // which made `mentions` (case-insensitive) and this disagree: the player was
+    // told the question meant nothing, for a line differing from a working one by
+    // a capital letter.
+    let keyword = SpellWord::Until.canonical();
+    let head = argument.get(..keyword.len())?;
+    if !head.eq_ignore_ascii_case(keyword) {
+        return None;
+    }
+    let rest = &argument[keyword.len()..];
+    // `untilX` is not this word.
+    if !rest.is_empty() && !rest.starts_with(char::is_whitespace) {
+        return None;
+    }
+    Some(rest.trim())
+}
+
+/// The question bounding a `repeat`, if it is bounded by one.
+fn guard_of(argument: &str) -> Option<Condition> {
+    crate::parser::condition(after_until(argument)?)
 }
 
 /// Drop §6's filler words from what a `wait` was given.
@@ -501,10 +613,11 @@ mod tests {
             "wait for mortar",
             "end",
         ]));
-        let Kind::Repeat { times, body } = &program.body[0].kind else {
+        let Kind::Repeat { times, until, body } = &program.body[0].kind else {
             panic!("not a repeat: {:?}", program.body);
         };
         assert_eq!(*times, Some(3));
+        assert_eq!(*until, None, "a counted repeat carries no guard");
         assert_eq!(
             kinds(body),
             [
@@ -528,6 +641,69 @@ mod tests {
             panic!("not a repeat: {:?}", program.body);
         };
         assert_eq!(*times, None);
+    }
+
+    #[test]
+    fn a_repeat_is_bounded_by_a_number_or_a_question_and_never_both() {
+        // **One bound per loop**, refused by name rather than resolved by
+        // precedence. `repeat 5 until X` read as `repeat 5` would drop half of
+        // what the player wrote in silence.
+        let program = read(&lines(&[
+            "repeat until the mortar is working",
+            "grind sage",
+            "end",
+        ]));
+        let Kind::Repeat { times, until, .. } = &program.body[0].kind else {
+            panic!("not a repeat: {:?}", program.body);
+        };
+        assert_eq!(*times, None, "a guarded repeat carries no count");
+        assert!(until.is_some(), "the guard was not read");
+
+        let both = read(&lines(&[
+            "repeat 5 until the mortar is working",
+            "grind sage",
+            "end",
+        ]));
+        assert!(
+            both.complaints
+                .iter()
+                .any(|complaint| complaint.key == "spell_two_bounds"),
+            "two bounds passed unremarked: {:?}",
+            both.complaints,
+        );
+    }
+
+    #[test]
+    fn a_bound_the_orb_cannot_read_is_said_rather_than_dropped() {
+        // A question that will not parse, and `until` buried where it cannot be
+        // read from. Both are a bound the player wrote and the orb cannot use,
+        // and an unbounded loop is not a safe thing to guess at.
+        for text in ["repeat until xyzzy plugh", "repeat the until room"] {
+            let program = read(&lines(&[text, "grind sage", "end"]));
+            assert!(
+                program
+                    .complaints
+                    .iter()
+                    .any(|complaint| complaint.key == "spell_unreadable_until"),
+                "{text:?} passed unremarked: {:?}",
+                program.complaints,
+            );
+        }
+    }
+
+    #[test]
+    fn until_on_its_own_line_belongs_to_nothing() {
+        // It is `repeat`'s argument, never a line of its own — and a real word in
+        // the wrong place is answered, not guessed at.
+        let program = read(&lines(&["until the mortar is working", "grind sage"]));
+        assert!(
+            program
+                .complaints
+                .iter()
+                .any(|complaint| complaint.key == "spell_stray_until"),
+            "a stray until passed unremarked: {:?}",
+            program.complaints,
+        );
     }
 
     #[test]
@@ -649,9 +825,9 @@ mod tests {
         for _ in 0..budget {
             match at(&program.body, &pc).map(|step| &step.kind) {
                 None => break,
-                Some(Kind::Repeat { times, body }) => {
+                Some(Kind::Repeat { times, body, .. }) => {
                     if body.is_empty() {
-                        if !step_past(&program.body, &mut pc, &mut loops) {
+                        if !step_past(&program.body, &mut pc, &mut loops, |_| true) {
                             break;
                         }
                     } else {
@@ -664,7 +840,7 @@ mod tests {
                 }) => {
                     let half = if holds { body } else { otherwise };
                     if half.is_empty() {
-                        if !step_past(&program.body, &mut pc, &mut loops) {
+                        if !step_past(&program.body, &mut pc, &mut loops, |_| true) {
                             break;
                         }
                     } else {
@@ -675,7 +851,7 @@ mod tests {
                 Some(Kind::Command(line)) => out.push(line.clone()),
                 Some(Kind::Wait(what)) => out.push(format!("wait {what}")),
             }
-            if !step_past(&program.body, &mut pc, &mut loops) {
+            if !step_past(&program.body, &mut pc, &mut loops, |_| true) {
                 break;
             }
         }
@@ -693,6 +869,10 @@ mod tests {
             Some(&crate::parser::Condition::Has {
                 place: "dispensary".to_owned(),
                 thing: "sage".to_owned(),
+                // `has sage` *is* `has 1 sage` — the default that keeps every
+                // spell written before counting existed meaning what it meant.
+                count: 1,
+                bound: crate::parser::Bound::AtLeast,
             }),
         );
     }

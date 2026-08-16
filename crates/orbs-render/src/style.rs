@@ -158,7 +158,7 @@ pub enum Heat {
 ///   [`Style::depicted`] drops a picture on an accented cell: §4 reserves the
 ///   triad strictly for meaning.
 ///
-/// DESIGN.md §19 records the widening this represents, and the Phase 5 item that
+/// DESIGN.md §19 records the widening this represents, and the Phase 11 item that
 /// carries the accessibility promise it moved.
 ///
 /// # Eight, and closed

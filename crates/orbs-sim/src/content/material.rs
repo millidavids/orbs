@@ -219,22 +219,36 @@ mod tests {
         let recipes = super::super::Recipes::builtin();
         let mut checked = 0;
         for recipe in recipes.for_instrument("flask_and_rod") {
-            let inputs: Vec<Wash> = recipe
-                .inputs()
-                .iter()
-                .filter_map(|name| materials.wash(name))
-                .collect();
             // A drawing recipe has no single product to check a colour against,
             // and the flask has none — the lectern is the only one that draws.
             let [made] = recipe.outputs()[..] else {
                 continue;
             };
-            let ([first, second], Some(output)) = (inputs.as_slice(), materials.wash(made)) else {
+            let named = recipe.inputs();
+            let [left, right] = named.as_slice() else {
+                continue;
+            };
+            let Some(output) = materials.wash(made) else {
                 continue;
             };
             if output.with.is_none() {
                 continue;
             }
+            // **From here the recipe *claims* to be a mixture, so a missing
+            // colour is a failure and not a reason to look away.** This used to
+            // `filter_map` the inputs and destructure two out of the result, so
+            // an untinted input shrank the list, the pattern failed, and the
+            // whole recipe was skipped **silently**. That is how
+            // `mugwort-tincture` and `valerian-tincture` shipped with no colour
+            // at all: the omission did not fail this check, it switched the check
+            // off — for `keen-draught`, `quiet-draught` and both potions beneath
+            // them. A lint that cannot fail is worse than no lint.
+            let first = materials.wash(left).unwrap_or_else(|| {
+                panic!("`{made}` is a mixture of `{left}`, which has no colour")
+            });
+            let second = materials.wash(right).unwrap_or_else(|| {
+                panic!("`{made}` is a mixture of `{right}`, which has no colour")
+            });
             checked += 1;
             assert_eq!(
                 output,
@@ -258,8 +272,21 @@ mod tests {
             let [made] = recipe.outputs()[..] else {
                 continue;
             };
-            let (Some(from), Some(into)) = (materials.wash(input), materials.wash(made)) else {
-                continue;
+            // **Both or neither, and never one quietly.** The same skip that hid
+            // the flask's missing tints lived here too: an untinted input made
+            // the pair fail to match and the distillation went unchecked. A
+            // distillation whose draught has a colour must produce one, and one
+            // whose draught has none is a material nobody has tinted — which is
+            // the other lint's business, not a reason to skip this one.
+            let (from, into) = match (materials.wash(input), materials.wash(made)) {
+                (Some(from), Some(into)) => (from, into),
+                (Some(_), None) => {
+                    panic!("`{made}` is distilled from the coloured `{input}` and has no colour")
+                }
+                (None, Some(_)) => {
+                    panic!("`{made}` has a colour and the `{input}` it comes from has none")
+                }
+                (None, None) => continue,
             };
             assert_eq!(
                 from, into,

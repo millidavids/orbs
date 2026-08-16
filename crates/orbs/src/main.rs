@@ -105,7 +105,7 @@ fn main() -> AppExit {
 ///
 /// `ORBS_WIZARD` exists because the alternative was renaming a wizard by
 /// overriding a system variable, which works by accident rather than by
-/// intention. The real answer is a settings screen, which §15 puts in Phase 5
+/// intention. The real answer is a settings screen, which §15 puts in Phase 11
 /// alongside the rest of the options; until then this is the switch.
 ///
 /// Read here rather than inside the sim, deliberately: the environment is not

@@ -48,7 +48,7 @@ pub use complete::{Completion, Suggestion, complete, is_answer};
 pub use fuzzy::{EXACT, MIN_SIMILARITY, distance, is_near, similarity};
 pub use intent::{Argument, Candidate, Confidence, Intent, Mode, Resolution, leaf};
 pub use normalise::is_filler;
-pub use question::{Condition, State as SpellState, condition, write_condition};
+pub use question::{Bound, Condition, State as SpellState, condition, write_condition};
 pub use report::report;
 pub use resolve::{Analysis, analyse, resolve};
 pub use scene::{Noun, NounMatch, Scene};

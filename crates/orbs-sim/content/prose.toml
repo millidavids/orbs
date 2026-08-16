@@ -204,6 +204,17 @@ debug_spawn_nowhere = "there is no shelf here to put {name} on"
 debug_spawn_unkept = "the arsenal keeps finished work. {name} is not any"
 debug_spawn_known = "the shelf could find: {name}"
 
+# `debug_spell`, the other tester's door - a known-good spell written out, so a
+# solver need not be typed by hand to check the archive still works.
+#
+# **The refusal names the room**, which is the one thing this word must say that
+# `debug_spawn` need not: a spell is written *for* a domain, so writing it in the
+# wrong one produces a file whose every line fails to resolve.
+debug_spell_done = "the grimoire remembers {name}, in a hand not yours"
+debug_spell_unknown = "no spell in the orb's own hand is called '{name}'"
+debug_spell_elsewhere = "that one is written for the {name}. go there first"
+debug_spell_known = "the orb could write: {name}"
+
 # ---------------------------------------------------------------------------
 # The spellbook (§8). Writing a spell, and the orb writing down what you meant.
 # ---------------------------------------------------------------------------
@@ -408,6 +419,14 @@ spell_stray_else = "{name} line {count}: an else with no if before it. ignored"
 # an unreadable question decides nothing at all, and **neither** half runs. It
 # used to say "answered no", which sent every one of them down the else for ever.
 spell_unreadable_if = "{name} line {count}: that question means nothing. neither half runs"
+# `until`, and the three ways a loop's bound can be written wrong.
+#
+# **The unreadable one stops the loop**, where the unreadable `if` above runs
+# neither half. Declining to act is safe; declining to *stop* is a spell running
+# for ever on a question nobody can answer, so the two cannot share a rule.
+spell_two_bounds = "{name} line {count}: a repeat takes a number or an until, not both"
+spell_stray_until = "{name} line {count}: until belongs to a repeat. ignored"
+spell_unreadable_until = "{name} line {count}: that question means nothing. the repeat stops"
 
 # A question about somewhere the tower does not have. §8's *Referent missing*,
 # and **not the same as the answer being no** - which is exactly the bug this
@@ -569,7 +588,7 @@ recall_quiet-draught = "valerian cut with salt. it distils into stillness"
 
 # ---------------------------------------------------------------------------
 # Essences. **Every one says its use is not built**, because it is not: S11.5's
-# resource table has a siege consuming 4-8 potions, and sieges are Phase 2. A
+# resource table has a siege consuming 4-8 potions, and sieges are Phase 8. A
 # page that described a drinking that does not exist would be worse than one that
 # is honest about the wait.
 # ---------------------------------------------------------------------------
@@ -611,6 +630,73 @@ using_quickening-scroll = "wield it anywhere, before a brew or during one"
 
 recall_verdant-scroll = "the shelf remembers a herb it has never held, one per scroll"
 using_verdant-scroll = "wield it anywhere. there are three herbs to remember"
+
+# ---------------------------------------------------------------------------
+# The six words a spell is written with, which nothing in the game taught.
+#
+# **Found by auditing the language against seven others** - Inform 7, HyperTalk,
+# AppleScript, Autonauts, Factorio, Oxygen Not Included and the Zachtronics
+# assemblers. Every one of them ships a reference; HyperTalk's whole thesis is
+# that an author learns by looking things up. Ours had none: control words are
+# spell-only and outside `Verb::ALL`, so `recall repeat` reached nothing at all.
+#
+# A `recall_` key is what makes a word nameable, so these six lines are the
+# difference between a language and a puzzle.
+# ---------------------------------------------------------------------------
+# `recall scripting` - the one page about the language rather than the tower,
+# and the only one whose last section changes with the room. The grammar is the
+# same everywhere; what a question can *name* is not, and a player standing in
+# the laboratory has no way to guess the archive's vocabulary.
+recall_scripting = "what a spell is made of, and what this room answers"
+
+# The seven words a way can answer to. `recall marks` used to say "other rooms
+# have words of their own", which is a dead end *and* a wrong reason - it is not
+# a scoping problem, the page simply did not exist.
+recall_passage = "open floor nobody has walked. a solver takes these first"
+using_passage = "if north has passage"
+
+recall_wall = "no way through. a solver checks this before it counts anything"
+using_wall = "if not north has wall"
+
+recall_exit = "the way out. a gleaning maze withdraws it and has none"
+using_exit = "if north has exit"
+
+recall_back = "the way the reading last came from"
+using_back = "and not north has back, or a solver turns round for ever"
+
+recall_spoil = "something worth picking up, one square that way"
+using_spoil = "if north has spoil. only a gleaning maze scatters them"
+
+recall_marks = "how often the square that way has been walked"
+using_marks = "if north has 2 or more marks. a wall has none, so guard on wall"
+
+recall_gleaning = "the errand a gleaning-scroll sets: gather, and no way out"
+using_gleaning = "if the stacks has gleaning, to walk it a different way"
+man_scripting_words = "words"
+man_scripting_asking = "questions"
+man_scripting_here = "nameable here"
+man_scripting_shape_is = "<place> is idle, working or empty"
+man_scripting_shape_has = "<place> has <thing>"
+man_scripting_shape_count = "<place> has 2 or more <thing>, or at most 2, or exactly 2"
+man_scripting_shape_join = "join them with and, or, not, either, both"
+
+recall_repeat = "do a block again. bare it runs for ever, or give it a count"
+using_repeat = "repeat 4, the lines, then end. or repeat until <question>"
+
+recall_until = "the question that ends a repeat, asked before every pass"
+using_until = "repeat until the stacks is idle. a count or an until, not both"
+
+recall_if = "take the lines under it only when the tower answers yes"
+using_if = "if the mortar is idle, the lines, then end. else is the other half"
+
+recall_else = "what an if does when the answer is no"
+using_else = "put it between the two halves. every if may have one"
+
+recall_end = "closes a block, whatever opened it"
+using_end = "one end for every repeat and every if, or the orb closes them"
+
+recall_wait = "hold here until something you name happens"
+using_wait = "wait for the mortar. it costs no tick and holds no slot"
 
 # What the archive is for, and what its verb does - the two manual entries the
 # domain has never had.

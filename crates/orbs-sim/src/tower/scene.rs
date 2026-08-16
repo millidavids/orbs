@@ -27,7 +27,6 @@
 
 use bevy_ecs::prelude::*;
 
-use super::maze::Sense;
 use super::node::{Cwd, Fixture, Name, Nameable, children_of, path_of};
 use crate::execute::LOG;
 use crate::parser::{NounKind, Scene};
@@ -41,7 +40,7 @@ use crate::parser::{NounKind, Scene};
 /// that domain**. `decoct clarity` works in `/tower/laboratory` and nowhere else.
 ///
 /// That is the base state, not a limitation: §19 settles **pane addressing** —
-/// *"named by domain, routed within the focused set"* — as a **Phase 2** item,
+/// *"named by domain, routed within the focused set"* — as a **Phase 7** item,
 /// which is precisely the unlock that later lets a player act on a domain
 /// without walking to it. Acting at a distance has to *become* possible, and it
 /// cannot if it was free from the start.
@@ -190,8 +189,8 @@ pub fn scene_at(world: &World, at: Entity) -> Scene {
 
     // **The maze's readings, always, whether or not a maze is open.**
     //
-    // These are the words a solver's `if` names — `if north has passage and not
-    // north has walked` — and they have to resolve at the moment the spell is
+    // These are the words a solver's `if` names — `if north has 1 or fewer
+    // marks` — and they have to resolve at the moment the spell is
     // **cast**, which is exactly when none of them is true of anything.
     // `spell::compile` resolves a condition's names against the room as it is,
     // and nulls the whole condition for a name it cannot place; that guard is
@@ -212,11 +211,7 @@ pub fn scene_at(world: &World, at: Entity) -> Scene {
     // with the world would make `if the stacks has gleaning` compile to a dead
     // branch, and a solver that could not ask which maze it was in is two
     // solvers the player has to choose between by hand.
-    for reading in Sense::ALL
-        .into_iter()
-        .chain([super::maze::BACK, super::maze::SPOIL])
-        .chain(super::maze::Errand::ALL)
-    {
+    for reading in super::maze::readings() {
         scene = scene.with(NounKind::Sense, reading);
     }
 
@@ -257,7 +252,7 @@ pub fn scene_at(world: &World, at: Entity) -> Scene {
             // This does **not** loosen "you can only name what is where you
             // are". That rule is about acting on another *domain* at a distance
             // — the archive's fragments from the laboratory — and a domain is
-            // not a `Fixture`. Phase 2's pane addressing is still what relaxes
+            // not a `Fixture`. Phase 7's pane addressing is still what relaxes
             // it in general.
             if world.get::<Fixture>(node).is_some() {
                 for held in children_of(world, node) {
@@ -403,7 +398,7 @@ mod tests {
     fn a_domains_belongings_are_nameable_only_from_inside_it() {
         // §7: the tree is the tower and navigation is diegetic. Brewing happens
         // in the laboratory because that is where the instruments are, which is
-        // also what gives §19's Phase 2 pane addressing something to be an unlock
+        // also what gives §19's Phase 7 pane addressing something to be an unlock
         // *from* — acting at a distance has to become possible.
         //
         // Tested with `retort` rather than `clarity`: recipe names are `Topic`s

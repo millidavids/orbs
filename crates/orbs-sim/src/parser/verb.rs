@@ -81,17 +81,23 @@ pub enum NounKind {
     Name,
     /// What the archive's maze reports about the cell you are reading.
     ///
-    /// `passage`, `wall`, `walked`, `twice`, `exit` — the words a solver's `if`
-    /// names. **A kind of their own, and no slot asks for one**, so a sense can
-    /// never fill a `Reagent` or an `Essence` by accident while
+    /// `passage`, `wall`, `exit`, plus `back`, `spoil`, `marks` and the errand
+    /// words — the vocabulary a solver's `if` names, and `tower::maze::readings`
+    /// is the one list of it. **A kind of their own, and no slot asks for one**,
+    /// so a sense can never fill a `Reagent` or an `Essence` by accident while
     /// [`Any`](Self::Any) still finds it. That last part is the whole reason the
     /// kind exists: `spell::compile` resolves a condition's names against the
-    /// room *as it is at that instant*, and no cell is `walked` at the moment a
-    /// solver is cast — so without a kind the scene always offers, every `if` in
+    /// room *as it is at that instant*, and no way has been walked at the moment
+    /// a solver is cast — so without a kind the scene always offers, every `if` in
     /// it would compile to a branch that takes neither half.
     ///
-    /// **Not [`Topic`](Self::Topic)**, which `recall` reads: `recall walked`
-    /// would resolve and then find no manual entry.
+    /// **A kind of its own, and now a `Topic` as well.** This said *"not
+    /// [`Topic`](Self::Topic), which `recall` reads: `recall walked` would
+    /// resolve and then find no manual entry"* — and both halves have since
+    /// stopped being true. `walked` was replaced by the counted `marks`, and
+    /// every reading has a `recall_` page, so each one *does* find an entry. The
+    /// kind still matters for the reason above it: no slot asks for a `Sense`,
+    /// so one can never fill a `Reagent` by accident, while `Any` still finds it.
     Sense,
     /// Anything with text in it — `peruse orb.log`, `peruse night_watch.spell`.
     ///

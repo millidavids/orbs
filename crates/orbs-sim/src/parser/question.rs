@@ -11,10 +11,15 @@
 //! # No punctuation, and no precedence to learn the hard way
 //!
 //! §6's posture is that a player types what they mean. `if count(sage) > 0` is a
-//! different program wearing the game's clothes, so there are no comparisons and
-//! no brackets — but there **are** connectives, because `if the mortar is idle
-//! and the dispensary has sage` is a sentence anyone would write, and before
-//! this the parser read the first half and threw the rest away.
+//! different program wearing the game's clothes, so there are no brackets and no
+//! operators — but there **are** connectives, because `if the mortar is idle and
+//! the dispensary has sage` is a sentence anyone would write, and before this the
+//! parser read the first half and threw the rest away.
+//!
+//! **And there are comparisons now, spelled out rather than punctuated.** `if the
+//! cabinet has 2 or more fragment` is the sentence; `>=` is the different program.
+//! This paragraph used to say there were none at all, which was true when the
+//! only counted thing in the game reported itself in two buckets — see §19.
 //!
 //! `not` binds tighter than `and`, which binds tighter than `or`, which is what
 //! every language does and what most people expect. Where that is not enough,
@@ -45,15 +50,102 @@
 use super::normalise::{Tokens, is_filler};
 use super::verb::NounKind;
 
+/// Which way a count is compared.
+///
+/// **Named rather than a `bool`**, because the call sites read it: `at_most:
+/// false` at a construction site says nothing, and this is a comparison the
+/// player wrote in words.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Bound {
+    /// At least this many — `has 4 X`, and `has 4 or more X` said out loud.
+    ///
+    /// **The default, and the one a bare count means.** A guard asks *have I
+    /// enough yet*, so `has 4 fragment` must stay true at five or the spell that
+    /// spends four stops working the moment something gets ahead of it.
+    #[default]
+    AtLeast,
+    /// At most this many — `has 4 or fewer X`.
+    ///
+    /// The direction that cannot be said any other way, and the reason
+    /// comparators earn their place: *prefer the least-walked* is a rule the
+    /// world can answer and an at-least count cannot ask.
+    AtMost,
+    /// This many and no other — `has exactly 4 X`, or `has = 4 X`.
+    ///
+    /// **The third bound, and it arrived with the symbols.** The words gave two
+    /// directions and no way to say *this many*; `=` is a thing people write
+    /// without being taught, and reading it as at-least would be the quiet
+    /// reinterpretation §6 forbids. `not has exactly 4 X` is how the fourth
+    /// question is asked, so there is no `!=` to learn.
+    Exactly,
+}
+
+/// Every way a bound can be written, longest match first.
+///
+/// **A table, so the reader and the writer cannot disagree**, and so a new
+/// spelling is one row rather than an arm in each. Order matters: `<=` must be
+/// tried before `<`, and `or fewer` shares its first token with `or more`.
+///
+/// **`at least` is here without its `at`.** That word is §6 filler
+/// (`normalise::FILLER`) and is stripped before a question is ever read, which
+/// is exactly why `has at least 2 marks` used to silently become `has marks` —
+/// the same swallow counting was added to close, left open for the spelling
+/// nobody had tried.
+const BOUNDS: &[(&[&str], Bound, i64)] = &[
+    // Words. `more than 2` is *three or more*, which is why the offsets exist:
+    // one shape in the type, several in English.
+    (&["or", "more"], Bound::AtLeast, 0),
+    (&["or", "fewer"], Bound::AtMost, 0),
+    (&["or", "less"], Bound::AtMost, 0),
+    (&["least"], Bound::AtLeast, 0),
+    (&["most"], Bound::AtMost, 0),
+    (&["exactly"], Bound::Exactly, 0),
+    (&["more", "than"], Bound::AtLeast, 1),
+    (&["greater", "than"], Bound::AtLeast, 1),
+    (&["fewer", "than"], Bound::AtMost, -1),
+    (&["less", "than"], Bound::AtMost, -1),
+    // Symbols, for people who would rather write them. `>=` before `>`.
+    (&[">="], Bound::AtLeast, 0),
+    (&["=<"], Bound::AtMost, 0),
+    (&["<="], Bound::AtMost, 0),
+    (&["=="], Bound::Exactly, 0),
+    (&["="], Bound::Exactly, 0),
+    (&[">"], Bound::AtLeast, 1),
+    (&["<"], Bound::AtMost, -1),
+];
+
 /// A question a spell can ask about the tower.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Condition {
-    /// `the dispensary has sage`.
+    /// `the dispensary has sage`, or `the cabinet has 4 fragment`.
     Has {
         /// Where to look.
         place: String,
         /// What to look for.
         thing: String,
+        /// How many of it are wanted.
+        ///
+        /// **One unless a number was written**, so every spell that predates
+        /// counting keeps its exact meaning — `has sage` *is* `has 1 sage`.
+        ///
+        /// **At least, never exactly.** A guard asks *"have I enough yet"*;
+        /// `if the cabinet has 4 fragment` must stay true at five or the spell
+        /// that assembles a scroll stops working the moment it gets ahead.
+        ///
+        /// The number was **silently swallowed** before this field existed:
+        /// `has 4 fragment` parsed as `has fragment`, with no fault, and
+        /// `interpret` showed the shorter question. That is §19's *"the orb
+        /// writes down a shorter command than it heard"* arriving through the
+        /// one surface built to catch it.
+        count: u32,
+        /// Which side of `count` satisfies it.
+        ///
+        /// **`AtLeast` with a count of nought is unrepresentable**, and that is
+        /// enforced where the question is read rather than by the type: it
+        /// collapses to `has no X`, because "at least nought" is satisfied by an
+        /// empty shelf and is therefore a guard that always fires. `AtMost` with
+        /// nought is a real comparison and means exactly what it says.
+        bound: Bound,
     },
     /// `the mortar is idle`.
     Is {
@@ -104,7 +196,7 @@ impl Condition {
     /// Visit every name in the tree, in the order it was written.
     fn walk<'a>(&'a self, visit: &mut impl FnMut(NounKind, &'a str)) {
         match self {
-            Self::Has { place, thing } => {
+            Self::Has { place, thing, .. } => {
                 visit(NounKind::Place, place);
                 visit(NounKind::Any, thing);
             }
@@ -127,7 +219,7 @@ impl Condition {
     /// typed. See [`compile`](crate::tower::spell::compile).
     pub fn rename(&mut self, rename: &mut impl FnMut(NounKind, &str) -> Option<String>) {
         match self {
-            Self::Has { place, thing } => {
+            Self::Has { place, thing, .. } => {
                 if let Some(found) = rename(NounKind::Place, place) {
                     *place = found;
                 }
@@ -196,6 +288,23 @@ fn is_connective(word: &str) -> bool {
     CONNECTIVES.contains(&word)
 }
 
+/// A count moved by a strict comparator's offset.
+///
+/// **`more than 2` is *three or more***, and the type carries two directions
+/// rather than four so the strictness lives here instead of in every place that
+/// answers one. Counts are whole, so this loses nothing.
+///
+/// Clamped at each end, and the two ends clamp differently **because clamping
+/// both to nought inverts one of them**. `fewer than 0` is unsatisfiable as
+/// written and becomes *none*, which is at least a question the world can answer.
+/// `more than u32::MAX` is unsatisfiable too — but clamping *that* to nought
+/// makes it "at least nought", satisfied by an empty shelf, so a typo that should
+/// never fire would always fire. It saturates instead.
+fn shift(count: u32, offset: i64) -> u32 {
+    let shifted = i64::from(count) + offset;
+    u32::try_from(shifted).unwrap_or(if shifted < 0 { 0 } else { u32::MAX })
+}
+
 /// Write a question back out, as a player could have typed it.
 ///
 /// Round-trips: `condition(&write_condition(&q)) == Some(q)` for every question
@@ -205,7 +314,55 @@ fn is_connective(word: &str) -> bool {
 #[must_use]
 pub fn write_condition(condition: &Condition) -> String {
     match condition {
-        Condition::Has { place, thing } => format!("{place} has {thing}"),
+        // **The count is written only when it is not one, and `or more` is never
+        // written at all.** `has sage`, `has 1 sage` and `has 1 or more sage` are
+        // one question with three spellings; the bare one is canonical, so
+        // quoting either of the others back at a player is the orb inventing a
+        // notation — the thing this function exists not to do.
+        //
+        // `or fewer` **is** written, because nothing else says it. That
+        // asymmetry is visible in `interpret` and is the point: it shows which
+        // direction is the default.
+        Condition::Has {
+            place,
+            thing,
+            count: 1,
+            bound: Bound::AtLeast,
+        } => format!("{place} has {thing}"),
+        // **Nought at-least keeps its words, and that is a round-trip fix.**
+        // `has 0 or more X` is deliberately *not* collapsed by the reader — the
+        // player asked for the vacuous question by name — but writing it as
+        // `has 0 X` handed it back to the reader, which *does* collapse that to
+        // `not has X`. So `interpret`, the one surface built to show a mis-read
+        // question, showed the **negation** of what was typed.
+        Condition::Has {
+            place,
+            thing,
+            count: 0,
+            bound: Bound::AtLeast,
+        } => format!("{place} has 0 or more {thing}"),
+        Condition::Has {
+            place,
+            thing,
+            count,
+            bound: Bound::AtLeast,
+        } => format!("{place} has {count} {thing}"),
+        Condition::Has {
+            place,
+            thing,
+            count,
+            bound: Bound::AtMost,
+        } => format!("{place} has {count} or fewer {thing}"),
+        // **Words, not the symbol that may have been typed.** `=` and `exactly`
+        // are one question, and the orb's fair copy is the spelling a player who
+        // has never seen an operator can still read — which is the whole of why
+        // symbols are accepted at the door and not kept.
+        Condition::Has {
+            place,
+            thing,
+            count,
+            bound: Bound::Exactly,
+        } => format!("{place} has exactly {count} {thing}"),
         Condition::Is { place, state } => format!("{place} is {}", state.canonical()),
         Condition::Not(inner) => format!("not {}", bracketed(inner, Around::Not)),
         Condition::All(items) => join(items, "and", Around::All),
@@ -340,6 +497,100 @@ impl<'a> Reader<'a> {
         false
     }
 
+    /// A leading number, if the next word is one — `has 4 fragment`.
+    ///
+    /// **Only ever called on the `has` side.** `is 4 idle` is not a sentence,
+    /// and letting a number through there would make `State::read` the thing
+    /// that refused it, one layer too late to say why.
+    ///
+    /// A number too large for a `u32` is **not** a count and is left alone, so
+    /// it falls through to [`span`](Self::span) and becomes part of the thing's
+    /// name — a question about something called `99999999999999 sage`, which
+    /// nothing is, so `compile` reports that name as one it cannot place and
+    /// §8.1 gets its culprit. Saturating to `u32::MAX` instead would turn a
+    /// typo into a guard that silently never fires.
+    fn eat_count(&mut self) -> Option<u32> {
+        let count = self.peek()?.parse().ok()?;
+        self.at += 1;
+        Some(count)
+    }
+
+    /// The [`BOUNDS`] row written at `at`, if one is — words and length.
+    fn bound_at(&self, at: usize) -> Option<(usize, Bound, i64)> {
+        BOUNDS.iter().find_map(|(words, bound, offset)| {
+            let matched = words
+                .iter()
+                .enumerate()
+                .all(|(step, word)| self.words.get(at + step) == Some(word));
+            matched.then_some((words.len(), *bound, *offset))
+        })
+    }
+
+    /// A symbol written against its number — `>=2`, with no space.
+    ///
+    /// Natural to type and invisible to a token-at-a-time reader, since the
+    /// whole thing arrives as one word. Longest operator first, so `>=2` is not
+    /// read as `>` against `=2`.
+    fn glued(&self) -> Option<(Bound, i64, u32)> {
+        let word = self.peek()?;
+        BOUNDS.iter().find_map(|(words, bound, offset)| {
+            let [symbol] = words else { return None };
+            let rest = word.strip_prefix(symbol)?;
+            Some((*bound, *offset, rest.parse().ok()?))
+        })
+    }
+
+    /// The count and which side of it satisfies, however it was written.
+    ///
+    /// # Every spelling, because the ones it refused were swallowed
+    ///
+    /// `has 2 marks`, `has at least 2 marks`, `has 2 or more marks`,
+    /// `has more than 1 mark`, `has >= 2 marks`, `has >=2 marks`,
+    /// `has exactly 2 marks` — one question, seven ways of asking it. Before
+    /// this only the first two existed and the rest **vanished silently**:
+    /// `at` is §6 filler, so `at least 2 marks` lost its `at` and the remainder
+    /// resolved down to `marks` with no fault raised. That is the same swallow
+    /// counting was added to close, left open for the spelling nobody tried.
+    ///
+    /// Returns whether a bound was **written**, which the caller needs: a bare
+    /// `has 0 X` collapses to `has no X`, and an explicit `has 0 or more X` must
+    /// not, because the player asked for the vacuous question by name.
+    ///
+    /// # `or` is why a postfix is read at all
+    ///
+    /// `or` joins two halves of a question and [`span`](Self::span) stops dead
+    /// at it, so `has 2 or more marks` ate the `2`, found an empty span and
+    /// refused the line. The `or` has to be claimed before the disjunction
+    /// parser sees it, and this is the only place that can happen:
+    /// `disjunction` → `conjunction` → `comparison` → here, with it unconsumed.
+    /// **Whole row or nothing**, so `has 2 sage or the mortar is idle` is still
+    /// the disjunction it reads as.
+    fn eat_bounded_count(&mut self) -> Option<(u32, Bound, bool)> {
+        if let Some((bound, offset, count)) = self.glued() {
+            self.at += 1;
+            return Some((shift(count, offset), bound, true));
+        }
+        let start = self.at;
+        let prefix = self.bound_at(self.at);
+        if let Some((words, ..)) = prefix {
+            self.at += words;
+        }
+        let Some(count) = self.eat_count() else {
+            // A bound with no number is not a question. Put the words back so
+            // `span` sees them and the line is refused naming what it read.
+            self.at = start;
+            return None;
+        };
+        if let Some((_, bound, offset)) = prefix {
+            return Some((shift(count, offset), bound, true));
+        }
+        if let Some((words, bound, offset)) = self.bound_at(self.at) {
+            self.at += words;
+            return Some((shift(count, offset), bound, true));
+        }
+        Some((count, Bound::AtLeast, false))
+    }
+
     fn disjunction(&mut self) -> Option<Condition> {
         let mut items = vec![self.conjunction()?];
         while self.eat("or") {
@@ -463,16 +714,42 @@ impl<'a> Reader<'a> {
             // `is not idle`.
             Asking::Is => self.eat("not"),
         };
+        // **After the negation and before the span**, which is the only place it
+        // can go: `span` stops at a connective or a question word and would
+        // otherwise take the digit as the first word of the thing's name — which
+        // is exactly what it did before counting existed, giving `has 4 fragment`
+        // a thing called *"4 fragment"* that nothing is ever called.
+        let counted = match asking {
+            Asking::Has => self.eat_bounded_count(),
+            Asking::Is => None,
+        };
+        let (counted, bound, written) = match counted {
+            Some((count, bound, written)) => (Some(count), bound, written),
+            None => (None, Bound::AtLeast, false),
+        };
         let span = self.span();
         if span.is_empty() {
             return None;
         }
         self.at += span.len();
 
+        // **`has 0 sage` is `has no sage` with a digit**, and saying so here is
+        // what stops it being a branch that always fires: "at least nought" is
+        // satisfied by an empty shelf, so read literally it is the vacuous truth
+        // a player least expects from a guard they wrote.
+        //
+        // **Only when no bound was written.** `has 0 or fewer sage` and
+        // `has 0 or more sage` are real comparisons — the first asks for an empty
+        // shelf and says so, the second asks the vacuous question by name — and
+        // collapsing either would make the explicit spelling pointless.
+        let bare_nought = counted == Some(0) && bound == Bound::AtLeast && !written;
+        let negated = negated || bare_nought;
         let condition = match asking {
             Asking::Has => Condition::Has {
                 place: name.to_owned(),
                 thing: span.join(" "),
+                count: if bare_nought { 1 } else { counted.unwrap_or(1) },
+                bound,
             },
             Asking::Is => Condition::Is {
                 place: name.to_owned(),
@@ -635,9 +912,16 @@ mod tests {
     }
 
     fn has(place: &str, thing: &str) -> Condition {
+        counted(place, thing, 1)
+    }
+
+    /// `has <count> <thing>` — the same question with a number written on it.
+    fn counted(place: &str, thing: &str, count: u32) -> Condition {
         Condition::Has {
             place: place.to_owned(),
             thing: thing.to_owned(),
+            count,
+            bound: Bound::AtLeast,
         }
     }
 }

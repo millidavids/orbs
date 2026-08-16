@@ -42,7 +42,7 @@ use bevy::prelude::Resource;
 /// The stages, in order, with how long each lasts.
 ///
 /// Just under thirteen seconds all told, and it runs every time: the keypress
-/// skip is gone (§19), and §4's *sticky* skip waits on Phase 5's settings.
+/// skip is gone (§19), and §4's *sticky* skip waits on Phase 11's settings.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) enum Stage {
     /// A dark tube. Nothing has happened yet.
@@ -226,7 +226,7 @@ impl Boot {
     //
     // §4's **sticky** skip is a different thing and still stands — a remembered
     // setting for someone on their fortieth launch, not a per-launch keypress —
-    // and it needs somewhere to persist, which arrives with §15's Phase 5
+    // and it needs somewhere to persist, which arrives with §15's Phase 11
     // settings screen. `Boot::finished` is the state it will select.
 }
 

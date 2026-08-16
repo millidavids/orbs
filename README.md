@@ -33,7 +33,9 @@ orbs:~$ _
 
 ---
 
-**Status: pre-production.** No implementation code yet.
+**Status: in production.** Phases 0, 0.5 and 1 are closed — the parser, the
+determinism spine, the cell renderer, brewing, the archive, the spell engine and
+the scripting language are built and the game runs. Phase 2 (Scrying) is next.
 
 | | |
 |---|---|

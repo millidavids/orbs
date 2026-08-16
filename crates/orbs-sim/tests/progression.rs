@@ -155,15 +155,51 @@ fn choose(sim: &Sim) -> Option<&'static str> {
             return Some(way);
         }
     }
-    for word in ["walked", "twice"] {
-        if let Some(way) = ways
-            .into_iter()
-            .find(|way| reads(sim, way, word) && !reads(sim, way, "back"))
-        {
-            return Some(way);
-        }
+    // **The middle tiers compare the count**, where they used to name `walked`
+    // and `twice`. Reading those by string is why this had to change by hand:
+    // the words are gone, so both rungs would have gone quietly dead and this
+    // test would still have passed on a degraded exit→passage→back ladder — with
+    // its own comment above claiming the missing rungs are what make it
+    // terminate. A silent weakening, which is worse than a failure.
+    //
+    // **`marks` is absent rather than nought on an unwalked way**, so a
+    // `<= 1` here means exactly one and needs no `wall` guard — unlike the same
+    // rung written as a *spell*, where a comparison answers nought for absence
+    // and a wall would satisfy it. Two mechanisms, one ladder.
+    let least = ways
+        .into_iter()
+        .find(|way| !reads(sim, way, "back") && marks(sim, way).is_some_and(|walked| walked <= 1));
+    let most = ways
+        .into_iter()
+        .find(|way| !reads(sim, way, "back") && marks(sim, way).is_some_and(|walked| walked >= 2));
+    least
+        .or(most)
+        .or_else(|| ways.into_iter().find(|way| reads(sim, way, "back")))
+}
+
+/// How many times the square a way leads to has been walked, if it says.
+///
+/// The count rides on `Stock`, so this is the same arithmetic `has 2 or more
+/// marks` is answered by rather than a second opinion about how many there are.
+fn marks(sim: &Sim, way: &str) -> Option<u32> {
+    let world = sim.world();
+    let cwd = world.resource::<orbs_sim::Cwd>().0;
+    let node = orbs_sim::children_of(world, cwd).into_iter().find(|node| {
+        world
+            .get::<orbs_sim::Name>(*node)
+            .is_some_and(|name| name.0 == way)
+    })?;
+    let held = orbs_sim::children_of(world, node)
+        .into_iter()
+        .find(|held| {
+            world
+                .get::<orbs_sim::Name>(*held)
+                .is_some_and(|name| name.0 == "marks")
+        })?;
+    match world.get::<orbs_sim::tower::Stock>(held)? {
+        orbs_sim::tower::Stock::Counted(units) => Some(*units),
+        orbs_sim::tower::Stock::Endless => None,
     }
-    ways.into_iter().find(|way| reads(sim, way, "back"))
 }
 
 /// Whether one way answers to `word` — a reading, or `back`.

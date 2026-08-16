@@ -9,6 +9,10 @@
 //! measurement rather than a claim. It is also the loop `orbs-balance` will
 //! sweep in Phase 2, so a regression here is a regression in every sweep.
 //!
+//! **Still Phase 2 after the renumber**, and not by accident: the siege moved to
+//! Phase 8 but `orbs-balance` moved *to* Phase 2, because five domain phases
+//! would otherwise author their durations on top of numbers nothing has swept.
+//!
 //! It exists because a review proposed caching the `QueryState`s that
 //! `tower::burn` and `tower::finish` build per tick. The number says the whole
 //! catch-up is ~120 ms at ~4 µs a step, so those four constructions are noise at

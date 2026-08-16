@@ -1,7 +1,7 @@
 # O.R.B.S. — Operational Relic Bewitching System
 
 **Blackhearth Studios — Game Design Document**
-Status: draft 8 · 2026-08-03 · pre-production, no code written
+Status: draft 8 · 2026-08-16 · **in production — Phases 0, 0.5 and 1 closed**
 
 Drafts 2, 4, and 6 each incorporate an independent staff-level design review.
 Draft 6 settled the tick model as duration-based, removed the offline clamp, gave
@@ -435,10 +435,10 @@ hard to push — but it arrives organically rather than through a menu button.
 |---|---|---|
 | **Production heat** — the more you brew, ward, and summon, the more the realm notices | Phase 1 | Yes |
 | **Scrying depth** — looking hard into hostile feeds draws attention | Phase 0 (scrying is in the slice) | Yes |
-| **Infiltration** — connecting to enemy hosts, scaling with time and interference | Phase 3 | **No — cut-line item 3** |
+| **Infiltration** — connecting to enemy hosts, scaling with time and interference | Phase 9 | **No — cut-line item 3** |
 
 Draft 5 rested this entire loop on infiltration alone, which was both a phase
-late (sieges land in Phase 2) and a cut-line dependency. Production heat and
+late (sieges land in Phase 8) and a cut-line dependency. Production heat and
 scrying depth are always available and survive every cut; **infiltration becomes
 the high-yield amplifier rather than the sole carrier.**
 
@@ -632,7 +632,7 @@ resolves against the *contents of its second* — `move charcoal from dispensary
 to athanor` looks `charcoal` up inside `dispensary`. This is what makes `from`
 load-bearing rather than decorative, and it does **not** relax §19's *"you can
 only name what is where you are"* for anything else: `purge charcoal` from the
-laboratory still fails, and Phase 2's pane addressing is still what relaxes the
+laboratory still fails, and Phase 8's pane addressing is still what relaxes the
 rule generally. The two-argument short form `move <thing> <dst>` infers the
 source from the current place and needs none of this.
 
@@ -1241,13 +1241,47 @@ what it cost to find.
 **Archive is bespoke, not derived** — it gates all discovery, is played most, and
 stales fastest. Budget fallback: decipherment becomes mostly a resource sink with
 occasional authored set-pieces. **That fallback is the plan of record until Phase
-3a**: the archive's minigame was considered for the head of Phase 1 and
+9a**: the archive's minigame was considered for the head of Phase 1 and
 deliberately left where discovery is, because its own "see it" line — gaining a
 verb — *is* the discovery loop, and because what the puzzle should feel like
 depends on what it unlocks (§19).
 
 **Scrying is elevated by the aberration model.** Log-parsing is how sabotage is
 found. Build it early, alongside the siege prototype.
+
+> **Amended: it is built early and the siege is not.** The five unbuilt domains
+> became Phases 2–7 and the siege moved to 8, so "alongside" no longer holds.
+> Scrying stays first for the half of the reason that survives — sabotage is
+> illegible without it, and the calm layer produces sabotage from Phase 0.
+
+#### What each remaining domain's scarcity is
+
+§10.1 is the worked example and the six rows of its template are in ROADMAP's
+*Phases 2–7* preamble. The load-bearing correction, recorded because a first pass
+got it wrong twice: **brewing's scarcity is lit *time*, not fuel stock** — fuel is
+`Holding::endless` on purpose — and `CAPACITY = 1` is tower-wide, so §5.0's
+*"concurrency is the real scarcity"* is a resource every domain already shares.
+
+| Domain | Its scarcity | Its choice |
+|---|---|---|
+| **Scrying** | the production slot — a read is not a brew | which source to read first |
+| **Spellcraft** | Concentration, §11.5's shared pool | what is worth factoring out |
+| **Enchanting** | the buff's own lifetime, and the slot | which instrument, and when to re-buff |
+| **Summoning** | allocation — a unit is spent stock | what to spend it on, and the unit's standing rule |
+| **Defense** | wards, made and consumed | where, given readable approach state |
+
+**Two things are ruled out and both were tried on paper.** A resource cost on
+*looking* contradicts §5.1's *"issuing commands is free"* and would push a player
+without potions onto the visual tell, which §14 makes a bonus and never a
+requirement. And a second fuel supply contradicts `build.rs`'s own reason for
+endless charcoal: *"a cold athanor with nothing to burn is a laboratory with
+nothing to do."*
+
+**Defense is the one that can still fail the rule.** *Command pressure at 1 Hz*
+is a reflex mechanic unless something makes it a decision, and §5.1's answer for
+aberrations — *"identifying any aberration costs exactly one command, never a
+sequence"* — has no ward-placement analogue yet. Finding one is head-of-phase
+work and the phase does not start without it.
 
 ### 10.1 Brewing — the worked example
 
@@ -1342,7 +1376,7 @@ file a recipe lives in, and a material's **state** decides which recipes can fir
 sequence. That is what gives the puzzle repeat-tolerance.
 
 **Capacity 1 is the form that ships.** §11.5 reaches capacity 4 at ~10 h and
-capacity is researched, which is Phase 3a — so for Phases 1 and 2 the four stages
+capacity is researched, which is Phase 9a — so for Phases 1 and 2 the four stages
 are sequential and the decision is *when to light the athanor* and whether both
 heated stages fit one window. Capacity 4 is where the laboratory becomes a
 pipeline, with the mortar grinding the next brew while the alembic distils this
@@ -1352,7 +1386,7 @@ one.
 generic-engine-first; that is the classic route to the wrong abstraction, because
 the generalisation axis is only knowable from the *second* consumer. Instead:
 build each bespoke domain concretely and cheaply, and schedule an explicit,
-budgeted **extraction task in Phase 3** when the derived domains arrive. If the
+budgeted **extraction task in Phase 9** when the derived domains arrive. If the
 derived domains are cut, the extraction is cut with them at zero loss.
 
 ## 11. Progression
@@ -1771,7 +1805,7 @@ composition architecture either way.
 TOML/RON keyed by state, never string literals in Rust.
 
 **Mitigation 3 — a word budget per phase**, tracked with a running total in §15,
-so slippage is measurable rather than discovered in Phase 5.
+so slippage is measurable rather than discovered in Phase 11.
 
 **Mitigation 4 — vocabulary size is the dominant multiplier** (§11).
 
@@ -1924,7 +1958,7 @@ strip = "symbols"
 
 Dev iteration additionally uses `bevy/dynamic_linking` and a fast linker (lld or
 mold). This is the largest quality-of-life lever available and should be set up in
-Phase 0, not discovered in Phase 3.
+Phase 0, not discovered in Phase 9.
 
 ### Distribution — not literally one binary
 
@@ -2000,7 +2034,7 @@ list.
      must replay identically and match offline to online. At 1 Hz and this entity
      count, parallelism buys nothing and costs the property everything else rests
      on. If the live game and the CLI harness diverged, we would not find out
-     until Phase 3.
+     until Phase 9.
 - **Balance harness (Phase 1):** an `orbs-sim` CLI running a scripted synthetic
   player for N simulated hours, dumping §11.5's curves to CSV. Converts balance
   from vibes into sweeps.
@@ -2125,7 +2159,7 @@ in the suite would have caught it, and none was ever written that could have.
   hard to convey in a capsule, and a deliberate audience-building play for
   Blackhearth's catalogue. Note the trade honestly: at ~$2.50 net per unit after
   Steam's cut and tax, matching a $14.99 return takes roughly four times the
-  units. Revisit at Phase 4 when content volume is visible.
+  units. Revisit at Phase 10 when content volume is visible.
 - **Positioning: Duskers + Zachtronics.** Lead with the terminal atmosphere —
   Duskers proved players will type commands into the dark and love it — and
   support with automation depth for the Exapunks/Shenzhen I/O audience. The two
@@ -2139,19 +2173,35 @@ in the suite would have caught it, and none was ever written that could have.
 |---|---|---|---|---|
 | **0. Vertical slice** | Parser + instrumentation, **the prompt — an interactive command line, built before the domains and used to verify them**, **brewing + archive (the two starting domains)**, **`orbs-render` Frame boundary**, **log-poisoning sabotage on brewing logs**, cell-grid renderer + fidelity tiers, worst-case CRT legibility test, structured-record output model, seeded-RNG + `step()` determinism spine, boot, scaffold tutorial | ~3k | 4 mo | Numeric gate below |
 | **1. Core loop** | World clock, script engine + **concentration** + failure taxonomy, remaining sabotage surfaces, 3 domains, minimal apprenticeship, content data format, balance CLI **sweeping §11.5's first-pass numbers**, **scrappy internal `orbs-tui` as a dev tool** | ~15k | 5 mo | A player automates a duty and feels clever; non-terminal testers in the loop |
-| **2. Siege** | Autobattler, trait composition, adversarial aberrations, escrow economy, **unattended-siege backlog + dispersal**, pane addressing, one siege type, drift stub, synergy template | ~15k | 4 mo | Sieges are tense and scripts visibly matter |
-| **3a. Breadth** | All 7 domains, discovery/research, full drift, **offline progression + its unlock**, shared-engine extraction | ~18k | 4 mo | Every domain playable |
-| **3b. Remote hosts** | The second content type: trees, verbs, infiltration, trace amplification. **`orbs-tui` to ship quality, if the schedule allows** | ~12k | 3 mo | Infiltration loop closed |
-| **3c. Engine upgrade** | Bevy version window — whole-codebase, isolated from new-system work | — | 1 mo | Green on all three platforms |
-| **4. Onboarding + demo** | Polish apprenticeship, progressive reveal, grimoire, soft ending, **demo + capsule + trailer** | ~20k | 4 mo | A non-terminal player reaches hour two unaided |
-| **5. Ship** | Accessibility, screen-reader siege mode, options, Steam (**both launch options**), polish | ~5k | 3 mo | Release |
+| **2. Scrying** | The `lens/` domain: deduction over sources that disagree. **World sabotage surface**, **`orbs-balance` sweeping §11.5's first-pass numbers** | ~6k | 3 mo | A player finds which of two accounts is lying, and a spell repeats it |
+| **3. Spellcraft** | The `grimoire/` domain: spells composed from reusable parts. **Naming pass (~35 verbs)**, hidden-directory authoring | ~6k | 3 mo | A spell is assembled from parts written earlier |
+| **4. Enchanting** | The `forge/` domain (derived): sequence + cost → a decaying buff on an instrument. **Shared-engine extraction**, pulled forward from 9a | ~4k | 2 mo | A buffed instrument is visibly faster and the buff runs out |
+| **5. Summoning** | The `menagerie/` domain (derived): allocation → a unit with a standing rule | ~4k | 2 mo | A summoned thing acts without being told to that tick |
+| **6. Defense** | The `battlements/` domain: wards under 1 Hz pressure. **Reflex-avoidance mechanism decided first**; **accessible mode decided here, not at 11** | ~5k | 3 mo | A pressure survived by choosing, not by reacting |
+| **7. One machine** | Reagents cross domains, **Focus-slot reservation**, pane addressing, the authored edges between domains | ~3k | 2 mo | The tower runs itself across rooms |
+| **8. Siege** | Autobattler, trait composition, adversarial aberrations, escrow economy, **unattended-siege backlog + dispersal**, pane addressing, one siege type, drift stub, synergy template | ~15k | 4 mo | Sieges are tense and scripts visibly matter |
+| **9a. Breadth** | Discovery/research, full drift, **offline progression + its unlock**. *(The five domains and the shared-engine extraction moved to Phases 2–7.)* | ~4k | 2 mo | Discovery closed |
+| **9b. Remote hosts** | The second content type: trees, verbs, infiltration, trace amplification. **`orbs-tui` to ship quality, if the schedule allows** | ~12k | 3 mo | Infiltration loop closed |
+| **9c. Engine upgrade** | Bevy version window — whole-codebase, isolated from new-system work | — | 1 mo | Green on all three platforms |
+| **10. Onboarding + demo** | Polish apprenticeship, progressive reveal, grimoire, soft ending, **demo + capsule + trailer** | ~20k | 4 mo | A non-terminal player reaches hour two unaided |
+| **11. Ship** | Accessibility, screen-reader siege mode, options, Steam (**both launch options**), polish | ~5k | 3 mo | Release |
 
-**Total: 28 months of work against a 24-month target.** That gap is deliberate and
-should be read as the buffer being *already spent* — it is the number to attack
-with the cut line, not a scheduling error to hide. §16's "per-phase scope buffers"
+**Total: 41 months of work against a 24-month target**, where it was 28 before
+the domains were given phases of their own. That gap is deliberate and should be
+read as the buffer being *already spent* — it is the number to attack with the
+cut line, not a scheduling error to hide. §16's "per-phase scope buffers"
 mitigation is only real if the calendar exists to measure against.
 
-**Phase 3 is split three ways.** Draft 5 loaded five domains, discovery, full
+**The 13 months are an admission, not an inflation.** Five domains and the
+extraction task were budgeted at 4 months and ~18k words *combined*, filed as one
+line inside a breadth phase; 9a shrinks by exactly that as they leave. Giving
+each domain a phase says plainly that the old figure was priced for a table entry
+rather than for five minigames — which is the same correction §10 makes about its
+own table: *"these forms are a table, not a design"*. A 41-month plan that is
+honest is more useful than a 28-month one that was never going to hold, and the
+cut line below is where the difference gets argued.
+
+**Phase 9 is split three ways.** Draft 5 loaded five domains, discovery, full
 drift, the entire remote-host content type, the engine upgrade, and the extraction
 task into one phase. The engine upgrade in particular must not share a phase with
 new-system work — it touches everything.
@@ -2171,7 +2221,7 @@ instant-startup, trivially scriptable target. It pays for itself in iteration
 speed on the two things Phase 1 is built around, which is why it costs no
 additional calendar.
 
-**Ship-quality `orbs-tui`** sits in Phase 3b and is explicitly cuttable. The Bevy
+**Ship-quality `orbs-tui`** sits in Phase 9b and is explicitly cuttable. The Bevy
 build never waits for it.
 
 **Two things moved into Phase 0.** The naming pass for the slice's 16 commands (now done — §6.1),
@@ -2181,7 +2231,7 @@ sabotage surface (log poisoning — cheapest and most legible), because §16 cla
 Phase 0 de-risks "siege is empty" and it cannot do that with a scrying stub and no
 sabotage at all.
 
-**The demo sits in Phase 4** because its purpose is validating onboarding, and a
+**The demo sits in Phase 10** because its purpose is validating onboarding, and a
 text-game demo is almost entirely apprenticeship and progressive reveal.
 
 **Running total: ~88k words.** If a phase overruns, the vocabulary budget (§11) is
@@ -2227,6 +2277,27 @@ missing synonym, or the scoring function.
 **Never cut:** the parser, the script engine, the aberration system, one excellent
 siege, onboarding.
 
+#### How a domain phase is cut, now that item 5 is two numbered phases
+
+Item 5 used to name two entries inside a breadth phase. They are **Phases 4 and
+5** now, sitting *ahead* of the never-cut siege, and cutting a numbered
+mid-sequence phase is a different and larger operation — it would re-trigger the
+renumber that this restructure just paid for.
+
+So the rule is: **a cut domain phase is emptied, not removed.** Its number stays,
+its heading stays, its items become a one-line record of what was dropped and
+why, and nothing after it moves. That keeps the cut cheap, keeps every
+cross-reference valid, and keeps the decision visible in the document rather than
+inferable from a gap in the numbering.
+
+**And the order of the five is itself a hedge.** Scrying and Spellcraft are first
+because they are the two whose absence would be felt everywhere — sabotage stays
+illegible without one, and the language stops growing without the other. The two
+**derived** domains sit at 4 and 5 precisely because they are the cut candidates:
+late enough that cutting them costs the least, early enough that the extraction
+task they carry lands before Phase 7 needs it. If both are cut, the extraction
+moves to 7 and 7 absorbs it.
+
 ### Naming pass
 
 The canonical command set is player-facing API and requires a dedicated in-world
@@ -2243,13 +2314,13 @@ re-audited by hand.
 |---|---|---|
 | Parser feels frustrating rather than magical | **Critical** | Phase 0 gate with recovery metric; instrumentation; forgiving pipe stages |
 | Siege is empty once scripts are good | **Critical** | Aberration system prototyped Phase 0; four-surface sabotage; trait novelty |
-| Onboarding loses non-terminal players | **Critical** | Three layered approaches from Phase 1; continuous external testing; demo in Phase 4 |
+| Onboarding loses non-terminal players | **Critical** | Three layered approaches from Phase 1; continuous external testing; demo in Phase 10 |
 | **Writing volume overruns the schedule** | **Critical** | Composition over authorship; per-phase word budget; vocabulary as first lever. court_wizard's speed came from externalised art — unavailable here |
 | Economy is wrong or untuneable | High | §11.5 settled with first-pass numbers and worked sinks; balance CLI sweeps them in Phase 1; one headline scarcity per phase — Focus in the tower, mana in the siege |
-| Seven domains + remote hosts spreads thin | High | Concrete-first with a budgeted Phase 3 extraction; cut line |
+| Seven domains + remote hosts spreads thin | High | Concrete-first with a budgeted Phase 9 extraction; cut line |
 | CRT over text is illegible | High | Phase 0 worst-case test at min resolution and max font scale |
 | Sabotage feels unfair rather than solvable | High | Every surface has a structural tell AND a one-command `verify`; log poisoning always leaves a trustworthy source |
-| Bevy 0.19 goes stale over two years | Medium | ~4-month cadence means shipping 5–6 versions behind; one deliberate upgrade window in Phase 3, budgeted |
+| Bevy 0.19 goes stale over two years | Medium | ~4-month cadence means shipping 5–6 versions behind; one deliberate upgrade window in Phase 9, budgeted |
 | Second frontend divides effort | Low-Medium | Bevy is the product and never waits. `orbs-render` owns presentation, so the boundary is cheap and reusable. Ship-quality TUI is cut-line item 3 |
 | Solo continuity — illness, burnout, life | Medium | Cut line defined in advance; minimum shippable state named; per-phase scope buffers |
 | Market: text-only is hard to sell | Medium | CRT *motion* is the hook — trailer over capsule; demo as primary conversion tool |
@@ -2267,26 +2338,30 @@ re-audited by hand.
 domains are settled (brewing + archive), and the fragment trickle has a rate
 (§11.5).
 
-**Blocking Phase 1**
+**Blocking Phases 2–7** *(these blocked Phase 1; it closed and they did not, so
+they are re-pointed at the phases that now need them rather than quietly dropped)*
 
 1. Trace tuning across all three sources — accrual rates, the nuisance-rate
    composition rule, the ceiling, and the provocation threshold (§5.3).
+   **→ Standing.** It accrues with content and has no state in which it is done.
 2. Naming pass for the remaining ~35 canonical commands and their synonym sets,
-   following §6.1's ≤7-character rule.
+   following §6.1's ≤7-character rule. **→ Phase 3**, ahead of the domains that
+   coin the most verbs.
 3. Hidden-directory authoring plan — ~80 fragments' worth, placed to pace the
-   first ten hours.
-4. **What the brewing recipe puzzle actually is.** §10 says *"sequence/recipe
-   puzzle with timing"*, §19 fixes the rule it must obey — decisions, never
-   execution — and §11.5 specifies the reagents, vessels and potions the domain
-   is still missing. The shape itself is unwritten, and it is the worked example
-   the other six domains are cut from.
+   first ten hours. **→ Phase 3**, which is what spends fragments.
+4. ~~What the brewing recipe puzzle actually is.~~ **Done at the head of Phase 1**,
+   and §10.1 is the answer: four stages, a shared fire, and *light → digest → damp
+   → combine → relight → distil* as a window at 1 Hz. It is now the worked example
+   Phases 2–7 are cut from, which is what this item asked for.
 5. **Nuisance aberrations are unscheduled in every phase.** §5.1 calls them *"the
-   core of manual play"* and Phase 2 lists only the adversarial ones; Phase 0
+   core of manual play"* and Phase 8 lists only the adversarial ones; Phase 0
    shipped log-poisoning drift and nothing else, and `RngStream::Aberration` has
-   never been rolled. Found while planning the brewing item, which wanted them as
-   its hook and discovered there was nothing to hook to. A gap, not a deferral.
+   never been rolled. **→ Phase 2**, and this is the phase that fixes it: scrying
+   is deduction over things that have gone wrong, and a domain built to read
+   sabotage with nothing generating any is a puzzle with no inputs. Still a gap
+   rather than a deferral — it just now has a phase that cannot ship without it.
 
-**Blocking Phase 2**
+**Blocking Phase 8**
 
 6. The 21-pair synergy template: which mechanical parameters it exposes, and the
    per-pair tuning values.
@@ -2296,7 +2371,7 @@ domains are settled (brewing + archive), and the fragment trickle has a rate
    definition or escrow cannot settle.
 8. Difficulty-tier definitions within the progression-gated range.
 
-**Commercial, before Phase 4**
+**Commercial, before Phase 10**
 
 9. Wishlist target, and whether $4 survives contact with actual content volume.
    Note that $4 forfeits discount room (a 50% sale is $2) and may read as a
@@ -2463,7 +2538,7 @@ comment warns about it two sections up.
 
 **Where a use is not built, the page says so.** Every potion reads *"nothing
 drinks a potion yet. a siege will be what spends them"* — §11.5's resource table
-has a siege consuming 4–8 potions and sieges are Phase 2. `undo`'s verb page
+has a siege consuming 4–8 potions and sieges are Phase 8. `undo`'s verb page
 already does this, and §15's argument is the same: a page admitting a thing does
 nothing is the cheapest way to keep a player out of a dead end.
 
@@ -2638,6 +2713,222 @@ shipped v0.1.24 changelog block was left alone**: it is the record of an
 announcement that already went to GitHub, Discord and Bluesky under the old
 word, and it describes a tower where the maze still opened on the lectern.
 
+#### The domains come before the siege, and the phases moved down by six
+
+**"If we don't have a series of interesting puzzles, then there really is no
+game."** Two of §10's seven domains were built; the other five were a single line
+inside Phase 3a, two phases away, and Phase 2 was the siege — building the thing
+that *consumes* the puzzles before the puzzles existed.
+
+So Phase 1 closed, everything from the old Phase 2 down shifted by six, and
+**Phases 2–7 are Scrying, Spellcraft, Enchanting, Summoning, Defense, and the
+phase that makes them one machine.** Old 2 → 8, 3a/3b/3c → 9a/9b/9c, 4 → 10,
+5 → 11. Phases 0, 0.5 and 1 did not move.
+
+**The version scheme moved with it**, since it is `0.<phase>.<step>`. Closing
+Phase 1 makes the next release **v0.2.0**, so v0.2.x now means *Scrying* where
+under the old numbering it would have meant *Siege*. Shipped `v0.1.x` tags are
+untouched and still mean what they meant. And §19's own note that the 1.0 switch
+is *"never read as a thirteenth phase"* was written against six numbered phases;
+there are eleven now, so the arithmetic it guards against is *twelfth*, not
+thirteenth — the guard still holds, but the sentence should not be quoted as a
+count.
+
+**Phase 1's exit had two clauses and one was unmet.** *"A player automates a duty
+and feels clever"* is met and mechanical — a script ends its loop with `stop
+athanor` and a person walks away with the fire lit. *"Non-terminal testers are in
+the loop"* needs a person, and **moved to Phase 10 with the item that carries
+it**. Ticking it would have been the failure §15's own See-it rule exists to
+catch.
+
+**Two scarcities were invented and had to be withdrawn**, and they are recorded
+because the mistake is instructive: a first pass gave Enchanting *"one fuel
+supply, two fires"* and Scrying *"looking costs a potion"*. Charcoal is
+`Holding::endless` by design — *"a cold athanor with nothing to burn is a
+laboratory with nothing to do"* — so fuel **stock** was never brewing's scarcity;
+lit **time** is. And §5.1 is *"issuing commands is free"*, so a resource cost on
+looking is not available to any domain. **The lesson is that the template is
+`CAPACITY = 1`**: §5.0 already says concurrency is the real scarcity, and four of
+the six new phases spend it rather than minting a currency.
+
+**Three things were nearly stranded by the renumber**, all in the same roadmap
+item: reagents crossing a domain, Focus-slot reservation, and pane addressing.
+§19 parked the first with *"Phase 2's pane addressing"*; renumbering mechanically
+would have sent all three to Phase 8 — *after* the five domains that need them —
+and `CAPACITY = 1` would have made Phase 7's exit unreachable by construction.
+They are Phase 7's, and the code comments that referenced them point there.
+
+**The renumber was 72 references in the docs and 30 in code and content**, none
+of which type-checks, including one player-facing prose line. Three rules made it
+safe: `3c` before `3b` before `3a` before bare `3`, or a pass corrupts `3a` into
+`9a`; **`Phase A` and `Phase B` are the tower and siege layers and were not
+touched**; and §19's Draft-review tables record *what a review said at the time*,
+so the row reading *"Phase 3 overloaded → split into 3a/3b/3c"* keeps its original
+numbers with a note, because renumbering a log falsifies it.
+
+#### Every spelling of a comparison, and the manual the language never had
+
+Three follow-ons from the audit, each closing something the audit itself opened.
+
+**The comparison had one spelling and swallowed the rest.** `has at least 2 X`
+became `has X` — count *and* words gone, no fault raised — because `at` is §6
+filler, so the remainder resolved down to the noun. That is the same swallow
+counting was added to close, left open for the phrasing nobody tried. There are
+now seventeen spellings in one table: `at least`, `at most`, `exactly`,
+`or more`, `or fewer`, `or less`, `more than`, `fewer than`, `greater than`,
+`less than`, and `=`, `==`, `>`, `>=`, `<`, `<=`, `=<` — the last set both spaced
+and written against their number (`>=2`).
+
+**A third bound arrived with the symbols.** `=` is a thing people write without
+being taught, and reading it as at-least would be the quiet reinterpretation §6
+forbids — so `Bound::Exactly` exists, and `not has exactly 4 X` is how the fourth
+question is asked rather than an `!=` to learn. Strict comparators carry an
+**offset** instead of variants of their own: `more than 2` is `AtLeast(3)`,
+because counts are whole and two directions are easier to answer than four.
+
+**Symbols are accepted at the door and never kept.** The fair copy writes
+`has exactly 2 X`, not `has = 2 X`: a spell is a file a player reads back, and
+the canonical form should be the one someone who has never seen an operator can
+still read.
+
+**And the manual.** Nothing in the game taught the spell language — control words
+are outside `Verb::ALL`, so `recall repeat` reached nothing, and the readings are
+`NounKind::Sense`, so `recall marks` answered with a message about *other rooms
+having words of their own*: a dead end wearing a wrong reason. There is now a
+page per control word, a page per reading, and **`recall scripting`**, whose
+last section is built from the room the way `help` builds its verb list — the
+grammar is the same everywhere, what a question can *name* is not.
+
+`every_word_a_spell_is_written_with_has_a_page` is what stops it rotting.
+
+**One lint was strengthened rather than added.** Both colour checks skipped a
+recipe whose input had no wash, so omitting a tint did not fail them — it
+switched them off, for the product *and* everything downstream. That is how two
+tinctures shipped colourless and took four products' coverage with them. Once a
+recipe claims to be a mixture, a missing colour is now a failure that names both
+the product and the input.
+
+#### The language audited against seven others: `until`, comparators, `marks`
+
+Asked to audit `.spell` against comparable languages and close whatever gaps stop
+it working *in this game*, keeping the rule that state lives on the object and
+there are no variables. Seven were read: **Autonauts** and **HyperTalk** and
+**AppleScript** (English-like, `repeat until`, non-programmer audiences),
+**Inform 7** (rulebooks sorted by specificity), **Factorio** and **Oxygen Not
+Included** (comparisons over signals, no variables at all), and the
+**Zachtronics** assemblers (complexity from constraint).
+
+**What the audit confirmed was already right**, and it is most of the language.
+No variables: Factorio and ONI reach the same answer, and ONI's single exception
+is an explicit latch we have no case for. No `shout`/`hear` signal bus, which
+Autonauts has and we do not need — a spell leaves a thing on a shelf and another
+asks `if the cabinet has 4 fragment`, and signalling *through the world* is what
+§8.1 requires anyway, since a bus is hidden state by definition. `wait` before
+`if` as the unlock order, which is Autonauts' own. And a per-step tick cost,
+which is Zachtronics' whole posture.
+
+**What it found missing was one word.** Three of the seven have `repeat until` as
+their *primary* loop, and we had `repeat <n>`, unbounded `repeat`, and no way to
+leave either early — so *"walk until the maze closes"* was inexpressible and the
+shipped solver said `repeat 20000`, a constant chosen to outlast the longest
+walk, spinning uselessly once the maze closed. `until` is the sixth control word
+and it earns its place by **deleting** a guessed number rather than adding a
+capability.
+
+Its guard is asked **before the first pass and again at the end of each**, which
+is Autonauts' rule and the difference between a guard and a do-while: the first
+pass is where a spell does damage, so a guard that cannot prevent it is not one.
+A question it **cannot answer stops the loop**, which is the opposite of what an
+`if` does with the same answer — declining to act is safe, while declining to
+*stop* is a spell running for ever on an unanswerable question.
+
+**Refused, and worth recording.** Inform 7 sorts rules by specificity so the most
+specific fires first, which would turn our twenty-four-rung ladder into an
+unordered set. Elegant, and wrong here: execution order would become *implicit*,
+derived from a metric the player cannot see, where §8.1's contract is that a
+spell is auditable and the log names the line. An `else`-ladder is worse to write
+and better to debug, and the game is about debugging.
+
+**`exit repeat` is deferred rather than refused.** AppleScript and HyperTalk both
+have one; with `until` the guard covers the common case, and Autonauts ships
+without it. Weighed, not overlooked.
+
+**And a stale number came out of it.** `tests/solver.rs` pinned `worst <= 6500`
+against a documented worst of **5123**; pinning the figure as an *equality* made
+it report **5699**, which is what it had been measuring all along. A loose bound
+cannot notice a stale claim about itself, so the ceiling now sits beside an
+equality that says *is the ladder still the ladder*.
+
+#### A spell counts, and a tester is handed a ladder rather than typing one
+
+Asked whether §8's language could automate the archive — solve a maze for its one
+fragment, and a gleaning maze for its five. **It already could**, and every part
+was verified in the running game before anything was written: one spell file
+solves a maze walked for its exit *and* one set to gather, re-opens the stacks
+itself, and assembles a scroll. What was missing was proof, reach, and one word.
+
+**The gap was a live defect, not an absence.** `if the cabinet has 4 fragment`
+parsed as `if cabinet has fragment` — the number swallowed in silence, with
+`interpret` displaying the shorter question. That is *"the orb writes down a
+shorter command than it heard"* arriving through the one surface built to catch
+it, and a player writing a guard got a branch that fired at one fragment.
+
+So `has` takes a count. **At least, never exactly**, because a guard asks *have I
+enough yet* and a walk pays into the cabinet while the spell runs — `has 4` that
+went false at five would jam the moment a solver got ahead of it. `has 1 X` is
+what a bare `has X` already meant and writes back bare, so every spell written
+before this keeps its meaning and its spelling. `has 0 X` is `has no X`, decided
+rather than discovered: read literally, "at least nought" is satisfied by an
+empty shelf, which is a guard that always fires.
+
+**The count is answered off the node's own `Stock`, and emphatically not through
+`tower::holdings`.** `holdings` skips `Nameable(NounKind::Sense)` — correct for a
+shelf, fatal here, because every maze reading *is* a `Sense` child. Routing `has`
+through it would have answered *no* to `if north has passage` for ever and
+deleted the archive's whole automation pillar while looking exactly like reuse.
+An independent review caught it in a plan that presented it as a benefit.
+
+**The solver ships to dev builds only, and that is a §12 decision rather than a
+convenience.** `spells.toml` ships `first_light` deliberately unfinished — *"it
+stops before the interesting part on purpose"* — and a complete twenty-four-rung
+ladder handed to a player is the answer to the archive's central puzzle, `back`
+included, which §19 above records was only found by measuring twenty mazes. So
+`debug_spell` writes it, `cfg(debug_assertions)` like `debug_spawn`, from a
+`dev_spells.toml` compiled in under the same `cfg`.
+
+It departs from `debug_spawn` twice, both deliberately:
+
+- **It refuses outside the spell's own domain**, where `debug_spawn`'s headline
+  property is *any fixture, from anywhere*. That argument does not survive here:
+  `scribe::write` homes a new spell to where the player stands, so writing an
+  archive spell from the laboratory produces a file whose every line fails to
+  resolve — a broken spell reported as written down.
+- **It records the write, not the typed line.** `write_spell` already pushes a
+  `Wrote`; recording the line as well would push two submissions for one input
+  and a replay would push two more. Recording the *lines* is also the stronger
+  guarantee — a replay reproduces what ran even after the file is edited, where a
+  recorded name would silently pick up new text. The cost is that the tool's own
+  two console lines are absent from a replay, which is the right thing to lose.
+
+**One ladder serves both errands with no errand check at all.** `spoil` and
+`exit` are both tiers; a gleaning maze withdraws the way out and an ordinary one
+scatters nothing, so the inapplicable tier is simply never true. `if the stacks
+has gleaning` remains for a spell wanting to do something *else* per errand. That
+was true from the day the spoil rung was written and was **a doc comment** — the
+test only ever pointed it at a gleaning maze, so a regression in the exit half
+would have left the suite green. It is now asserted across four seeds.
+
+**Two ladders are kept on purpose**, against this codebase's own instinct to fold
+duplicates. `tests/solver.rs` pins a 6500-tick budget *to notice the language
+getting slower*, and `SCRIPT_BUDGET` is 1, so the four always-false `spoil` rungs
+cost a tick per move — 708 moves is +2832 ticks and the pin fails at ~7955. They
+hold different properties: one the tick cost of an exit walk, one that a single
+text serves both errands. Folding them breaks the first and proves nothing.
+
+**And `threading` does not re-`research`.** A first draft opened the next maze
+itself, which made a single walk's yield unobservable — the count keeps climbing,
+and a test asserting *five spoils ended the walk* reads fourteen.
+
 #### The typed path and the spell path have to answer the same question
 
 A review of the scrolls found the same shape three times, and it is worth one
@@ -2733,7 +3024,7 @@ rediscovered: a *reagent* cannot cross a domain boundary, because the arsenal
 takes finished work only. Nothing needs it to today — the archive's stock is
 fragments, which the lectern consumes in the room they are won in — but the day a
 domain wants another's raw material, this is the decision, and it belongs with
-Phase 2's pane addressing rather than with a byproduct.
+Phase 8's pane addressing rather than with a byproduct.
 
 #### And the tool learned the room
 
@@ -2921,6 +3212,15 @@ stack pointer.
 This is the strongest defence §19's refusal of numeric comparison has, and it
 belongs where the next person is tempted: **the language did not need to grow,
 the world needed to remember.**
+
+> **Amended by *"a spell counts"* below, and half of it stood.** The world does
+> the remembering and always did — `Square::marks` is the visited set, and no
+> variable was ever wanted. What was wrong is the other half: the language *did*
+> need to grow, because the count the world kept was being read through two words
+> (`walked`, `twice`) that could not tell a square walked twice from one walked
+> forty times, so *prefer the least-walked way* was a rule the world could answer
+> and the language could not ask. A comparison adds no memory. It stops the
+> language reading a `u8` through a two-value lens.
 
 #### One thing had to give, and it was the vocabulary
 
@@ -3667,7 +3967,7 @@ can never be finished has stopped being a plan and become a list.
 
 Twice now. The settings item (sticky skip, persisted CRT-off, reduce-motion) sat
 open in Phase 0.5 waiting for somewhere to persist a setting, which no Phase 0.5
-item builds; it moved to Phase 5, beside the settings screen it depends on. The
+item builds; it moved to Phase 11, beside the settings screen it depends on. The
 upgrade tree then sat open in Phase 1 waiting for content, and had no such phase
 to move to — because it is not waiting on one thing, it is waiting on all of
 them.
@@ -4578,7 +4878,7 @@ theme existed so *"a player with a colour vision deficiency loses nothing"*, and
 the accessible option also an aesthetic choice: a player who needs the
 accommodation has to give up amber to get it.
 
-So the guarantee moves to **Phase 5: colour-vision filters and a true greyscale
+So the guarantee moves to **Phase 11: colour-vision filters and a true greyscale
 mode**, applied as a post-pass over the composited frame in the CRT shader, after
 the phosphor and before the barrel. One place catches the fire, the tints and the
 accent triad, rather than four palettes each being solved three more times. A
@@ -5288,6 +5588,14 @@ operators — `if the dispensary has sage`, `if the mortar is idle`. No
 comparisons, no booleans, no `and`, no nesting of conditions; each is a thing to
 learn that the tower never taught.
 
+> **Superseded twice, and both are recorded below rather than rewritten in.**
+> The connectives work added `and`, `or`, `not`, `either`/`both` and nesting;
+> *"A spell counts"* adds `has <n>`, which is the first comparison. What survives
+> is the **posture** — that each addition is a thing to learn and has to earn the
+> teaching — not the list. §19's convention is to mark a decision that moved, so
+> a reader arriving at this paragraph is not told the language is smaller than it
+> is.
+
 **A question the orb cannot read answers no**, and says so. Guessing would be
 worse than refusing here in a way it is not elsewhere: a condition the player did
 not write would decide what their laboratory does while they are somewhere else.
@@ -5363,7 +5671,7 @@ spell and watching it resolve to the mortar anyway. So it was decoration that
 *looked* load-bearing, in a file the player has to be able to read, and the
 `Referent missing` row it was supposed to support does not work either.
 
-It goes back with wards and gates in Phase 2, where there is something for it to
+It goes back with wards and gates in Phase 8, where there is something for it to
 catch and something to test it against. Generalising it from one example about
 one kind of place was the error.
 
@@ -5393,7 +5701,7 @@ it:** moving an `end` changes far more meaning than moving a command line.
 
 `Records::sequence()` counts everything ever pushed and does not reset on
 `clear`. An index into the stream is correct only while nothing truncates it, and
-the stream grows without bound against a Phase 3a offline catch-up of ~29k steps
+the stream grows without bound against a Phase 9a offline catch-up of ~29k steps
 — so the day rotation arrives, every saved cursor would point at the wrong record
 and spells would re-fire or skip with no test catching it.
 
@@ -5654,7 +5962,7 @@ the one place instruments are declared), the scene collects them from the
 fixtures present, and the parser skips the rest.
 
 That is not tidiness. It is what keeps the vocabulary safe to grow: §10 puts five
-further domains in Phase 3a, each coining the verbs its tools need, and **none of
+further domains in Phase 9a, each coining the verbs its tools need, and **none of
 them can capture another's typo** because they are never candidates at the same
 time. Without it, every domain added would widen the collision surface for every
 other — the failure the Phase 0 naming pass exists to prevent, arriving by
@@ -5853,7 +6161,7 @@ spent the affordance twice. The default is now `Wide`.
   Bevy crate over a **hardcoded copy** of the instrument list, so renaming an
   instrument left it passing on stale names.
 - **The panel's spoken domain is passed in**, not the literal `"laboratory"`.
-  §10's Phase 3a adds a second instrumented room; a sighted player would have read
+  §10's Phase 9a adds a second instrumented room; a sighted player would have read
   `/tower/workshop` in the border while a reader heard "laboratory: forge burning".
 - **`needs_heat` became `Recipe::heat`.** It was `matches!(instrument,
   "balneum_mariae" | "alembic")` in the executor while `recipes.toml` recorded the
@@ -5970,7 +6278,7 @@ what the reviews changed, because most of it was load-bearing.
 | **Ash at burn-out, not per tick** | Per-tick spawning would issue ids into `Children`, and insertion order *is* the parse. A determinism bug no test in the suite would have caught |
 | **`balneum_mariae`, not `retort`** | `retort` scored **667** against `revert` (a plain synonym for `undo`), so a bare `retort` could reach `undo` — found only because the second review checked the new *nouns* and not just the new verbs. The rename is also the better instrument: a water bath is *gently* heated, which is what sitting on the athanor should mean. It has the side effect of keeping `retort` a live `Vessel` noun, so the kind is never emptied |
 | **`wield` + `kindle`, not `stoke`/`start`/`tend`** | Computed against the real scoring function: `stoke` scores 600 against `stop` and shares its `sto` prefix, `start` prefix-collides with `status`, `tend` scores 667 against `attend`, `exert` 667 against `revert` |
-| **Capacity 1 is the form that ships** | Capacity 4 arrives at ~10 h via research, which is Phase 3a. For Phases 1–2 the pipeline is sequential, and the athanor is what makes that a decision rather than a queue. An earlier draft had this backwards — "designed for 4, degrades to 1" — when 1 is the only capacity anyone plays for a year |
+| **Capacity 1 is the form that ships** | Capacity 4 arrives at ~10 h via research, which is Phase 9a. For Phases 1–2 the pipeline is sequential, and the athanor is what makes that a decision rather than a queue. An earlier draft had this backwards — "designed for 4, degrades to 1" — when 1 is the only capacity anyone plays for a year |
 
 **What the reviews cost, and why the practice stays.** Two context-free reviews
 found: a headline command that could not parse, the deletion of §15's stated
@@ -6046,7 +6354,7 @@ same slot and cut, on three findings:
 
 | | |
 |---|---|
-| Its "see it" line is **already Phase 3a's** | *"`research` a fragment and gain a verb you did not have."* That needs `Verb::ALL` to stop being a fixed sixteen, the synonym table to stop being `const`, `is_live` to stop being a `const fn`, and the boot tutorial to read all three dynamically — plus §18's unstarted naming pass. That is the discovery loop pulled forward two phases, not a minigame |
+| Its "see it" line is **already Phase 9a's** | *"`research` a fragment and gain a verb you did not have."* That needs `Verb::ALL` to stop being a fixed sixteen, the synonym table to stop being `const`, `is_live` to stop being a `const fn`, and the boot tutorial to read all three dynamically — plus §18's unstarted naming pass. That is the discovery loop pulled forward two phases, not a minigame |
 | §10 **pre-authorises the cheap version** | *"decipherment becomes mostly a resource sink with occasional authored set-pieces"* — and §7's only depiction of the verb is exactly that. A bespoke puzzle is an ambition increase, not a debt being paid |
 | It is better bought later | The archive gates all discovery. What the puzzle should feel like depends on what it unlocks, and nothing is unlockable yet |
 
@@ -6084,7 +6392,7 @@ nothing, and it is the same argument §5.1 already makes for nuisances.
 
 #### Two things this surfaced that no phase owns
 
-- **Nuisance aberrations have no roadmap item in any phase.** Phase 2 lists only
+- **Nuisance aberrations have no roadmap item in any phase.** Phase 8 lists only
   the adversarial ones; Phase 0 shipped log-poisoning drift alone, and
   `RngStream::Aberration` is unrolled. §5.1 calls nuisances *"the core of manual
   play"*, so this is a gap rather than a deferral.
@@ -6111,7 +6419,7 @@ POST naming what the orb is made of.
 | **Sequential, not merged** | The POST is the machine; §4's report is the tower. To stop them reading as one screen twice, the POST is a **centred title card** — no pane, no `name qty state` columns — and the border does not exist until the stage that draws it |
 | **The versions are real** | `tower/boot.rs` exists because *"a report that could go stale is a lie the player reads first."* A POST printing invented numbers is the same lie one screen earlier. Bevy's is the exact pin, held to `Cargo.toml` by a test; Rust's comes from a build script |
 | **The world does not tick during it** | `tower::drift` rolls once per tick, so ticking through a wall-clock animation advances the RNG stream by an amount depending on how long boot took and whether anyone skipped. **The same seed would build a different world.** A correctness fix, not polish |
-| **Skip is a keypress, and §4 asked for sticky** | ~~Sticky needs persistence, which does not exist and arrives with §15's Phase 5 settings screen. The keypress is the honest half-measure.~~ **Superseded — the keypress skip is removed entirely (below).** §4's sticky skip still stands and still waits on Phase 5 |
+| **Skip is a keypress, and §4 asked for sticky** | ~~Sticky needs persistence, which does not exist and arrives with §15's Phase 11 settings screen. The keypress is the honest half-measure.~~ **Superseded — the keypress skip is removed entirely (below).** §4's sticky skip still stands and still waits on Phase 11 |
 | **Any key, including the bound ones** | ~~`F10` quits, and a player reaching for it during boot means *skip*.~~ **Superseded with the keypress.** Every keyed system is still gated on `booted`, which is now the whole story: until the game is up, a keystroke does nothing at all |
 
 #### The keypress skip is removed
@@ -6129,7 +6437,7 @@ an obstacle.
 
 **This does not touch §4's sticky skip**, which is a different mechanism for a
 different person: a remembered setting for someone on their fortieth launch,
-chosen once. It still waits on Phase 5's settings screen, and `Boot::finished` is
+chosen once. It still waits on Phase 11's settings screen, and `Boot::finished` is
 the state it will select.
 
 **What was actually gained by removing it:** the `booted` run condition stops
@@ -6209,12 +6517,12 @@ than the prompt appearing after a bang.
 
 **The consequence worth recording: no part of this game flashes any more.** The
 only photosensitivity exposure Phase 0.5 ever created is retired, which is also
-why §14's health warning stops being urgent — it lands with the Phase 5 settings
+why §14's health warning stops being urgent — it lands with the Phase 11 settings
 screen alongside the persisted CRT toggle rather than ahead of it.
 
 The two entries below are kept because the **reasoning** was wrong twice, in
 opposite directions, and that is the part worth not repeating. `CrtSettings`
-keeps its `flash` field: §4 reserves it for *flash on breach*, which is Phase 2.
+keeps its `flash` field: §4 reserves it for *flash on breach*, which is Phase 8.
 
 #### The flash limit is per window, not per second of effect
 
@@ -6272,7 +6580,7 @@ magnitude in hand rather than a value tuned to sit just inside the limit.
 
 **The off switch is still not the safety mechanism, because it is not
 persisted.** `F3` works in-session; settings and the health warning §14 records
-this product inheriting arrive together in Phase 5.
+this product inheriting arrive together in Phase 11.
 
 #### Amber is the default, and there is a fourth theme
 
@@ -6299,7 +6607,7 @@ all the colour there is. It is the highest contrast the game offers, and its
 > materials carry a tint hinting at what is inside an instrument. Both put hue on
 > this theme.
 >
-> The guarantee moved to **Phase 5's colour-vision filters and true greyscale
+> The guarantee moved to **Phase 11's colour-vision filters and true greyscale
 > mode**, which is a better home for it than a theme ever was: a theme made the
 > accommodation an aesthetic choice, so a player who needed it had to give up
 > amber to get it. A filter is orthogonal to the theme, which is what an
@@ -6450,7 +6758,7 @@ the same band covers.
 **It rides `CrtSettings::on`.** An env var is not a switch a player can reach,
 and the entry below is precisely the failure of gating motion on something
 indirect. F3 cycles the tube to `OFF`; that now stops the fire too. The
-persistent per-effect toggle stays with Phase 5's settings item — and at this
+persistent per-effect toggle stays with Phase 11's settings item — and at this
 rate that item has a real dependency rather than a nominal one.
 
 #### The fire's shape, and what it cost at the boundary
@@ -6811,7 +7119,7 @@ parser with nothing to parse against.
 | Question | Decision |
 |---|---|
 | **The tree is ECS** | Rule 1 makes the world model ECS throughout, and a second representation would be a thing `Scene`, durations and Phase 1's script referents all have to bridge. Nodes carry a **stable `NodeId`**, not an `Entity`: §8 resolves bound references by stable id and writes them into script files as `north_gate#7f2a`, and `Entity` is a generational index that means nothing across a save |
-| **You can only name what is where you are** | §7 makes the tree the tower and navigation diegetic, so `decoct clarity` works in `/tower/laboratory` and nowhere else. Places stay nameable everywhere — gating movement on being somewhere would be a lock whose key is behind it. This is the base state §19's **pane addressing** later relaxes in Phase 2: acting at a distance has to *become* possible |
+| **You can only name what is where you are** | §7 makes the tree the tower and navigation diegetic, so `decoct clarity` works in `/tower/laboratory` and nowhere else. Places stay nameable everywhere — gating movement on being somewhere would be a lock whose key is behind it. This is the base state §19's **pane addressing** later relaxes in Phase 8: acting at a distance has to *become* possible |
 | **The scene walks `Children`, never a query** | §6 breaks scoring ties by registration order, so registration order *is* the parse. Archetype order is not insertion order and an entity moves tables whenever a component is added — so starting a brew would have reordered the noun list, flipped a tie, and changed what a phrase resolves to. Replay would diverge with no test seeing it |
 | **Rebuilt per tick, in its own schedule pass** | On-change is a cache-invalidation bug waiting for the first system that mutates without setting a marker. And sharing a pass with whatever a frontend adds through `with_schedule` is an ambiguity rather than an ordering — Bevy's topsort was in fact running the caller's systems first |
 | **One production slot, tower-wide** | §11.5 opens at multiplex capacity **1** and §9's fourth invariant reserves it for the action's whole duration, so brewing occupies the tower and you are not also deciphering. A slot per domain would delete the trade the focus track is built on *and* be more code — a counter per domain where the design needs one |
@@ -6909,7 +7217,7 @@ no roadmap item had ever named:
 | 3- and 4-pane tiling | brewing + archive |
 | `Sim::submissions` — the replay log is written and never read | Phase 1: needs a replay command |
 | `Verb::is_destructive` — §7's destruction guard | brewing + archive: `purge` has nothing to destroy |
-| Per-subsystem RNG streams | Phase 2: nothing rolls yet |
+| Per-subsystem RNG streams | Phase 8: nothing rolls yet |
 
 Every one is gated by content that does not exist rather than by the pass having
 been careless, so none of them changes what the pass should have done. What it
@@ -6953,10 +7261,10 @@ phase on being reachable from the running game.
 | **What went wrong** | Phase 0's first six items were completed in layer order — determinism spine, Frame boundary, parser, cell renderer, CRT port, record model — each tested, reviewed, and correct. The result was **~10,000 lines of Rust that the game binary called under 40% of.** `cargo run -p orbs` answered `Escape`, `F2`, `F3` and `F12`, and no letter key at all. The parser was unreachable from the frontend; the record model had never been drawn by the renderer built to draw it |
 | **Whose error** | Not a judgment call made and lost — **the lists themselves were the defect.** Every item was phrased "build this subsystem", so following one faithfully could not produce something playable until it ended. A correct process executed against a badly ordered list |
 | **Why tests did not catch it** | They were not capable of it. Tests prove code does what it was written to do; they cannot prove it is the code worth writing. Untouched code is *unshaped* code — `report()` needed an `input` parameter no test wanted and no design document predicted, and it surfaced from an adversarial review rather than from a caller. That is luck, not method |
-| **Why this is not a Phase 0 rule** | Later phases need it more, not less. Phase 1 asks whether a player *feels clever*; Phase 2 whether a siege is *tense*; Phase 4 whether a non-terminal player reaches hour two unaided. None of those is assertable, all of them are felt, and the phase exit criteria were already written in exactly those terms — the step-level lists simply did not inherit it |
+| **Why this is not a Phase 0 rule** | Later phases need it more, not less. Phase 1 asks whether a player *feels clever*; Phase 8 whether a siege is *tense*; Phase 10 whether a non-terminal player reaches hour two unaided. None of those is assertable, all of them are felt, and the phase exit criteria were already written in exactly those terms — the step-level lists simply did not inherit it |
 | **The rule** | **No work item in any phase is complete until a person can reach it from the running game.** Every item carries a *See it* line naming the keystrokes. Same standing as the build gate in CLAUDE.md |
 | **Retroactive gating is a work item** | Everything already built without a gate gets one, immediately after the prompt and before any new Phase 0 work. Not a cleanup task and not optional: code the game does not call has been asserted, not verified |
-| **Where a gate is not yet possible** | Some built code has no honest player surface until later content exists — per-subsystem RNG streams cannot be *seen* until something rolls against them, which is aberrations in Phase 2. Those items name the phase that gates them rather than inventing a debug affordance nobody will maintain |
+| **Where a gate is not yet possible** | Some built code has no honest player surface until later content exists — per-subsystem RNG streams cannot be *seen* until something rolls against them, which is aberrations in Phase 8. Those items name the phase that gates them rather than inventing a debug affordance nobody will maintain |
 | **The counter-example worth copying** | The CRT was the one item player-gated on arrival: boot the game, press F3. It flashed, the flashing was obvious in ten seconds, and **two wrong diagnoses were falsified by looking rather than by reasoning.** No test in the suite would have caught it and none could have been written to |
 | **What does not change** | The slice is still brewing + archive, the numeric gate is unchanged, no phase boundary moves, and no scope is added. This is an ordering and acceptance-criteria change |
 
@@ -7058,7 +7366,7 @@ now read one stream, and none of them is privileged.
 listings from eldritch corruption but says nothing about the **echo**. Corrupting
 it would damage §6's pedagogy — the echo is how players learn the canonical form
 — but adding a fourth exempt surface is a design change, so `RecordKind::Echo` is
-currently corruptible. Decide before the eldritch renderer ships in Phase 2.
+currently corruptible. Decide before the eldritch renderer ships in Phase 8.
 
 #### Corrections — post-review
 
@@ -7179,7 +7487,7 @@ commit.
 | Licence | **GPL-3.0-or-later.** Declared in the workspace manifest, full text at the repository root |
 | Dependency tree | **Audited and compatible.** Every crate in the tree is MIT, Apache-2.0, BSD-2/3, Zlib, ISC, Unicode-3.0, CC0, 0BSD, MIT-0, or Unlicense; all are FSF-listed as GPL-compatible. The only copyleft entry, `r-efi`, offers MIT/Apache-2.0 alternatives and does not build on our targets |
 | One-way constraint | Apache-2.0 is compatible with GPL-**3**.0 but **not** GPL-2.0. Bevy is `MIT OR Apache-2.0`, so 3.0-or-later works and 2.0 would not have |
-| Assets | Both font licences survive the combination. CC0 imposes nothing; Spleen's BSD-2 notice requirement **persists** and still has to reach the shipped build (Phase 5) |
+| Assets | Both font licences survive the combination. CC0 imposes nothing; Spleen's BSD-2 notice requirement **persists** and still has to reach the shipped build (Phase 11) |
 | Commercial release | Unaffected — §15's demo-then-1.0 Steam posture stands. Selling GPL software is permitted; the obligation is to offer source to those you distribute binaries to |
 
 ### Parser corrections — post-review
@@ -7241,7 +7549,7 @@ Two consequences worth remembering:
 |---|---|
 | Font | **Spleen 2.2.0, `cp437/spleen-8x16-ibm-437.bdf`.** In the repo at `assets/fonts/spleen/` with full provenance and checksums |
 | Licence | **BSD-2-Clause**, and **GPL-3.0-compatible** — the FSF lists the 2-clause BSD licence as *"compatible with the GNU GPL"*. Only the 4-clause form is incompatible, and Spleen has no advertising clause. Combining it into a GPL work does **not** discharge its notice requirement |
-| Obligation | Binary redistribution must reproduce the copyright notice *"in the documentation and/or other materials"*. The shipped build therefore carries a third-party notice — naturally a `grimoire licences` topic, since every screen is terminal content. **Phase 5 ship task**; the obligation only attaches on distribution |
+| Obligation | Binary redistribution must reproduce the copyright notice *"in the documentation and/or other materials"*. The shipped build therefore carries a third-party notice — naturally a `grimoire licences` topic, since every screen is terminal content. **Phase 11 ship task**; the obligation only attaches on distribution |
 | Why this file | **Indexed by codepage byte, 0–255, complete.** `cp437_index()` already returns exactly that index, so there is no mapping layer between Frame and atlas. The Unicode-keyed build of the same font is *not* a substitute — it is missing `∟ ► ◄` against our repertoire |
 | Rejected | **int10h Px437** (most authentic, but CC BY-SA share-alike on adaptations, and its "raw bitmaps are uncopyrightable" defence is a US-centric interpretation, not settled law, on a product sold worldwide). **Terminus** (OFL's reserved-font-name clause forces a rename once we edit it). **unscii-16** (public domain and uniform 2px weight, but missing `∙ ⌂ ⌐ ☼`) |
 | Custom variants | Unrestricted. §4's custom glyph variants for §8.1 sabotage tells are a local edit BSD-2 permits outright — which is why a modify-friendly licence outranked a more authentic look |
@@ -7299,7 +7607,7 @@ Two findings from actually rendering these screens rather than only testing them
 | Question | Decision |
 |---|---|
 | Status | **Bevy is the product and never waits.** The terminal build is wanted and pursued, but second-class and cuttable |
-| Split of costs | **Boundary** (`orbs-render`, Phase 0) is non-negotiable and ~free. **Dev-tool TUI** (Phase 1) has no parity obligation. **Ship-quality TUI** (Phase 3b) is cut-line item 3 |
+| Split of costs | **Boundary** (`orbs-render`, Phase 0) is non-negotiable and ~free. **Dev-tool TUI** (Phase 1) has no parity obligation. **Ship-quality TUI** (Phase 9b) is cut-line item 3 |
 | What it is | A full-screen raw-mode application (à la the Ubuntu Steam installer). Terminal as framebuffer + keyboard, nothing more |
 | What it is **not** | It does not shell out, touch the real filesystem, or interoperate with the host shell. Same sim, same commands, same simulated tower |
 | Architecture | New `orbs-render` crate owns the `Frame` (cell buffer + semantic styling + layout). **`orbs-render` decides what appears and where; frontends decide only how a cell is drawn.** Frontend-only enrichment (CRT, audio) may never carry information absent from the Frame |
@@ -7307,8 +7615,8 @@ Two findings from actually rendering these screens rather than only testing them
 | Glyphs | User's terminal font; Unicode U+2500 box drawing instead of CP437 |
 | Not present in TUI | CRT effects, fidelity tiers, embedded bitmap font |
 | Sabotage tells | Glyph/alignment cues are Bevy-only; `verify` is authoritative everywhere (§8.1) |
-| Schedule | Boundary Phase 0 (cannot be retrofitted), dev tool Phase 1, ship quality Phase 3b |
-| Cost | Boundary is ~free. Dev-tool TUI absorbed in Phase 1. Ship-quality TUI sits in Phase 3b and is cuttable |
+| Schedule | Boundary Phase 0 (cannot be retrofitted), dev tool Phase 1, ship quality Phase 9b |
+| Cost | Boundary is ~free. Dev-tool TUI absorbed in Phase 1. Ship-quality TUI sits in Phase 9b and is cuttable |
 | Dividend | If it ships, it is the cheapest route to screen-reader support — but §14 does not depend on it |
 | Distribution | If shipped, both binaries in the Steam depot as two launch options |
 
@@ -7466,7 +7774,7 @@ moved under them, and half a dozen constants existed only to manage that motion.
 | `INPUT_ROWS` is a constant, and it is **1** | It used to be derived: a second row bought back the pixel height a finer tier took away, `32s ≤ 16(s+1) ⇔ s ≤ 1`. With one grid there is no tier to compensate for, so a second row stopped being compensation and became magnification — a prompt twice the transcript's size at *every* window and three times again at 4K. Shipped at 2 and reverted on sight, which is what the risk register predicted. It also cost the player half the line: at 2× the text is written into half the columns, so a 120-column grid gave 60 cells to type into and now gives 118 |
 | The magnified path has no caller now | `Frame::set_magnified` and the renderer's 2× pass are reachable only by setting `INPUT_ROWS` back to 2. Kept rather than deleted **because that is the whole retreat** — one constant — and not on the grounds of a future consumer: the font-scale setting this owes would change the *grid* (80×30, also on the 8:3 line) rather than magnify one row, so it is not the mechanism that would revive this. If the prompt size is settled, deleting it is the honest follow-up |
 | A resize constraint | **Considered and dropped.** `WindowResizeConstraints` is logical pixels while `WindowResolution::new` is physical, so on a 2× display a floor expressed in it would exceed the initial window and the game could not open at its stated size. `paint_too_small` is the guard, and it is physical-unit correct |
-| The debt this owes | §4 justified reflow with *"fixed scaling without reflow would make large accessibility font scales unreadable"*, and that objection is correct. The game now has **one text size per window size and no way to ask for another**. The replacement is a font-scale setting choosing between authored grids on the 8:3 line — 80×30 is the large-text one — which is a Phase 5 settings item, not a tier |
+| The debt this owes | §4 justified reflow with *"fixed scaling without reflow would make large accessibility font scales unreadable"*, and that objection is correct. The game now has **one text size per window size and no way to ask for another**. The replacement is a font-scale setting choosing between authored grids on the 8:3 line — 80×30 is the large-text one — which is a Phase 11 settings item, not a tier |
 
 `INITIAL_WINDOW` stays 1280×720: it is ×1.0 exactly, so the game opens at native
 cell size *and* with visible bars, exercising the letterbox on every run.
@@ -7537,7 +7845,7 @@ cell size *and* with visible bars, exercising the letterbox on every run.
 | Composition applied to highest-traffic prose | Inverted — author failure text, compose descriptive text |
 | CRT port understated | Corrected to 2,638 lines + 242-line shader |
 | No schedule | Calendar added; 28 months against a 24-month target, stated plainly |
-| Phase 3 overloaded | Split into 3a breadth / 3b remote hosts / 3c engine upgrade |
+| Phase 3 overloaded | Split into 3a breadth / 3b remote hosts / 3c engine upgrade *(those three are 9a/9b/9c since the phases were renumbered; this row records what the review said at the time)* |
 
 ### Draft 4 questions — resolved
 
@@ -7551,7 +7859,7 @@ cell size *and* with visible bars, exercising the letterbox on every run.
 | Pane addressing | Named by domain, routed within the focused set |
 | Script validation | Bind always succeeds; warn with suggested fix |
 | Synergy matrix | All 21 pairs; shared mechanical template, bespoke flavour |
-| Price | $4 provisional; revisit Phase 4 |
+| Price | $4 provisional; revisit Phase 10 |
 | Positioning | Duskers + Zachtronics |
 | Saves vs achievements | Readable and editable; achievements unguarded |
 | Save timing | Tick boundaries only; scripts atomic within a tick |
@@ -7574,6 +7882,6 @@ cell size *and* with visible bars, exercising the letterbox on every run.
 | 9 | Difficulty tiers | Progression-gated range, player choice within it |
 | 10 | Siege rewards | Trait knowledge + guaranteed drops. ~~Banked continuously~~ → **superseded (draft 6): progress-scaled escrow** |
 | 11 | Steam Workshop | Deferred; scripts plain text so sharing stays possible |
-| 12 | Release posture | Demo (Phase 4) then full 1.0. No Early Access |
+| 12 | Release posture | Demo (Phase 10) then full 1.0. No Early Access |
 | 13 | Endgame | Soft ending closes the lore arc; play continues |
 | 14 | World beyond the tower | Remote hosts as navigable machines |

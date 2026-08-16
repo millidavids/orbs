@@ -36,7 +36,7 @@ use crate::content::Prose;
 use crate::parser::{Intent, Verb};
 use crate::rng::{RngStream, Rngs};
 use crate::session::Scrollback;
-use crate::tower::{self, Cwd, Maze, Square, Way};
+use crate::tower::{self, Cwd, Maze, Sense, Square, Way};
 
 /// How wide a maze is, in cells.
 ///
@@ -189,22 +189,27 @@ pub fn refresh(world: &mut World) {
     let Some(stacks) = stacks(world) else {
         return;
     };
-    let readings: Vec<(Way, Option<&'static str>, bool, bool)> = {
+    let readings: Vec<(Way, Option<&'static str>, bool, bool, Option<u8>)> = {
         let maze = world.get::<Maze>(stacks);
         Way::ALL
             .into_iter()
             .map(|way| {
                 (
                     way,
-                    maze.map(|maze| maze.reading(way).word()),
+                    maze.and_then(|maze| maze.reading(way)).map(Sense::word),
                     maze.is_some_and(|maze| maze.came() == Some(way)),
                     maze.is_some_and(|maze| maze.spoil(way)),
+                    // **Nought is not published**, because a pile that reaches
+                    // zero is despawned everywhere else in the tower and a node
+                    // holding `Counted(0)` is a state `debug_spawn` refuses to
+                    // create. Unwalked floor is `passage`, which says it already.
+                    maze.and_then(|maze| maze.marks(way)).filter(|&n| n > 0),
                 )
             })
             .collect()
     };
 
-    for (way, word, came, spoil) in readings {
+    for (way, word, came, spoil, marks) in readings {
         let Some(node) = find_reading(world, way) else {
             continue;
         };
@@ -224,6 +229,13 @@ pub fn refresh(world: &mut World) {
         // that tells it whether the square has been walked.
         if spoil {
             tower::raise_reading(world, node, tower::maze::SPOIL);
+        }
+        // And a fourth, which is the only reading carrying a **number**: how
+        // often the square beyond has been walked. `walked` and `twice` were two
+        // buckets over this, so a ladder could not prefer the less-trodden of two
+        // ways it had both already seen.
+        if let Some(count) = marks {
+            tower::raise_count(world, node, tower::maze::MARKS, u32::from(count));
         }
     }
 

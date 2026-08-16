@@ -84,7 +84,7 @@ impl Records {
     ///
     /// DESIGN.md §3 puts the eldritch treatment on *messages*, not on call
     /// sites: it is a property of how the orb is currently speaking, which in
-    /// Phase 2 is driven by threat. Setting it once here rather than at every
+    /// Phase 8 is driven by threat. Setting it once here rather than at every
     /// emit site is what keeps a register change from being a hundred-line diff
     /// that misses four of them.
     ///
@@ -130,7 +130,7 @@ impl Records {
     /// never truncated.
     ///
     /// It never is *today*: [`clear`](Self::clear) is called from one test. But
-    /// the stream grows without bound and §5's Phase 3a offline catch-up is
+    /// the stream grows without bound and §5's Phase 9a offline catch-up is
     /// ~29k steps, so the day someone adds rotation, every saved cursor would
     /// silently point at the wrong record and spells would re-fire or skip
     /// events with **no test catching it**.

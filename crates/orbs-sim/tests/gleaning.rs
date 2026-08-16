@@ -317,6 +317,12 @@ fn spending_a_scroll_takes_no_production_slot() {
     );
 }
 
+// **Both of the next two are `cfg(debug_assertions)`**, because they read the
+// ladder from `execute::dev_spells`, which a release build does not have — the
+// whole point of `debug_spell` being a tester's door. Without the gate the test
+// *binary* fails to compile in release, which `cargo test --workspace` never
+// notices and `cargo check --release --all-targets` does.
+#[cfg(debug_assertions)]
 #[test]
 fn gathering_the_last_spoil_ends_the_walk() {
     // The errand's own completion rule. Walked by hand rather than solved,
@@ -332,14 +338,16 @@ fn gathering_the_last_spoil_ends_the_walk() {
     // no exit, so this cannot end early by arriving somewhere.
     //
     // **Five spoils is a much longer walk than one exit**, and the budget says
-    // so: the ladder is twenty-one rungs, a step costs a tick (`SCRIPT_BUDGET`
+    // so: the ladder is twenty-four rungs, a step costs a tick (`SCRIPT_BUDGET`
     // is 1), and five scattered squares means crossing the maze five times over.
     // `tests/solver.rs` pins 6500 ticks for reaching one exit; this is that
     // several times, with room.
-    sim.write_spell("sweeping", &sweeper(20_000));
+    sim.write_spell("sweeping", &threading());
     sim.step();
     sim.submit("invoke sweeping");
-    sim.step_n(60_000);
+    // ~2.5x the measured walk, not eight times it. A step runs whether the walk
+    // is over or not, so the surplus is pure suite time.
+    sim.step_n(22_000);
 
     assert!(
         sim.stacks().is_none(),
@@ -354,7 +362,68 @@ fn gathering_the_last_spoil_ends_the_walk() {
     );
 }
 
+#[cfg(debug_assertions)]
+#[test]
+fn one_ladder_solves_a_maze_walked_for_its_exit_and_one_set_to_gather() {
+    // **The claim the errand was built for, finally asserted.** It has been true
+    // since the spoil rung was written and it was a *doc comment*: `sweeper`
+    // said "one solver for both errands" and was only ever pointed at a gleaning
+    // maze. A regression that broke the exit half — the `exit` tier reordered, a
+    // reading renamed — would have left this file green.
+    //
+    // What makes it one ladder rather than two is that both halves below run the
+    // *same* `threading()` text, which is the file `debug_spell` hands a tester.
+    //
+    // **Four seeds, and the step budgets are the lever rather than the count.**
+    // `tests/solver.rs` carries the wide sweep for the exit errand at 12 seeds;
+    // this asks the narrower question — *does one text serve both* — so four is
+    // enough to catch an ordering mistake.
+    //
+    // What costs is the *headroom*, not the seeds: a step runs whether the walk
+    // is over or not, so an exit solve measured at ~5100 ticks against a
+    // `step_n(20_000)` throws away three quarters of the run, four times over.
+    // These are ~2.5x the measured worst, which is margin for a slower seed
+    // without paying for eight walks nobody takes.
+    const SEEDS: [u64; 4] = [3, 11, 17, 23];
+    const EXIT_TICKS: u64 = 13_000;
+    const GLEAN_TICKS: u64 = 22_000;
+
+    for seed in SEEDS {
+        // The ordinary errand: a way out, and one fragment for reaching it.
+        let mut exit = Sim::new(seed);
+        exit.submit("attend archive");
+        exit.step();
+        exit.submit("research");
+        exit.step();
+        exit.write_spell("threading", &threading());
+        exit.step();
+        exit.submit("invoke threading");
+        exit.step_n(EXIT_TICKS);
+        assert!(
+            fragments(&exit) >= 1,
+            "seed {seed}: the ladder never reached the way out",
+        );
+
+        // The gathering errand: no way out at all, five things to pick up.
+        let mut glean = with_a_gleaning_scroll(seed);
+        glean.submit("research");
+        glean.step();
+        glean.submit("wield gleaning-scroll");
+        glean.step();
+        glean.write_spell("threading", &threading());
+        glean.step();
+        glean.submit("invoke threading");
+        glean.step_n(GLEAN_TICKS);
+        assert_eq!(
+            fragments(&glean),
+            5,
+            "seed {seed}: the same ladder did not gather a maze set to gather",
+        );
+    }
+}
+
 /// How many fragments the archive's shelf holds.
+#[cfg(debug_assertions)]
 fn fragments(sim: &Sim) -> u32 {
     // **Wherever the rule says they live**, rather than a room written down
     // here. A walk pays into the archive's shelf and `debug_spawn` puts one in
@@ -369,31 +438,26 @@ fn fragments(sim: &Sim) -> u32 {
         .sum()
 }
 
-/// The four-way ladder from `tests/solver.rs`, with a spoil rung on top.
+/// The ladder a tester gets from `debug_spell`, read from the content file.
 ///
-/// **One solver for both errands**, which is what the errand exists to make
-/// possible: the top rung reads `spoil` where an ordinary walk reads `exit`, and
-/// the four tiers beneath it are unchanged. `else` throughout, because a flat
-/// ladder of `if`s casts clean and oscillates for ever (§19).
-fn sweeper(laps: u32) -> Vec<String> {
-    let ways = ["north", "east", "south", "west"];
-    let ladder: Vec<(String, &str)> = ["spoil", "exit", "passage"]
-        .into_iter()
-        .flat_map(|reading| ways.map(|way| (format!("{way} has {reading}"), way)))
-        .chain(["walked", "twice"].into_iter().flat_map(|reading| {
-            ways.map(|way| (format!("{way} has {reading} and not {way} has back"), way))
-        }))
-        .chain(ways.map(|way| (format!("{way} has back"), way)))
-        .collect();
-
-    let mut lines = vec![format!("repeat {laps}")];
-    for (condition, way) in &ladder {
-        lines.push(format!("if {condition}"));
-        lines.push(format!("follow {way}"));
-        lines.push("else".to_owned());
-    }
-    lines.extend(std::iter::repeat_n("end".to_owned(), ladder.len() + 1));
-    lines
+/// **The same text, not a second copy of it.** This was a `sweeper()` that built
+/// the ladder here while `tests/solver.rs` built its own — two expressions of one
+/// algorithm that had to agree and nothing made them, which is the shape §19 keeps
+/// recording as the cause of defects. Reading `dev_spells.toml` makes *the ladder
+/// under test* and *the ladder a tester is handed* the same twenty-four rungs by
+/// construction: a change to one is a change to both, and this file fails if the
+/// shipped ladder stops working.
+///
+/// `tests/solver.rs` keeps a ladder of its own **on purpose** — see the note there.
+/// It pins a tick budget, and the four always-false `spoil` rungs this one carries
+/// would blow it by ~2800 ticks while proving nothing about the exit walk.
+#[cfg(debug_assertions)]
+fn threading() -> Vec<String> {
+    orbs_sim::execute::dev_spells()
+        .iter()
+        .find(|(name, _)| *name == "threading")
+        .map(|(_, spell)| spell.lines.clone())
+        .expect("dev_spells.toml has no threading ladder")
 }
 
 #[test]

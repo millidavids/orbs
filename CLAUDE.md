@@ -12,9 +12,16 @@ enemy attacks the automation.
 Artless by design. No sprites, no characters, no illustrations. A single curved
 CRT glowing in the dark.
 
-**Status: Phase 0 in progress.** The determinism spine, the Frame boundary, the
-parser, the font assets, and the cell renderer are built and the game draws.
+**Status: Phases 0, 0.5 and 1 closed. Phase 2 (Scrying) next.** The determinism
+spine, the Frame boundary, the parser, the cell renderer, brewing, the archive,
+the spell engine and its scripting language are built and the game plays.
 See [docs/ROADMAP.md](docs/ROADMAP.md) for what remains.
+
+**Phases 2–7 are §10's five remaining domains** — scrying, spellcraft,
+enchanting, summoning, defense — and the phase that makes them one machine. The
+siege moved from Phase 2 to **Phase 8**, because a series of puzzles has to exist
+before the thing that consumes them. Phase numbers in older notes are six lower
+from Phase 2 down; DESIGN.md §19 records the shift.
 
 **The design is authoritative and lives in [docs/DESIGN.md](docs/DESIGN.md)** —
 ~2,000 lines, eight drafts, four independent staff-level reviews. Read it before
@@ -32,7 +39,7 @@ such.
 ## Technology Stack
 
 - **Rust**, edition 2024, pinned toolchain
-- **Bevy `=0.19.0`** — exact pin, upgraded deliberately (one window in Phase 3c)
+- **Bevy `=0.19.0`** — exact pin, upgraded deliberately (one window in Phase 9c)
 - `serde` + `toml` (readable saves), `rand` 0.9 (seeded), `thiserror`, `tracing`,
   `clap` (harness), `bevy-steamworks`
 - **No `bevy_text` / `bevy_ui`.** Every screen is terminal content rendered by our
@@ -438,6 +445,14 @@ ORBS_BOOT=0 ORBS_GRID=100x30 ORBS_DUMP="attend laboratory; scribe check" \
 ORBS_EDIT="edit\nmake a potion of clarity\nif the mortr is bare\nsurvey\nend\nxyzzy plugh\n<esc>\ninterpret" \
   cargo run -p orbs
 
+# `has` takes a count, and `interpret` is where you check it survived. This
+# **used to print `if cabinet has fragment`** — the number silently swallowed,
+# no fault raised, which is §19's "the orb writes down a shorter command than it
+# heard" arriving through the one surface built to catch it.
+ORBS_BOOT=0 ORBS_GRID=100x30 ORBS_DUMP="attend archive; scribe check" \
+ORBS_EDIT="edit\nif the cabinet has 4 fragment\nwield lectern\nend\n<esc>\ninterpret" \
+  cargo run -p orbs
+
 # Editing a spell while it runs — the marker in the gutter is the orb's place
 # in the file, and the save that lands a beat later is picked up mid-flight.
 ORBS_DUMP="attend laboratory; invoke brewing; meditate 3; scribe brewing" \
@@ -675,6 +690,23 @@ moves **four matching fragments** into the lectern and wields it. `move` carries
 one unit, so that is four `move`s — noise against four walks of the stacks, and
 four lines of a spell if it grates.
 
+**A spell asks `if the cabinet has 4 fragment` before it moves any**, and that
+guard is what the count was added for. Without it a spell cannot tell one
+fragment from four, so the only shape available was `repeat 4 / move / end` fired
+blind — which moves whatever is there, wields a short lectern, and says *"the
+lectern can do nothing with fragment"* on every lap for ever. `debug_spell
+assembling` writes the guarded version.
+
+**At least, never exactly**: `has 4` stays true at five, or the guard jams the
+moment a solver gets ahead of it. `has 1 X` is what a bare `has X` already meant
+and writes back bare; `has 0 X` is `has no X`.
+
+```bash
+# 2 fragments: nothing moves and the log stays quiet. 4 and 5 both assemble.
+ORBS_BOOT=0 ORBS_DUMP="attend archive; debug_spawn fragment 2; debug_spell assembling" \
+  ORBS_THEN="invoke assembling; meditate 60; peruse archive.log" cargo run -p orbs
+```
+
 **Where a fragment lands is `tower::home`, asked by both paths**, so a spawned
 one and a won one cannot end up in different rooms. That split existed for one
 change and is the reason the tests ask the rule rather than naming a room.
@@ -837,27 +869,92 @@ presses has advanced the clock eight seconds, something has gone back through
 executed. Use `Sim::replay` rather than matching on `Submission` by hand; three
 test files had their own copy of that match and they are one now.
 
-**Watching a spell solve it is the point of the map**, and the solver is fifty
-lines, so build it rather than typing it. `else` is load-bearing — a flat ladder
-of sixteen `if`s casts clean and oscillates for ever (§19):
+**Watching a spell solve it is the point of the map, and `debug_spell threading`
+is how you get one.** The ladder is twenty-four rungs across eighty lines; it
+lives in `crates/orbs-sim/content/dev_spells.toml`, and the word that writes it
+out is `cfg(debug_assertions)` like `debug_spawn` — a release build has neither
+the word nor the text. **A spell is written *for* a domain, so it refuses
+anywhere but the archive**, naming the room.
 
 ```bash
-python3 -c '
-lines = ["edit", "repeat 400"]
-for r in ("exit","passage","walked","twice"):
-    for w in ("north","east","south","west"):
-        lines += [f"if {w} has {r}", f"follow {w}", "else"]
-lines += ["end"]*17 + ["<esc>", "quit"]
-print("\\n".join(lines), end="")' > /tmp/solver.txt
-ORBS_BOOT=0 ORBS_DUMP="attend archive; research; scribe threading" \
-  ORBS_EDIT="$(cat /tmp/solver.txt)" \
-  ORBS_THEN="invoke threading; meditate 300" cargo run -p orbs
+ORBS_BOOT=0 ORBS_DUMP="debug_spell" cargo run -p orbs          # what it can write
+
+# An ordinary maze: the way out, and a fragment for reaching it.
+ORBS_SEED=11 ORBS_BOOT=0 ORBS_GRID=160x45 \
+  ORBS_DUMP="attend archive; research; debug_spell threading" \
+  ORBS_THEN="invoke threading; meditate 3600; meditate 3600; survey cabinet" cargo run -p orbs
+
+# The **same file** on the other errand: no way out, five things to gather.
+ORBS_SEED=17 ORBS_BOOT=0 ORBS_GRID=160x45 \
+  ORBS_DUMP="attend archive; research; debug_spawn gleaning-scroll; \
+    wield gleaning-scroll; debug_spell threading" \
+  ORBS_THEN="invoke threading; meditate 3600; meditate 3600; survey cabinet" cargo run -p orbs
 ```
 
-**The maze is a 15×15 grid of squares, one character each** — a wall is a square,
-not a line between two cells, so **one arrow press moves one character**. It was
-cells with the walls between them, which draws `2w+1` across and moved the
-reading two characters a step.
+**Do not hand-build the four-tier ladder**, and note that two of its words no
+longer exist. `exit`/`passage`/`walked`/`twice` is what §19 calls *"the solver
+that was never a solver"* — measured at equal laps and ticks it solved seed 3 and
+**failed seed 11**, because without a `back` rung a fixed compass order sends the
+reading back where it came from at any junction where two ways read alike, and it
+cycles. It also had no `spoil` rung, so it could never glean. That recipe was in
+this file for two versions and it was the broken one.
+
+**`walked` and `twice` are gone**; a way reports `marks`, a count, and the
+middle tiers compare it — `1 or fewer marks` and `2 or more marks`. They were
+two buckets over a `u8` the maze had all along, so a square walked nine times
+read exactly like one walked twice.
+
+```bash
+# What a way says now. Used to read `back walked`.
+ORBS_SEED=3 ORBS_BOOT=0 ORBS_GRID=160x45 \
+  ORBS_DUMP="attend archive; research; follow south; follow south; follow north; survey south" \
+  cargo run -p orbs
+# -> back    marks = 1
+```
+
+**The language has six control words**, not five: `wait`, `repeat`, `if`, `else`,
+`end`, `until`. **`repeat until <question>` is the bound a loop should have** —
+`repeat 20000` was a guessed constant chosen to outlast the longest walk, and the
+surplus laps spun doing nothing once the maze closed. The guard is asked before
+the first pass *and* at the end of each, so `repeat until <already true>` runs
+zero times; a question it cannot answer **stops** the loop, which is the opposite
+of `if`'s rule and deliberate.
+
+**A comparison has seventeen spellings and one canonical form.** `has 2 X`,
+`at least 2`, `2 or more`, `more than 1`, `>= 2`, `>=2` all mean at-least;
+`at most 2`, `2 or fewer`, `fewer than 3`, `<= 2`, `<3` mean at-most; `exactly 2`
+and `= 2` mean exactly. **Symbols are accepted and never written back** — the
+fair copy is words, so a player who has never seen an operator can read it.
+`interpret` is where you check a spelling survived, because the ones that did not
+used to vanish in silence.
+
+**`recall` now teaches the language.** Nothing did before — control words are
+outside `Verb::ALL` and readings are `NounKind::Sense`, so `recall repeat`
+reached nothing and `recall marks` answered with a message about other rooms.
+
+```bash
+ORBS_BOOT=0 ORBS_DUMP="recall repeat; recall until; recall marks" cargo run -p orbs
+
+# The page whose last section is the room. Run it in both and compare: the words
+# and the question shapes are identical, what you can *name* is not.
+ORBS_BOOT=0 ORBS_GRID=100x40 ORBS_DUMP="attend archive; recall scripting" cargo run -p orbs
+ORBS_BOOT=0 ORBS_GRID=100x40 ORBS_DUMP="attend laboratory; recall scripting" cargo run -p orbs
+```
+
+**One ladder serves both errands, and no errand check is involved.** `spoil` and
+`exit` are both tiers: a gleaning maze withdraws the way out and an ordinary one
+scatters nothing, so the tier that does not apply is simply never true. `if the
+stacks has gleaning` exists for a spell that wants to do something *else* per
+errand. `cargo test -p orbs-sim --test gleaning` holds it across four seeds.
+
+**`threading` solves the maze in front of it and stops.** It does not re-`research`
+— a ladder whose fragment count keeps climbing cannot be observed for one walk.
+
+**The maze is 176 cells in a 33×23 picture of squares, one character each** — a
+wall is a square, not a line between two cells, so **one arrow press moves one
+character**. It was cells with the walls between them, which draws `2w+1` across
+and moved the reading two characters a step. At 33 wide the whole picture wants
+`ORBS_GRID=160x45`; at the game's own 120×45 the inline map pans instead.
 
 **The inline map refuses rather than truncating**, and it takes **columns, never
 rows** — taking rows under a `Top` panel leaves the deep-focus floor a five-row

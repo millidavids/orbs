@@ -274,7 +274,32 @@ fn step_one(world: &mut World, entity: Entity) {
         // otherwise be an unbounded loop inside a single tick, and the game
         // would stop. The budget is the only thing standing between a player's
         // typo and a hang.
-        if let super::Kind::Repeat { times, body } = &step.kind {
+        if let super::Kind::Repeat { times, until, body } = &step.kind {
+            // **The guard is asked on the way in as well as the way out**, which
+            // is Autonauts' rule and the difference between a guard and a
+            // do-while: `repeat until the stacks is idle` with the stacks already
+            // shut must run zero times, because the first pass is where a spell
+            // does damage. An unanswerable question stops it too — see
+            // `guard_answers` for why that is the opposite of `if`'s rule.
+            //
+            // **Asked in the spell's own room, exactly as an `if` is.** `holds`
+            // finds a place through `Cwd`, so answering a guard against wherever
+            // the *player* happens to be standing made a **bound** spell — which
+            // by design runs while they are elsewhere — see nothing, answer
+            // `None`, and stop. `dev_spells.toml`'s `threading` is bound and its
+            // bound is `repeat until the stacks is idle`, so the flagship case
+            // was the broken one.
+            if let Some(condition) = until {
+                let at = node_of(world, state.at);
+                let (answer, missing) = asked_where_the_spell_is(world, at, condition);
+                if !matches!(answer, Some(false)) {
+                    if answer.is_none() {
+                        say_missing(world, entity, &state, step.line, &missing);
+                    }
+                    advance_pc(world, entity);
+                    continue;
+                }
+            }
             // An empty body is stepped **past**, not into. Descending into one
             // puts the path somewhere `at` cannot resolve, which the runner
             // reads as the end of the spell — so `repeat 2 / end / survey` ended
@@ -665,14 +690,164 @@ fn advance_pc(world: &mut World, entity: Entity) {
     else {
         return;
     };
+    // **Every guard answered before `Running` is borrowed mutably.** `holds`
+    // wants the world and `step_past` wants `&mut Running`, and both live on this
+    // entity — so the questions are asked first and the answers carried in.
+    //
+    // Only the loops the path is *inside* are asked, and all of them in the
+    // spell's own room; `guard_answers` explains both.
+    let (at, pc) = world
+        .get::<Running>(entity)
+        .map_or((None, Vec::new()), |state| {
+            (node_of(world, state.at), state.pc.clone())
+        });
+    let guards = guard_answers(world, program.body(), at, &pc);
     if let Some(mut running) = world.get_mut::<Running>(entity) {
         let Running { pc, loops, .. } = &mut *running;
-        if !super::program::step_past(program.body(), pc, loops) {
+        let again = |at: &[usize]| {
+            guards
+                .iter()
+                .find(|(path, _)| path.as_slice() == at)
+                .is_none_or(|(_, more)| *more)
+        };
+        if !super::program::step_past(program.body(), pc, loops, again) {
             // Off the end. `at` will return `None` next time round and the
             // spell finishes there, so there is one place that ends a spell.
             pc.clear();
         }
     }
+}
+
+/// Answer `condition` in the **spell's own room**, not the player's.
+///
+/// `watch::holds` finds a place through `Cwd`, so a question answered against
+/// wherever the player happens to be standing is a question about the wrong
+/// room. `Kind::If` has always swapped; `until` did not, and that made a **bound**
+/// spell — which runs while the player is elsewhere by design — see nothing,
+/// answer `None`, and stop. `dev_spells.toml`'s `threading` is bound and its
+/// bound is `repeat until the stacks is idle`, so the flagship case was the
+/// broken one.
+///
+/// One function rather than the swap written twice, because two expressions of
+/// one rule is how they came to disagree in the first place.
+fn asked_where_the_spell_is(
+    world: &mut World,
+    at: Option<Entity>,
+    condition: &crate::parser::Condition,
+) -> (Option<bool>, Vec<String>) {
+    let player = world.resource::<Cwd>().0;
+    let Some(room) = at else {
+        return (None, Vec::new());
+    };
+    world.insert_resource(Cwd(room));
+    let asked = super::watch::holds(world, condition);
+    world.insert_resource(Cwd(player));
+    asked
+}
+
+/// Name what a guard could not place, once per line per cast.
+///
+/// §8.1's *"the culprit is never anonymous"*. A guard that stops on an
+/// unanswerable question is the one failure mode with nothing on screen
+/// explaining it — the spell simply does not run — so it is worth more than the
+/// `if` path's version of the same sentence, not less.
+fn say_missing(
+    world: &mut World,
+    entity: Entity,
+    state: &Running,
+    line: usize,
+    missing: &[String],
+) {
+    if missing.is_empty() || already_said(world, entity, line) {
+        return;
+    }
+    say_failure(
+        world,
+        state,
+        "spell_nowhere",
+        &missing.join(", "),
+        Role::Danger,
+    );
+}
+
+/// Whether each guarded loop may take another turn, by path.
+///
+/// **Three answers folded into two, and the fold is a decision.** `until X`
+/// continues while X is *not* satisfied, so `Some(false)` goes round again and
+/// `Some(true)` stops. An **unanswerable** question — §8's *Referent missing*,
+/// a place the tower no longer has — also stops.
+///
+/// That is the opposite of what an `if` does with the same answer, where an
+/// unreadable question declines to act. The asymmetry is deliberate: declining
+/// to act is safe, while a `repeat` that declined to *stop* would run for ever
+/// on a question nobody can answer, which is §19's *"a spell that has stopped
+/// describing the world it runs in"* left running instead of caught.
+///
+/// A loop with no `until` is absent from this list and [`advance_pc`] reads that
+/// as yes, so an unguarded `repeat` costs no world read at all.
+fn guard_answers(
+    world: &mut World,
+    body: &super::Block,
+    at: Option<Entity>,
+    pc: &[usize],
+) -> Vec<(Vec<usize>, bool)> {
+    fn walk(
+        world: &World,
+        body: &super::Block,
+        pc: &[usize],
+        path: &mut Vec<usize>,
+        out: &mut Vec<(Vec<usize>, bool)>,
+    ) {
+        for (index, step) in body.iter().enumerate() {
+            path.push(index);
+            match &step.kind {
+                super::Kind::Repeat { until, body, .. } => {
+                    // **Only a loop the path is inside can be unwound**, and a
+                    // loop being unwound is always an ancestor of the current
+                    // `pc`. Asking the rest would put questions to the world
+                    // about loops that are not running — the *"a read nobody
+                    // asked for"* this whole function's short-circuit exists to
+                    // avoid, arrived at from the other direction.
+                    if let Some(condition) = until
+                        && pc.starts_with(path)
+                    {
+                        let more = matches!(super::watch::holds(world, condition).0, Some(false));
+                        out.push((path.clone(), more));
+                    }
+                    walk(world, body, pc, path, out);
+                }
+                super::Kind::If {
+                    body, otherwise, ..
+                } => {
+                    // **Both halves, and the path elements a branch costs.**
+                    // `enter_branch` pushes the half *and* the step, so a loop
+                    // nested in an `if` is two elements deeper than its index
+                    // suggests — matching what `step_past` pops on the way out.
+                    for (half, block) in [body, otherwise].into_iter().enumerate() {
+                        path.push(half);
+                        walk(world, block, pc, path, out);
+                        path.pop();
+                    }
+                }
+                super::Kind::Command(_) | super::Kind::Wait(_) => {}
+            }
+            path.pop();
+        }
+    }
+
+    // **The room swapped once around the whole walk**, not per guard: every
+    // question below is answered where the *spell* is standing, for the same
+    // reason `Kind::If` swaps — `holds` finds a place through `Cwd`, and a bound
+    // spell runs while the player is in another room by design.
+    let player = world.resource::<Cwd>().0;
+    let Some(room) = at else {
+        return Vec::new();
+    };
+    world.insert_resource(Cwd(room));
+    let mut out = Vec::new();
+    walk(world, body, pc, &mut Vec::new(), &mut out);
+    world.insert_resource(Cwd(player));
+    out
 }
 
 /// The spell has run out of lines.

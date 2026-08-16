@@ -49,11 +49,31 @@ pub enum SpellWord {
     Else,
     /// Close a block, whatever opened it.
     End,
+    /// Bound a `repeat` by a question instead of a number.
+    ///
+    /// **Never the first word of a line.** It is `repeat`'s argument —
+    /// `repeat until the stacks is idle` — and a line beginning with it is a
+    /// real word in the wrong place, which is exactly what [`SpellWord`] exists
+    /// to answer honestly rather than let the fuzzy matcher guess at.
+    ///
+    /// The sixth control word, and the count is defended rather than spent
+    /// (`verb.rs` makes the same argument about verbs). It earns its place by
+    /// *deleting* something: every loop that wanted "until" had to guess a
+    /// bound instead, and the shipped solver still says `repeat 20000` because
+    /// the language could not say what it meant.
+    Until,
 }
 
 impl SpellWord {
     /// Every one, for the naming pass and for the prompt's answer.
-    pub const ALL: [Self; 5] = [Self::Wait, Self::Repeat, Self::If, Self::Else, Self::End];
+    pub const ALL: [Self; 6] = [
+        Self::Wait,
+        Self::Repeat,
+        Self::If,
+        Self::Else,
+        Self::End,
+        Self::Until,
+    ];
 
     /// The word as it is written in a spell.
     #[must_use]
@@ -64,10 +84,15 @@ impl SpellWord {
             Self::If => "if",
             Self::Else => "else",
             Self::End => "end",
+            Self::Until => "until",
         }
     }
 
     /// Whether this word opens a block that an `end` must close.
+    ///
+    /// **`Until` does not**, even though it is always inside one: the block is
+    /// `repeat`'s, and counting it here would want a second `end` for a loop
+    /// with a guard on it.
     #[must_use]
     pub const fn opens_block(self) -> bool {
         matches!(self, Self::Repeat | Self::If)

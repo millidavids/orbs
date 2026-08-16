@@ -24,6 +24,8 @@
 
 #[cfg(debug_assertions)]
 mod debug;
+#[cfg(debug_assertions)]
+mod debug_spell;
 mod dispatch;
 mod files;
 mod navigate;
@@ -41,6 +43,10 @@ mod tests;
 
 #[cfg(debug_assertions)]
 pub use debug::{Order as SpawnOrder, SPAWN, order as spawn_order};
+#[cfg(debug_assertions)]
+pub use debug_spell::{
+    Order as SpellOrder, SPELL, order as spell_order, run as run_spell_order, spells as dev_spells,
+};
 pub use dispatch::{LOG, MAX_MEDITATE, execute_one, is_gated, is_live, offered, run_pending};
 // Crate-internal: `Sim::stacks` needs it and `divine` is a private module, so
 // the re-export is what makes it nameable rather than what makes it public.

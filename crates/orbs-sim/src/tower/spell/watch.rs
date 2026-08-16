@@ -137,13 +137,49 @@ fn ask(world: &World, condition: &Condition, missing: &mut Vec<String>) -> Optio
             let answers = every(world, items, missing)?;
             Some(answers.into_iter().any(|answer| answer))
         }
-        Condition::Has { place, thing } => {
+        // **A named child, and deliberately not `tower::holdings`.** `holdings`
+        // skips `Nameable(NounKind::Sense)`, which is right for a shelf and fatal
+        // here: every maze reading is a `Sense` child — `passage`, `wall`,
+        // `walked`, `twice`, `exit`, `back`, `spoil` and the errand word all come
+        // from `tower::raise_reading`. Asking `holdings` would answer *no* to
+        // `if north has passage` for ever and delete the archive's whole
+        // automation pillar, while looking like reuse. `tower::build`'s own note
+        // on `raise_reading` says it outright: *"a named child, which is the one
+        // read the language has."*
+        //
+        // The count then comes from the node's own `Stock`, which is where a
+        // quantity lives when there is one.
+        Condition::Has {
+            place,
+            thing,
+            count,
+            bound,
+        } => {
             let at = find(world, place, missing)?;
-            Some(tower::children_of(world, at).into_iter().any(|held| {
+            let held = tower::children_of(world, at).into_iter().find(|held| {
                 world
-                    .get::<tower::Name>(held)
+                    .get::<tower::Name>(*held)
                     .is_some_and(|name| name.0 == *thing)
-            }))
+            });
+            // **How many there are, where absent is nought and means it.** The
+            // other reading — a comparison needs something to count, so `or
+            // fewer` is false of an absent thing — was considered and refused:
+            // `if the dispensary has 2 or fewer sage` would then be **false with
+            // no sage at all**, which is the one case a restock guard is written
+            // for. A player who writes that sentence gets what it says.
+            //
+            // A thing with no `Stock` is one of it: a reading, a file, a spell.
+            let many = match held.map(|node| world.get::<tower::Stock>(node)) {
+                Some(Some(tower::Stock::Endless)) => u32::MAX,
+                Some(Some(tower::Stock::Counted(units))) => *units,
+                Some(None) => 1,
+                None => 0,
+            };
+            Some(match bound {
+                crate::parser::Bound::AtLeast => many >= *count,
+                crate::parser::Bound::AtMost => many <= *count,
+                crate::parser::Bound::Exactly => many == *count,
+            })
         }
         // **The panel's word, not `busy()`.** The two are the same answer for the
         // four instruments that consume Focus and differ for the athanor, whose

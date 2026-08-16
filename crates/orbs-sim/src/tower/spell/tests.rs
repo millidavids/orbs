@@ -40,6 +40,75 @@ fn with_spell(name: &str, lines: &[&str]) -> Sim {
 }
 
 #[test]
+fn a_guard_is_asked_before_the_first_pass_and_not_only_after_it() {
+    // **The difference between a guard and a do-while**, and Autonauts' rule:
+    // `repeat until <already true>` runs **zero** times. The first pass is where
+    // a spell does damage, so a guard that cannot prevent it is not a guard.
+    //
+    // The mortar is idle to begin with, so `until … is idle` holds on entry and
+    // the grind never happens.
+    let mut sim = with_spell(
+        "check",
+        &["repeat until the mortar is idle", "grind sage", "end"],
+    );
+    sim.submit("invoke check");
+    sim.step_n(8);
+    assert!(
+        !mentioned(&sim, "dispensary to mortar"),
+        "the body ran despite the guard holding on entry: {:?}",
+        said(&sim),
+    );
+}
+
+#[test]
+fn a_guard_stops_the_loop_when_the_body_makes_it_true() {
+    // And the other half: asked again at the end of each pass, so a loop whose
+    // body satisfies its own guard runs **once** and finishes — rather than for
+    // ever, which is what an unbounded `repeat` would have done here and is
+    // exactly the guessed-bound problem `until` exists to remove.
+    let mut sim = with_spell(
+        "check",
+        &["repeat until the mortar is working", "grind sage", "end"],
+    );
+    sim.submit("invoke check");
+    sim.step_n(8);
+    assert_eq!(
+        said(&sim)
+            .iter()
+            .filter(|line| line.contains("dispensary to mortar"))
+            .count(),
+        1,
+        "the guard did not stop the loop after one pass: {:?}",
+        said(&sim),
+    );
+    assert!(
+        mentioned(&sim, "is finished"),
+        "the spell never ended: {:?}",
+        said(&sim),
+    );
+}
+
+#[test]
+fn a_guard_that_cannot_be_answered_stops_the_loop_rather_than_spinning() {
+    // **The opposite of `if`'s rule, deliberately.** An `if` whose question
+    // cannot be read declines to act, which is safe. A `repeat` that declined to
+    // *stop* would run for ever on a question nobody can answer — §19's "a spell
+    // that has stopped describing the world it runs in", left running instead of
+    // caught. `mortr` names no place, so `holds` has no answer at all.
+    let mut sim = with_spell(
+        "check",
+        &["repeat until the mortr is working", "grind sage", "end"],
+    );
+    sim.submit("invoke check");
+    sim.step_n(10);
+    assert!(
+        mentioned(&sim, "is finished"),
+        "an unanswerable guard left the loop spinning: {:?}",
+        said(&sim),
+    );
+}
+
+#[test]
 fn a_spell_runs_the_laboratory_and_leaves_a_product() {
     // **The test the whole item turns on, and it asserts a *product* rather
     // than a completion.** The failure this exists to catch looks exactly like

@@ -49,7 +49,7 @@ impl Sim {
     /// Domain systems belong inside [`Sim::new`]. §13 is explicit about why: if
     /// the Bevy build, `orbs-tui` and `orbs-balance` each registered their own,
     /// they would be three different games, and *"if the live game and the CLI
-    /// harness diverged, we would not find out until Phase 3."* The seam is left
+    /// harness diverged, we would not find out until Phase 9."* The seam is left
     /// open because closing it would cost the ordering test its only handle, not
     /// because a frontend may reach through it.
     ///
@@ -272,6 +272,12 @@ impl Sim {
         #[cfg(debug_assertions)]
         if let Some(order) = crate::execute::spawn_order(line) {
             self.debug_spawn(line, order);
+            return;
+        }
+
+        #[cfg(debug_assertions)]
+        if let Some(order) = crate::execute::spell_order(line) {
+            self.debug_spell(line, &order);
             return;
         }
 
@@ -632,6 +638,35 @@ impl Sim {
         self.world.resource_mut::<Pending>().spawn(order);
     }
 
+    /// Queue a tester's `debug_spell`.
+    ///
+    /// **Runs now rather than queueing, and records the write rather than the
+    /// line.** Both are departures from [`debug_spawn`](Self::debug_spawn) and
+    /// both are the same reason: the effect *is* a write, and
+    /// [`write_spell`](Self::write_spell) already pushes a `Wrote` into
+    /// `Submissions`. Recording the typed line as well would push two
+    /// submissions for one input, and a replay would re-match the word and push
+    /// two more.
+    ///
+    /// Recording only the write is also the stronger guarantee — a replay
+    /// reproduces the **lines that ran**, even if `dev_spells.toml` is edited
+    /// afterwards, where a recorded name would silently pick up the new text.
+    ///
+    /// Not in the parse trace, for the reason `debug_spawn` gives: it is not a
+    /// phrasing, and §15's first metric measures phrasings.
+    #[cfg(debug_assertions)]
+    fn debug_spell(&mut self, line: &str, order: &crate::execute::SpellOrder) {
+        self.world
+            .resource_mut::<Scrollback>()
+            .records_mut()
+            .push(RecordKind::Input)
+            .text(orbs_render::FieldName::Message, line)
+            .finish();
+        if let Some((name, lines)) = crate::execute::run_spell_order(&mut self.world, order) {
+            self.write_spell(&name, &lines);
+        }
+    }
+
     /// Answer a numbered prompt.
     ///
     /// Recorded in the scrollback but **not** in the parse trace: a digit is not
@@ -793,7 +828,7 @@ impl Sim {
 
     /// Change the register everything said from now on is spoken in.
     ///
-    /// DESIGN.md §3's high-threat tonal register. In Phase 2 this is driven by
+    /// DESIGN.md §3's high-threat tonal register. In Phase 8 this is driven by
     /// threat rather than set by hand; until the threat system exists it is
     /// reachable directly, which is what makes the three typefaces and §3's
     /// corruption exemption something a person can see rather than something an

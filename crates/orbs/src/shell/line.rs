@@ -25,7 +25,7 @@ const MAX_INPUT: usize = 512;
 ///
 /// Far more than a session reaches, and it bounds the memory. History is not
 /// persisted — it dies with the process, and giving it a home arrives with
-/// Phase 5's settings, where §4's sticky skip is already waiting.
+/// Phase 11's settings, where §4's sticky skip is already waiting.
 const MAX_HISTORY: usize = 100;
 
 /// The command line as it currently stands.

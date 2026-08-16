@@ -167,7 +167,7 @@ impl Plugin for ShellPlugin {
                     // gate acts on failure *clustering*. Every reading is kept
                     // as it happens; this is what gets it out to a spreadsheet.
                     export_trace.run_if(input_just_pressed(KeyCode::F6)),
-                    // §3's tonal register, until Phase 2 drives it from threat.
+                    // §3's tonal register, until Phase 8 drives it from threat.
                     cycle_register.run_if(input_just_pressed(KeyCode::F7)),
                     // F10, not Escape: the moment there is a text field, Escape
                     // is "clear the line" muscle memory, and quitting the game

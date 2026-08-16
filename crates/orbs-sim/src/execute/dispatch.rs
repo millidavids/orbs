@@ -58,7 +58,7 @@ pub fn run_pending(world: &mut World) {
 ///
 /// **The script runner's door into the same dispatch a typed line takes.** §13
 /// is explicit that if the live game and the CLI harness diverged *"we would not
-/// find out until Phase 3"*, and a script with its own copy of any verb is that
+/// find out until Phase 9"*, and a script with its own copy of any verb is that
 /// divergence with an extra step. It does not go through
 /// [`Pending`](crate::session::Pending): that queue is drained by the `commands`
 /// schedule which runs **before** the one the runner is in, so a script routed

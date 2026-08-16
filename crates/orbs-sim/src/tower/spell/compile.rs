@@ -121,10 +121,43 @@ fn resolved(body: Block, scene: &Scene, known: &[&str], complaints: &mut Vec<Com
         .map(|Step { line, kind }| Step {
             line,
             kind: match kind {
-                Kind::Repeat { times, body } => Kind::Repeat {
+                // **A guard's names are fixed against the room exactly as an
+                // `if`'s are.** It is the same condition grammar answered by the
+                // same `watch::holds`, so a name it could not place has to fail
+                // the same way — otherwise `repeat until the mortr is idle` would
+                // resolve quietly at cast and then never end.
+                Kind::Repeat {
                     times,
-                    body: resolved(body, scene, known, complaints),
-                },
+                    mut until,
+                    body,
+                } => {
+                    let unplaced = until
+                        .as_mut()
+                        .map(|condition| fix(condition, scene, known))
+                        .unwrap_or_default();
+                    // **Nought turns, not unbounded.** Dropping the guard and
+                    // leaving `times` at `None` — which is what a *guarded*
+                    // repeat carries — turns a loop the orb could not read into
+                    // one that never stops, which is the opposite of what
+                    // `spell_unreadable_until` tells the player.
+                    let mut turns = times;
+                    if unplaced
+                        .iter()
+                        .any(|entry| matches!(entry, Unplaced::Thing(_)))
+                    {
+                        until = None;
+                        turns = Some(0);
+                        complaints.push(Complaint {
+                            line,
+                            key: "spell_unreadable_until",
+                        });
+                    }
+                    Kind::Repeat {
+                        times: turns,
+                        until,
+                        body: resolved(body, scene, known, complaints),
+                    }
+                }
                 Kind::If {
                     mut condition,
                     body,
@@ -432,13 +465,38 @@ fn one(line: &str, scene: &Scene, known: &[&str]) -> Reading {
     }
 
     if let Some(word) = crate::parser::spell_word(trimmed) {
-        if word != crate::parser::SpellWord::If {
+        // **`repeat until` carries the same grammar an `if` does**, resolved by
+        // the same `fix`, so it belongs on this surface for the same reason. It
+        // was excluded, which left `interpret` — the one place a wrong resolution
+        // can be seen *before* it runs — covering half the language: a guard with
+        // a misspelt place came back exactly as typed, with no fault and no
+        // change to the "cannot read" count.
+        let guarded = word == crate::parser::SpellWord::Repeat
+            && crate::parser::spell_argument(trimmed)
+                .split_whitespace()
+                .next()
+                .is_some_and(|first| {
+                    first.eq_ignore_ascii_case(crate::parser::SpellWord::Until.canonical())
+                });
+        if word != crate::parser::SpellWord::If && !guarded {
             return verbatim(None);
         }
-        let Some(mut question) = crate::parser::condition(crate::parser::spell_argument(trimmed))
-        else {
+        let (lead, argument) = if guarded {
+            let rest = crate::parser::spell_argument(trimmed);
+            let after = rest
+                .split_once(char::is_whitespace)
+                .map_or("", |(_, tail)| tail);
+            ("repeat until", after)
+        } else {
+            ("if", crate::parser::spell_argument(trimmed))
+        };
+        let Some(mut question) = crate::parser::condition(argument) else {
             return verbatim(Some(Fault {
-                key: "spell_unreadable_if",
+                key: if guarded {
+                    "spell_unreadable_until"
+                } else {
+                    "spell_unreadable_if"
+                },
                 detail: None,
             }));
         };
@@ -448,7 +506,7 @@ fn one(line: &str, scene: &Scene, known: &[&str]) -> Reading {
         let fault = fault_of(&fix(&mut question, scene, known));
         return Reading {
             line: 0,
-            heard: format!("if {}", crate::parser::write_condition(&question)),
+            heard: format!("{lead} {}", crate::parser::write_condition(&question)),
             fault,
         };
     }

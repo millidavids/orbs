@@ -15,6 +15,63 @@
   at 1.0 (DESIGN.md §19).
 -->
 
+## [v0.2.0] - 2026-08-16
+
+### Description
+In development — a dev log, not patch notes. Scrolls do something now, the tower
+got an arsenal so finished work can leave the room it was made in, and spells
+learned to loop until a question is answered instead of guessing a number.
+
+### Added
+- **Three scrolls, and each one does something.** Four scraps from the stacks
+  make one. A gleaning scroll sets the shelves to gather — five things scattered
+  in the dark and no way out. A quickening scroll makes the laboratory work at
+  double speed for five minutes, whether or not anything is brewing yet. A
+  verdant scroll makes the shelf remember a herb it has never held.
+- **The arsenal** — one room reachable from every other, and the first place
+  anything could be carried between rooms. It keeps finished work only: a potion
+  brewed in the laboratory can be carried there and listed from the archive, and
+  a handful of sage is turned away and told where it belongs.
+- **Two new potions and three new herbs.** Amber, mugwort and valerian arrive on
+  the shelf one verdant scroll at a time, and between them they reach insight
+  and stillness.
+- **Spells can loop until something is true.** `repeat until the stacks is idle`
+  runs no times if they already are, and stops the moment they close — where
+  before you had to guess a number of laps and hope.
+- **Spells can count, and compare.** `if the cabinet has 4 fragment` waits until
+  there are four. `2 or more`, `at least 2`, `1 or fewer`, `exactly 2` and the
+  symbols for them all read, so you can write it however you think of it.
+- **The manual covers the spell language.** Every word a spell is written with
+  has a page, and so does every reading a maze publishes. `recall scripting`
+  lists what you can write *in the room you are standing in* — the words and the
+  questions are the same everywhere, what you can name is not.
+- **Every material tells you what it is.** `recall` says what a thing is and how
+  it is used before it says how to make it, because someone holding a potion is
+  not asking for its five steps.
+
+### Changed
+- **The archive is three things instead of one.** The stacks are the shelves you
+  walk, the cabinet is where scraps are kept, and the lectern is where four of
+  them become a scroll. Each says what it is doing on its own row.
+- **A way says how many times it has been walked**, as a number. It used to say
+  only "walked" or "twice", so a square crossed nine times looked exactly like
+  one crossed twice and a solver could not prefer the quieter path.
+- **"Labyrinth" is gone; it is the stacks.** One name for one thing — you
+  research at the stacks and you are then in the stacks.
+- **A gleaning run pays five scraps against the four a scroll costs**, so
+  gleaning is what keeps scrolls in circulation.
+
+### Fixed
+- **A number in a question was silently thrown away.** `if the cabinet has 4
+  fragment` was read as "has any fragment", with nothing said about it.
+- **A spell stopped when you walked into another room.** A loop's question was
+  answered about wherever *you* were standing rather than where the spell was,
+  so a spell left running while you did something else quietly gave up.
+- **A mistyped loop ran for ever.** A bound the orb could not read produced an
+  endless loop while telling you the loop had stopped.
+- **Two tinctures had no colour**, so they and everything made from them drew in
+  the wrong shade.
+
 ## [v0.1.24] - 2026-08-14
 
 ### Description

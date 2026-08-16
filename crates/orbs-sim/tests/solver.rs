@@ -39,10 +39,10 @@ fn solver() -> Vec<String> {
         "if east has exit",
         "follow east",
         "end",
-        "if east has passage and not east has walked",
+        "if east has passage and not east has 1 or more marks",
         "follow east",
         "end",
-        "if north has passage and not north has twice",
+        "if north has passage and not north has 2 or more marks",
         "follow north",
         "end",
         "end",
@@ -64,9 +64,9 @@ fn solver() -> Vec<String> {
 /// **`else`, not sixteen `if`s in a row, and the difference is the whole test.**
 /// A flat ladder walks two cells and then oscillates for ever: the passage tier
 /// steps into a fresh cell, and four lines later the *same lap* reads the cell
-/// just left as `walked` and steps straight back. Guarding the retreat behind
+/// just left as walked and steps straight back. Guarding the retreat behind
 /// *nowhere new to go* moves the pendulum down a tier rather than removing it —
-/// the `walked` rung then steps back and the `twice` rung returns.
+/// the least-walked rung then steps back and the most-walked rung returns.
 ///
 /// The rule a ladder is *read* as carrying — "the first line that matches, and
 /// then stop" — is the thing `else` says and a sequence of `if`s does not. One
@@ -78,14 +78,44 @@ fn four_way_solver(laps: u32) -> Vec<String> {
     let ways = ["north", "east", "south", "west"];
     // Five rungs, and the last two are the whole difference between a solver and
     // a thing that looks like one. `back` is *not* a reading in the same axis —
-    // a way can be `walked` and the way you came at once — so the middle rungs
-    // exclude it and the bottom rung is the retreat.
+    // a way can carry a tread count and be the way you came at once — so the
+    // middle rungs exclude it and the bottom rung is the retreat.
+    //
+    // **Twenty rungs, not the twenty-four `dev_spells.toml` carries.** That one
+    // has four `spoil` rungs on top so a single file serves both errands; here
+    // they would be four always-false conditions costing a tick per move, and
+    // `BUDGET` below exists to notice the language getting slower. Two ladders
+    // for two properties, deliberately — see the note on `BUDGET`.
     let ladder: Vec<(String, &str)> = ["exit", "passage"]
         .into_iter()
         .flat_map(|reading| ways.map(|way| (format!("{way} has {reading}"), way)))
-        .chain(["walked", "twice"].into_iter().flat_map(|reading| {
-            ways.map(|way| (format!("{way} has {reading} and not {way} has back"), way))
-        }))
+        .chain(
+            // **The tiers that used to be `walked` and `twice`**, which were two
+            // buckets over a count the maze had all along. `1 or fewer marks`
+            // needs the `wall` guard because absence answers nought to a
+            // comparison; `2 or more` does not, since nought is never two.
+            // **A `(reading, extra guard)` pair, not a template string.** This
+            // held `"1 or fewer marks and not {way} has wall"` and substituted
+            // `{way}` by hand *inside* a `format!` that interpolates `{way}`
+            // itself — two mechanisms in one expression, where a rung that
+            // forgot the `.replace` would emit a literal `{way}`, parse as a
+            // thing name, and answer no for ever.
+            [("1 or fewer marks", true), ("2 or more marks", false)]
+                .into_iter()
+                .flat_map(|(reading, guard_wall)| {
+                    ways.map(move |way| {
+                        let wall = if guard_wall {
+                            format!(" and not {way} has wall")
+                        } else {
+                            String::new()
+                        };
+                        (
+                            format!("{way} has {reading} and not {way} has back{wall}"),
+                            way,
+                        )
+                    })
+                }),
+        )
         .chain(ways.map(|way| (format!("{way} has back"), way)))
         .collect();
 
@@ -149,7 +179,7 @@ fn the_readings_are_offered_before_any_maze_exists() {
     sim.submit("attend archive");
     sim.step();
 
-    for word in ["passage", "wall", "walked", "twice", "exit"] {
+    for word in ["passage", "wall", "exit", "back", "spoil", "marks"] {
         let line = format!("if north has {word}");
         let reading = sim.read_spell(
             "archive",
@@ -266,14 +296,40 @@ fn a_solver_walks_a_generated_maze_to_the_exit() {
         worst <= BUDGET,
         "the slowest maze took {worst} ticks, over the {BUDGET} this pins",
     );
+    // **And the exact figure, because the ladder is tier-for-tier equivalent.**
+    // `1 or fewer marks` and `2 or more marks` replaced `walked` and `twice`
+    // over the same count with the same rung order, and a comparison costs no
+    // extra step — the whole condition tree is evaluated inside one `Kind::If`.
+    // So the number must not move at all, and a loose ceiling would have hidden
+    // it drifting by hundreds while still passing.
+    assert_eq!(
+        worst, WORST,
+        "the ladder is no longer tier-for-tier what it was",
+    );
 }
 
 /// How long a solver is given before it is called stuck.
 const CEILING: u64 = 40_000;
 
+/// What the slowest swept maze actually costs, exactly.
+///
+/// Pinned as an equality beside [`BUDGET`]'s inequality, and the two say
+/// different things: the ceiling is *would a player wait for this*, and this is
+/// *is the ladder still the ladder*. A change to the tiers that kept the rung
+/// count would slide this by hundreds and stay under the ceiling.
+///
+/// **5699, and the docs said 5123 for two versions.** Nothing checked it — the
+/// ceiling passed at either figure — so the number in `ROADMAP.md` and in
+/// `BUDGET`'s own doc drifted from the number the suite measured. That is the
+/// whole argument for an equality here: a loose bound cannot notice a stale
+/// claim about itself.
+const WORST: u64 = 5_699;
+
 /// The slowest a swept maze may be, in ticks.
 ///
-/// **6500 against an observed worst of 5123**, over the twelve seeds above.
+/// **6500 against an observed worst of [`WORST`]**, over the twelve seeds above.
+/// It said 5123 until the figure was pinned as an equality and turned out to be
+/// 5699 — see `WORST` for why a loose bound could not notice.
 /// Loose enough that a differently-shaped maze does not fail it, tight enough to
 /// notice the language getting slower — which is the only way this number is
 /// worth having, since a test that merely says *eventually* would pass on a
@@ -317,12 +373,18 @@ fn a_solved_maze_leaves_no_readings_behind() {
         sim.submit(&format!("survey {way}"));
         sim.step();
         let said: Vec<String> = messages(&sim).split_off(before);
-        assert!(
-            !said.iter().any(|line| line.contains("passage")
-                || line.contains("walked")
-                || line.contains("twice")),
-            "{way} still reads from stacks that are gone: {said:?}",
-        );
+        // **Every word a way can publish**, asked from `maze::readings` rather
+        // than listed here. It listed `passage`/`walked`/`twice`; two of those
+        // three no longer exist, so the assertion had quietly decayed to
+        // *"does not say passage"* — and `marks` is the reading most likely to be
+        // left behind, being the only one raised through `raise_count` with a
+        // `Stock` child of its own.
+        for word in orbs_sim::tower::maze::readings() {
+            assert!(
+                !said.iter().any(|line| line.contains(word)),
+                "{way} still reads {word} from stacks that are gone: {said:?}",
+            );
+        }
     }
 }
 

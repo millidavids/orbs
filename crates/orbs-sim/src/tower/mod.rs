@@ -16,7 +16,7 @@ mod stock;
 mod work;
 
 pub use boot::report;
-pub use build::{operated, raise, raise_reading};
+pub use build::{operated, raise, raise_count, raise_reading};
 pub use experience::{Experience, concentration, credit, worth};
 pub use heat::{
     ATHANOR, Banked, Burning, banked, burn, burning, damp, find as find_athanor, kindle, lit,

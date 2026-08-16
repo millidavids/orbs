@@ -15,7 +15,7 @@
 //! here are real instruments for exactly that reason, and it cost an afternoon
 //! to learn.
 
-use orbs_sim::parser::{Condition, SpellState, condition, write_condition};
+use orbs_sim::parser::{Bound, Condition, SpellState, condition, write_condition};
 
 /// The question `text` asks, written back out — or `-` for one the orb refuses.
 ///
@@ -422,7 +422,32 @@ fn every_shape() -> Vec<String> {
         for thing in things {
             out.push(format!("the {place} has {thing}"));
             out.push(format!("the {place} has no {thing}"));
+            // **Counted, or the writer half of `has <count>` is unverified.**
+            // These three properties all run off this generator, so a shape
+            // missing here is a shape nothing round-trips, nothing checks for a
+            // dropped name, and nothing pins as deterministic — while all three
+            // stay green. `2` and `4` because 1 is the default and writes back
+            // *without* the number, which is its own case below.
+            out.push(format!("the {place} has 2 {thing}"));
+            out.push(format!("the {place} has 4 {thing}"));
+            out.push(format!("the {place} has no 2 {thing}"));
+            // Both comparator spellings. `or more` round-trips **through** the
+            // bare form rather than back to itself, which the property allows
+            // because it compares conditions and not text.
+            out.push(format!("the {place} has 2 or more {thing}"));
+            out.push(format!("the {place} has 2 or fewer {thing}"));
+            out.push(format!("the {place} has 0 or fewer {thing}"));
+            // **The row that was missing.** `0 or more` is kept uncollapsed by
+            // the reader, so the writer has to keep its words too — writing
+            // `has 0 X` handed it back as `not has X`, and the round-trip
+            // property could not see it because no row generated the shape.
+            out.push(format!("the {place} has 0 or more {thing}"));
+            out.push(format!("the {place} has no 2 or fewer {thing}"));
         }
+        // `has 1 X` and `has 0 X` are the two that do **not** round-trip
+        // literally, by design: 1 is written back bare and 0 is `no`. They are
+        // asserted by name in A7 rather than fed through the round-trip, which
+        // would only be able to say they differ.
     }
     // ...and every join of two of them, both ways round, bracketed and not.
     let leaves: Vec<String> = out.clone();
@@ -508,6 +533,229 @@ fn reading_a_question_is_deterministic() {
     // notice.
     for text in every_shape() {
         assert_eq!(condition(&text), condition(&text), "{text:?}");
+    }
+}
+
+// ---------------------------------------------------------------------------
+// A7. Counting — the two spellings that deliberately do not round-trip
+// ---------------------------------------------------------------------------
+
+#[test]
+fn a_bare_has_is_a_count_of_one_and_writes_back_bare() {
+    // **The compatibility claim, both ways.** Every spell written before
+    // counting existed says `has sage`, and it has to keep meaning exactly what
+    // it meant — so the default is 1 on the way in, and 1 is invisible on the
+    // way out. Quoting `has 1 sage` back at a player who typed `has sage` would
+    // be the orb inventing a notation, which is what `write_condition` exists
+    // not to do.
+    assert_eq!(
+        condition("the dispensary has sage"),
+        Some(counted("dispensary", "sage", 1)),
+    );
+    assert_eq!(read("the dispensary has 1 sage"), "dispensary has sage");
+}
+
+#[test]
+fn a_count_of_nought_is_the_way_no_is_spelled_with_a_digit() {
+    // **`has 0 sage` is `has no sage`**, and it is a decision rather than a
+    // reading. Taken literally, "at least nought" is satisfied by an empty
+    // shelf — a guard that always fires, which is the last thing a player
+    // expects from a number they wrote to restrict something.
+    assert_eq!(
+        condition("the dispensary has 0 sage"),
+        condition("the dispensary has no sage"),
+    );
+    assert_eq!(read("the dispensary has 0 sage"), "not dispensary has sage");
+}
+
+#[test]
+fn a_number_the_orb_cannot_count_to_is_not_a_count() {
+    // Past `u32` it is not a count, and it is **not** silently clamped either.
+    // It stays where it was written — part of the thing's name — so the question
+    // is about something called `99999999999999 sage`, which nothing is. The
+    // spell's compile step then reports that name as one it cannot place, and
+    // §8.1 gets its culprit. Saturating to `u32::MAX` would turn a typo into a
+    // guard that never fires and never says why.
+    assert_eq!(
+        condition("the dispensary has 99999999999999 sage"),
+        Some(counted("dispensary", "99999999999999 sage", 1)),
+    );
+    // A count with nothing after it is not a question at all: the span is empty,
+    // so the line is refused rather than read as a shelf holding a number.
+    assert_eq!(condition("the dispensary has 4"), None);
+}
+
+#[test]
+fn or_more_is_the_default_said_out_loud_and_or_fewer_is_not() {
+    // **`2` and `2 or more` are one question**, so the bare form is canonical
+    // and the spoken one collapses to it. `or fewer` has no other spelling, so
+    // it keeps its words — and that asymmetry is what `interpret` shows a player
+    // to tell them which direction a bare count means.
+    assert_eq!(
+        condition("the cabinet has 2 or more fragment"),
+        condition("the cabinet has 2 fragment"),
+    );
+    assert_eq!(
+        read("the cabinet has 2 or more fragment"),
+        "cabinet has 2 fragment"
+    );
+    assert_eq!(
+        condition("the cabinet has 2 or fewer fragment"),
+        Some(bounded("cabinet", "fragment", 2, Bound::AtMost)),
+    );
+    assert_eq!(
+        read("the cabinet has 2 or fewer fragment"),
+        "cabinet has 2 or fewer fragment",
+    );
+}
+
+#[test]
+fn every_spelling_of_a_comparison_reads_and_none_is_swallowed() {
+    // **The table this feature is for.** `has at least 2 X` used to become
+    // `has X` — the count *and* the words gone, no fault raised — because `at`
+    // is §6 filler and the rest resolved down to the noun. Every row here was a
+    // sentence a player would reasonably type and the orb silently rewrote.
+    //
+    // The right-hand side is the canonical form, so the collapses are visible:
+    // at-least writes bare, and a strict comparator becomes the count it means.
+    table(&[
+        // At least, six ways.
+        ("the cabinet has 2 fragment", "cabinet has 2 fragment"),
+        (
+            "the cabinet has at least 2 fragment",
+            "cabinet has 2 fragment",
+        ),
+        (
+            "the cabinet has 2 or more fragment",
+            "cabinet has 2 fragment",
+        ),
+        (
+            "the cabinet has more than 1 fragment",
+            "cabinet has 2 fragment",
+        ),
+        (
+            "the cabinet has greater than 1 fragment",
+            "cabinet has 2 fragment",
+        ),
+        ("the cabinet has >= 2 fragment", "cabinet has 2 fragment"),
+        ("the cabinet has >=2 fragment", "cabinet has 2 fragment"),
+        ("the cabinet has > 1 fragment", "cabinet has 2 fragment"),
+        // At most, five.
+        (
+            "the cabinet has at most 2 fragment",
+            "cabinet has 2 or fewer fragment",
+        ),
+        (
+            "the cabinet has 2 or fewer fragment",
+            "cabinet has 2 or fewer fragment",
+        ),
+        (
+            "the cabinet has fewer than 3 fragment",
+            "cabinet has 2 or fewer fragment",
+        ),
+        (
+            "the cabinet has <= 2 fragment",
+            "cabinet has 2 or fewer fragment",
+        ),
+        (
+            "the cabinet has <3 fragment",
+            "cabinet has 2 or fewer fragment",
+        ),
+        // Exactly, which arrived with the symbols and has no other spelling.
+        (
+            "the cabinet has exactly 2 fragment",
+            "cabinet has exactly 2 fragment",
+        ),
+        (
+            "the cabinet has = 2 fragment",
+            "cabinet has exactly 2 fragment",
+        ),
+        (
+            "the cabinet has ==2 fragment",
+            "cabinet has exactly 2 fragment",
+        ),
+    ]);
+}
+
+#[test]
+fn a_bound_with_no_number_keeps_its_words_rather_than_dropping_them() {
+    // **Nothing vanishes, which is the whole property.** A bound with no number
+    // is not a comparison, so the words go back and `span` takes them into the
+    // thing's name — a question about something called `least fragment`, which
+    // nothing is, so `compile` reports that name and §8.1 gets its culprit.
+    //
+    // The same shape as a number too large to count. What must **not** happen is
+    // the words disappearing and leaving `has fragment`, which is what
+    // `at least 2 fragment` did before comparators were spelled out.
+    for (text, kept) in [
+        ("the cabinet has at least fragment", "least fragment"),
+        ("the cabinet has >= fragment", ">= fragment"),
+    ] {
+        assert_eq!(read(text), format!("cabinet has {kept}"), "{text:?}");
+    }
+    // And with nothing after it at all, the word is the thing it looked for.
+    assert_eq!(read("the cabinet has exactly"), "cabinet has exactly");
+}
+
+#[test]
+fn a_bare_or_is_still_a_disjunction() {
+    // **The lookahead takes two tokens or neither.** `or` followed by anything
+    // but `more`/`fewer`/`less` is left exactly where it was, so a question with
+    // a count on its left half still joins.
+    assert_eq!(
+        condition("the dispensary has 2 sage or the mortar is idle"),
+        Some(Condition::Any(vec![
+            counted("dispensary", "sage", 2),
+            idle("mortar"),
+        ])),
+    );
+}
+
+#[test]
+fn a_count_of_nought_collapses_only_when_it_is_not_a_comparison() {
+    // `has 0 X` is `has no X` — "at least nought" is satisfied by an empty shelf
+    // and is a guard that always fires. `has 0 or fewer X` is a **comparison**
+    // asking for an empty shelf and saying so, and collapsing it would make the
+    // explicit spelling pointless.
+    assert_eq!(
+        condition("the dispensary has 0 sage"),
+        condition("the dispensary has no sage"),
+    );
+    assert_eq!(
+        condition("the dispensary has 0 or fewer sage"),
+        Some(bounded("dispensary", "sage", 0, Bound::AtMost)),
+    );
+    assert_ne!(
+        condition("the dispensary has 0 or fewer sage"),
+        condition("the dispensary has no sage"),
+    );
+}
+
+#[test]
+fn a_count_survives_a_short_form_and_a_join() {
+    // The short form (`shared`) looks ahead for a question word, not for a
+    // number, so a counted operand on the right of an `and` must still find its
+    // subject. This is the interaction the count's parse position was chosen for.
+    assert_eq!(
+        condition("the cabinet has 4 fragment and 2 sage"),
+        Some(Condition::All(vec![
+            counted("cabinet", "fragment", 4),
+            counted("cabinet", "sage", 2),
+        ])),
+    );
+}
+
+fn counted(place: &str, thing: &str, count: u32) -> Condition {
+    bounded(place, thing, count, Bound::AtLeast)
+}
+
+/// `has <count> or fewer <thing>`, and its at-least twin.
+fn bounded(place: &str, thing: &str, count: u32, bound: Bound) -> Condition {
+    Condition::Has {
+        place: place.to_owned(),
+        thing: thing.to_owned(),
+        count,
+        bound,
     }
 }
 

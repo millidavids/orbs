@@ -228,7 +228,7 @@ mod tests {
         // The theme used to guarantee that a colourblind player lost nothing:
         // its base carried no hue, and it burned white so the fire carried none
         // either. Two decisions retired that — one fire ramp on every tube, and
-        // material tints — and the guarantee **moved to a Phase 5 roadmap item**
+        // material tints — and the guarantee **moved to a Phase 11 roadmap item**
         // (colour-vision filters and a true greyscale mode), which is a better
         // home for it: a theme made the accessible option also an aesthetic
         // choice, so a player who wanted amber had to give up the accommodation

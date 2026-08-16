@@ -202,7 +202,8 @@ fn rec_is_pinned_as_a_prefix_before_anything_else_wants_it() {
     // or `recover` would build the `dec`-reaches-three-verbs defect the naming
     // pass exists to prevent, one word at a time and with nothing complaining.
     //
-    // So the prefix is claimed here rather than discovered in Phase 2.
+    // So the prefix is claimed here rather than discovered in Phase 3, where the
+    // naming pass runs and five domains' worth of new verbs arrive.
     let owners: Vec<&str> = Verb::ALL
         .iter()
         .map(|verb| verb.canonical())
