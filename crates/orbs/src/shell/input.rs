@@ -192,13 +192,13 @@ pub(crate) struct Panel {
     pub(crate) instruments: Vec<orbs_sim::tower::Instrument>,
     /// That place's leaf name, for the panel's spoken summary.
     pub(crate) domain: String,
-    /// The labyrinth the player is standing over, if there is one.
+    /// The stacks the player is standing over, if they are open.
     ///
     /// **On the same tick clock as the instruments, and it belongs here for the
     /// same reason.** A 49-cell `Vec` rebuilt at 60 Hz would be the allocation
     /// this resource exists to stop; rebuilt once a second it is exactly as
     /// fresh as the world it describes, because the world moves at 1 Hz too.
-    pub(crate) labyrinth: Option<orbs_render::Labyrinth>,
+    pub(crate) stacks: Option<orbs_render::Stacks>,
 }
 
 /// Re-read the panel from the world.
@@ -206,7 +206,7 @@ pub(crate) fn refresh_panel(mut panel: ResMut<Panel>, tower: Res<Tower>) {
     let sim = tower.sim();
     panel.instruments = sim.instruments();
     panel.domain = orbs_sim::parser::leaf(&sim.location()).to_owned();
-    panel.labyrinth = sim.labyrinth();
+    panel.stacks = sim.stacks();
 }
 
 /// A line the player finished.

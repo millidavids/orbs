@@ -62,6 +62,19 @@ pub const SPAWN: &str = "debug_spawn";
 /// that is not a number is **refused rather than defaulted** — `debug_spawn sage
 /// lots` meaning one sage is the kind of quiet reinterpretation this whole
 /// subsystem spent a week removing.
+///
+/// # And optionally where
+///
+/// `debug_spawn fragment 4 lectern` puts them in the lectern. The destination
+/// was added when the archive gained an instrument that *consumes* stock: there
+/// is exactly one `Store` in the tower and it is in the laboratory, so §7 made
+/// every archive state unreachable from this tool — four fragments on a lectern
+/// could be reached by walking the stacks four times and by nothing else, which is the
+/// forty ticks of grinding this exists to skip, several hundred times over.
+///
+/// **Any fixture, from anywhere.** The same argument the shelf lookup makes:
+/// requiring the tester to be standing in the right room first puts back the
+/// walking the tool is for.
 #[must_use]
 pub fn order(line: &str) -> Option<Order> {
     let rest = line.trim().strip_prefix(SPAWN)?;
@@ -85,27 +98,40 @@ pub fn order(line: &str) -> Option<Order> {
         // cannot otherwise reach — the thing this tool refuses to create.
         Some(count) => count.parse().ok().filter(|count| *count > 0)?,
     };
+    // **A destination is not a number**, and refusing one here rather than at
+    // the shelf is what keeps the old guarantee. `debug_spawn sage 2 3` was
+    // refused outright before there was a third slot; read as a *place* called
+    // `3` it would find nothing and say so, which is a worse answer to what is
+    // almost certainly a mistyped count.
+    let into = match words.next() {
+        None => None,
+        Some(word) if word.parse::<u32>().is_ok() => return None,
+        Some(word) => Some(word.to_owned()),
+    };
     // **Every word read, or none of them** — the rule the question grammar next
     // door is built on, and it belongs here for the same reason: `debug_spawn
-    // sage 2 3` meaning two sage is a line half-obeyed.
+    // sage 2 lectern spare` naming one destination is a line half-obeyed.
     if words.next().is_some() {
         return None;
     }
     Some(Order::Spawn {
         name: name.to_owned(),
         count,
+        into,
     })
 }
 
 /// What the word was asked to do.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Order {
-    /// Put `count` of `name` on the shelf.
+    /// Put `count` of `name` on the shelf, or in the fixture named by `into`.
     Spawn {
         /// What to make.
         name: String,
         /// How many.
         count: u32,
+        /// Which fixture to put them in. The shelf if unsaid.
+        into: Option<String>,
     },
     /// Say what can be made.
     List,
@@ -120,12 +146,12 @@ pub fn run(world: &mut World, order: &Order) {
             &known(world).join(", "),
             Role::Normal,
         ),
-        Order::Spawn { name, count } => spawn(world, name, *count),
+        Order::Spawn { name, count, into } => spawn(world, name, *count, into.as_deref()),
     }
 }
 
-/// Put `count` of `name` on the shelf where the player is standing.
-fn spawn(world: &mut World, name: &str, count: u32) {
+/// Put `count` of `name` on the shelf, or wherever `into` names.
+fn spawn(world: &mut World, name: &str, count: u32, into: Option<&str>) {
     // **Known names only.** Spawning `xyzzy` would put a node in the tower that
     // no recipe, no instrument and no `survey` row knows what to do with — a
     // world state the game cannot otherwise reach, which is the opposite of what
@@ -138,10 +164,23 @@ fn spawn(world: &mut World, name: &str, count: u32) {
         return;
     };
 
-    // The dispensary, not the floor and not wherever the player happens to be:
-    // §19 fixed that there is one place things go when they leave a tool, and
-    // `move` can only reach a fixture.
-    let Some(shelf) = dispensary(world) else {
+    // **Where the thing belongs, by default.** Not the floor, not wherever the
+    // player happens to be, and — since `tower::home` — no longer *always* the
+    // laboratory's shelf either: sage lands on the dispensary, a fragment in the
+    // archive's cabinet, a potion in the arsenal, because that is where the game
+    // itself would have left each of them.
+    //
+    // That is the whole point of the word. A tester types `debug_spawn <thing>`
+    // and the thing is in the room it is used in, reachable, ready to be `move`d
+    // or ground or wielded — with no third argument and no knowledge of the
+    // tower's layout. A named destination overrides it for the cases where the
+    // point *is* the layout, and obeys the same rule about what a shelf is (see
+    // [`shelf`]).
+    let into = match into {
+        Some(into) => shelf(world, into),
+        None => tower::home(world, &known).or_else(|| dispensary(world)),
+    };
+    let Some(into) = into else {
         say(world, "debug_spawn_nowhere", &known, Role::Danger);
         return;
     };
@@ -152,7 +191,27 @@ fn spawn(world: &mut World, name: &str, count: u32) {
     // take. That is precisely the state this refuses to create, arriving through
     // the check meant to prevent it.
     let kind = world.resource::<Recipes>().kind_of(&known);
-    tower::give(world, shelf, &known, kind, count);
+
+    // **And the arsenal's door holds for a tester too.** It takes finished work
+    // only, so a reagent standing in it is a state no `move` could produce —
+    // the same objection as an unknown name, a nought-count and a wrong kind,
+    // which this word already refuses three times over. A testing tool that can
+    // build impossible worlds is a tool whose bug reports have to be checked
+    // against the tool first.
+    //
+    // Asked of the **kind**, like the door itself: `tower::admits` owns the rule
+    // and this asks it rather than restating it, because two expressions of one
+    // rule is how they come to disagree (§19).
+    if world.get::<tower::Keep>(into).is_some()
+        && !matches!(
+            kind,
+            crate::parser::NounKind::Essence | crate::parser::NounKind::Scroll
+        )
+    {
+        say(world, "debug_spawn_unkept", &known, Role::Danger);
+        return;
+    }
+    tower::give(world, into, &known, kind, count);
     say(world, "debug_spawn_done", &known, Role::Success);
 }
 
@@ -172,6 +231,46 @@ fn dispensary(world: &World) -> Option<Entity> {
     let mut stack = vec![tower::root(world)];
     while let Some(node) = stack.pop() {
         if world.get::<Store>(node).is_some() {
+            return Some(node);
+        }
+        stack.extend(tower::children_of(world, node));
+    }
+    None
+}
+
+/// The shelf called `named`, anywhere in the tower.
+///
+/// **Somewhere a `move` could reach, not any node.** Stock lives inside
+/// instruments and stores; a pile standing on an ordinary domain node is one
+/// `move` cannot pick up and `survey` reports oddly, which is again a state the
+/// game cannot otherwise reach. Naming `laboratory` therefore finds nothing and
+/// says so, rather than half-working.
+///
+/// **The arsenal is the exception, because the game makes it one.** It is a
+/// domain rather than a `Fixture`, so the fixture test alone refused it — and
+/// that put every arsenal state back out of a tester's reach, which is the exact
+/// gap that made this function take a name in the first place. What decides the
+/// question is not what shape the node is but whether `pipeline::reachable` can
+/// see into it, and it can see into exactly two things: a fixture where you
+/// stand, and the arsenal from anywhere (`tower::keep`).
+fn shelf(world: &World, named: &str) -> Option<Entity> {
+    let leaf = crate::parser::leaf(named);
+    let mut stack = vec![tower::root(world)];
+    while let Some(node) = stack.pop() {
+        // **A way is a fixture and is not a shelf**, which is the one case the
+        // fixture test gets wrong on its own. `north` and its three siblings
+        // carry `Fixture` so the maze can publish readings into them — and
+        // `research::refresh` despawns *everything* in a way on the step after,
+        // so a reagent put there is a pile that vanishes with no line saying so.
+        // A tester chasing that would be chasing the tool.
+        let holds_stock = (world.get::<tower::Fixture>(node).is_some()
+            || world.get::<tower::Keep>(node).is_some())
+            && world.get::<tower::Reading>(node).is_none();
+        if holds_stock
+            && world
+                .get::<tower::Name>(node)
+                .is_some_and(|name| name.0 == leaf)
+        {
             return Some(node);
         }
         stack.extend(tower::children_of(world, node));
@@ -218,6 +317,7 @@ mod tests {
             Some(Order::Spawn {
                 name: "sage".to_owned(),
                 count: 1,
+                into: None,
             }),
         );
         assert_eq!(
@@ -225,8 +325,22 @@ mod tests {
             Some(Order::Spawn {
                 name: "ground-sage".to_owned(),
                 count: 5,
+                into: None,
             }),
         );
+        // A destination needs a count in front of it, because the count is
+        // positional and always has been. `debug_spawn fragment lectern` is
+        // therefore refused rather than read as one fragment somewhere — the
+        // quiet reinterpretation this whole word refuses.
+        assert_eq!(
+            order("debug_spawn fragment 4 lectern"),
+            Some(Order::Spawn {
+                name: "fragment".to_owned(),
+                count: 4,
+                into: Some("lectern".to_owned()),
+            }),
+        );
+        assert_eq!(order("debug_spawn fragment lectern"), None);
 
         // Not this word, and not guessed at: a tester who mistypes it should be
         // told by the ordinary parser rather than have the tower change.
@@ -244,5 +358,132 @@ mod tests {
         // reinterpretation this subsystem exists to refuse.
         assert_eq!(order("debug_spawn sage lots"), None);
         assert_eq!(order("debug_spawn sage 2 3"), None);
+    }
+
+    /// What the place called `place` holds after `line`, by name and count.
+    ///
+    /// **One place, not the whole tower.** Sweeping the tree finds the endless
+    /// `sage` on the dispensary's shelf whatever the spawn did, so *"is there
+    /// sage"* is true before the command runs — a test that asks it is asserting
+    /// nothing, which is the shape §19 records three tests having.
+    fn held_by(line: &str, place: &str) -> Vec<(String, u32)> {
+        let mut sim = crate::Sim::new(1);
+        sim.submit(line);
+        sim.step();
+        let world = sim.world();
+
+        let mut stack = vec![tower::root(world)];
+        while let Some(node) = stack.pop() {
+            if world
+                .get::<tower::Name>(node)
+                .is_some_and(|name| name.0 == place)
+            {
+                return tower::holdings(world, node);
+            }
+            stack.extend(tower::children_of(world, node));
+        }
+        panic!("the tower has no `{place}`");
+    }
+
+    #[test]
+    fn every_name_the_tool_offers_lands_in_the_room_it_belongs_to() {
+        // **The list, the door and the layout all have to agree.** A word printed
+        // by a bare `debug_spawn` and then refused — or dropped in a room the
+        // tester is not in and cannot reach — is worse than a shorter list: the
+        // tester believes the tool and looks for the bug in the game.
+        //
+        // Driven per name and against `tower::home` rather than a room written
+        // down here, because a room written down here is the hand-kept list the
+        // rule exists to replace. What this pins is that the tool obeys the rule,
+        // and `every_material_has_a_home_a_move_can_reach` pins that the rule has
+        // an answer for everything.
+        let sim = crate::Sim::new(1);
+        let names = known(sim.world());
+        assert!(!names.is_empty(), "the tool offers nothing at all");
+
+        for name in names {
+            let want = {
+                let world = sim.world();
+                let node = tower::home(world, &name)
+                    .unwrap_or_else(|| panic!("`{name}` is offered and has no home"));
+                world
+                    .get::<tower::Name>(node)
+                    .map_or_else(String::new, |place| place.0.clone())
+            };
+            let held = held_by(&format!("debug_spawn {name}"), &want);
+            assert!(
+                held.iter().any(|(held, count)| *held == name && *count > 0),
+                "`{name}` is offered by the list and did not land in `{want}`: {held:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn every_material_the_game_has_is_one_the_tool_can_make() {
+        // **The other direction, and it is the one that rots.** The list above
+        // is derived from the *recipes*, so a material authored in
+        // `materials.toml` that no recipe names would have a colour, a manual
+        // route and no way for a tester to hold one — and nothing would say so,
+        // because both files parse perfectly.
+        //
+        // It is also the shape of the ask this test was written for: *"make sure
+        // all new items are in `debug_spawn`"* is a promise that has to keep
+        // being true, and a promise kept by hand is one kept until somebody is
+        // busy.
+        let sim = crate::Sim::new(1);
+        let names = known(sim.world());
+        let materials = crate::content::Materials::builtin();
+        for material in materials.names() {
+            assert!(
+                names.iter().any(|known| known == material),
+                "`{material}` is authored in materials.toml and cannot be spawned",
+            );
+        }
+    }
+
+    #[test]
+    fn the_arsenal_is_a_destination_and_keeps_its_door() {
+        // The arsenal is a **domain**, not a `Fixture`, so the shelf lookup
+        // refused it — which put every arsenal state back out of a tester's
+        // reach, the exact gap a named destination was added to close.
+        let kept = held_by("debug_spawn clarity 1 arsenal", tower::ARSENAL);
+        assert!(
+            kept.iter().any(|(name, _)| name == "clarity"),
+            "a potion could not be put in the arsenal: {kept:?}",
+        );
+
+        // And the door holds for a tester too. Stock standing in the arsenal is
+        // a state no `move` could produce, which is the same objection as an
+        // unknown name and a wrong kind — both of which this word already
+        // refuses. A tool that can build impossible worlds makes every bug report
+        // start by checking the tool.
+        let kept = held_by("debug_spawn sage 1 arsenal", tower::ARSENAL);
+        assert!(
+            !kept.iter().any(|(name, _)| name == "sage"),
+            "the arsenal took a reagent from the tool: {kept:?}",
+        );
+    }
+
+    #[test]
+    fn a_way_is_not_a_shelf() {
+        // `north` and its three siblings carry `Fixture` so the maze can publish
+        // readings into them — and `research::refresh` despawns *everything* in a
+        // way on the step after, so a reagent put there is a pile that vanishes
+        // with no line saying so. The fixture test alone said yes.
+        for way in ["north", "east", "south", "west"] {
+            let held = held_by(&format!("debug_spawn sage 1 {way}"), way);
+            assert!(
+                !held.iter().any(|(name, _)| name == "sage"),
+                "`{way}` took a reagent it will silently destroy: {held:?}",
+            );
+        }
+
+        // ...and an ordinary domain is still refused, which is the rule the ways
+        // are an exception *to* rather than a change in it.
+        let held = held_by("debug_spawn sage 1 laboratory", "laboratory");
+        assert!(
+            !held.iter().any(|(name, _)| name == "sage"),
+            "stock was put on a domain node, where `move` cannot reach it",
+        );
     }
 }

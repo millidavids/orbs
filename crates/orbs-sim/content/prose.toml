@@ -125,9 +125,13 @@ recall_brewing = "kindle, grind, digest, mix, distil - then empty, or purge the 
 # `{kind}` is the heat marker, already worded. Forgetting to light the athanor is
 # the commonest way a stage refuses, so it earns its place on the line.
 route_line = "{name}: {count} steps, {ticks} ticks"
-route_step = "{index} {detail} -> {name} + {state}  ({source}, {ticks}t{kind})"
-route_step_or = "or {detail} -> {name} + {state}  ({source}, {ticks}t{kind})"
+route_step = "{index} {detail} -> {name}{state}  ({source}, {ticks}t{kind})"
+route_step_or = "or {detail} -> {name}{state}  ({source}, {ticks}t{kind})"
 route_heat = ", needs heat"
+# The byproduct clause, composed in like `route_heat` beside it - because not
+# every step leaves one. Byproducts are the laboratory's mechanic, and a step
+# without one used to read "-> gleaning-scroll +  " with nothing after the plus.
+route_leaves = " + {state}"
 
 # Terse on purpose. The interpolated line is what has to fit ~60 cells at the
 # 80x22 floor, and "you move the ground-sage from the laboratory to the
@@ -143,6 +147,11 @@ wield_busy = "the {name} is at work. wait, or stop it"
 wield_empty = "the {name} is empty"
 wield_no_recipe = "the {name} can do nothing with {detail}"
 wield_done = "the {source} yields {name}, and leaves {detail}  +{count}"
+# A run that leaves nothing behind. Byproducts are the laboratory's mechanic, so
+# the sentence cannot end in "and leaves " with a hole where one would go - the
+# hole is exactly how a missing key surfaces (S19), and here it would surface on
+# every scroll the archive ever assembles.
+wield_done_clean = "the {source} yields {name}  +{count}"
 
 # A run that lands on contents matching no recipe. Should not be reachable —
 # the lock sees to that — but `transmute` used to return silently here, which
@@ -192,6 +201,7 @@ concentration_gained = "the orb can hold a spell now. bind one, and walk away"
 debug_spawn_done = "the shelf finds it had {name} all along"
 debug_spawn_unknown = "nothing in the tower is called '{name}'"
 debug_spawn_nowhere = "there is no shelf here to put {name} on"
+debug_spawn_unkept = "the arsenal keeps finished work. {name} is not any"
 debug_spawn_known = "the shelf could find: {name}"
 
 # ---------------------------------------------------------------------------
@@ -453,44 +463,175 @@ bind_full = "the orb holds {count}: {detail}. let one go first"
 spell_unattended = "{name} needed you there. it stops"
 
 # ---------------------------------------------------------------------------
-# The archive's labyrinth (§10, §19).
+# The archive's stacks (§10, §19).
 #
 # `research` (`divine` until the archive got its name right) opened nothing and
-# produced nothing for two phases; it now resolves a
-# maze out of the shelf, and `follow` threads it. The three defects that came
+# produced nothing for two phases; it now opens the
+# stacks out of a page, and `follow` threads them. The three defects that came
 # with the old verb - a completion with no sentence, a run that could not be
 # stopped, a domain with no manual entry - are gone because the domain has an
 # instrument, not because they were patched.
 # ---------------------------------------------------------------------------
-research_opens = "the page resolves into a labyrinth. the way out is somewhere in it"
-research_already = "a reading is already open. follow it, or stop the lectern"
-research_nowhere = "there is no lectern here"
-research_solved = "the labyrinth gives up {name}"
+research_opens = "the page opens into shelves that do not end. a way out is in them"
+research_already = "a reading is already open. follow it, or stop the stacks"
+research_nowhere = "there are no stacks here to read"
+research_solved = "the stacks give up {name}"
 follow_done = "the reading goes {name}"
 follow_wall = "there is no way {name}"
 follow_unopened = "nothing is open to follow. research first"
 follow_nowhere = "follow which way? north, east, south or west"
 
+# ---------------------------------------------------------------------------
+# Scrolls. Four fragments become one, and wielding it spends it.
+#
+# Every refusal names the scroll, because the player is holding a thing four
+# walks of the stacks paid for and "no" alone is the dead end S15 weighs heaviest.
+# Each one also says what would work instead: that is S6's rule, and it is why
+# none of these is a bare complaint.
+# ---------------------------------------------------------------------------
+scroll_gleaning = "the {name} unrolls. {count} things in the dark, and no way out"
+scroll_unopened = "the {name} wants open stacks to work on. research first"
+scroll_nowhere = "there are no stacks here to unroll the {name} over"
+scroll_already = "the stacks are already gathering. the {name} stays rolled"
+scroll_no_room = "there is not enough unwalked floor left. the {name} stays rolled"
+scroll_inert = "the {name} is written in a hand the orb cannot read yet"
+scroll_quickening = "the {name} burns away. the {source} works quick for {count}"
+scroll_verdant = "the {name} unrolls, and the shelf remembers {detail}"
+scroll_already_flowered = "the shelf holds every herb the {name} knows"
+
+# ---------------------------------------------------------------------------
+# The arsenal: the one room reachable from every other, and what it will hold.
+#
+# The refusal names what the room is *for* rather than what the thing is not.
+# S6 forbids a bare error, and "no" about a reagent you are holding is exactly
+# that - the player has to be told where their sage does belong.
+# ---------------------------------------------------------------------------
+move_unkept = "the {path} keeps finished work. {name} belongs on a shelf"
+recall_arsenal = "finished potions and scrolls, within reach from any room"
+
+# ---------------------------------------------------------------------------
+# The ported herbs. Every one is a real plant or resin, and the line says what it
+# **looks like and where it grows** before what it is for - which is the shape
+# `../court_wizard` uses for all nineteen of its ingredients, and the reason a
+# player asking "what is this" gets an answer rather than an invented name.
+#
+# S19 records the four shard names failing exactly this: "nothing in the game
+# ever said what one was". A herb the orb cannot describe is the same defect.
+# ---------------------------------------------------------------------------
+recall_mugwort = "a silvery roadside weed. its underside catches the moonlight"
+recall_valerian = "a pale wet-woodland root. pungent enough to slow a room"
+recall_amber = "warm fossil resin off a cold shore. it holds what it touches"
+
+# ---------------------------------------------------------------------------
+# Every material has a page, and `every_material_has_a_page` holds it.
+#
+# `recall <thing>` used to answer with the **route** and nothing else, so a
+# player holding a potion could be told its five steps and not one word about
+# what it was for. A route answers *how do I get one*; this answers *what is
+# this*, and both are said now - what it is first, because that is what someone
+# holding the thing is asking.
+#
+# `using_<name>` is the second half: how you spend it. It is optional, because a
+# byproduct is a thing you have rather than a thing you do - and where a use is
+# **not built yet** it says so, which is what `undo`'s verb page already does and
+# what S15 wants, since a page admitting a thing does nothing is the cheapest way
+# to keep a player out of a dead end.
+#
+# **Not `recall_<name>_use`.** `Prose::topics` decides what is nameable by
+# stripping `recall_`, so that spelling would register `clarity_use` as something
+# to ask the orb about - the trap `grimoire_step_or` already paid for.
+# ---------------------------------------------------------------------------
+
+# Base stock: the three the tower opens with.
+recall_sage = "common garden sage. the laboratory's first and plainest work"
+recall_rock-salt = "coarse mined salt. ground, it fixes what a tincture cannot"
+recall_charcoal = "what the athanor burns. one lump outlasts a whole brew"
+using_charcoal = "kindle charcoal, and stop the athanor when nothing needs heat"
+
+# Ground: a mortar takes a thing down to where the bath or the flask can use it.
+recall_ground-sage = "sage broken down. the bath can draw a tincture off it now"
+recall_ground-salt = "rock salt broken down, and what the flask fixes a draught with"
+recall_ground-mugwort = "mugwort broken down. the bath can take it now"
+recall_ground-valerian = "valerian broken down. the bath can take it now"
+recall_powdered-amber = "amber ground to dust. it fixes an extract rather than steeping"
+
+# Extracts: what gentle heat draws out.
+recall_sage-tincture = "sage drawn out over gentle heat. half of a clarity"
+recall_weak-tincture = "husks steeped a second time. thin, and free if you grind"
+recall_mugwort-tincture = "mugwort drawn out over gentle heat"
+recall_valerian-tincture = "valerian drawn out over gentle heat"
+
+# Draughts: two things combined, and one step from a potion.
+recall_clarified-draught = "tincture and salt combined. the alembic makes clarity"
+recall_fixed-draught = "tincture and potash combined. it distils into warding"
+recall_keen-draught = "mugwort held in amber. it distils into insight"
+recall_quiet-draught = "valerian cut with salt. it distils into stillness"
+
+# ---------------------------------------------------------------------------
+# Essences. **Every one says its use is not built**, because it is not: S11.5's
+# resource table has a siege consuming 4-8 potions, and sieges are Phase 2. A
+# page that described a drinking that does not exist would be worse than one that
+# is honest about the wait.
+# ---------------------------------------------------------------------------
+recall_clarity = "a potion of clear sight, and the laboratory's flagship work"
+recall_warding = "a potion that turns harm aside"
+recall_haste = "a potion of quickness. the cheapest chain in the tower"
+recall_insight = "a potion that opens the mind's eye"
+recall_stillness = "a potion of deep quiet, which is valerian's own gift"
+using_clarity = "nothing drinks a potion yet. a siege will be what spends them"
+using_warding = "nothing drinks a potion yet. a siege will be what spends them"
+using_haste = "nothing drinks a potion yet. a siege will be what spends them"
+using_insight = "nothing drinks a potion yet. a siege will be what spends them"
+using_stillness = "nothing drinks a potion yet. a siege will be what spends them"
+
+# ---------------------------------------------------------------------------
+# Byproducts. S10.1's rule is that every one has a use, so every page names it -
+# a line that only said "waste" would be the tidying feeling the rule removes.
+# ---------------------------------------------------------------------------
+recall_husks = "what a grind leaves behind. steep them for a thin tincture"
+recall_ash = "what a burnt-out fire leaves. grind it down for potash"
+recall_sediment = "what settles out of the bath. with dregs it makes salt again"
+recall_dregs = "what settles out of the flask. with sediment it makes salt again"
+recall_phlegm = "the watery part of a distillation. cut it with potash for salt"
+recall_potash = "ash ground down. it fixes a draught the alembic can hold"
+
+# ---------------------------------------------------------------------------
+# The archive's own, and the scrolls it assembles. These are the pages the whole
+# change was for: a scroll that told you its four fragments and not what
+# unrolling it did was the dead end wearing a manual entry.
+# ---------------------------------------------------------------------------
+recall_fragment = "a scrap won by walking the stacks. four of them make a scroll"
+using_fragment = "move four to the lectern and wield it"
+
+recall_gleaning-scroll = "sets the stacks to gather: five scraps, and no way out"
+using_gleaning-scroll = "wield it in the archive, with the stacks already open"
+
+recall_quickening-scroll = "the laboratory works at double speed for a while"
+using_quickening-scroll = "wield it anywhere, before a brew or during one"
+
+recall_verdant-scroll = "the shelf remembers a herb it has never held, one per scroll"
+using_verdant-scroll = "wield it anywhere. there are three herbs to remember"
+
 # What the archive is for, and what its verb does - the two manual entries the
 # domain has never had.
-recall_archive = "research opens a labyrinth, follow threads it. four make a scroll"
+recall_archive = "research opens the stacks, follow threads them. four make a scroll"
 attend_reading = "that is a way the reading can go, not a room you can stand in"
-research_abandoned = "you let the labyrinth close"
+research_abandoned = "you let the stacks close"
 
 # The map's own border. `Painter::border` announces a title as a heading, which
 # is the whole of what the picture says to a listener - the four ways are what
-# `survey` answers and the progress is on the lectern's panel row, so a second
+# `survey` answers and the progress is on the stacks' panel row, so a second
 # continuous utterance here would be the "completion only" rule (S14) broken by
 # the one surface that most wants to break it.
-maze_title = "labyrinth"
+maze_title = "stacks"
 maze_title_walking = "walking"
 
-# `wander` - the arrow keys take the maze. The map is already on screen either
+# `wander` - the arrow keys take the stacks. The map is already on screen either
 # way, so what this word buys is the keys, and the refusals have to name the two
 # things that must be true first.
-wander_opens = "you step into the labyrinth. the arrows walk it"
-wander_unopened = "there is no labyrinth to walk. research one first"
-wander_nowhere = "there is no lectern here to walk a labyrinth at"
+wander_opens = "you step into the stacks. the arrows walk them"
+wander_unopened = "the stacks are not open. research first"
+wander_nowhere = "there are no stacks here to walk"
 maze_keys = "arrows walk   esc leaves"
 maze_walked = "walked {quantity} of {detail}"
 
@@ -558,11 +699,11 @@ man_grind_eg1 = "grind sage leaves ground-sage, and husks beside it"
 man_grind_also = "digest, empty, recall brewing"
 
 man_wander_use = "wander"
-man_wander_gloss = "walk the labyrinth by hand"
-man_wander_1 = "the arrows take the maze; esc gives the prompt back"
+man_wander_gloss = "walk the stacks by hand"
+man_wander_1 = "the arrows take the stacks; esc gives the prompt back"
 man_wander_2 = "a step is a step, and costs the tower no time at all"
-man_wander_3 = "a spell walks it with follow, which is the slow way"
-man_wander_eg1 = "research opens one, then wander, then hold a direction"
+man_wander_3 = "a spell walks them with follow, which is the slow way"
+man_wander_eg1 = "research opens them, then wander, then hold a direction"
 man_wander_also = "research, follow, recall archive"
 
 man_attend_use = "attend <place>"
@@ -694,7 +835,7 @@ man_kindle_also = "digest, distil"
 man_stop_use = "stop <place>"
 man_stop_gloss = "halt what is running"
 man_stop_1 = "an instrument mid-run, or a spell mid-flight"
-man_stop_2 = "at the lectern it abandons the labyrinth as well"
+man_stop_2 = "at the stacks it closes what research opened"
 man_stop_3 = "what was being made is lost; what was in it is not"
 man_stop_eg1 = "stop threading ends a spell that will not settle"
 man_stop_also = "purge, empty, invoke"
@@ -708,11 +849,11 @@ man_purge_eg1 = "purge dust, when nothing is going to want it"
 man_purge_also = "empty, stop, verify"
 
 man_research_use = "research"
-man_research_gloss = "open a labyrinth on the lectern"
-man_research_1 = "the archive's work. a maze resolves out of the"
-man_research_2 = "shelf, and reaching its way out gives a fragment"
-man_research_3 = "four fragments on the lectern make a scroll"
-man_research_eg1 = "research, then wander to walk it yourself"
+man_research_gloss = "open a way into the stacks"
+man_research_1 = "the archive's work. shelves resolve out of a page,"
+man_research_2 = "and reaching the way out of them gives a fragment"
+man_research_3 = "four fragments moved to the lectern make a scroll"
+man_research_eg1 = "research, then wander to walk them yourself"
 man_research_also = "follow, wander, wield, recall archive"
 
 man_follow_use = "follow <way>"

@@ -33,7 +33,7 @@ pub enum RngStream {
     Yield,
     /// Trace accrual jitter.
     Trace,
-    /// The archive's labyrinths (§10, `tower::maze`).
+    /// The archive's stacks (§10, `tower::maze`).
     Archive,
 }
 

@@ -167,6 +167,13 @@ pub fn begin(world: &mut World, place: Entity, verb: Verb, subject: NodeId, tick
         return false;
     }
 
+    // **Speed is read here and nowhere else**, and it follows heat: §10.1 checks
+    // the athanor when a run *begins* and lets the run finish even if the fire
+    // dies under it. A run started inside a quickened window is short and stays
+    // short, which keeps `Working` an interval set once — the property
+    // `meditate` idempotence rests on. Applied per tick it would be the
+    // countdown §19 refused, wearing a multiplier.
+    let ticks = super::quicken::hastened(world, place, ticks);
     let now = *world.resource::<Tick>();
     world.entity_mut(place).insert(Working {
         verb,

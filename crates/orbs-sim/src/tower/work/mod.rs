@@ -24,11 +24,13 @@
 //! |---|---|
 //! | [`slot`] | the intervals, the pools, `begin`, `stop`, and the busy contract |
 //! | [`produce`] | `transmute` and `siphon` — what an instrument makes |
+//! | [`quicken`] | a domain working at double speed, for a while |
 //! | [`triage`] | `purge` — §7's destruction-as-maintenance |
 //! | [`land`] | the once-per-tick pass that completes both pools |
 
 mod land;
 mod produce;
+mod quicken;
 mod slot;
 mod triage;
 
@@ -37,6 +39,7 @@ mod tests;
 
 pub use land::finish;
 pub use produce::{Product, contents};
+pub use quicken::{QUICKENED_BY, QUICKENED_TICKS, Quickened, quickened};
 pub use slot::{
     Busy, CAPACITY, DIVINE_TICKS, PURGE_TICKS, Triaging, Working, begin, busy, in_flight, occupied,
     refuse_busy, stop,

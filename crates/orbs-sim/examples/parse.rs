@@ -28,7 +28,7 @@ fn tower() -> Scene {
         .with(NounKind::Essence, "warding")
         .with(NounKind::Vessel, "alembic")
         .with(NounKind::Script, "night_watch")
-        .with(NounKind::Fragment, "sigil-iv")
+        .with(NounKind::Scroll, "gleaning-scroll")
         .with(NounKind::Topic, "brewing")
         .with(NounKind::Any, "sludge")
 }

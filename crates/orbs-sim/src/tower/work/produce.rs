@@ -39,6 +39,41 @@ pub fn contents(world: &mut World, place: Entity) -> Vec<Entity> {
     children_of(world, place)
 }
 
+/// Which of a recipe's products this run made.
+///
+/// # A recipe that makes one thing rolls nothing
+///
+/// The guard is not an optimisation. Every completion in the game passes through
+/// here, so drawing unconditionally would advance
+/// [`RngStream::Archive`](crate::RngStream::Archive) on every grind and every
+/// distillation — coupling the laboratory to the archive in exactly the
+/// direction §19 records fixing once already, when solving a maze rolled the
+/// laboratory's `Yield` stream and changed a player's subsequent brew yields.
+///
+/// # Once per completion, never per tick
+///
+/// `land::finish` calls `transmute` on the tick the interval ends and on no
+/// other, so the number of draws cannot depend on how the ticks were consumed. A
+/// draw made anywhere that runs per tick would give a `meditate 60` a different
+/// world from sixty `meditate 1`s — `heat.rs` records the same hazard for
+/// spawning.
+///
+/// # Why the archive's stream
+///
+/// The lectern is the only instrument that draws, and what it draws is an
+/// archive yield. If the laboratory ever gains a drawing recipe this has to
+/// become a per-instrument choice rather than a constant — `Yield` is the
+/// laboratory's stream — and that is the moment to make it one, not before.
+fn draw(world: &mut World, choices: &[String]) -> String {
+    let [only] = choices else {
+        let mut rngs = world.resource_mut::<crate::rng::Rngs>();
+        let rng = rngs.stream(crate::rng::RngStream::Archive);
+        let at = rand::Rng::random_range(rng, 0..choices.len());
+        return choices[at].clone();
+    };
+    only.clone()
+}
+
 /// Turn an instrument's contents into what its recipe makes.
 ///
 /// The recipe is looked up **again** here rather than carried on
@@ -58,9 +93,14 @@ pub(super) fn transmute(world: &mut World, place: Entity) {
         .matching(&name, &holding)
         .map(|recipe| {
             (
-                recipe.output.clone(),
+                recipe
+                    .outputs()
+                    .into_iter()
+                    .map(str::to_owned)
+                    .collect::<Vec<_>>(),
                 recipe.leaves.clone(),
                 recipe.potion,
+                recipe.scroll,
                 recipe.count,
             )
         });
@@ -75,13 +115,15 @@ pub(super) fn transmute(world: &mut World, place: Entity) {
     // no record at all: the echo appeared and then nothing, ever — no completion,
     // no refusal, no message. §14 announces completions, and a run ending is a
     // completion whether or not it produced anything.
-    let Some((output, leaves, potion, count)) = made else {
+    let Some((choices, leaves, potion, scroll, count)) = made else {
         let message = world
             .resource::<Prose>()
             .line("wield_nothing", &[("name", &name)]);
         say(world, &name, &name, "fouled", &message, Role::Cost);
         return;
     };
+
+    let output = draw(world, &choices);
 
     // **What the recipe asked for, not everything in the vessel.** The instrument
     // is charged a unit at a time, so a run spends what the recipe wants and no
@@ -94,10 +136,16 @@ pub(super) fn transmute(world: &mut World, place: Entity) {
         };
         super::super::stock::take(world, place, &name, count);
     }
-    // A finished potion is an `Essence`; everything else is crafting stock. The
-    // byproduct is always stock — §10.1 gives every one of them a use.
+    // A finished potion is an `Essence`, a scroll is a `Scroll`, and everything
+    // else is crafting stock. The byproduct is always stock — §10.1 gives every
+    // one of them a use.
+    //
+    // The same three-way rule `Recipes::kind_of` applies by name; the two agree
+    // because `parse` refuses a recipe that sets both flags.
     let kind = if potion {
         NounKind::Essence
+    } else if scroll {
+        NounKind::Scroll
     } else {
         NounKind::Reagent
     };
@@ -107,7 +155,15 @@ pub(super) fn transmute(world: &mut World, place: Entity) {
     // "waste", which §10.1 explicitly refuses: every byproduct is some other
     // recipe's input, and route B of the clarified draught is exactly the husks
     // route A leaves behind.
-    for (product, kind, wanted) in [(&output, kind, true), (&leaves, NounKind::Reagent, false)] {
+    //
+    // **A recipe may leave nothing**, and then nothing is what it leaves — no
+    // node, no row on `survey`, no substance to explain. Byproducts are the
+    // laboratory's mechanic (see `Recipe::leaves`); the lectern's assembly used
+    // to shed `dust` only because the field was compulsory.
+    let byproduct = leaves
+        .as_ref()
+        .map(|leaves| (leaves, NounKind::Reagent, false));
+    for (product, kind, wanted) in std::iter::once((&output, kind, true)).chain(byproduct) {
         // Merged into whatever is already there, so a second run adds to the
         // pile rather than standing a second node beside it under the same name.
         let node = super::super::stock::give(world, place, product, kind, 1);
@@ -123,12 +179,20 @@ pub(super) fn transmute(world: &mut World, place: Entity) {
     // run says what it made, and what it earned belongs in that sentence.
     let earned = super::super::worth(world, &name);
 
+    // **Two lines, not one line with a hole in it.** `Prose` prints an unfilled
+    // `{detail}` literally, which §19 records as the deliberate way a typo
+    // surfaces — and *"and leaves "* on the end of every scroll the archive
+    // assembles is that mechanism firing on content that is correct.
     let message = world.resource::<Prose>().line(
-        "wield_done",
+        if leaves.is_some() {
+            "wield_done"
+        } else {
+            "wield_done_clean"
+        },
         &[
             ("source", &name),
             ("name", &output),
-            ("detail", &leaves),
+            ("detail", leaves.as_deref().unwrap_or_default()),
             ("count", &earned.to_string()),
         ],
     );
@@ -140,7 +204,7 @@ pub(super) fn transmute(world: &mut World, place: Entity) {
         .count(FieldName::Quantity, earned)
         // The byproduct is the state the instrument is left in — and a *fact*,
         // so not `Detail`, which is prose a view draws in front of the message.
-        .text(FieldName::State, &leaves)
+        .text(FieldName::State, leaves.as_deref().unwrap_or_default())
         .text(FieldName::Source, &name)
         // Where it happened. `Name` here is the **product**, which is why a
         // spell could not use it to know which instrument yielded — see

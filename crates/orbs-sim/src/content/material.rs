@@ -128,6 +128,24 @@ impl Materials {
     /// `None` is *"nobody has decided"* rather than *"this is colourless"*, and
     /// the panel draws it in the base hue — which is what an untinted material
     /// has always looked like.
+    /// Every material that has been given a colour, alphabetically.
+    ///
+    /// **What the game has, against what any other list claims it has.** A
+    /// `BTreeMap`, so the order is stable and a failure message reads the same
+    /// every run — the same reason `Recipes::instruments` exists, and it is used
+    /// the same way: `debug_spawn` checks that a tester can hold one of each of
+    /// these, and a material no recipe names would otherwise have a colour, a
+    /// manual route and no way to reach it.
+    #[must_use]
+    pub fn names(&self) -> Vec<&str> {
+        self.by_name.keys().map(String::as_str).collect()
+    }
+
+    /// The colour `name` draws in, if it has been given one.
+    ///
+    /// `None` is *"nobody has decided"* rather than *"this is colourless"*, and
+    /// the panel draws it in the base hue — which is what an untinted material
+    /// has always looked like.
     #[must_use]
     pub fn wash(&self, name: &str) -> Option<Wash> {
         let entry = self.by_name.get(name)?;
@@ -206,9 +224,12 @@ mod tests {
                 .iter()
                 .filter_map(|name| materials.wash(name))
                 .collect();
-            let ([first, second], Some(output)) =
-                (inputs.as_slice(), materials.wash(&recipe.output))
-            else {
+            // A drawing recipe has no single product to check a colour against,
+            // and the flask has none — the lectern is the only one that draws.
+            let [made] = recipe.outputs()[..] else {
+                continue;
+            };
+            let ([first, second], Some(output)) = (inputs.as_slice(), materials.wash(made)) else {
                 continue;
             };
             if output.with.is_none() {
@@ -218,9 +239,8 @@ mod tests {
             assert_eq!(
                 output,
                 Wash::mixing(first.tint, second.tint),
-                "`{}` claims to be a mixture but is not the colour of the {:?} \
-                 it is made from",
-                recipe.output,
+                "`{made}` claims to be a mixture but is not the colour of the \
+                 {:?} it is made from",
                 recipe.inputs(),
             );
         }
@@ -235,14 +255,15 @@ mod tests {
             let [input] = inputs.as_slice() else {
                 continue;
             };
-            let (Some(from), Some(into)) = (materials.wash(input), materials.wash(&recipe.output))
-            else {
+            let [made] = recipe.outputs()[..] else {
+                continue;
+            };
+            let (Some(from), Some(into)) = (materials.wash(input), materials.wash(made)) else {
                 continue;
             };
             assert_eq!(
                 from, into,
-                "`{}` is not the colour of the `{input}` it was distilled from",
-                recipe.output,
+                "`{made}` is not the colour of the `{input}` it was distilled from",
             );
         }
 

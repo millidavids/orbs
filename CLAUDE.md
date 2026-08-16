@@ -444,14 +444,45 @@ ORBS_DUMP="attend laboratory; invoke brewing; meditate 3; scribe brewing" \
   cargo run -p orbs
 ```
 
-**`debug_spawn` skips the setup.** A state worth testing costs forty ticks of
-grinding to reach; this puts reagents straight in the dispensary, from wherever
-you are standing. Known names only (`Recipes::vocabulary` plus the fuels), and
-bare it lists them. It is **not a verb** — matched exactly, before the parser,
-absent from `Verb::ALL` and from the tutorial — and it is
+**`debug_spawn <name> [count] [place]` skips the setup.** A state worth testing
+costs forty ticks of grinding to reach; this puts stock straight where you want
+it, from wherever you are standing. Known names only (`Recipes::vocabulary` plus
+the fuels), and bare it lists them. It is **not a verb** — matched exactly,
+before the parser, absent from `Verb::ALL` and from the tutorial — and it is
 `cfg(debug_assertions)`, so a release build has no code for it at all.
 
+**It lands where the thing belongs, so the common case needs no destination.**
+`tower::home` is a rule over the content, not a list: finished work goes to the
+arsenal, anything a recipe *produces* goes to the domain that produces it, and
+anything else to the domain that consumes it — always the **store**, never an
+instrument, because a shelf is inert and a charged tool is a state to explain
+rather than one to test from.
+
 ```bash
+# From the archive, with no destination named. Each lands in its own room.
+ORBS_BOOT=0 ORBS_DUMP="attend archive; debug_spawn fragment 4; debug_spawn clarity; \
+  debug_spawn sage; survey cabinet; survey arsenal" cargo run -p orbs
+```
+```text
+survey cabinet   reagent  fragment 4     ← made in the archive, so it stays there
+survey arsenal   essence  clarity 1      ← finished work keeps itself
+                                         ← the sage went to the dispensary
+```
+
+**Three lints make that a guarantee rather than a claim**, which is the point:
+a new item has to be testable the moment it is authored.
+`every_material_has_a_home_a_move_can_reach` fails the build by name if an
+authored material has nowhere to live or lives somewhere `reachable` cannot see;
+`every_name_the_tool_offers_lands_in_the_room_it_belongs_to` drives each one
+through a real `Sim` and checks it arrives where the rule says;
+`every_material_the_game_has_is_one_the_tool_can_make` catches the direction that
+rots — a material with a tint that no recipe names, with both files parsing
+perfectly.
+
+```bash
+# Bare, to see the whole list.
+ORBS_BOOT=0 ORBS_DUMP="debug_spawn" cargo run -p orbs
+
 ORBS_BOOT=0 ORBS_GRID=100x30 \
   ORBS_DUMP="attend laboratory; debug_spawn ground-sage 3; survey dispensary" \
   cargo run -p orbs
@@ -459,6 +490,31 @@ ORBS_BOOT=0 ORBS_GRID=100x30 \
 # The gate itself, from the side that cannot be tested in a debug build.
 cargo test --release -p orbs-sim --test debug_spawn
 ```
+
+**The third slot is a *shelf*, not any place**, and the rule is what
+`pipeline::reachable` can see into: an instrument or store anywhere in the tower,
+or the arsenal. Three things are refused, each because the state it would build
+is one the game cannot reach on its own — which is what this word already refuses
+for an unknown name, a nought count and a wrong noun kind:
+
+```bash
+ORBS_BOOT=0 ORBS_DUMP="debug_spawn fragment 4 lectern; debug_spawn clarity 1 arsenal; \
+  debug_spawn sage 1 arsenal; debug_spawn sage 1 north; debug_spawn sage 1 laboratory" \
+  cargo run -p orbs
+```
+```text
+the shelf finds it had fragment all along          ← any instrument, from any room
+the shelf finds it had clarity all along           ← the arsenal, which is a domain
+the arsenal keeps finished work. sage is not any   ← its door holds for a tester too
+there is no shelf here to put sage on              ← a *way* is a fixture and is not
+there is no shelf here to put sage on              ← an ordinary domain never was
+```
+
+**A `way` is the one that surprises.** `north` and its three siblings carry
+`Fixture` so the maze can publish readings into them — and `research::refresh`
+despawns *everything* in a way on the step after, so a reagent put there is a
+pile that vanishes with no line saying so. A tester chasing that would be chasing
+the tool.
 
 **A spell's own records are in the log, not in the pane.** `prompt.rs` draws
 *"what the player did, not what their spells did"* — a `repeat` loop would
@@ -582,7 +638,7 @@ decides who the arrows belong to, and `ORBS_WALK` presses them:
 # **It pans** at the game's own grid: a session pane is 58 columns and the whole
 # picture wants 35, which does not leave the transcript its floor, so the block
 # shows the part the reading is standing in. That is the designed fallback, not a
-# defect — see `labyrinth::split`.
+# defect — see `stacks::split`.
 ORBS_BOOT=0 ORBS_DUMP="attend archive; research" cargo run -p orbs
 
 # ...opening as it goes. `▒` walked once, `░` finished with, `☼` the reading,
@@ -612,6 +668,142 @@ ORBS_SEED=11 ORBS_BOOT=0 ORBS_DUMP="attend archive; research; wander" cargo run 
 It applies to the whole world, not just the archive — everything generated is
 one seed's worth of evidence per run. The *distribution* is not something a dump
 can show at all, so it is a test: `cargo test -p orbs-sim --lib research`.
+
+**A scroll is `wield`ed, and the archive's loop is the laboratory's.** A walk of
+the stacks pays its fragment onto the **cabinet**, the archive's shelf; the player
+moves **four matching fragments** into the lectern and wields it. `move` carries
+one unit, so that is four `move`s — noise against four walks of the stacks, and
+four lines of a spell if it grates.
+
+**Where a fragment lands is `tower::home`, asked by both paths**, so a spawned
+one and a won one cannot end up in different rooms. That split existed for one
+change and is the reason the tests ask the rule rather than naming a room.
+
+`debug_spawn`'s third slot is still there for when you want the fragments
+*already* in the lectern. **The count is positional and required**, so
+`debug_spawn fragment lectern` is refused rather than read as one fragment
+somewhere.
+
+```bash
+# The whole loop: assemble a scroll, open the stacks, spend it on them.
+ORBS_SEED=3 ORBS_BOOT=0 ORBS_DUMP="attend archive; \
+  research; debug_spawn gleaning-scroll; wield gleaning-scroll; wander" \
+  cargo run -p orbs
+```
+
+**Five `♦` and no `Ω`, and the missing `Ω` is the point.** A gleaning errand
+withdraws the way out rather than leaving one that does nothing: a solver's top
+rung is `if <way> has exit`, so an inert exit would have it walk onto that square
+and take the same rung for ever. **`wander` is how you see the whole maze** — the
+grid is fixed at 120×45 and the map pans inside a pane, so a dump at any other
+`ORBS_GRID` is an instrument reading a screen nobody has.
+
+**The errand is a word on the stacks, and that is what a spell asks.** `if the
+stacks has gleaning` compiles at cast like every other reading (`Errand::ALL`
+chains onto them in `scene_at`), so **one** solver reads which maze it is in and
+swaps its top rung from `exit` to `spoil`:
+
+```bash
+ORBS_BOOT=0 ORBS_DUMP="attend archive; research; debug_spawn gleaning-scroll; \
+  wield gleaning-scroll; survey stacks" \
+  cargo run -p orbs
+```
+```text
+Heading    reading
+TableRow   gleaning       ← the word a spell asks for, on the stacks
+```
+
+A scroll's own draw and the errand-aware solver are both things a dump cannot
+show — one is a distribution, the other is four thousand ticks of walking — so
+they are tests: `cargo test -p orbs-sim --test gleaning`.
+
+**There are three scrolls and the lectern draws between them.** `gleaning` sets
+the errand above; `quickening` sets a **window** in which the laboratory works at
+double speed; and `verdant` puts one base reagent the laboratory has never had on
+its shelf, endlessly.
+
+**Quickening never refuses for want of something to hurry** — it was a one-shot
+on the run in hand, which made it unusable at exactly the moment a player reaches
+for one. It is an interval like `Burning`, read at `begin` like heat, so a run
+started inside the window stays short when the window closes. What is already
+running is hurried too, halved from *now*.
+
+```bash
+# An 8-tick grind, twice. Without the scroll `meditate 4` yields nothing.
+ORBS_BOOT=0 ORBS_DUMP="attend laboratory; debug_spawn quickening-scroll; \
+  wield quickening-scroll; grind sage; meditate 4" cargo run -p orbs
+
+# Three reagents become six, one scroll at a time. The fourth says so.
+ORBS_BOOT=0 ORBS_DUMP="attend laboratory; debug_spawn verdant-scroll 4; \
+  wield verdant-scroll; wield verdant-scroll; wield verdant-scroll; \
+  wield verdant-scroll; survey dispensary" cargo run -p orbs
+```
+
+**`recall <thing>` is a page, not a route.** It says what the thing is, then how
+it is used, then how it is made — in that order, because someone holding a potion
+is not asking for its five steps. `using_<name>` is the second half and is
+**deliberately not** `recall_<name>_use`: `Prose::topics` strips `recall_` to
+decide what is nameable, so that spelling would register `clarity_use` as a
+subject.
+
+```bash
+ORBS_BOOT=0 ORBS_DUMP="recall clarity; recall gleaning-scroll" cargo run -p orbs
+```
+```text
+a potion of clear sight, and the laboratory's flagship work
+nothing drinks a potion yet. a siege will be what spends them   ← honest, per `undo`
+clarity: 5 steps, 94 ticks
+1. sage -> ground-sage + husks  (mortar_and_pestle, 8t)
+...
+```
+
+**Two lints keep it complete**: `every_material_has_a_page` fails by name for a
+material with no description, and `a_finished_product_says_what_it_is_for`
+requires a `using_` line on every potion and scroll. A material added without a
+page does not ship.
+
+**Every material is a `Topic` because of this**, on the same exemption verb pages
+have — *a manual you can only read in the right room has a lock on it*. So §7's
+scoping is a claim about the **kind**: from the archive `sage` is something to
+read about and not something to grind. A test asserting a name is *absent* from
+another room wants `things()`, not `names()`.
+
+**What a verdant scroll may unlock is derived, never listed** — a base reagent is
+one the vocabulary knows that *nothing in the tower makes*, whose home is the
+laboratory's shelf. Author a fourth herb in `recipes.toml` and it is unlockable
+the same tick. **Check `survey dispensary` after four scrolls when touching
+this**: the first version asked `Recipes::outputs`, which is a recipe's `output`
+and not its `leaves`, so every byproduct read as a herb and `dregs`, `ash` and a
+`fragment` were shelved as inexhaustible stock. The suite was green throughout.
+
+**`/tower/arsenal` is the one room reachable from every other, and before it
+nothing could be carried between domains at all.** `move`'s destination wants a
+fixture where you are standing, so a potion made in the laboratory could not go
+anywhere; and a finished potion could not be picked up at all, because the slot
+was `Reagent` and a potion is an `Essence` (§19). Both are fixed, and the
+exemption is narrow: the arsenal takes **finished work only**.
+
+```bash
+# A potion brewed in one room, carried to a second, listed from a third.
+ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="attend laboratory; kindle charcoal; \
+  debug_spawn clarified-draught; distil clarified-draught; meditate 60; \
+  empty alembic; move clarity to arsenal; attend archive; survey arsenal" \
+  cargo run -p orbs
+
+# The door. A reagent is refused, and told where it does belong.
+ORBS_BOOT=0 ORBS_DUMP="attend laboratory; move sage to arsenal" cargo run -p orbs
+```
+
+**Nameable is not enough, and that is what to check when touching this.**
+`purge` and `verify` take `NounKind::Any`, so they can now *name* a potion from
+any room — and a verb that names what it cannot reach says *"there is no clarity
+within reach"*, which is the one answer that is false. Put
+`attend archive; verify clarity; peruse arsenal.log; purge clarity; survey
+arsenal` on the end of the line above: none of them may say that, and the `purge`
+must actually empty the room rather than resolving and doing nothing.
+
+`cargo test -p orbs-sim --test arsenal` holds all of it, one claim per way this
+could have been half-built.
 
 **A step is in the log, not the transcript** (§19). The map already shows the
 reading move, so `follow`'s success is `quiet` — emitted, stored and spoken as

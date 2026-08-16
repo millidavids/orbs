@@ -35,7 +35,7 @@ const SEED: u64 = 0x0B5;
 /// The seed, or `ORBS_SEED`'s if it names a number.
 ///
 /// **A See-it affordance, not a setting.** Anything the world *generates* — the
-/// archive's labyrinths first, sabotage and sieges later — is one seed's worth of
+/// archive's stacks first, sabotage and sieges later — is one seed's worth of
 /// evidence per run, and one sample cannot show a distribution. Three dumps of
 /// the same maze looked like proof that randomising it had failed; they were
 /// three copies of one seed.

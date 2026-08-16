@@ -130,6 +130,35 @@ pub struct Operation(pub crate::parser::Verb);
 #[derive(Component, Debug, Clone, Copy)]
 pub struct Store;
 
+/// Where finished work is kept, and the one place in the tower you can reach
+/// from anywhere — §10.1's arsenal.
+///
+/// # Why it is not a [`Store`]
+///
+/// A store is *"the fallback a `move` falls back to"*: `reachable` searches it
+/// last, and anything turned out of an instrument lands there. An arsenal that
+/// were one would quietly capture stray reagents, which is the opposite of what
+/// it is for. What it holds is finished work — an
+/// [`Essence`](crate::parser::NounKind::Essence) or a
+/// [`Scroll`](crate::parser::NounKind::Scroll) — and `pipeline` refuses anything
+/// else at the door, naming what the room is for.
+///
+/// # The exemption, stated as one
+///
+/// §7 is *"you can only name what is where you are"*, and `tower::scene`
+/// records that acting on another **domain** at a distance is Phase 2's unlock.
+/// This is a deliberate hole in that rule, and it is narrow: places, spells and
+/// the maze's readings already have the same one, for the same reason — a
+/// spellbook you carry is not a shelf you walk to, and neither is a bandolier.
+///
+/// **Nameable is not enough.** The exemption has to reach *every* verb that can
+/// now name what is in here, or a word resolves at full confidence and then
+/// reports "no such thing" — §15's dead end, arriving through the affordance
+/// meant to remove one. `pipeline::reachable`, `pipeline::purge` and
+/// `files::here_or_place` are the three lookups that had to learn it.
+#[derive(Component, Debug, Clone, Copy)]
+pub struct Keep;
+
 /// One of the four ways the archive's reading can go — see `tower::maze`.
 ///
 /// **A place that is not somewhere you go.** It has to be a `NounKind::Place`,

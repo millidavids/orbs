@@ -77,7 +77,7 @@ pub(crate) struct View<'a> {
     /// Read-only, unlike `editing`: this surface has no viewport that follows a
     /// caret, so the painter has nothing to tell it.
     pub(crate) weaving: Option<&'a Tapestry>,
-    /// Whether the arrow keys are walking the archive's labyrinth.
+    /// Whether the arrow keys are walking the archive's stacks.
     ///
     /// **A flag rather than a borrow**, unlike the two above it, because this
     /// surface holds no state of its own — the maze is the sim's and arrives
@@ -183,9 +183,9 @@ pub(crate) fn paint(frame: &mut Frame, linear: &mut Linear, view: View<'_>) {
     // transcript whenever a maze is open, which is what makes a spell's solving
     // watchable. What this branch adds is the pane, and only for the player who
     // is walking it themselves.
-    if walking && let Some(maze) = panel.labyrinth.as_ref() {
+    if walking && let Some(maze) = panel.stacks.as_ref() {
         let mut painter = frame.painter(first);
-        super::labyrinth::paint_alone(&mut painter, first, maze, sim.prose());
+        super::stacks::paint_alone(&mut painter, first, maze, sim.prose());
         if let Some(second) = main.get(1) {
             telemetry(frame, sim, screen, *second);
         }
@@ -429,9 +429,9 @@ pub(super) fn session(
     // on the rest, so the second is the one whose refusal can fire — and an
     // instrument row is load-bearing where a map is a convenience. Running this
     // first would also put it outboard of the panel, which is the wrong side.
-    let map = super::labyrinth::split(body, panel.labyrinth.as_ref());
-    if let Some(maze) = panel.labyrinth.as_ref() {
-        super::labyrinth::paint(&mut painter, map.area, maze, sim.prose());
+    let map = super::stacks::split(body, panel.stacks.as_ref());
+    if let Some(maze) = panel.stacks.as_ref() {
+        super::stacks::paint(&mut painter, map.area, maze, sim.prose());
     }
     body = map.rest;
 

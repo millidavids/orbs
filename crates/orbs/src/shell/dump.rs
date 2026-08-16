@@ -139,7 +139,7 @@ const THEN: &str = "ORBS_THEN";
 /// ```
 const WEAVE: &str = "ORBS_WEAVE";
 
-/// Arrow presses for the labyrinth a `wander` in `ORBS_DUMP` took the keys for.
+/// Arrow presses for the stacks a `wander` in `ORBS_DUMP` took the keys for.
 ///
 /// `\n`-separated, one of `<up>`, `<right>`, `<down>`, `<left>` per segment.
 /// Anything else ends the walk, the way Escape does.
@@ -309,7 +309,7 @@ pub(crate) fn run(seed: u64, wizard: Option<String>) -> bool {
         let panel = super::input::Panel {
             instruments: sim.instruments(),
             domain: orbs_sim::parser::leaf(&sim.location()).to_owned(),
-            labyrinth: sim.labyrinth(),
+            stacks: sim.stacks(),
         };
         super::prompt::paint(
             &mut frame,

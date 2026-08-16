@@ -24,7 +24,7 @@ fn tower() -> Scene {
         .with(NounKind::Reagent, "sage")
         .with(NounKind::Vessel, "retort")
         .with(NounKind::Script, "night_watch")
-        .with(NounKind::Fragment, "sigil-iv")
+        .with(NounKind::Scroll, "gleaning-scroll")
         .with(NounKind::Topic, "brewing")
         .with(NounKind::Any, "sludge")
 }
@@ -195,7 +195,10 @@ fn every_verb_is_reachable_from_plain_english() {
         // `stop`, the pair this room can least afford to confuse.
         ("collect laboratory", Verb::Empty),
         ("get rid of sludge", Verb::Purge),
-        ("study sigil-iv", Verb::Research),
+        // `research` takes no argument at all now — it opens the stacks on the
+        // one lectern (§19) — so what this pins is the *word*, which is all it
+        // ever pinned: `study` has to reach `research` and nothing else.
+        ("study", Verb::Research),
         ("author night_watch", Verb::Scribe),
         ("schedule night_watch", Verb::Bind),
         ("cast night_watch", Verb::Invoke),

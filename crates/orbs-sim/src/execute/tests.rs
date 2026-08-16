@@ -142,7 +142,7 @@ fn sample(verb: Verb) -> (&'static str, &'static str) {
         // that made it. The mortar is empty here, and the refusal that
         // yields is still the world answering rather than acknowledging.
         Verb::Purge => ("laboratory", "purge laboratory.log"),
-        // No argument: `divine` takes `NOTHING` since it opens a labyrinth
+        // No argument: `divine` takes `NOTHING` since it opens the stacks
         // rather than deciphering a named fragment. The parser fixtures were
         // migrated when the signature changed and this one was missed, so it had
         // been feeding a noun to a verb with no slot for it.
@@ -410,7 +410,11 @@ fn survey_lists_the_place_it_echoed() {
         .map(|value| value.with_str(str::to_owned))
         .collect();
 
-    assert!(listed.iter().any(|name| name == "sigil-iv"), "{listed:?}");
+    // The lectern, which is the archive's own and stands in it. It used to be
+    // `sigil-iv`, one of three artefacts the archive kept on its floor after
+    // `research` stopped consuming them (§19) — an instrument is the better
+    // subject anyway, because it is what the room is *for*.
+    assert!(listed.iter().any(|name| name == "lectern"), "{listed:?}");
     assert!(!listed.iter().any(|name| name == "clarity"), "{listed:?}");
 }
 

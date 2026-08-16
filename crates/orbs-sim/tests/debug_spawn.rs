@@ -33,20 +33,29 @@ fn messages(sim: &Sim) -> Vec<String> {
         .collect()
 }
 
-/// What the dispensary actually holds, by name.
+/// What the place called `place` actually holds, by name.
 ///
-/// **The shelf's children, not the scene.** `Scene::nouns` is everything
-/// *nameable* from where you stand, which includes a `Topic` for every reagent
-/// so `recall ground-sage` reads the manual — so a scene sweep says the shelf
-/// holds `ground-sage` before any has ever been ground. That is the same
-/// duplication that made `ground-sag` refuse as ambiguous with itself, wearing
-/// its other face: here it would have made two of these tests pass on nothing.
+/// **Its children, not the scene.** `Scene::nouns` is everything *nameable* from
+/// where you stand, which includes a `Topic` for every reagent so `recall
+/// ground-sage` reads the manual — so a scene sweep says the shelf holds
+/// `ground-sage` before any has ever been ground. That is the same duplication
+/// that made `ground-sag` refuse as ambiguous with itself, wearing its other
+/// face: here it would have made two of these tests pass on nothing.
+///
+/// **It takes a name now, and it used to find "the `Store`".** There was one, so
+/// "the shelf" was unambiguous; the archive has a `cabinet` since it needed
+/// somewhere to turn the lectern out into, and the search then returned
+/// whichever store the walk reached first — the *empty* one — and five tests
+/// failed at once on a helper rather than on the tool.
 #[cfg(debug_assertions)]
-fn shelved(sim: &Sim) -> Vec<String> {
+fn held_in(sim: &Sim, place: &str) -> Vec<String> {
     let world = sim.world();
     let mut stack = vec![orbs_sim::tower::root(world)];
     while let Some(node) = stack.pop() {
-        if world.get::<orbs_sim::tower::Store>(node).is_some() {
+        if world
+            .get::<orbs_sim::tower::Name>(node)
+            .is_some_and(|name| name.0 == place)
+        {
             return orbs_sim::tower::children_of(world, node)
                 .into_iter()
                 .filter_map(|held| world.get::<orbs_sim::tower::Name>(held))
@@ -56,6 +65,12 @@ fn shelved(sim: &Sim) -> Vec<String> {
         stack.extend(orbs_sim::tower::children_of(world, node));
     }
     Vec::new()
+}
+
+/// What the laboratory's shelf holds — the commonest question here.
+#[cfg(debug_assertions)]
+fn shelved(sim: &Sim) -> Vec<String> {
+    held_in(sim, "dispensary")
 }
 
 #[cfg(debug_assertions)]
@@ -119,21 +134,21 @@ fn a_spawned_potion_is_an_essence_like_a_distilled_one() {
     sim.submit("debug_spawn ground-sage");
     sim.step();
 
+    // **The whole tower, because the claim is about the kind and not the room.**
+    // It used to read the first `Store` it found, which stopped working twice
+    // over: there are two stores now, and a potion no longer lives in either —
+    // `tower::home` sends finished work to the arsenal, which is the room it is
+    // for.
     let world = sim.world();
     let kinds: Vec<(String, orbs_sim::parser::NounKind)> = {
         let mut stack = vec![orbs_sim::tower::root(world)];
         let mut found = Vec::new();
         while let Some(node) = stack.pop() {
-            if world.get::<orbs_sim::tower::Store>(node).is_some() {
-                found = orbs_sim::tower::children_of(world, node)
-                    .into_iter()
-                    .filter_map(|held| {
-                        let name = world.get::<orbs_sim::tower::Name>(held)?;
-                        let kind = world.get::<orbs_sim::tower::Nameable>(held)?;
-                        Some((name.0.clone(), kind.0))
-                    })
-                    .collect();
-                break;
+            if let (Some(name), Some(kind)) = (
+                world.get::<orbs_sim::tower::Name>(node),
+                world.get::<orbs_sim::tower::Nameable>(node),
+            ) {
+                found.push((name.0.clone(), kind.0));
             }
             stack.extend(orbs_sim::tower::children_of(world, node));
         }

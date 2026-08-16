@@ -36,7 +36,7 @@ fn scene() -> Scene {
         // `alembic` became an instrument — a place — with §10.1, so the vessel
         // fixture is `retort`, which stayed one when `crucible` was removed.
         .with(NounKind::Vessel, "retort")
-        .with(NounKind::Fragment, "sigil-iv")
+        .with(NounKind::Scroll, "gleaning-scroll")
         .with(NounKind::Script, "night_watch")
         .with(NounKind::Any, "sludge")
 }
@@ -54,7 +54,7 @@ const fn sample_argument(verb: Verb) -> &'static str {
         NounKind::Essence => "clarity",
         NounKind::Reagent => "sage",
         NounKind::Vessel => "retort",
-        NounKind::Fragment => "sigil-iv",
+        NounKind::Scroll => "gleaning-scroll",
         NounKind::Script => "night_watch",
         NounKind::Count => "30",
         // Free text the player is coining, so any word will do — and a word that
@@ -77,6 +77,13 @@ const fn sample_argument(verb: Verb) -> &'static str {
         // exercises the ordinary `stop <instrument>` and leaves calling a spell
         // off to the tests that are about spells.
         NounKind::Stoppable => "/tower/laboratory",
+        // The same again for `wield`: the instrument is the ordinary reading,
+        // and spending a scroll is left to the tests that are about scrolls.
+        NounKind::Workable => "/tower/laboratory",
+        // What `move` takes. The reagent, not the potion: this exercises §10.1's
+        // own loop, and carrying finished work is what `tests/arsenal.rs` is
+        // about.
+        NounKind::Portable => "sage",
         NounKind::Any => "sludge",
     }
 }
@@ -399,7 +406,7 @@ fn the_words_the_naming_pass_replaced_still_resolve() {
         .with(NounKind::Place, "/tower/laboratory/alembic")
         .with(NounKind::Vessel, "retort")
         .with(NounKind::Topic, "clarity")
-        .with(NounKind::Fragment, "sigil-iv")
+        .with(NounKind::Scroll, "gleaning-scroll")
         .with(NounKind::Script, "night_watch");
 
     for (input, expected) in [
@@ -412,7 +419,7 @@ fn the_words_the_naming_pass_replaced_still_resolve() {
         // nearest, and the two nearest here are `purge` and `stop`. Somebody who
         // learned `decant` still gets the thing that takes stuff out of a tool.
         ("decant alembic", "empty alembic"),
-        // `divine` takes no argument now: it opens a labyrinth on the lectern
+        // `divine` takes no argument now: it opens the stacks
         // rather than consuming a fragment (§10, §19). The *word* is what this
         // test is about, and `decipher` still reaches it.
         ("decipher", "research"),
@@ -456,6 +463,18 @@ fn a_bare_anything_verb_offers_the_same_four_readings() {
     // way to get it — registering all 27 canonicals as `NounKind::Topic` — would
     // move this list. That is why it is written down first: `Topic` is reachable
     // from `Any`, so a change made for the manual would silently land here.
+    //
+    // **It has moved once, and this is what the pin is for.** `east` was the
+    // fourth reading until the archive gained a `cabinet` — somewhere to turn the
+    // lectern out into, without which its `dust` was trapped in the instrument
+    // that made it. Places sort by full path, and `/tower/archive/cabinet` comes
+    // before `/tower/archive/east`, so a fixture added for a reason two rooms
+    // away changed what a bare `purge` offers. Nothing on screen would have said
+    // so; this did.
+    //
+    // Both readings are still places the orb refuses to unmake — the cabinet is a
+    // `Store` and therefore `Protected`, exactly as the dispensary is — so what
+    // changed is which four are listed and not what answering one does.
     for verb in ["purge", "verify"] {
         let mut sim = orbs_sim::Sim::new(1);
         sim.submit("attend laboratory");
@@ -469,7 +488,7 @@ fn a_bare_anything_verb_offers_the_same_four_readings() {
                 format!("{verb} grimoire"),
                 format!("{verb} tower"),
                 format!("{verb} archive"),
-                format!("{verb} east"),
+                format!("{verb} cabinet"),
             ],
             "the readings a bare `{verb}` offers moved",
         );
@@ -522,7 +541,11 @@ fn a_verb_name_never_reaches_a_destructive_slot() {
             "purge grimoire".to_owned(),
             "purge tower".to_owned(),
             "purge archive".to_owned(),
-            "purge east".to_owned(),
+            // `east` until the archive gained a `cabinet`; places sort by full
+            // path and `cabinet` comes first. See the pin above, which is where
+            // the reasoning lives — what this test claims is that a *verb name*
+            // does not appear here, and it does not.
+            "purge cabinet".to_owned(),
         ],
         "a verb name moved the readings a destructive verb offers",
     );

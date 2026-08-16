@@ -158,6 +158,36 @@ pub fn scene_at(world: &World, at: Entity) -> Scene {
         }
     }
 
+    // **Everything the arsenal holds, wherever the player is standing.**
+    //
+    // The third exemption, and the same one spells have for the same reason:
+    // finished work is carried, not shelved. A potion is brewed in the laboratory
+    // to be used elsewhere and a scroll is assembled in the archive to be spent
+    // elsewhere, so an arsenal nameable only from inside itself would be a room
+    // you walk to in order to look at things you cannot then use.
+    //
+    // **Registered after the spells and before the readings**, which is a
+    // decision rather than a detail: `scene_at`'s order *is* the tie-break (§6
+    // resolves a tie to whatever was registered first), and putting this ahead of
+    // the readings keeps the words a solver names in the same relative order they
+    // have always been in.
+    //
+    // It does not loosen §7. What is still forbidden is acting on another
+    // **domain** at a distance — the archive's fragments from the laboratory —
+    // which `tower::keep` says at length, and which the arsenal refusing stock at
+    // the door is what keeps honest.
+    //
+    // **And naming is only half.** Three lookups had to learn this too, or a word
+    // resolves at full confidence and then reports "no such thing" — see
+    // `tower::keep`.
+    for node in super::keeping(world) {
+        let (Some(name), Some(kind)) = (world.get::<Name>(node), world.get::<Nameable>(node))
+        else {
+            continue;
+        };
+        scene = scene.with(kind.0, &name.0);
+    }
+
     // **The maze's readings, always, whether or not a maze is open.**
     //
     // These are the words a solver's `if` names — `if north has passage and not
@@ -175,7 +205,18 @@ pub fn scene_at(world: &World, at: Entity) -> Scene {
     // others, with nothing on screen saying why.
     // `back` rides with the readings: it is a word a solver names in an `if`,
     // so it has to resolve at *cast* exactly as they do.
-    for reading in Sense::ALL.into_iter().chain([super::maze::BACK]) {
+    //
+    // So do `spoil` and every errand word. An errand is set by a scroll spent
+    // *after* the spell was written, so at cast there is never one on — which is
+    // exactly the case the chain exists for: a vocabulary that came and went
+    // with the world would make `if the stacks has gleaning` compile to a dead
+    // branch, and a solver that could not ask which maze it was in is two
+    // solvers the player has to choose between by hand.
+    for reading in Sense::ALL
+        .into_iter()
+        .chain([super::maze::BACK, super::maze::SPOIL])
+        .chain(super::maze::Errand::ALL)
+    {
         scene = scene.with(NounKind::Sense, reading);
     }
 
@@ -288,6 +329,23 @@ mod tests {
             .collect()
     }
 
+    /// The names the scene offers **as things**, rather than as manual subjects.
+    ///
+    /// Every material has a `recall` page now, and a page is readable from
+    /// anywhere — *"a manual you can only read in the right room has a lock on
+    /// it"*, which is the rule verb pages already follow. So a reagent's name is
+    /// in the scene everywhere as a `Topic`, and §7's scoping is a claim about
+    /// the **kind**: in the laboratory `sage` is something you can grind, and in
+    /// the archive it is only something you can read about.
+    fn things(sim: &Sim) -> Vec<String> {
+        sim.scene()
+            .nouns()
+            .iter()
+            .filter(|noun| noun.kind != crate::parser::NounKind::Topic)
+            .map(|noun| noun.name.clone())
+            .collect()
+    }
+
     #[test]
     fn the_log_survives_a_rebuild() {
         // It is not a node in the tree, so a rebuild that only walks the tree
@@ -350,6 +408,14 @@ mod tests {
         //
         // Tested with `retort` rather than `clarity`: recipe names are `Topic`s
         // nameable everywhere (§6.1), because a manual is not a thing in a room.
+        //
+        // The archive's side is its **log**, and it used to be `sigil-iv`. The
+        // three sigils were the last of the `divine` that consumed a fragment,
+        // and they went when nothing produced them, consumed them or said what
+        // one was (§19). A domain log is the honest replacement: every domain
+        // has one, it is `NounKind::File` rather than a place, and it is
+        // registered from `cwd` like everything else that is not a place — so it
+        // makes the same claim about the same rule.
         let mut sim = Sim::new(1);
         sim.step();
         assert!(!names(&sim).iter().any(|name| name == "retort"));
@@ -357,11 +423,11 @@ mod tests {
         sim.submit("attend laboratory");
         sim.step();
         assert!(names(&sim).iter().any(|name| name == "retort"));
-        assert!(!names(&sim).iter().any(|name| name == "sigil-iv"));
+        assert!(!names(&sim).iter().any(|name| name == "archive.log"));
 
         sim.submit("attend archive");
         sim.step();
-        assert!(names(&sim).iter().any(|name| name == "sigil-iv"));
+        assert!(names(&sim).iter().any(|name| name == "archive.log"));
         assert!(!names(&sim).iter().any(|name| name == "retort"));
     }
 
@@ -372,19 +438,29 @@ mod tests {
         // otherwise: `move husks from alembic to dispensary` has to name
         // `husks`. The domain rule above is untouched — a domain is not a
         // fixture.
+        //
+        // **Asked of `things`, not `names`.** Every material has a manual page,
+        // and a page is readable anywhere — so `sage` is in the scene from the
+        // archive too, as a `Topic`. What §7 scopes is the *thing*: in the
+        // laboratory it is something you can grind, and in the archive it is
+        // something you can read about and nothing else.
         let mut sim = Sim::new(1);
         sim.submit("attend laboratory");
         sim.step();
         assert!(
-            names(&sim).iter().any(|name| name == "sage"),
+            things(&sim).iter().any(|name| name == "sage"),
             "the dispensary's sage is out of reach from the laboratory"
         );
 
         sim.submit("attend archive");
         sim.step();
         assert!(
-            !names(&sim).iter().any(|name| name == "sage"),
+            !things(&sim).iter().any(|name| name == "sage"),
             "it stayed nameable from another domain"
+        );
+        assert!(
+            names(&sim).iter().any(|name| name == "sage"),
+            "`recall sage` stopped working outside the laboratory"
         );
     }
 

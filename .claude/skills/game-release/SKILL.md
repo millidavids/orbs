@@ -22,25 +22,26 @@ kept whole; the Steam half is commented out in the workflows rather than deleted
 and the parts of this skill that only made sense with Steam are marked where they
 are missing.
 
-## Invoking this skill *is* the approval — up to `dev`
+## Invoking this skill *is* the approval
 
 `CLAUDE.md` says never commit or push without explicit approval. **Running
-`/game-release` is that approval, scoped to `dev`**: dev mode and consolidate
-mode commit and push to `origin/dev` as their last step, without asking again.
-Running a command whose documented purpose is "commit and push to dev" and then
-asking whether to commit and push to dev is a report generator, not a skill.
+`/game-release` is that approval, for whichever mode was asked for.** Dev and
+consolidate modes commit and push to `origin/dev`; `main` mode pushes `main`,
+which tags, releases and announces. None of them asks again.
 
-The scope is exactly `dev`, and the line is drawn where the consequences change:
+Running a command whose documented purpose is "promote to main and announce" and
+then asking whether to promote to main and announce is a report generator, not a
+skill. **The typed argument is the decision** — `main` is not a word anyone
+reaches for by accident, and B1's seven preconditions are the real safeguard,
+each a hard stop that fires before anything leaves the machine.
 
-- **`dev` is recoverable and private.** A push there runs the gate and nothing
-  else — no tag, no Release, no Discord, no Bluesky. Getting it wrong costs
-  another commit.
-- **`main` is neither.** Promotion tags a version, publishes a GitHub Release,
-  and posts to two public channels. **Mode B still stops before pushing `main`**
-  and asks, every time.
+This was scoped to `dev` only for one revision, on the grounds that `main` is
+public and irreversible. That is true and it is not a reason to ask twice; it is
+a reason for the preconditions to be strict. They are.
 
 Everything else in `CLAUDE.md`'s git rules still binds — specific paths only, no
-`git add -A`, no force-push, no attribution in the message.
+`git add -A`, no force-push, no attribution in the message. **Stop and ask if a
+precondition fails**, never to confirm an instruction already given.
 
 ## The version is assigned on dev, never at promotion
 
@@ -154,7 +155,7 @@ being built.
 ### Description
 In development — a dev log, not patch notes. The orb became a proper 4:3
 monitor: the grid is fixed now, so resizing scales the text instead of reflowing
-every pane. Labyrinths got properly random, too.
+every pane. The stacks got properly random, too.
 ```
 
 *What got worked on*, in a builder's voice — two or three things, most
@@ -328,9 +329,14 @@ release instead.
 2. `git pull --ff-only`
 3. `git merge --ff-only dev` — if this fails, stop and surface it. Never
    force-push, never rebase silently.
-4. `git rev-parse main dev` to confirm the SHAs match.
-5. **Stop and ask before pushing.** On approval, `git push origin main`.
-6. `git switch dev`.
+4. `git rev-parse main dev` to confirm the SHAs match. If they do not, stop —
+   something other than a fast-forward happened.
+5. `git push origin main`. **This is the release**: it triggers `release.yml`,
+   which tags `vV`, publishes the GitHub Release, and posts to Discord and
+   Bluesky. B1 is what stands between the argument and this line; by the time you
+   reach it, the decision was made when the user typed `main`.
+6. `git switch dev` — always, even if the push failed. Leaving the user on
+   `main` means their next commit lands there.
 
 ### B3. Report
 
@@ -353,9 +359,8 @@ promotion stops being the end of the story and announcing moves out of
 
 ## Hard rules (all modes)
 
-- **Invoking the skill approves committing and pushing to `dev`, and nothing
-  more.** Pushing `main` is asked for every time, because that one tags and
-  announces.
+- **Invoking the skill approves the push its mode implies**, including `main`.
+  Ask when a precondition fails, never to re-confirm the argument.
 - **Never `git add -A` or `git add .`** — stage only what the user changed.
 - **Never `git reset`**, and never `git checkout` to discard working-tree
   changes. `git switch` for branches only.

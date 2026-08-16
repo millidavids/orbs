@@ -49,6 +49,34 @@ tint = "grey"
 tint = "grey"
 
 # ---------------------------------------------------------------------------
+# The ported herbs (see recipes.toml). Colours follow the family rule the rest
+# of this file does: a substance keeps its hue through every state it passes
+# through, so the panel shows one thing changing rather than several.
+#
+# Chosen from what `court_wizard` says each one *looks like*, not from what its
+# potion does - mugwort is a silvery-green roadside weed, valerian a thick
+# pungent root out of wet woodland, amber a warm translucent resin.
+# ---------------------------------------------------------------------------
+
+[mugwort]
+tint = "green"
+
+[ground-mugwort]
+tint = "green"
+
+[valerian]
+tint = "brown"
+
+[ground-valerian]
+tint = "brown"
+
+[amber]
+tint = "gold"
+
+[powdered-amber]
+tint = "gold"
+
+# ---------------------------------------------------------------------------
 # Byproducts — §10.1 gives every one of these a use, so they are as likely to be
 # sitting in an instrument as any reagent.
 # ---------------------------------------------------------------------------
@@ -87,6 +115,18 @@ tint = "green"
 [weak-tincture]
 tint = "green"
 
+# The two ported herbs, steeped. **These were missing and the tests did not
+# say so**: both colour lints `continue` when an input has no wash, so leaving
+# these out did not fail a check — it switched off the checks on `keen-draught`,
+# `quiet-draught`, `insight` and `stillness` at the same time, silently. An
+# untinted material draws in the base hue, which is the failure CLAUDE.md calls
+# total and invisible.
+[mugwort-tincture]
+tint = "green"
+
+[valerian-tincture]
+tint = "brown"
+
 # **Authored as the mixture they are, not as a third colour.** The flask draws
 # its growing band by averaging its two ingredients, and these are what it leaves
 # behind — so writing them as `green` + `bone` makes the band and the product the
@@ -104,6 +144,18 @@ with = "bone"
 [fixed-draught]
 tint = "green"
 with = "grey"
+
+# Mugwort's green fixed with amber's gold, and valerian's brown cut with salt.
+# Both are authored as the mixtures they are, and
+# `the_flasks_products_are_the_colour_of_what_makes_them` checks each against the
+# recipe that makes it rather than trusting the pair to stay in step.
+[keen-draught]
+tint = "green"
+with = "gold"
+
+[quiet-draught]
+tint = "brown"
+with = "bone"
 
 # ---------------------------------------------------------------------------
 # Essences — the end of the pipeline.
@@ -135,17 +187,38 @@ with = "grey"
 [haste]
 tint = "green"
 
+# The two ported essences, each the colour of the draught it came from.
+[insight]
+tint = "green"
+with = "gold"
+
+[stillness]
+tint = "brown"
+with = "bone"
+
 # The archive's fragment, and what four of them make. One family, one colour: a
 # scroll is what its fragments become, which is the same rule the flask's
 # products follow.
 [fragment]
 tint = "gold"
 
-[spell-scroll]
+# **One family, one colour, and it survives a second scroll.** The rule was
+# written when there was one and the obvious reading was "this scroll is what
+# these fragments become". It holds better than it looks: what a scroll *is* is
+# assembled knowledge, and that is one substance however the orb happens to have
+# folded it. Telling two scrolls apart is the panel's `NAME` column's job and the
+# manual's - a hue would be a second, weaker way of saying a word already says,
+# and it would spend one of the eight families per scroll for ever.
+[gleaning-scroll]
 tint = "gold"
 
-# Grey, with ash and phlegm, rather than brown with the plant waste. This is what
-# comes off tomes and scrolls that have sat unread - the archive's dirt is old
-# paper and stone dust, not spent stalks.
-[dust]
-tint = "grey"
+[quickening-scroll]
+tint = "gold"
+
+[verdant-scroll]
+tint = "gold"
+
+# **`dust` was here and is gone.** It was the lectern's byproduct, coloured grey
+# for the archive's old paper rather than brown for the laboratory's spent
+# stalks - and it existed only because `leaves` used to be compulsory. Byproducts
+# are the laboratory's mechanic now; the lectern leaves nothing.

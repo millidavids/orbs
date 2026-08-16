@@ -110,7 +110,17 @@ impl Sim {
         // build-time error that `the_builtin_curve_prices_every_instrument`
         // fails on first.
         let curve = crate::content::Progression::default();
-        if let Err(error) = curve.check(&world.resource::<Recipes>().instruments()) {
+        // **What may be priced: anything that runs.** The recipes' instruments,
+        // plus the fixtures that carry a verb and transform nothing — the
+        // athanor, and the `stacks`, which earns for every walk finished and
+        // has no recipe to be found by. Checking against the recipes alone made
+        // the second impossible to price and the first impossible to price
+        // *ever*.
+        let mut instruments = world.resource::<Recipes>().instruments();
+        instruments.extend(tower::operated());
+        instruments.sort_unstable();
+        instruments.dedup();
+        if let Err(error) = curve.check(&instruments) {
             panic!("the built-in content is authored with the crate: {error}");
         }
         world.insert_resource(curve);
@@ -503,7 +513,7 @@ impl Sim {
         self.world.resource_mut::<crate::execute::Weaving>().take()
     }
 
-    /// Walk the archive's labyrinth one cell, **now** (§10, §19).
+    /// Walk the archive's stacks one cell, **now** (§10, §19).
     ///
     /// # The third entry point, and why the tick was the wrong clock
     ///
@@ -529,9 +539,9 @@ impl Sim {
     /// against it in list order. A tick can never hold both kinds, because the
     /// prompt is dead while the arrows have the maze.
     ///
-    /// Returns whether there was a labyrinth to walk at all.
+    /// Returns whether the stacks were open to walk at all.
     pub fn walk(&mut self, way: tower::Way) -> bool {
-        let Some(lectern) = crate::execute::lectern(&self.world) else {
+        let Some(lectern) = crate::execute::stacks(&self.world) else {
             return false;
         };
         if self.world.get::<tower::Maze>(lectern).is_none() {
@@ -712,11 +722,11 @@ impl Sim {
         tower::instruments(&self.world)
     }
 
-    /// The labyrinth the player is standing over, if there is one (§10, §19).
+    /// The stacks the player is standing over, if they are open (§10, §19).
     ///
     /// **`None` everywhere but an archive with a maze open**, and for the same
     /// reason [`Sim::instruments`] is empty outside the laboratory: it goes
-    /// through the lectern, which is found relative to `Cwd`. So the map is a
+    /// through the stacks, which are found relative to `Cwd`. So the map is a
     /// property of where the player is, and a frontend cannot carry it out of
     /// the room and show something `survey` would not.
     ///
@@ -724,11 +734,9 @@ impl Sim {
     /// panel — a 49-cell `Vec` at 1 Hz, against `Instrument`'s recorded
     /// objection to allocating *per frame*, which is a different rate entirely.
     #[must_use]
-    pub fn labyrinth(&self) -> Option<orbs_render::Labyrinth> {
-        let lectern = crate::execute::lectern(&self.world)?;
-        self.world
-            .get::<tower::Maze>(lectern)
-            .map(tower::Maze::view)
+    pub fn stacks(&self) -> Option<orbs_render::Stacks> {
+        let stacks = crate::execute::stacks(&self.world)?;
+        self.world.get::<tower::Maze>(stacks).map(tower::Maze::view)
     }
 
     /// The readings the orb is waiting for the player to pick between (§6).

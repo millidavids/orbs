@@ -87,7 +87,61 @@ fn reachable(world: &World, cwd: Entity) -> Vec<Entity> {
     for node in stores {
         order.extend(tower::children_of(world, node));
     }
+    // **The arsenal last, wherever it is.** Its contents are nameable from every
+    // room (`tower::keep`), so they have to be *findable* from every room or
+    // `move clarity to flask_and_rod` resolves at full confidence and then
+    // reports "no such thing" — §15's dead end, arriving through the exemption
+    // that exists to remove one.
+    //
+    // Last is the point: a reagent in the room always outranks one carried, so
+    // adding this cannot change what an existing command picks up.
+    order.extend(tower::keeping(world));
     order
+}
+
+/// Somewhere a `move` can name: an instrument here, or the arsenal.
+///
+/// **The arsenal from anywhere, and it is the only place that gets this.**
+/// [`instrument`] wants a `Fixture` child of `cwd`, and a domain is neither —
+/// which is why nothing in the tower could be carried between rooms at all
+/// before there was an arsenal. `tower::keep` states the exemption and why it is
+/// narrow; what makes it safe rather than a repeal of §7 is that the arsenal
+/// takes finished work only, so it cannot become the room everything ends up in.
+///
+/// Tried **after** the instruments, so a room that ever raises a fixture called
+/// `arsenal` still means its own.
+///
+/// **Both ends of a `move` ask this**, and that is the correction: it was the
+/// destination's lookup alone, so `move clarity to arsenal` worked and `move
+/// clarity from arsenal to alembic` answered *"there is no /tower/arsenal within
+/// reach"* — a name that resolves at full confidence and then reports itself
+/// unreachable, which is §15's worst dead end and precisely what `tower::keep`'s
+/// *"nameable is not enough"* note enumerates. Three lookups learned the
+/// exemption and the fourth did not.
+fn addressed(world: &World, path: &str) -> Option<(Entity, String)> {
+    instrument(world, path).or_else(|| {
+        let leaf = crate::parser::leaf(path);
+        let keep = tower::keep(world)?;
+        (world
+            .get::<tower::Name>(keep)
+            .is_some_and(|name| name.0 == leaf))
+        .then(|| (keep, leaf.to_owned()))
+    })
+}
+
+/// Where the thing called `named` is, among everything within reach.
+///
+/// The *place*, not the node: taking a unit goes through
+/// [`tower::take`](crate::tower::take), which is keyed by where a thing is
+/// standing. [`reachable`] decides what within reach means, so this obeys §10.1's
+/// search order and its lock without a second opinion about either.
+pub(super) fn holder(world: &World, cwd: Entity, named: &str) -> Option<Entity> {
+    let node = reachable(world, cwd).into_iter().find(|node| {
+        world
+            .get::<tower::Name>(*node)
+            .is_some_and(|name| name.0 == named)
+    })?;
+    world.get::<ChildOf>(node).map(ChildOf::parent)
 }
 
 /// Carry a reagent from one place to another (§10.1).
@@ -114,7 +168,7 @@ pub(super) fn carry(intent: &Intent, world: &mut World) {
         return;
     };
 
-    let Some((to, destination)) = instrument(world, &destination) else {
+    let Some((to, destination)) = addressed(world, &destination) else {
         missing(Verb::Move, &destination, world);
         return;
     };
@@ -132,7 +186,7 @@ pub(super) fn carry(intent: &Intent, world: &mut World) {
     // named, §10.1's own order — see `reachable`.
     let cwd = world.resource::<Cwd>().0;
     let haystack: Vec<Entity> = match &source {
-        Some(source) => match instrument(world, source) {
+        Some(source) => match addressed(world, source) {
             Some((from, _)) => {
                 // §10.1's lock covers taking as much as putting: an instrument
                 // mid-something will not be raided. Naming one refuses outright.
@@ -169,6 +223,27 @@ pub(super) fn carry(intent: &Intent, world: &mut World) {
         return;
     };
 
+    // **The arsenal's door, and it is checked before anything moves.** Finished
+    // work only — see `tower::admits` for why the question is about the kind and
+    // never about the name. Refusing here rather than after the fact is the rule
+    // the multi-reagent charge above already follows: a half-done `move` leaves
+    // the player working out what went where before anything will start again.
+    if world.get::<tower::Keep>(to).is_some() && !tower::admits(world, node) {
+        let message = world
+            .resource::<Prose>()
+            .line("move_unkept", &[("name", &thing), ("path", &destination)]);
+        world
+            .resource_mut::<Scrollback>()
+            .records_mut()
+            .push(RecordKind::Message)
+            .text(FieldName::Name, &thing)
+            .text(FieldName::Path, &destination)
+            .text(FieldName::Message, &message)
+            .role(Role::Cost)
+            .finish();
+        return;
+    }
+
     // Where it actually came from, which is the half the player could not see.
     // Named *before* the move, because after it the parent is the destination.
     let origin = world
@@ -204,6 +279,16 @@ pub(super) fn carry(intent: &Intent, world: &mut World) {
 
 /// Set an instrument working on what is in it (§10.1).
 pub(super) fn wield(intent: &Intent, world: &mut World) {
+    // **A scroll first, and it returns before `start`.** Spending one is not a
+    // run: it takes no production slot, so it is not refused while a brew is in
+    // flight — which is exactly when a player reaches for one — and it never
+    // reaches `Verb::transmutes`, which `land::finish` reads. `begins_work` is
+    // `const fn(Verb)` and cannot see the argument, so branching here rather
+    // than there is what keeps a scroll out of the pool at all.
+    if super::scroll::spend(intent, world) {
+        return;
+    }
+
     let Some(name) = intent
         .arguments
         .first()
@@ -591,7 +676,7 @@ pub(super) fn stop(intent: &Intent, world: &mut World) {
             tower::damp(world, at);
         }
         Some((at, _)) => {
-            // **A labyrinth is abandoned, not merely un-run.** `divine` inserts
+            // **The stacks are abandoned, not merely un-run.** `divine` inserts
             // no `Working` — reading takes no production slot — so without this
             // `stop lectern` would find an instrument, do nothing, and say so:
             // the un-stoppable `divine` §19 records, still true and now harder
@@ -653,7 +738,14 @@ pub(super) fn purge(intent: &Intent, world: &mut World) {
     let cwd = world.resource::<Cwd>().0;
     let found = tower::children_of(world, cwd)
         .into_iter()
-        .find(|node| world.get::<tower::Name>(*node).is_some_and(|n| n.0 == leaf));
+        .find(|node| world.get::<tower::Name>(*node).is_some_and(|n| n.0 == leaf))
+        // **...and whatever the arsenal holds.** It is nameable from every room,
+        // so `purge` has to reach it from every room: a destructive verb that
+        // resolves and then says "no such thing" is worse than one that refuses,
+        // because the player cannot tell whether the thing is gone. Throwing away
+        // a potion you no longer want is exactly the everyday maintenance §7
+        // means by *"destruction is a tool, not a trap"*.
+        .or_else(|| tower::kept(world, &leaf));
 
     // `purge` takes `NounKind::Any`, so it reaches **places** too — and it has
     // to, or §7's guard never fires: aiming at a live domain reported "no such

@@ -74,15 +74,37 @@ const BRANCHES: &[Branch] = &[
     },
     Branch {
         name: "archive",
-        holds: &[
-            Holding::new(
-                NounKind::Fragment,
-                &["sigil-iv", "sigil-ix", "the-quiet-page"],
-            ),
-            Holding::new(NounKind::File, &["archive.log"]),
-        ],
+        // **`sigil-iv`, `sigil-ix` and `the-quiet-page` are gone**, and they were
+        // the last of the `divine` that took a fragment. Once `research` opened a
+        // the stacks instead of consuming a sigil (§19), nothing produced them,
+        // nothing consumed them and no prose said what one *was* — which is
+        // verbatim the complaint §19 records against `shard-of-dawn` and its
+        // three siblings: *"four invented names standing in for a decision nobody
+        // made"*. Three more of the same, left on the floor of the room that
+        // stopped needing them.
+        //
+        // What the archive yields now is `fragment`, and it accumulates on the
+        // lectern that made it rather than lying about.
+        holds: &[Holding::new(NounKind::File, &["archive.log"])],
         places: ARCHIVE,
         role: None,
+        operation: None,
+    },
+    // **The one room you can reach from any other**, and it starts empty: what
+    // is in it is what the player has finished. See [`Role::Keep`] and
+    // `tower::keep` for why the exemption is narrow and why this is not a second
+    // dispensary.
+    //
+    // **Last, and the order is load-bearing.** §6 resolves a tie to whichever
+    // noun was registered first, so raising the arsenal before the archive would
+    // silently reorder every existing reading — `spawn order is part of the
+    // world's determinism` (see [`node`](super::node)). A new domain goes on the
+    // end.
+    Branch {
+        name: super::ARSENAL,
+        holds: &[Holding::new(NounKind::File, &["arsenal.log"])],
+        places: &[],
+        role: Some(Role::Keep),
         operation: None,
     },
 ];
@@ -96,8 +118,67 @@ const BRANCHES: &[Branch] = &[
 /// panel. None of the three was worth patching separately — they were one
 /// absence.
 const ARCHIVE: &[Branch] = &[
+    // **Assembly, and nothing else now.** The lectern used to be both halves of
+    // the archive at once — the stacks open on it *and* a scroll coming
+    // together in it — which §19 records as the first instrument in the game
+    // that could be doing two things at once, and treated as a curiosity rather
+    // than as the design problem it was. `stop lectern` had to decide which of
+    // the two it meant; the panel had one row for both; and `follow`'s scope had
+    // nowhere to go because a fixture carries exactly one `Operation` and this
+    // one had spent it on `research`.
+    //
+    // It has **no operation** now: four fragments are moved in and `wield`ed,
+    // which is the ordinary way an instrument runs. Its picture comes from
+    // having recipes rather than from a verb — see `panel::craft_of`.
     Branch {
         name: "lectern",
+        holds: &[],
+        places: &[],
+        role: None,
+        operation: None,
+    },
+    // **Every domain that holds stock needs somewhere to put it**, and the
+    // archive had none — so `empty lectern` answered *"there is nowhere here to
+    // put what the lectern holds"*, and `tower::home` had no archive home to send
+    // a `fragment` to, which put the archive's only stock out of a tester's reach
+    // in the room it is used in.
+    //
+    // **It was added for a stronger reason that has since gone**: the lectern
+    // shed `dust`, which was trapped in the instrument that made it and
+    // clearable only by `purge`. The byproduct went instead — §10.1 keeps that
+    // mechanic in the laboratory — and this stayed, because the rule it serves is
+    // about *stock*, not about waste. A room with an instrument and nowhere to
+    // set anything down is a room where `empty` is a word that can never work.
+    //
+    // **`cabinet`, measured rather than chosen** — 572 against `combine`, its
+    // nearest word, where the resolver's floor is 600. `shelf` and `chest` both
+    // land *on* the floor (600, against `help` and `check`), and `press`,
+    // `stacks` and `carrel` are over it. `almery` — a monastic book cupboard — is
+    // safest at 429 and was passed over for being a word nobody can type on a
+    // first guess, which is the same objection §19 records against the four
+    // invented shard names.
+    Branch {
+        name: "cabinet",
+        holds: &[],
+        places: &[],
+        role: Some(Role::Store),
+        operation: None,
+    },
+    // **The stacks: an endless library, and the maze lives here.**
+    //
+    // §10 calls the archive *decipherment*, and the stacks are what that became
+    // — but walking is not assembly, and the two were sharing a fixture
+    // for no better reason than that the archive had only one. Splitting them
+    // gives each its own row on the panel, its own `stop`, and its own state, so
+    // *"is a reading open"* and *"is a scroll coming together"* stop being one
+    // question with two answers.
+    //
+    // **Last, and the order is load-bearing.** §6 resolves a tie to whichever
+    // noun was registered first, so a fixture inserted ahead of the existing ones
+    // would silently change what an existing phrase resolves to. A new place goes
+    // on the end — the same rule the arsenal follows.
+    Branch {
+        name: "stacks",
         holds: &[],
         places: &[],
         role: None,
@@ -198,6 +279,32 @@ const INSTRUMENTS: &[Branch] = &[
     },
 ];
 
+/// Every fixture the tower raises that has a verb of its own.
+///
+/// **What `progression.toml` may price.** Its `[earns]` keys used to be checked
+/// against `recipes.toml` alone, which was right while every instrument that
+/// *ran* also transformed something — and stopped being right twice over. The
+/// athanor has a verb and no recipe, so it could never have been priced; the
+/// `stacks` has a verb and no recipe and earns for every walk finished, so it
+/// had to be.
+///
+/// A fixture with neither — the dispensary, the cabinet — is a shelf, and pricing
+/// one would be authoring a number nothing can ever pay.
+#[must_use]
+pub fn operated() -> Vec<&'static str> {
+    fn walk(branches: &'static [Branch], into: &mut Vec<&'static str>) {
+        for branch in branches {
+            if branch.operation.is_some() {
+                into.push(branch.name);
+            }
+            walk(branch.places, into);
+        }
+    }
+    let mut names = Vec::new();
+    walk(BRANCHES, &mut names);
+    names
+}
+
 struct Branch {
     name: &'static str,
     holds: &'static [Holding],
@@ -225,6 +332,9 @@ enum Role {
     Heat,
     /// A shelf of stock: the fallback a `move` falls back to.
     Store,
+    /// Where finished work is kept, reachable from every room (§7's one
+    /// exemption). See [`super::Keep`].
+    Keep,
     /// One of the four ways the archive's reading can go.
     ///
     /// A **place**, because `spell::compile` resolves the place half of a
@@ -365,6 +475,13 @@ fn raise_branch(world: &mut World, parent: Entity, branch: &Branch, protect: boo
             // is never ruinous, only slower"*. An instrument is safe by being
             // emptied rather than deleted; a shelf of stock is safe by refusing.
             world.entity_mut(at).insert((super::Store, Protected));
+        }
+        Some(Role::Keep) => {
+            // **`Protected` already**, from being a top-level branch, and that
+            // is the answer you want: the arsenal holds everything the player
+            // has finished, so `purge arsenal` refusing in character is exactly
+            // §7's guard doing its job on the highest-value room in the tower.
+            world.entity_mut(at).insert(super::Keep);
         }
         Some(Role::Reading) => {
             // **`Protected` too.** `purge north` would otherwise scour a
@@ -579,12 +696,23 @@ mod tests {
         // is not one — it is where you write, not something you run — so it is
         // deliberately outside this assertion rather than added to it. See
         // `GRIMOIRE`.
+        //
+        // **`/tower/arsenal` is the same kind of exception**, and it is inside
+        // the assertion rather than outside it because it *is* under `/tower`:
+        // it is where finished work is kept, not something you run, so it raises
+        // no instrument, offers no verb and draws an empty panel. What it is
+        // counted for here is the **order** — §6 resolves a tie to whichever
+        // noun was registered first, so a domain added anywhere but the end
+        // would silently change what an existing phrase resolves to.
         let sim = Sim::new(1);
         let world = sim.world();
         let tower = children_of(world, crate::tower::root(world))[0];
 
         assert_eq!(path_of(world, tower), "/tower");
-        assert_eq!(names_under(world, tower), ["laboratory", "archive"]);
+        assert_eq!(
+            names_under(world, tower),
+            ["laboratory", "archive", super::super::ARSENAL],
+        );
     }
 
     #[test]

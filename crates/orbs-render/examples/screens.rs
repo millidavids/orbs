@@ -15,9 +15,9 @@
 //! less, the setting would become a difficulty choice."*
 
 use orbs_render::{
-    Burn, Depiction, DisplayMode, FieldName, Frame, GRID, GridSize, Grind, Intensity, Labyrinth,
-    Outcome, PICTURE, Painter, Pos, Presentation, RecordKind, RecordView, Records, Rect, Role,
-    ScreenLayout, ScreenRequest, Sift, Span, Square, Steep, Style, UtteranceKind,
+    Burn, Depiction, DisplayMode, FieldName, Frame, GRID, GridSize, Grind, Intensity, Outcome,
+    PICTURE, Painter, Pos, Presentation, RecordKind, RecordView, Records, Rect, Role, ScreenLayout,
+    ScreenRequest, Sift, Span, Square, Stacks, Steep, Style, UtteranceKind,
 };
 
 /// The wizard's name is world state (`orbs_sim::Wizard`), which this crate does
@@ -80,16 +80,21 @@ fn main() {
     // states, because the fog is the whole mechanic and one of them is not
     // enough to see it. The grid is 33 squares across (`2 × 16 + 1`), and the
     // snake through it is 511 squares long.
-    for (caption, walked) in [
-        ("unopened — one mark in the dark (§10)", 0),
-        ("part walked — a lit region growing out of it", 120),
+    for (caption, walked, gleaning) in [
+        ("unopened — one mark in the dark (§10)", 0, false),
+        ("part walked — a lit region growing out of it", 120, false),
         (
             "all but the last square — once, twice, and the way out",
             511,
+            false,
         ),
+        // The errand a scroll sets. **No `Ω` anywhere in this one**, which is
+        // the whole difference: the walk ends when the five `♦` are gathered,
+        // so a way out would be a mark on screen that nothing answers to.
+        ("set to glean — five spoils, and no way out", 120, true),
     ] {
-        let map = labyrinth_screen(GridSize::new(35, 35), walked);
-        show(&format!("The labyrinth, {caption}"), &map);
+        let map = stacks_screen(GridSize::new(35, 35), walked, gleaning);
+        show(&format!("The stacks, {caption}"), &map);
     }
 
     burning();
@@ -601,12 +606,14 @@ fn editor_screen(grid: GridSize) -> Frame {
 /// **Not a replica, unlike [`weave_screen`].** The weave screen is drawn in
 /// `orbs`, which this crate cannot reach, so that one is redrawn by hand and can
 /// drift. The maze picture lives *here*, so this calls straight into
-/// [`Painter::labyrinth`] and cannot disagree with the game about a single
+/// [`Painter::stacks`] and cannot disagree with the game about a single
 /// square.
 ///
 /// `walked` is how far along a snake through the grid the reading has gone,
 /// which is enough to exercise every glyph: fog, the two marks, and the way out.
-fn labyrinth_screen(grid: GridSize, walked: usize) -> Frame {
+/// `gleaning` sets the errand a scroll sets — spoils scattered ahead of the
+/// reading, and no way out at all.
+fn stacks_screen(grid: GridSize, walked: usize, gleaning: bool) -> Frame {
     let (span_x, span_y): (usize, usize) = (33, 23);
     let mut squares = vec![
         Square {
@@ -647,18 +654,32 @@ fn labyrinth_screen(grid: GridSize, walked: usize) -> Frame {
         .unwrap_or(path[0]);
     squares[at].marks = squares[at].marks.max(1);
 
-    let maze = Labyrinth {
+    // Spread across the floor the reading has *not* reached, which is where the
+    // sim scatters them — a spoil on a walked square would already be gathered.
+    let spoils: Vec<usize> = if gleaning {
+        path.iter()
+            .skip(walked)
+            .step_by(70)
+            .take(5)
+            .copied()
+            .collect()
+    } else {
+        Vec::new()
+    };
+
+    let maze = Stacks {
         squares,
         width: u16::try_from(span_x).unwrap_or(u16::MAX),
         at,
-        exit: *path.last().unwrap_or(&0),
+        exit: (!gleaning).then(|| *path.last().unwrap_or(&0)),
+        spoils,
     };
 
     let mut frame = Frame::new(grid);
     let area = Rect::new(0, 0, grid.cols, grid.rows);
     let mut painter = frame.painter(area);
-    painter.border(area, Some("labyrinth"), Style::DIM);
-    painter.labyrinth(area.inset(1), &maze);
+    painter.border(area, Some("stacks"), Style::DIM);
+    painter.stacks(area.inset(1), &maze);
     frame
 }
 

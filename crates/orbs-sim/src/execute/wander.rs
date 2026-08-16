@@ -1,4 +1,4 @@
-//! `wander` — hand the arrow keys the archive's labyrinth (§10, §19).
+//! `wander` — hand the arrow keys the archive's stacks (§10, §19).
 //!
 //! # It buys the keys, and nothing else
 //!
@@ -56,12 +56,12 @@ impl Wandering {
     }
 }
 
-/// `wander` — walk the labyrinth by hand.
+/// `wander` — walk the stacks by hand.
 pub(super) fn wander(world: &mut World) {
     // **Three answers, no bare error.** §6 forbids a command that fails without
     // saying what would have worked, and the two refusals here are the two
     // states a player reaches by typing this in the wrong place or too early.
-    let Some(lectern) = super::lectern(world) else {
+    let Some(lectern) = super::stacks(world) else {
         say(world, "wander_nowhere", Role::Danger);
         return;
     };
@@ -106,7 +106,7 @@ mod tests {
             .collect()
     }
 
-    /// A wizard standing in the archive with a labyrinth open.
+    /// A wizard standing in the archive with the stacks open.
     fn opened() -> Sim {
         let mut sim = Sim::new(1);
         sim.submit("attend archive");
@@ -161,8 +161,11 @@ mod tests {
         sim.step();
 
         assert!(!sim.has_wandering());
+        // The **stacks**, which is where the maze lives since it moved off the
+        // lectern. §6 forbids a bare error, so the refusal has to name the thing
+        // the laboratory has not got rather than only saying no.
         assert!(
-            messages(&sim).iter().any(|line| line.contains("lectern")),
+            messages(&sim).iter().any(|line| line.contains("stacks")),
             "the refusal did not say what was missing: {:?}",
             messages(&sim),
         );

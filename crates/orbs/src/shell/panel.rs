@@ -194,7 +194,7 @@ enum Bar {
     Fire,
     /// A hearth gone out: a wisp of smoke off the bottom and nothing else.
     Cold,
-    /// A labyrinth on the lectern, and how much of it has been walked.
+    /// The stacks open, and how much of them has been walked.
     ///
     /// **Meterless**, unlike [`Plain`](Self::Plain): a lectern with no maze open
     /// reports no meter at all, and `Plain` in that state draws *nothing* — the
@@ -280,6 +280,15 @@ const fn bar_of(craft: Craft, state: State, heat: bool) -> Bar {
         // Every state, one bar. A maze has no stages — it is open or it is not,
         // and the gauge says how much of it has been seen either way.
         Craft::Reading => Bar::Read,
+        // **A plain gauge, and it is an improvement on what it replaced.** The
+        // lectern used to be `Craft::Reading` because it carried the maze's verb,
+        // so a *scroll coming together* drew the stacks' explored-cells gauge
+        // — a picture of a different thing entirely. A twenty-tick run against a
+        // known duration is exactly what the plain meter is for.
+        //
+        // No picture of its own yet: §10.1 gives each laboratory instrument one,
+        // and the archive's would be its own item rather than a line here.
+        Craft::Assembling => Bar::Plain,
         Craft::Heating => match state {
             State::Burning => Bar::Fire,
             State::Cold => Bar::Cold,
@@ -514,7 +523,7 @@ fn draw(
     match (kind, upward) {
         (Bar::Plain, true) => painter.meter_upward(at, done, total, style),
         (Bar::Plain, false) => painter.meter(at, done, total, style),
-        // **The plain gauge, deliberately.** A labyrinth's picture is the map
+        // **The plain gauge, deliberately.** The stacks' picture is the map
         // (its own item); what belongs on the panel is *how much has been
         // walked*, and a bespoke glyph vocabulary here would be a second, worse
         // drawing of the same fact in a column two cells wide.

@@ -122,7 +122,7 @@ pub use layout::{
 };
 pub use linear::{Speech, Utterance, UtteranceKind};
 pub use liquid::{DRIFT_EVERY, Motion, RISE_EVERY, STIR_EVERY};
-pub use maze::{Labyrinth, Square};
+pub use maze::{Square, Stacks};
 pub use mix::{Band, Stir};
 pub use paint::Painter;
 pub use pulse::{CYCLE_SECS, FLIP_HZ};

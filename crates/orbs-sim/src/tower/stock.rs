@@ -80,11 +80,27 @@ pub fn find(world: &World, place: Entity, named: &str) -> Option<Entity> {
 /// `&World`, not `&mut`: `contents` is `children_of` with a mutable borrow it
 /// does not use, and demanding one here would keep this out of `panel::read`,
 /// which is the caller that most needs it to be the same rule.
+///
+/// # A reading is not stock
+///
+/// [`Sense`](crate::parser::NounKind::Sense) children are skipped, and the rule
+/// is general rather than a special case for the one place it bites. The maze
+/// publishes what it can see as named children — `passage`, `back`, `spoil`, and
+/// the lectern's own errand — and the lectern is an **instrument**, so a reading
+/// counted here would enter the multiset `Recipes::matching` compares: four
+/// fragments plus one word is not four fragments, the recipe would stop
+/// matching, and the panel would read `fouled` for a lectern with nothing wrong
+/// with it. Nothing anywhere wants a word to be a unit of something.
 #[must_use]
 pub fn holdings(world: &World, place: Entity) -> Vec<(String, u32)> {
     super::children_of(world, place)
         .into_iter()
         .filter_map(|node| {
+            if world.get::<super::Nameable>(node).map(|kind| kind.0)
+                == Some(crate::parser::NounKind::Sense)
+            {
+                return None;
+            }
             let name = world.get::<Name>(node)?.0.clone();
             let units = match world.get::<Stock>(node).copied() {
                 Some(Stock::Endless) => u32::MAX,
@@ -162,5 +178,30 @@ pub fn give(world: &mut World, place: Entity, named: &str, kind: NounKind, wante
         ))
         .id();
     world.entity_mut(node).insert(ChildOf(place));
+    node
+}
+
+/// Put an **inexhaustible** pile of `named` in `place`.
+///
+/// The shape `build` gives the three the tower starts with, reached at run time:
+/// a base reagent unlocked mid-game has to be as endless as one the laboratory
+/// opened with, or the same word means a different thing depending on when it
+/// arrived — and a recipe written against it would work for a while and then
+/// stop.
+///
+/// Idempotent, and the one that already exists wins. `give` would have converted
+/// nothing: it returns early on an `Endless` node precisely so a second gift
+/// cannot make an inexhaustible pile exhaustible.
+pub fn give_endless(world: &mut World, place: Entity, named: &str, kind: NounKind) -> Entity {
+    if let Some(node) = find(world, place, named) {
+        if let Some(mut stock) = world.get_mut::<Stock>(node) {
+            *stock = Stock::Endless;
+        }
+        return node;
+    }
+    let node = give(world, place, named, kind, 1);
+    if let Some(mut stock) = world.get_mut::<Stock>(node) {
+        *stock = Stock::Endless;
+    }
     node
 }

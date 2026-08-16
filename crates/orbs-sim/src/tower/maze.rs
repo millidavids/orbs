@@ -1,4 +1,4 @@
-//! The archive's labyrinth (DESIGN.md §10, §19).
+//! The archive's stacks (DESIGN.md §10, §19).
 //!
 //! # The world remembers, so the spell does not have to
 //!
@@ -36,7 +36,7 @@
 //! §7's filesystem is already the game's space and `attend` is already how you
 //! move through it. A second spatial system would be a second answer to "where
 //! am I". So the player stands in the archive throughout and it is the *reading*
-//! that threads the labyrinth — which is also why a spell can work one, since
+//! that threads the stacks — which is also why a spell can work them, since
 //! `may_issue` forbids a spell from walking.
 
 use bevy_ecs::prelude::*;
@@ -82,6 +82,61 @@ pub enum Sense {
 /// sizes, in at most 708 steps. It is one word and it is the difference between
 /// the archive being automatable and not.
 pub const BACK: &str = "back";
+
+/// A way whose next square holds something worth picking up.
+///
+/// **A second fact about a direction, exactly as [`BACK`] is**, and outside
+/// [`Sense::ALL`] for the same reason: a way can be `passage` *and* hold a
+/// spoil, and a solver asks both. `scene_at` chains the two onto the readings so
+/// all of them resolve at **cast**, when none of them is true of anything.
+pub const SPOIL: &str = "spoil";
+
+/// What the stacks are being walked *for*.
+///
+/// The maze's **modifier**, and the thing a scroll changes. It is published on
+/// the **stacks** as an ordinary named child, so a spell asks `if the stacks has
+/// gleaning` through the `has` question it already has — no new grammar, no new
+/// [`State`](super::panel::State), and one solver can therefore handle both
+/// errands instead of two that cannot tell which maze they are in.
+///
+/// **The stacks, not the lectern**, and this said `lectern` for a version after
+/// the two fixtures split. The word goes where the maze is, which is where
+/// `republish_errand` puts it — but a doc is the spec a spell author writes
+/// against, so `if the lectern has gleaning` was a rung that compiles clean and
+/// never fires, which is the worst shape a wrong instruction can take here.
+///
+/// **Not a `State` variant**, which was the other candidate: `State` is a closed
+/// set read by `State::is_busy`, the panel's `bar_of` and the spell language's
+/// `is working` / `is idle` at once, and an errand is not a state of the
+/// *instrument* — the stacks are doing exactly what they were doing before.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Errand {
+    /// Reach the way out. What the stacks always open as.
+    #[default]
+    Way,
+    /// Gather everything scattered through it. **There is no way out while this
+    /// is on** — see [`Maze::reading`], which stops publishing [`Sense::Exit`].
+    Glean,
+}
+
+impl Errand {
+    /// The word this errand is published and named by, if it has one.
+    ///
+    /// `Way` has none: it is what the stacks already are, and publishing a word
+    /// for the absence of a modifier would put a permanent child on the stacks
+    /// saying nothing. A spell that wants the other case writes `if not the
+    /// stacks has gleaning`, which §19's `not` already answers.
+    #[must_use]
+    pub const fn word(self) -> Option<&'static str> {
+        match self {
+            Self::Way => None,
+            Self::Glean => Some("gleaning"),
+        }
+    }
+
+    /// Every word an errand can be published as, for the scene to offer.
+    pub const ALL: [&'static str; 1] = ["gleaning"];
+}
 
 impl Sense {
     /// Every reading, as the scene offers them.
@@ -165,7 +220,7 @@ pub struct Square {
     pub marks: u8,
 }
 
-/// A labyrinth, and where the reading has reached in it.
+/// The stacks, and where the reading has reached in them.
 ///
 /// **A component, not a node per square.** Spawning one entity each would flood
 /// `survey`, the parser's scene and `NodeId`s with nodes the player can never
@@ -187,6 +242,15 @@ pub struct Maze {
     exit: usize,
     /// The way back to where the reading last stood.
     came: Option<Way>,
+    /// What this walk is for.
+    errand: Errand,
+    /// Squares still holding something to pick up, in the order they were
+    /// scattered.
+    ///
+    /// Empty under [`Errand::Way`], which has nothing to gather. A `Vec` rather
+    /// than a set because the order is part of the replay: it is written once,
+    /// from one draw, and only ever shrinks.
+    spoils: Vec<usize>,
 }
 
 impl Maze {
@@ -212,7 +276,48 @@ impl Maze {
             at,
             exit,
             came: None,
+            errand: Errand::Way,
+            spoils: Vec::new(),
         }
+    }
+
+    /// Set this maze an errand, and what it has to gather to finish it.
+    ///
+    /// **In one go, like everything else here.** `Maze::new`'s own note applies:
+    /// scattering the spoils as the walk went would issue them at a rate
+    /// depending on how the ticks were consumed, so a live-watched run and a
+    /// `meditate`-collapsed one would differ from one seed.
+    pub fn set_errand(&mut self, errand: Errand, spoils: Vec<usize>) {
+        self.errand = errand;
+        self.spoils = spoils;
+    }
+
+    /// What this walk is for.
+    #[must_use]
+    pub const fn errand(&self) -> Errand {
+        self.errand
+    }
+
+    /// Squares still holding something to pick up.
+    #[must_use]
+    pub fn spoils(&self) -> &[usize] {
+        &self.spoils
+    }
+
+    /// Every square the reading could still be sent to gather from.
+    ///
+    /// Unwalked floor only, and never where the reading is standing: a spoil
+    /// dropped under the reading's feet would be collected on the frame it was
+    /// scattered, and one on a walked square would make spending the scroll on a
+    /// half-explored maze a partial refund.
+    #[must_use]
+    pub fn scatterable(&self) -> Vec<usize> {
+        self.squares
+            .iter()
+            .enumerate()
+            .filter(|(at, square)| !square.wall && square.marks == 0 && *at != self.at)
+            .map(|(at, _)| at)
+            .collect()
     }
 
     /// Where the reading is.
@@ -249,7 +354,7 @@ impl Maze {
 
     /// Floor walked, against floor there is.
     ///
-    /// **The only honest meter a labyrinth has.** A brew knows its duration
+    /// **The only honest meter the stacks have.** A brew knows its duration
     /// before it starts; a maze does not — how long it takes is what the player's
     /// rule decides. What *can* be reported is how much of it has been seen, and
     /// that only ever grows, which is what a bar has to do.
@@ -265,10 +370,28 @@ impl Maze {
         (walked, total)
     }
 
-    /// Whether the reading has reached the way out.
+    /// Whether the walk is over — which is a different question per errand.
+    ///
+    /// Reaching the way out finishes a [`Way`](Errand::Way); gathering the last
+    /// spoil finishes a [`Glean`](Errand::Glean). The two never both apply,
+    /// because a gleaning maze publishes no exit.
     #[must_use]
     pub const fn solved(&self) -> bool {
-        self.at == self.exit
+        match self.errand {
+            Errand::Way => self.at == self.exit,
+            Errand::Glean => self.spoils.is_empty(),
+        }
+    }
+
+    /// Whether the square beyond `way` holds something to pick up.
+    ///
+    /// The question [`SPOIL`] answers, and it rides beside the reading rather
+    /// than replacing it — a spoil is nearly always in a `passage`, and a solver
+    /// wants to know both.
+    #[must_use]
+    pub fn spoil(&self, way: Way) -> bool {
+        self.beyond(self.at, way)
+            .is_some_and(|beyond| self.spoils.contains(&beyond))
     }
 
     /// The square `way` leads to, if there is one.
@@ -289,6 +412,12 @@ impl Maze {
     /// **`Exit` outranks everything**, including a wall — a solver's first rule
     /// is *if the way out is there, take it*, and a reading that reported the
     /// exit as `walked` would make that rule fire on the wrong square.
+    ///
+    /// **And a gleaning maze publishes no exit at all**, rather than publishing
+    /// one that does nothing. A solver's top rung is `if <way> has exit`, so an
+    /// inert exit would have it walk onto that square, find the walk not over,
+    /// and take the same rung again from the same place for ever. Withdrawing
+    /// the word is what makes the errand a *behaviour* change instead of a trap.
     #[must_use]
     pub fn reading(&self, way: Way) -> Sense {
         let Some(beyond) = self.beyond(self.at, way) else {
@@ -300,7 +429,7 @@ impl Maze {
         if square.wall {
             return Sense::Wall;
         }
-        if beyond == self.exit {
+        if beyond == self.exit && self.errand == Errand::Way {
             return Sense::Exit;
         }
         match square.marks {
@@ -314,6 +443,11 @@ impl Maze {
     ///
     /// Returns whether it moved. **The maze does the marking**, which is what
     /// lets a spell hold a rule rather than a memory.
+    ///
+    /// A spoil on the square the reading arrives at is picked up here, by the
+    /// walking, rather than by anything watching: `Sim::walk` and `follow` both
+    /// come through this one function, so a fifth press of an arrow key and a
+    /// bound solver's fifth lap collect on exactly the same rule.
     pub fn tread(&mut self, way: Way) -> bool {
         if matches!(self.reading(way), Sense::Wall) {
             return false;
@@ -326,6 +460,7 @@ impl Maze {
         if let Some(square) = self.squares.get_mut(beyond) {
             square.marks = square.marks.saturating_add(1);
         }
+        self.spoils.retain(|spoil| *spoil != beyond);
         true
     }
 
@@ -343,7 +478,7 @@ impl Maze {
     /// untouched — and the cheap repair, if it bites, is a spoken bearing to the
     /// exit rather than a return to fog.
     #[must_use]
-    pub fn view(&self) -> orbs_render::Labyrinth {
+    pub fn view(&self) -> orbs_render::Stacks {
         let squares = self
             .squares
             .iter()
@@ -353,11 +488,16 @@ impl Maze {
             })
             .collect();
 
-        orbs_render::Labyrinth {
+        orbs_render::Stacks {
             squares,
             width: u16::try_from(self.width).unwrap_or(u16::MAX),
             at: self.at,
-            exit: self.exit,
+            // **The picture says the same thing the readings do.** A gleaning
+            // maze publishes no `exit`, so drawing `Ω` would be the one place on
+            // screen offering a way out that a spell cannot see and a player
+            // cannot use — the invisible-state defect in reverse.
+            exit: (self.errand == Errand::Way).then_some(self.exit),
+            spoils: self.spoils.clone(),
         }
     }
 }

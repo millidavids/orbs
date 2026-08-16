@@ -1,4 +1,4 @@
-//! The archive's labyrinth, as a picture (DESIGN.md §10, §19).
+//! The archive's stacks, as a picture (DESIGN.md §10, §19).
 //!
 //! # What a frontend is given, and why it is not the maze
 //!
@@ -52,20 +52,30 @@ pub struct Square {
     pub marks: u8,
 }
 
-/// A labyrinth as a frontend needs to draw it.
+/// The stacks as a frontend needs to draw them.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
-pub struct Labyrinth {
+pub struct Stacks {
     /// Squares, row-major, already fogged.
     pub squares: Vec<Square>,
     /// How wide, in squares.
     pub width: u16,
     /// Where the reading is, as an index into `squares`.
     pub at: usize,
-    /// Where the way out is.
-    pub exit: usize,
+    /// Where the way out is, when there is one.
+    ///
+    /// **`Option`, because the stacks can be walked for something other than
+    /// the exit.** A maze set to gather withdraws the way out entirely rather
+    /// than keeping one that does nothing, and the picture has to say the same
+    /// thing the readings do — an `Ω` a spell cannot see and a player cannot use
+    /// would be the only mark here that lies.
+    pub exit: Option<usize>,
+    /// Squares still holding something to pick up.
+    ///
+    /// Empty for an ordinary walk. Indices into `squares`, like `at` and `exit`.
+    pub spoils: Vec<usize>,
 }
 
-impl Labyrinth {
+impl Stacks {
     /// The picture's size in character cells.
     ///
     /// **One character per square**, which is the whole point of squares: the
@@ -122,6 +132,13 @@ pub(crate) const TWICE: char = '░';
 pub(crate) const HEAD: char = '☼';
 /// The way out.
 pub(crate) const EXIT: char = 'Ω';
+/// Something scattered through the maze, waiting to be picked up.
+///
+/// **In CP437 at 0x04**, checked by `ALPHABET` below — `Cell::new` substitutes
+/// silently outside the repertoire, so a glyph that is not in the table becomes
+/// a faint smudge rather than a failure, and a drawing is the hardest place to
+/// notice that.
+pub(crate) const SPOIL: char = '♦';
 
 /// Every glyph the picture can put on the screen.
 ///
@@ -131,14 +148,14 @@ pub(crate) const EXIT: char = 'Ω';
 /// faint smudge rather than a failure, and a drawing is the hardest place to
 /// notice that.
 #[cfg(test)]
-const ALPHABET: [char; 6] = [' ', WALL, ONCE, TWICE, HEAD, EXIT];
+const ALPHABET: [char; 7] = [' ', WALL, ONCE, TWICE, HEAD, EXIT, SPOIL];
 
 /// What is at one coordinate of the picture.
 ///
 /// `col` and `row` are relative to the picture's own top-left, and index the
 /// grid directly — there is no odd/even split any more, because a wall is a
 /// square rather than a line between two.
-pub(crate) fn cell(maze: &Labyrinth, col: u16, row: u16) -> (char, Style) {
+pub(crate) fn cell(maze: &Stacks, col: u16, row: u16) -> (char, Style) {
     let width = maze.width.max(1);
     if col >= width {
         return (' ', Style::NORMAL);
@@ -159,8 +176,15 @@ pub(crate) fn cell(maze: &Labyrinth, col: u16, row: u16) -> (char, Style) {
     }
     // **The way out announces itself the moment the reading knows it is there.**
     // Not a giveaway: `survey east` already answers `exit` from the same square.
-    if index == maze.exit {
+    if maze.exit == Some(index) {
         return (EXIT, Style::SUCCESS);
+    }
+    // A spoil outranks the mark under it for the same reason the exit does: it
+    // is what the walk is *for*, and `survey east` already answers `spoil` from
+    // the square beside it. Picking one up removes it, so a walked square never
+    // draws one.
+    if maze.spoils.contains(&index) {
+        return (SPOIL, Style::SUCCESS);
     }
     // Floor nobody has walked draws nothing. The walls around it are already on
     // screen, so the corridor is a gap in them — a glyph here would be a third
@@ -192,7 +216,7 @@ pub(crate) fn cell(maze: &Labyrinth, col: u16, row: u16) -> (char, Style) {
 /// picture does fit, the window is the whole picture and nothing moves — the
 /// common case is still a still.
 #[must_use]
-pub(crate) fn viewport(maze: &Labyrinth, area: Rect) -> Option<(Rect, u16, u16)> {
+pub(crate) fn viewport(maze: &Stacks, area: Rect) -> Option<(Rect, u16, u16)> {
     let (cols, rows) = maze.size();
     let width = cols.min(area.cols);
     let height = rows.min(area.rows);
@@ -226,8 +250,8 @@ mod tests {
     use crate::cp437;
 
     /// A `span` × `span` grid of solid wall, with nothing seen.
-    fn solid(span: u16) -> Labyrinth {
-        Labyrinth {
+    fn solid(span: u16) -> Stacks {
+        Stacks {
             squares: vec![
                 Square {
                     wall: true,
@@ -237,12 +261,13 @@ mod tests {
             ],
             width: span,
             at: 0,
-            exit: usize::from(span) * usize::from(span) - 1,
+            exit: Some(usize::from(span) * usize::from(span) - 1),
+            spoils: Vec::new(),
         }
     }
 
     /// The picture as one string per row, for reading a whole maze at once.
-    fn drawn(maze: &Labyrinth) -> Vec<String> {
+    fn drawn(maze: &Stacks) -> Vec<String> {
         let (cols, rows) = maze.size();
         (0..rows)
             .map(|row| (0..cols).map(|col| cell(maze, col, row).0).collect())
@@ -299,7 +324,7 @@ mod tests {
         // with the wall it was cut through on either side of it.
         let mut maze = solid(7);
         maze.at = 8;
-        maze.exit = 12;
+        maze.exit = Some(12);
         for index in 8..=12 {
             maze.squares[index] = Square {
                 wall: false,
@@ -316,7 +341,7 @@ mod tests {
         // looping, so the two must not collapse into one glyph.
         let mut maze = solid(5);
         maze.at = 5;
-        maze.exit = 24;
+        maze.exit = Some(24);
         for (index, marks) in [(5, 1), (6, 1), (7, 7)] {
             maze.squares[index] = Square { wall: false, marks };
         }
@@ -334,7 +359,7 @@ mod tests {
         // region into a dot saying what the gap in the wall already said.
         let mut maze = solid(3);
         maze.at = 4;
-        maze.exit = 8;
+        maze.exit = Some(8);
         maze.squares[4] = Square {
             wall: false,
             marks: 1,

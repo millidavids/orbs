@@ -119,7 +119,7 @@ fn the_archive_earns_too() {
     // played most. At nothing it would be dead progression for half the opening.
     //
     // **Solved rather than merely opened.** `divine` used to hold the slot for
-    // twelve ticks and pay for it; it now opens a labyrinth, and what earns is
+    // twelve ticks and pay for it; it now opens the stacks, and what earns is
     // reaching the way out — so this walks one, by the same Trémaux rule a
     // player writes as a spell: prefer a passage nobody has walked, and fall
     // back to the least-walked way out.

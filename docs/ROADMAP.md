@@ -1384,8 +1384,8 @@ the loop.
       **See it:** `verify` each of the four surfaces and have it name the tampering
 - [x] **The archive is a maze, and the world holds the search** — §10 calls the
       domain *bespoke* and *"stales fastest"*, and it was five entities with a
-      verb that consumed nothing and produced nothing. `research` now resolves a
-      labyrinth out of the lectern, `follow` threads it, the way out gives up a
+      verb that consumed nothing and produced nothing. `research` now resolves
+      the stacks out of a page, `follow` threads them, the way out gives up a
       fragment, and four fragments make a scroll.
       - **A search, automatable, with no grammar change.** Trémaux needs no
         memory beyond marks in the passages, so the cells mark themselves and the
@@ -1398,19 +1398,19 @@ the loop.
       - **`step` scores 750 against `stop`, `tread` 800 against `read`.** `follow`
         is 429. It is the 21st tower-wide verb and is recorded as a **debt**: it
         belongs to the archive, but a fixture carries one `Operation` and the
-        lectern spends it on `research`
+        stacks spends it on `research`
       - The instrument retired three defects at once — no completion sentence, an
         unstoppable run, no `recall` — and with them `DIVINE_TICKS`,
         `pipeline::work` and `progression::DIVINE`
 
       **See it:** ✅ `ORBS_BOOT=0 ORBS_DUMP="attend archive; research; survey north; follow east"`
-      — a labyrinth resolves, `survey north` shows a reading, the reading moves.
+      — the stacks resolve, `survey north` shows a reading, the reading moves.
       ✅ `cargo test -p orbs-sim --test solver` — a Trémaux solver's every
       condition survives the cast, the readings resolve with no maze open, and a
       misspelled `walkd` is still refused.
       ⬜ a scroll that does something — the item below
 - [x] **The map that fills in** — `orbs-render/src/maze.rs`, CP437-checked, drawn
-      by `orbs/src/shell/labyrinth.rs` beside the instrument panel whenever a maze
+      by `orbs/src/shell/stacks.rs` beside the instrument panel whenever a maze
       is open. Walls only where the reading has *stood*, `▒` walked once, `░`
       finished with, `☼` the head, `Ω` the way out, and blank for floor nobody has
       walked — the walls around it already say a corridor is there. **Columns, never rows**, whichever way the panel runs: taking
@@ -1440,7 +1440,7 @@ the loop.
       write a solver.
       **See it:** ✅ `cargo test -p orbs-sim --test solver` — twelve seeds, each
       swept to a shard, worst 5123 ticks against a pinned budget of 6500.
-- [x] **`wander`** — the arrow keys walking the labyrinth, because nobody solves
+- [x] **`wander`** — the arrow keys walking the stacks, because nobody solves
       a maze by typing `follow east` a hundred times. The **22nd tower-wide
       verb**, which `verb.rs` argues for rather than merely counts: the seat is
       `unfurl`'s (a surface with no other way in) and the debt is `follow`'s (a
@@ -1535,7 +1535,7 @@ the loop.
       distinct names again; until those spells exist this is the honest
       placeholder. It cost `Recipe::count` — see below.
       **See it:** ✅ `ORBS_BOOT=0 ORBS_DUMP="attend archive; research"` then solve
-      and `survey lectern` — `fragment = 1`, and the panel reads `gathering`.
+      and `survey cabinet` — `fragment = 1` on the archive's shelf.
       ✅ `cargo test -p orbs-sim --test solver`
 - [x] **A recipe can want more than one of something** — `Recipe::count`,
       defaulting to 1. What an instrument holds is a node per *name* with a stock
@@ -1638,6 +1638,39 @@ the loop.
       **See it:** ✅ `ORBS_BOOT=0 ORBS_DUMP="attend laboratory; recall distil"`
       ✅ `cargo test -p orbs-sim --lib recall` — the three lints
       ✅ every verb: `for v in attend survey peruse ...; do ORBS_DUMP="recall $v"`
+- [x] **The manual, part four: every *item* has a page** — 34 materials, and the
+      half of the manual that was missing. `recall <thing>` answered with the
+      **route** and nothing else, so a player holding a potion could be told its
+      five steps and not one word about what it was for. A route answers *how do
+      I get one*; someone holding the thing is asking *what is this*.
+
+      Both are said now, and **what it is comes first**. `using_<name>` is the
+      second half — how you spend it — and it is optional, because a byproduct is
+      something you have rather than something you do. Where the use is **not
+      built** the page says so: every potion's reads *"nothing drinks a potion
+      yet. a siege will be what spends them"*, which is `undo`'s precedent and
+      §15's argument that a page admitting a thing does nothing is the cheapest
+      way to keep a player out of a dead end.
+
+      **Not `recall_<name>_use`**: `Prose::topics` decides what is nameable by
+      stripping `recall_`, so that spelling would have registered `clarity_use`
+      as a subject — the trap `grimoire_step_or` already paid for.
+
+      Two lints hold it, beside the three that hold the verb pages:
+      `every_material_has_a_page` fails the build by name for a material with no
+      description, and `a_finished_product_says_what_it_is_for` requires a
+      `using_` line on every potion and scroll.
+
+      **It made every material a `Topic`**, which is the same exemption verb
+      pages have and for the stated reason — *a manual you can only read in the
+      right room has a lock on it*. §7's scoping is unharmed and now says so more
+      precisely: from the archive `sage` is something to read about and not
+      something to grind, which is a claim about the **kind** and is what
+      `what_an_instrument_holds_is_nameable_from_the_room_it_stands_in` asserts.
+      **See it:** ✅ `ORBS_BOOT=0 ORBS_DUMP="recall clarity"` — what it is, that
+      nothing drinks it yet, then the five steps that make one.
+      ✅ `ORBS_BOOT=0 ORBS_DUMP="recall gleaning-scroll"` — and how to spend it.
+      ✅ `cargo test -p orbs-sim --lib recall` — five lints now
 - [x] **A fixed 4:3 picture — the grid stops following the window** — the window
       used to decide the *cell count*: 1280×720 gave 160×45, 1920×1080 gave
       120×33, so every pane, border and wrapped sentence was recomputed against a
@@ -1678,11 +1711,208 @@ the loop.
       by grid; drag below 960×720 for the same screen by scale.
       ✅ `cargo run -p orbs-render --example screens` — the scale table that
       replaced §9's tier table, and the worst case at the smallest legible glyph.
-- [ ] **Scrolls that do something** — `spell-scroll` assembles and is then an
+- [x] **Scrolls that do something** — `spell-scroll` assembled and was then an
       object with no use, which is §19's third finding against this item conceded
-      rather than dodged. Haste for brewing is the cheapest first use, and it is
-      also where the generic fragment becomes specific ones.
-      **See it:** spend a scroll and watch a brew run shorter
+      rather than dodged. Four steps, and the order is *what can be shown without
+      the next thing existing*. DESIGN.md §19 records the decisions.
+  1. ✅ **A scroll is a kind, the lectern rolls one, and `wield` spends it on a
+        gleaning errand.** Merged deliberately, on brewing step 3's precedent
+        (line 527 below): a step that ships a scroll you cannot spend leaves this
+        item's dead end open and its See-it line reads *"look at the thing that
+        does nothing"*.
+        **The spend is `wield`, not a 23rd word.** `verb.rs`'s vocabulary test
+        refuses one in advance — *"22 is a number to defend, not a budget to
+        spend"* — so the verb learned a second argument kind (`NounKind::Workable`,
+        the `Stoppable` pattern) and `empty` kept `PLACE` so `empty
+        gleaning-scroll` never parses.
+        **What four fragments become is drawn**, not fixed: nothing about the
+        inputs could decide it, and a lectern that always made the same thing is
+        §10's *"a duration with no decision content"* one level up. The list is
+        on the recipe rather than three `[[lectern]]` blocks, because
+        `Recipes::matching` returns the **first** match and the other two would
+        be unreachable with the file looking reasonable.
+        **The errand is the modifier a spell can ask about**, published on the
+        stacks as a named child exactly as a way publishes `passage` — so `if
+        the stacks has gleaning` works through the `has` question §8 already
+        has: no new `State`, no panel change, no new grammar. **One** solver then
+        handles both errands. `Errand::ALL` chains onto the readings in
+        `scene_at`, because the condition must resolve at *cast*, when there is
+        never an errand on.
+        **A gleaning maze publishes no exit at all.** An inert one would have a
+        solver walk onto it, find the walk not over, and take the same rung from
+        the same place for ever — so the picture withdraws `Ω` too, or the map
+        would offer a way out the readings do not.
+        **Five spoils against a scroll's four, profitable on purpose** — gleaning
+        is what keeps scrolls in circulation. It is also the item's largest
+        balance exposure and **nothing sweeps it**: `orbs-balance` is a stub, so
+        the number is a placeholder, not a tuned one.
+        Two defects fixed on the way: **`holdings` counted a reading as stock**,
+        so an errand on an instrument would have broken the four-fragment recipe
+        and drawn `fouled` for an instrument with nothing wrong with it; and
+        **`debug_spawn` could not reach the archive at all** — there is one
+        `Store` and it is in the laboratory — so it gained a destination
+        (`debug_spawn fragment 4 lectern`), which `tests/solver.rs` had already
+        written down as impossible.
+        **See it:** ✅ `ORBS_SEED=3 ORBS_BOOT=0 ORBS_DUMP="attend archive;
+        research; debug_spawn gleaning-scroll; wield gleaning-scroll; wander"`
+        — five `♦` scattered through the maze and
+        **no `Ω`**.
+        ✅ the same without `wander` plus `survey stacks` — `reading: gleaning`
+        on the stacks, which is the word a spell asks for.
+        ✅ `cargo test -p orbs-sim --test gleaning` — nine claims driven through a
+        real `Sim`, including one solver taking a different branch under each
+        errand, and the lectern still assembling with an errand open.
+        ✅ `cargo run -p orbs-render --example screens` — the fourth stacks
+        screen, through the real painter.
+  2. ✅ **The arsenal — `/tower/arsenal`, and the one room reachable from every
+        other.** Nothing in the tower could be carried between domains **at
+        all**: `carry`'s destination lookup wants a `Fixture` child of `cwd` and
+        a domain is neither, so `move clarity to archive` could not resolve and
+        neither could any route between two rooms. §10's remaining five domains
+        all have that problem waiting for them, so this is the standing answer
+        rather than a fix for one pair — and it is the prerequisite for
+        quickening rather than a convenience beside it.
+
+        **A finished potion could not be picked up at all**, and had not been
+        able to for as long as there have been potions: `move`'s first slot was
+        `Reagent` and `produce::transmute` gives a `potion = true` output
+        `Essence`, so the slot silently never filled. Nothing noticed because
+        `empty` turns an instrument out wholesale and never asks what kind
+        anything is, so the one route that mattered *inside* the laboratory
+        worked. `NounKind::Portable` is the fix — the `Stoppable` pattern again —
+        and it is **not** `Any`, which would make `move laboratory to arsenal`
+        resolve at full confidence.
+
+        **The exemption is narrow and it is stated.** `scene.rs` names acting on
+        a domain you are not in as **Phase 2's** unlock, and this does not repeal
+        it: what reaches everywhere is the arsenal's *contents*, on exactly the
+        terms places, spells and the maze's readings already have. What keeps it
+        honest is the door — **finished work only**, asked of the *kind* and
+        never of the name, because telling work from stock by name would mean the
+        tower deciding which reagents are waste, which §10.1 refuses outright. So
+        it cannot become a second dispensary, and `reachable` searches it **last**
+        so a reagent in the room always outranks a carried one.
+
+        **Nameable is not enough, and that is the whole risk.** Registering the
+        contents in the scene makes them nameable everywhere — and `purge` and
+        `verify` take `NounKind::Any`, so both would have *resolved* on a potion
+        from any room and then reported it absent: §15's dead end, arriving
+        through the affordance meant to remove one. Three lookups had to learn
+        it (`pipeline::reachable`, `pipeline::purge`, `files::here_or_place`), and
+        `tower::keep` owns the rule so they cannot disagree.
+
+        **It is also what lets a spell touch a potion.** A spell is written *for*
+        a domain and `may_issue` forbids it `attend`ing, so finished work living
+        in the room that made it could never be reached by automation running
+        anywhere else.
+
+        Free from being a top-level branch: `Protected`, so `purge arsenal`
+        refuses in character; a row on the boot report; and `arsenal.log`, which
+        actually fills because `move` already stamps `Path`.
+        Two more defects settled on the way. **`fragment` was two noun kinds at
+        once** — `Fragment` from a solved maze, `Reagent` from `debug_spawn` —
+        and `stock::give` merges by name, so the two would have merged into
+        whichever node was found first. And **`Recipe::leaves` was compulsory**,
+        so the lectern shed a `dust` invented to fill the field — which was
+        trapped in the instrument that made it, and whose mortar recipe could
+        never fire, because reagents do not cross a domain boundary. §10.1 builds
+        the waste-has-a-use loop around *brewing*, where a second route to the
+        same draught can exist; the archive has no second route to anything. So
+        `leaves` is optional and byproducts stay the laboratory's mechanic.
+        **And the archive became three fixtures doing one thing each.** The maze
+        opened *on the lectern*, which was also where four fragments
+        became a scroll — §19 called that "the first instrument that can be doing
+        two things at once" and treated it as a curiosity. It was a design
+        problem: `stop lectern` had to guess which it meant, the panel gave both
+        one row, and a twenty-tick assembly drew the maze's explored-cells gauge.
+        So the maze moved to the **stacks** — an endless library you navigate —
+        the **cabinet** is the archive's shelf, and the **lectern** is where four
+        matching fragments are moved out of the cabinet and assembled. A walk of
+        the stacks pays onto the cabinet, so the hoard is on `survey cabinet`
+        instead of hidden in the instrument that consumes it, and `debug_spawn`
+        already put one there — a split this closed. `[earns]` widened with it:
+        its keys were checked against `recipes.toml`, so an instrument that runs
+        and transforms nothing could never be priced, which was quietly true of
+        the athanor all along. And `tower::home` now derives
+        **where every item belongs** from the recipes that name it, so
+        `debug_spawn <thing>` puts the thing in the room it is used in with no
+        destination named. Three lints hold that: a new item is testable the
+        moment it is authored.
+        **See it:** ✅ `ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="attend laboratory;
+        kindle charcoal; debug_spawn clarified-draught; distil
+        clarified-draught; meditate 60; empty alembic; move clarity to arsenal;
+        attend archive; survey arsenal"` — a potion brewed in one room, carried
+        to a second and listed from a third. The first time anything in the tower
+        has crossed a domain.
+        ✅ `ORBS_BOOT=0 ORBS_DUMP="attend laboratory; move sage to arsenal"` — the
+        door, refusing in voice and naming where a reagent does belong.
+        ✅ the long line with `attend archive; verify clarity; peruse arsenal.log;
+        purge clarity; survey arsenal` on the end — every verb that can now name
+        a kept thing reaches it, the log has the move in it, and `purge` acts
+        rather than resolving and doing nothing.
+        ✅ `cargo test -p orbs-sim --test arsenal` — eight claims, one per way
+        this could have been half-built.
+  3. ✅ **Quickening — a window on the laboratory, not a shot at one run.** For
+        `QUICKENED_TICKS` the room works at double speed: everything it starts
+        inside the window takes half as long, and whatever is already running is
+        hurried too, because the state means *this room is quick* and a run in
+        flight is something the room is doing.
+
+        **It was a one-shot and refused when nothing was running**, which made it
+        unusable at exactly the moment a player reaches for one — *quicken the
+        laboratory, then brew* is the obvious play and was the one thing it could
+        not do. Four walks bought a single stage; a window buys a stretch of
+        work and rewards lining it up.
+
+        **An interval, like `Burning`**, so it survives `meditate` with no system
+        ticking it down. **Read at `begin`, like heat**, so a run started inside
+        the window stays short when the window closes — which is what keeps
+        `Working` an interval set once, the property `meditate` idempotence rests
+        on. A run already going is halved from **now**, not from the start:
+        halving the whole interval would refund time already spent.
+        **See it:** ✅ an 8-tick grind, twice —
+        `ORBS_BOOT=0 ORBS_DUMP="attend laboratory; grind sage; meditate 4"`
+        yields nothing, and the same line with
+        `debug_spawn quickening-scroll; wield quickening-scroll` in front of it
+        yields ground-sage.
+        ✅ `cargo test -p orbs-sim --test gleaning` — the short run, the run that
+        stays short when the window closes, the in-flight halving and its point,
+        and the two clocks agreeing.
+  4. ✅ **The verdant scroll, and two potions off ported herbs** — `mugwort`,
+        `valerian` and `amber` from `../court_wizard`, whose alchemy is nineteen
+        real herbs each with prose saying what it looks like and where it grows.
+        Its *effects* do not port; the half that does is a substance a player can
+        be told about, so each has a `recall` page.
+
+        **One herb per scroll, not all three** — the plan said unlock *the*
+        reagents, and one scroll doing all of it would have left the lectern
+        assembling a thing with nothing left to give: a dud draw for ever, which
+        is the dead end this item exists to close. Three are each worth having.
+
+        **What is unlockable is derived, never listed.** A base reagent is one the
+        vocabulary knows that nothing in the tower makes, whose home is the
+        laboratory's shelf — so a fourth herb authored in `recipes.toml` is
+        unlockable the same tick with no Rust to touch. Getting *made* wrong was
+        visible rather than subtle: the first version asked `Recipes::outputs`,
+        which is a recipe's `output` and not its `leaves`, so every byproduct read
+        as a herb and four scrolls shelved `dregs`, `ash` and a `fragment` as
+        inexhaustible stock. **One dump found it and no test would have.**
+
+        Names measured, not chosen: `keen-draught` and `quiet-draught` replaced
+        `steeped`/`settled`, which collided at **734** — worse than the 667 that
+        got `decant` renamed — and `verdant-scroll` replaced `flowering` at 688.
+        The worst pair now is 693, against the 819 (`ground-sage`/`ground-salt`)
+        and 896 (`sage`/`sage-tincture`) already shipping.
+        **See it:** ✅ `ORBS_BOOT=0 ORBS_DUMP="attend laboratory; debug_spawn
+        verdant-scroll 4; wield verdant-scroll; wield verdant-scroll; wield
+        verdant-scroll; wield verdant-scroll; survey dispensary"` — three
+        reagents become six, one at a time, and the fourth scroll says the shelf
+        holds every herb it knows.
+        ✅ `recall insight` and `recall stillness` — five steps each, and
+        `recall mugwort` says what a mugwort is.
+        ✅ the whole route walked in `tests/gleaning.rs`, because a route that
+        reads well and cannot be walked is a table rather than content — which is
+        exactly what the lectern's `dust` recipe turned out to be.
 - [ ] Third domain (scrying — the player's first discovery)
       **See it:** discover it in play rather than starting with it
 - [ ] Minimal apprenticeship + **continuous non-terminal-user playtesting**

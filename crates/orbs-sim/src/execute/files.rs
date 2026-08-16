@@ -95,6 +95,12 @@ fn here_or_place(world: &World, target: &str) -> Option<Entity> {
         // anywhere (`tower::scene`), so they have to be findable from anywhere
         // or `peruse` resolves and then reads nothing — see [`find_script`].
         .or_else(|| find_script(world, target))
+        // ...and whatever the arsenal holds, for exactly the reason above. It is
+        // the third thing nameable from everywhere, so it is the third that has
+        // to be findable from everywhere: `verify clarity` from the archive
+        // resolving and then reporting "no such thing" is §15's dead end,
+        // arriving through the exemption meant to remove one.
+        .or_else(|| tower::kept(world, target))
 }
 
 /// Which file an intent names, if any.

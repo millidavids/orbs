@@ -1,4 +1,4 @@
-//! `wander` — the arrow keys walking the archive's labyrinth (§10, §19).
+//! `wander` — the arrow keys walking the archive's stacks (§10, §19).
 //!
 //! # The fourth surface that can own the keyboard, and the smallest
 //!
@@ -35,7 +35,7 @@ use orbs_sim::tower::Way;
 
 use crate::sim::Tower;
 
-/// Whether the arrows have the labyrinth.
+/// Whether the arrows have the stacks.
 ///
 /// A resource rather than a component, for the reason `Editing` and `Loom` both
 /// give: there is one maze, the mode is modal, and an entity would invite a
@@ -146,14 +146,14 @@ pub(crate) fn type_into_maze(
     }
 }
 
-/// Let go when there is no longer a labyrinth to walk.
+/// Let go when the stacks are no longer open to walk.
 ///
 /// **Three ways a maze ends, and one condition covers them.** It is solved; it
 /// is abandoned by `stop lectern`, which a bound spell may issue; or the player
 /// is no longer in the archive. Naming this after the solved case would have
 /// left the other two owning the keyboard over a pane with no map on it.
 pub(crate) fn close_when_gone(tower: Res<Tower>, mut walk: ResMut<Walk>) {
-    if tower.sim().labyrinth().is_none() {
+    if tower.sim().stacks().is_none() {
         walk.close();
     }
 }
@@ -186,8 +186,8 @@ mod tests {
         app.world()
             .resource::<Tower>()
             .sim()
-            .labyrinth()
-            .expect("no labyrinth")
+            .stacks()
+            .expect("the stacks are shut")
             .at
     }
 
@@ -197,8 +197,8 @@ mod tests {
             .world()
             .resource::<Tower>()
             .sim()
-            .labyrinth()
-            .expect("no labyrinth");
+            .stacks()
+            .expect("the stacks are shut");
         Way::ALL
             .into_iter()
             .enumerate()
@@ -265,7 +265,7 @@ mod tests {
                 .world()
                 .resource::<Tower>()
                 .sim()
-                .labyrinth()
+                .stacks()
                 .map_or((seen, 0), |maze| maze.explored());
             seen = seen.max(walked);
         }
@@ -278,23 +278,29 @@ mod tests {
     #[test]
     fn walking_out_of_the_archive_gives_the_keys_back() {
         // Unreachable by typing — the prompt is dead while this is open — but a
-        // bound spell can `stop lectern`, and `Sim::labyrinth` is `None` outside
+        // bound spell can `stop stacks`, and `Sim::stacks` is `None` outside
         // the archive too. One condition, three ways in.
+        //
+        // **`stop stacks`, and it was `stop lectern`.** The maze moved to its own
+        // instrument, so stopping the lectern now abandons an *assembly* and
+        // leaves the stacks alone — which is the whole point of splitting
+        // them, and is what this test would have gone on asserting the opposite
+        // of.
         let mut app = app();
         run(&mut app, "attend archive");
         run(&mut app, "research");
         run(&mut app, "wander");
         assert!(app.world().resource::<Walk>().is_open());
 
-        run(&mut app, "stop lectern");
+        run(&mut app, "stop stacks");
         assert!(
             !app.world().resource::<Walk>().is_open(),
-            "the arrows held a labyrinth that had closed",
+            "the arrows held stacks that had closed",
         );
     }
 
     #[test]
-    fn a_press_with_no_labyrinth_left_gives_the_keys_back_at_once() {
+    fn a_press_with_no_stacks_left_gives_the_keys_back_at_once() {
         // `close_when_gone` also says so, but it runs *after* the key handler
         // and a whole key repeat can land inside one frame. The handler has to
         // notice for itself or the frame after a solve walks into nothing.
@@ -305,7 +311,7 @@ mod tests {
 
         app.world_mut()
             .resource_mut::<Tower>()
-            .submit("stop lectern");
+            .submit("stop stacks");
         app.world_mut().resource_mut::<Tower>().step();
         assert!(!app.world_mut().resource_mut::<Tower>().walk(Way::East));
     }

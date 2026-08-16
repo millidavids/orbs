@@ -43,21 +43,52 @@ ticks = 8
 
 # Ash is a byproduct that grinds down into something the flask wants, which is
 # what keeps the athanor's waste from being pure litter.
-# Dust is what a scroll's assembly leaves - what comes off tomes and scrolls that
-# have sat unread - and the mortar takes it down to the same potash ash becomes:
-# §10.1's rule that every byproduct has a use, applied to the archive's waste
-# rather than the athanor's.
-[[mortar_and_pestle]]
-input = "dust"
-output = "potash"
-leaves = "husks"
-ticks = 6
-
+#
+# **`dust` was here too and is gone with it.** The lectern shed it, so the mortar
+# was given a second route to the same potash to satisfy §10.1's rule that every
+# byproduct has a use - and the dust could never actually get here, because
+# reagents do not cross a domain boundary. A recipe that only fires on material a
+# tester spawns is not content, and the honest fix was upstream: byproducts are
+# the laboratory's mechanic and no other domain replicates them.
 [[mortar_and_pestle]]
 input = "ash"
 output = "potash"
 leaves = "husks"
 ticks = 6
+
+# ---------------------------------------------------------------------------
+# The ported herbs, and the two potions they reach.
+#
+# Names and character come from `../court_wizard`, whose alchemy is nineteen real
+# historical herbs each with prose saying what it looks like and where it grows.
+# Its *effects* do not port - all fourteen are tower-defence terms - so what came
+# across is the half that matters: a substance a player can be told about.
+#
+# **These three are not on the shelf at the start.** A `verdant-scroll` puts one
+# of them there, and what counts as unlockable is derived rather than listed: a
+# base reagent is one the vocabulary knows and no recipe makes. So a fourth herb
+# added here is unlockable the same tick, with no Rust to touch.
+# ---------------------------------------------------------------------------
+
+[[mortar_and_pestle]]
+input = "mugwort"
+output = "ground-mugwort"
+leaves = "husks"
+ticks = 8
+
+[[mortar_and_pestle]]
+input = "valerian"
+output = "ground-valerian"
+leaves = "husks"
+ticks = 8
+
+# A resin rather than a stalk, and the mortar still leaves husks - which is the
+# mortar's leaving whatever went in, as `rock-salt` and `ash` already show.
+[[mortar_and_pestle]]
+input = "amber"
+output = "powdered-amber"
+leaves = "husks"
+ticks = 8
 
 # ---------------------------------------------------------------------------
 # balneum_mariae - gentle digestion over the athanor. Needs heat.
@@ -75,6 +106,20 @@ input = "husks"
 output = "weak-tincture"
 leaves = "sediment"
 ticks = 10
+heat = true
+
+[[balneum_mariae]]
+input = "ground-mugwort"
+output = "mugwort-tincture"
+leaves = "sediment"
+ticks = 12
+heat = true
+
+[[balneum_mariae]]
+input = "ground-valerian"
+output = "valerian-tincture"
+leaves = "sediment"
+ticks = 12
 heat = true
 
 # ---------------------------------------------------------------------------
@@ -107,6 +152,21 @@ ticks = 14
 [[flask_and_rod]]
 inputs = ["sage-tincture", "potash"]
 output = "fixed-draught"
+leaves = "dregs"
+ticks = 10
+
+# The two ported draughts. **Amber is a fixative rather than a steeping**, which
+# is why it goes in whole from the mortar and never through the bath: it is the
+# thing that holds a volatile extract together long enough to distil.
+[[flask_and_rod]]
+inputs = ["mugwort-tincture", "powdered-amber"]
+output = "keen-draught"
+leaves = "dregs"
+ticks = 10
+
+[[flask_and_rod]]
+inputs = ["valerian-tincture", "ground-salt"]
+output = "quiet-draught"
 leaves = "dregs"
 ticks = 10
 
@@ -160,6 +220,22 @@ ticks = 12
 potion = true
 heat = true
 
+[[alembic]]
+input = "keen-draught"
+output = "insight"
+leaves = "phlegm"
+ticks = 40
+potion = true
+heat = true
+
+[[alembic]]
+input = "quiet-draught"
+output = "stillness"
+leaves = "phlegm"
+ticks = 40
+potion = true
+heat = true
+
 # ---------------------------------------------------------------------------
 # athanor - fuel, not recipes. Arrives with step 4.
 # ---------------------------------------------------------------------------
@@ -167,7 +243,7 @@ heat = true
 # ---------------------------------------------------------------------------
 # lectern - the archive. Assembly, not transformation.
 #
-# Four fragments make a scroll, and the fragments come from solving labyrinths
+# Four fragments make a scroll, and the fragments come from walking the stacks
 # rather than from a shelf. **One generic fragment, deliberately**: the four were
 # `shard-of-dawn`/`noon`/`dusk`/`night`, drawn at random, which made collecting a
 # set coupon-collector attrition - 8.3 solves on average, and no decision anywhere
@@ -180,16 +256,37 @@ heat = true
 # `count` is what makes four-of-one work at all: what an instrument holds is a
 # node per *name* with a stock count on it, so four fragments are one entry.
 #
-# It leaves dust, which is the archive's own kind of waste: assembling a scroll
-# means clearing off tomes that have sat unread, and what comes away is grey
-# rather than the brown of the laboratory's spent stalks. It was `chaff`, which
-# is threshed husk - a granary's leaving, not a library's.
+# **It leaves nothing**, and `leaves` is optional for that reason. It shed
+# `dust` for one recipe's worth of the field being compulsory, and the dust then
+# had nowhere to go: reagents do not cross a domain boundary, so it could never
+# reach the mortar written to grind it, and the archive had to grow a shelf to
+# stop it being trapped in the lectern. §10.1 builds the whole waste-has-a-use
+# loop around brewing, where a second route to the same draught can exist and be
+# interesting; replicating it here bought a substance nobody had decided anything
+# about.
 #
 # No heat: a lectern is not an instrument you light.
+#
+# ## `outputs`, and why it is a list
+#
+# What four fragments assemble into is **drawn**, not fixed. Four fragments are
+# four fragments however they were won, so nothing about the inputs could decide
+# which scroll comes out - and a lectern that always made the same thing would be
+# §10's objection to the old `research` all over again: a duration with no
+# decision content, one level up.
+#
+# The list is on the recipe rather than being three `[[lectern]]` blocks because
+# `Recipes::matching` returns the **first** recipe whose inputs match. Three
+# blocks all wanting four fragments would leave two of them permanently
+# unreachable, with the file looking perfectly reasonable and nothing saying so.
+#
+# One entry today. The draw is uniform over whatever is here, so adding a scroll
+# is adding a line - and `every_scroll_the_lectern_makes_can_be_spent` refuses
+# a name with no effect behind it.
 # ---------------------------------------------------------------------------
 [[lectern]]
 input = "fragment"
 count = 4
-output = "spell-scroll"
-leaves = "dust"
+outputs = ["gleaning-scroll", "quickening-scroll", "verdant-scroll"]
 ticks = 20
+scroll = true

@@ -31,6 +31,7 @@ mod pipeline;
 mod recall;
 mod research;
 mod scribe;
+mod scroll;
 mod unfurl;
 mod wander;
 mod weave;
@@ -41,12 +42,20 @@ mod tests;
 #[cfg(debug_assertions)]
 pub use debug::{Order as SpawnOrder, SPAWN, order as spawn_order};
 pub use dispatch::{LOG, MAX_MEDITATE, execute_one, is_gated, is_live, offered, run_pending};
-// Crate-internal: `Sim::labyrinth` needs it and `divine` is a private module, so
+// Crate-internal: `Sim::stacks` needs it and `divine` is a private module, so
 // the re-export is what makes it nameable rather than what makes it public.
 pub use navigate::find_domain;
-pub(crate) use research::{lectern, tread};
+pub(crate) use research::{stacks, tread};
 pub(crate) use scribe::Reloaded;
 pub use scribe::{Opening, Request, write};
+/// Named so `every_scroll_the_lectern_makes_can_be_spent` can ask whether a word
+/// authored in `recipes.toml` has anything behind it. Nothing else outside this
+/// module needs it — `wield` reaches the effect through `spend`.
+pub use scroll::Scroll;
+// Crate-internal, and the reason is the defect it closed: `spell::block` has to
+// ask the same question `wield` asks, or a scripted spend is charged a
+// production slot the typed one is not.
+pub(crate) use scroll::spending;
 pub use unfurl::Unfurling;
 pub use wander::Wandering;
 pub use weave::Weaving;

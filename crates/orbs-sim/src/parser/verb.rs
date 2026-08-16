@@ -45,8 +45,20 @@ pub enum NounKind {
     Reagent,
     /// A vessel holding a finished brew. `siphon retort`.
     Vessel,
-    /// A researchable fragment. `decipher sigil-iv`.
-    Fragment,
+    /// A scroll, which is finished work you spend. `wield gleaning-scroll`.
+    ///
+    /// **A kind of its own, beside [`Essence`](Self::Essence) rather than inside
+    /// it.** A potion is §10.1's *quality* a recipe yields; a scroll is an
+    /// object with an effect, and the two answer different questions — a slot
+    /// that took "finished work" would let `wield clarity` resolve at full
+    /// confidence and then find nothing to do, which is §15's dead end reached
+    /// through a kind that was merely convenient.
+    ///
+    /// Not [`Reagent`](Self::Reagent) either, which is *"crafting stock: an
+    /// ingredient, a part-made material, a byproduct, or fuel"* — every one of
+    /// those is something a recipe consumes, and a scroll is something the
+    /// player spends.
+    Scroll,
     /// A script. `invoke night_watch`.
     Script,
     /// A count of ticks. `meditate 30`.
@@ -71,7 +83,7 @@ pub enum NounKind {
     ///
     /// `passage`, `wall`, `walked`, `twice`, `exit` — the words a solver's `if`
     /// names. **A kind of their own, and no slot asks for one**, so a sense can
-    /// never fill a `Reagent` or a `Fragment` by accident while
+    /// never fill a `Reagent` or an `Essence` by accident while
     /// [`Any`](Self::Any) still finds it. That last part is the whole reason the
     /// kind exists: `spell::compile` resolves a condition's names against the
     /// room *as it is at that instant*, and no cell is `walked` at the moment a
@@ -96,6 +108,46 @@ pub enum NounKind {
     /// `open`, `show` — is the verb a shell-naive tester reaches for first, so
     /// the dead end would land where §15 weighs it heaviest.
     Readable,
+    /// Anything you can **pick up** — stock, a potion, a scroll.
+    ///
+    /// A slot kind, never a noun's own, like [`Readable`](Self::Readable) and
+    /// [`Stoppable`](Self::Stoppable).
+    ///
+    /// # `move` could not carry a potion at all
+    ///
+    /// Its first slot was [`Reagent`](Self::Reagent), and `produce::transmute`
+    /// gives a finished potion [`Essence`](Self::Essence) — so `move clarity to
+    /// dispensary` failed to fill a required slot, silently, for as long as
+    /// there have been potions. It went unnoticed because `empty` turns an
+    /// instrument out wholesale and never asks what kind anything is, so the one
+    /// route that mattered in the laboratory worked.
+    ///
+    /// The arsenal is what made it matter: carrying finished work between rooms
+    /// is the whole point of the room, and every route into it goes through this
+    /// slot.
+    ///
+    /// **Not [`Any`](Self::Any)**, which reaches places, files, topics and
+    /// spells — `move laboratory to arsenal` would resolve at full confidence.
+    /// What this names is the set of things that are *stuff*.
+    ///
+    /// **There is no `Fragment` in the list, and there was.** A fragment *is*
+    /// crafting stock — the lectern's recipe consumes four of them — so it is a
+    /// [`Reagent`](Self::Reagent) like every other input, and the separate kind
+    /// went with the sigils it was invented for.
+    Portable,
+    /// Anything you can **set going** — an instrument, or a scroll.
+    ///
+    /// A slot kind, never a noun's own, like [`Readable`](Self::Readable) and
+    /// [`Stoppable`](Self::Stoppable), and it exists for the reason those two
+    /// do: `wield` had to reach a second sort of thing and the alternative was a
+    /// 23rd tower-wide verb, which `the_vocabulary_is_the_tower_wide_verbs_plus_
+    /// the_laboratory_s_own` refuses in advance.
+    ///
+    /// **`empty` keeps [`Place`](Self::Place)**, and the split is the point:
+    /// both verbs used to share one signature, and widening it would have made
+    /// `empty gleaning-scroll` a sentence the parser accepts and the executor
+    /// cannot answer.
+    Workable,
     /// Anything that can be **running** — an instrument, or a spell.
     ///
     /// A slot kind, never a noun's own, like [`Readable`](Self::Readable).
@@ -192,7 +244,7 @@ impl NounKind {
     /// The word for this category, as output names it.
     ///
     /// §6 forbids a bare error: when a slot is empty the orb has to say what
-    /// would fill it, and it cannot say `Fragment`. Kept to one lower-case word
+    /// would fill it, and it cannot say `Portable`. Kept to one lower-case word
     /// so it drops into a sentence a content file composes later (§12) without
     /// the file having to case-fold or re-word it.
     #[must_use]
@@ -205,7 +257,7 @@ impl NounKind {
             Self::Essence => "essence",
             Self::Reagent => "reagent",
             Self::Vessel => "vessel",
-            Self::Fragment => "fragment",
+            Self::Scroll => "scroll",
             Self::Script => "script",
             Self::Count => "count",
             Self::Name => "name",
@@ -216,6 +268,13 @@ impl NounKind {
             // What the orb asks for, not what the type is called: you stop a
             // thing that is working, and both an instrument and a spell are.
             Self::Stoppable => "place",
+            // Same rule again. An instrument is the overwhelmingly commoner
+            // answer, and "which workable?" is not a sentence anyone says.
+            Self::Workable => "place",
+            // And again: the laboratory is mostly full of reagents, so that is
+            // what "move which reagent?" should ask for even though the slot
+            // will also take a potion or a scroll.
+            Self::Portable => "reagent",
             Self::Any => "name",
             Self::Command => "command",
             // What the orb asks for, not what the type is called: "which
@@ -243,6 +302,8 @@ impl NounKind {
             Self::Any => !matches!(noun, Self::Command),
             Self::Readable => matches!(noun, Self::File | Self::Script),
             Self::Stoppable => matches!(noun, Self::Place | Self::Script),
+            Self::Workable => matches!(noun, Self::Place | Self::Scroll),
+            Self::Portable => matches!(noun, Self::Reagent | Self::Essence | Self::Scroll),
             Self::Subject => matches!(noun, Self::Topic | Self::Command),
             // `as u8` because `PartialEq::eq` is not const and a fieldless enum
             // casts cleanly. Writing the other ten arms out would be a table
@@ -289,6 +350,8 @@ const PLACE_OPTIONAL: &[Slot] = &[Slot::optional(NounKind::Place)];
 const READABLE: &[Slot] = &[Slot::required(NounKind::Readable)];
 /// `stop` reaches an instrument **or** a running spell.
 const STOPPABLE: &[Slot] = &[Slot::required(NounKind::Stoppable)];
+/// `wield` reaches an instrument **or** a scroll you spend.
+const WORKABLE: &[Slot] = &[Slot::required(NounKind::Workable)];
 const PATTERN_AND_FILE: &[Slot] = &[
     Slot::required(NounKind::Pattern),
     Slot::required(NounKind::File),
@@ -334,9 +397,14 @@ const COUNT: &[Slot] = &[Slot::required(NounKind::Count)];
 /// ```text
 /// move sage to mortar_and_pestle              -> reagent, _, destination
 /// move husks from alembic to dispensary       -> reagent, source, destination
+/// move clarity to arsenal                     -> essence, _, destination
 /// ```
+///
+/// The first slot is [`Portable`](NounKind::Portable) rather than `Reagent`
+/// because a finished potion is an `Essence` and could not be picked up at
+/// all — see that kind for how long that had been true and why nothing noticed.
 const MOVE: &[Slot] = &[
-    Slot::required(NounKind::Reagent),
+    Slot::required(NounKind::Portable),
     Slot::optional(NounKind::Place),
     Slot::required(NounKind::Place),
 ];
@@ -487,7 +555,7 @@ pub enum Verb {
     /// scores 200 against `wield` and 400 against `write` — the only other `w`
     /// words in the vocabulary — and `wea` is a free three-character prefix.
     Weave,
-    /// Give the arrow keys the archive's labyrinth (§10, §19).
+    /// Give the arrow keys the archive's stacks (§10, §19).
     ///
     /// **The twenty-second tower-wide word, and it is `unfurl`'s argument
     /// again**: the surface has no other way in, and in a mouseless game a word
@@ -739,7 +807,7 @@ impl Verb {
             Self::Peruse => READABLE,
             Self::Sift => PATTERN_AND_FILE,
             // **`divine` takes nothing now.** It named a fragment while it was
-            // a twelve-tick command that consumed nothing; it opens a labyrinth
+            // a twelve-tick command that consumed nothing; it opens the stacks
             // on the lectern, and there is only one lectern to open one at.
             // `wander` joins them for the reason `weave` did: it opens a
             // surface, and a surface is not something you name an argument for.
@@ -757,7 +825,13 @@ impl Verb {
             Self::Move => MOVE,
             // An instrument is a place (§10.1), and you always name the
             // instrument rather than what is inside it.
-            Self::Wield | Self::Empty => PLACE,
+            //
+            // **`wield` split from `empty` when scrolls arrived.** Setting a
+            // thing going reaches both an instrument and a scroll; turning a
+            // thing out reaches only somewhere that holds something. Sharing one
+            // signature would have made `empty gleaning-scroll` parse.
+            Self::Wield => WORKABLE,
+            Self::Empty => PLACE,
             // **A spell counts.** `stop` reaching only instruments made an
             // invoked spell unstoppable — see `NounKind::Stoppable`.
             Self::Stop => STOPPABLE,
@@ -804,7 +878,7 @@ mod tests {
             NounKind::File,
             NounKind::Reagent,
             NounKind::Script,
-            NounKind::Fragment,
+            NounKind::Scroll,
         ] {
             assert!(kind.accepts(kind), "{kind:?} did not accept itself");
             for other in [NounKind::Place, NounKind::File, NounKind::Reagent] {
@@ -827,7 +901,7 @@ mod tests {
             NounKind::Place,
             NounKind::Essence,
             NounKind::Vessel,
-            NounKind::Fragment,
+            NounKind::Scroll,
         ] {
             assert!(
                 !NounKind::Readable.accepts(opaque),

@@ -95,7 +95,7 @@ impl Tower {
         self.0.wandering()
     }
 
-    /// Walk the labyrinth one cell, now. See [`orbs_sim::Sim::walk`].
+    /// Walk the stacks one cell, now. See [`orbs_sim::Sim::walk`].
     pub(crate) fn walk(&mut self, way: orbs_sim::tower::Way) -> bool {
         self.0.walk(way)
     }

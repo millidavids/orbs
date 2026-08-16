@@ -111,7 +111,7 @@ impl Plugin for ShellPlugin {
                     // world ticks behind the screen, so a threshold crossed
                     // while a player is looking should land while they look.
                     super::weaving::refresh.run_if(super::weaving::weaving),
-                    // The labyrinth's arrows, on the same terms as the two
+                    // The stacks' arrows, on the same terms as the two
                     // above. It owns no pane — the map draws whether or not
                     // anybody said the word — so what is gated here is only the
                     // keyboard.

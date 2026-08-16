@@ -62,8 +62,16 @@ pub enum Craft {
     /// Not an operation at all — shared heat the others draw on. The athanor,
     /// which is why it is the one instrument taking no Focus (§10.1).
     Heating,
-    /// Threading a labyrinth. The archive's lectern (§10, `tower::maze`).
+    /// Threading the archive's stacks (§10, `tower::maze`).
     Reading,
+    /// Fragments into a scroll. The archive's lectern.
+    ///
+    /// **The one craft not named by an [`Operation`](super::Operation)**, because
+    /// the lectern has none: four fragments are `move`d in and `wield`ed, which
+    /// is how an instrument runs when it has no verb of its own. What says it is
+    /// working is that it has *recipes* — the craft is read off the content
+    /// rather than off a name.
+    Assembling,
     /// A fixture with no recipe of its own.
     Idle,
 }
@@ -339,9 +347,29 @@ fn craft_of(world: &World, node: Entity) -> Craft {
         Some(crate::parser::Verb::Mix) => Craft::Combining,
         Some(crate::parser::Verb::Distil) => Craft::Distilling,
         Some(crate::parser::Verb::Research) => Craft::Reading,
-        // `Kindle` is the heat source's, and it answered above. Anything else is
-        // a fixture with no operation of its own — the dispensary, a shelf.
-        _ => Craft::Idle,
+        // `Kindle` is the heat source's, and it answered above. Anything else has
+        // no operation — which is the dispensary and the cabinet, and is *also*
+        // the lectern, whose verb went to the stacks when the maze did.
+        //
+        // **So the fallback asks the content.** An instrument with recipes is an
+        // instrument that runs, whether or not a verb names it, and a fixture
+        // with neither is a shelf. Matching `"lectern"` here would be the
+        // hardcoded-name pattern this function's own header records paying for
+        // twice.
+        _ => {
+            let named = world.get::<super::Name>(node);
+            let has_recipes = named.is_some_and(|name| {
+                !world
+                    .resource::<crate::content::Recipes>()
+                    .for_instrument(&name.0)
+                    .is_empty()
+            });
+            if has_recipes {
+                Craft::Assembling
+            } else {
+                Craft::Idle
+            }
+        }
     }
 }
 
@@ -351,10 +379,10 @@ fn read(world: &World, node: Entity, name: &str, now: Tick) -> (State, Option<Me
         let (done, total) = work.progress(now);
         return (State::Working, Some(Meter { done, total }));
     }
-    // **A labyrinth is work, and says so** — even though it takes no production
-    // slot. `if lectern is working` is how a solver asks whether its maze is
-    // still open, and the meter is cells walked against cells there are: the
-    // only honest measure a maze has, because how long it takes is what the
+    // **Walking the stacks is work, and says so** — even though it takes no
+    // production slot. `if stacks is working` is how a solver asks whether its
+    // maze is still open, and the meter is cells walked against cells there are:
+    // the only honest measure a maze has, because how long it takes is what the
     // player's rule decides.
     if let Some(maze) = world.get::<super::Maze>(node) {
         let (done, total) = maze.explored();
@@ -489,14 +517,27 @@ mod tests {
         sim.step();
         assert!(panel(&mut sim).is_empty(), "the tower root has instruments");
 
-        // **The archive has exactly one**, and that is what retired three
-        // defects at once: a completion with no sentence, a run `stop` could
-        // not reach, and a domain that drew nothing. The property this test
-        // actually encodes — that the panel belongs to *where you are* — is
-        // measured at the root, which has no instruments and never will.
+        // **The archive has two**, and it had one: giving it a fixture at all is
+        // what retired three defects at once — a completion with no sentence, a
+        // run `stop` could not reach, and a domain that drew nothing — and the
+        // second arrived when the maze moved off the lectern onto the `stacks`.
+        // One row each, which is the point: *is a reading open* and *is a scroll
+        // coming together* were one row with two meanings.
+        //
+        // The `cabinet` is not counted. It is a `Store`, and the panel leaves
+        // those out because a shelf reading `charged` from the first tick to the
+        // last teaches the eye to skip the panel.
+        //
+        // The property this test actually encodes — that the panel belongs to
+        // *where you are* — is measured at the root, which has no instruments
+        // and never will.
         sim.submit("attend archive");
         sim.step();
-        assert_eq!(panel(&mut sim).len(), 1, "the archive lost its lectern");
+        assert_eq!(
+            panel(&mut sim).len(),
+            2,
+            "the archive lost the lectern or the stacks",
+        );
 
         sim.submit("attend tower");
         sim.step();

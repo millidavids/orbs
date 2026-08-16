@@ -32,7 +32,7 @@ use crate::frame::Frame;
 use crate::geometry::{Pos, Rect};
 use crate::grind;
 use crate::linear::UtteranceKind;
-use crate::maze::{self, Labyrinth};
+use crate::maze::{self, Stacks};
 use crate::mix;
 use crate::span::Span;
 use crate::style::{Presentation, Role, Style, Wash};
@@ -505,7 +505,7 @@ impl<'a> Painter<'a> {
         self.frame.set_tint(area, wash);
     }
 
-    /// Draw a labyrinth, centred in `area` at its natural size.
+    /// Draw the stacks, centred in `area` at their natural size.
     ///
     /// Returns whether anything was drawn — false only for a region with no room
     /// at all. A region too small for the whole maze gets a **window onto it,
@@ -517,7 +517,7 @@ impl<'a> Painter<'a> {
     /// walked, and both are already in the panel's one utterance — a second
     /// continuous announcement would be the *"progress announcements: completion
     /// only"* rule (§14) broken by the very surface that most wants to break it.
-    pub fn labyrinth(&mut self, area: Rect, maze: &Labyrinth) -> bool {
+    pub fn stacks(&mut self, area: Rect, maze: &Stacks) -> bool {
         let area = area.intersection(self.area);
         let Some((at, from_x, from_y)) = maze::viewport(maze, area) else {
             return false;

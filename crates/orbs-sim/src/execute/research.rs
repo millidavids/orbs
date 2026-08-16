@@ -1,11 +1,26 @@
-//! `divine` and `follow` — opening a labyrinth and threading it (§10, §19).
+//! `divine` and `follow` — opening the stacks and threading them (§10, §19).
 //!
 //! # What `divine` became
 //!
 //! It held the production slot for twelve ticks, consumed nothing, produced
 //! nothing, and could be run on the same sigil for ever — §10's *"commands with
 //! a duration and no decision content"*, which is the thing that column exists
-//! to prevent. It now opens a maze on the lectern.
+//! to prevent. It now opens a maze in the **stacks**.
+//!
+//! # The stacks, and not the lectern
+//!
+//! The maze opened on the lectern until the archive had a second fixture, and
+//! the lectern was assembling scrolls at the same time — §19 recorded that as
+//! *"the first instrument that can be doing two things at once"* and treated it
+//! as a curiosity. It was a design problem wearing one: `stop lectern` had to
+//! guess which of the two it meant, the panel gave both one row, and *"is a
+//! reading open"* and *"is a scroll coming together"* were one question with two
+//! answers.
+//!
+//! They are two fixtures now. The stacks is an endless library you navigate; the
+//! lectern is where four fragments become a scroll. `stop stacks` closes the
+//! stacks and `stop lectern` abandons an assembly, and neither reaches the
+//! other.
 //!
 //! **Opening takes no slot.** A maze is walked for hundreds of ticks, and
 //! `CAPACITY` is 1 with `PATIENCE` at 120 — a solver holding the tower's one
@@ -27,8 +42,8 @@ use crate::tower::{self, Cwd, Maze, Square, Way};
 ///
 /// **Sixteen, and it is deliberately larger than the smallest pane can draw.**
 /// It was seven, chosen so the picture fitted everywhere; the maze that produced
-/// was small enough to read at a glance and over in a few dozen steps. A
-/// labyrinth you can take in whole is not one.
+/// was small enough to read at a glance and over in a few dozen steps. Stacks
+/// you can take in whole are not stacks.
 ///
 /// See [`HEIGHT`], which is *not* this: character cells are twice as tall as
 /// they are wide, so a maze with equal counts draws as a portrait rectangle.
@@ -57,20 +72,20 @@ const SPAN_X: usize = 2 * WIDTH + 1;
 /// How tall the grid is, in squares. `2 × HEIGHT + 1`.
 const SPAN_Y: usize = 2 * HEIGHT + 1;
 
-/// `research` — open a labyrinth on the lectern.
+/// `research` — open a way into the stacks.
 pub(super) fn research(intent: &Intent, world: &mut World) {
     let _ = intent;
-    let Some(lectern) = lectern(world) else {
+    let Some(stacks) = stacks(world) else {
         say(world, Verb::Research, "research_nowhere", &[], Role::Danger);
         return;
     };
-    if world.get::<Maze>(lectern).is_some() {
+    if world.get::<Maze>(stacks).is_some() {
         say(world, Verb::Research, "research_already", &[], Role::Cost);
         return;
     }
 
     let maze = generate(world);
-    world.entity_mut(lectern).insert(maze);
+    world.entity_mut(stacks).insert(maze);
     refresh(world);
     say(world, Verb::Research, "research_opens", &[], Role::Success);
 }
@@ -97,15 +112,16 @@ pub(super) fn follow(intent: &Intent, world: &mut World) {
 /// the two would disagree about a wall, or about what a solve is worth, and only
 /// one of them would be tested.
 pub(crate) fn tread(world: &mut World, way: Way) {
-    let Some(lectern) = lectern(world) else {
+    let Some(stacks) = stacks(world) else {
         say(world, Verb::Follow, "research_nowhere", &[], Role::Danger);
         return;
     };
-    let Some(mut maze) = world.get_mut::<Maze>(lectern) else {
+    let Some(mut maze) = world.get_mut::<Maze>(stacks) else {
         say(world, Verb::Follow, "follow_unopened", &[], Role::Cost);
         return;
     };
 
+    let spoils_before = maze.spoils().len();
     if !maze.tread(way) {
         // **A wall costs the step and nothing else.** §7's *"destruction is a
         // tool, not a trap"* applies to a wrong turn too: a solver that walked
@@ -120,16 +136,28 @@ pub(crate) fn tread(world: &mut World, way: Way) {
         );
         return;
     }
-    if maze.solved() {
+    // **Asked of the maze, not counted by the caller.** `Maze::tread` collects a
+    // spoil the reading arrives on, so both entry points — a typed `follow` and
+    // an arrow through `Sim::walk` — pick up on one rule rather than two.
+    let gathered = spoils_before > maze.spoils().len();
+    let solved = maze.solved();
+
+    if gathered {
+        // Each spoil is a fragment, paid the moment it is picked up rather than
+        // banked to the end: the panel then counts up as the walk goes, and a
+        // gleaning run abandoned half way is worth what it actually did.
+        give_fragment(world, stacks);
+    }
+    if solved {
         // **Removed first, then refreshed.** The other order leaves the four
         // ways holding the solved maze's last readings for ever: `survey north`
-        // answers `passage` with no labyrinth open, and a bound solver reads
+        // answers `passage` with the stacks closed, and a bound solver reads
         // them, fires its `follow` tier every lap, and is told *"research first"*
         // for the rest of its `repeat`. `pipeline::stop` has always had this
         // order; this path did not.
-        world.entity_mut(lectern).remove::<Maze>();
+        world.entity_mut(stacks).remove::<Maze>();
         refresh(world);
-        yield_fragment(world, lectern);
+        finish_walk(world, stacks, gathered);
         return;
     }
     refresh(world);
@@ -158,11 +186,11 @@ pub(crate) fn tread(world: &mut World, way: Way) {
 /// hazard with more nodes; the four ways are raised once by `build` and only
 /// their contents change.
 pub fn refresh(world: &mut World) {
-    let Some(lectern) = lectern(world) else {
+    let Some(stacks) = stacks(world) else {
         return;
     };
-    let readings: Vec<(Way, Option<&'static str>, bool)> = {
-        let maze = world.get::<Maze>(lectern);
+    let readings: Vec<(Way, Option<&'static str>, bool, bool)> = {
+        let maze = world.get::<Maze>(stacks);
         Way::ALL
             .into_iter()
             .map(|way| {
@@ -170,12 +198,13 @@ pub fn refresh(world: &mut World) {
                     way,
                     maze.map(|maze| maze.reading(way).word()),
                     maze.is_some_and(|maze| maze.came() == Some(way)),
+                    maze.is_some_and(|maze| maze.spoil(way)),
                 )
             })
             .collect()
     };
 
-    for (way, word, came) in readings {
+    for (way, word, came, spoil) in readings {
         let Some(node) = find_reading(world, way) else {
             continue;
         };
@@ -190,20 +219,111 @@ pub fn refresh(world: &mut World) {
         if came {
             tower::raise_reading(world, node, tower::maze::BACK);
         }
+        // And a third, for the same reason: a spoil is nearly always sitting in
+        // a `passage`, so replacing the reading would cost a solver the one word
+        // that tells it whether the square has been walked.
+        if spoil {
+            tower::raise_reading(world, node, tower::maze::SPOIL);
+        }
+    }
+
+    republish_errand(world, stacks);
+}
+
+/// Put the maze's errand on the stacks, as a word a spell can ask for.
+///
+/// **A named child, exactly like a way's reading**, so `if the stacks has
+/// gleaning` is answered by the `has` question §8 already has — no new grammar
+/// and no new [`State`](tower::panel::State).
+///
+/// # Only the errand's own children are cleared
+///
+/// The four ways hold nothing but readings, so `refresh` empties them wholesale.
+/// The stacks holds the **fragments**, and a sweep of its children would
+/// destroy the walk's own yield. So this removes the errand words it might have
+/// left and touches nothing else — which is also why `holdings` has to skip a
+/// reading: the stacks is an instrument, and a `Sense` child that counted as
+/// stock would break the four-fragment recipe it is standing next to.
+fn republish_errand(world: &mut World, stacks: Entity) {
+    let wanted = world
+        .get::<Maze>(stacks)
+        .and_then(|maze| maze.errand().word());
+
+    for node in tower::children_of(world, stacks) {
+        let named = world
+            .get::<tower::Name>(node)
+            .is_some_and(|name| tower::maze::Errand::ALL.contains(&name.0.as_str()));
+        if named && world.get::<tower::Name>(node).map(|name| name.0.as_str()) != wanted {
+            world.entity_mut(node).despawn();
+        }
+    }
+
+    let Some(word) = wanted else {
+        return;
+    };
+    let already = tower::children_of(world, stacks)
+        .into_iter()
+        .any(|node| world.get::<tower::Name>(node).is_some_and(|n| n.0 == word));
+    if !already {
+        tower::raise_reading(world, stacks, word);
     }
 }
 
-/// The maze is solved: a fragment, and what the work was worth.
-fn yield_fragment(world: &mut World, lectern: Entity) {
-    tower::give(
-        world,
-        lectern,
-        FRAGMENT,
-        crate::parser::NounKind::Fragment,
-        1,
-    );
+/// One fragment onto the archive's shelf.
+///
+/// **Silent.** Reaching a spoil says so through the map — the `♦` is gone and the
+/// count under it has moved — and `follow`'s own step is already `quiet` for
+/// exactly that reason (§19). A gleaning run is five of these inside one walk,
+/// so a line each would be the same fact five times over the player's own typing.
+///
+/// # The cabinet, not the stacks
+///
+/// What the stacks give up is *stock*, and stock lives on a shelf: the archive
+/// then reads like the laboratory — take from the shelf, charge the tool, wield —
+/// and `survey cabinet` is where a player's hoard is, in one place, instead of
+/// hidden inside the instrument that will consume it.
+///
+/// **It also closes a split the tool had already opened.** `tower::home` sends a
+/// spawned fragment to the cabinet, and a *solved maze* was putting one in the
+/// stacks — the same word in two places depending on how it was got, which is
+/// the shape of the `Fragment`/`Reagent` kind defect one field over. Both paths
+/// ask the same rule now, so neither can drift.
+///
+/// The stacks is the fallback for a tower whose archive has no shelf, which
+/// `build` always raises but nothing in the type system promises.
+fn give_fragment(world: &mut World, stacks: Entity) {
+    // **The kind the rest of the game would have given it**, asked rather than
+    // asserted. This said `NounKind::Fragment` while `debug_spawn` — the only
+    // other thing that can put one in the tower — asked `Recipes::kind_of` and
+    // was told `Reagent`, so the same word was two kinds depending on where it
+    // came from. `stock::give` merges by *name*, so the two would have silently
+    // merged into whichever node was found first, and `move fragment ...` worked
+    // on one and not the other.
+    //
+    // A fragment is what the stacks's recipe consumes, which is exactly what
+    // `Reagent` means: *"crafting stock: an ingredient, a part-made material, a
+    // byproduct, or fuel"*. There is no `NounKind::Fragment` any more — it had
+    // no slot asking for it and, once this stopped issuing them, nothing in the
+    // world was one; it went with the three sigils it had been invented for.
+    let kind = world
+        .resource::<crate::content::Recipes>()
+        .kind_of(FRAGMENT);
+    let shelf = tower::home(world, FRAGMENT).unwrap_or(stacks);
+    tower::give(world, shelf, FRAGMENT, kind, 1);
+}
 
-    let earned = tower::worth(world, "lectern");
+/// The walk is over: what it was worth, said once.
+///
+/// `gathered` is whether this last step also picked something up, which is what
+/// tells the two errands apart at the end: a [`Way`](tower::maze::Errand::Way)
+/// ends by arriving somewhere, a [`Glean`](tower::maze::Errand::Glean) by taking
+/// the last spoil — and the second has already had its fragment.
+fn finish_walk(world: &mut World, stacks: Entity, gathered: bool) {
+    if !gathered {
+        give_fragment(world, stacks);
+    }
+
+    let earned = tower::worth(world, "stacks");
     let message = world
         .resource::<Prose>()
         .line("research_solved", &[("name", FRAGMENT)]);
@@ -213,7 +333,7 @@ fn yield_fragment(world: &mut World, lectern: Entity) {
         .push(RecordKind::Completion)
         .text(FieldName::Name, Verb::Research.canonical())
         .text(FieldName::Detail, FRAGMENT)
-        .text(FieldName::At, "lectern")
+        .text(FieldName::At, "stacks")
         .count(FieldName::Quantity, earned)
         .text(FieldName::Message, &message)
         .role(Role::Success)
@@ -271,7 +391,7 @@ fn generate(world: &mut World) -> Maze {
     // long corridors with the odd stub — easy to read at a glance and easy to
     // walk. Prim's grows the maze outward from everywhere at once, which gives
     // short passages, frequent junctions and many small dead ends: the tight,
-    // busy texture a labyrinth is supposed to have.
+    // busy texture the stacks are supposed to have.
     //
     // The result is still a spanning tree — every cell reachable, exactly one
     // path between any two, no loops — which is the floor Trémaux is measured
@@ -377,7 +497,7 @@ const fn cell_at((x, y): (usize, usize)) -> usize {
 ///
 /// Integer-only, like everything else the sim scores with: a weighting resolved
 /// in floats would make the draw depend on rounding, and §3 requires a seed to
-/// replay to the same labyrinth on every machine.
+/// replay to the same stacks on every machine.
 fn drawn_away_from(rng: &mut rand_chacha::ChaCha8Rng, from: (usize, usize)) -> usize {
     let toward = (WIDTH - 1 - from.0, HEIGHT - 1 - from.1);
     let reach = (WIDTH - 1) + (HEIGHT - 1);
@@ -432,13 +552,13 @@ fn named(word: &str) -> Option<Way> {
     Way::ALL.into_iter().find(|way| way.word() == leaf)
 }
 
-/// The lectern, if the player is standing where one is.
+/// The stacks, if the player is standing where one is.
 ///
-/// **Reads `Cwd`, which is what makes `Sim::labyrinth` honest.** A frontend
+/// **Reads `Cwd`, which is what makes `Sim::stacks` honest.** A frontend
 /// asking for the map gets one only where the player could `survey` the ways
 /// themselves — so the picture cannot outrun the readings by following the
 /// player out of the room.
-pub(crate) fn lectern(world: &World) -> Option<Entity> {
+pub(crate) fn stacks(world: &World) -> Option<Entity> {
     let cwd = world.resource::<Cwd>().0;
     tower::children_of(world, cwd).into_iter().find(|node| {
         world
@@ -493,13 +613,13 @@ fn say(world: &mut World, verb: Verb, key: &str, args: &[(&str, &str)], role: Ro
 /// archive.log` was empty after a walk long before this made the steps quiet.
 ///
 /// Drawn records got away with it because the pane is a second surface. This one
-/// has no second surface, so the lectern goes in `Source` — an instrument, as
+/// has no second surface, so the stacks goes in `Source` — an instrument, as
 /// `work::produce` and `work::slot` already file theirs — and the log the player
 /// is told to read actually holds the steps.
 fn quietly(world: &mut World, verb: Verb, key: &str, args: &[(&str, &str)], role: Role) {
     let message = world.resource::<Prose>().line(key, args);
-    let at = lectern(world)
-        .and_then(|lectern| world.get::<tower::Name>(lectern))
+    let at = stacks(world)
+        .and_then(|stacks| world.get::<tower::Name>(stacks))
         .map(|name| name.0.clone());
 
     let mut records = world.resource_mut::<Scrollback>();
@@ -527,7 +647,7 @@ mod tests {
         sim.step();
         sim.submit("research");
         sim.step();
-        let maze = sim.labyrinth().expect("research opens a labyrinth");
+        let maze = sim.stacks().expect("research opens the stacks");
 
         // Square indices back to cells: `square_of` puts cell (x, y) at square
         // (2y + 1, 2x + 1), so the inverse halves each axis.
@@ -535,7 +655,10 @@ mod tests {
             let span = usize::from(maze.width);
             ((index % span - 1) / 2, (index / span - 1) / 2)
         };
-        (cell(maze.at), cell(maze.exit))
+        (
+            cell(maze.at),
+            cell(maze.exit.expect("fresh stacks are walked for their exit")),
+        )
     }
 
     /// Enough seeds that a corner missed by chance is vanishingly unlikely: four
@@ -545,7 +668,7 @@ mod tests {
     #[test]
     fn the_reading_starts_in_every_corner_across_seeds() {
         // It was the top-left one, always. Four corners uniformly is the first
-        // half of making two labyrinths feel like two errands.
+        // half of making two walks feel like two errands.
         let mut corners = std::collections::BTreeSet::new();
         for seed in 1..=SWEEP {
             let (start, _) = ends(seed);
@@ -680,7 +803,7 @@ mod tests {
     }
 
     #[test]
-    fn the_same_seed_still_draws_the_same_labyrinth() {
+    fn the_same_seed_still_draws_the_same_stacks() {
         // Three new rolls went into the archive's stream. §3 makes replay
         // architectural, so the property that matters is not *which* maze a seed
         // draws but that it keeps drawing that one.

@@ -37,10 +37,41 @@ pub struct Recipe {
     /// The inputs, for `flask_and_rod`, which combines two.
     #[serde(default)]
     inputs: Vec<String>,
-    /// What comes out.
-    pub output: String,
-    /// The byproduct left behind. §10.1: every one of these has a use.
-    pub leaves: String,
+    /// What comes out, for a recipe that makes one thing.
+    #[serde(default)]
+    output: Option<String>,
+    /// What **may** come out, for a recipe whose product is drawn rather than
+    /// fixed.
+    ///
+    /// The lectern is the only one: four fragments are four fragments however
+    /// they were won, so what they assemble into is the archive's roll rather
+    /// than a fact about the inputs. Written as a list here rather than as
+    /// several recipes because [`matching`](Recipes::matching) returns the
+    /// *first* recipe whose inputs match — three `[[lectern]]` blocks all
+    /// wanting four fragments would leave two of them permanently unreachable,
+    /// and nothing would say so.
+    #[serde(default)]
+    outputs: Vec<String>,
+    /// The byproduct left behind, if the process leaves one. §10.1: every one of
+    /// these has a use.
+    ///
+    /// # Optional, because byproducts are the laboratory's mechanic
+    ///
+    /// §10.1 builds the whole *waste has a use* loop around brewing — husks
+    /// become a weak tincture, dregs and sediment become salt, ash becomes
+    /// potash — and it is the laboratory that makes it interesting, because the
+    /// laboratory is where a second route to the same draught can exist.
+    ///
+    /// Replicating it into every other domain buys nothing and costs each one a
+    /// substance nobody has decided anything about. The lectern's assembly left
+    /// `dust` for exactly one reason — that the field was compulsory — and the
+    /// dust then had nowhere to go and nothing to become that `ash` did not
+    /// already become.
+    ///
+    /// So a recipe may leave nothing, and the two ways to say so are the same:
+    /// omit the key.
+    #[serde(default)]
+    pub leaves: Option<String>,
     /// How long it takes. A placeholder the balance CLI sweeps.
     pub ticks: u64,
     /// Whether the output is a finished potion rather than more crafting stock.
@@ -52,6 +83,17 @@ pub struct Recipe {
     /// yet would otherwise silently become a potion.
     #[serde(default)]
     pub potion: bool,
+    /// Whether the output is a scroll — finished work, like a potion, but read
+    /// rather than drunk.
+    ///
+    /// A third kind rather than a second flavour of `potion`, because the two
+    /// are different nouns: an [`Essence`](crate::parser::NounKind::Essence) is
+    /// §10.1's *quality* a recipe yields, and a
+    /// [`Scroll`](crate::parser::NounKind::Scroll) is an object you spend. A
+    /// recipe setting both is refused at load — the output would have to be two
+    /// kinds at once, and `kind_of` would answer whichever branch came first.
+    #[serde(default)]
+    pub scroll: bool,
     /// How many of **each** input this consumes. One unless the file says so.
     ///
     /// # Why a count rather than the input repeated
@@ -104,6 +146,24 @@ impl Recipe {
             self.inputs.iter().map(String::as_str).collect()
         }
     }
+
+    /// Everything this recipe can produce, however it was written.
+    ///
+    /// The counterpart of [`inputs`](Self::inputs), and the same two spellings
+    /// for the same reason: a recipe that makes one thing says `output = "x"`
+    /// rather than a list of one. A recipe that **draws** says `outputs`, and
+    /// every name in it is a real product — so this is what the vocabulary, the
+    /// scene's topics, `recall`'s routes and `kind_of` all read. Anything asking
+    /// *"can this make x"* has to consider all of them or a rolled product would
+    /// be a word the parser does not know.
+    #[must_use]
+    pub fn outputs(&self) -> Vec<&str> {
+        if self.outputs.is_empty() {
+            self.output.as_deref().into_iter().collect()
+        } else {
+            self.outputs.iter().map(String::as_str).collect()
+        }
+    }
 }
 
 /// Every instrument's recipes, by instrument name.
@@ -135,9 +195,38 @@ impl Recipes {
     /// # Errors
     ///
     /// [`ContentError`](super::ContentError) if the text is not valid TOML of the
-    /// expected shape.
+    /// expected shape, **or if a recipe produces nothing, or claims to produce
+    /// two kinds of thing at once**. Both parse perfectly and are unusable —
+    /// `Materials::parse` refuses an unknown colour for the same reason and in
+    /// the same place.
     pub fn parse(text: &str) -> Result<Self, super::ContentError> {
-        super::load::parse(FILE, text)
+        let parsed: Self = super::load::parse(FILE, text)?;
+        for (instrument, recipe) in parsed
+            .by_instrument
+            .iter()
+            .flat_map(|(name, recipes)| recipes.iter().map(move |recipe| (name, recipe)))
+        {
+            if recipe.outputs().is_empty() {
+                return Err(super::ContentError::new(
+                    FILE,
+                    format!("a `{instrument}` recipe names neither `output` nor `outputs`"),
+                ));
+            }
+            // **Not "whichever branch runs first".** `kind_of` asks `potion`
+            // before `scroll`, so a recipe setting both would quietly be an
+            // essence and the scroll half would be authored, drawn, and never
+            // read — the silent-fallback shape the colour check exists to stop.
+            if recipe.potion && recipe.scroll {
+                return Err(super::ContentError::new(
+                    FILE,
+                    format!(
+                        "a `{instrument}` recipe is both a potion and a scroll; \
+                         its output cannot be two kinds of noun"
+                    ),
+                ));
+            }
+        }
+        Ok(parsed)
     }
 
     /// The first recipe `instrument` can run on exactly `held`.
@@ -252,7 +341,7 @@ impl Recipes {
             .flat_map(|(instrument, recipes)| {
                 recipes
                     .iter()
-                    .filter(move |recipe| recipe.output == output)
+                    .filter(move |recipe| recipe.outputs().contains(&output))
                     .map(move |recipe| (instrument.as_str(), recipe))
             })
             .collect()
@@ -272,9 +361,11 @@ impl Recipes {
             .values()
             .flatten()
             .flat_map(|recipe| {
-                std::iter::once(recipe.output.as_str())
+                recipe
+                    .outputs()
+                    .into_iter()
                     .chain(recipe.inputs())
-                    .chain(std::iter::once(recipe.leaves.as_str()))
+                    .chain(recipe.leaves.as_deref())
             })
             .collect();
         out.sort_unstable();
@@ -319,21 +410,26 @@ impl Recipes {
     ///
     /// **The rule `produce` applies, asked by name instead of by recipe.** A
     /// finished potion is an [`Essence`](crate::parser::NounKind::Essence) —
-    /// §10.1's *quality* a recipe yields — and everything else is crafting
-    /// stock. `produce` knows which because it has the recipe it just ran in
-    /// hand; anything working from a name alone (`debug_spawn`) has to ask.
+    /// §10.1's *quality* a recipe yields — a scroll is a
+    /// [`Scroll`](crate::parser::NounKind::Scroll), and everything else is
+    /// crafting stock. `produce` knows which because it has the recipe it just
+    /// ran in hand; anything working from a name alone (`debug_spawn`) has to
+    /// ask.
     ///
     /// A name no recipe produces is stock: that is every input and every
     /// byproduct, which is what most of the vocabulary is.
     #[must_use]
     pub fn kind_of(&self, name: &str) -> crate::parser::NounKind {
-        let potion = self
-            .by_instrument
-            .values()
-            .flatten()
-            .any(|recipe| recipe.output == name && recipe.potion);
-        if potion {
+        let made_by = |wanted: fn(&Recipe) -> bool| {
+            self.by_instrument
+                .values()
+                .flatten()
+                .any(|recipe| recipe.outputs().contains(&name) && wanted(recipe))
+        };
+        if made_by(|recipe| recipe.potion) {
             crate::parser::NounKind::Essence
+        } else if made_by(|recipe| recipe.scroll) {
+            crate::parser::NounKind::Scroll
         } else {
             crate::parser::NounKind::Reagent
         }
@@ -346,7 +442,7 @@ impl Recipes {
             .by_instrument
             .values()
             .flatten()
-            .map(|recipe| recipe.output.as_str())
+            .flat_map(Recipe::outputs)
             .collect();
         out.sort_unstable();
         out.dedup();
@@ -378,8 +474,8 @@ mod tests {
         let recipe = recipes
             .matching("mortar_and_pestle", &held)
             .expect("sage grinds");
-        assert_eq!(recipe.output, "ground-sage");
-        assert_eq!(recipe.leaves, "husks");
+        assert_eq!(recipe.outputs(), ["ground-sage"]);
+        assert_eq!(recipe.leaves.as_deref(), Some("husks"));
     }
 
     #[test]
@@ -398,10 +494,10 @@ mod tests {
         assert_eq!(
             recipes
                 .matching("flask_and_rod", &forward)
-                .map(|r| &r.output),
+                .map(Recipe::outputs),
             recipes
                 .matching("flask_and_rod", &backward)
-                .map(|r| &r.output)
+                .map(Recipe::outputs)
         );
         assert!(recipes.matching("flask_and_rod", &backward).is_some());
     }
@@ -433,12 +529,18 @@ mod tests {
     fn every_byproduct_has_at_least_one_use() {
         // §10.1's rule, as a test. A byproduct that is only ever litter makes
         // `purge` into tidying — the exact feeling this item exists to remove.
+        //
+        // **A recipe that leaves nothing is not a recipe that leaves litter**,
+        // so it is skipped rather than counted as one. Leaving something is the
+        // laboratory's mechanic and no other domain replicates it (see
+        // [`Recipe::leaves`]); the rule polices the byproducts that exist, not
+        // the absence of one.
         let recipes = Recipes::builtin();
         let mut byproducts: Vec<&str> = recipes
             .by_instrument
             .values()
             .flatten()
-            .map(|recipe| recipe.leaves.as_str())
+            .filter_map(|recipe| recipe.leaves.as_deref())
             .collect();
         byproducts.sort_unstable();
         byproducts.dedup();

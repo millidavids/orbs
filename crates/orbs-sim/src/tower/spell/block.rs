@@ -99,7 +99,7 @@ pub fn would_block(world: &mut World, intent: &Intent) -> Option<Blocked> {
     // the tier that fires** for a multi-instrument spell, and it has no
     // separable predicate of its own in `work::slot` — `begin` tests it inline
     // and emits its refusal at the same time.
-    if begins_work(intent.verb)
+    if begins_work(intent)
         && tower::in_flight(world).len() >= tower::CAPACITY
         && let Some((doing, at)) = tower::occupied(world)
     {
@@ -112,14 +112,29 @@ pub fn would_block(world: &mut World, intent: &Intent) -> Option<Blocked> {
     None
 }
 
-/// Whether this verb takes the tower's production slot.
+/// Whether this instruction takes the tower's production slot.
 ///
 /// The verbs that reach `work::begin`. `siphon`, `move` and `empty` are
 /// deliberately absent: they need an instrument to be *idle*, but they take no
 /// slot and finish within the tick — §9's triage band exists so short work still
 /// runs during a brew.
-const fn begins_work(verb: Verb) -> bool {
-    verb.is_operation() || matches!(verb, Verb::Wield | Verb::Research | Verb::Purge)
+///
+/// **It reads the argument, and it has to.** This was `const fn(Verb)`, which
+/// meant `wield` was one answer for two acts: charging an instrument *is* a run,
+/// and spending a scroll is not. `pipeline::wield` returns before `work::begin`
+/// for a scroll, so a typed spend was never charged a slot — but a spell reaches
+/// this tier first, so `wield quickening-scroll` in a script waited out the very
+/// brew it was written to hurry. **Quicken then brew** is the obvious play and
+/// automating it is the point; it was the one thing a spell could not do.
+///
+/// Asks [`execute::spending`](crate::execute::spending), which `pipeline::wield`
+/// asks too, rather than testing the kind here — two expressions of one rule
+/// being how they came to disagree in the first place.
+fn begins_work(intent: &Intent) -> bool {
+    if crate::execute::spending(intent).is_some() {
+        return false;
+    }
+    intent.verb.is_operation() || matches!(intent.verb, Verb::Wield | Verb::Research | Verb::Purge)
 }
 
 /// Every instrument `intent` needs to find idle, where the script is standing.

@@ -176,7 +176,7 @@ pub const fn is_live(verb: Verb) -> bool {
             | Verb::Weave
             | Verb::Follow
             // Live, and it refuses in two states rather than being gated by
-            // one: there is no lectern here, or no labyrinth open yet. Both
+            // one: there are no stacks here, or none open yet. Both
             // name the way forward, so neither is the dead end this list
             // exists to keep off the scaffold.
             | Verb::Wander

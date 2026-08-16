@@ -29,7 +29,7 @@
 //! every key — so a screen that still looked like a session would be offering
 //! something it cannot do. The editor takes the pane for exactly this reason.
 
-use orbs_render::{Labyrinth, Painter, Rect, Span, Style, UtteranceKind};
+use orbs_render::{Painter, Rect, Span, Stacks, Style, UtteranceKind};
 use orbs_sim::content::Prose;
 
 /// Cells of transcript that must survive beside the map.
@@ -57,12 +57,12 @@ pub(crate) struct Split {
 /// unless the whole maze fitted, on the argument that half a maze is a wrong
 /// maze. That held while a maze was 15 squares across and fitted every pane; at
 /// 33 it meant the map vanished from every small grid, which is not honest but
-/// merely absent. `Painter::labyrinth` now draws a window centred on the reading,
+/// merely absent. `Painter::stacks` now draws a window centred on the reading,
 /// so a short pane shows where you are and pans as you walk.
 ///
 /// What is still refused is a block too narrow to read *anything* from, or one
 /// that would leave no transcript beside it.
-pub(crate) fn split(area: Rect, maze: Option<&Labyrinth>) -> Split {
+pub(crate) fn split(area: Rect, maze: Option<&Stacks>) -> Split {
     let nothing = Split {
         area: Rect::EMPTY,
         rest: area,
@@ -101,12 +101,12 @@ const LEAST_BLOCK: u16 = 9;
 ///
 /// This is the **watching** case: a spell has the maze, the player has the
 /// prompt, and the map is one more thing on the pane.
-pub(crate) fn paint(painter: &mut Painter<'_>, at: Rect, maze: &Labyrinth, prose: &Prose) {
+pub(crate) fn paint(painter: &mut Painter<'_>, at: Rect, maze: &Stacks, prose: &Prose) {
     if at.is_empty() {
         return;
     }
     painter.border(at, Some(&prose.line("maze_title", &[])), Style::DIM);
-    painter.labyrinth(at.inset(1), maze);
+    painter.stacks(at.inset(1), maze);
 }
 
 /// Draw the maze over the whole pane, with the transcript behind it.
@@ -119,7 +119,7 @@ pub(crate) fn paint(painter: &mut Painter<'_>, at: Rect, maze: &Labyrinth, prose
 /// It is deliberately *not* what a spell's solving looks like — that stays
 /// inline, beside a live transcript, because watching and doing are different
 /// activities and only one of them owns the keyboard.
-pub(crate) fn paint_alone(painter: &mut Painter<'_>, at: Rect, maze: &Labyrinth, prose: &Prose) {
+pub(crate) fn paint_alone(painter: &mut Painter<'_>, at: Rect, maze: &Stacks, prose: &Prose) {
     if at.is_empty() {
         return;
     }
@@ -141,7 +141,7 @@ pub(crate) fn paint_alone(painter: &mut Painter<'_>, at: Rect, maze: &Labyrinth,
         body.cols,
         body.rows.saturating_sub(footer),
     );
-    painter.labyrinth(picture, maze);
+    painter.stacks(picture, maze);
 
     if footer < FOOTER_ROWS {
         return;
@@ -184,12 +184,13 @@ mod tests {
     /// **Not square, and that is the point** — a character cell is twice as tall
     /// as it is wide, so an equal-count maze draws as a portrait rectangle. A
     /// square fixture would have let a bug that swapped the axes pass.
-    fn maze() -> Labyrinth {
-        Labyrinth {
+    fn maze() -> Stacks {
+        Stacks {
             squares: vec![Square::default(); 33 * 23],
             width: 33,
             at: 0,
-            exit: 33 * 23 - 1,
+            exit: Some(33 * 23 - 1),
+            spoils: Vec::new(),
         }
     }
 

@@ -282,7 +282,7 @@ pub enum Submission {
         /// rather than trusting one recorded alongside it.
         lines: Vec<String>,
     },
-    /// One cell of the archive's labyrinth, walked by hand (§10, §19).
+    /// One cell of the archive's stacks, walked by hand (§10, §19).
     ///
     /// # Why this is not a [`Typed`](Self::Typed) `follow east`
     ///
@@ -510,7 +510,7 @@ mod tests {
     }
 
     /// A way that is actually open from where the reading stands.
-    fn a_way_out(maze: &orbs_render::Labyrinth) -> Option<crate::tower::Way> {
+    fn a_way_out(maze: &orbs_render::Stacks) -> Option<crate::tower::Way> {
         crate::tower::Way::ALL
             .into_iter()
             .enumerate()
@@ -518,7 +518,7 @@ mod tests {
     }
 
     #[test]
-    fn a_labyrinth_walked_by_hand_replays_to_the_same_cell() {
+    fn stacks_walked_by_hand_replay_to_the_same_cell() {
         // **The claim `Sim::walk` makes, tested rather than argued.** It is the
         // third entry point and the only one that does not go through the tick,
         // so it is the one that could quietly put a replay a step out — and a
@@ -534,7 +534,7 @@ mod tests {
         // player actually produces, and the shape a per-tick queue could not.
         for round in 0..3 {
             for _ in 0..4 {
-                let Some(maze) = live.labyrinth() else { break };
+                let Some(maze) = live.stacks() else { break };
                 let Some(way) = a_way_out(&maze) else { break };
                 live.walk(way);
             }
@@ -553,7 +553,7 @@ mod tests {
             replayed.step();
         }
 
-        let at = |sim: &Sim| sim.labyrinth().map(|maze| (maze.at, maze.explored()));
+        let at = |sim: &Sim| sim.stacks().map(|maze| (maze.at, maze.explored()));
         assert!(at(&live).is_some(), "the walk never opened a maze");
         assert_eq!(at(&live), at(&replayed), "the replay walked somewhere else");
     }
@@ -571,7 +571,7 @@ mod tests {
 
         let before = sim.tick();
         for _ in 0..8 {
-            let Some(maze) = sim.labyrinth() else { break };
+            let Some(maze) = sim.stacks() else { break };
             let Some(way) = a_way_out(&maze) else { break };
             sim.walk(way);
         }
@@ -599,7 +599,7 @@ mod tests {
     ///
     /// Was `decoct nonsense` against the laboratory's three essences until
     /// `decoct` was retired (§19), then `divine nonsense` against the archive's
-    /// three fragments until `divine` stopped taking one — it opens a labyrinth
+    /// three fragments until `divine` stopped taking one — it opens the stacks
     /// now. The dispensary's three reagents are the same shape of
     /// question, and `move` is the verb whose first slot is *required* — which
     /// is what makes the prompt appear at all.

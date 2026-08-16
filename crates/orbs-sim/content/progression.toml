@@ -30,8 +30,16 @@ balneum_mariae = 2
 flask_and_rod = 4
 alembic = 8
 
-# The archive, whose instrument is the lectern. A maze is minutes of walking
+# The archive, which has two instruments now. A maze is minutes of walking
 # against the mortar's eight ticks, so it pays what the flask does.
+#
+# **The stacks is the walking and the lectern is the assembly**, and they were
+# one fixture until the maze moved to its own. Both keep exactly the 4 the
+# lectern paid for both halves before, so the split rebalances nothing — which
+# is deliberate: a rename is a bad moment to change a number, and a 20-tick
+# assembly paying what a 5000-tick walk pays is a question for the balance
+# harness rather than for this change.
+stacks = 4
 lectern = 4
 
 # ---------------------------------------------------------------------------

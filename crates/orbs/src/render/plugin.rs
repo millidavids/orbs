@@ -214,7 +214,7 @@ struct ShellState<'w> {
     editing: ResMut<'w, crate::shell::Editing>,
     /// `ResMut` only to reach `get_mut`; the painter tells this surface nothing.
     weaving: ResMut<'w, crate::shell::Loom>,
-    /// Whether the arrows are walking the archive's labyrinth.
+    /// Whether the arrows are walking the archive's stacks.
     ///
     /// `Res`, not `ResMut`: this one owns no pane, so there is nothing for the
     /// painter to hand back to it.

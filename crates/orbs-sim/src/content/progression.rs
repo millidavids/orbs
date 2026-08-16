@@ -344,7 +344,10 @@ mod tests {
                     "balneum_mariae",
                     "flask_and_rod",
                     "alembic",
+                    // Both of the archive's, since the maze moved off the
+                    // lectern onto the stacks and each earns for its own work.
                     "lectern",
+                    "stacks",
                 ])
                 .is_ok(),
             "the real instruments were rejected",
@@ -431,7 +434,10 @@ mod tests {
                     "balneum_mariae",
                     "flask_and_rod",
                     "alembic",
+                    // Both of the archive's, since the maze moved off the
+                    // lectern onto the stacks and each earns for its own work.
                     "lectern",
+                    "stacks",
                 ])
                 .is_ok(),
             "the shipped curve does not ascend",

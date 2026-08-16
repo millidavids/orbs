@@ -337,7 +337,7 @@ pub const SYNONYMS: &[Synonym] = &[
     // says about a passage.
     syn(Verb::Follow, Register::Arcane, &["follow"]),
     syn(Verb::Follow, Register::Plain, &["walk"]),
-    // wander — give the arrow keys the labyrinth (§10, §19)
+    // wander — give the arrow keys the stacks (§10, §19)
     //
     // **The obvious words are all taken or too close.** `enter` is `attend`'s
     // and `walk` is `follow`'s own; `thread` is 667 against `read`, `stride` 667

@@ -281,33 +281,62 @@ pub(super) fn recall(intent: &Intent, world: &mut World) {
         return;
     }
 
+    // **What it is, before how it is made.** A route answers *how do I get one*;
+    // a player holding a potion or a scroll is asking *what is this for*, and the
+    // two are different questions. This used to be an `else`: anything with a
+    // recipe got the walk and nothing else, so every finished product in the game
+    // could tell you its five steps and not one word about what it did.
+    let said = describe(world, &topic);
+
     let plan = plan(world, &topic);
     if plan.is_empty() {
-        // Not a recipe. §6.1 makes `recall` the **in-world manual**, so a
+        // Not a recipe either. §6.1 makes `recall` the **in-world manual**, so a
         // subject like `brewing` is answered with authored prose (rule 6) rather
         // than treated as a thing that does not exist.
-        //
-        // `recall_` is also what [`Prose::topics`](crate::content::Prose::topics)
-        // strips to decide what is *nameable*, which is why the route templates
-        // below are `route_` and not `recall_`: a template is not a subject, and
-        // sharing the prefix registered `step_or` as something to ask about.
-        let key = format!("recall_{topic}");
-        if world.resource::<Prose>().has(&key) {
-            let message = world.resource::<Prose>().line(&key, &[]);
-            world
-                .resource_mut::<Scrollback>()
-                .records_mut()
-                .push(RecordKind::Message)
-                .text(FieldName::Name, &topic)
-                .text(FieldName::Message, &message)
-                .finish();
-            return;
+        if !said {
+            missing(Verb::Recall, &topic, world);
         }
-        missing(Verb::Recall, &topic, world);
         return;
     }
 
     say_plan(world, &topic, &plan);
+}
+
+/// Say what `topic` is, and how it is used. Whether anything was said.
+///
+/// Two keys, and the second is deliberately **not** `recall_<topic>_use`:
+/// [`Prose::topics`](crate::content::Prose::topics) decides what is *nameable* by
+/// stripping `recall_`, so that spelling would register `clarity_use` as a
+/// subject to ask the orb about. It is the trap the route templates already
+/// record paying for, where `grimoire_step_or` made `step_or` a topic.
+///
+/// `using_` is optional and often absent — a byproduct is a thing you have
+/// rather than a thing you do — and where it *is* present it may honestly say
+/// the use is not built. `undo`'s page does the same, and §15 wants that: a page
+/// admitting a word does nothing is the cheapest way to keep a player out of a
+/// dead end.
+fn describe(world: &mut World, topic: &str) -> bool {
+    let prose = world.resource::<Prose>();
+    let what = format!("recall_{topic}");
+    let how = format!("using_{topic}");
+    let lines: Vec<String> = [what, how]
+        .into_iter()
+        .filter(|key| prose.has(key))
+        .map(|key| prose.line(&key, &[]))
+        .collect();
+    if lines.is_empty() {
+        return false;
+    }
+    for message in lines {
+        world
+            .resource_mut::<Scrollback>()
+            .records_mut()
+            .push(RecordKind::Message)
+            .text(FieldName::Name, topic)
+            .text(FieldName::Message, &message)
+            .finish();
+    }
+    true
 }
 
 /// Write the plan out, a record per step.
@@ -358,6 +387,15 @@ fn say_step(world: &mut World, step: &Step, index: Option<usize>) {
     } else {
         String::new()
     };
+    // Composed in like the heat clause beside it, and for the same reason: not
+    // every step has one. The `+` lives in `route_leaves` rather than in the
+    // step line, so a step that leaves nothing does not print a plus with
+    // nothing after it.
+    let leaves = if step.leaves.is_empty() {
+        String::new()
+    } else {
+        prose.line("route_leaves", &[("state", &step.leaves)])
+    };
     let message = prose.line(
         if index.is_some() {
             "route_step"
@@ -371,7 +409,7 @@ fn say_step(world: &mut World, step: &Step, index: Option<usize>) {
             ),
             ("detail", &inputs),
             ("name", &step.output),
-            ("state", &step.leaves),
+            ("state", &leaves),
             ("source", &step.instrument),
             ("ticks", &step.ticks.to_string()),
             ("kind", &heat),
@@ -426,7 +464,7 @@ impl Step {
             output: output.to_owned(),
             instrument: instrument.to_owned(),
             inputs: recipe.inputs().into_iter().map(ToOwned::to_owned).collect(),
-            leaves: recipe.leaves.clone(),
+            leaves: recipe.leaves.clone().unwrap_or_default(),
             ticks: recipe.ticks,
             heat: recipe.heat,
         }
@@ -733,6 +771,55 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn every_material_has_a_page() {
+        // **The same completeness lint, one noun space over.** Verbs have had one
+        // since the manual was written; materials had none, so a reagent could be
+        // authored with a colour, a recipe and a route and never a word saying
+        // what it *was*. §19 records that failing twice already — the four shard
+        // names, and the `dust` a byproduct field invented — and both times what
+        // found it was a person asking rather than a test.
+        //
+        // One key required, not three: a material is a thing, and most of them
+        // want a sentence rather than a page. `using_` is where a *use* goes and
+        // is optional, because a byproduct is something you have rather than
+        // something you do.
+        let prose = crate::content::Prose::builtin();
+        for material in crate::content::Materials::builtin().names() {
+            assert!(
+                prose.has(&format!("recall_{material}")),
+                "`{material}` is authored in materials.toml and the manual cannot \
+                 say what it is",
+            );
+        }
+    }
+
+    #[test]
+    fn a_finished_product_says_what_it_is_for() {
+        // **The pages this change was for.** A potion and a scroll are the two
+        // things a player *holds*, and a route told them five steps and nothing
+        // about the thing in their hand. Every one of them now has a `using_`
+        // line — which for a potion honestly says the drinking is not built, on
+        // `undo`'s precedent.
+        let prose = crate::content::Prose::builtin();
+        let recipes = crate::content::Recipes::builtin();
+        let mut checked = 0;
+        for made in recipes.outputs() {
+            if !matches!(
+                recipes.kind_of(made),
+                crate::parser::NounKind::Essence | crate::parser::NounKind::Scroll
+            ) {
+                continue;
+            }
+            checked += 1;
+            assert!(
+                prose.has(&format!("using_{made}")),
+                "`{made}` is finished work and its page does not say how it is used",
+            );
+        }
+        assert!(checked > 0, "no finished product was actually checked");
     }
 
     #[test]

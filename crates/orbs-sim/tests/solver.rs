@@ -241,6 +241,22 @@ fn a_solver_walks_a_generated_maze_to_the_exit() {
             "seed {seed}: a solver ran for {CEILING} ticks and never reached the exit",
         );
         worst = worst.max(ticks);
+
+        // **And it lands on the archive's shelf.** What the stacks give up is
+        // stock, so it goes where stock goes and the player moves four of them
+        // into the lectern to assemble. Asked of `tower::home` rather than named
+        // here, because `debug_spawn` asks the same rule — and a fragment that
+        // was in one place when won and another when spawned is the split this
+        // closed.
+        let world = sim.world();
+        let shelf =
+            orbs_sim::tower::home(world, "fragment").expect("a fragment has nowhere to live");
+        assert!(
+            orbs_sim::tower::holdings(world, shelf)
+                .iter()
+                .any(|(name, units)| name == "fragment" && *units > 0),
+            "seed {seed}: the exit paid its fragment somewhere else",
+        );
     }
 
     // **A ceiling on the cost, not just on the outcome.** A solver that arrives
@@ -305,7 +321,7 @@ fn a_solved_maze_leaves_no_readings_behind() {
             !said.iter().any(|line| line.contains("passage")
                 || line.contains("walked")
                 || line.contains("twice")),
-            "{way} still reads from a labyrinth that is gone: {said:?}",
+            "{way} still reads from stacks that are gone: {said:?}",
         );
     }
 }
@@ -353,13 +369,7 @@ fn a_lectern_collecting_fragments_is_not_reported_as_fouled() {
     sim.submit("attend archive");
     sim.step();
     let lectern = lectern_of(&sim);
-    orbs_sim::tower::give(
-        sim.world_mut(),
-        lectern,
-        "fragment",
-        orbs_sim::parser::NounKind::Fragment,
-        2,
-    );
+    orbs_sim::tower::give(sim.world_mut(), lectern, "fragment", fragment_kind(), 2);
     sim.step();
 
     let state = sim
@@ -375,6 +385,16 @@ fn a_lectern_collecting_fragments_is_not_reported_as_fouled() {
 }
 
 /// The archive's lectern.
+/// The kind a fragment is, **asked rather than written down here**.
+///
+/// A test that hard-codes it can drift from `research::give_fragment`, and then
+/// it is setting up a state the game cannot reach — which is exactly what
+/// happened while the maze gave `NounKind::Fragment` and `debug_spawn` gave
+/// `Reagent` for the same word (§19).
+fn fragment_kind() -> orbs_sim::parser::NounKind {
+    orbs_sim::content::Recipes::builtin().kind_of("fragment")
+}
+
 fn lectern_of(sim: &Sim) -> bevy_ecs::entity::Entity {
     let world = sim.world();
     let cwd = world.resource::<orbs_sim::Cwd>().0;
@@ -414,28 +434,33 @@ fn four_fragments_on_the_lectern_become_a_scroll() {
             })
             .expect("the archive has no lectern")
     };
-    orbs_sim::tower::give(
-        sim.world_mut(),
-        lectern,
-        "fragment",
-        orbs_sim::parser::NounKind::Fragment,
-        4,
-    );
+    orbs_sim::tower::give(sim.world_mut(), lectern, "fragment", fragment_kind(), 4);
 
     sim.submit("wield lectern");
     sim.step_n(30);
 
+    // **Any scroll, not one name.** What the lectern makes is *drawn* from the
+    // scrolls it knows, so pinning a name here would make this test fail the day
+    // a second one is authored — and it would be failing on the roll working.
+    // What has to hold is that four fragments become *a scroll*.
+    let scrolls = orbs_sim::content::Recipes::builtin();
+    let scrolls: Vec<&str> = scrolls
+        .outputs()
+        .into_iter()
+        .filter(|name| scrolls.kind_of(name) == orbs_sim::parser::NounKind::Scroll)
+        .collect();
+    assert!(!scrolls.is_empty(), "nothing in the content is a scroll");
     assert!(
         messages(&sim)
             .iter()
-            .any(|line| line.contains("spell-scroll")),
+            .any(|line| scrolls.iter().any(|scroll| line.contains(scroll))),
         "four fragments made no scroll: {:?}",
         messages(&sim),
     );
 }
 
 #[test]
-fn a_way_is_not_a_room_and_a_labyrinth_can_be_abandoned() {
+fn a_way_is_not_a_room_and_the_stacks_can_be_abandoned() {
     // Two refusals that only exist because the maze had to borrow shapes from
     // elsewhere. The four ways are `NounKind::Place` — the only kind the place
     // half of a spell's question resolves against — which made them somewhere
@@ -454,15 +479,21 @@ fn a_way_is_not_a_room_and_a_labyrinth_can_be_abandoned() {
         messages(&sim),
     );
 
-    // ...and `divine` inserts no `Working`, so without its own branch `stop`
-    // would find the lectern, do nothing, and say it had.
+    // ...and `research` inserts no `Working`, so without its own branch `stop`
+    // would find the stacks, do nothing, and say it had.
+    //
+    // **`stop stacks`, and it was `stop lectern`.** The maze has its own
+    // instrument now, so `stop lectern` reaches an *assembly* and answers *"the
+    // lectern is not working"* — which is the separation working rather than a
+    // regression, and is what this test would otherwise have gone on asserting
+    // the opposite of.
     sim.submit("research");
     sim.step();
-    sim.submit("stop lectern");
+    sim.submit("stop stacks");
     sim.step();
     assert!(
         messages(&sim).iter().any(|line| line.contains("close")),
-        "the labyrinth could not be abandoned: {:?}",
+        "the stacks could not be abandoned: {:?}",
         messages(&sim),
     );
     sim.submit("follow north");

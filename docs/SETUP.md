@@ -338,7 +338,7 @@ first clause that this is a thing being built.
 ### Description
 In development — a dev log, not patch notes. The orb became a proper 4:3
 monitor: the grid is fixed now, so resizing scales the text instead of reflowing
-every pane. Labyrinths got properly random, too.
+every pane. The stacks got properly random, too.
 ```
 
 Write it as *what got worked on*, in a builder's voice — the bullets below it

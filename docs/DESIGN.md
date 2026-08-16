@@ -575,7 +575,7 @@ The Phase 0 vocabulary (16 commands), canonical arcane with synonym registers:
 | `decoct <essence>` | Brew a potion — **retired in Phase 1, see below** | — | brew, make, mix, distil |
 | `empty <place>` | Turn a tool out into the dispensary | — | unload, collect, decant, pour |
 | `purge <target>` | Destroy waste or spoilage | `rm` | clean, dump, "get rid of" |
-| `research` | Open a labyrinth on the lectern | — | divine, decipher, study, translate |
+| `research` | Open a way into the stacks | — | divine, decipher, study, translate |
 | `scribe <name>` | Open a spell in the editor, making it if new | `vi`, `edit` | inscribe, author |
 | `bind <script>` | Attach a script to a trigger | `cron` | schedule, automate |
 | `invoke <script>` | Run a script or spell | `run`, `exec`, `./` | cast, do |
@@ -2305,13 +2305,604 @@ domains are settled (brewing + archive), and the fragment trickle has a rate
 
 ## 19. Decisions log
 
+### The arsenal, and §7's one exemption
+
+**Nothing in the tower could be carried between domains.** `carry`'s destination
+lookup wants a `Fixture` child of `cwd` and a domain is neither, so `move clarity
+to archive` could not resolve — and neither could any route between two rooms.
+That held while nothing a domain made was wanted anywhere else: the laboratory
+consumed its own reagents, the archive its own fragments. A **finished** thing
+breaks it, because a potion is brewed to be used elsewhere and a scroll is
+assembled to be spent elsewhere.
+
+§10's remaining five domains all have the same problem waiting for them, so
+`/tower/arsenal` is the standing answer rather than a fix for one pair.
+
+#### A finished potion could not be picked up at all
+
+`move`'s first slot was `NounKind::Reagent`, and `produce::transmute` gives a
+`potion = true` output `NounKind::Essence` — so the required slot silently never
+filled, and had not since potions existed. It went unnoticed because `empty`
+turns an instrument out wholesale and never asks what kind anything is, so the
+one route that mattered *inside* the laboratory worked.
+
+`NounKind::Portable` is the fix, on the `Stoppable` pattern: stock, a fragment, a
+potion, a scroll. Deliberately **not** `Any`, which reaches places, files, topics
+and spells — `move laboratory to arsenal` would resolve at full confidence.
+
+#### The exemption is narrow, and stated rather than assumed
+
+`tower::scene` records that acting on a domain you are not standing in is **Phase
+2's** unlock. This does not repeal that. What reaches everywhere is the arsenal's
+*contents*, on exactly the terms places, spells and the maze's readings already
+have — a spellbook you carry is not a shelf you walk to, and neither is a
+bandolier.
+
+What keeps it honest is the door. **Finished work only** — an `Essence` or a
+`Scroll` — so the arsenal cannot become a second dispensary and reagents still
+belong to the domain that uses them. The question is asked of the **kind**, never
+of the name: telling finished work from stock by name would mean the tower
+deciding which reagents are waste, which §10.1 refuses outright, because every
+byproduct is some other recipe's input. And `reachable` searches the arsenal
+**last**, so a reagent in the room always outranks a carried one and nothing an
+existing command picks up can change.
+
+#### Nameable is not enough, and that was the whole risk
+
+Registering the contents in the scene makes them nameable from every room — and
+`purge` and `verify` take `NounKind::Any`, so both would then *resolve* on a
+potion from any room and report it absent. That is §15's dead end arriving
+through the affordance meant to remove one, and it is the failure mode this
+document already records for spells: a `Script` slot with nothing findable is
+*worse* than a dead end, because `bind night_watch` fell through to `sift` and
+reported success.
+
+Three lookups had to learn it — `pipeline::reachable`, `pipeline::purge` and
+`files::here_or_place` — and `tower::keep` owns the rule so they cannot disagree.
+§19 already records what happens when a rule like that has copies: three
+hand-built versions of *what is in this instrument* all dropped the stock count,
+and nothing noticed until a recipe wanted more than one of something.
+
+#### It is also what lets a spell touch a potion
+
+Not obvious, and worth writing down. A spell is written *for* a domain and
+`may_issue` forbids it `attend`ing, so it can only name what is in scope where it
+runs. Finished work that lived in the room that made it could never be reached by
+automation running anywhere else — so this is pillar 3's access to the crafting
+economy, not only a convenience for a player's hands.
+
+#### What came free, and one defect settled
+
+Being a top-level branch gives it `Protected` — so `purge arsenal` refuses in
+character, which matters more here than anywhere, since the room holds everything
+the player has finished. The boot report walks the world, so it gains a row with
+no code. `arsenal.log` fills because `move` already stamps `Path`; §19 records
+the archive's log being empty from the day it was built for want of exactly that.
+
+And **`fragment` was two noun kinds at once**: `NounKind::Fragment` from a solved
+maze, `Reagent` from `debug_spawn`, which asks `Recipes::kind_of`. `stock::give`
+merges by *name*, so the two would have merged into whichever node was found
+first, and `move fragment ...` worked on one and not the other. One rule now: the
+maze asks the same question everything else does.
+
+#### Every item has a home, and it is a rule rather than a list
+
+`debug_spawn` is how a state worth testing is reached without paying the forty
+ticks of grinding it costs, and its value is that **a new item is testable the
+moment it is authored**. That has to be structural. A hand-kept list of where
+each thing goes is a promise kept until somebody is busy: the next material lands
+in whichever room the list happened to say, or in none, and the person who finds
+out is the one who assumed the tool was right and went looking for the bug in the
+game.
+
+So `tower::home` is a rule *over the content*, and the rule is **where the game
+itself would leave it**:
+
+1. **Finished work** — an `Essence` or a `Scroll` — goes to the arsenal. That is
+   the room it is for, and the one reachable from every other.
+2. **Anything a recipe produces** belongs to the domain that produces it. Dust is
+   the archive's leavings even though a mortar will grind it, because the archive
+   is where it comes from.
+3. **Anything else** — a base reagent, a fuel — belongs to the domain that
+   consumes it. Nothing makes sage; the laboratory is where it is wanted.
+
+Within a domain it is the **store**, never an instrument. A shelf is inert: the
+thing sits there until it is `move`d or a per-instrument verb reaches in for it.
+Dropped straight into a tool it would charge it, and a mortar holding something
+no recipe wants reads `fouled` — a state to explain rather than one to test from.
+
+Two lints make it a guarantee instead of a claim.
+`every_material_has_a_home_a_move_can_reach` walks every authored material and
+fails the build by name if any has nowhere to live, or lives somewhere
+`pipeline::reachable` cannot see into. `every_name_the_tool_offers_lands_in_the_
+room_it_belongs_to` drives each one through a real `Sim` and checks it arrives
+where the rule says — against the rule rather than against a room written down in
+the test, because a room written down in a test is the list this replaces.
+
+#### Byproducts are the laboratory's mechanic, and only the laboratory's
+
+`Recipe::leaves` was compulsory, so every recipe had to shed something — and the
+lectern's assembly duly shed `dust`, a substance invented to fill a field. It
+then had nowhere to go. §10.1's *every byproduct has at least one use* forced a
+second mortar recipe grinding dust into the potash that ash already became, and
+**that recipe could never fire**: reagents do not cross a domain boundary, so the
+archive's dust could not reach the laboratory's mortar. A recipe that only fires
+on material a tester spawns is not content.
+
+The chain of repairs it was pulling behind it is the tell. Dust needed the
+archive to grow a shelf so it was not trapped in the lectern; it needed a mortar
+recipe so it was not litter; it needed a tint, a name and a paragraph about old
+paper. None of that was buying anything, because §10.1 builds the waste-has-a-use
+loop around **brewing** — where a second route to the same draught can exist and
+be interesting — and the archive has no second route to anything.
+
+So `leaves` is optional and the lectern leaves nothing. The mechanic stays where
+it works. `every_byproduct_has_at_least_one_use` now polices the byproducts that
+exist rather than the absence of one, and two prose lines gained a companion —
+`wield_done_clean`, and a `route_leaves` clause composed in beside `route_heat` —
+because *"and leaves "* with a hole after it is how §19 says a missing key
+surfaces, and it would have surfaced on every scroll the archive ever assembles.
+
+### A thing's page says what it is, not only how it is made
+
+`recall <thing>` walked the recipe graph and stopped. So the manual could tell a
+player the five steps to a `clarity` and not one word about what a clarity *was*
+— and a `gleaning-scroll`, the thing four walks of the stacks pay for, answered
+with its assembly and nothing about unrolling it.
+
+Those are different questions. A route answers *how do I get one*; a player
+holding the thing is asking *what is this*, and after that *how do I use it*.
+Both are said now, and what it is comes first — the route is the least urgent of
+the three to someone with the object already in hand.
+
+**`using_<name>`, deliberately not `recall_<name>_use`.**
+`Prose::topics` decides what is nameable by stripping `recall_`, so the suffix
+spelling would have registered `clarity_use` as a subject to ask the orb about.
+That is the trap `grimoire_step_or` already paid for once, and the file's own
+comment warns about it two sections up.
+
+**Where a use is not built, the page says so.** Every potion reads *"nothing
+drinks a potion yet. a siege will be what spends them"* — §11.5's resource table
+has a siege consuming 4–8 potions and sieges are Phase 2. `undo`'s verb page
+already does this, and §15's argument is the same: a page admitting a thing does
+nothing is the cheapest way to keep a player out of a dead end.
+
+**Two lints, beside the three the verb pages have.**
+`every_material_has_a_page` fails the build by name for a material with no
+description; `a_finished_product_says_what_it_is_for` requires a `using_` line on
+every potion and scroll. §19 records this class of omission twice already — the
+four shard names, and the `dust` a compulsory field invented — and both times a
+person asking found it rather than a test.
+
+**It makes every material a `Topic`, which is the same exemption verb pages
+have.** *A manual you can only read in the right room has a lock on it*, so
+`recall sage` works from the archive. §7's scoping is unharmed and is now stated
+more precisely than it was: from the archive `sage` is something to read about
+and not something to grind, which is a claim about the **kind** rather than about
+the name. The cost, recorded rather than discovered: `purge`/`verify` take
+`NounKind::Any` and so can name a material from a room that has none — which was
+already true of every recipe *output* and is now true of every input and
+byproduct too.
+
+#### Quickening, and the herbs a scroll puts on the shelf
+
+The other two scrolls, and each answered a question the first left open.
+
+**Quickening is a window on the room, and was a one-shot on a run.** The first
+version halved what was left of the run in hand and *refused when nothing was
+running* — which made it unusable at exactly the moment a player reaches for one.
+**Quicken the laboratory, then brew** is the obvious play, and it was the one
+thing the scroll could not do; four walks of the stacks also bought a single stage
+where a window buys a stretch of work and rewards lining it up.
+
+So it sets `Quickened` on the laboratory for `QUICKENED_TICKS`, and everything
+the room starts inside that window takes half as long.
+
+**An interval, like the fire.** `Burning` is *"a pure function of the tick, so
+fuel survives `meditate`"*, and speed is the same claim: the state stores when it
+began and how long it lasts, nothing ticks it down, and hundreds of ticks
+collapsed inside one `step` behave exactly like hundreds watched.
+
+**Read when a run starts, like heat.** §10.1 checks the athanor at `begin` and
+lets the run finish even if the fire dies under it, because *"pausing would be
+the countdown §19 refused"*. A run started inside the window stays short when the
+window closes — which is also what keeps `Working` an interval set once, the
+property `meditate` idempotence rests on. A rate applied per tick would be that
+countdown wearing a multiplier.
+
+**And what is already running is hurried too — one rule, not two.** The state
+means *this room works at double speed*, and a run in flight is something the
+room is doing; leaving it alone would make wielding the scroll mid-brew look like
+it had done nothing. Halved from **now**, not from the start: halving the whole
+interval would refund time already spent and, past the half-way point, land the
+end in the past.
+
+`QUICKENED_TICKS` is **300 — five minutes**, since §5.0 makes a tick one real
+second. That is squarely in §11.5's Production band (3–10 minutes), which is what
+a window covering a *stretch of work* should be measured against, and it is about
+three clarities' worth of brewing. Generous, deliberately: a scroll costs four
+walks of the stacks, which is thousands of ticks of walking, and a window covering
+one stage made that trade absurd. A placeholder like every other duration, and
+`orbs-balance` being a stub is why sweeping it is a plan rather than a fact.
+
+**The test that guards it was measuring nothing**, and raising the number is what
+showed that. `a_run_started_in_the_window_stays_short_when_it_closes` meditated
+25 ticks against a 120-tick window and then asserted a length nothing had any
+reason to move — green for the wrong reason. It starts the run *near the end* of
+the window now and crosses the boundary while the run is going, checking
+`tower::quickened` on both sides so it cannot silently stop closing again.
+
+**The verdant scroll gives one herb, not all of them.** The plan said *unlock the
+reagents*; a scroll that did the lot would leave the lectern assembling something
+with nothing left to give — a dud draw for ever, which is the dead end this item
+exists to close. Three scrolls, three herbs, and the laboratory visibly grows
+three times.
+
+**What counts as unlockable is derived.** A base reagent is one the vocabulary
+knows that *nothing in the tower makes*, whose home is the laboratory's shelf. So
+authoring a fourth herb makes it unlockable the same tick, and the archive's
+`fragment` is excluded without being named — `tower::home` already knows which
+room a thing belongs to, and asking it beats a second list.
+
+**Getting *made* wrong was visible rather than subtle**, and it is the clearest
+argument for the See-it rule in this whole arc. The first version asked
+`Recipes::outputs`, which is a recipe's `output` and **not** its `leaves` — so
+every byproduct in the game read as a herb, and four scrolls put `dregs`, `ash`
+and a `fragment` on the shelf as inexhaustible stock. Every test passed. One dump
+showed it in a second.
+
+**Names measured, not chosen.** `steeped-draught` and `settled-draught` collided
+at **734** — worse than the 667 that got `decant` renamed to `siphon` — and
+became `keen-draught` and `quiet-draught`; `flowering-scroll` sat at 688 against
+`gleaning-scroll` and became `verdant-scroll`. The worst remaining pair is 693,
+against the 819 (`ground-sage`/`ground-salt`) and 896 (`sage`/`sage-tincture`)
+the game already ships and `Scene::knowing` already protects.
+
+#### The stacks and the lectern are two instruments, and were one
+
+The maze opened **on the lectern**, which was also where four fragments became
+a scroll. §19 above records that as *"the first instrument that can be doing two
+things at once"* and treats it as a curiosity found while fixing `stop`. It was a
+design problem wearing one.
+
+- `stop lectern` had to guess which of the two it meant, and the fix was a branch
+  that stopped the maze *and then* fell through to the run.
+- The panel gave both one row, and one `State`. *"Is a reading open"* and *"is a
+  scroll coming together"* were the same question with two answers.
+- Its picture was `Craft::Reading` — the maze's explored-cells gauge — so a
+  twenty-tick assembly drew a bar measuring something else entirely.
+- And a fixture carries exactly one `Operation`, which the lectern spent on
+  `research`. That is the recorded reason `follow` is a tower-wide verb wearing a
+  domain's coat.
+
+So the archive has **stacks** — an endless library you navigate, which is what a
+maze in a library *is* — and the lectern goes back to being one thing: where four
+matching fragments are moved out of the cabinet and assembled. `stop stacks`
+closes the stacks, `stop lectern` abandons an assembly, and neither reaches the
+other. The panel has a row each, with the maze's gauge on one and an honest
+progress bar on the other.
+
+**The lectern has no `Operation` now**, and its picture comes from having
+*recipes* instead — `craft_of` asks the content rather than matching a name,
+which is the pattern that module's own header records paying for twice.
+
+**`[earns]` had to widen, and it was too narrow already.** Its keys were checked
+against `recipes.toml`, so an instrument that runs and transforms nothing could
+never be priced — which was true of the athanor all along and became true of the
+stacks, which earn for every walk finished. The check now takes the recipes'
+instruments *plus* the fixtures that carry a verb. Both archive instruments keep
+the 4 the lectern paid for both halves, so the split rebalances nothing; a rename
+is a bad moment to change a number.
+
+**It did *not* retire `follow`'s debt, and that is worth being clear about.** The
+lectern's `Operation` slot is free now, so `follow` could be scoped through it —
+and that would be a lie, because `follow` walks the stacks' maze and the lectern
+does not answer to it. Two verbs still want to scope to one fixture, which is the
+same missing mechanism `verb.rs` names. `follow` and `wander` retire together the
+day a fixture can carry a second operation, exactly as recorded.
+
+**One naming note, measured.** `stacks` scores **667** against `status`, over the
+600 floor — six letters, two edits. They never compete in the same position: the
+first word of a line is a verb and `stacks` is a place, so `attend stacks` and
+`survey stacks` resolve against nouns where `status` is not one. What a bare
+`stacks` can do is fuzz to `status`, which prints the status and echoes the word
+it chose — §6's echo answering exactly the case it exists for. Recorded rather
+than renamed, because the word is right for the room.
+
+#### "labyrinth" is retired: the stacks are the instrument *and* the place
+
+The split above gave the archive a fixture named `stacks` and left the thing it
+opens called a `labyrinth`, so the game had two words for one object and said
+both — *"there are no stacks here to walk a labyrinth in"* was a real line. The
+second word is gone. **You `research` at the stacks and you are then in the
+stacks**, which is what an endless library means and what the split was for.
+
+The collision that had to be rewritten rather than substituted is the whole
+reason this is an entry: a find-and-replace produces *"no stacks here to walk a
+stacks in"*, so every sentence naming both was reworded, and the ones treating
+the maze as singular (*"walk it"*, *"research opens one"*) became plural
+(*"walk them"*, *"research opens them"*). `research_opens` is now *"the page
+opens into shelves that do not end"* — the image survives, the noun does not.
+
+**`maze` stays, and only below the waterline.** It is the accurate word for a
+spanning tree with one path between any two cells, and `Maze`, `maze.rs` and
+Prim's own documentation read worse renamed to a room. So the rule is: the
+player and the prose say **stacks**; the algorithm says **maze**. Nothing
+player-facing says either "labyrinth" or "maze" any more — the two manual lines
+that did (`man_wander_1`, `man_research_1`) were rewritten with the rest.
+
+Renamed with it: `orbs_render::Labyrinth` → `Stacks`, `Painter::labyrinth` →
+`Painter::stacks`, `Sim::labyrinth` → `Sim::stacks`, `shell/labyrinth.rs` →
+`shell/stacks.rs`, and `research::finish_labyrinth` → `finish_walk`. **The
+shipped v0.1.24 changelog block was left alone**: it is the record of an
+announcement that already went to GitHub, Discord and Bluesky under the old
+word, and it describes a tower where the maze still opened on the lectern.
+
+#### The typed path and the spell path have to answer the same question
+
+A review of the scrolls found the same shape three times, and it is worth one
+entry rather than three fixes: **a rule expressed twice, where only one of the
+two expressions was ever exercised.**
+
+`begins_work` was `const fn(Verb)`, so `wield` had one answer for two acts —
+charging an instrument *is* a run, spending a scroll is not. `pipeline::wield`
+returns before `work::begin` for a scroll, so a **typed** spend was never
+charged the production slot, and its comment said as much. A **spell** reaches
+`spell::block` first, so `wield quickening-scroll` in a script waited out the
+very brew it was written to hurry, burned `PATIENCE` and gave up. *Quicken then
+brew* is the obvious play, automating it is the point, and it was the one thing
+a spell could not do — while `using_quickening-scroll` told the player *"wield
+it anywhere, before a brew or during one"*. Both halves are one predicate now,
+`execute::spending`, asked by both paths.
+
+`carry`'s **destination** learned the arsenal exemption and its **source** did
+not, so `move clarity to arsenal` worked and `move clarity from arsenal to
+alembic` answered *"there is no /tower/arsenal within reach"* — a name resolving
+at full confidence and then reporting itself unreachable, which is §15's worst
+dead end and exactly what `tower::keep`'s *"nameable is not enough"* note
+enumerates. `receiver` is now `addressed` and both ends ask it.
+
+And a quickening scroll spent on the tick a run would land read `left == 0`,
+where `(0 / QUICKENED_BY).max(1)` is 1 — so the scroll pushed `ends` a tick
+*past* where it already was. `max(1)` was guarding a one-tick run becoming a
+no-tick one, which is a different case; the interval may now only ever move
+earlier.
+
+**The fourth was the same lesson wearing content.** `mugwort-tincture` and
+`valerian-tincture` were authored with no `tint`, and both colour lints
+`continue` on an input with no wash — so the omission did not fail a check, it
+switched the checks off for `keen-draught`, `quiet-draught`, `insight` and
+`stillness` at once. A material with no colour draws in the base hue, which is
+the failure mode §19 already calls total and invisible. The lint that skips
+rather than fails is the next thing to fix here.
+
+#### The cabinet is where fragments are kept, and the lectern is where four are spent
+
+The `cabinet` was added for the trapped dust, and that reason went with the
+byproduct. It has a better one: **it is the archive's shelf, and what the stacks
+give up is stock.** A solved maze pays its fragment onto it; the player moves
+**four matching fragments** into the lectern to assemble a scroll.
+
+That is the laboratory's own loop, in the archive's words — take from the shelf,
+charge the tool, wield — and it is worth having for three reasons beyond
+symmetry. `survey cabinet` is where a hoard is, in one place, instead of hidden
+inside the instrument that will consume it. The lectern holds a maze *and* an
+assembly (§19 records it as the first instrument that can be doing two things at
+once), so keeping a growing pile out of it is one fewer thing overlapping. And
+the arithmetic is now visible: four is a number a player can see themselves
+reaching.
+
+**It also closed a split the tool had opened.** `tower::home` sends a *spawned*
+fragment to the cabinet, and a *solved maze* was putting one in the lectern — the
+same word in two places depending on how it was got, which is the shape of the
+`Fragment`/`Reagent` kind defect one field over. Both paths ask `tower::home`
+now, so neither can drift, and so does the test that counts them.
+
+**"Matching" is doing nothing yet, and is the right word anyway.** There is one
+generic `fragment`, so any four match. When specific fragments arrive — §19 above
+records that as the intended shape, waiting on a reason to prefer one maze over
+another — the sentence does not change, and neither does `Recipe::count`, which
+already asks for four of *one name*.
+
+**What it costs, stated rather than discovered.** `move` carries one unit, so
+assembling is four `move fragment to lectern` and a `wield`. Against four walks
+of the stacks that is noise, and it is exactly the tedium the archive is built to
+automate — `repeat 4 / move fragment to lectern / end` is four lines of a spell.
+If it ever grates, the lever is `move` learning a count, and that is a signature
+change with the optional middle slot to think about rather than a quick fix.
+
+Without the cabinet, `empty lectern` would also be a word that can never work in
+the room it is offered in.
+
+Measured rather than chosen: 572 against `combine`, its nearest word, where the
+resolver's floor is 600. `shelf` and `chest` both land *on* the floor (600,
+against `help` and `check`); `press`, `stacks` and `carrel` are over it. `almery`
+— a monastic book cupboard — is safest at 429 and was passed over for being a
+word nobody types on a first guess, which is §19's own objection to the four
+invented shard names.
+
+**It moved the numbered prompt, and the pin is what said so.** Places sort by
+full path, so `/tower/archive/cabinet` displaced `east` as the fourth reading a
+bare `purge` offers — a fixture added for a reason two rooms away changing what a
+player is shown, with nothing on screen saying so.
+`a_bare_anything_verb_offers_the_same_four_readings` exists for exactly that and
+caught it on the first run.
+
+**And the boundary it exposed is still there**, stated rather than left to be
+rediscovered: a *reagent* cannot cross a domain boundary, because the arsenal
+takes finished work only. Nothing needs it to today — the archive's stock is
+fragments, which the lectern consumes in the room they are won in — but the day a
+domain wants another's raw material, this is the decision, and it belongs with
+Phase 2's pane addressing rather than with a byproduct.
+
+#### And the tool learned the room
+
+`debug_spawn` grew a destination when the archive gained an instrument it could
+not reach; the arsenal is a **domain**, so the fixture test refused it and every
+arsenal state went straight back out of a tester's reach — the same gap, one
+change later. The rule is not what shape a node is but whether
+`pipeline::reachable` can see into it, and it can see into exactly two things: a
+fixture where you stand, and the arsenal from anywhere.
+
+**Its door holds for a tester too.** Stock standing in the arsenal is a state no
+`move` could produce, which is the same objection this word already answers three
+times over — an unknown name, a nought count, a wrong noun kind. A testing tool
+that can build impossible worlds is one whose bug reports have to be checked
+against the tool first.
+
+**And a `way` is a fixture and is not a shelf**, which the fixture test alone got
+wrong. `north` and its three siblings carry `Fixture` so the maze can publish
+readings into them, and `research::refresh` despawns everything in a way on the
+step after — so a reagent put there is a pile that vanishes with no line saying
+so.
+
+Two lints hold the promise that *everything* is reachable, because a promise kept
+by hand is one kept until somebody is busy. One drives every offered name through
+a real `Sim`; the other checks the direction that rots — a material authored in
+`materials.toml` that no recipe names would have a colour, a manual route, and no
+way for a tester to hold one, with both files parsing perfectly.
+
+#### The sigils, and the noun kind that went with them
+
+`sigil-iv`, `sigil-ix` and `the-quiet-page` sat on the archive's floor from the
+day it was built, and were the last of the `divine` that consumed a fragment.
+Once `research` opened the stacks instead, nothing produced them, nothing
+consumed them and no prose said what one *was* — which is verbatim the complaint
+recorded above against `shard-of-dawn` and its three siblings: *"four invented
+names standing in for a decision nobody made"*. Three more of the same, one room
+over, and they survived that clean-up because nothing pointed at them.
+
+**`NounKind::Fragment` went with them, and the argument is §15's.** No verb's
+signature ever asked for one — `grep` the signature table and there is no
+`Fragment` in it — so the kind sorted nothing and gated nothing; and once the
+maze's yield became a `Reagent`, nothing in the world was one either. A kind with
+no instances and no slot is an API with no callers, which §19 has deleted before:
+`Depiction::Tool` and its four solved ramps went for exactly this.
+
+**§11.5's Fragments row is unaffected**, and it is worth saying why. That row is
+about the *resource* — what the archive yields and what research consumes — and
+the resource is a named material, `fragment`, which is exactly as real as it was.
+What is gone is a parser category that never told anything apart. It comes back
+the day a slot needs to refuse a reagent while accepting a fragment, and not
+before.
+
+**No version bump.** Nothing moved from `[ ]` to `[x]`; this is a correction
+folded into the step above, which CLAUDE.md's *Finishing a step* says advances
+nothing.
+
+### A scroll does something, and the stacks gain an errand
+
+Four walks of the stacks assembled a `spell-scroll` and that was where the archive
+stopped: an object with a name, a colour and no use. §15 weighs the dead-end rate
+above the raw resolution rate, and this was the largest one in the game.
+
+**The design document had no theory of what a scroll was for.** It appears once
+above, as *the thing four fragments become*. So the mechanism is decided here.
+
+#### `wield`, not a twenty-third word
+
+`verb.rs`'s vocabulary test argues the case and refuses the alternative in
+advance: *"22 is a number to defend, not a budget to spend: the next word added
+here needs an argument of this shape. `wander` is the last one this reasoning
+stretches to."* Spending a scroll is *setting a thing going*, which is what
+`wield` already means, so the verb learned a second argument kind —
+`NounKind::Workable`, accepting a place **or** a scroll — on the `Stoppable`
+pattern that exists for exactly this.
+
+**`empty` split off and kept `PLACE`.** The two shared one signature, and
+widening it would have made `empty gleaning-scroll` a sentence the parser accepts
+and the executor cannot answer.
+
+**The scroll branch returns before `start`.** `begins_work` is `const fn(Verb)`
+and cannot see the argument, so branching in the handler is the only place a
+scroll can be kept out of the production pool — and it must be, because at
+`CAPACITY = 1` a scroll would otherwise be refused whenever anything was running,
+which is exactly when a player reaches for one.
+
+#### What four fragments become is drawn, and that is not the attrition we removed
+
+Nothing about the inputs could decide which scroll comes out — four fragments are
+four fragments however they were won — and a lectern that always made the same
+thing is §10's objection to the old `research` one level up: a duration with no
+decision content.
+
+**This is not the roll that was taken out.** That one was four *distinct*
+fragments drawn uniformly and collected into a set: 8.3 solves per scroll, and no
+way to aim for the one you lacked. The draw is on the **output** now, every
+result is immediately usable, and there is no set to complete.
+
+**The list lives on the recipe, not in three `[[lectern]]` blocks.**
+`Recipes::matching` returns the *first* recipe whose inputs match, so three
+blocks all wanting four fragments would leave two permanently unreachable with
+the content file looking perfectly reasonable. `Recipe::outputs()` is the
+counterpart of `inputs()` and takes the same two spellings for the same reason.
+
+**A recipe that makes one thing rolls nothing**, and the guard is not an
+optimisation: every completion passes through `transmute`, so an unconditional
+draw would advance `RngStream::Archive` on every grind and every distillation —
+the cross-subsystem coupling this document already records fixing once, when
+solving a maze rolled the laboratory's `Yield` stream and changed a player's brew
+yields.
+
+#### The errand is a word on the lectern, not a `State`
+
+The maze gained a modifier — `Errand::Way` or `Errand::Glean` — and a spell has
+to be able to ask which, or the player needs two solvers and no way to tell which
+maze they are in.
+
+It is published as an ordinary **named child of the stacks**, exactly as a way
+publishes `passage` and `back`, so `if the stacks has gleaning` is answered by
+the `has` question §8 already has. A `State` variant was the other candidate and
+is worse three ways over: `State` is a closed set read by `State::is_busy`, the
+panel's `bar_of` and the spell language's `is working` / `is idle` at once, and an
+errand is not a state of the *instrument* — the stacks are doing exactly what they
+were doing before.
+
+`Errand::ALL` chains onto the readings in `scene_at` beside `back` and `spoil`,
+because a condition resolves at **cast** and there is never an errand on at that
+moment. That is the same single line the whole solver design already rests on.
+
+**A gleaning maze publishes no exit at all.** Leaving one that did nothing would
+be a trap rather than a change: a solver's top rung is `if <way> has exit`, so it
+would walk onto that square, find the walk not over, and take the same rung from
+the same place for ever. The picture withdraws `Ω` with it — a map offering a way
+out that the readings do not is the one mark on screen that lies.
+
+**Five spoils against the four a scroll costs, profitable on purpose.** Gleaning
+is what keeps scrolls in circulation and makes automating the maze the engine §10
+says the archive is meant to be. It is also the largest balance exposure in the
+feature and **nothing sweeps it**: `orbs-balance` is still a stub, so the number
+is a placeholder and is written down as one rather than implied to be tuned.
+
+#### Two defects the work uncovered
+
+**`tower::holdings` counted a reading as stock.** A child with no `Stock` reports
+one unit, and the lectern is an *instrument* — so an errand parked on it would
+have entered the multiset `Recipes::matching` compares. Four fragments plus one
+word is not four fragments: the recipe would stop matching and the panel would
+read `fouled` for a lectern with nothing wrong with it. The ways got away with
+publishing readings only because nothing ever asks them what they hold. Fixed at
+the source — `holdings` skips `NounKind::Sense`, which is true everywhere and not
+a special case.
+
+**`debug_spawn` could not reach the archive at all.** It walks to the tower's one
+`Store`, and that is in the laboratory, so §7 made every archive state
+unreachable from the tool that exists to reach states — four fragments on a
+lectern could be had by walking the stacks four times and by nothing else.
+`tests/solver.rs` had already written the impossibility down in a comment and
+worked around it by hand. It now takes a destination (`debug_spawn fragment 4
+lectern`), a fixture anywhere, on the same argument the shelf lookup already
+makes: requiring the tester to stand in the right room first puts back the
+walking the tool exists to skip. A numeric third word is still refused at the
+parse, so `debug_spawn sage 2 3` does not become a place called `3`.
+
 ### The archive is a maze, and the world holds the search
 
 §10 calls the archive **bespoke** — *"played most, and stales fastest"* — and
 named a resource sink only as the budget fallback. It was five entities and a
 verb that consumed nothing, produced nothing and could be run on the same sigil
-for ever. It is now a labyrinth: `research` resolves one out of the lectern,
-`follow` threads it, the way out gives up a shard, and four shards make a scroll
+for ever. It is now the stacks: `research` resolves them out of the lectern,
+`follow` threads them, the way out gives up a shard, and four shards make a scroll
 (`Recipes::matching`, so the assembly half needed **no new mechanism**).
 
 #### The finding the whole design rests on
@@ -2380,7 +2971,7 @@ inserts no `Working` at all now, because reading takes no production slot — so
 `stop lectern` found an instrument, had nothing to stop, and said so. The defect
 was not retired; it was made *moot*, which is a different thing and reads the
 same from outside. It is fixed properly now: `stop` on a lectern holding a
-labyrinth **abandons** it, which is also the answer to a player stuck in a maze
+maze **abandons** it, which is also the answer to a player stuck in one
 they cannot solve. A claim that a defect is gone is worth exactly as much as the
 test under it, and this one had none. With them went
 `DIVINE_TICKS`, `pipeline::work`, `progression::DIVINE` and its escape from
@@ -2388,8 +2979,8 @@ test under it, and this one had none. With them went
 like every other room.**
 
 `research` also stopped taking a fragment. It named one while it was a twelve-tick
-command that consumed one; it opens a labyrinth, and there is one lectern to open
-one at.
+command that consumed one; it opens the stacks, and there is one place to open
+them at.
 
 #### Two shapes borrowed, and what each cost
 
@@ -2401,7 +2992,7 @@ explicit refusal was added. That is the second spatial system this design was
 warned against, arriving by default rather than by drift, and it is held off by
 one guard on one component.
 
-**A labyrinth reports as `Working` with a meter of floor walked.** It takes no
+**The stacks report as `Working` with a meter of floor walked.** They take no
 production slot, so `Working` here is the *panel's* state rather than the
 component — which is what lets a solver ask `if lectern is working` to know
 whether its maze is still open. The meter is the only honest one a maze has: a
@@ -2458,13 +3049,13 @@ tests, all correct, all testing the wrong half.
 The archive's maze was complete in the sim and invisible in the game. A bound
 solver working for four hundred ticks showed a two-cell gauge creeping up the
 panel — §10.1's `bar_of` conceded as much, drawing the plain gauge *because* "a
-labyrinth's picture is the map (its own item)". It is now `orbs-render/src/maze.rs`,
-placed by `orbs/src/shell/labyrinth.rs`.
+maze's picture is the map (its own item)". It is now `orbs-render/src/maze.rs`,
+placed by `orbs/src/shell/stacks.rs`.
 
 **Three decisions carried the item.**
 
 **The picture lives in `orbs-render` and the sim builds one.** `orbs-sim` depends
-on the render crate and never the reverse, so a `Labyrinth` description crossing
+on the render crate and never the reverse, so a `Stacks` description crossing
 the boundary is the only arrangement available — and it is the better one anyway:
 `Maze` keeps its cells private, and the fog is decided in exactly one place
 (`Maze::view`) rather than in each frontend's painter. `Instrument`'s `Wash` is
@@ -2503,7 +3094,7 @@ it.
 ### `wander` — the 22nd tower-wide verb, and what it is not
 
 Walking a maze meant typing `follow east` fifty to a hundred times. `wander`
-gives the arrow keys the labyrinth.
+gives the arrow keys the stacks.
 
 **The seat and the debt are two different arguments and both have to be made.**
 `verb.rs` records that 21 was "a number to defend, not a budget to spend", and
@@ -2947,7 +3538,7 @@ because each is a rule already written down being broken somewhere new.
 
 **The readings outlived their maze.** `refresh` ran *before* the solved `Maze`
 was removed, so the four ways kept the solved position's readings for ever:
-`survey north` answered `passage` with no labyrinth open. The cost lands on
+`survey north` answered `passage` with the stacks closed. The cost lands on
 exactly the thing the archive is for — a bound solver read them, fired its
 `follow` tier every lap and was told *"research first"* for the rest of its
 `repeat`. `pipeline::stop` had the order right all along.
@@ -2960,7 +3551,7 @@ reading of it; a record filed under the wrong verb is that source lying, and the
 verb is passed in now.
 
 **Solving a maze rolled from the laboratory's stream.** The shard draw used
-`RngStream::Yield`, so walking a labyrinth changed a player's subsequent brew
+`RngStream::Yield`, so walking the stacks changed a player's subsequent brew
 yields — the cross-subsystem coupling per-stream RNG exists to prevent, in the
 same change that added `RngStream::Archive` and then did not use it here.
 
@@ -6788,7 +7379,7 @@ ORBS_SEED=3 ORBS_BOOT=0 ORBS_GRID=100x40 ORBS_DUMP="attend archive; research; \
   follow west; follow west; peruse archive.log" cargo run -p orbs
 ```
 
-### Three fixed things in the labyrinth, made random (Phase 1, §10)
+### Three fixed things in the stacks, made random (Phase 1, §10)
 
 *"The path to the end is always relatively the same."* The maze itself was
 already randomised — Prim's, uniform frontier draw — but three things around it

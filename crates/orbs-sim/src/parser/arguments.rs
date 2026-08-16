@@ -228,7 +228,7 @@ mod tests {
             .with(NounKind::File, "feed.log")
             .with(NounKind::Essence, "clarity")
             .with(NounKind::Reagent, "sage")
-            .with(NounKind::Fragment, "sigil-iv")
+            .with(NounKind::Scroll, "gleaning-scroll")
             .with(NounKind::Script, "night_watch")
     }
 
@@ -287,7 +287,7 @@ mod tests {
     fn a_required_slot_with_nothing_to_fill_it_is_reported() {
         // This is what turns into the numbered prompt of §6.
         // **`invoke`, not `divine`.** `divine` took a fragment while it was a
-        // twelve-tick command that consumed one; it opens a labyrinth now and
+        // twelve-tick command that consumed one; it opens the stacks now and
         // takes nothing, so it stopped being an example of a required slot.
         let filled = fill(Verb::Invoke, &words(&[]), &tower());
         assert_eq!(filled.missing.map(|m| m.kind), Some(NounKind::Script));
