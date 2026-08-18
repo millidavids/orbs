@@ -74,6 +74,15 @@ impl Sim {
         world.init_resource::<ParseLog>();
         world.init_resource::<Wizard>();
         world.init_resource::<Choices>();
+        // What each domain wants noticed, for §9's rail. Empty at tick 0 and
+        // latched by whatever raises one; `attend` is the only thing that
+        // clears, so a mark survives a save exactly as the state it describes
+        // does.
+        world.init_resource::<crate::tower::Marks>();
+        // What the player has found. Empty at tick 0 and written only by a
+        // broken ward, so it is reproducible from `(seed, submissions)` exactly
+        // as everything else in the world is.
+        world.init_resource::<crate::tower::Learned>();
         // The compiled-in default, so a headless `Sim` needs no filesystem
         // (rule 6, rule 8). A frontend swaps it with `set_prose`.
         world.init_resource::<Prose>();
@@ -165,6 +174,16 @@ impl Sim {
                 tower::burn,
                 tower::finish,
                 tower::drift,
+                // **After `drift`, and the order is load-bearing.** Both draw
+                // once per tick from `RngStream::Threat`, so which one goes
+                // first decides which value each sees — and a schedule that
+                // reordered them would silently change every existing replay.
+                // Appended, never inserted, exactly as a stream index is.
+                tower::substitution,
+                // **After the roll, and it draws nothing.** A lie settling is a
+                // clock reading, so it cannot perturb `RngStream::Threat` — which
+                // is what lets it be appended here without touching a replay.
+                tower::settling,
                 tower::spell::stand,
             )
                 .chain(),
@@ -281,6 +300,24 @@ impl Sim {
             return;
         }
 
+        #[cfg(debug_assertions)]
+        if crate::execute::giveaway(line) {
+            self.debug_ward(line);
+            return;
+        }
+
+        #[cfg(debug_assertions)]
+        if crate::execute::swapping(line) {
+            self.debug_swap(line);
+            return;
+        }
+
+        #[cfg(debug_assertions)]
+        if let Some(lesson) = crate::execute::lesson(line) {
+            self.debug_learn(line, lesson.name.as_deref());
+            return;
+        }
+
         // `analyse` rather than `resolve`: it keeps every scored reading, which
         // is what §6's *"the parser must explain itself"* means in practice and
         // what the Phase 0 gate needs to cluster failures by cause rather than
@@ -392,6 +429,35 @@ impl Sim {
     #[must_use]
     pub fn concentration(&self) -> usize {
         tower::concentration(&self.world)
+    }
+
+    /// The ward's sheet, where the player is standing.
+    ///
+    /// **Reads `Cwd`, exactly as [`stacks`](Self::stacks) does**: a frontend
+    /// asking for the board gets one only where the player could `survey prism`
+    /// themselves, so the picture cannot outrun the readings by following them
+    /// out of the room.
+    #[must_use]
+    pub fn ward(&self) -> Option<orbs_render::Board> {
+        let cwd = self.world.resource::<tower::Cwd>().0;
+        tower::children_of(&self.world, cwd)
+            .into_iter()
+            .find_map(|node| self.world.get::<tower::Ward>(node))
+            .map(tower::Ward::view)
+    }
+
+    /// Every domain at a glance — what §9's rail draws.
+    ///
+    /// **Derived here rather than in a frontend**, because rule 2 lets a
+    /// frontend decide only how a cell is drawn: `orbs-tui` must be able to draw
+    /// the same rail without re-deriving *what is happening in the forge*, and
+    /// two derivations are two answers that can disagree.
+    ///
+    /// Always seven, in a fixed order, including the rooms the tower has not
+    /// built yet — see [`tower::briefs`].
+    #[must_use]
+    pub fn briefs(&self) -> Vec<tower::Brief> {
+        tower::briefs(&self.world)
     }
 
     /// The spells the orb is holding, named, in the order the tower keeps them.
@@ -636,6 +702,103 @@ impl Sim {
             .finish();
         self.world.resource_mut::<Submissions>().push(tick, line);
         self.world.resource_mut::<Pending>().spawn(order);
+    }
+
+    /// Substitute a reagent on a shelf where the player is standing.
+    ///
+    /// Takes the first pile it finds by name, so a dump reaches the same one
+    /// every time — `tower::node` records archetype order as a defect that
+    /// changes what a phrase resolves to with nothing catching it.
+    #[cfg(debug_assertions)]
+    fn debug_swap(&mut self, line: &str) {
+        let tick = *self.world.resource::<Tick>();
+        self.world
+            .resource_mut::<Scrollback>()
+            .records_mut()
+            .push(RecordKind::Input)
+            .text(orbs_render::FieldName::Message, line)
+            .finish();
+        self.world.resource_mut::<Submissions>().push(tick, line);
+
+        let cwd = self.world.resource::<tower::Cwd>().0;
+        let mut piles: Vec<(String, bevy_ecs::entity::Entity)> =
+            tower::children_of(&self.world, cwd)
+                .into_iter()
+                .flat_map(|place| tower::children_of(&self.world, place))
+                .filter(|node| self.world.get::<tower::Stock>(*node).is_some())
+                .filter_map(|node| {
+                    self.world
+                        .get::<tower::Name>(node)
+                        .map(|name| (name.0.clone(), node))
+                })
+                .collect();
+        piles.sort_unstable();
+
+        if let Some((name, node)) = piles.first() {
+            let claimed = format!("{name}-");
+            tower::substitute(&mut self.world, *node, &claimed);
+        }
+    }
+
+    /// Hand the open ward's answer to the aperture, so the next press breaks it.
+    #[cfg(debug_assertions)]
+    fn debug_ward(&mut self, line: &str) {
+        let tick = *self.world.resource::<Tick>();
+        self.world
+            .resource_mut::<Scrollback>()
+            .records_mut()
+            .push(RecordKind::Input)
+            .text(orbs_render::FieldName::Message, line)
+            .finish();
+        self.world.resource_mut::<Submissions>().push(tick, line);
+
+        let cwd = self.world.resource::<tower::Cwd>().0;
+        let found = tower::children_of(&self.world, cwd)
+            .into_iter()
+            .find(|node| self.world.get::<tower::Ward>(*node).is_some());
+        if let Some(node) = found
+            && let Some(mut ward) = self.world.get_mut::<tower::Ward>(node)
+        {
+            ward.give_away();
+        }
+    }
+
+    /// Learn a secret the lens would otherwise have to find.
+    ///
+    /// **Runs now rather than queueing**, like `debug_spell` and unlike
+    /// `debug_spawn`: nothing about it is a world action with a duration, and a
+    /// tester wants the next line of their dump to see the result.
+    #[cfg(debug_assertions)]
+    fn debug_learn(&mut self, line: &str, wanted: Option<&str>) {
+        let tick = *self.world.resource::<Tick>();
+        self.world
+            .resource_mut::<Scrollback>()
+            .records_mut()
+            .push(RecordKind::Input)
+            .text(orbs_render::FieldName::Message, line)
+            .finish();
+        self.world.resource_mut::<Submissions>().push(tick, line);
+
+        let found = crate::tower::learn(&mut self.world, wanted);
+        let message = match &found {
+            Some(name) => self
+                .world
+                .resource::<Prose>()
+                .line("probe_found", &[("name", name)]),
+            None => format!("{line}: no such secret, or every one is known"),
+        };
+        self.world
+            .resource_mut::<Scrollback>()
+            .records_mut()
+            .push(RecordKind::Completion)
+            .text(orbs_render::FieldName::Name, crate::execute::LEARN)
+            .text(orbs_render::FieldName::Message, &message)
+            .role(if found.is_some() {
+                orbs_render::Role::Success
+            } else {
+                orbs_render::Role::Cost
+            })
+            .finish();
     }
 
     /// Queue a tester's `debug_spell`.

@@ -300,11 +300,15 @@ fn unrenderable_input_is_substituted_rather_than_dropped() {
 
 #[test]
 fn a_full_screen_linearises_in_paint_order() {
-    let grid = GridSize::new(120, 33);
+    // **The game's own grid, and it was an arbitrary 120×33.** The rail needs
+    // `MIN_RAIL_BOX` rows per domain across seven domains, so a short grid drops
+    // it entirely — and a test that asserts rail speech on a grid with no rail is
+    // asserting nothing. 120×45 is the only grid the game has (§19).
+    let grid = GridSize::new(120, 45);
     let layout = ScreenLayout::compute(&ScreenRequest {
         grid,
         main_panes: 2,
-        sidebar_panes: 2,
+        rail: true,
         mode: DisplayMode::Deep,
         input_rows: 1,
     });
@@ -320,9 +324,9 @@ fn a_full_screen_linearises_in_paint_order() {
         );
     }
 
-    for (row, name) in layout.sidebar().iter().zip(["archive", "menagerie"]) {
-        frame.painter(*row).span(
-            row.origin(),
+    for (slot, name) in layout.rail_boxes().iter().zip(["archive", "menagerie"]) {
+        frame.painter(*slot).span(
+            slot.origin(),
             &Span::new(name).with_kind(UtteranceKind::Heading),
         );
     }
@@ -354,17 +358,19 @@ fn a_full_screen_linearises_in_paint_order() {
 
     // Column 9, not 8: the input line is inset one cell from the bottom-left
     // corner, where a curved tube distorts most. See `ScreenLayout::compute`.
-    assert_eq!(frame.cursor(), Some(Pos::new(9, 32)));
+    assert_eq!(frame.cursor(), Some(Pos::new(9, 44)));
     assert_eq!(frame.cell(Pos::ORIGIN), Some(&Cell::new('┌', Style::DIM)));
 }
 
 #[test]
 fn panes_drawn_from_a_layout_never_bleed_into_each_other() {
-    let grid = GridSize::new(120, 33);
+    // 120×45 for the reason above: the assertion below refuses to run without a
+    // rail, and a short grid does not host one.
+    let grid = GridSize::new(120, 45);
     let layout = ScreenLayout::compute(&ScreenRequest {
         grid,
         main_panes: 4,
-        sidebar_panes: 3,
+        rail: true,
         mode: DisplayMode::Deep,
         input_rows: 1,
     });
@@ -386,13 +392,24 @@ fn panes_drawn_from_a_layout_never_bleed_into_each_other() {
             .all(|cell| cell.is_blank())
     };
 
-    // The sidebar and the input line, which nothing painted, are untouched.
-    for row in layout.sidebar() {
-        assert!(
-            blank(&frame, row.row),
-            "sidebar row {} was overrun",
-            row.row
-        );
+    // **The rail is checked by column, where the sidebar was checked by row.**
+    // That is the whole shape change as a test: a rail shares every row with the
+    // main window, so a pane bleeding rightwards would show up here and nowhere
+    // else — and it is precisely the bleed a full-width sidebar could never have
+    // caught.
+    let rail = layout.rail();
+    assert!(
+        !rail.is_empty(),
+        "the rail did not fit, so nothing is tested"
+    );
+    for row in rail.row..rail.bottom() {
+        for col in rail.col..rail.right() {
+            let cell = frame.cell(Pos::new(col, row));
+            assert!(
+                cell.is_none_or(|cell| cell.is_blank()),
+                "a pane overran into the rail at {col},{row}",
+            );
+        }
     }
     assert!(
         blank(&frame, layout.input().row),

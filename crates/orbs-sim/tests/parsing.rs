@@ -7,6 +7,11 @@
 use orbs_sim::parser::{Confidence, Mode, NounKind, Register, Resolution, Scene, Verb, resolve};
 
 /// The slice's world: two starting domains, thin (DESIGN.md §15).
+/// A scene standing **nowhere in particular**, offering no fixture's verb.
+///
+/// Load-bearing for `the_retired_brewing_words_all_still_land_somewhere_deliberate`,
+/// which needs `mix` and `distil` out of scope to reach `Resolution::Elsewhere`. Use
+/// [`anywhere`] for a test about phrasing rather than about scope.
 fn tower() -> Scene {
     Scene::new()
         .with(NounKind::Place, "/tower/laboratory")
@@ -27,6 +32,20 @@ fn tower() -> Scene {
         .with(NounKind::Scroll, "gleaning-scroll")
         .with(NounKind::Topic, "brewing")
         .with(NounKind::Any, "sludge")
+}
+
+/// [`tower`], plus every fixture-anchored verb in scope at once.
+///
+/// `Scene::offers` asks [`Verb::anchor`], so a bare [`tower`] scopes out
+/// `research`, `follow`, `wander` and the five laboratory operations. A test about
+/// *phrasing* reaching a verb must not also be measuring which room the verb lives
+/// in — that is what `every_verb_is_reachable_from_plain_english` was accidentally
+/// doing when `study` came back `Elsewhere { Research }`.
+fn anywhere() -> Scene {
+    Verb::ALL
+        .into_iter()
+        .filter_map(Verb::anchor)
+        .fold(tower(), Scene::offering)
 }
 
 fn echo(input: &str) -> String {
@@ -205,7 +224,7 @@ fn every_verb_is_reachable_from_plain_english() {
     ];
 
     for (input, expected) in plain {
-        let resolution = resolve(input, &tower(), Mode::Calm);
+        let resolution = resolve(input, &anywhere(), Mode::Calm);
         let intent = resolution
             .intent()
             .unwrap_or_else(|| panic!("{input:?} did not resolve: {resolution:?}"));

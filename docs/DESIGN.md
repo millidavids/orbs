@@ -2380,6 +2380,629 @@ they are re-pointed at the phases that now need them rather than quietly dropped
 
 ## 19. Decisions log
 
+### Scrying is a code-breaker, and the first design deleted its own puzzle
+
+**§10's form for this domain was one line — *"deduction: parse noisy logs to find
+truth"* — and §10 says outright that the forms are a table, not a design.** The
+mechanic is now a ward: a far wizard's orb sealed with four sigils drawn from
+six, none twice, 360 codes. You press figures against it and read how it answers.
+The stolen logs survive as the *yield* rather than the mechanic.
+
+#### The vice, and why the obvious design cannot work
+
+Measured over all 360 codes: **"press anything still consistent with the answers
+so far" solves in 4.24 presses, and the best play there is manages 4.08.**
+Mastermind's entire difficulty is bookkeeping, and a machine gets bookkeeping for
+free — so there is no skill above the naive strategy to reward.
+
+And `parser::question` is stateless: `Has`, `Is`, `Not`/`All`/`Any`, every operand
+a literal written into the file. A spell's only memory is what the world writes
+down. So:
+
+| The world publishes | A spell can solve it | A player has a puzzle |
+|---|---|---|
+| the last answer only | **no** — two numbers it cannot turn into a guess | yes |
+| the surviving candidates | yes, in three lines | **no** — the orb has done it |
+
+**There is no useful middle.** A first design published a standing per sigil; it
+buys 0.09 presses out of 4.24, and it means the orb is deducing.
+
+#### The fix: two channels onto one ward
+
+| | The player | A spell |
+|---|---|---|
+| Reads | `aligned`, `astray` | `closer`/`level`/`further`, `marks`, `settled` |
+| Method | deduction | greedy hill-climbing |
+| Presses | **4.14** | **22.8** |
+
+Both use the same two verbs. *Did that help* is a fact the world can write down
+without inferring anything, and it is enough to hill-climb on — so §8's language
+automates a puzzle it could never solve.
+
+**The player still wins, 5.5 to 1**, which is the margin the domain rests on and
+is pinned by `deduction_beats_the_ladder`. A bound solver earns less per ward and
+runs while you are in the laboratory, which is §8's argument for automation
+landing through concurrency rather than speed.
+
+#### The ratchet, and the settle-lock
+
+**A press that does not gain snaps the aperture back.** This is the undo §8's
+variable-free language cannot express: without it a blind ladder destroys the
+sockets it has already got right and never converges. It never blocks correct
+play — putting the right sigil in its own socket always raises `aligned` — so it
+costs only the ability to hold a *worse* figure, and it makes a wrong press cost
+ticks and nothing else (§11.5's *"cost is the resource, never progress"*).
+
+**A gain settles a socket only when it was the only one that moved**, and both
+looser rules were wrong. Settling everything ever touched locked the aperture on
+the first gain. Settling everything touched *by this press* is worse and subtler:
+with no repeats, dialling a sigil already in play exchanges two sockets, so a gain
+of one settles both — and code `[0,1,3,4]` reaches three aligned with its fourth
+socket locked wrong, unsolvable by any ladder. One socket moved and `aligned` rose
+is **entailed**; that is the only claim the world may make.
+
+A settled socket then **refuses** later dials, which is what bounds the walk. The
+improving move a ward always has is provably reachable without disturbing one.
+
+#### Names, and two words that did not survive
+
+**`scry` is not a verb**, and §10's own word for the domain losing to a naming
+rule is worth recording. `tests/naming.rs` forbids two canonicals sharing a
+three-character prefix, having deleted its last exemption on the grounds that
+*"an exemption that outlives its cause is how a guard quietly stops guarding"* —
+and `scr` reaches `scribe`. `probe` opens a reading when none is open, which is
+`grind`'s move-and-wield idiom; the fixture that existed only to carry the other
+verb went with it. `seat` became **`dial`** to the same rule (`sea` reaches
+`sift`'s `search`), and `dial` is the better word anyway: a ward is a lock.
+
+**The first six sigils all failed a sweep**, `crown`/`cron` scoring 800 against
+`bind`'s shell synonym — above the 750 the pinned set tolerates. They are now
+`nitre`, `alum`, `borax`, `quartz`, `pewter`, `ochre`.
+
+**And three readings leaked.** `gained`/`held`/`lost` are `NounKind::Sense`, which
+`NounKind::Any` reaches — so `purge grind` fuzzy-matched `gained` and answered
+*"there is no gained within reach"* from the laboratory. Ordinary English
+participles sit in the way of half the words a player might mistype; comparatives
+do not. `open` went the same way for a plainer reason: it is `peruse`'s own shell
+synonym. They are `closer`/`level`/`further` and `loose`.
+
+#### Two entanglements the lens pulled apart
+
+**`is_operation` is not "does this take the production slot".** It answers *is
+this word scoped to one instrument*, and `spell::block::begins_work` was reading
+it as the other question. `dial` is scoped and schedules nothing; left alone a
+spell's `dial first nitre` would queue behind a brew and burn `PATIENCE` doing
+nothing.
+
+**And the slot question itself is where the lens differs from the archive.** §19
+refuses the slot to a maze because a solve is hundreds of ticks and a solver
+holding it would starve every other spell. A press is twelve ticks and gives the
+slot back between presses — so the lens can honour ROADMAP's stated scarcity,
+*"a read is not a brew"*, where the archive could not.
+
+**A ward between presses is `charged`, not `fouled`.** It holds no stock, so the
+panel's fall-through read *"holding only what the last run fouled it with"* and
+the prism reported a mess it did not have.
+
+#### What a solve pays
+
+`prism = 8`, the alembic's tier, and the yield curve is much gentler than the
+first draft's. Halving per press past par lands a 23-press ladder on a floor of 1,
+while it *already* pays 5.5× the ticks — the penalty double-counts and drives
+automated scrying below the archive's maze. Three quarters beyond par, and the
+tick cost does the real work: **0.161 XP/tick hand-played against clarity's 0.170,
+0.022 for a bound solver against the maze's 0.006.**
+
+### The world sabotage surface — §8.1's second of four
+
+**A reagent is substituted: the name changes and the identity does not.** That is
+the whole mechanism, and it is what §8.1's world-state row already specifies —
+*"reagents swapped… substituted entities fail ID check → `Referent missing`"*. A
+spell resolved the reagent at cast to a stable id; the id still points at the
+pile and the *name* no longer matches, so the spell stops working for exactly the
+reason §8.1 says it should.
+
+It is the mirror of how a poisoned log works. **Nothing stored is destroyed**, so
+the tampering is recoverable, comparable and `verify`-able — the same argument §3
+makes for a poisoned line being re-emitted rather than rewritten.
+
+**Both of §8.1's channels, because either alone is a defect.** `survey` shows the
+odd one out on the shelf, carried by the *name* rather than by a colour; `verify`
+finds it in one command and **names it**, which §8.1's design rule requires —
+*"the skill is knowing which surface to inspect, not deciphering an obscure
+clue"*.
+
+**A place answers for what stands in it**, one level deep. Verifying a shelf and
+being told `sound` while a swapped pile sat in it would be the surface reporting
+the container rather than the contents; recursing the whole tree would be
+`verify --all`, which §8.1 prices as Production-class work.
+
+#### Endless base stock only, and the restriction is the design
+
+A first pass took any pile at all and swapped `ground-sage` sitting between a
+grind and a digestion. **That does not misdirect a player, it destroys work in
+flight** — against §5.1, which keeps environmental damage in the calm layer and
+leaves misdirection as the thing to see through, and against §11.5's *"cost is
+the resource, never progress"*.
+
+A base reagent is the honest target for the same reason it is endless: the tower
+always has more, so what a swap costs is the **spell that named it** and nothing
+half-made. It is also the thing a spell names most, which is what makes the
+sabotage worth finding.
+
+It announced itself by breaking `meditating_stalls_at_a_stage_boundary` — a test
+about the pipeline with nothing to do with sabotage. A nuisance that can reach
+into a running brew shows up as noise everywhere, which is the signal that it
+reaches too far.
+
+#### A second system, not a branch, and the reason is the stream
+
+`drift` and `substitution` both draw once per tick from `RngStream::Threat`.
+Interleaving two rolls inside one system would make *which* surface is hit depend
+on how many draws had happened before it — so adding the world surface would
+silently invalidate every existing log-poisoning replay. Two systems each drawing
+once is one more draw per tick and no reordering of what either sees, and the
+second is **appended** to the schedule for the same reason a stream index is
+never inserted.
+
+Swaps are four times rarer than log drift: a poisoned log misleads one reading,
+and a swapped reagent stops a spell.
+
+**Two of §8.1's four surfaces now ship.** Script text and trigger clocks stay in
+Phase 8, where §5.1 puts adversarial aberrations — with no siege they have no
+producer, and an item that cannot close does not belong in a numbered phase.
+
+### The solver spell, and the two words it taught the lens
+
+`debug_spell breaking` is 24 rungs, one per socket and sigil, and writing it
+found two things the design had assumed rather than checked.
+
+**`is empty` cannot mean *no ward*.** `spell::watch` answers `empty` by asking
+whether the node has **children**, and a prism's children are its published
+readings — of which there are none until the first press lands. A `breaking`
+bounded on `repeat until the prism is empty` ended on its own first instruction,
+having pressed once and looked finished. **An open ward reports `working`**, the
+same answer the stacks gives for an open maze and for the same reason, and the
+bound is `repeat until the prism is idle`. (`charged` was the first answer and is
+also wrong: it means *wield this and it runs*, which a reading in progress is
+not.)
+
+**A guard that never moves is a ladder that never advances.** Every rung for a
+socket asked the same `loose` question, so the first rung fired for ever — and
+the first rung is `dial first nitre`, which the opening aperture already holds,
+so nothing moved, nothing pressed, and the spell spun for six hundred ticks
+having done one press. The fix is a **per-socket tally**: a dial *aimed* at a
+socket marks it whether or not anything moved, so the next lap takes the next
+rung. That is honest bookkeeping — *attempts on this socket* — and it is the only
+way a language with no variables can walk a list.
+
+A settled socket is deliberately **not** marked, because the latch means *stop
+looking here*, and a tally that kept climbing on a socket nobody may touch would
+tell a ladder it had made progress.
+
+**It keeps going, unlike `threading`.** A maze solver stops at one so a single
+walk can be observed; a ward solver is a faucet, and breaking seals while the
+player is in the laboratory is the whole reason to bind one.
+
+#### Slot contention, measured
+
+§19 refuses the production slot to a maze because *"a solver holding the tower's
+one slot would starve every other spell into `spell_gave_up`"*, and a bound
+`breaking` presses for twelve ticks in roughly every thirteen — worse in
+occupancy than the case that refusal was written for.
+
+**Measured rather than assumed**, which the plan for this phase insisted on: over
+600 ticks the solver does not own the slot outright, and a `grind` issued beside
+it still completes. The tower is **contended, not starved** — `PATIENCE` is 120
+ticks and a gap arrives far more often than that. A brew beside a bound solver is
+slower, which is the trade §5.0 calls *"concurrency is the real scarcity"*
+working as intended rather than a defect.
+
+### Discovery lives in two rooms, and the lens is the second
+
+**§11 puts discovery in `archive/`** — *"decipherment; powers all discovery"* —
+and the lens now discovers things too. That is not a contradiction, and the split
+is what makes it not one:
+
+| The archive discovers | The lens discovers |
+|---|---|
+| **your own capability** — verbs, hidden directories, what fragments assemble | **other people's knowledge** — what a far wizard knows how to make |
+
+You do not decipher a recipe out of your own shelves. You steal it from somebody
+who already had it, which is what a broken ward is for.
+
+#### The spill
+
+A dozen lines of somebody else's laboratory, **quiet** — they go to `lens.log`,
+and the transcript gets one sentence saying how many there were. Twelve lines a
+solve on the transcript would push the player's own last command off screen in
+seconds, which is the argument §19 already makes for a spell's output.
+
+**Generated from real content, so it stays true.** The shapes are authored and
+the nouns come from `Recipes`, so a line always names an instrument doing
+something it can actually do. A free-for-all of names would print `digest sage`
+— plausible, false, and a player who tried it would learn the wrong thing about
+their own tower.
+
+**A secret can appear in the spill, and that is the point.** `distil dregs` in
+somebody else's log is a recipe you do not have, sitting there being used. It is
+a hint rather than a leak, because the word is not in *your* vocabulary until you
+find it.
+
+**`RecordKind::Message`, not `Entry`.** An `Entry` speaks as a `TableRow`, which
+`Record::is_prose` excludes — so every field draws, and a stolen line came out as
+`probe mix phlegm prism`: the orb's own bookkeeping wrapped around somebody
+else's log entry.
+
+#### Secrets: content, not player state
+
+`recipes.toml` gains `secret = true`; `tower::Learned` holds what has been found.
+Keeping them apart is what lets `Recipes` stay immutable, which is what recipe
+replay rests on — and `Learned` is itself reproducible from `(seed, submissions)`,
+because a discovery is a seeded roll on a deterministic tick.
+
+**Exactly three questions consult it**, and the restraint is the design:
+whether a recipe fires, whether it is *part-way* to firing, and whether its
+product is a word the player can say. **Everything else stays unfiltered**, and
+one of those would have been a real defect: `execute::scroll` derives a base
+reagent as *"in the vocabulary and made by nothing"*, so a filtered `outputs`
+would drop an undiscovered potion out of "made" and offer it as an inexhaustible
+herb — the same shape as the bug §19 records shipping once, when every byproduct
+read as a herb.
+
+**The gate is a set subtraction in `scene_at`, and it has to be there.** `Topics`
+is snapshotted once at construction so a prose reload cannot change what a phrase
+resolves to — and a secret potion's `recall_` page *is* a prose key, so it is in
+that snapshot from tick 0. Gate it at snapshot time and `recall <secret>` answers
+before the player has found it, with every other test green because the recipe
+still refuses to fire.
+
+**An unfound recipe reads `fouled`, not `charged`.** Honest rather than coy: the
+player is holding something that makes nothing, as far as they know. `charged`
+would promise a run that can never start.
+
+#### The curve, and the three that ship
+
+`0.04 + 0.04 × solves_since_last`, capped: mean about six solves, **certain by the
+25th**. A flat chance leaves a player forty solves in with nothing; a certainty
+makes the lottery a queue. It **retires** once all three are found rather than
+rolling against an empty pool.
+
+The three are `mending`, `dreaming` and `vigour`, and each is **one step over a
+byproduct** — potash, sediment, dregs. That is the point rather than a saving:
+§10.1 gives every byproduct one use, and these give three of them a *second*, so
+what you find is a use for something you have been throwing away. Each is also
+the colour of what it was distilled from, which
+`the_flasks_products_are_the_colour_of_what_makes_them` enforces and which caught
+all three of a first pass's prettier choices.
+
+**The file's order is the reveal order** — the roll takes the first unfound one
+rather than drawing at random, so `recipes.toml` decides what a player meets
+first, and a replay reaches the same tower.
+
+### The board — the ward as a sheet, and what it may not show
+
+The map's shape one room over: **not gated on a word**, so a bound solver is
+watchable; **columns, never rows**; and it splits *after* the instrument panel,
+because whichever runs second is the one whose refusal can fire.
+
+**It refuses rather than panning, and the maze does the opposite.** A maze is 33
+squares across and a window centred on the reading is a useful answer; a ward is
+ten columns and every row matters equally, so a sheet showing four of six presses
+has lost the two the player was about to compare. There is no "where you are" to
+centre on.
+
+**It carries nothing the readings lack, and adds only *history*.** Every row is a
+press the transcript already reported; what a sheet buys is five of them side by
+side, which is what makes deduction possible without a notepad. Nothing is
+inferred, because the sim it reads from infers nothing.
+
+**The figure recorded is the one that was sent, not the one it snapped back to.**
+A board logging the reverted aperture would say a press answered something the
+press never asked.
+
+**Six glyphs, never six colours** (§14). `▪` for a held socket is not in CP437 and
+was the first choice; `■` is. `●` for a peg is not either; `•` is. Both were
+caught by the board's own repertoire test rather than by a player — the same
+class of miss §19 records finding in DESIGN.md's own boot text.
+
+**Spoken once, as a summary.** A reader hearing four sigils and four pegs read out
+cell by cell gets box-drawing noise, which is exactly what putting structure on
+one channel and content on the other exists to prevent. The per-press detail is
+already in the transcript, where it was said as a sentence.
+
+### The tower rail replaces the telemetry pane — Phase 2 item 2
+
+**§9's sidebar was built, tested, and unreachable**, listed in this log under
+*"gated by: brewing + archive — nothing to minimise with two panes."* Scrying is
+the third domain, so the gate opens — and what it opened into is not the shape
+§9 wrote.
+
+**A thin vertical column on the right, one box per domain**, rather than
+full-width rows above the input line. Everything §9 argued for survives:
+awareness only, never commandable, and it yields before the main window does.
+What moved is the axis, and the reason is arithmetic — **a row can hold a name
+*or* a state *or* a spell, and a box can hold all three.** A glance at seven
+domains wants to know that the alembic is busy *and* that `tending` is what is
+keeping it busy, and one line cannot say both.
+
+There is **one implementation**, not two: `ScreenLayout::sidebar` became
+`ScreenLayout::rail`, with its tests rewritten to hold the same properties on the
+other axis.
+
+| | |
+|---|---|
+| Columns | **16.** Inset one leaves 14, against `battlements` at 11 plus a mark, `►tending` at 8, `al 22t` at 6 |
+| Boxes | **Seven, always.** An unbuilt room is a dim dotted row with no name |
+| Below the floor | **Dropped whole**, never narrowed — at 80×22 there is no rail and the session pane is intact |
+
+**The telemetry pane is gone, and `PANES` is 1.** It drew nine developer readings
+into fifty-eight columns; five of them are at the rail's foot and the other four
+— `seed`, `queued`, `logged` and the rest — were already in `status`. **They
+could not have moved there anyway**: `scale`, `cols`, `rows` and `focus` are
+`Screen` facts, and `status` lives in the sim, which rules 1 and 2 forbid a
+window.
+
+**What one pane bought: the session body went from 58 columns to 102.** The
+laboratory's instrument panel flips to `Along::Side`, and — unplanned — **the
+archive's maze stops panning**, because the whole 35-column picture now fits
+beside a transcript. This log's own note that it pans is amended: it pans below
+this grid, and `ORBS_GRID=80x22` is where to see that.
+
+**Seven slots with four dark is foreshadowing, and it is deliberate.** A rail
+showing only what exists would grow a box at a time with no warning. Naming the
+unbuilt rooms would spend §11's discovery; drawing them anonymously says *there
+is more* without saying what. It also keeps the built boxes in fixed positions,
+which is what makes a mark findable.
+
+#### Marks: a latch cleared by walking in, never a timer
+
+A mark says *something happened over there*. It is cleared by `attend`ing the
+domain and by nothing else — diegetic, needing no second clock, and unable to
+drift from what the player has actually seen. **A timer was the alternative and
+is worse**: it would clear while the player was making tea, which is the case
+idle play is largely made of.
+
+**A fault outranks news**, in either arrival order, because the rail has one
+glyph to spend and a player shown the find and not the broken spell has been told
+the less useful of the two things.
+
+**Glyphs, not colours** — `‼` and `!`, with the accent carrying the same fact a
+second time. A red border and a green exclamation are the obvious design and are
+exactly what §14 forbids.
+
+**A refused command is not a fault.** The mark is raised in `say_failure` at
+`Role::Danger` only, which is four cases: a spell gave up, named something that
+is not there, used a verb it may not, or holds a line the orb cannot read. A
+`Cost` there is a spell politely waiting for the production slot, which happens
+constantly.
+
+#### Two things it cost, both recorded rather than fixed
+
+**`F4` is visibly inert at one pane.** §9 makes the focus mode overridable at any
+time and this log fixes the switch on `F4`; with one pane both tilings are
+identical, so the key does nothing until multiplexing returns the second pane in
+Phase 9a, when it reclaims its job with no code to change. Reassigning it to
+toggle the rail would re-litigate two recorded decisions to buy a key a job for
+one phase. ROADMAP's ✅ line claiming *"`F4` changes the split"* is amended to
+what remains true, and `f4_switches_focus_without_moving_the_grid` now asks about
+an explicit two-pane request — the property is about the tiler, not about today's
+pane count.
+
+**`PaneTransition::panes()` is gone** with its one non-test caller. It comes back
+with multiplexing, which is the only thing that will make the count vary again.
+
+#### The boxes are ruled off, and drawing the rule changed the layout
+
+A box holds one to four rows of content in a five-row slot, so consecutive
+domains ran together in a column of whitespace and which line belonged to which
+room was left to the reader. **A horizontal rule closes every box but the
+seventh**, whose boundary is the foot's own rule — two rules in adjacent rows is a
+thing nobody would author deliberately. The rule belongs to the box *above* the
+boundary, so it costs that box a row, and it is silent like the border: structure
+writes cells and no speech, and a reader hearing six horizontal lines read out
+between seven domains gets box-drawing noise where a sighted player gets
+separation for free.
+
+**Drawing it made an existing unevenness visible, which is the interesting part.**
+`lay_rail` gave its remainder to the earliest boxes — `tiling::deep`'s rule,
+shared deliberately so this crate had one way of splitting leftovers rather than
+two. That is right for a pane, whose exact height nobody can see. It is wrong for
+a *ruled* box: the first box was one row taller, so one separator sat a row below
+the other five and read as a defect. **The remainder now goes to the foot**, where
+slack is invisible because the readings are top-aligned. Seven equal boxes, six
+evenly spaced rules.
+
+`MIN_RAIL_BOX` went **3 → 4** with it, and the doc it had was already the argument:
+*"a name, a state, and the spell running there."* At three, with a row spent on the
+rule, the squeezed box kept its name and state and silently dropped `►spell` — the
+one row that tells a player a room is automated. The fixed 120×45 grid gives each
+box five, so this moves only where the rail yields entirely.
+
+#### `▸` is not in CP437, and the lint that exists could never have said so
+
+The spell marker was `▸` (U+25B8), which is not in the code page, so it drew as
+`?` — the row saying a room is automated instead read as *the orb does not know
+what is there*, which is the worst available reading of it in the pane whose whole
+job is a glance. `►` is CP437 0x10 and is the glyph that was wanted.
+
+**`cp437::is_renderable` never saw it, and would not have.** That lint runs over
+authored *prose*, because rule 6 puts every player-facing string in a TOML file —
+and a painter's structural glyphs are Rust literals by design, which is the one
+category the content pipeline cannot reach. The board's `▪` was the same defect and
+this log records it; a second occurrence in the same phase is the argument for a
+test rather than for care, so `every_glyph_the_rail_draws_is_in_the_code_page`
+asserts the painter's own constants.
+
+**And the spell row said `tending.spe`.** A spell node is named for the file it was
+scribed to, so the brief carried `tending.spell` — six columns of extension in a
+fourteen-column rail, cut in half by the rail's own truncation. Stripped in
+`brief.rs` using the `content::without_extension` that already existed, **not** in
+the painter: rule 2 gives a frontend only *how* a cell is drawn, so `orbs-tui` must
+not have to know that spells live in files.
+
+### `orbs-balance` is built, and it disagrees with four numbers — Phase 2 item 1
+
+**Built first in the phase, deliberately**, because ROADMAP writes the item as
+*"**before** five phases author durations on top of unswept ones"* and because
+§15's own rule is *build the instrument before the thing it measures*. It drives
+a real `Sim` through `submit` with five synthetic players, samples experience
+against ticks, and prints a per-tick rate against a pinned reference.
+
+It found four things on its first clean run. **None of them is a bug**; all four
+are the difference between a number argued for in a sentence and a number a
+player can reach.
+
+**1. Every rate in §11.5 is a *recipe-tick idealisation*, and the real loop is
+about 25% slower.** Clarity's 0.170 is 16 experience over 94 ticks — grind 8,
+digest 12, grind 8, mix 10, distil 56 — and counts nothing else. A hand-played
+clarity reaches `experience 16` at **tick 123**, which is 0.130, because every
+command pays a tick of queue latency and each fouled instrument pays a
+`PURGE_TICKS` scour before the next lap can load it. A running loop settles at
+**0.140** once the first lap's setup is amortised. The design keeps its
+idealisation, which is the right way to *derive* a threshold; `orbs-balance`
+pins the reachable number, which is the right way to catch drift.
+
+**2. §10.1's damping is *behind*, not ahead — and the reason is that fuel is
+endless.** §10.1 argues the efficient play is *light → digest → damp → combine →
+relight → distil*, and this log calls that *"the best argument yet that `stop
+athanor` is a real move"*, claiming the damping script is *"meaningfully ahead
+over a session"*. Measured, `damped` is **0.1356 against `clarity`'s 0.1400** —
+3% behind. Damping does avoid the five lost laps an hour that a guttering fire
+costs the careless policy, but it pays two extra commands every lap to save a
+resource that `build.rs` deliberately makes `Holding::endless`.
+
+**This is a real gap in the design, not a tuning miss.** ROADMAP's six-row table
+gives brewing *"a shared, **depleting** resource — lit time"*, but lit time only
+depletes something if fuel is scarce, and it is explicitly not. Either charcoal
+stops being endless — which `build.rs` refuses on the grounds that *"a cold
+athanor with nothing to burn is a laboratory with nothing to do"* — or lit time
+buys something other than fuel, or brewing's stated scarcity is not one. **The
+claim is withdrawn until one of those is chosen**; `Policy::DAMPED` stays in the
+harness so the day it gets ahead, the table says so.
+
+**3. The haste chain still dominates the flagship, and the risk stands.** This
+log already records it at 0.367 against 0.170, a ratio of 2.16. Measured it is
+**0.2553 against 0.1400 — 1.82**. Gentler, same shape, still the case that the
+shortest chain in the laboratory out-earns the potion the tutorial teaches.
+
+**4. The archive maze is 10–20× below the flagship, and it is seed-dependent.**
+`progression.toml` already flags `stacks = 4` as *"a question for the balance
+harness rather than for this change."* The harness answers: **0.0067 at seeds 0
+and 11, 0.0144 at seed 3**, against clarity's 0.140. It is excluded from the
+pinned reference table for that spread — pinning it would pin a seed rather than
+a rate.
+
+#### Two things the harness needed that the sim's shape decides
+
+**A policy is a policy, never a script with a stopwatch.** Every command goes
+through `Sim::submit` and lands on the next tick like a player's, and the only
+timing model is waiting for the tower to be free. That is this log's own
+distinction — *"a script encodes a policy; `orbs-balance` sweeps policy against
+state"* against *"the harness has no player, so it cannot sweep anything"* — and
+it is why there is no typing delay here and never will be.
+
+**`Sim::working()` is the production slot only, and a driver must also watch the
+triage slot.** §9 gives a pane one production slot *and* one triage slot; a
+`purge` lives in the second and is invisible to `working()`. A driver waiting on
+`working()` alone runs straight over its own scour, is told *"you are already
+scouring the balneum_mariae"*, and reports 0.072 for a loop worth 0.140. The fix
+is to also ask whether any instrument reads `State::Scouring`, which is what the
+instrument panel draws, so the two cannot disagree.
+
+**The `cost` column cannot tell a refusal from a scour, and does not pretend
+to.** `refuse_busy` and `purge` both stamp `Role::Cost` — §4's accent triad says
+*"mana and arcane expenditure"*, which a scour honestly is. Discriminating would
+mean matching prose, and rule 6 puts prose in a file precisely so nothing in Rust
+depends on its wording. So the number is *things that cost something* and `--why`
+prints the sentences, which is where the diagnosis actually lives: **two sweeps
+were read as balance findings before that flag existed, and both were the
+policy's fault.**
+
+### The harness's first regression catch — the ambient swap was terminal
+
+The four findings above were all *disagreements with prose*. This is the first
+thing `orbs-balance` caught that was simply wrong, and it caught it one item
+later in the same phase: the world sabotage surface (Phase 2 item 7) shipped, and
+the next sweep flagged **all four pinned policies at once**.
+
+| | pinned | measured |
+|---|---|---|
+| clarity | 0.140 | **0.074** |
+| damped | 0.136 | **0.104** |
+| haste | 0.255 | **0.116** |
+| grind | 0.100 | **0.093** |
+
+The whole test suite was green throughout, and so was every See-it line — because
+`debug_swap` targets a pile directly and shows the tell working perfectly. What
+nobody had looked at was the *ambient* system running beside it.
+
+**Three defects, each hidden by the next.**
+
+**1. The target was never actually drawn.** `substitution` sorted the endless
+piles by name — correctly, because a replay has to swap the same pile from the
+same seed — and then took `piles.first()`. So *which* pile was hit was as fixed as
+the sort: `charcoal`, then `rock-salt`, then `sage`, in that order, on every seed,
+for ever. A determinism fix that quietly became content. The index now comes out
+of the quotient of the same roll that decided *whether* to swap, rather than a
+second draw — a draw that only happens when the swap fires would move `drift`'s
+stream position by a variable amount, which is the exact hazard the two systems
+were split apart to avoid.
+
+**2. Fuel was in the pool, and it should never have been.** The module's own
+argument for restricting swaps to endless base stock is that a swap must cost
+*the spell that named the reagent* and nothing half-made. Charcoal is named by no
+recipe at all — it is the tower's power supply, so swapping it stops every heated
+stage in every domain at once. Combined with (1) it meant the **first** swap of
+every session took the fire: no `kindle`, therefore no digestion, no
+distillation, no clarity, and none of the three secrets. Fuel is now exempt, on
+the same reasoning that already exempts the non-endless piles.
+
+**3. A swap was permanent, and the repair loop is human-only by construction.**
+This is the finding worth keeping, because it is a fact about the *language*
+rather than about this module. A spell names things with literals — `parser/
+question.rs` has no variables — so a spell can never say *"purge whatever the
+dispensary is lying about"*. It would have to name `sage-`, a word nobody knew
+when the spell was written. So notice → `verify` → `purge` is reachable **only by
+a person reading the screen**, and an unattended tower has no path back at all.
+
+Measured: the standing grind loop fell from 0.100/tick to 0.058 and **stayed
+there for the rest of the session**. §5.1 caps aberration arrival *"so repairs
+cannot spiral"*; a permanent un-automatable swap does not spiral, it terminates,
+which is worse and was never the intent. A lie now settles back to the truth on
+its own, and `purge` still repairs it the instant it is found — which is what
+keeps the human loop worth running rather than making waiting the better play.
+
+**The two constants are swept, not chosen, and only their ratio matters.** A loop
+stalls for as long as the pile it names is lying, so its downtime is `WEARS_OFF /
+SWAP_INTERVAL`. At (1200, never) that was total; at (1200, 1800) it was 60% of
+every window. **3600 and 300 — one swap an hour, five minutes of trouble — is 8%**,
+and at that size every pinned rate came back inside its band on three seeds
+without the reference table needing to move. That is the outcome to want: a
+nuisance small enough that it does not perturb the numbers the rest of the design
+is derived from.
+
+**A swap is also twelve times rarer than a poisoned log now, and it was four.** A
+poisoned log misdirects a reading of one; a swapped reagent stops every loop that
+named it. Pricing them one step apart said they were the same order of
+interruption.
+
+#### The pin was not a pin, and the test that holds it
+
+`report::EXPECTED` is documented as a regression pin, and printed `<-- drifted`
+beside a measurement that left its band — which is a pin only for as long as
+somebody is reading the column. Nothing failed. `tests/agrees.rs`, named for the
+See-it claim *"a sweep's curve and a hand-played session agree"*, drove `Sim` by
+hand in both its tests and would have passed with the entire harness deleted: it
+asserted the reference numbers were *reachable* and never that the harness reached
+them.
+
+Both halves are fixed together, because they are one hole. The crate gained a
+`lib.rs` — a binary-only crate cannot be reached from an integration test at all,
+which is *why* the file had been written against `Sim` directly — and the test now
+runs real policies through `drive::run` and fails when a measurement leaves its
+band. Pointed at the tree as it stood, it flagged all four policies immediately.
+
 ### The arsenal, and §7's one exemption
 
 **Nothing in the tower could be carried between domains.** `carry`'s destination
@@ -7657,6 +8280,450 @@ Two findings from actually rendering these screens rather than only testing them
 | Script invoking script | Permitted, **call-depth limit 3** — the Attention pool alone fails silently |
 | Script vs manual, same domain | Both allowed; different resources; contend only for reagents and mana, manual wins |
 | Hostile host retaliation | **None.** Trace is the entire risk model |
+
+### The dev spells are on the shelf in a debug build, and absent in a release one
+
+**Reversed deliberately.** §19 previously argued that a dev ladder should reach the
+grimoire only when `debug_spell` wrote it, so a tester looking at what the game does
+would not see scaffolding on the shelf. In practice the first thing anybody does
+with one is cast it, and `debug_spell breaking` before `invoke breaking` was a step
+that taught nothing. `raise_grimoire` shelves all three at construction now, under
+`cfg(debug_assertions)`.
+
+**A shelved spell carries its own `Domain` from the file**, which is why this can
+skip the room check `debug_spell` needs. That check exists because `scribe::write`
+homes a *new* spell to wherever the player is standing, so writing an archive spell
+from the laboratory would produce a file whose every line fails to resolve. Nothing
+shelved is new, so nothing is homed wrongly — `threading` is an archive spell on the
+shelf from tick 0 while the player starts in the tower.
+
+`debug_spell` stays for the job that is still its own: handing back a fresh copy
+after one has been edited or purged.
+
+**The release guarantee is the half that matters**, and §12 is why — the archive's
+central puzzle is one the player is meant to find, which is the whole reason these
+live in `dev_spells.toml` rather than `spells.toml`. A release build gets neither
+the nodes nor the eighty lines behind them.
+
+#### The old test could not see the thing it forbade
+
+`the_dev_spells_never_reach_the_grimoire_on_their_own` read `said(&sim)` — the
+sentences said so far — and asserted no dev spell's name appeared in it. No spell
+name appears in that transcript either way, so it passed against a grimoire holding
+every ladder. **An absence test that cannot see the thing it forbids is not a
+test.** Both directions ask `Sim::spell` now.
+
+#### Two things four scripts broke that one did not
+
+Adding three nouns to the grimoire changed what a *nonexistent* spell name resolves
+to, and two tests were resting on there being only one.
+
+**`invoke night_watch` became ambiguous.** It was *unresolved* while
+`first_light.spell` stood alone, so the parser said so and that counted as the world
+answering; with four scripts it ties between them and returns a numbered prompt of
+`Echo` records, which `a_dark_verb_only_acknowledges_and_a_live_one_does_not`
+filters out — so `invoke` looked dead. §19 records the same drift at `brew`, and
+CLAUDE.md's rule from it stands: reach for `purge` when you want an ambiguity
+fixture, rather than depending on how many nouns happen to exist.
+
+**And a forward reference became a fault**, which is the real defect of the two.
+§8's own worked example is a spell invoking one the player has not written yet, and
+`compile::names_a_spell` quoted such a line rather than resolving it — but it only
+covered `Resolved` and `Incomplete`. A forward reference matches no spell well, so
+which of those it produces depends on how many spells exist: one, and it resolved
+(the verb is weighted double); four, and it came back `Ambiguous`, fell through, and
+was reported as `spell_missing`. Shelving the ladders surfaced it; **a player with
+four spells of their own would have found it just the same.** The rule is *this line
+names a spell*, and a tie between spells is still that.
+
+### A press is instant, and the lens costs the tower nothing
+
+**`PRESS_TICKS` is 0.** A probe used to schedule twelve ticks of work on the prism
+through the ordinary production machinery; it now answers on the tick it is typed,
+like `dial`.
+
+**This withdraws ROADMAP's stated scarcity for the domain.** *"A read is not a
+brew"* was that sentence, and it was the whole of what scrying cost: §19 refused the
+production slot to the archive's maze because a solve is hundreds of ticks, and gave
+it to a press because twelve is short enough to hand back between presses. There is
+now no slot to hand back, and the lens competes with the laboratory for nothing.
+
+Two things follow, and both are balance facts rather than opinions:
+
+- **A bound solver runs beside a full brewing loop with no contention.** Measured,
+  the solver earns about **0.07/tick** against clarity's 0.140 — half, and additive,
+  where before it was a third of that and took the slot 12 ticks in every 13.
+- **`orbs-balance`'s four pins are unmoved** (clarity 0.1376, damped 0.1326, haste
+  0.2460, grind 0.0958), because no policy scrys. The harness cannot see this
+  change, which is exactly why the number above is stated here.
+
+Hand-play is the part that plainly improves: deduction over four sigils should not
+wait twelve seconds per press, and now it does not.
+
+#### It changed what a solver spell's loop does, which no test would have caught
+
+`repeat until the prism is idle` solves the ward in front of it and exits. With a
+press *in flight* for twelve ticks the guard was asked before the solve landed, so
+the loop never fell out and an invocation lapped for ever — **by accident.** An
+instant press lands the solve before the guard is asked, so the loop exits and an
+invocation is one ward.
+
+The faucet is therefore the **binding**, which re-casts a spell that has run off the
+end. That is the honest shape and the one §8 already describes: an invocation is an
+act, a binding is standing automation. `the_solver_spell_keeps_solving_and_never
+_goes_quiet` now binds rather than invokes, and asserts the second hour earns like
+the first.
+
+`PRESS_TICKS` is kept as a named nought rather than deleted: it is the number the
+domain's rates were derived against, and pricing a press again should change one
+line rather than reintroduce a concept.
+
+### `dial <socket>` with no sigil — the state that makes the ward scriptable
+
+**The question was whether the lens can really be scripted.** It could, and the
+script was twenty-four rungs across eighty lines. That is a spell nobody writes; it
+is a spell somebody *generates*. So the domain gained the one piece of state the
+language cannot keep for itself.
+
+**The bind: a spell cannot name the sigil it has not tried.** Every operand in
+`parser::question` is a literal, so *"put something else in this socket"* has no
+expression — the only way to say it was to enumerate all six per socket and use the
+per-socket mark count as an index into `SIGILS`. Both halves of that were wrong:
+
+- **A mark is not an index.** `seat` marks a socket for every dial *aimed* at it,
+  including one that moved nothing, and a swap marks the far end too — so the count
+  outran the sigils actually tried and a socket exhausted its rungs with candidates
+  left.
+- **Nothing reset it.** A gain moves the baseline the ratchet keeps, so sigils
+  rejected against the old figure are worth trying again. The reference ladder in
+  `tests/ward.rs` does exactly this with `tried.clear()` — and **that test never ran
+  the spell**, so it was proving a Rust loop terminates while the thing a player
+  casts went unmeasured.
+
+**`Ward::tried` is the state**: which sigils each socket has been set to since the
+last gain. It is what a player with squared paper would keep, which is the test this
+log applies to the maze's map. Three rules over it:
+
+| | |
+|---|---|
+| `seat` records the sigil | **before** the early returns — dialling one a socket already holds *has* tried it, and that is exactly the case where nothing moves |
+| a gain clears the sockets that **moved** | not all four; see below |
+| `replenish` gives them all back when none has any | the termination guarantee |
+
+**`dial <socket>` takes an optional sigil**, on `recall`'s `TOPIC_OPTIONAL`
+precedent: bare and argumented are the same act — turning that dial — at two
+scopes. Bare, the ward picks the first untried sigil. The socket publishes
+`untried` as a count, so the existing comparison grammar guards it:
+`if the first has 1 or more untried`.
+
+**The solver is now four rungs and twenty-four lines**, against twenty-four rungs
+and a hundred and five. That is the whole deliverable: a spell a person can write.
+
+#### Three measurements, and the first two corrected the third
+
+**A plateau that was not one.** The first evidence that the old ladder stalled was
+seed 1 freezing at 78 experience between `meditate 4800` and `meditate 9600`.
+`MAX_MEDITATE` is **3600**: both runs were the same 3600 ticks. A long wait has to
+be several commands, and the retraction is recorded here because the finding was
+stated before it was checked.
+
+**Clearing all four sockets on a gain cost a quarter of the rate.** Measured over
+14400 ticks across six seeds, that version ran 216–258 experience against the
+twenty-four rung ladder's 186–440 — it spent its next laps re-trying sigils that
+were still wrong. Clearing only the sockets that **moved** brings it to 292–338,
+which is a mean of 313 against 323: even, and far more consistent than the spread it
+replaced.
+
+**And the old ladder did not stall after all.** With the cap accounted for it earns
+linearly. What was true of it is the part that mattered: nobody would write it.
+
+#### The termination guarantee is a proof, not a sample
+
+A four-rung ladder falls through to `wait` when every socket reports no `untried`,
+and the loop below it then presses an unchanged aperture for ever — holding the
+tower's one production slot and earning nothing. That is the failure a faucet has:
+not a crash, silence. Six seeds over 14400 ticks never reached it, and *never
+observed* is not *cannot happen*.
+
+`Ward::replenish` gives every **unsettled** socket its candidates back when none has
+any left. Settled sockets keep their lock, so the monotonicity the walk rests on —
+`aligned` only rises, settled sockets only accumulate — is untouched. Two unit tests
+drive **all 360 codes** rather than a handful of seeds: one asserts a socket is
+always left to turn, the other that the four-rung shape breaks every code.
+
+### The ward's sheet was ten cells wide in a pane of a hundred
+
+**Reported from play: the ward box is too small to read.** It was, and the size was
+only half of it.
+
+The first sheet packed four sigils, two spaces and four pegs into ten cells —
+`☼○♂♀  ••○ ` — which is correct, compact, and a wall of symbols. Two things were
+missing that no amount of *correct* makes up for:
+
+- **Nothing said which column was which socket.** `dial second borax` names a socket
+  by word, so a player had to count along the row before they could type.
+- **Nothing said what a glyph was called.** `♦` is `pewter`, and the only place that
+  mapping appeared was the transcript the sheet exists to save you re-reading.
+
+It is 39 cells now: a press number, four named socket columns with the glyph centred
+under each, and the pegs under an `answer` header — with a two-row legend beneath
+pairing every glyph with its word.
+
+```
+    first second  third fourth  answer
+ 1    ☼      ○      ♂      ♀   ○ ○
+ 2    ☼      ♂      ○      ♀   ○ ○
+ 3    ☼      ○      ♀      ♂   • ○
+───────────────────────────────────────
+ →    ☼      ○      ♀      ♂   · · · ·
+ ☼ nitre   ○ alum    ♂ borax
+ ♀ quartz  ♦ pewter  ♠ ochre
+```
+
+**The words come from the sim, through `Ward::view`.** They are content
+(`tower::ward::SOCKETS` and `SIGILS`), and `orbs-render` may not depend on
+`orbs-sim` — so `Board` carries two name arrays rather than the painter knowing any
+of them. It is the same reason the view exists at all.
+
+**Numbered from the history, not from the sheet.** The cap still shows the last
+twelve presses of a fifty-one press ladder; numbering those `1..12` would say the
+solve had just begun, so the gutter counts the real press.
+
+**It still fits the 80×22 floor** beside a transcript, and still refuses whole
+rather than truncating — a row missing its pegs says a press answered nothing.
+
+Four tests pinned the ten-cell strings and are rewritten against the shape rather
+than the spelling: every row is exactly `COLS` wide (one short row shifts every peg
+beneath it and makes two presses look alike), the header names what `dial` names,
+and the legend pairs all six.
+
+### `move` stays in the laboratory, and stops being taught there
+
+**Raised from play: the word should be unnecessary, because calling a stage's own
+verb ought to fetch the ingredient.** It already does, and more completely than the
+question assumed — `pipeline::reachable` walks every instrument in the room that is
+not busy, in raise order, and *then* the store. So `grind sage` fetches from the
+shelf and `digest ground-sage` reaches straight into the mortar and takes the one it
+needs, leaving the husks. **A whole clarity brews to `experience 16` without the
+word `move` appearing once.**
+
+**So it is redundant in the loop and is not redundant in the room**, and those are
+different claims. Two things need it and nothing else does them:
+
+- **`move clarity to arsenal`.** Finished work leaving the room that made it is what
+  `/tower/arsenal` was built for, this log records that *nothing in the tower could
+  be carried between domains at all* before it, and potions are made in the
+  laboratory. Removing `move` there would put the exemption back where it started.
+- **Reaching `charged`.** `grind sage` is the fetch and the wield in one tick, so
+  the bowl never rests at `charged` and never pours. Three animation See-it lines —
+  the mortar filling, the bath's vessel, the flask's two-colour mixture — exist only
+  because `move` can stop there. No other word can.
+
+**What was actually wrong is that the manual taught the superseded form first.**
+`recall move`'s page opened on `move sage to mortar_and_pestle, then wield it` — a
+pair of commands no loop has needed since §10.1 gave every instrument a verb. The
+page now leads with carrying to the arsenal and demotes loading to a note. The room
+primer never mentioned it.
+
+#### The property nothing asserted
+
+`orbs-balance`'s `BY_HAND` brews a clarity with no `move`, which looks like the
+claim and is only its weaker half: it `empty`s the mortar before digesting, so the
+ground-sage is fetched from the **shelf**. It would keep passing if the tool-to-tool
+reach were deleted tomorrow. `tests/fetching.rs` holds the real one, and a mutation
+that skips the instrument tier in `reachable` fails it with *"there is no
+ground-sage within reach"* — which is what a player would have seen.
+
+**`empty` is not the same question and is still required.** It clears the
+*byproduct* the last stage left, so the mortar can take a second load; without it
+the brew stalls at `grind rock-salt` with *"the mortar_and_pestle can do nothing with
+husks, rock-salt"*. Applying the same fetch-for-me treatment to byproducts is a
+larger change and is not this one.
+
+### A verb is scoped by its fixture, not by whether it takes the slot
+
+**Asked for from play: `help` in a domain should only show what works there.** It
+was listing `research`, `follow` and `wander` in the laboratory and the lens, where
+none of the three can do anything.
+
+The cause is the entanglement this log already recorded. `Scene::offers` asked
+`Verb::is_operation()` — which is the **production slot** question — so every verb
+that took no slot was offered in every room. §19 called `follow` and `wander` a debt
+*"waiting on one missing mechanism"* and said a third occurrence would be the
+argument for building it. `research` was the third, and it was worse than the other
+two: the stacks already declares `operation: Some(Verb::Research)`, so the content
+had said which room it belonged to all along and nothing consulted it.
+
+**`Verb::anchor()` is the mechanism.** It answers *which fixture must stand here for
+this verb to mean anything*, and it is a different question from the slot:
+
+| | takes the slot | anchored to a fixture |
+|---|---|---|
+| `grind` | ✅ | ✅ mortar |
+| `dial` | ❌ | ✅ socket |
+| `research`, `follow`, `wander` | ❌ | ✅ stacks |
+| `move`, `wield`, `empty`, `stop` | ❌ | ❌ — they name their target |
+
+Neither implies the other now, and the lens is where they first came apart.
+
+**Most of it is derived.** A verb that some `Branch` declares is *self-anchored*, so
+the content says which room it belongs to and the parser holds no list of rooms.
+`every_self_anchored_verb_is_declared_by_a_fixture` checks both directions: a verb
+claiming an anchor no fixture declares resolves in **no** room, which is as quiet a
+failure as the one this fixed. `follow` and `wander` are the spelled-out exception —
+they act on the reading *inside* the stacks, and a fixture carries exactly one
+`Operation`, which the stacks had spent.
+
+#### The refusal got the other half of its answer
+
+*"there is nothing here to wander with"* satisfies §6 — it names the verb and says
+it does not apply — but it is half an answer. `tower::fixture_of` walks the same
+content, so it is now **"there is no stacks here to wander with"**, and a player who
+asks in the wrong room is told where to go.
+
+#### Four tests were measuring scope while claiming to measure naming
+
+`naming.rs`'s scene built itself from `is_operation`, with a comment saying its
+purpose was *"every word the game has, all live at once"* so the file would not end
+up *"measuring the scoping rule instead of the naming"*. That is exactly what it
+started doing: `study`, `decipher` and four more came back `Elsewhere`. Both scenes
+now fold `Verb::anchor`.
+
+`parsing.rs` needed the opposite in one place. `tower()` stands **nowhere in
+particular** on purpose, because `the_retired_brewing_words_all_still_land_somewhere
+_deliberate` needs `mix` out of scope to reach `Elsewhere` — so offering everything
+there broke it. The two requirements are now two helpers, `tower()` and `anywhere()`,
+each documented with which tests need which.
+
+And `an_instruments_verb_is_only_a_word_where_the_instrument_is` asserted the
+substring `"nothing here"`, so it failed when the refusal *improved*. A test that
+depends on wording is what rule 6 puts prose in a file to prevent; it asks
+`Outcome::Unresolved` and the fixture in `FieldName::Source` now.
+
+#### The boot report was listing a word that is not a word there
+
+Its own doc already said domain verbs are left out because *"the report is written at
+the tower root, and `grind` is not a word there — sending a tester after it would be
+the exact dead end this list exists to avoid."* `research` was in the list anyway,
+for the same reason: it takes no slot. The report needed no change, only the correct
+predicate; the test restating the rule is where it was fixed.
+
+### `help` explains the room before it lists the words
+
+**Asked for from play: a player who types `help` in a domain is not asking for a
+word list.** They are asking what a ward is, or what the stacks are for, or which
+verb starts the thing in front of them. `recall` bare answered with twenty-five
+verbs in five groups and not one sentence about the room — §6.1 makes it the
+in-world manual, and a manual that opens with an index is a reference rather than
+an explanation.
+
+So the listing is now second. First is a primer for the room the player is standing
+in: **three keys, and they are the three questions.** `man_here_<room>` is what the
+place is, `man_start_<room>` is how to begin its puzzle, `man_solve_<room>` is how
+to finish one. What-it-is before how-it-works is the order a *thing*'s
+`recall_`/`using_` pair already uses, because it is the same split.
+
+**Three rather than two because of the width lint, and that turned out to be
+right.** `every_authored_line_fits_the_worst_case_width` gives 70 cells against
+§4's 80×22 floor and the first draft ran to 112 in one sentence. Splitting start
+from solve is not a workaround for the budget: they are two instructions, followed
+at different times. The whole screen — primer and full listing — fits the floor's
+nineteen transcript rows exactly.
+
+**`man_`, not `recall_`.** `Prose::topics` strips `recall_` to decide what is
+*nameable*, so `recall_here_lens` would register `here_lens` as a subject nobody
+authored. That is the trap this log records paying for twice already, at
+`grimoire_step_or` and at `clarity_use`. `man_` is the manual's own furniture prefix
+and is not a noun space.
+
+The heading is the room's name, and is the one heading here that is not a prose key:
+it *is* the place, and authoring seven `man_section_<room>` lines that say the room's
+name back would be furniture with a translation cost.
+
+#### Two lints, and the second found a wrong instruction immediately
+
+`every_room_a_player_can_stand_in_explains_itself` drives `Sim::briefs()` and
+requires all three keys for every **built** domain, plus `arsenal` and `tower` by
+name — those are standable and are not rail domains, so `briefs()` cannot see them.
+`built` is what makes it honest: `forge`, `menagerie` and `battlements` are dark,
+need nothing yet, and start needing it the day `build.rs` raises them. §10 has five
+more rooms coming and each will be built by someone not thinking about the manual,
+where the failure is silent — `primer` is guarded on `Prose::has`, so an unauthored
+room just prints the old word list.
+
+`a_primer_only_names_words_that_room_actually_offers` checks every verb a primer
+names against `offered`, the same filter the listing below it uses, so the two
+halves of one screen cannot disagree. §15 weighs the dead-end rate above the raw
+resolution rate, and a manual is the worst place to spend it — the player did the
+right thing by asking. It caught **`bind`** in the grimoire's first draft: gated at
+concentration 0, so a fresh player was being told to type a word the listing
+directly below correctly refused to print.
+
+**And it caught availability only, which the grimoire also proves.** `scribe` *is*
+offered there and refuses — *"a spell is written for a place. go where the work is
+first"* — so the same first draft sent the player at the one thing that room cannot
+do, and the test passed. **Looking is what found it**, which is why the See-it line
+runs `help` in all six rooms rather than trusting the green. What the lint does hold
+is the failure that arrives later and silently: a verb renamed, or moved between
+rooms.
+
+### Leaving a surface hands the prompt the middle of a keystroke
+
+**Reported from play: `wander` was sitting in the prompt after leaving the maze.**
+
+You walk the archive's stacks with the arrow keys and press Escape. The maze lets
+go of the keyboard on that frame — but a finger is still on the arrow and **key
+repeat keeps delivering**. By the next frame the prompt owns the keyboard again, an
+arrow at the prompt means *recall history*, and the newest history entry is the
+`wander` that opened the maze. So leaving the maze typed the word back in.
+
+**It is not a maze bug.** All four surfaces that can own the keyboard — the editor,
+the weave screen, the unfurled transcript and the maze — hand it back the same way,
+so escaping any of them on a held key does the same thing. The maze is only where it
+was noticed, because it is the one surface a player holds a key *down* in.
+
+#### The fix is narrower than a quiet frame, and deliberately
+
+Swallowing everything for a frame or two would be a race against the player's
+key-repeat rate, which is a setting on their machine. What is actually wrong is
+exact: **the prompt is being handed the middle of a keystroke whose press it never
+saw.** So `HeldOver` records which physical keys were down at the moment the
+keyboard changed hands and drops events for exactly those, exactly until they are
+released. A fresh press afterwards is a real keystroke and gets through — which is
+half the test, because a fix that swallowed the keyboard from the moment a surface
+closed would satisfy the other half and break `Up` for ever.
+
+`chord_is_stale` already reasons this way about ghost modifiers, and for the same
+reason: a key whose press this surface never saw is not the player talking to it.
+
+**The watch has to be ungated, and that is the part worth remembering.** The obvious
+home for it is inside `type_into_line`, which already reads all four surface states
+— but that system is gated on `on_message::<KeyboardInput>`, so it never runs on the
+frames where a surface owned the keyboard and nobody typed. The edge it needs to see
+is precisely the one it cannot: Escape arrives, the surface has already let go, and
+there is no previous frame on record saying it ever held on. A first attempt put the
+transition there and fixed nothing.
+
+`type_into_line`'s own comment predicted the four-term predicate's ceiling was five
+and that a single `Focus` owner was worth building before the fifth surface arrived.
+This is not that refactor, but the predicate now lives in one function that both
+callers ask, rather than being spelled out twice.
+
+#### The test harness was modelling half a keystroke
+
+`press` — the helper thirty-odd tests type through — wrote a `Pressed` event and no
+`Released`, and stamped every keystroke `KeyCode::KeyA` on the stated grounds that
+nothing read the field. So `A` stayed held for the rest of every test. That was
+invisible until `watch_focus` read `key_code`, at which point one correct fix
+produced a false failure in an unrelated test about the transcript.
+
+**`tap`, ten lines away, already knew:** *"Released on the way out, or
+`input_just_pressed` sees it held and the next tap of the same key is not a fresh
+press."* `press` now writes both halves. A test about which key is physically down
+also needs real key codes rather than a shared `KeyA`, so
+`leaving_the_maze_leaves_nothing_in_the_prompt` uses a helper that carries them —
+without it, every key lands in one bucket and the test passes against a fix that
+swallows the keyboard permanently.
 
 ### A step is logged, not drawn (Phase 1, §10)
 

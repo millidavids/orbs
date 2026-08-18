@@ -120,13 +120,26 @@ pub fn report(input: &str, resolution: &Resolution, prose: &Prose, records: &mut
         // (rule 6); §6 forbids a bare error, and "I do not know that word" would
         // be a lie about a word the game taught next door.
         Resolution::Elsewhere { verb } => {
-            let message = prose.line("verb_elsewhere", &[("name", verb.canonical())]);
-            records
+            // **And it names the fixture, which is the other half of the answer.**
+            // *"there is nothing here to wander with"* says the verb is real and
+            // does not apply, which satisfies §6 — but a player who has been told
+            // *"there is no stacks here to wander with"* has been told where to go.
+            // Drawn from the content by `tower::fixture_of`, so a new domain's
+            // refusal reads correctly the day its branch is authored.
+            let (key, fixture) = match crate::tower::fixture_of(*verb) {
+                Some(fixture) => ("verb_needs_fixture", fixture),
+                None => ("verb_elsewhere", ""),
+            };
+            let message = prose.line(key, &[("name", verb.canonical()), ("source", fixture)]);
+            let mut record = records
                 .push(RecordKind::Echo)
                 .outcome(Outcome::Unresolved)
                 .text(FieldName::Name, verb.canonical())
-                .text(FieldName::Message, &message)
-                .finish();
+                .text(FieldName::Message, &message);
+            if !fixture.is_empty() {
+                record = record.text(FieldName::Source, fixture);
+            }
+            record.finish();
         }
         // A word the editor taught them, typed here. Naming it and saying where
         // it belongs — §6 forbids a bare error, and this word is one the game

@@ -48,6 +48,10 @@ fn main() {
 
     parity(&deep, &wide);
 
+    let sheet = ward(GRID);
+    show("Ward — the lens's sheet, part broken (§10)", &sheet);
+    speak(&sheet);
+
     let records = brewing_log();
     let views = records_screen(GridSize::new(80, 22), &records);
     show("Records — one stream, three views (§7)", &views);
@@ -1022,12 +1026,12 @@ fn boot_report(grid: GridSize) -> Frame {
     frame
 }
 
-/// Four domain panes under attack, three more minimised to the sidebar.
+/// Four domain panes under attack, with every domain on the rail beside them.
 fn siege(grid: GridSize, mode: DisplayMode) -> Frame {
     let layout = ScreenLayout::compute(&ScreenRequest {
         grid,
         main_panes: 4,
-        sidebar_panes: 3,
+        rail: true,
         mode,
         input_rows: 1,
     });
@@ -1053,20 +1057,52 @@ fn siege(grid: GridSize, mode: DisplayMode) -> Frame {
         content(&mut painter.sub(inner), inner);
     }
 
-    // Sidebar panes are awareness only — one line, not commandable (§9).
-    for (rect, name) in layout
-        .sidebar()
-        .iter()
-        .zip(["forge", "menagerie", "sanctum"])
-    {
-        let mut painter = frame.painter(*rect);
-        painter.span(
-            rect.origin(),
-            &Span::new(name)
-                .with_style(Style::DIM)
-                .with_kind(UtteranceKind::Heading),
+    // The rail is awareness only — never commandable (§9). One box per domain,
+    // and the last two are rooms the tower has not built yet: a dim rule with no
+    // name, so the seven slots keep fixed positions while the game grows into
+    // them.
+    let rail = layout.rail();
+    if !rail.is_empty() {
+        let mut painter = frame.painter(rail);
+        painter.border(rail, Some("tower"), Style::DIM);
+        let known = [
+            ("laboratory", "working"),
+            ("archive", "working"),
+            ("lens", "probing"),
+            ("grimoire", "idle"),
+            ("forge", "idle"),
+        ];
+        for (index, slot) in layout.rail_boxes().iter().enumerate() {
+            let Some((name, state)) = known.get(index) else {
+                painter.glyphs(
+                    slot.origin(),
+                    &"·".repeat(usize::from(slot.cols)),
+                    Style::DIM,
+                );
+                continue;
+            };
+            painter.span(
+                slot.origin(),
+                &Span::new(name)
+                    .with_style(Style::NORMAL)
+                    .with_kind(UtteranceKind::Heading),
+            );
+            painter.glyphs(
+                Pos::new(slot.col, slot.row.saturating_add(1)),
+                &format!("  {state}"),
+                Style::DIM,
+            );
+        }
+        let foot = layout.rail_foot();
+        painter.glyphs(
+            foot.origin(),
+            &"─".repeat(usize::from(foot.cols)),
+            Style::DIM,
         );
-        painter.glyphs(Pos::new(rect.col + 12, rect.row), "idle", Style::DIM);
+        painter.span(
+            Pos::new(foot.col, foot.row.saturating_add(1)),
+            &Span::new("tick  4210").with_style(Style::DIM),
+        );
     }
 
     let input = layout.input();
@@ -1410,6 +1446,76 @@ fn scrying(painter: &mut Painter<'_>, area: Rect) {
             .with_style(Style::NORMAL.with_presentation(Presentation::Eldritch))
             .with_spoken("The door is open. It was not opened."),
     );
+}
+
+/// A ward part-broken — the sheet a code-breaker keeps beside them (§10).
+///
+/// **Every glyph here has to be one CP437 can draw**, and this example is where
+/// that gets caught: the board's own tests assert the repertoire, but only a
+/// rendered frame shows whether four sigils and four pegs read as two columns or
+/// as a smear. `▪` failed the first pass and became `■`.
+fn ward(grid: GridSize) -> Frame {
+    let board = orbs_render::Board {
+        attempts: vec![
+            orbs_render::Attempt {
+                figure: [0, 1, 2, 3],
+                aligned: 0,
+                astray: 2,
+            },
+            orbs_render::Attempt {
+                figure: [0, 4, 2, 3],
+                aligned: 1,
+                astray: 2,
+            },
+            orbs_render::Attempt {
+                figure: [5, 4, 2, 3],
+                aligned: 2,
+                astray: 1,
+            },
+        ],
+        aperture: [5, 4, 2, 3],
+        settled: [true, false, false, false],
+        marks: [2, 1, 3, 3, 2, 1],
+        // `tower::ward`'s own words. The sim hands these through `Ward::view`; an
+        // example has no sim, so it repeats them — and this is the surface where a
+        // header wider than its column, or a legend that runs into the border,
+        // shows up as a picture rather than as a passing assertion.
+        sockets: ["first", "second", "third", "fourth"],
+        sigils: ["nitre", "alum", "borax", "quartz", "pewter", "ochre"],
+    };
+
+    let layout = ScreenLayout::compute(&ScreenRequest::single(grid));
+    let mut frame = Frame::new(grid);
+    let pane = layout.main()[0];
+    let mut painter = frame.painter(pane);
+    painter.border(pane, Some("lens"), Style::DIM);
+
+    let (cols, rows) = board.size();
+    let at = Rect::new(pane.col + 2, pane.row + 2, cols + 2, rows + 2);
+    painter.border(at, Some("ward"), Style::DIM);
+    let inside = at.inset(1);
+    for row in 0..inside.rows {
+        let Some(cells) = board.row(usize::from(row)) else {
+            break;
+        };
+        for (col, (glyph, style, tint)) in cells.into_iter().enumerate() {
+            let Ok(col) = u16::try_from(col) else { break };
+            let cell = Pos::new(inside.col + col, inside.row + row);
+            painter.glyphs(cell, &glyph.to_string(), style);
+            if let Some(tint) = tint {
+                painter.tint(
+                    Rect::new(cell.col, cell.row, 1, 1),
+                    orbs_render::Wash::plain(tint),
+                );
+            }
+        }
+    }
+    painter.announce(
+        UtteranceKind::Progress,
+        Role::Normal,
+        "3 pressed, last 2 aligned 1 astray, 1 held",
+    );
+    frame
 }
 
 /// `label ....... [ status ]` — one utterance, three visual styles.

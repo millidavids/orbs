@@ -12,8 +12,8 @@
 //! the log a player will `peruse`.
 
 use orbs_render::{
-    DisplayMode, FieldName, Frame, Pos, RecordKind, RecordView, Records, Rect, ScreenLayout,
-    ScreenRequest, Span, Style, UtteranceKind,
+    DisplayMode, Frame, Pos, RecordView, Rect, ScreenLayout, ScreenRequest, Span, Style,
+    UtteranceKind,
 };
 use orbs_sim::Sim;
 
@@ -24,14 +24,6 @@ use super::reveal::Reveal;
 use super::screen::Screen;
 use super::tapestry::Tapestry;
 use super::transition::PaneTransition;
-
-/// Columns the telemetry pane shows.
-///
-/// `State` carries the one reading that is a word rather than a count. A row
-/// without it leaves a gap, which is the record model's documented behaviour
-/// rather than a special case — and putting `wide` in a `qty` column would be a
-/// lie the model exists to make impossible.
-const TELEMETRY: [FieldName; 3] = [FieldName::Name, FieldName::Quantity, FieldName::State];
 
 /// Everything a frame is drawn from, borrowed for the one call.
 ///
@@ -131,15 +123,18 @@ pub(crate) fn paint(frame: &mut Frame, linear: &mut Linear, view: View<'_>) {
     let main = layout.main();
     let first = main.first().copied().unwrap_or(Rect::EMPTY);
 
-    // **The target's pane count, not the interpolated one.** Below
-    // `DEEP_FOCUS_FLOOR` the readings live in the session's border title; above
-    // it they get a real telemetry pane. Deciding that from where the animation
-    // has *reached* would pop the title from its long form to its short one
-    // partway through the motion. Switching once, when the motion starts, reads
-    // as part of the same movement — and for the quarter-second a pane is
-    // leaving, the readings are briefly in both places, which is the harmless
-    // direction to be wrong in.
-    let carry_readings = panes.panes() == 1;
+    // **The rail carries the readings, and the border title carries them only
+    // when there is no rail.** This used to ask `panes.panes() == 1`, which was
+    // right while a second *pane* held the telemetry: below `DEEP_FOCUS_FLOOR`
+    // there was no second pane, so the readings fell back into the session's
+    // border title.
+    //
+    // With `PANES` at 1 that test is permanently true, and the title would have
+    // gone to its long form at every size — duplicating, in the one place the
+    // player is always looking, the five rows the rail is already showing. The
+    // question is now the one it was always standing in for: **is there anywhere
+    // else for the readings to be?**
+    let carry_readings = layout.rail().is_empty();
 
     // The same rectangle, not a second pane: the point of §14's stream is that
     // it says the same thing as the cells, and a comparison you make by pressing
@@ -154,11 +149,18 @@ pub(crate) fn paint(frame: &mut Frame, linear: &mut Linear, view: View<'_>) {
     // and the prompt is dead while either has the keyboard, so there is no route
     // that opens one over the other. An order is still needed, and the newer
     // surface losing silently would be the harder bug to see.
+    // **The rail is drawn whatever the pane is doing**, which is what makes it
+    // awareness rather than a view: a player deep in the spell editor still gets
+    // told the forge caught fire. Each modal branch below returns early, so this
+    // is hoisted above all four rather than repeated inside them — it was four
+    // copies of the telemetry call before, and a fifth surface would have made
+    // it five.
+    let rail = || (layout.rail(), layout.rail_boxes(), layout.rail_foot());
+
     if let Some(tapestry) = weaving {
         super::loom::paint(frame, tapestry, first, sim.prose());
-        if let Some(second) = main.get(1) {
-            telemetry(frame, sim, screen, *second);
-        }
+        let (at, boxes, foot) = rail();
+        super::rail::paint(frame, sim, screen, at, boxes, foot, &panel.briefs);
         return;
     }
 
@@ -166,9 +168,8 @@ pub(crate) fn paint(frame: &mut Frame, linear: &mut Linear, view: View<'_>) {
         if let Some((col, row)) = super::sheet::paint(frame, editor, first, sim.prose()) {
             frame.set_cursor(Some(Pos::new(col, row)));
         }
-        if let Some(second) = main.get(1) {
-            telemetry(frame, sim, screen, *second);
-        }
+        let (at, boxes, foot) = rail();
+        super::rail::paint(frame, sim, screen, at, boxes, foot, &panel.briefs);
         // No prompt row: the prompt is dead while the editor has the keyboard
         // (`editing::not_editing`), and drawing a caret it cannot accept a
         // keystroke into is the clearest possible lie about where typing goes.
@@ -186,9 +187,8 @@ pub(crate) fn paint(frame: &mut Frame, linear: &mut Linear, view: View<'_>) {
     if walking && let Some(maze) = panel.stacks.as_ref() {
         let mut painter = frame.painter(first);
         super::stacks::paint_alone(&mut painter, first, maze, sim.prose());
-        if let Some(second) = main.get(1) {
-            telemetry(frame, sim, screen, *second);
-        }
+        let (at, boxes, foot) = rail();
+        super::rail::paint(frame, sim, screen, at, boxes, foot, &panel.briefs);
         // No prompt row and no caret, exactly as the editor leaves none: every
         // keystroke is discarded while this is open, and a caret is the game's
         // one promise about where typing lands.
@@ -221,9 +221,8 @@ pub(crate) fn paint(frame: &mut Frame, linear: &mut Linear, view: View<'_>) {
             bench,
         );
     }
-    if let Some(second) = main.get(1) {
-        telemetry(frame, sim, screen, *second);
-    }
+    let (at, boxes, foot) = rail();
+    super::rail::paint(frame, sim, screen, at, boxes, foot, &panel.briefs);
     // The ghost arrives already computed. It stays a pure function of the line,
     // the scene and whether a prompt is open — `shell::input::suggest` owns the
     // one call and names what invalidates it, so there is no second copy able to
@@ -435,6 +434,17 @@ pub(super) fn session(
     }
     body = map.rest;
 
+    // The lens's sheet, on the same terms and in the same slot. **The two cannot
+    // both be present**, because a maze lives in the archive and a ward in the
+    // lens and the player stands in one room — so this is not a third claim on
+    // the columns, it is the same claim made by whichever domain is open. It
+    // still splits after the panel, and it still refuses rather than clipping.
+    let sheet = super::board::split(body, panel.ward.as_ref());
+    if let Some(ward) = panel.ward.as_ref() {
+        super::board::paint(&mut painter, sheet.area, ward, sim.prose());
+    }
+    body = sheet.rest;
+
     // The tower-wide production meter stays: it is the *pool*, not an
     // instrument, and it is what says the slot is spent wherever it was spent.
     // Skipped in the laboratory, where the panel already draws that instrument's
@@ -531,99 +541,30 @@ fn to_u32(ticks: u64) -> u32 {
     u32::try_from(ticks).unwrap_or(u32::MAX)
 }
 
-/// What the orb and the tube are currently doing.
-///
-/// Drawn with [`RecordView::table`] rather than by formatting a string, so the
-/// numbers stay numbers all the way to the cell that draws them — right-aligned
-/// because the record said they were counts, not because this function did.
-///
-/// This is the playability gate for three subsystems at once (§15). A changing
-/// **tick** is the only visible proof the sim runs; **scale against a fixed
-/// grid** is what you walk through by dragging a window edge, and the pair is
-/// the whole of §19's change in one row each — one number moves, the other two
-/// do not; and the **focus mode** is §9's setting, which the design requires be
-/// overridable at any time.
-fn telemetry(frame: &mut Frame, sim: &Sim, screen: &Screen, pane: Rect) {
-    if pane.is_empty() {
-        return;
-    }
-    let mut painter = frame.painter(pane);
-    painter.border(pane, Some("orb"), Style::DIM);
-
-    let mut readings = Records::new();
-    // Ordered by what a glance most wants, because in Wide focus this pane is a
-    // four-row strip (§9) and the table truncates. `status` is the full answer;
-    // this is the glance.
-    row(&mut readings, "tick", sim.tick().get());
-    // §8: concentration is *"surfaced in `status` and in the sidebar — never a
-    // quiet log line"*. High, because at capacity it is the number a player is
-    // deciding against, and this pane is a four-row strip in Wide focus.
-    //
-    // **Absent until the orb has been taught to hold one.** §8 is explicit that
-    // concentration 0 "is not an exhaustion at all but the starting state", and a
-    // row reading `held 0 of 0` for the first two minutes would spend one of those
-    // four rows saying nothing. The row *appearing* is §11.5's turn.
-    let slots = sim.concentration();
-    if slots > 0 {
-        readings
-            .push(RecordKind::Status)
-            .text(FieldName::Name, "held")
-            .count(FieldName::Quantity, quantity(sim.bound().len()))
-            .text(FieldName::State, &format!("of {slots}"))
-            .finish();
-    }
-    // **The scale, where the tier used to be**, and it is the reading that
-    // earns its row now: `cols` and `rows` are constants, so this is the only
-    // one of the three that moves when the window does. A `Quantity` cannot
-    // carry `1.5`, so it goes in the state field the way `held` does.
-    readings
-        .push(RecordKind::Status)
-        .text(FieldName::Name, "scale")
-        .text(FieldName::State, &format!("{:.2}x", screen.scale()))
-        .finish();
-    row(&mut readings, "cols", u64::from(screen.grid.cols));
-    row(&mut readings, "rows", u64::from(screen.grid.rows));
-    row(
-        &mut readings,
-        "logged",
-        quantity(sim.scrollback().records().len()),
-    );
-    row(&mut readings, "queued", quantity(sim.pending().len()));
-    row(&mut readings, "seed", sim.seed());
-
-    readings
-        .push(RecordKind::Status)
-        .text(FieldName::Name, "focus")
-        .text(FieldName::State, focus(screen))
-        .finish();
-
-    RecordView::table(&TELEMETRY).draw(&mut painter, pane.inset(1), readings.iter());
-}
-
-/// One named count in the telemetry pane.
-///
-/// A free function rather than a closure capturing the `Records`: the held row
-/// carries a *state* as well as a count, so it pushes directly, and a closure
-/// holding the borrow across it is the one arrangement that cannot interleave
-/// the two.
-fn row(readings: &mut Records, name: &str, value: u64) {
-    readings
-        .push(RecordKind::Status)
-        .text(FieldName::Name, name)
-        .count(FieldName::Quantity, value)
-        .finish();
-}
+// **The telemetry pane was here, and the tower rail replaced it** (§19, Phase 2).
+//
+// It drew nine developer readings — tick, held, scale, cols, rows, logged,
+// queued, seed, focus — into fifty-eight columns of the second main pane, and it
+// was built as a playability gate rather than as something a player wants. Five
+// of those rows moved to the rail's foot (`shell::rail::readings`); the other
+// four were already in `status`, which is the full answer where the rail is the
+// glance.
+//
+// What the pane bought is not lost: `tick` still proves the sim runs and `scale`
+// against a fixed `grid` is still what a window drag walks through. What it cost
+// was §9's second pane, spent on the orb rather than on a domain.
 
 /// §9's focus mode, as a word.
+///
+/// Kept after the telemetry pane went, because the **border title** still carries
+/// the readings on any grid too small for the rail — see `carry_readings`. That
+/// fallback is the whole reason the readings are not simply the rail's: a player
+/// at the authoring floor has no rail and still needs to know the sim is ticking.
 const fn focus(screen: &Screen) -> &'static str {
     match screen.mode {
         DisplayMode::Deep => "deep",
         DisplayMode::Wide => "wide",
     }
-}
-
-fn quantity(count: usize) -> u64 {
-    u64::try_from(count).unwrap_or(u64::MAX)
 }
 
 /// Draw the prompt and what is being typed into it.

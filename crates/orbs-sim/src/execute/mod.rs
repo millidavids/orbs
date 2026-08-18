@@ -34,6 +34,7 @@ mod recall;
 mod research;
 mod scribe;
 mod scroll;
+mod scry;
 mod unfurl;
 mod wander;
 mod weave;
@@ -42,7 +43,9 @@ mod weave;
 mod tests;
 
 #[cfg(debug_assertions)]
-pub use debug::{Order as SpawnOrder, SPAWN, order as spawn_order};
+pub use debug::{
+    LEARN, Order as SpawnOrder, SPAWN, SWAP, WARD, giveaway, lesson, order as spawn_order, swapping,
+};
 #[cfg(debug_assertions)]
 pub use debug_spell::{
     Order as SpellOrder, SPELL, order as spell_order, run as run_spell_order, spells as dev_spells,
@@ -62,6 +65,7 @@ pub use scroll::Scroll;
 // ask the same question `wield` asks, or a scripted spend is charged a
 // production slot the typed one is not.
 pub(crate) use scroll::spending;
+pub use scry::land as land_probe;
 pub use unfurl::Unfurling;
 pub use wander::Wandering;
 pub use weave::Weaving;

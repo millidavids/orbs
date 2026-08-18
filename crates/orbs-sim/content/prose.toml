@@ -55,6 +55,10 @@ purge_protected = "the orb will not unmake the {path}"
 # But "I do not know that word" would be a lie about a word the game taught in
 # the room next door, so the refusal names the verb and says where it is not.
 verb_elsewhere = "there is nothing here to {name} with"
+# The same refusal, when the content can say *which* thing is missing. §6 forbids
+# a bare error and the line above is only half an answer: a player told the name
+# of the fixture has been told where to go. `tower::fixture_of` finds it.
+verb_needs_fixture = "there is no {source} here to {name} with"
 
 # The commonest refusal in the game: the parser resolved a name on submit and by
 # the next tick it was gone, or the player named something that is not within
@@ -491,6 +495,32 @@ spell_unattended = "{name} needed you there. it stops"
 # stopped, a domain with no manual entry - are gone because the domain has an
 # instrument, not because they were patched.
 # ---------------------------------------------------------------------------
+# The lens (§10). Outcome lines first, then the manual pages further down.
+#
+# **Every refusal names the way forward**, which is what keeps all three verbs
+# off `is_gated` — a word that can only say no is worse than a word that is not
+# offered, and none of these can only say no.
+verify_substituted = "something here is not what it says: {detail}"
+ward_title = "ward"
+ward_spoken = "{quantity} pressed, last {name} aligned {detail} astray, {state} held"
+scry_opens = "a far orb swims up. four sigils hold it shut"
+scry_nowhere = "there is no lens here to look through"
+dial_unopened = "nothing is open to turn. probe first"
+dial_incomplete = "dial which socket, to what? name a socket and a sigil"
+dial_not_a_socket = "{name} is not a socket. the four are first to fourth"
+dial_not_a_sigil = "{detail} is not a sigil. survey the lens to see the six"
+dial_held = "the {name} will not turn. it is settled, or holds that already"
+# **Bare `dial <socket>` with nothing left to try.** Not the same refusal as
+# `dial_held`: that one means *you named a sigil it cannot take*, this one means
+# *it has been round them all since the last gain*. A ladder's next rung takes
+# over on the same tick, so this has to read as a state and not a fault.
+dial_spent = "the {name} has been round them all. something else must move first"
+dial_done = "the {name} socket turns to {detail}"
+probe_answered = "{quantity} aligned, {detail} astray. the ward is {state}"
+probe_broken = "the seal gives. the far orb spills its working, in {quantity}"
+probe_found = "and a way to make {name}. the orb writes it down"
+spill_step = "{name} {detail}"
+
 research_opens = "the page opens into shelves that do not end. a way out is in them"
 research_already = "a reading is already open. follow it, or stop the stacks"
 research_nowhere = "there are no stacks here to read"
@@ -597,11 +627,17 @@ recall_warding = "a potion that turns harm aside"
 recall_haste = "a potion of quickness. the cheapest chain in the tower"
 recall_insight = "a potion that opens the mind's eye"
 recall_stillness = "a potion of deep quiet, which is valerian's own gift"
+recall_mending = "a potion that knits what is worn. distilled from ash and salt"
+recall_dreaming = "a potion of sleeping sight, out of what a bath leaves"
+recall_vigour = "a potion of hard work, wrung from the dregs of a combination"
 using_clarity = "nothing drinks a potion yet. a siege will be what spends them"
 using_warding = "nothing drinks a potion yet. a siege will be what spends them"
 using_haste = "nothing drinks a potion yet. a siege will be what spends them"
 using_insight = "nothing drinks a potion yet. a siege will be what spends them"
 using_stillness = "nothing drinks a potion yet. a siege will be what spends them"
+using_mending = "nothing drinks a potion yet. a siege will be what spends them"
+using_dreaming = "nothing drinks a potion yet. a siege will be what spends them"
+using_vigour = "nothing drinks a potion yet. a siege will be what spends them"
 
 # ---------------------------------------------------------------------------
 # Byproducts. S10.1's rule is that every one has a use, so every page names it -
@@ -744,6 +780,62 @@ man_group_careful = "careful"
 # vocabulary* rather than *this is the vocabulary here*.
 man_elsewhere = "other rooms have words of their own. attend one and ask again"
 
+# ---------------------------------------------------------------------------
+# The room primer - what `help` says BEFORE the word list.
+#
+# Three keys per room, and they are the three questions a lost player has:
+# `man_here_<room>` is what the place is, `man_start_<room>` is how to begin its
+# puzzle, `man_solve_<room>` is how to finish one. What-it-is before how-it-works
+# is the same order a thing's `recall_`/`using_` pair uses, because it is the same
+# split.
+#
+# **Three rather than two because of the width lint.** `every_authored_line_fits
+# _the_worst_case_width` gives 70 cells against §4's 80x22 floor, and the first
+# draft ran to 112 in one sentence. Splitting start from solve is not a workaround:
+# they are two instructions and the player follows them at different times.
+#
+# **`man_`, not `recall_`.** `Prose::topics` strips `recall_` to decide what is
+# nameable, so `recall_here_lens` would register `here_lens` as a subject nobody
+# authored - the trap `grimoire_step_or` and `clarity_use` both paid for.
+#
+# `every_room_a_player_can_stand_in_explains_itself` fails the build for a built
+# room missing any of the three, so a new domain cannot ship without a primer.
+#
+# **Keep the last two lines instructions, and name only words that work here.**
+# A player typing `help` in a room they do not understand wants the first verb to
+# type, not a summary of the theme. `a_primer_only_names_words_that_room_actually
+# _offers` holds the availability half; the *refusal* half it cannot see, which is
+# what the grimoire note below is about.
+# ---------------------------------------------------------------------------
+man_here_laboratory = "where reagents become potions, one instrument at a time"
+man_start_laboratory = "kindle charcoal for heat, then grind sage in the mortar"
+man_solve_laboratory = "each stage feeds the next. recall clarity walks a whole brew"
+
+man_here_archive = "shelves that run further than they should. things are lost here"
+man_start_archive = "research opens the stacks. wander walks them with the arrows"
+man_solve_archive = "reach the way out for a fragment. four in the lectern, wield it"
+
+man_here_lens = "another wizard's orb, sealed with four sigils of six"
+man_start_lens = "dial a socket to a sigil, free. probe presses them, twelve ticks"
+man_solve_lens = "aligned counts sigils in the right socket, astray the misplaced"
+
+# **Not `scribe a name to write one`, which was the first draft and was wrong
+# twice.** `scribe` is *offered* here and refuses - "a spell is written for a
+# place. go where the work is first" - so the instruction sent the player at the
+# one thing this room cannot do. And `bind` is gated at concentration 0, so naming
+# it at a fresh start is a dead end the listing below correctly does not print.
+man_here_grimoire = "where your spells are kept. no work happens here"
+man_start_grimoire = "a spell is written where its work is. attend a room first"
+man_solve_grimoire = "peruse one to read it back. invoke casts it where you stand"
+
+man_here_arsenal = "finished work, kept where every room can reach it"
+man_start_arsenal = "move a potion or a scroll here from the room that made it"
+man_solve_arsenal = "nothing spends them yet. a siege will be what does"
+
+man_here_tower = "your tower. the rooms are below you"
+man_start_tower = "attend a room to stand in it, then ask again"
+man_solve_tower = "no work happens up here. the rooms below have all of it"
+
 # The page headings. Lower case like everything else (S3).
 man_page_what = "what it does"
 man_page_like = "for instance"
@@ -863,13 +955,20 @@ man_meditate_3 = "while you wait rather than while you watch"
 man_meditate_eg1 = "meditate 40 is long enough for most single stages"
 man_meditate_also = "status, wield, invoke"
 
+# **Carrying leads, and loading is a footnote.** The page opened on `move sage to
+# mortar_and_pestle`, which is a command no brewing loop has needed since §10.1
+# gave every instrument its own verb - `grind sage` fetches from the shelf *or*
+# from another tool and wields, so a whole clarity brews without this word
+# (`a_whole_brew_needs_no_move`). What `move` is actually for now is the one thing
+# nothing else does: getting finished work out of the room that made it.
 man_move_use = "move <reagent> to <place>"
 man_move_gloss = "carry something from one place to another"
-man_move_1 = "takes a unit, not the pile, so what is left stays"
-man_move_2 = "an instrument at work will not be charged or raided"
-man_move_3 = "each stage's own word does this and the wield in one"
-man_move_eg1 = "move sage to mortar_and_pestle, then wield it"
-man_move_eg2 = "or grind sage, which is both of those at once"
+man_move_1 = "carries finished work to the arsenal, which every room reaches"
+man_move_2 = "takes a unit, not the pile, so what is left stays"
+man_move_3 = "an instrument at work will not be charged or raided"
+man_move_4 = "in the laboratory each stage's own word fetches for you"
+man_move_eg1 = "move clarity to arsenal, once it is brewed"
+man_move_eg2 = "grind sage already does the carrying, and the wield"
 man_move_also = "wield, empty, grind"
 
 man_wield_use = "wield <place>"
@@ -933,6 +1032,31 @@ man_purge_2 = "you meant to clear a tool and keep the leavings"
 man_purge_3 = "the tower itself and its domains are refused"
 man_purge_eg1 = "purge dust, when nothing is going to want it"
 man_purge_also = "empty, stop, verify"
+
+man_dial_use = "dial <socket> [<sigil>]"
+man_dial_gloss = "turn one dial of the aperture"
+man_dial_1 = "the sockets are first, second, third and fourth"
+man_dial_2 = "dialling a sigil already in play swaps the two"
+man_dial_3 = "free, and instant. only probing costs the tower"
+# **The three a player has to be told**, and the last two are what make a dial
+# look like it was ignored. The ratchet is an undo and the settle is a lock; both
+# are the ward working, and neither is visible from the sentence a dial prints.
+man_dial_4 = "name no sigil and it turns to one it has not tried"
+man_dial_5 = "a press that does not gain snaps the aperture back"
+man_dial_6 = "a socket proved right settles, and will not turn again"
+man_dial_eg1 = "dial second borax, then probe"
+man_dial_eg2 = "dial first, which a spell uses: it can name no sigil"
+man_dial_also = "probe, survey, stop"
+
+man_probe_use = "probe"
+man_probe_gloss = "press a figure against a far orb's ward"
+man_probe_1 = "opens a reading if none is open. four sigils out"
+man_probe_2 = "of six hold it shut, none of them twice. aligned"
+man_probe_3 = "is right sigil right socket; astray is right sigil"
+man_probe_4 = "wrong socket. a press that does not gain snaps"
+man_probe_5 = "back, so a wrong guess costs time and nothing else"
+man_probe_eg1 = "probe, then dial what you deduce and probe again"
+man_probe_also = "dial, survey, stop, recall lens"
 
 man_research_use = "research"
 man_research_gloss = "open a way into the stacks"

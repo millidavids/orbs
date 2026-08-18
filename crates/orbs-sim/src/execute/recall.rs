@@ -275,6 +275,85 @@ fn entry(world: &mut World, name: &str, shape: &str) {
     }
 }
 
+/// The three halves of a room's primer, in the order they are printed.
+///
+/// Named here rather than spelled out at each site so the prose keys, the emitter
+/// and `every_room_a_player_can_stand_in_explains_itself` cannot come to disagree
+/// about how many there are — which is how a fourth would get authored and never
+/// drawn.
+const KEYS: [&str; 3] = ["here", "start", "solve"];
+
+/// What the room you are standing in is, and how its puzzle is worked.
+///
+/// # Three keys, and they are the three questions
+///
+/// `man_here_<room>` says what the place *is*, `man_start_<room>` how to begin its
+/// puzzle, `man_solve_<room>` how to finish one. What-it-is before how-it-works is
+/// the same order [`describe`] uses for a thing, because it is the same split.
+///
+/// Three rather than two because `every_authored_line_fits_the_worst_case_width`
+/// gives 70 cells against §4's 80×22 floor and one first-draft sentence ran to 112.
+/// That is not a workaround: start and solve are two instructions, followed at
+/// different times.
+///
+/// # `man_`, not `recall_`
+///
+/// [`Prose::topics`](crate::content::Prose::topics) decides what is *nameable* by
+/// stripping `recall_`, so `recall_here_lens` would register `here_lens` as a
+/// subject to ask the orb about — the trap this module already records paying for
+/// twice, at `grimoire_step_or` and at `clarity_use`. `man_` is the prefix the
+/// manual's own furniture already uses (`man_elsewhere`, `man_group_work`) and is
+/// not a noun space.
+///
+/// # Absent is allowed
+///
+/// Guarded on [`Prose::has`], so an unbuilt room simply has no primer and the
+/// listing prints as it always did. `every_room_a_player_can_stand_in_explains
+/// _itself` is what stops that being a silent omission for a room that *is* built.
+fn primer(world: &mut World) {
+    let room = here(world);
+    if room.is_empty() {
+        return;
+    }
+
+    let keys = KEYS.map(|part| format!("man_{part}_{room}"));
+    let prose = world.resource::<Prose>();
+    let lines: Vec<String> = keys
+        .iter()
+        .filter(|key| prose.has(key))
+        .map(|key| prose.line(key, &[]))
+        .collect();
+    if lines.is_empty() {
+        return;
+    }
+
+    // The room's own name as the heading, which is why this one is not a `Prose`
+    // key like the group headings below: it *is* the place, and authoring seven
+    // files' worth of `man_section_<room>` saying the room's name back would be
+    // furniture with a translation cost.
+    world
+        .resource_mut::<Scrollback>()
+        .records_mut()
+        .push(RecordKind::Section)
+        .text(FieldName::Kind, &room)
+        .finish();
+    for message in lines {
+        line(world, Verb::Recall.canonical(), &message);
+    }
+}
+
+/// The room the player is standing in, for the manual's own purposes.
+///
+/// [`domain_of`](crate::tower::domain_of) returns `None` at `/tower` and at
+/// `/grimoire` because neither is somewhere work happens — but both are places a
+/// player can stand and ask for help, and the grimoire has a box on the tower rail
+/// like any other. So this falls back to the node itself rather than to nothing.
+fn here(world: &World) -> String {
+    let cwd = world.resource::<crate::tower::Cwd>().0;
+    let node = crate::tower::domain_of(world, cwd).unwrap_or(cwd);
+    crate::tower::where_at(world, node)
+}
+
 /// Everything you can type where you are standing, grouped.
 ///
 /// # Why this is `Section` + `Entry` and not a formatted string
@@ -296,6 +375,14 @@ fn entry(world: &mut World, name: &str, shape: &str) {
 /// anywhere, because a manual you can only read in the right room has a lock on
 /// it. That asymmetry is deliberate and recorded in §19.
 fn overview(world: &mut World) {
+    // **The room first, and the vocabulary second.** A listing of twenty-five
+    // words answers *what may I type* and never *what is this place for* — and a
+    // player who types `help` in the lens is not usually asking for a word list,
+    // they are asking what a ward is and how to open one. §6.1 makes `recall` the
+    // in-world manual, and a manual that opens with an index is a reference rather
+    // than an explanation.
+    primer(world);
+
     let offered = super::offered(world);
 
     for group in Group::ALL {
@@ -471,42 +558,11 @@ fn say_plan(world: &mut World, goal: &str, plan: &Plan) {
 /// line rather than five `label: value` pairs. A `Message` carrying fields keeps
 /// `sift` working on them (rule 4) while drawing and speaking as prose.
 fn say_step(world: &mut World, step: &Step, index: Option<usize>) {
+    // Joined once and handed on — `step_line` needs the same string for its
+    // sentence, and building it twice was two allocations per step of every
+    // `recall` page and every line of the lens's spill.
     let inputs = step.inputs.join(" + ");
-    let prose = world.resource::<Prose>();
-    let heat = if step.heat {
-        prose.line("route_heat", &[])
-    } else {
-        String::new()
-    };
-    // Composed in like the heat clause beside it, and for the same reason: not
-    // every step has one. The `+` lives in `route_leaves` rather than in the
-    // step line, so a step that leaves nothing does not print a plus with
-    // nothing after it.
-    let leaves = if step.leaves.is_empty() {
-        String::new()
-    } else {
-        prose.line("route_leaves", &[("state", &step.leaves)])
-    };
-    let message = prose.line(
-        if index.is_some() {
-            "route_step"
-        } else {
-            "route_step_or"
-        },
-        &[
-            (
-                "index",
-                &index.map_or_else(String::new, |n| format!("{n}.")),
-            ),
-            ("detail", &inputs),
-            ("name", &step.output),
-            ("state", &leaves),
-            ("source", &step.instrument),
-            ("ticks", &step.ticks.to_string()),
-            ("kind", &heat),
-        ],
-    );
-
+    let message = step_line(world, step, index, &inputs);
     // The facts ride along for `sift` and a pipe, under the same names the
     // pipeline's own records use: the instrument is a `Path`, what comes out is
     // the `Name`, what went in is the `Origin`.
@@ -530,6 +586,67 @@ fn say_step(world: &mut World, step: &Step, index: Option<usize>) {
         record = record.count(FieldName::Quantity, to_count(index));
     }
     record.finish();
+}
+
+/// One step's sentence, composed and not yet emitted.
+///
+/// **Split out of [`say_step`] so the lens can steal it.** A broken ward spills
+/// the far wizard's working into `lens.log`, and it has to read exactly as
+/// `recall` reads — a second renderer would be two ways of describing one recipe,
+/// which is the class of defect §19 records most often. What differs between the
+/// two callers is only the record it lands in.
+fn step_line(world: &World, step: &Step, index: Option<usize>, inputs: &str) -> String {
+    let prose = world.resource::<Prose>();
+    let heat = if step.heat {
+        prose.line("route_heat", &[])
+    } else {
+        String::new()
+    };
+    // Composed in like the heat clause beside it, and for the same reason: not
+    // every step has one. The `+` lives in `route_leaves` rather than in the
+    // step line, so a step that leaves nothing does not print a plus with
+    // nothing after it.
+    let leaves = if step.leaves.is_empty() {
+        String::new()
+    } else {
+        prose.line("route_leaves", &[("state", &step.leaves)])
+    };
+    prose.line(
+        if index.is_some() {
+            "route_step"
+        } else {
+            "route_step_or"
+        },
+        &[
+            (
+                "index",
+                &index.map_or_else(String::new, |n| format!("{n}.")),
+            ),
+            ("detail", inputs),
+            ("name", &step.output),
+            ("state", &leaves),
+            ("source", &step.instrument),
+            ("ticks", &step.ticks.to_string()),
+            ("kind", &heat),
+        ],
+    )
+}
+
+/// How to make `goal`, as the sentences `recall` would print.
+///
+/// The lens's spill, and nothing else. It walks the same [`plan`] the manual
+/// does, so a stolen recipe and a read one cannot describe the same thing two
+/// ways.
+pub(super) fn route_lines(world: &World, goal: &str) -> Vec<String> {
+    plan(world, goal)
+        .steps
+        .iter()
+        .enumerate()
+        .map(|(index, step)| {
+            let inputs = step.inputs.join(" + ");
+            step_line(world, step, Some(index + 1), &inputs)
+        })
+        .collect()
 }
 
 /// One thing to do, in the order it is done.
@@ -722,6 +839,133 @@ mod tests {
     }
 
     #[test]
+    fn help_explains_the_room_before_it_lists_the_words() {
+        // **What the player asked for, as an ordering.** A twenty-five word index
+        // answers *what may I type* and never *what is this place for* — and the
+        // first thing on screen is what a lost player reads.
+        let mut sim = Sim::new(1);
+        run(&mut sim, "attend lens");
+        let before = sim.scrollback().records().len();
+        run(&mut sim, "help");
+
+        let after: Vec<_> = drawn(&sim).split_off(before);
+        let heading = after
+            .iter()
+            .position(|(kind, _)| *kind == RecordKind::Section)
+            .expect("the manual printed no headings at all");
+        assert_eq!(
+            after[heading].1.trim(),
+            "lens",
+            "the first heading is not the room: {after:?}",
+        );
+
+        // The instruction half, and it must come before any group heading — those
+        // are the index, and the index is what this reordering demotes.
+        let first_group = after
+            .iter()
+            .skip(heading + 1)
+            .position(|(kind, _)| *kind == RecordKind::Section)
+            .expect("the vocabulary listing has gone");
+        let primer: Vec<&String> = after
+            .iter()
+            .skip(heading + 1)
+            .take(first_group)
+            .map(|(_, line)| line)
+            .collect();
+        assert!(
+            primer.iter().any(|line| line.contains("probe")),
+            "the room's own puzzle is not explained before the word list: {primer:?}",
+        );
+    }
+
+    #[test]
+    fn every_room_a_player_can_stand_in_explains_itself() {
+        // **A new domain cannot ship without a primer.** §10 has five more rooms
+        // coming and each will be built by someone who is not thinking about the
+        // manual; the failure mode is silent, because `primer` is guarded on
+        // `Prose::has` and an unauthored room simply prints the old word list.
+        //
+        // Driven from `Sim::briefs()` rather than a list written out here, so the
+        // rooms come from the world. `built` is what makes it honest: `forge`,
+        // `menagerie` and `battlements` are dark, need nothing yet, and start
+        // needing it on the day `build.rs` raises them.
+        let sim = Sim::new(1);
+        let prose = sim.world().resource::<Prose>();
+
+        // `arsenal` and `tower` are standable and are not rail domains, so they are
+        // named — `briefs()` cannot see them. Both are checked by the same rule
+        // rather than exempted from it.
+        let extra = ["arsenal", "tower"];
+        let rooms: Vec<String> = sim
+            .briefs()
+            .into_iter()
+            .filter(|brief| brief.built)
+            .map(|brief| brief.name.to_owned())
+            .chain(extra.into_iter().map(str::to_owned))
+            .collect();
+        assert!(rooms.len() > extra.len(), "no rooms were found to check");
+
+        for room in rooms {
+            for key in KEYS.map(|part| format!("man_{part}_{room}")) {
+                assert!(
+                    prose.has(&key),
+                    "`help` in the {room} explains nothing: prose.toml has no `{key}`",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_primer_only_names_words_that_room_actually_offers() {
+        // **The half that rots.** A primer is a sentence naming verbs, and a verb
+        // moving room — or being renamed, which `tests/naming.rs` exists because it
+        // happens — turns an instruction into a dead end. §15 weighs the dead-end
+        // rate above the raw resolution rate, and a manual is the worst place to
+        // spend it: the player did the right thing by asking.
+        //
+        // Checked against `offered`, which is the same filter the listing below the
+        // primer uses, so the two halves of one screen cannot disagree.
+        //
+        // **It catches availability, not success, and the grimoire is the proof.**
+        // `scribe` is offered there and refuses — *"a spell is written for a place.
+        // go where the work is first"* — so the first draft of that primer sent the
+        // player at the one thing the room cannot do and this test passed. Looking
+        // is what found it (§15), which is why the See-it line runs `help` in every
+        // room rather than trusting the green. What this *does* hold is the failure
+        // that arrives later and silently: a verb renamed or moved between rooms.
+        //
+        // It did catch `bind`, which is gated at concentration 0 — an instruction
+        // the listing below correctly refuses to print.
+        let mut sim = Sim::new(1);
+        for room in ["laboratory", "archive", "lens", "grimoire"] {
+            run(&mut sim, &format!("attend {room}"));
+            let here: Vec<&str> = super::super::offered(sim.world())
+                .into_iter()
+                .map(Verb::canonical)
+                .collect();
+
+            // Both instruction halves. `here` is descriptive and names no verbs,
+            // but it is checked too — a description that named one would be making
+            // the same promise.
+            for key in KEYS.map(|part| format!("man_{part}_{room}")) {
+                let said = sim.world().resource::<Prose>().line(&key, &[]);
+                for word in said.split(|glyph: char| !glyph.is_ascii_lowercase()) {
+                    // Only words that *are* verbs somewhere are candidates; the rest
+                    // of the sentence is English and is not this test's business.
+                    if !Verb::ALL.iter().any(|verb| verb.canonical() == word) {
+                        continue;
+                    }
+                    assert!(
+                        here.contains(&word),
+                        "`{key}` tells the player to type `{word}`, which the {room} \
+                         does not offer",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
     fn the_overview_lists_what_resolves_here_and_nothing_else() {
         // Both directions, in two rooms. The listing is `execute::offered`, which
         // is the boot report's filter — so this is also what stops the tutorial a
@@ -843,15 +1087,27 @@ mod tests {
                 line.starts_with(verb.canonical()),
                 "{key} does not open with the word it documents: {line:?}",
             );
-            // **`follow` is exempt, and the exemption is the recorded debt.**
-            // Its slot is a `Place` because the place half of a spell's
-            // condition resolves against exactly that kind, which is why the
-            // four ways are places you cannot stand in (§19). `follow <place>`
-            // would be honest about the implementation and wrong for a player,
-            // who is choosing a direction. The exemption goes when the ways stop
-            // needing to be places.
-            if verb == Verb::Follow {
-                assert!(line.contains("way"), "{key} lost its direction: {line:?}");
+            // **Two verbs are exempt, and the exemption is a recorded debt.**
+            // Both take `Place` slots because the place half of a spell's
+            // condition resolves against exactly that kind — which is why the
+            // archive's four ways and the lens's sockets and sigils are places
+            // you cannot stand in (§19). `follow <place>` and
+            // `seat <place> <place>` would be honest about the implementation
+            // and wrong for a player, who is choosing a direction, or a dial and
+            // a mark.
+            //
+            // The exemption is still an assertion rather than a skip: each names
+            // the word the player is actually choosing, so a synopsis cannot
+            // drift into saying nothing. It goes when `Role::Reading` fixtures
+            // stop having to be `Place`s.
+            if let Some(instead) = match verb {
+                Verb::Follow => Some(&["way"][..]),
+                Verb::Dial => Some(&["socket", "sigil"][..]),
+                _ => None,
+            } {
+                for wanted in instead {
+                    assert!(line.contains(wanted), "{key} lost its {wanted}: {line:?}",);
+                }
                 continue;
             }
             for slot in verb.signature().iter().filter(|slot| slot.required) {

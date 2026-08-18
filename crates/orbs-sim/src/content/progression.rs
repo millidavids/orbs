@@ -348,6 +348,11 @@ mod tests {
                     // lectern onto the stacks and each earns for its own work.
                     "lectern",
                     "stacks",
+                    // The lens's one. Its oculus is deliberately unpriced —
+                    // opening a reading is not work — and this table only
+                    // refuses keys that name nothing, so an absent name is not
+                    // an error.
+                    "prism",
                 ])
                 .is_ok(),
             "the real instruments were rejected",
@@ -438,6 +443,11 @@ mod tests {
                     // lectern onto the stacks and each earns for its own work.
                     "lectern",
                     "stacks",
+                    // The lens's one. Its oculus is deliberately unpriced —
+                    // opening a reading is not work — and this table only
+                    // refuses keys that name nothing, so an absent name is not
+                    // an error.
+                    "prism",
                 ])
                 .is_ok(),
             "the shipped curve does not ascend",

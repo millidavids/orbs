@@ -64,6 +64,12 @@ pub enum Craft {
     Heating,
     /// Threading the archive's stacks (§10, `tower::maze`).
     Reading,
+    /// Pressing figures against a far orb's ward (§10, `tower::ward`).
+    ///
+    /// Two fixtures share it — the oculus a reading is opened at and the prism
+    /// it is pressed at — because a craft names *what a room does*, and both of
+    /// those are scrying. What tells them apart on the panel is their state.
+    Scrying,
     /// Fragments into a scroll. The archive's lectern.
     ///
     /// **The one craft not named by an [`Operation`](super::Operation)**, because
@@ -217,15 +223,27 @@ impl State {
 /// of *where you are* rather than a thing the frontend has to decide to show.
 #[must_use]
 pub fn instruments(world: &World) -> Vec<Instrument> {
+    instruments_in(world, world.resource::<Cwd>().0)
+}
+
+/// Every instrument standing in one place, whether or not the player is there.
+///
+/// **Extracted from [`instruments`] rather than written beside it**, because the
+/// tower rail asks the same question about a room the player is not in, and two
+/// derivations of *what is in this room* are two answers that can disagree — the
+/// defect [`State::is_busy`] already records once. `instruments` is now this with
+/// `Cwd` supplied, which keeps the panel a property of where you are standing
+/// while letting the rail glance elsewhere.
+#[must_use]
+pub fn instruments_in(world: &World, place: Entity) -> Vec<Instrument> {
     let now = *world.resource::<Tick>();
-    let cwd = world.resource::<Cwd>().0;
 
     // The **dispensary is not an instrument** and is deliberately absent. It is
     // a shelf: it does nothing, it has no meter, and it is `charged` from the
     // first tick to the last — a row that never changes teaches the eye to skip
     // the panel, which is the one thing a permanent fixture must not do.
     // `survey dispensary` is how you read a shelf.
-    let fixtures: Vec<Entity> = children_of(world, cwd)
+    let fixtures: Vec<Entity> = children_of(world, place)
         .into_iter()
         .filter(|node| world.get::<Fixture>(*node).is_some())
         .filter(|node| world.get::<super::Store>(*node).is_none())
@@ -347,6 +365,7 @@ fn craft_of(world: &World, node: Entity) -> Craft {
         Some(crate::parser::Verb::Mix) => Craft::Combining,
         Some(crate::parser::Verb::Distil) => Craft::Distilling,
         Some(crate::parser::Verb::Research) => Craft::Reading,
+        Some(crate::parser::Verb::Probe) => Craft::Scrying,
         // `Kindle` is the heat source's, and it answered above. Anything else has
         // no operation — which is the dispensary and the cabinet, and is *also*
         // the lectern, whose verb went to the stacks when the maze did.
@@ -387,6 +406,35 @@ fn read(world: &World, node: Entity, name: &str, now: Tick) -> (State, Option<Me
     if let Some(maze) = world.get::<super::Maze>(node) {
         let (done, total) = maze.explored();
         return (State::Working, Some(Meter { done, total }));
+    }
+    // **An open ward is work, and says so** — the same answer the stacks gives
+    // for an open maze, and for the same two reasons.
+    //
+    // It is what a solver asks: `repeat until the prism is idle` is how a spell
+    // says *until the seal gives*, and `is empty` cannot do that job because
+    // `spell::watch` answers it by asking whether the node has **children** —
+    // the prism's children are its published readings, and there are none until
+    // the first press lands. A `breaking` bounded on `empty` ended on its first
+    // instruction, having pressed once.
+    //
+    // `Charged` was the first answer and is wrong for the same reason: it means
+    // *wield this and it runs*, which is not what a reading in progress is.
+    //
+    // The meter is sigils placed against sigils there are — the only honest
+    // measure a ward has, because how many presses it takes is what the player's
+    // deduction decides, exactly as a maze's length is what their rule decides.
+    if let Some(ward) = world.get::<super::Ward>(node) {
+        return (
+            State::Working,
+            // **`best`, not `last().0`.** The meter is *progress*, and the last
+            // press's answer goes down as well as up — a gauge that fell back
+            // whenever a guess did not help would be reporting the guess rather
+            // than the reading.
+            Some(Meter {
+                done: u64::from(ward.best()),
+                total: super::ward::WIDTH as u64,
+            }),
+        );
     }
     if let Some(triage) = world.get::<super::Triaging>(node) {
         let total = triage.ends.get().saturating_sub(triage.started.get());
@@ -451,7 +499,12 @@ fn read(world: &World, node: Entity, name: &str, now: Tick) -> (State, Option<Me
     // remove: "a fouled instrument read as *it will not start*".
     let holding = super::holdings(world, node);
     let recipes = world.resource::<crate::content::Recipes>();
-    if recipes.matching(name, &holding).is_some() {
+    // **A recipe the player has not found reads `fouled`, not `charged`**, and
+    // that is honest rather than coy: they are holding two things that make
+    // nothing, as far as they know. A panel saying `charged` for a run that will
+    // never start is the exact lie this column exists to remove.
+    let learned = world.resource::<super::Learned>();
+    if recipes.matching(name, &holding, learned).is_some() {
         return (State::Charged, None);
     }
     // **Part of a recipe is not leavings.** The lectern wants four distinct
@@ -459,7 +512,7 @@ fn read(world: &World, node: Entity, name: &str, now: Tick) -> (State, Option<Me
     // `Fouled` — the panel telling a player *collecting a set* that their
     // instrument will not start, which is the confusion this whole column exists
     // to remove.
-    if recipes.gathering(name, &holding) {
+    if recipes.gathering(name, &holding, learned) {
         return (State::Gathering, None);
     }
     (State::Fouled, None)

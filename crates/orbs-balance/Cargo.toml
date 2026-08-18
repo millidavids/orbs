@@ -9,6 +9,10 @@ authors.workspace = true
 
 [dependencies]
 orbs-sim = { path = "../orbs-sim" }
+clap = { workspace = true }
+# For `Role` only — the accent triad a refusal is stamped with. `orbs-render`
+# has no backend dependency (CLAUDE.md rule 2), so this costs no GPU and no window.
+orbs-render = { path = "../orbs-render" }
 
 [lints]
 workspace = true

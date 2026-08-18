@@ -109,6 +109,21 @@ pub fn finish(world: &mut World) {
             continue;
         }
 
+        // **A press is the third kind of completed work**, beside a transmuting
+        // run and the generic one below. It makes no material, so `transmute`
+        // is wrong; and what it says depends on what the ward answered, so the
+        // generic sentence is wrong too. It also credits on its own terms — the
+        // yield scales with how few presses it took — which is the one thing
+        // `worth(verb)` below cannot express.
+        if working.verb == crate::parser::Verb::Probe {
+            crate::execute::land_probe(world, place);
+            world
+                .resource_mut::<Scrollback>()
+                .records_mut()
+                .attribute(None);
+            continue;
+        }
+
         let subject = name_of(world, working.subject);
         // `Source` is what makes a domain log a log: §3 keeps one stream, and
         // `peruse laboratory.log` is that stream filtered by where each line

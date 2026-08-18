@@ -125,6 +125,25 @@ pub struct Recipe {
     /// wants heat: an instrument may well gain a cold recipe later.
     #[serde(default)]
     pub heat: bool,
+    /// Whether the player has to **find** this before it will fire (§10, `lens/`).
+    ///
+    /// **Content, not player state.** This says a recipe *is* discoverable;
+    /// [`Learned`](crate::tower::Learned) says whether it has been discovered.
+    /// Keeping them apart is what lets `Recipes` stay immutable — it is loaded
+    /// once and deliberately not hot-reloadable, because a recipe reaches a
+    /// decision and swapping one mid-session would break replay from
+    /// `(seed, submissions)`.
+    ///
+    /// **Only two questions consult it**: whether a recipe fires
+    /// ([`matching`](Recipes::matching), [`gathering`](Recipes::gathering)) and
+    /// whether its product is a word the player can say (`tower::scene`).
+    /// Everything else here is a *content* query and must stay unfiltered —
+    /// `debug_spawn` reaches every material by design, and `execute::scroll`'s
+    /// verdant unlock derives base reagents as *"in the vocabulary and made by
+    /// nothing"*, so a filtered `outputs` would drop an undiscovered potion out
+    /// of "made" and offer it as an endless herb.
+    #[serde(default)]
+    pub secret: bool,
 }
 
 /// The default for [`Recipe::count`]: a recipe wants one of each input.
@@ -242,9 +261,20 @@ impl Recipes {
     /// `held` is what the instrument contains: each name once, with how many
     /// units of it are there. See [`Recipe::count`] for why the count is carried
     /// rather than the name repeated.
+    /// `learned` is what the player has found. A secret recipe they have not
+    /// found does not fire, and the instrument reads `fouled` — which is honest:
+    /// they are holding two things that make nothing, as far as they know.
     #[must_use]
-    pub fn matching(&self, instrument: &str, held: &[(String, u32)]) -> Option<&Recipe> {
+    pub fn matching(
+        &self,
+        instrument: &str,
+        held: &[(String, u32)],
+        learned: &crate::tower::Learned,
+    ) -> Option<&Recipe> {
         self.by_instrument.get(instrument)?.iter().find(|recipe| {
+            if !self.reachable(recipe, learned) {
+                return false;
+            }
             let mut wanted: Vec<&str> = recipe.inputs();
             if wanted.len() != held.len() {
                 return false;
@@ -279,12 +309,20 @@ impl Recipes {
     /// **Two ways to be part-way there**, and the lectern reaches both: fewer
     /// *kinds* than a recipe names, or every kind but not enough of one.
     #[must_use]
-    pub fn gathering(&self, instrument: &str, held: &[(String, u32)]) -> bool {
+    pub fn gathering(
+        &self,
+        instrument: &str,
+        held: &[(String, u32)],
+        learned: &crate::tower::Learned,
+    ) -> bool {
         if held.is_empty() {
             return false;
         }
         self.by_instrument.get(instrument).is_some_and(|recipes| {
             recipes.iter().any(|recipe| {
+                if !self.reachable(recipe, learned) {
+                    return false;
+                }
                 let mut wanted: Vec<&str> = recipe.inputs();
                 if held.len() > wanted.len() {
                     return false;
@@ -435,7 +473,66 @@ impl Recipes {
         }
     }
 
+    /// Whether the player may fire this recipe at all.
+    ///
+    /// One place, asked by both [`matching`](Self::matching) and
+    /// [`gathering`](Self::gathering) — two expressions of one rule disagreeing
+    /// is the defect §19 records most often, and here it would show as an
+    /// instrument reading `gathering` for a set it will never assemble.
+    fn reachable(&self, recipe: &Recipe, learned: &crate::tower::Learned) -> bool {
+        !recipe.secret
+            || recipe
+                .outputs()
+                .iter()
+                .all(|made| learned.knows(self, made))
+    }
+
+    /// Whether a name is one the player has to find before they can make it.
+    ///
+    /// **Every route to it must be secret.** A name one recipe hides and another
+    /// gives away freely is not a secret, and treating it as one would hide a
+    /// product the player can already make by the other route — §10.1's *"the
+    /// same goal, two right answers"* is a shape the content is built around.
+    #[must_use]
+    pub fn is_secret(&self, name: &str) -> bool {
+        let mut routes = self
+            .by_instrument
+            .values()
+            .flatten()
+            .filter(|recipe| recipe.outputs().contains(&name))
+            .peekable();
+        routes.peek().is_some() && routes.all(|recipe| recipe.secret)
+    }
+
+    /// Every product that has to be found, in the file's own order.
+    ///
+    /// The order **is** the reveal sequence — `execute::scry` takes the first
+    /// unfound one rather than drawing at random, so `recipes.toml` decides what
+    /// a player meets first. §19 makes the same argument for `recall`'s primary
+    /// route.
+    #[must_use]
+    pub fn secrets(&self) -> Vec<&str> {
+        let mut out: Vec<&str> = Vec::new();
+        for recipe in self.by_instrument.values().flatten() {
+            if !recipe.secret {
+                continue;
+            }
+            for made in recipe.outputs() {
+                if self.is_secret(made) && !out.contains(&made) {
+                    out.push(made);
+                }
+            }
+        }
+        out
+    }
+
     /// Every distinct output any instrument can produce.
+    ///
+    /// **Unfiltered, deliberately** — see [`Recipe::secret`]. This is a content
+    /// query: `debug_spawn` reaches every material through it, and
+    /// `execute::scroll`'s verdant unlock subtracts it from the vocabulary to
+    /// find base reagents, so filtering here would offer an undiscovered potion
+    /// as an inexhaustible herb.
     #[must_use]
     pub fn outputs(&self) -> Vec<&str> {
         let mut out: Vec<&str> = self
@@ -467,12 +564,18 @@ mod tests {
         assert!(!recipes.for_instrument("alembic").is_empty());
     }
 
+    /// What the player knows at tick 0 — nothing found, everything ordinary
+    /// available. The default, spelled out so a test reads as *a new tower*.
+    fn fresh() -> crate::tower::Learned {
+        crate::tower::Learned::default()
+    }
+
     #[test]
     fn a_single_input_recipe_matches_its_reagent() {
         let recipes = Recipes::builtin();
         let held = vec![("sage".to_owned(), 1)];
         let recipe = recipes
-            .matching("mortar_and_pestle", &held)
+            .matching("mortar_and_pestle", &held, &fresh())
             .expect("sage grinds");
         assert_eq!(recipe.outputs(), ["ground-sage"]);
         assert_eq!(recipe.leaves.as_deref(), Some("husks"));
@@ -493,13 +596,17 @@ mod tests {
         ];
         assert_eq!(
             recipes
-                .matching("flask_and_rod", &forward)
+                .matching("flask_and_rod", &forward, &fresh())
                 .map(Recipe::outputs),
             recipes
-                .matching("flask_and_rod", &backward)
+                .matching("flask_and_rod", &backward, &fresh())
                 .map(Recipe::outputs)
         );
-        assert!(recipes.matching("flask_and_rod", &backward).is_some());
+        assert!(
+            recipes
+                .matching("flask_and_rod", &backward, &fresh())
+                .is_some()
+        );
     }
 
     #[test]
@@ -508,13 +615,52 @@ mod tests {
         // Leave the husks in and the mortar does not know what you want.
         let recipes = Recipes::builtin();
         let held = vec![("sage".to_owned(), 1), ("husks".to_owned(), 1)];
-        assert!(recipes.matching("mortar_and_pestle", &held).is_none());
+        assert!(
+            recipes
+                .matching("mortar_and_pestle", &held, &fresh())
+                .is_none()
+        );
     }
 
     #[test]
     fn an_empty_instrument_matches_nothing() {
         let recipes = Recipes::builtin();
-        assert!(recipes.matching("alembic", &[]).is_none());
+        assert!(recipes.matching("alembic", &[], &fresh()).is_none());
+    }
+
+    #[test]
+    fn a_secret_recipe_does_not_fire_until_it_is_found() {
+        // §10's discovery, at its narrowest: the alembic holds potash, the
+        // recipe exists, and nothing happens — because the player has not been
+        // told it exists.
+        let recipes = Recipes::builtin();
+        let held = vec![("potash".to_owned(), 1)];
+        assert!(
+            recipes.matching("alembic", &held, &fresh()).is_none(),
+            "a secret fired before it was found",
+        );
+
+        let secrets = recipes.secrets();
+        assert!(!secrets.is_empty(), "nothing is authored secret");
+        for made in &secrets {
+            assert!(recipes.is_secret(made), "{made} is not hidden");
+        }
+    }
+
+    #[test]
+    fn an_ordinary_recipe_is_never_treated_as_secret() {
+        // The other half, and the one that would break the whole laboratory if
+        // it slipped: everything shipped before Phase 2 must still fire on a
+        // tower that has found nothing.
+        let recipes = Recipes::builtin();
+        for made in [
+            "ground-sage",
+            "sage-tincture",
+            "clarified-draught",
+            "clarity",
+        ] {
+            assert!(!recipes.is_secret(made), "{made} became a secret");
+        }
     }
 
     #[test]
@@ -522,7 +668,7 @@ mod tests {
         // Sequencing is the puzzle: sage grinds, it does not distil.
         let recipes = Recipes::builtin();
         let held = vec![("sage".to_owned(), 1)];
-        assert!(recipes.matching("alembic", &held).is_none());
+        assert!(recipes.matching("alembic", &held, &fresh()).is_none());
     }
 
     #[test]

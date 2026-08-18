@@ -1,11 +1,13 @@
 //! The tower: the directory tree that *is* the world (DESIGN.md §7).
 
 mod boot;
+mod brief;
 mod build;
 mod experience;
 mod heat;
 mod home;
 mod keep;
+mod learned;
 mod mastery;
 pub mod maze;
 mod node;
@@ -13,10 +15,12 @@ mod panel;
 mod sabotage;
 mod scene;
 mod stock;
+pub mod ward;
 mod work;
 
 pub use boot::report;
-pub use build::{operated, raise, raise_count, raise_reading};
+pub use brief::{Brief, DOMAINS, Mark, Marks, briefs, clear_mark, mark, mark_fault_at};
+pub use build::{declared, fixture_of, operated, raise, raise_count, raise_reading};
 pub use experience::{Experience, concentration, credit, worth};
 pub use heat::{
     ATHANOR, Banked, Burning, banked, burn, burning, damp, find as find_athanor, kindle, lit,
@@ -24,16 +28,21 @@ pub use heat::{
 };
 pub use home::home;
 pub use keep::{ARSENAL, admits, keep, keeping, kept};
+pub use learned::{CERTAIN, Learned, discover, learn};
 pub use mastery::{Node, Standing, Taken, ley_line, mastery, next};
 pub use maze::{Maze, Sense, Square, Way};
 pub use node::{
     Cwd, Domain, Fixture, HeatSource, Held, Keep, Name, Nameable, NodeId, NodeIds, Operation,
     Protected, Reading, Store, children_of, domain_of, filesystem_root, path_of, root, where_at,
 };
-pub use panel::{Craft, Instrument, Meter, State, instruments, state_at};
-pub use sabotage::{Log, Poisoned, drift, emit_lines, poison, poisoned, verify};
+pub use panel::{Craft, Instrument, Meter, State, instruments, instruments_in, state_at};
+pub use sabotage::{
+    Log, Poisoned, Substituted, drift, emit_lines, poison, poisoned, restore, settling, substitute,
+    substitution, verify,
+};
 pub use scene::{Topics, rebuild, scene_at};
 pub use stock::{Stock, give, give_endless, held, holdings, take};
+pub use ward::{SIGILS, SOCKETS, Shift, Ward};
 pub mod spell;
 pub use work::{
     Busy, CAPACITY, DIVINE_TICKS, PURGE_TICKS, Product, QUICKENED_BY, QUICKENED_TICKS, Quickened,

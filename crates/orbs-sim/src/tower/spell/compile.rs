@@ -565,10 +565,27 @@ fn one(line: &str, scene: &Scene, known: &[&str]) -> Reading {
 /// Lifted out of the rewriter this replaced, where it guarded the file. It now
 /// guards what the orb *says* about the file, which is the only surface left
 /// that can get this wrong.
-const fn names_a_spell(resolution: &Resolution) -> bool {
+fn names_a_spell(resolution: &Resolution) -> bool {
     let verb = match resolution {
         Resolution::Resolved { intent, .. } => intent.verb,
         Resolution::Incomplete { verb, .. } => *verb,
+        // **Ambiguous counts too, and this was the hole.** A forward reference
+        // matches *no* spell well, so which resolution it produces depends on how
+        // many spells happen to exist: with one on the shelf `invoke
+        // not_written_yet` resolved (the verb is weighted double) and was quoted;
+        // with four it ties between them and came back `Ambiguous`, which fell
+        // through to `spell_missing` and called a forward reference a fault.
+        //
+        // Shelving the dev ladders in a debug build is what made four, but the
+        // defect was always there — a player with four spells of their own would
+        // have found it. The rule is *this line names a spell*, and a tie between
+        // spells is still that.
+        Resolution::Ambiguous { candidates } => {
+            return !candidates.is_empty()
+                && candidates
+                    .iter()
+                    .all(|candidate| matches!(candidate.intent.verb, Verb::Invoke | Verb::Bind));
+        }
         _ => return false,
     };
     matches!(verb, Verb::Invoke | Verb::Bind)

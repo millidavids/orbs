@@ -926,6 +926,17 @@ fn say_blocked(world: &mut World, state: &Running, blocked: &Blocked) {
 }
 
 fn say_failure(world: &mut World, state: &Running, key: &str, detail: &str, role: Role) {
+    // **The rail's fault mark is raised here and nowhere else**, because this is
+    // the one place that knows a spell failed *and* which room it was working
+    // in. §8 makes a broken spell log rather than halt, so without a mark the
+    // only way to find one is to go and read its log — and §9's whole argument
+    // for the minimised half is noticing without going.
+    //
+    // `Role::Danger` only: a `Cost` here is a spell politely waiting its turn
+    // for the production slot, which happens constantly and is not a fault.
+    if role == Role::Danger {
+        crate::tower::mark_fault_at(world, state.at);
+    }
     let name = spell_name(world, state);
     let message = world.resource::<Prose>().line(
         key,

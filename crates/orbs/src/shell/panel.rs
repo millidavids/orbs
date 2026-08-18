@@ -280,6 +280,23 @@ const fn bar_of(craft: Craft, state: State, heat: bool) -> Bar {
         // Every state, one bar. A maze has no stages — it is open or it is not,
         // and the gauge says how much of it has been seen either way.
         Craft::Reading => Bar::Read,
+        // **The prism, and a plain gauge is right here where it was wrong for
+        // the lectern.** A press has a duration the tower knows before it starts
+        // — twelve ticks, every time — which is exactly what the plain meter is
+        // for, and exactly what a maze does *not* have (hence `Bar::Read`, which
+        // is meterless).
+        //
+        // What a plain gauge cannot show is the ward itself: how many sigils are
+        // aligned, what has been tried, which sockets have settled. That is the
+        // **board**, which is its own item and draws beside the transcript the
+        // way the maze map does — a panel row is a progress bar, and this is the
+        // one instrument whose interesting state is not progress.
+        //
+        // Not `Bar::Plain` by omission, which is the defect `Bar::meterless`
+        // records shipping three times: a prism between presses is `Empty` and a
+        // gauge with no meter behind it draws nothing at all. `Empty` here means
+        // *no reading open*, and the board is what says so.
+        Craft::Scrying => Bar::Plain,
         // **A plain gauge, and it is an improvement on what it replaced.** The
         // lectern used to be `Craft::Reading` because it carried the maze's verb,
         // so a *scroll coming together* drew the stacks' explored-cells gauge

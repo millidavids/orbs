@@ -46,6 +46,7 @@ use rand::Rng as _;
 
 use crate::rng::{RngStream, Rngs};
 use crate::session::Scrollback;
+use crate::tick::Tick;
 
 /// A surface an enemy has interfered with.
 ///
@@ -75,10 +76,38 @@ pub fn verify(world: &mut World, target: Entity) {
     let name = world
         .get::<Name>(target)
         .map_or_else(String::new, |name| name.0.clone());
-    let tampered = poisoned(world, target);
 
-    world
-        .resource_mut::<Scrollback>()
+    // **A place answers for what is standing in it**, which is what makes the
+    // *world* a surface rather than only the log. §8.1's world-state row is
+    // *"reagents swapped, entity substituted"*, and a substitution is not on the
+    // shelf — it is on the pile. Verifying the shelf and being told `sound`
+    // while a swapped pile sat in it would be the surface reporting the
+    // container instead of the contents.
+    //
+    // One level, deliberately: `verify` is §5.1's *one command, instantly and
+    // cheaply*, and a recursive audit of the whole tree is `verify --all`, which
+    // §8.1 prices as Production-class work.
+    let substituted: Vec<String> = super::children_of(world, target)
+        .into_iter()
+        .filter(|node| poisoned(world, *node))
+        .filter_map(|node| world.get::<Name>(node).map(|name| name.0.clone()))
+        .collect();
+    let tampered = poisoned(world, target) || !substituted.is_empty();
+
+    // **Named, not counted.** §8.1's design rule is that sabotage must be
+    // engaging to find and never frustrating — *"the skill is knowing which
+    // surface to inspect, not deciphering an obscure clue"* — so once the player
+    // has inspected the right surface, the answer is the thing itself.
+    let message = if substituted.is_empty() {
+        String::new()
+    } else {
+        world
+            .resource::<crate::content::Prose>()
+            .line("verify_substituted", &[("detail", &substituted.join(", "))])
+    };
+
+    let mut scrollback = world.resource_mut::<Scrollback>();
+    let mut record = scrollback
         .records_mut()
         .push(RecordKind::Status)
         .text(FieldName::Name, Verb::Verify.canonical())
@@ -91,8 +120,134 @@ pub fn verify(world: &mut World, target: Entity) {
             Role::Danger
         } else {
             Role::Success
-        })
-        .finish();
+        });
+    if !message.is_empty() {
+        record = record.text(FieldName::Message, &message);
+    }
+    record.finish();
+}
+
+/// Swap what a pile of stock says it is, without moving it.
+///
+/// §8.1's world-state tampering: *"reagents swapped, glyphs corrupted, entity
+/// substituted"*, whose tell is *"substituted entities fail ID check →
+/// `Referent missing`"*.
+///
+/// **The name changes and the identity does not.** That is the whole mechanism:
+/// a spell that named the reagent resolved it at cast to a stable id, so the id
+/// still points here and the *name* no longer matches — which is exactly the
+/// missing-referent fault §8's failure taxonomy already reports, arriving for
+/// the reason §8.1 says it should rather than through a typo.
+///
+/// It is the mirror of how a poisoned log works: nothing stored is destroyed,
+/// so the tampering is recoverable, comparable and `verify`-able. A swap that
+/// deleted the pile would be an enemy taking your sage, which is theft rather
+/// than sabotage — §5.1 puts environmental damage in the calm layer and keeps
+/// *misdirection* as the thing scrying exists to see through.
+pub fn substitute(world: &mut World, node: Entity, as_named: &str) {
+    let Some(mut name) = world.get_mut::<Name>(node) else {
+        return;
+    };
+    // **The true name is kept, and without it this was not sabotage but
+    // destruction.** `purge` on a poisoned surface removes `Poisoned` and reports
+    // `cleansed`, which left the pile permanently misnamed and — being
+    // un-poisoned again — eligible for a second swap to `charcoal--`. Three
+    // endless reagents in the tower, so three rolls killed every heated recipe in
+    // the game: no `kindle charcoal`, therefore no digestion, no distillation, no
+    // clarity and none of the three secrets. Unwinnable, quietly, about an hour
+    // in.
+    //
+    // The module header already claimed *"nothing stored is destroyed, so the
+    // tampering is recoverable"*. It is true now.
+    let was = std::mem::replace(&mut name.0, as_named.to_owned());
+    let since = *world.resource::<Tick>();
+    world.entity_mut(node).insert(Substituted { was, since });
+    world.entity_mut(node).insert(Poisoned);
+}
+
+/// What a substituted thing is really called, and when the lie landed.
+///
+/// The name is held beside the lie rather than instead of it, which is what makes
+/// [`restore`] possible — and what makes notice → `verify` → `purge` a repair
+/// loop rather than a report.
+#[derive(Component, Debug, Clone)]
+pub struct Substituted {
+    /// The true name.
+    pub was: String,
+    /// The tick the swap landed, for [`settling`].
+    pub since: Tick,
+}
+
+/// Give a substituted thing its name back.
+///
+/// Returns what it is called afterwards, so the sentence about the repair can
+/// name the thing that was repaired rather than the lie it was carrying.
+pub fn restore(world: &mut World, node: Entity) -> Option<String> {
+    let was = world.get::<Substituted>(node)?.was.clone();
+    if let Some(mut name) = world.get_mut::<Name>(node) {
+        name.0 = was.clone();
+    }
+    world.entity_mut(node).remove::<Substituted>();
+    Some(was)
+}
+
+/// How long a lie holds before the pile settles back to its own name.
+///
+/// # Why a swap wears off at all
+///
+/// **The repair loop is human-only by construction, and that is a fact about the
+/// language rather than a gap in this module.** A spell names things with literals
+/// (`parser/question.rs` has no variables at all), so a spell cannot say *"purge
+/// whatever the dispensary is lying about"* — it would have to name `sage-`, a
+/// word nobody knew at the time the spell was written. So `verify` → `purge` is
+/// reachable only by a person who reads the lie off the screen and types it.
+///
+/// Without an expiry, that made an unattended tower terminal rather than
+/// harassed: `orbs-balance` measured the standing grind loop falling from
+/// 0.100/tick to **0.058 and staying there** — one swap and the loop is dead for
+/// the rest of the session, silently, because `grind sage` finds no sage and the
+/// refusal blames the mortar. §5.1 caps aberration arrival *"so repairs cannot
+/// spiral"*; a permanent un-automatable swap does not spiral, it terminates, which
+/// is worse and was never the intent.
+///
+/// # The number is swept, not chosen
+///
+/// A loop stalls for as long as the pile it names is lying, so its downtime is
+/// `WEARS_OFF / SWAP_INTERVAL` — the one ratio that matters, and the reason these
+/// two constants have to be set together. At the first pair (1200, never) an
+/// unattended tower lost **42%** of its rate permanently; at (1200, 1800) it lost
+/// 60% of every window. `orbs-balance` measured both.
+///
+/// **300 against `SWAP_INTERVAL`'s 3600 is 8% downtime**, which is a nuisance a
+/// player notices and an hour away survives. Five minutes is also short enough
+/// that waiting one out is never the *better* play — `purge` repairs it the moment
+/// it is found, and that is what keeps the human loop worth running.
+const WEARS_OFF: u64 = 300;
+
+/// Let a lie that nobody caught settle back to the truth.
+///
+/// The passive half of the repair loop, and deliberately **silent**: a pile
+/// quietly becoming itself again is the tower settling, not an event, and a line
+/// saying so would be a notification for something the player never saw go wrong.
+/// What is *not* silent is `verify` while it holds, which is the tell §8.1 asks
+/// for.
+pub fn settling(now: Res<Tick>, lies: Query<(Entity, &Substituted)>, mut commands: Commands) {
+    let settled: Vec<Entity> = lies
+        .iter()
+        .filter(|(_, lie)| now.get().saturating_sub(lie.since.get()) >= WEARS_OFF)
+        .map(|(node, _)| node)
+        .collect();
+
+    for node in settled {
+        commands.queue(move |world: &mut World| {
+            restore(world, node);
+            // **`Poisoned` goes too, or the pile is sound and still ineligible.**
+            // `substitution` filters on `Without<Poisoned>`, so a settled pile
+            // that kept the marker would be truthful *and* permanently immune —
+            // three settlings and the surface would have nothing left to touch.
+            world.entity_mut(node).remove::<Poisoned>();
+        });
+    }
 }
 
 /// Roughly how many ticks pass between interferences.
@@ -131,6 +286,110 @@ pub fn drift(
         commands.entity(target).insert(Poisoned);
     }
 }
+
+/// Swap a reagent somewhere in the tower, occasionally — §8.1's world surface.
+///
+/// **A second system rather than a branch inside [`drift`]**, and the reason is
+/// the stream. Both draw from [`RngStream::Threat`], and interleaving two rolls
+/// in one system would make *which* surface is hit depend on how many draws had
+/// happened before — so adding the world surface would silently change every
+/// existing log-poisoning replay. Two systems each drawing once per tick is one
+/// more draw per tick and no reordering of what either one sees.
+///
+/// **Rarer than log drift, deliberately.** A poisoned log misdirects a
+/// diagnosis; a swapped reagent stops a bound spell, which is a bigger
+/// interruption — §5.1 caps aberration arrival so repairs cannot spiral, and
+/// this is the more expensive of the two to repair.
+pub fn substitution(
+    mut rngs: ResMut<Rngs>,
+    fuels: Res<crate::content::Fuels>,
+    stock: Query<(Entity, &Name, &super::Stock), Without<Poisoned>>,
+    mut commands: Commands,
+) {
+    // **Endless base stock only, and this is the load-bearing restriction.**
+    //
+    // A first pass took any pile at all, and swapped `ground-sage` sitting
+    // between a grind and a digestion — which does not misdirect a player, it
+    // destroys work in flight. §5.1 keeps environmental damage in the calm layer
+    // and leaves *misdirection* as the thing to see through, and §11.5's rule is
+    // that a cost is the resource and never progress.
+    //
+    // A base reagent is the honest target for the same reason it is endless: the
+    // tower always has more, so what a swap costs is the **spell that named it**
+    // and nothing that was half-made. It is also what a spell names most, which
+    // is what makes the sabotage worth finding.
+    //
+    // It broke `meditating_stalls_at_a_stage_boundary` on the way in, which is a
+    // test about the pipeline and not about sabotage — a nuisance that can reach
+    // into a running brew is one that shows up as noise everywhere.
+    // **The roll first, unconditionally, and the order is the whole reason this
+    // is a separate system.** The doc above promises *one more draw per tick and
+    // no reordering of what either one sees* — and drawing *after* an early
+    // return breaks it: once every endless pile is poisoned this system stops
+    // drawing, and every subsequent `drift` roll shifts one position along the
+    // shared stream. Adding or removing an endless reagent in `build.rs` would
+    // then silently change the log-poisoning schedule, which is exactly the
+    // hazard the split was built to avoid.
+    let roll: u64 = rngs.stream(RngStream::Threat).random();
+
+    let mut piles: Vec<(Entity, &Name)> = stock
+        .iter()
+        .filter(|(_, _, stock)| matches!(stock, super::Stock::Endless))
+        // **Fuel is exempt, and the reason is the paragraph above.** A swap is
+        // honest because it costs *the spell that named the reagent* and nothing
+        // half-made — and charcoal is named by no recipe at all. It is the
+        // tower's power supply, so swapping it stops every heated stage in every
+        // domain at once, which is the same "reaches into work in flight"
+        // objection that already exempts the non-endless piles.
+        //
+        // `orbs-balance` is what found this, on the first sweep after the surface
+        // shipped: `charcoal` sorts before `rock-salt` and `sage`, so the *first*
+        // swap of every session took the fire and clarity's rate fell from 0.140
+        // to 0.074 — half the laboratory, silently, on every seed.
+        .filter(|(_, name, _)| fuels.get(&name.0).is_none())
+        .map(|(node, name, _)| (node, name))
+        .collect();
+    // **Sorted by name, not query order.** `tower::node` records archetype order
+    // as a defect that changes what a phrase resolves to with no test catching
+    // it, and a replay has to swap the *same* pile from the same seed.
+    piles.sort_unstable_by(|(_, a), (_, b)| a.0.cmp(&b.0));
+
+    if !roll.is_multiple_of(SWAP_INTERVAL) {
+        return;
+    }
+
+    // **Drawn from the pool, not `first()`.** The sort above is for replay and is
+    // right; taking its head made *which* pile is hit as fixed as the sort —
+    // every session, every seed, in alphabetical order for ever. That is a
+    // determinism fix that quietly became content.
+    //
+    // The index comes out of the *same* `roll` rather than a second draw, because
+    // a draw that only happens when the swap fires would move `drift`'s stream
+    // position by a variable amount — the hazard this system was split out to
+    // avoid. `roll` cleared `SWAP_INTERVAL`, so its quotient is untouched entropy.
+    let index = (roll / SWAP_INTERVAL) as usize % piles.len().max(1);
+    let Some((target, name)) = piles.get(index).copied() else {
+        return;
+    };
+
+    // The name it is *made to claim*, which must be a real word or the tell
+    // would read as corruption rather than as substitution. Its own name with a
+    // sigil struck through it is the cheapest honest lie: `sage` sitting in the
+    // dispensary calling itself something a recipe will not take.
+    let claimed = format!("{}-", name.0);
+    commands.queue(move |world: &mut World| {
+        substitute(world, target, &claimed);
+    });
+}
+
+/// Roughly how many ticks pass between reagent swaps.
+///
+/// **Twelve times rarer than [`DRIFT_INTERVAL`], and it was four.** A poisoned log
+/// misleads a reading of one; a swapped reagent stops every loop that named it, so
+/// the two are not the same order of interruption and pricing them one step apart
+/// said they were. One an hour, paired with [`WEARS_OFF`]'s five minutes — see
+/// there for the ratio, which is the number that was actually swept.
+const SWAP_INTERVAL: u64 = 3600;
 
 /// A file that accumulates what a domain did.
 #[derive(Component, Debug, Clone, Copy)]

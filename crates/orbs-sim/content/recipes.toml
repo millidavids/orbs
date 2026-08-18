@@ -228,6 +228,51 @@ ticks = 40
 potion = true
 heat = true
 
+# ---------------------------------------------------------------------------
+# THE THREE ANOTHER WIZARD KNEW (§10, `lens/`).
+#
+# `secret = true` means the player has to **find** this before it will fire — a
+# broken ward spills a far wizard's log, and now and then the log spells out how
+# they made something. Until then the alembic reads `fouled` on a load it cannot
+# transmute, which is honest: two things that make nothing, as far as you know.
+#
+# **The order here is the reveal order.** `execute::scry` takes the first unfound
+# one rather than drawing at random, so this file decides what a player meets
+# first — the same argument §19 makes for `recall`'s primary route being the
+# file's first entry.
+#
+# **Each is one step over a byproduct**, and that is the point rather than a
+# saving. §10.1's rule is that every byproduct has at least one use; these give
+# three of them a *second*, so a laboratory full of leavings becomes a laboratory
+# with options. It also means a discovery needs no new intermediate and no new
+# route — what you find is a use for something you have been throwing away.
+[[alembic]]
+input = "potash"
+output = "mending"
+leaves = "phlegm"
+ticks = 30
+potion = true
+heat = true
+secret = true
+
+[[alembic]]
+input = "sediment"
+output = "dreaming"
+leaves = "phlegm"
+ticks = 34
+potion = true
+heat = true
+secret = true
+
+[[alembic]]
+input = "dregs"
+output = "vigour"
+leaves = "phlegm"
+ticks = 36
+potion = true
+heat = true
+secret = true
+
 [[alembic]]
 input = "quiet-draught"
 output = "stillness"

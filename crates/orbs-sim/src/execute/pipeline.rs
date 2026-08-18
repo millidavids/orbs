@@ -461,7 +461,7 @@ fn start(world: &mut World, at: Entity, name: &str, verb: Verb) {
     // indistinguishable from "you loaded the wrong thing".
     let Some((ticks, heat)) = world
         .resource::<Recipes>()
-        .matching(name, &holding)
+        .matching(name, &holding, world.resource::<tower::Learned>())
         .map(|recipe| (recipe.ticks, recipe.heat))
     else {
         let key = if holding.is_empty() {

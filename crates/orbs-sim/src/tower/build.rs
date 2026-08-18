@@ -91,6 +91,21 @@ const BRANCHES: &[Branch] = &[
         role: None,
         operation: None,
     },
+    // **Scrying (§10), and the third domain the game opens.** A far wizard's orb
+    // is sealed with a ward; you press figures against it and read how it
+    // answers. See `tower::ward` for why the orb keeps no candidate set.
+    //
+    // It holds no materials at all, and that is deliberate: what a broken seal
+    // yields is experience, a stolen log, and occasionally a recipe — none of
+    // which is a thing on a shelf. So the lens needs no `Role::Store`, and
+    // `tower::home` has nothing to place here.
+    Branch {
+        name: "lens",
+        holds: &[Holding::new(NounKind::File, &["lens.log"])],
+        places: LENS,
+        role: None,
+        operation: None,
+    },
     // **The one room you can reach from any other**, and it starts empty: what
     // is in it is what the player has finished. See [`Role::Keep`] and
     // `tower::keep` for why the exemption is narrow and why this is not a second
@@ -215,6 +230,113 @@ const ARCHIVE: &[Branch] = &[
     },
 ];
 
+/// The lens: one instrument, four sockets and six sigils.
+///
+/// **Both verbs are scoped, and that is what keeps a third debt off the books.**
+/// `Scene::offering` derives a verb's scope from the `Operation` a fixture
+/// carries, and a fixture carries exactly one — which is the mechanism §19
+/// records `follow` and `wander` waiting on, both of them tower-wide words as a
+/// result. The prism spends its operation on `probe`, and the four **sockets
+/// each carry `dial`**, which costs nothing because they are places a player
+/// names anyway.
+///
+/// **There is no oculus.** A first pass gave the lens a second instrument to
+/// carry `scry`, and `scry` did not survive the naming sweep — `scr` reaches
+/// `scribe`, and `tests/naming.rs` deleted its last prefix exemption on the
+/// grounds that one outliving its cause is how a guard stops guarding. `probe`
+/// opens a reading when none is open, so the fixture that existed only to hold
+/// the other verb went with it.
+///
+/// Sockets and sigils are `Role::Reading` for the reason the archive's compass
+/// bearings are: a spell's question resolves its place half against
+/// `NounKind::Place`, so `if the first is settled` needs `first` to be one — and
+/// `Role::Reading` is what makes it a place you can name without being a room
+/// you can stand in (`attend` refuses one in voice).
+const LENS: &[Branch] = &[
+    // Where the ward is held and where the answer lands. `aligned`, `astray` and
+    // `spent` are published as its children, exactly as the maze publishes on
+    // its four ways.
+    Branch {
+        name: "prism",
+        holds: &[],
+        places: &[],
+        role: None,
+        operation: Some(Verb::Probe),
+    },
+    Branch {
+        name: "first",
+        holds: &[],
+        places: &[],
+        role: Some(Role::Reading),
+        operation: Some(Verb::Dial),
+    },
+    Branch {
+        name: "second",
+        holds: &[],
+        places: &[],
+        role: Some(Role::Reading),
+        operation: Some(Verb::Dial),
+    },
+    Branch {
+        name: "third",
+        holds: &[],
+        places: &[],
+        role: Some(Role::Reading),
+        operation: Some(Verb::Dial),
+    },
+    Branch {
+        name: "fourth",
+        holds: &[],
+        places: &[],
+        role: Some(Role::Reading),
+        operation: Some(Verb::Dial),
+    },
+    // The six sigils. Each publishes its own `marks`, which is the tally a
+    // ladder walks; none of them publishes anything about the code.
+    Branch {
+        name: "nitre",
+        holds: &[],
+        places: &[],
+        role: Some(Role::Reading),
+        operation: None,
+    },
+    Branch {
+        name: "alum",
+        holds: &[],
+        places: &[],
+        role: Some(Role::Reading),
+        operation: None,
+    },
+    Branch {
+        name: "borax",
+        holds: &[],
+        places: &[],
+        role: Some(Role::Reading),
+        operation: None,
+    },
+    Branch {
+        name: "quartz",
+        holds: &[],
+        places: &[],
+        role: Some(Role::Reading),
+        operation: None,
+    },
+    Branch {
+        name: "pewter",
+        holds: &[],
+        places: &[],
+        role: Some(Role::Reading),
+        operation: None,
+    },
+    Branch {
+        name: "ochre",
+        holds: &[],
+        places: &[],
+        role: Some(Role::Reading),
+        operation: None,
+    },
+];
+
 /// §10.1's five instruments, plus the dispensary that feeds them.
 ///
 /// Each is a **place**, so `survey alembic` inspects one from across the
@@ -304,6 +426,53 @@ pub fn operated() -> Vec<&'static str> {
     let mut names = Vec::new();
     walk(BRANCHES, &mut names);
     names
+}
+
+/// Every verb a fixture in the tower declares as its own.
+///
+/// The content half of [`Verb::anchor`], which is what makes a scoped verb scoped
+/// by *where its fixture stands* rather than by a list of rooms written in the
+/// parser. `every_self_anchored_verb_is_declared_by_a_fixture` compares the two.
+#[must_use]
+pub fn declared() -> Vec<Verb> {
+    fn walk(branches: &'static [Branch], into: &mut Vec<Verb>) {
+        for branch in branches {
+            if let Some(verb) = branch.operation
+                && !into.contains(&verb)
+            {
+                into.push(verb);
+            }
+            walk(branch.places, into);
+        }
+    }
+    let mut verbs = Vec::new();
+    walk(BRANCHES, &mut verbs);
+    verbs
+}
+
+/// The fixture that declares `verb`, for a refusal that can name what is missing.
+///
+/// §6 forbids a bare error, and *"there is nothing here to wander with"* is only
+/// half an answer — the other half is **which** thing. Walking the content rather
+/// than pairing verbs with names in the parser, so a new domain's refusal reads
+/// correctly the day the branch is authored.
+///
+/// Takes the anchor, so `follow` and `wander` both name the `stacks` they act
+/// through rather than nothing at all.
+#[must_use]
+pub fn fixture_of(verb: Verb) -> Option<&'static str> {
+    fn walk(branches: &'static [Branch], wanted: Verb) -> Option<&'static str> {
+        for branch in branches {
+            if branch.operation == Some(wanted) {
+                return Some(branch.name);
+            }
+            if let Some(found) = walk(branch.places, wanted) {
+                return Some(found);
+            }
+        }
+        None
+    }
+    walk(BRANCHES, verb.anchor()?)
 }
 
 struct Branch {
@@ -428,17 +597,51 @@ fn raise_grimoire(world: &mut World, filesystem: Entity) {
 
     let spells = world.resource::<crate::content::Spells>().clone();
     for (name, spell) in spells.iter() {
-        let node = spawn(
-            world,
-            Some(grimoire),
-            &crate::content::with_extension(name),
-            NounKind::Script,
-        );
-        world.entity_mut(node).insert((
-            super::Held(spell.lines.clone()),
-            super::Domain(spell.domain.clone()),
-        ));
+        shelve(world, grimoire, name, spell);
     }
+
+    // **The dev ladders, on the shelf from tick 0 — in a debug build only.**
+    //
+    // They used to be reachable only through `debug_spell <name>`, which writes
+    // one out and refuses outside its own domain. That refusal exists because
+    // `scribe::write` homes a *new* spell to where the player stands; a spell
+    // raised here carries its own `Domain` from the file, so the room it is
+    // written for is right without anybody having walked there. `debug_spell`
+    // stays for the other job it does — handing back a fresh copy after one has
+    // been edited or `purge`d.
+    //
+    // `cfg(debug_assertions)` here and `include_str!` under the same `cfg` in
+    // `execute::debug_spell`, so a release build has neither these nodes nor the
+    // eighty lines behind them. `the_dev_spells_are_shelved_only_in_a_debug_build`
+    // holds both halves.
+    #[cfg(debug_assertions)]
+    for (name, spell) in crate::execute::dev_spells().iter() {
+        shelve(world, grimoire, name, spell);
+    }
+}
+
+/// Put one spell on the grimoire's shelf as a readable, invocable file.
+///
+/// The `Domain` is the spell's own rather than where anybody is standing, which
+/// is what lets a dev ladder be shelved for the archive while the player starts in
+/// the tower.
+fn shelve(
+    world: &mut World,
+    grimoire: Entity,
+    name: &str,
+    spell: &crate::content::Spell,
+) -> Entity {
+    let node = spawn(
+        world,
+        Some(grimoire),
+        &crate::content::with_extension(name),
+        NounKind::Script,
+    );
+    world.entity_mut(node).insert((
+        super::Held(spell.lines.clone()),
+        super::Domain(spell.domain.clone()),
+    ));
+    node
 }
 
 /// Spawn one branch, its holdings, and any places inside it.
@@ -575,6 +778,42 @@ mod tests {
     use super::super::node::{children_of, path_of};
     use super::*;
     use crate::Sim;
+
+    #[test]
+    fn every_self_anchored_verb_is_declared_by_a_fixture() {
+        // **The two halves of one rule, checked against each other.**
+        // `Verb::anchor` says a verb is scoped to a fixture; `BRANCHES` says which
+        // fixture and therefore which room. If the parser claims an anchor no
+        // fixture declares, the verb is scoped to nowhere and silently vanishes
+        // from every room's `help` — the opposite of the defect this pair fixed,
+        // and just as quiet.
+        //
+        // §19 records three entangled lists drifting exactly this way. This is the
+        // guard that stops the fourth.
+        let declared = declared();
+        for verb in Verb::ALL {
+            if verb.anchor() == Some(verb) {
+                assert!(
+                    declared.contains(&verb),
+                    "`{}` claims to be its own anchor, but no fixture in the tower \
+                     declares it — so it resolves in no room at all",
+                    verb.canonical(),
+                );
+            }
+        }
+
+        // ...and the other direction: a fixture that declares a verb the parser
+        // does not anchor puts that verb in every room, which is the defect itself.
+        for verb in declared {
+            assert_eq!(
+                verb.anchor(),
+                Some(verb),
+                "a fixture declares `{}`, but `Verb::anchor` does not scope it, so \
+                 it is offered everywhere",
+                verb.canonical(),
+            );
+        }
+    }
 
     #[test]
     fn every_noun_kind_the_slice_uses_has_something_to_resolve_against() {
@@ -732,7 +971,11 @@ mod tests {
         assert_eq!(path_of(world, tower), "/tower");
         assert_eq!(
             names_under(world, tower),
-            ["laboratory", "archive", super::super::ARSENAL],
+            // The lens is **third, before the arsenal**, which is the rule this
+            // assertion exists for: a domain goes on the end of `BRANCHES` and
+            // the arsenal is not a domain, so scrying slots in ahead of it and
+            // the two that came before do not move.
+            ["laboratory", "archive", "lens", super::super::ARSENAL],
         );
     }
 

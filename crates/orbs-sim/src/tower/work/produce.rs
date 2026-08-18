@@ -90,7 +90,7 @@ pub(super) fn transmute(world: &mut World, place: Entity) {
 
     let made = world
         .resource::<Recipes>()
-        .matching(&name, &holding)
+        .matching(&name, &holding, world.resource::<super::super::Learned>())
         .map(|recipe| {
             (
                 recipe

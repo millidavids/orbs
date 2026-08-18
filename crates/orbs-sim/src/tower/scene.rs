@@ -98,9 +98,34 @@ pub fn scene_at(world: &World, at: Entity) -> Scene {
     //
     // No intermediate `Vec<String>`: these ran per tick, cloning every name into
     // an owned string only to hand `Scene::with` a `&str` it copies again.
+    // **A secret is subtracted here, and it has to be here.** `Topics` is
+    // snapshotted once at construction (`sim.rs`) so a prose hot-reload cannot
+    // change what a phrase resolves to — and a secret potion's `recall_` page is
+    // a prose key, so it is in that snapshot from tick 0. Gating at snapshot
+    // time would be gating a thing that is built once and never rebuilt; gating
+    // here is a set subtraction against the world as it stands, which is what
+    // `scene_at` is for.
+    //
+    // Get this wrong and `recall <secret>` answers before the player has found
+    // it — with every test green, because the recipe still refuses to fire.
+    let hidden: Vec<String> = {
+        let recipes = world.resource::<crate::content::Recipes>();
+        let learned = world.resource::<super::Learned>();
+        recipes
+            .secrets()
+            .into_iter()
+            .filter(|made| !learned.knows(recipes, made))
+            .map(str::to_owned)
+            .collect()
+    };
+    let is_hidden = |name: &str| hidden.iter().any(|made| made == name);
+
     {
         let recipes = world.resource::<crate::content::Recipes>();
         for output in recipes.outputs() {
+            if is_hidden(output) {
+                continue;
+            }
             scene = scene.with(NounKind::Topic, output);
         }
     }
@@ -109,10 +134,22 @@ pub fn scene_at(world: &World, at: Entity) -> Scene {
     // list as what is here — that is the point. It stops one real name being
     // fuzzed into another when the first is out of stock; see `Scene::knowing`
     // for the `digest ground-sage` defect that named it.
-    scene = scene.knowing(crate::content::Recipes::substances(world));
+    // **Also subtracted from `knowing`.** A secret left in the known-substance
+    // list is a *word the parser recognises*, so typing it answers *"there is
+    // none here"* rather than *"no such thing"* — a different answer from a
+    // nonsense word, which is exactly the discriminator `Scene::knowing` exists
+    // to draw, and enough to tell a player a name they have not earned is real.
+    let substances: Vec<String> = crate::content::Recipes::substances(world)
+        .into_iter()
+        .filter(|name| !is_hidden(name))
+        .collect();
+    scene = scene.knowing(substances);
     {
         let topics = world.resource::<Topics>();
         for topic in &topics.0 {
+            if is_hidden(topic) {
+                continue;
+            }
             scene = scene.with(NounKind::Topic, topic);
         }
     }
@@ -212,6 +249,16 @@ pub fn scene_at(world: &World, at: Entity) -> Scene {
     // branch, and a solver that could not ask which maze it was in is two
     // solvers the player has to choose between by hand.
     for reading in super::maze::readings() {
+        scene = scene.with(NounKind::Sense, reading);
+    }
+
+    // **And the lens's, for exactly the same reason.** A spell is compiled at
+    // cast, when no ward is open — so `aligned`, `settled` and `marks` all
+    // resolve against nothing unless they are here unconditionally. A solver
+    // whose every rung compiled to a dead branch is the defect this chain exists
+    // to prevent, and it would be silent: the spell casts, runs, and does
+    // nothing for ever.
+    for reading in super::ward::readings() {
         scene = scene.with(NounKind::Sense, reading);
     }
 

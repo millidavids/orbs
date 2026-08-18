@@ -4,9 +4,23 @@
 //!
 //! - The **main window** holds every open pane, all fully rendered and fully
 //!   functional, up to multiplex capacity.
-//! - The **sidebar** holds every other unlocked pane, minimised to a single line.
-//!   Awareness only, not commandable.
+//! - The **rail** holds every domain, minimised. Awareness only, not commandable.
 //! - **One input line, always at the bottom.**
+//!
+//! # The rail was a sidebar, and the shape changed in Phase 2
+//!
+//! §9 wrote the second of those as *"minimised to a single line"* and this module
+//! laid it out as full-width rows stacked above the input line. It was built,
+//! tested, and never reachable — §19 lists it under *"gated by: brewing + archive
+//! — nothing to minimise with two panes."* Scrying is the third domain, which is
+//! the gate opening, and the shape it opened into is a **thin vertical column on
+//! the right divided into one box per domain** rather than a stack of rows.
+//!
+//! Everything §9 argued for survives the change: awareness only, never
+//! commandable, and it **yields before the main window does**. What moved is the
+//! axis, and the reason is that a row can hold a name *or* a state *or* a spell,
+//! while a box can hold all three — which is what a glance at seven domains
+//! actually needs.
 //!
 //! Layout is computed from a grid size, not from pixels, so it is identical
 //! under both frontends. That is what makes §9's parity rule enforceable rather
@@ -35,6 +49,59 @@ const MAIN_CAP: u16 = 4;
 const SIDEBAR_CAP: u16 = 7;
 const _: () = assert!(MAIN_CAP as usize == MAX_MAIN_PANES);
 const _: () = assert!(SIDEBAR_CAP as usize == MAX_PANES);
+
+/// Columns the rail takes off the right of the main window.
+///
+/// **Sixteen, and the arithmetic is checked rather than eyeballed.** Inset one
+/// each side leaves 14 for content, against the longest domain name
+/// (`battlements`, 11) plus room for a mark, `►tending` at 8, and
+/// `alembic 22t` at 11. The main window keeps 104 of the fixed 120, so a single
+/// pane's body is 102 columns — against the 58 it had when the second pane was
+/// telemetry.
+pub const RAIL_COLS: u16 = 16;
+
+/// Rows the rail keeps at its foot for the readings that are not per-domain.
+///
+/// A separator plus `tick`, `held`, `scale`, the grid and the focus mode — the
+/// three playability gates §15 named plus the two §9 requires be readable. These
+/// were the telemetry pane's and cannot go to `status`, which lives in the sim
+/// and may not see a window (rules 1 and 2).
+pub const RAIL_FOOT_ROWS: u16 = 6;
+
+/// Rows the foot's content needs: a rule, then `tick`, `held`, `scale`, `grid`
+/// and `focus`.
+///
+/// **Separate from [`RAIL_FOOT_ROWS`] so the assertion below is not
+/// tautological.** It read `assert!(RAIL_FOOT_ROWS >= 6)` against a constant
+/// defined as `6` three lines above, which can never fail — so lowering the
+/// budget to 4 would have passed the check and silently dropped `focus`, which
+/// is precisely what the comment claimed it was preventing.
+pub const RAIL_FOOT_CONTENT: u16 = 6;
+
+// The budget against what the foot actually writes. `rail::readings` bails at
+// `row >= at.bottom()`, so it would find out by dropping its last row in
+// silence.
+const _: () = assert!(RAIL_FOOT_ROWS >= RAIL_FOOT_CONTENT);
+
+/// The fewest rows a rail box can occupy and still say anything.
+///
+/// A name, a state, the spell running there, **and the rule that closes the box**.
+/// Below that the rail is **dropped rather than squeezed** — §9's rule that the
+/// minimised half yields and the main window never does.
+///
+/// **Four, and it was three before the boxes were ruled off.** The rule is drawn
+/// by the box above the boundary and so costs that box a row; at three the
+/// squeezed box kept its name and state and silently dropped the spell, which is
+/// the one line telling a player that room is automated. The fixed 120×45 grid
+/// gives each box five, so this changes only where the rail yields.
+pub const MIN_RAIL_BOX: u16 = 4;
+
+/// The fewest columns the main window may be left with before the rail yields.
+///
+/// A pane narrower than this cannot host the instrument panel *and* a
+/// transcript, and §9's main window is *"fully rendered and fully functional"* —
+/// so the awareness column is what goes.
+const MIN_MAIN_COLS: u16 = 60;
 
 /// Rows a Wide-focus strip occupies.
 ///
@@ -105,8 +172,14 @@ pub struct ScreenRequest {
     /// Panes in the main window — the multiplex capacity in use. Clamped to
     /// [`MAX_MAIN_PANES`].
     pub main_panes: u8,
-    /// Unlocked panes minimised to the sidebar. Clamped to [`MAX_PANES`].
-    pub sidebar_panes: u8,
+    /// Whether to lay out the rail — one box per domain, down the right.
+    ///
+    /// **A flag rather than a count**, because the rail always shows all seven
+    /// (§10). A domain that is not built yet draws as a dim empty slot, which is
+    /// the progression tell §9's *"two of seven at the start"* implies and which
+    /// a variable count would hide: seven slots with four dark says *there is
+    /// more* without naming what.
+    pub rail: bool,
     /// How the main window is divided.
     pub mode: DisplayMode,
     /// Rows the input line occupies. At least 1.
@@ -118,7 +191,7 @@ pub struct ScreenRequest {
 }
 
 impl ScreenRequest {
-    /// A request for a single main pane and no sidebar — the opening state, and
+    /// A request for a single main pane and no rail — the opening state, and
     /// the shape of the boot report (§4).
     ///
     /// Takes the grid rather than assuming [`GRID`](crate::GRID) because
@@ -129,7 +202,7 @@ impl ScreenRequest {
         Self {
             grid,
             main_panes: 1,
-            sidebar_panes: 0,
+            rail: false,
             mode: DisplayMode::default_for(grid),
             input_rows: crate::INPUT_ROWS,
         }
@@ -141,8 +214,10 @@ impl ScreenRequest {
 pub struct ScreenLayout {
     main: [Rect; MAX_MAIN_PANES],
     main_len: usize,
-    sidebar: [Rect; MAX_PANES],
-    sidebar_len: usize,
+    rail: Rect,
+    boxes: [Rect; MAX_PANES],
+    boxes_len: usize,
+    foot: Rect,
     input: Rect,
 }
 
@@ -151,8 +226,10 @@ impl Default for ScreenLayout {
         Self {
             main: [Rect::EMPTY; MAX_MAIN_PANES],
             main_len: 0,
-            sidebar: [Rect::EMPTY; MAX_PANES],
-            sidebar_len: 0,
+            rail: Rect::EMPTY,
+            boxes: [Rect::EMPTY; MAX_PANES],
+            boxes_len: 0,
+            foot: Rect::EMPTY,
             input: Rect::EMPTY,
         }
     }
@@ -170,10 +247,10 @@ impl ScreenLayout {
     /// and show a "window too small" screen — not something to enforce with a
     /// panic down here.
     ///
-    /// Sidebar entries that do not fit are **dropped, not squeezed** — main
-    /// panes are "fully rendered and fully functional" (§9) and the sidebar is
-    /// awareness only, so the sidebar is what yields. The caller can compare
-    /// `sidebar().len()` against what it asked for.
+    /// The rail is **dropped whole, never squeezed** — main panes are "fully
+    /// rendered and fully functional" (§9) and the rail is awareness only, so the
+    /// rail is what yields. There is no narrower fallback to compare against:
+    /// [`rail`](Self::rail) is empty or it is [`RAIL_COLS`] wide.
     #[must_use]
     pub fn compute(request: &ScreenRequest) -> Self {
         let mut layout = Self::default();
@@ -206,32 +283,60 @@ impl ScreenLayout {
 
         let main_panes = u16::from(request.main_panes).min(MAIN_CAP);
 
-        // Reserve what the main window needs before the sidebar takes its share.
-        let reserved = match request.mode {
-            DisplayMode::Deep => MIN_PANE_ROWS.saturating_mul(tiling::deep_bands(main_panes)),
-            DisplayMode::Wide => MIN_PANE_ROWS.saturating_add(main_panes.saturating_sub(1)),
+        // **Columns, never rows** — the same rule the maze map follows, and for
+        // the same reason: taking rows would shorten the transcript, which is
+        // the one thing the main window is for. Taking columns costs the panes
+        // width they have to spare at a fixed 120.
+        let rail_cols = if request.rail && fits_rail(grid.cols, above_input) {
+            RAIL_COLS
+        } else {
+            0
         };
 
-        let requested_sidebar = u16::from(request.sidebar_panes).min(SIDEBAR_CAP);
-        let sidebar_rows = requested_sidebar.min(above_input.saturating_sub(reserved));
-
-        // The sidebar sits directly above the input line, one row per pane.
-        let sidebar_top = above_input - sidebar_rows;
-        for index in 0..sidebar_rows {
-            let Some(slot) = layout.sidebar.get_mut(usize::from(index)) else {
-                break;
-            };
-            *slot = Rect::new(0, sidebar_top + index, grid.cols, 1);
-            layout.sidebar_len += 1;
-        }
-
-        let main_area = Rect::new(0, 0, grid.cols, sidebar_top);
+        let main_area = Rect::new(0, 0, grid.cols - rail_cols, above_input);
         layout.main_len = match request.mode {
             DisplayMode::Deep => tiling::deep(main_area, main_panes, &mut layout.main),
             DisplayMode::Wide => tiling::wide(main_area, main_panes, &mut layout.main),
         };
 
+        if rail_cols > 0 {
+            layout.lay_rail(Rect::new(main_area.cols, 0, rail_cols, above_input));
+        }
+
         layout
+    }
+
+    /// Divide the rail into one box per domain, with the readings beneath.
+    ///
+    /// **Every box is the same height and the remainder goes to the foot**, which
+    /// is deliberately *not* `tiling::deep`'s leftovers-to-the-earliest rule. A
+    /// pane's exact height is invisible, so where a spare row lands there does not
+    /// matter; a rail box is closed by a drawn rule, so an uneven box puts one
+    /// separator a row further down than the other five and reads as a defect.
+    /// Slack at the foot is invisible — the readings are top-aligned within it.
+    fn lay_rail(&mut self, rail: Rect) {
+        self.rail = rail;
+        let inside = rail.inset(1);
+        if inside.is_empty() {
+            return;
+        }
+
+        let cap = u16::try_from(MAX_PANES).unwrap_or(SIDEBAR_CAP);
+        let least = RAIL_FOOT_ROWS.min(inside.rows);
+        let each = (inside.rows - least) / cap;
+        let body = each * cap;
+        let foot_rows = inside.rows - body;
+        self.foot = Rect::new(inside.col, inside.row + body, inside.cols, foot_rows);
+
+        let mut row = inside.row;
+        for slot in &mut self.boxes {
+            if each == 0 {
+                break;
+            }
+            *slot = Rect::new(inside.col, row, inside.cols, each);
+            row += each;
+            self.boxes_len += 1;
+        }
     }
 
     /// A layout partway between two others.
@@ -266,10 +371,22 @@ impl ScreenLayout {
         self.main.get(..self.main_len).unwrap_or(&[])
     }
 
-    /// Minimised panes, top to bottom, one row each.
+    /// The whole rail, borders included. Empty when it did not fit.
     #[must_use]
-    pub fn sidebar(&self) -> &[Rect] {
-        self.sidebar.get(..self.sidebar_len).unwrap_or(&[])
+    pub const fn rail(&self) -> Rect {
+        self.rail
+    }
+
+    /// One box per domain, top to bottom, inside the rail's border.
+    #[must_use]
+    pub fn rail_boxes(&self) -> &[Rect] {
+        self.boxes.get(..self.boxes_len).unwrap_or(&[])
+    }
+
+    /// The readings beneath the boxes — what the telemetry pane used to carry.
+    #[must_use]
+    pub const fn rail_foot(&self) -> Rect {
+        self.foot
     }
 
     /// The input line.
@@ -279,16 +396,28 @@ impl ScreenLayout {
     }
 }
 
+/// Whether a grid can host the rail without starving the main window.
+///
+/// **Total, and the answer is yes or no rather than a narrower rail.** §9's rule
+/// is that the minimised half yields and the fully-functional half never does, so
+/// there is no squeezed middle to fall back to — at the 80×22 authoring floor the
+/// rail is simply absent and the session pane is whole.
+fn fits_rail(cols: u16, above_input: u16) -> bool {
+    let body = above_input.saturating_sub(2).saturating_sub(RAIL_FOOT_ROWS);
+    let cap = u16::try_from(MAX_PANES).unwrap_or(SIDEBAR_CAP);
+    cols >= RAIL_COLS + MIN_MAIN_COLS && body / cap >= MIN_RAIL_BOX
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::viewport::MIN_GRID;
 
-    fn request(cols: u16, rows: u16, main: u8, side: u8, mode: DisplayMode) -> ScreenRequest {
+    fn request(cols: u16, rows: u16, main: u8, rail: bool, mode: DisplayMode) -> ScreenRequest {
         ScreenRequest {
             grid: GridSize::new(cols, rows),
             main_panes: main,
-            sidebar_panes: side,
+            rail,
             mode,
             input_rows: 1,
         }
@@ -314,8 +443,8 @@ mod tests {
     #[test]
     fn the_input_line_is_always_the_bottom_row() {
         for panes in 0..=4u8 {
-            for side in 0..=6u8 {
-                let req = request(80, 22, panes, side, DisplayMode::Deep);
+            for rail in [false, true] {
+                let req = request(80, 22, panes, rail, DisplayMode::Deep);
                 let layout = ScreenLayout::compute(&req);
                 assert_eq!(layout.input(), Rect::new(1, 21, 78, 1));
             }
@@ -329,7 +458,7 @@ mod tests {
         // carrying less than the Frame, which rule 2 forbids. The gutter is the
         // layout's answer; see `compute`.
         for cols in [MIN_GRID.cols, 100, 160] {
-            let layout = ScreenLayout::compute(&request(cols, 30, 2, 1, DisplayMode::Deep));
+            let layout = ScreenLayout::compute(&request(cols, 30, 2, true, DisplayMode::Deep));
             let input = layout.input();
             assert!(input.col >= 1, "{cols}: flush against the left edge");
             assert!(input.right() < cols, "{cols}: flush against the right edge",);
@@ -343,7 +472,7 @@ mod tests {
             MIN_GRID.cols,
             MIN_GRID.rows,
             1,
-            0,
+            false,
             DisplayMode::Wide,
         ));
         assert!(!layout.input().is_empty());
@@ -352,34 +481,38 @@ mod tests {
     /// DESIGN.md §9: tier 2 at 1080p gives four panes at "roughly 60x15 each".
     #[test]
     fn four_panes_at_tier_two_match_the_design_figure() {
-        let layout = ScreenLayout::compute(&request(120, 33, 4, 3, DisplayMode::Deep));
+        let layout = ScreenLayout::compute(&request(120, 33, 4, false, DisplayMode::Deep));
 
         assert_eq!(layout.main().len(), 4);
         for pane in layout.main() {
             assert_eq!(pane.cols, 60);
+            // **16 now, where it was 14.** The sidebar used to take three rows
+            // off the top of this whether or not anything was in it; the rail
+            // takes columns instead, so four panes get the rows back. §9's
+            // "roughly 60x15" is cleared either way, and by more than it was.
             assert!(
-                (14..=15).contains(&pane.rows),
+                (14..=16).contains(&pane.rows),
                 "{pane:?} is not roughly 15 rows"
             );
         }
-        assert_tiles_exactly(&layout, Rect::new(0, 0, 120, 29));
+        assert_tiles_exactly(&layout, Rect::new(0, 0, 120, 32));
     }
 
     #[test]
     fn panes_tile_the_main_window_without_gaps_or_overlap() {
         for panes in 1..=4u8 {
-            for side in 0..=3u8 {
+            for rail in [false, true] {
                 let layout =
-                    ScreenLayout::compute(&request(120, 33, panes, side, DisplayMode::Deep));
-                let sidebar_rows = u16::try_from(layout.sidebar().len()).expect("small");
-                assert_tiles_exactly(&layout, Rect::new(0, 0, 120, 32 - sidebar_rows));
+                    ScreenLayout::compute(&request(120, 33, panes, rail, DisplayMode::Deep));
+                let taken = layout.rail().cols;
+                assert_tiles_exactly(&layout, Rect::new(0, 0, 120 - taken, 32));
             }
         }
     }
 
     #[test]
     fn a_short_final_band_spans_the_full_width() {
-        let layout = ScreenLayout::compute(&request(120, 33, 3, 0, DisplayMode::Deep));
+        let layout = ScreenLayout::compute(&request(120, 33, 3, false, DisplayMode::Deep));
         let main = layout.main();
         assert_eq!(main.len(), 3);
         assert_eq!(main[0].cols, 60);
@@ -391,56 +524,79 @@ mod tests {
     }
 
     #[test]
-    fn the_sidebar_sits_directly_above_the_input_line() {
-        let layout = ScreenLayout::compute(&request(80, 22, 2, 3, DisplayMode::Deep));
-        let sidebar = layout.sidebar();
-        assert_eq!(sidebar.len(), 3);
-        assert_eq!(sidebar[0], Rect::new(0, 18, 80, 1));
-        assert_eq!(sidebar[1], Rect::new(0, 19, 80, 1));
-        assert_eq!(sidebar[2], Rect::new(0, 20, 80, 1));
-        assert_eq!(layout.input().row, 21);
+    fn the_rail_takes_the_right_hand_columns_and_leaves_the_rows_alone() {
+        // The whole shape of the change, as one assertion: a rail costs the main
+        // window width and never height, so the transcript is as long with it as
+        // without. Taking rows is what the maze map already refuses to do, and
+        // for the same reason.
+        let with = ScreenLayout::compute(&request(120, 45, 1, true, DisplayMode::Deep));
+        let without = ScreenLayout::compute(&request(120, 45, 1, false, DisplayMode::Deep));
+
+        assert_eq!(with.rail(), Rect::new(104, 0, RAIL_COLS, 44));
+        assert_eq!(with.main()[0].rows, without.main()[0].rows, "rows moved");
+        assert_eq!(with.main()[0].cols, 104);
+        assert_eq!(without.main()[0].cols, 120);
+        assert_eq!(with.input(), without.input(), "the prompt moved");
     }
 
-    /// All seven domains at once — four multiplexed, three minimised — on the
-    /// declared 80×22 floor. §9 says every unlocked pane is visible somewhere;
-    /// if that did not fit at the floor, the floor would be wrong.
     #[test]
-    fn the_full_pane_complement_fits_at_the_declared_floor() {
-        let sidebar = u8::try_from(MAX_PANES - MAX_MAIN_PANES).expect("small");
-        let layout = ScreenLayout::compute(&request(
+    fn the_rail_holds_one_box_for_every_domain_and_they_tile_it() {
+        // Seven, always — a domain that is not built yet draws as a dim slot,
+        // which is the progression tell. If this ever returns fewer, the rail is
+        // silently hiding a room.
+        let layout = ScreenLayout::compute(&request(120, 45, 1, true, DisplayMode::Deep));
+        let boxes = layout.rail_boxes();
+        assert_eq!(boxes.len(), MAX_PANES);
+
+        let inside = layout.rail().inset(1);
+        for slot in boxes {
+            assert_eq!(slot.col, inside.col, "a box left the rail");
+            assert_eq!(slot.cols, inside.cols);
+            assert!(
+                slot.rows >= MIN_RAIL_BOX,
+                "{slot:?} cannot say three things"
+            );
+        }
+        for (index, a) in boxes.iter().enumerate() {
+            for b in &boxes[index + 1..] {
+                assert!(a.intersection(*b).is_empty(), "{a:?} overlaps {b:?}");
+            }
+        }
+
+        let covered: u16 = boxes.iter().map(|slot| slot.rows).sum();
+        assert_eq!(
+            covered + layout.rail_foot().rows,
+            inside.rows,
+            "the boxes and the readings do not fill the rail",
+        );
+    }
+
+    #[test]
+    fn the_rail_yields_whole_rather_than_squeezing_the_main_window() {
+        // §9's rule, and the reason there is no narrow fallback: at the authoring
+        // floor the rail is *absent* and the session pane is whole. A rail drawn
+        // three columns wide would be a worse answer than none.
+        let floor = ScreenLayout::compute(&request(
             MIN_GRID.cols,
             MIN_GRID.rows,
-            u8::try_from(MAX_MAIN_PANES).expect("small"),
-            sidebar,
-            DisplayMode::Deep,
+            1,
+            true,
+            DisplayMode::Wide,
         ));
+        assert!(floor.rail().is_empty(), "the rail squeezed in at 80x22");
+        assert!(floor.rail_boxes().is_empty());
+        assert_eq!(floor.main()[0].cols, MIN_GRID.cols, "the pane lost columns");
 
-        assert_eq!(layout.main().len(), MAX_MAIN_PANES);
-        assert_eq!(layout.sidebar().len(), usize::from(sidebar));
-        for pane in layout.main() {
-            assert!(pane.rows >= MIN_PANE_ROWS, "{pane:?} is unusably short");
-        }
-    }
-
-    #[test]
-    fn the_sidebar_yields_before_the_main_window_does() {
-        // Well below the floor — a terminal the user shrank. Six minimised panes
-        // no longer fit above four full ones.
-        let layout = ScreenLayout::compute(&request(80, 12, 4, 6, DisplayMode::Deep));
-
-        assert_eq!(layout.main().len(), 4, "main panes must survive");
-        assert!(
-            layout.sidebar().len() < 6,
-            "the sidebar should have yielded"
-        );
-        for pane in layout.main() {
-            assert!(pane.rows >= MIN_PANE_ROWS, "{pane:?} is unusably short");
+        // ...and never at the cost of a main pane, at any size between.
+        for rows in 12..=45u16 {
+            let layout = ScreenLayout::compute(&request(120, rows, 4, true, DisplayMode::Deep));
+            assert_eq!(layout.main().len(), 4, "a main pane yielded at {rows} rows");
         }
     }
 
     #[test]
     fn wide_focus_gives_one_full_pane_and_compact_strips() {
-        let layout = ScreenLayout::compute(&request(80, 22, 4, 0, DisplayMode::Wide));
+        let layout = ScreenLayout::compute(&request(80, 22, 4, false, DisplayMode::Wide));
         let main = layout.main();
 
         assert_eq!(main.len(), 4);
@@ -462,24 +618,26 @@ mod tests {
     fn both_modes_grant_the_same_pane_count() {
         // §9: parity is mandatory. Only the rendering differs.
         for panes in 1..=4u8 {
-            let deep = ScreenLayout::compute(&request(120, 33, panes, 2, DisplayMode::Deep));
-            let wide = ScreenLayout::compute(&request(120, 33, panes, 2, DisplayMode::Wide));
+            let deep = ScreenLayout::compute(&request(120, 33, panes, true, DisplayMode::Deep));
+            let wide = ScreenLayout::compute(&request(120, 33, panes, true, DisplayMode::Wide));
             assert_eq!(deep.main().len(), wide.main().len());
-            assert_eq!(deep.sidebar().len(), wide.sidebar().len());
+            assert_eq!(deep.rail_boxes().len(), wide.rail_boxes().len());
+            assert_eq!(deep.rail(), wide.rail(), "the rail followed the mode");
         }
     }
 
     #[test]
     fn capacity_is_capped_at_four() {
-        let layout = ScreenLayout::compute(&request(120, 33, 7, 0, DisplayMode::Deep));
+        let layout = ScreenLayout::compute(&request(120, 33, 7, false, DisplayMode::Deep));
         assert_eq!(layout.main().len(), MAX_MAIN_PANES);
     }
 
     #[test]
     fn a_degenerate_grid_lays_out_without_panicking() {
         for (cols, rows) in [(0, 0), (1, 1), (4, 2), (80, 1)] {
-            let layout = ScreenLayout::compute(&request(cols, rows, 4, 6, DisplayMode::Deep));
+            let layout = ScreenLayout::compute(&request(cols, rows, 4, true, DisplayMode::Deep));
             assert!(layout.main().len() <= MAX_MAIN_PANES);
+            assert!(layout.rail_boxes().len() <= MAX_PANES);
         }
     }
 

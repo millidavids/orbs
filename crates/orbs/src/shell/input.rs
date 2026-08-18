@@ -84,6 +84,89 @@ impl Offered {
 #[derive(Resource, Debug, Default)]
 pub(crate) struct Ghost(pub(crate) String);
 
+/// Keys a surface was still holding when it handed the keyboard back.
+///
+/// # The bug this exists for
+///
+/// You walk the archive's maze with the arrows and press Escape. The maze lets go
+/// on that frame — but your finger is still on the arrow, and **key repeat keeps
+/// delivering**. By the next frame the prompt owns the keyboard again, an arrow at
+/// the prompt means *recall history*, and the newest entry is the `wander` that
+/// opened the maze. So leaving the maze put the word back in the prompt.
+///
+/// It is not a maze bug: all four surfaces hand the keyboard back the same way, so
+/// escaping the editor or the weave screen on a held arrow does the same thing.
+///
+/// # Why a set of keys rather than a quiet frame
+///
+/// Swallowing everything for a frame or two would be a race against the player's
+/// key-repeat rate, which is a setting on their machine. What is actually wrong is
+/// narrower and exact: **the prompt is being handed the *middle* of a keystroke
+/// whose press it never saw.** So it drops events for exactly those keys, and
+/// exactly until they are released — a fresh press afterwards is a real one and
+/// gets through. `chord_is_stale` reasons about ghost modifiers the same way, and
+/// for the same reason.
+#[derive(Resource, Debug, Default)]
+pub(crate) struct HeldOver {
+    /// Physical keys whose press went to another surface.
+    keys: std::collections::HashSet<KeyCode>,
+    /// Whether another surface owned the keyboard on the previous frame.
+    owned: bool,
+}
+
+impl HeldOver {
+    /// Whether this key's press belonged to somebody else.
+    pub(crate) fn swallows(&self, key: KeyCode) -> bool {
+        self.keys.contains(&key)
+    }
+}
+
+/// Notice when the keyboard changes hands, and what was held when it did.
+///
+/// **Ungated, and it has to be.** The obvious place for this is inside
+/// [`type_into_line`], which already reads all four surface states — but that
+/// system is gated on `on_message::<KeyboardInput>`, so it never runs on the
+/// frames where a surface owned the keyboard and nobody typed. The edge it needs
+/// to see is exactly the one it cannot: the frame Escape arrives, the surface has
+/// already let go, and there is no previous frame on record saying it ever held on.
+///
+/// This is also the **one** place the four-surface predicate lives now.
+/// `type_into_line`'s own comment predicted the shape's ceiling was five terms and
+/// that a single owner was worth building before the fifth arrived; this is not
+/// that refactor, but it is one copy of the predicate rather than two.
+pub(crate) fn watch_focus(
+    editing: Res<super::editing::Editing>,
+    loom: Res<super::Loom>,
+    walk: Res<super::Walk>,
+    scroll: Res<Scroll>,
+    held: Res<ButtonInput<KeyCode>>,
+    mut over: ResMut<HeldOver>,
+) {
+    if owned_elsewhere(&editing, &loom, &walk, &scroll) {
+        over.owned = true;
+        return;
+    }
+    if over.owned {
+        over.owned = false;
+        over.keys = held.get_pressed().copied().collect();
+    }
+    // Pruned every frame rather than on release: a key that has been let go of is
+    // no longer held, and pruning here is what lets the *next* deliberate press of
+    // the same key through. Testing `pressed` at the point of use instead would
+    // swallow that press too, for ever.
+    over.keys.retain(|key| held.pressed(*key));
+}
+
+/// Whether a surface other than the prompt owns the keyboard.
+const fn owned_elsewhere(
+    editing: &super::editing::Editing,
+    loom: &super::Loom,
+    walk: &super::Walk,
+    scroll: &Scroll,
+) -> bool {
+    editing.is_open() || loom.is_open() || walk.is_open() || scroll.is_reading()
+}
+
 /// Recompute the suggestion.
 pub(crate) fn suggest(mut ghost: ResMut<Ghost>, line: Res<Line>, tower: Res<Tower>) {
     let sim = tower.sim();
@@ -199,6 +282,21 @@ pub(crate) struct Panel {
     /// this resource exists to stop; rebuilt once a second it is exactly as
     /// fresh as the world it describes, because the world moves at 1 Hz too.
     pub(crate) stacks: Option<orbs_render::Stacks>,
+    /// The ward the player is standing over, if a reading is open.
+    ///
+    /// Beside the stacks and on the same clock, for the same reason: it is a
+    /// description of a world that moves at 1 Hz, so rebuilding it per frame
+    /// would allocate sixty times for one change.
+    pub(crate) ward: Option<orbs_render::Board>,
+    /// Every domain at a glance, for §9's rail.
+    ///
+    /// **Here rather than asked from the painter, and it is the most expensive of
+    /// the four.** `Sim::briefs` walks every top-level room, builds two
+    /// `QueryState`s, and runs `instruments_in` — with its per-recipe `matching`
+    /// and `gathering` allocations — once per built room. Called from `rail::paint`
+    /// it ran all of that at 60 Hz for data that changes at 1 Hz, which is
+    /// precisely what this resource was created to stop.
+    pub(crate) briefs: Vec<orbs_sim::tower::Brief>,
 }
 
 /// Re-read the panel from the world.
@@ -207,6 +305,8 @@ pub(crate) fn refresh_panel(mut panel: ResMut<Panel>, tower: Res<Tower>) {
     panel.instruments = sim.instruments();
     panel.domain = orbs_sim::parser::leaf(&sim.location()).to_owned();
     panel.stacks = sim.stacks();
+    panel.ward = sim.ward();
+    panel.briefs = sim.briefs();
 }
 
 /// A line the player finished.
@@ -345,6 +445,7 @@ pub(crate) fn type_into_line(
     walk: Res<super::Walk>,
     scroll: Res<Scroll>,
     quiet: Res<Quiet>,
+    over: Res<HeldOver>,
 ) {
     // **Discarded here, not gated out by a run condition.** A message this
     // system never *reads* is still in the queue on the next frame, because
@@ -367,7 +468,7 @@ pub(crate) fn type_into_line(
     // a place to *forget*. A surface added without its term does not fail
     // loudly; it types into an invisible prompt while the player looks at
     // something else, and the characters arrive later.
-    if editing.is_open() || loom.is_open() || walk.is_open() || scroll.is_reading() {
+    if owned_elsewhere(&editing, &loom, &walk, &scroll) {
         keys.clear();
         return;
     }
@@ -400,6 +501,13 @@ pub(crate) fn type_into_line(
         // `repeat` is deliberately not filtered: held Backspace should delete
         // more than one character, which is what every text field does.
         if event.state != ButtonState::Pressed {
+            continue;
+        }
+        // **A keystroke whose press went to another surface**, still repeating
+        // after that surface let go. Dropped before anything else so it cannot
+        // retire the Tab listing either — it is not the player answering the
+        // prompt, it is a finger that has not lifted yet.
+        if over.swallows(event.key_code) {
             continue;
         }
         // Any keystroke retires the last Tab listing — it answered a question

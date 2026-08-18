@@ -35,11 +35,13 @@ pub enum RngStream {
     Trace,
     /// The archive's stacks (§10, `tower::maze`).
     Archive,
+    /// The lens: a ward's code, and what a broken seal spills (§10, `tower::ward`).
+    Lens,
 }
 
 impl RngStream {
     /// Number of distinct streams. Must equal the variant count.
-    pub const COUNT: usize = 7;
+    pub const COUNT: usize = 8;
 
     /// Fixed index into [`Rngs::streams`].
     ///
@@ -58,6 +60,7 @@ impl RngStream {
             // folds the index in, so renumbering would silently remap every
             // stream and invalidate every existing replay.
             Self::Archive => 6,
+            Self::Lens => 7,
         }
     }
 }
@@ -123,6 +126,7 @@ mod tests {
         RngStream::Yield,
         RngStream::Trace,
         RngStream::Archive,
+        RngStream::Lens,
     ];
 
     #[test]

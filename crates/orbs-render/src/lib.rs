@@ -54,7 +54,7 @@
 //! let layout = ScreenLayout::compute(&ScreenRequest {
 //!     grid,
 //!     main_panes: 2,
-//!     sidebar_panes: 1,
+//!     rail: true,
 //!     mode: DisplayMode::Deep,
 //!     input_rows: INPUT_ROWS,
 //! });
@@ -88,6 +88,7 @@ pub mod cp437;
 pub mod record;
 
 mod bath;
+mod board;
 mod cell;
 mod fire;
 mod frame;
@@ -110,6 +111,10 @@ mod viewport;
 mod wrap;
 
 pub use bath::Steep;
+// `SIGILS` and `TINTS` alongside the types: the glyph table and the name table
+// have to be indexed together, and a caller that can reach one and not the other
+// cannot check that they correspond.
+pub use board::{Attempt, Board, SIGILS, TINTS};
 pub use cell::Cell;
 pub use cp437::{REPLACEMENT, cp437_glyph, cp437_index, is_renderable};
 pub use fire::Burn;
@@ -117,8 +122,8 @@ pub use frame::Frame;
 pub use geometry::{GridSize, Pos, Rect};
 pub use grind::{Grind, fallen_cells};
 pub use layout::{
-    DEEP_FOCUS_FLOOR, DisplayMode, MAX_MAIN_PANES, MAX_PANES, MIN_PANE_ROWS, STRIP_ROWS,
-    ScreenLayout, ScreenRequest,
+    DEEP_FOCUS_FLOOR, DisplayMode, MAX_MAIN_PANES, MAX_PANES, MIN_PANE_ROWS, MIN_RAIL_BOX,
+    RAIL_COLS, RAIL_FOOT_ROWS, STRIP_ROWS, ScreenLayout, ScreenRequest,
 };
 pub use linear::{Speech, Utterance, UtteranceKind};
 pub use liquid::{DRIFT_EVERY, Motion, RISE_EVERY, STIR_EVERY};

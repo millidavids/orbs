@@ -12,9 +12,10 @@ enemy attacks the automation.
 Artless by design. No sprites, no characters, no illustrations. A single curved
 CRT glowing in the dark.
 
-**Status: Phases 0, 0.5 and 1 closed. Phase 2 (Scrying) next.** The determinism
-spine, the Frame boundary, the parser, the cell renderer, brewing, the archive,
-the spell engine and its scripting language are built and the game plays.
+**Status: Phases 0, 0.5, 1 and 2 closed. Phase 3 (Spellcraft) next.** The
+determinism spine, the Frame boundary, the parser, the cell renderer, brewing,
+the archive, the lens, the tower rail, the balance harness, the spell engine and
+its scripting language are built and the game plays.
 See [docs/ROADMAP.md](docs/ROADMAP.md) for what remains.
 
 **Phases 2–7 are §10's five remaining domains** — scrying, spellcraft,
@@ -273,6 +274,7 @@ cargo run -p orbs                        # the game — window, sim, cell render
 ORBS_DUMP=1 cargo run -p orbs            # ...its screen as text, no window, no GPU
 ORBS_CAPTURE=1 cargo run -p orbs         # ...or as a screenshot
 cargo run -p orbs-render --example screens   # real Frames dumped as text
+cargo run -p orbs-balance -- sweep --hours 1 --why   # the economy, measured
 ```
 
 The `screens` example renders the §4 boot report and a multiplexed siege through
@@ -280,6 +282,391 @@ the same public API the frontends use. **It has already found bugs that the full
 test suite did not** — an em-dash in DESIGN.md's own boot text that CP437 cannot
 draw, and pane content eating a border because a sub-painter was not established.
 Add a screen to it whenever a new surface is built.
+
+### The world sabotage surface — a reagent that is not what it says
+
+§8.1's second of four surfaces. A base reagent is **substituted**: its name
+changes and its identity does not, so a spell that named it stops working.
+
+```bash
+ORBS_BOOT=0 ORBS_DUMP="attend laboratory; debug_swap; survey dispensary; \
+  verify dispensary; verify laboratory" cargo run -p orbs
+```
+```text
+charcoal- = ∞   rock-salt = ∞   sage = ∞     ← the odd one out, on screen
+verify dispensary tampered something here is not what it says: charcoal-
+verify laboratory sound                      ← one level, deliberately
+```
+
+**Endless base stock only, and never fuel.** A swap that could reach
+`ground-sage` mid-pipeline destroys work in flight rather than misdirecting — and
+it announced itself by breaking a *pipeline* test that has nothing to do with
+sabotage, which is how a nuisance that reaches too far shows up. Charcoal was the
+same mistake wearing the endless flag: it is named by no recipe, so swapping it
+stops every heated stage in every domain rather than one spell.
+
+**`debug_swap` above is the tester's shortcut, and the *ambient* half is what
+breaks.** The system runs at one swap an hour and no dump can reach it, which is
+how three defects shipped with every See-it line and every test green. They are in
+DESIGN.md §19; the gate is a sweep and a test, and the sweep is the one that found
+them:
+
+```bash
+cargo test -p orbs-sim --test tampering        # settles; never takes the fire
+cargo run -p orbs-balance -- sweep --ticks 7200
+```
+
+**A swept rate is the only instrument that sees an ambient nuisance at all.** The
+one that shipped took the alphabetically-first endless pile — always `charcoal` —
+and never expired, so clarity read **0.074 against its pinned 0.140** and a
+standing grind loop died for the rest of the session. `--ticks 7200`, not
+`--hours 1`: an hour is short enough that one badly-timed swap flags the seed.
+
+**A lie settles back to the truth on its own, and that is a fact about the spell
+language.** A spell names things with literals, so it can never `purge sage-` — a
+word nobody knew when it was written. `verify` → `purge` is therefore human-only,
+and without an expiry an unattended tower had no path back at all. `purge` still
+repairs it instantly, which is what keeps finding one worth doing.
+
+**`drift` and `substitution` are two systems, not one branch.** Both draw once
+per tick from `RngStream::Threat`, so interleaving them would make which surface
+is hit depend on prior draws and invalidate every existing replay. The second is
+**appended** to the schedule, never inserted — the same rule a stream index has.
+`settling` is appended after both and draws **nothing**: it is a clock reading, so
+it cannot perturb the stream. A second draw taken only *when* a swap fires would —
+which is why the pile is chosen from the quotient of the roll that already fired.
+
+### The lens — a code-breaker, and the orb deduces nothing
+
+**Four sigils of six, no repeats, 360 codes.** `probe` opens a reading if none is
+open and presses the aperture; `dial <socket> <sigil>` turns one dial and is
+free. **Both are instant and neither costs the tower anything** — a press was
+twelve ticks of the one production slot, which is ROADMAP's *"a read is not a
+brew"*, and that scarcity is withdrawn (§19). So `meditate` after a probe is no
+longer needed anywhere, and a bound solver runs beside a full brewing loop with no
+contention at all.
+
+**The orb keeps no candidate set.** That is the rule the whole domain rests on:
+"press anything still consistent" solves in 4.24 presses against the best play's
+4.08, so an orb that does the bookkeeping has done the puzzle. §19 records the
+first design deleting its own puzzle exactly that way.
+
+**Two channels onto one ward.** A player reads `aligned` and `astray` and
+deduces; a spell reads `closer`/`level`/`further`, `marks` and `settled` and
+hill-climbs. 4.14 presses against 22.8.
+
+```bash
+# A ward, pressed and dialled. `survey` each of the three kinds of reading.
+# **No `meditate`**: a press answers on the tick it is typed (§19).
+ORBS_SEED=3 ORBS_BOOT=0 ORBS_DUMP="attend lens; probe; \
+  dial second borax; probe; survey prism; survey second; \
+  survey borax" cargo run -p orbs
+```
+```text
+prism    aligned = 0   astray = 2   level   spent = 2
+second   alum   loose   marks = 1    ← borax was dialled in and snapped back
+borax    marks = 2
+```
+
+**A socket reports `marks` too, and that count is what a stateless ladder walks.**
+`dial` tallies the socket even when nothing moves, so a rung guarded on a socket
+being untried fires once rather than for ever — the defect §19 records as *"the
+ladder fired one rung for ever"*, when every rung asked the same `loose`.
+
+**`survey second` reading `alum` after you dialled `borax` is the ratchet, not a
+bug.** A press that does not gain snaps the aperture back — the undo §8's
+variable-free language cannot express, and what makes a blind ladder converge. It
+never blocks correct play, because putting the right sigil in its own socket
+always gains.
+
+**A settled socket refuses a dial**, and that is the other half: a socket that
+gained *as the only one that moved* is provably right, so the ladder is barred
+from disturbing it. `dial_held` is what you get.
+
+**There is no `meditate` in a lens See-it line any more.** Every one of them used
+to carry `meditate 13` — one tick past a twelve-tick press — and a press is instant
+now. A dump that still waits is testing the wait.
+
+**`scry` is not a verb and `seat` is not either.** `scr` reaches `scribe` and
+`sea` reaches `sift`'s `search`, and `tests/naming.rs` allows no prefix
+exemption. The domain is still scrying; the words are `probe` and `dial`.
+
+**The board draws whenever a reading is open**, not when a word is typed — the
+map's rule, and what makes a bound solver watchable. Columns never rows, and it
+splits *after* the instrument panel.
+
+```text
+┌ ward ─────────────────────────────────┐
+│    first second  third fourth  answer │   ← the words `dial` takes
+│ 1    ☼      ○      ♂      ♀   ○ ○     │   ← a press: the figure, then its pegs
+│ 2    ☼      ♂      ○      ♀   ○ ○     │
+│───────────────────────────────────────│
+│ →    ☼      ○      ♀      ♂   · · · · │   ← the aperture, and which are held
+│                                       │
+│ ☼ nitre   ○ alum    ♂ borax           │   ← without this, `♦` is unnameable
+│ ♀ quartz  ♦ pewter  ♠ ochre           │
+└───────────────────────────────────────┘
+```
+
+**39 cells, and it was 10** (§19). The compact version was correct and unreadable:
+nothing said which column was which socket, so a player counted along the row
+before typing `dial second borax`, and nothing anywhere said `♦` was `pewter`. Both
+name tables come from the sim through `Ward::view` — they are content, and
+`orbs-render` may not depend on `orbs-sim`.
+
+**The gutter counts the real press, not the row.** The sheet still caps at the last
+twelve of a fifty-one press ladder; numbering those `1..12` would say the solve had
+just begun. It still fits the 80×22 floor beside a transcript, and still refuses
+whole rather than truncating.
+
+**Six glyphs, not six colours** (§14): the tint is enrichment and the shape
+carries the identity, so the sheet reads in a dump. `▪` is not in CP437 and was
+the first choice; `■` is. It is spoken **once, as a summary** — a reader hearing
+twenty cells read out would get box-drawing noise.
+
+**A broken seal spills the far wizard's log**, quiet — twelve lines into
+`lens.log`, one sentence on the transcript. Every line is generated from a real
+`(instrument, verb, material)` triple, so it never names an operation that
+cannot happen.
+
+```bash
+# `debug_ward` makes the answer whatever the aperture holds, so the next press
+# breaks it — a See-it line for the *spill* should not open with forty dials.
+ORBS_SEED=3 ORBS_BOOT=0 ORBS_DUMP="attend lens; probe; \
+  debug_ward; probe; peruse lens.log" cargo run -p orbs
+```
+```text
+ 5 mix phlegm            ← somebody else's laboratory
+10 distil dregs          ← a recipe you do not have. that is the hint, not a leak
+```
+
+**Three recipes are `secret = true` and have to be found.** `debug_learn` takes
+the next one in the file's order without waiting on the roll; `debug_learn
+<name>` takes a named one and refuses anything that is not a secret.
+
+```bash
+ORBS_BOOT=0 ORBS_DUMP="recall mending; debug_learn; recall mending" cargo run -p orbs
+```
+
+**`debug_learn` skips the roll, so it is not a gate for the *discovery* — and the
+whole loop the domain exists for needs two hours and a bound solver.** There is
+deliberately no way to force a find (`debug_ward` takes no argument), so this is
+the only line that shows the log spelling a recipe out, the orb writing it down,
+and the rail raising its mark. It is slow and it is the real thing:
+
+```bash
+ORBS_SEED=3 ORBS_BOOT=0 ORBS_DUMP="attend lens; debug_spell breaking" \
+  ORBS_THEN="invoke breaking; meditate 3600; meditate 3600; \
+  sift mending lens.log; recall mending; attend laboratory" cargo run -p orbs
+```
+```text
+probe 2. potash -> mending + phlegm  (alembic, 30t, needs heat) prism
+2 probe mending prism and a way to make mending. the orb writes it down
+mending: 2 steps, 36 ticks          ← `recall` answers now, and refused before
+│lens         !│                    ← the rail's news mark, from another room
+```
+
+**The mark is the one part of this that no *short* dump can reach**, because the
+chance starts at 4% and climbs — so a dump that solves one ward and looks for a
+`!` finds nothing and is not broken. `Mark::News` is set only on a find, which is
+the ask: a solve is ordinary, a discovery is news.
+
+**Unmakeable, unnameable and unreadable, all flipping on the same tick** — and
+the third is the one that hides. `Topics` is snapshotted once at construction, so
+a secret's `recall_` page is in that snapshot from tick 0; the gate is a set
+subtraction in `scene_at` and nowhere else. Gate it at snapshot time and `recall
+<secret>` answers early with every test green.
+
+**Only three questions consult `Learned`**: does a recipe fire, is it part-way to
+firing, and is its product a word the player can say. **Leave everything else
+unfiltered** — `execute::scroll`'s verdant unlock derives base reagents as *"in
+the vocabulary and made by nothing"*, so a filtered `Recipes::outputs` would
+offer an undiscovered potion as an inexhaustible herb.
+
+**`debug_spell breaking` is the solver — four rungs, one per socket.**
+
+```
+probe
+repeat until the prism is idle
+if the first has 1 or more untried
+dial first
+else                                  ← ...and the same for second, third, fourth
+```
+
+**`dial <socket>` with no sigil is what makes that possible** (§19). A spell has
+no variables, so it cannot name the sigil a socket has not tried — bare, the ward
+picks it, and `untried` is the count the guard reads. Without it the only shape
+available was six rungs per socket using the mark count as an index: **24 rungs,
+105 lines**, a spell nobody writes by hand.
+
+Three traps, all worth knowing before writing another lens spell:
+
+- **`is empty` does not mean *no ward*.** `spell::watch` answers `empty` by
+  asking whether a node has *children*, and a prism's children are its readings —
+  none until the first press lands. An open ward reports **`working`**, so the
+  bound is `repeat until the prism is idle`.
+- **Guard on `untried`, not on `loose` alone.** Every rung for a socket asks the
+  same `loose` question, so a ladder guarded only on that fires its first rung for
+  ever — and that rung dials a sigil the opening aperture already holds, so nothing
+  moves and nothing presses.
+- **A candidate is spent even when nothing turns.** `dial first` on a socket that
+  already holds the chosen sigil says `dial_held` and still lowers `untried` — a
+  ladder that counted only *movement* would aim at that socket for ever.
+
+**`MAX_MEDITATE` is 3600, so a long run is several commands.** `meditate 9600`
+silently becomes 3600, which is how a first pass at measuring this "found" a
+plateau that was the cap. §19 records the retraction.
+
+**`invoke` solves one ward; `bind` is the faucet.** `repeat until the prism is
+idle` exits the moment the ward closes — it only lapped before because a press was
+*in flight* for twelve ticks when the guard was asked, so the invocation kept going
+by accident (§19). A binding re-casts a spell that has run off the end, which is
+the shape §8 already describes: an invocation is an act, a binding is standing
+automation.
+
+```bash
+# Two `debug_ward` solves buy the first slot, because a press is free now.
+ORBS_SEED=3 ORBS_BOOT=0 ORBS_DUMP="attend lens; probe; debug_ward; probe; \
+  probe; debug_ward; probe; debug_spell breaking" \
+  ORBS_THEN="bind breaking; meditate 3600; status" cargo run -p orbs
+```
+→ `experience 268`, and it is **linear** — a faucet that stops is this domain's
+failure mode, not a crash. `cargo test -p orbs-sim --lib tower::ward` drives all
+360 codes for both halves of that: the ladder always has a socket left to turn
+(`Ward::replenish`), and the four-rung shape breaks every code.
+
+**It runs beside a brew with no contention at all**, because a press takes no slot.
+About **0.07/tick** against clarity's 0.140 — half, and additive rather than
+competing. It was a third of that, 12 ticks in every 13, when a press was work.
+
+```bash
+cargo test -p orbs-sim --test ward        # a blind ladder solving through the real verbs
+cargo test -p orbs-sim --test secrets     # the gate, and the verdant regression
+cargo test -p orbs-sim --lib tower::ward  # the model: 360 codes, the proofs
+cargo run -p orbs-render --example screens   # the sheet, no sim and no GPU
+```
+
+### The tower rail — every domain at a glance, and no telemetry pane
+
+**There is one main pane now.** The rail takes 16 columns down the right and
+holds one box per domain; the telemetry pane it replaced is gone, and five of its
+nine readings live at the rail's foot (`tick`, `held`, `scale`, `grid`, `focus`).
+The other four were already in `status`, which is the full answer where the rail
+is the glance.
+
+**Seven boxes, always, and four are dark.** A room the tower has not built draws
+as a dim dotted row with no name — the slots keep fixed positions so a box never
+appears and pushes the others down at the one moment it has news.
+
+**Each box is ruled off from the next**, and the rule belongs to the box *above*
+the boundary. The seventh draws none, because the foot opens with a rule of its
+own and two in adjacent rows is a mistake nobody would author on purpose.
+
+**So the boxes are all the same height and the spare row goes to the foot** —
+which is deliberately *not* `tiling::deep`'s leftovers-to-the-earliest rule that
+`lay_rail` used to share. A pane's exact height is invisible; a *ruled* box's is
+not, and the first box being one row taller put one separator a row below the
+other five. `MIN_RAIL_BOX` went 3 → 4 with it: the rule costs a row, and at three
+a squeezed box silently dropped the `►spell` line, which is the one row telling a
+player that room is automated.
+
+**`►`, not `▸`.** U+25B8 is not in CP437 and drew as `?`, so the row saying a room
+is automated read as the orb not knowing what was there. `is_renderable` never saw
+it — that lint is for authored prose, and a painter's glyphs are Rust literals — so
+`every_glyph_the_rail_draws_is_in_the_code_page` is what holds it now. The board's
+`▪` was the same defect and §19 records it; this is the second, found the same way.
+
+**The spell row says `►tending`, not `►tending.spe`.** A spell node is named for
+its file, and six columns of `.spell` in a fourteen-column rail left the rail
+cutting the extension in half. Stripped in `brief.rs` with the
+`content::without_extension` that already existed, not in the painter: rule 2
+means `orbs-tui` must not have to know spells live in files.
+
+```bash
+# The rail beside a working laboratory. `mp 8t` is the two-letter form the
+# instrument panel uses, because `mortar_and_pestle 8t` truncates to a name with
+# no number left on it.
+ORBS_BOOT=0 ORBS_DUMP="attend laboratory; kindle charcoal; grind sage" cargo run -p orbs
+
+# **A fault, latched.** Stand in the archive and the rail says the laboratory is
+# broken — `laboratory ‼`. A refused command is *not* a fault; the four that are
+# come from `say_failure` at `Role::Danger` — gave up, missing name, forbidden
+# verb, unreadable line.
+ORBS_BOOT=0 ORBS_DUMP="attend laboratory; scribe broken" \
+  ORBS_EDIT="edit\nrepeat 5\nwield zzz\nend\n<esc>\nquit" \
+  ORBS_THEN="invoke broken; meditate 20; attend archive" cargo run -p orbs
+
+# ...and cleared by going to look, which is the only thing that clears it.
+# Append `; attend laboratory` to the line above and the `‼` is gone.
+
+# The rail **yields whole** below the grid that can host it — no narrow
+# fallback. At the floor there is no rail and the readings fall back into the
+# session's border title.
+ORBS_BOOT=0 ORBS_GRID=80x22 ORBS_DUMP="attend laboratory; grind sage" cargo run -p orbs
+```
+
+**`F4` is visibly inert, and that is recorded rather than fixed.** With one pane
+both tilings are identical, so the key changes nothing until multiplexing returns
+the second pane in Phase 9a. §9 fixes the focus mode on `F4` and §19 fixes the
+switch there, so reassigning it to toggle the rail would re-litigate both.
+
+### `orbs-balance` — the economy, looked at rather than argued
+
+**Every duration in the game is a placeholder and this is what sweeps them.** It
+drives a real `Sim` through `submit` with five synthetic players and prints
+experience per tick against a pinned reference. It found four disagreements with
+DESIGN.md on its first clean run (§19), so treat a number in the design as an
+*idealisation* until this has been run against it.
+
+**And then it caught a real regression one item later** — the ambient reagent swap,
+flagged on all four pinned policies at once while the full suite stayed green and
+every See-it line still read correctly. **Run a sweep after anything that touches
+the world, not only after anything that touches a duration.**
+
+```bash
+cargo run -p orbs-balance -- list
+cargo run -p orbs-balance -- sweep --ticks 7200 --why
+cargo run -p orbs-balance -- run clarity --ticks 1200 --why
+cargo run -p orbs-balance -- sweep --hours 4 --csv /tmp/curves.csv
+cargo test -p orbs-balance          # the pins, as a test rather than a column
+```
+
+**Two hours is the shortest honest sweep, and an hour was the default.** A policy
+amortises its first lap's setup over the run, and the ambient reagent swap
+(`tower::sabotage`) costs a few minutes an hour — so at 3600 ticks one badly-timed
+swap moves a rate by more than its tolerance band and the table flags the seed
+rather than the game.
+
+**A `<-- drifted` marker is only a pin while somebody reads the column, so
+`tests/agrees.rs` reads it.** It runs the four pinned policies through the real
+`drive::run` and fails when a measurement leaves its band. It exists because the
+first version of that file — named for this crate's See-it claim — drove `Sim` by
+hand in both its tests and would have passed with the whole harness deleted. The
+crate has a `lib.rs` for that reason: a binary-only crate cannot be reached from an
+integration test at all, which is *why* it had been written the other way.
+
+**Read the `cost` column before the rate.** Every entry in it should be a scour
+the policy asked for; anything else means the loop has fallen out of phase with
+the tower, and the rate beside it is measuring a game nobody plays. `--why`
+prints the sentences behind it, which is where the diagnosis is — **two sweeps
+were read as balance findings before that flag existed, and both were the
+policy's fault.**
+
+**A rate here is a *loop* rate and DESIGN.md's is a *recipe-tick* rate.** Clarity
+is 0.170 idealised, 0.130 hand-played (`experience 16` at tick 123), 0.140
+looped. The gap is a tick of queue latency per command plus a `PURGE_TICKS` scour
+per fouled instrument, and it is not a defect in either number.
+
+**A maze is one sample per seed** — `stacks` reads 0.0067 at seeds 0 and 11 and
+0.0144 at seed 3, so it is deliberately absent from the pinned table. Sweep it
+across several `--seed`s or conclude nothing.
+
+**Adding a policy: scour *before* use, never after fouling.** The byproduct a
+stage leaves blocks the *next* lap's load, so a purge placed after the stage that
+dirtied it cleans an instrument nothing is waiting on and still leaves lap two
+refused. And a driver must wait on the **triage** slot as well as the production
+one — `Sim::working()` reports only the latter, and a policy that runs over its
+own scour reports 0.072 for a loop worth 0.140.
 
 **A dump has no clocks of its own.** It builds no `App`, so it advances no
 `Time` and has no `Time<Fixed>` — every animation would sit at phase zero and
@@ -293,6 +680,26 @@ mortar_and_pestle` followed by `wield mortar_and_pestle` — naming the operatio
 rather than the tool collapses the two commands a player types most. `move` and
 `wield` still exist and still work; they are simply not how the loop is written
 any more, and a dump using them is testing the long way round.
+
+**The fetch reaches into other instruments, not just the shelf**, and that is what
+makes the loop `move`-free rather than merely shorter. `pipeline::reachable` walks
+every unbusy instrument in raise order and *then* the store, so `digest ground-sage`
+takes it straight out of the mortar and leaves the husks. A whole clarity brews to
+`experience 16` without the word.
+
+**`move` stays in the laboratory anyway**, and §19 says why: it is the only way
+finished work leaves the room (`move clarity to arsenal`) and the only way to reach
+an instrument's `charged` state, which the three animation See-it lines below need
+because `grind` never rests there. What changed is the *manual* — `recall move` led
+with `move sage to mortar_and_pestle`, which is a loop nobody writes.
+
+```bash
+cargo test -p orbs-sim --test fetching   # the tool-to-tool reach, and the brew
+```
+
+**`empty` is a different question and is still required.** It clears the byproduct
+so the mortar can take a second load; without it a brew stalls at `grind rock-salt`
+with *"the mortar_and_pestle can do nothing with husks, rock-salt"*.
 
 **Reach for `ORBS_DUMP` first; keep `ORBS_CAPTURE` for what only pixels show.**
 The screenshot path needs a composited window, and without one it writes a valid
@@ -580,15 +987,49 @@ second pass and complain about it for ever — `grind sage` then `empty
 mortar_and_pestle` is the shortest loop that can actually lap.
 
 **`recall` bare is the manual's overview, and `help`/`man`/`?` all reach it.**
-It lists what resolves *where you are standing* — `execute::offered`, the same
-filter the boot report uses — grouped by `Verb::group()`. Check it at the floor,
-because a 25-verb listing is most of the transcript at 80×22 and that is where it
-has to read:
+**It opens with a primer for the room and lists the vocabulary second** — a player
+who types `help` in the lens is asking what a ward is, not for twenty-five verbs.
+The listing is still `execute::offered`, the same filter the boot report uses,
+grouped by `Verb::group()`.
+
+**Three prose keys per room**: `man_here_<room>` is what the place is,
+`man_start_<room>` how to begin its puzzle, `man_solve_<room>` how to finish one.
+`man_`, never `recall_` — `Prose::topics` strips the latter to decide what is
+nameable, so `recall_here_lens` would register `here_lens` as a subject nobody
+authored (§19; the `clarity_use` trap again).
+
+**A room lists only its own operations**, and it used to list every other room's.
+`Scene::offers` asks `Verb::anchor` — *which fixture must stand here* — where it
+asked `is_operation`, the **production slot** question, so anything that took no
+slot went everywhere: `help` in the laboratory offered `research`, `follow` and
+`wander`. §19 records this as the debt those two words were waiting on.
+
+The two questions are separate now, and a verb can be either, both or neither.
+Self-anchored verbs are **derived from the `Branch` that declares them**, so a new
+domain's verbs scope themselves; `every_self_anchored_verb_is_declared_by_a_fixture`
+fails the build both ways, because a verb claiming an anchor nothing declares
+resolves in *no* room. And the refusal names the fixture now —
+`there is no stacks here to wander with`, from `tower::fixture_of`.
+
+**Check it in every room, and at the floor.** Primer plus listing fills the 80×22
+transcript exactly, and the 70-cell width lint is what keeps a line from wrapping
+there:
 
 ```bash
-ORBS_BOOT=0 ORBS_DUMP="attend laboratory; help" cargo run -p orbs
-ORBS_BOOT=0 ORBS_DUMP="attend archive; help" cargo run -p orbs   # no grind
+for room in laboratory archive lens grimoire arsenal tower; do
+  ORBS_BOOT=0 ORBS_DUMP="attend $room; help" cargo run -q -p orbs; done
+ORBS_BOOT=0 ORBS_GRID=80x22 ORBS_DUMP="attend lens; help" cargo run -p orbs
 ```
+
+**Two lints, and neither can see a *refusal*.**
+`every_room_a_player_can_stand_in_explains_itself` requires all three keys for
+every **built** domain (from `Sim::briefs()`) plus `arsenal` and `tower` by name;
+`a_primer_only_names_words_that_room_actually_offers` checks each verb a primer
+names against `offered`. The second caught `bind` in the grimoire — gated at
+concentration 0. What it *missed* is `scribe`, which is offered in the grimoire and
+refuses, so the first draft told the player to do the one thing that room cannot.
+**Run the loop above rather than trusting the green** — that is the half only eyes
+have.
 
 **A bare verb that needs an argument still asks.** `recall` is the exception and
 `TOPIC_OPTIONAL` is why (§19): it is `survey`'s shape, because bare and
@@ -608,10 +1049,12 @@ dump that opens the screen and presses an arrow is testing the refusal, not the
 movement. **Left/right walks the track; up/down picks between a tier's
 siblings** — rightward is progress, downward is a choice.
 
-**The session pane is 60 columns, not 120.** Panes tile side by side, so the
-grid's width is never this surface's. `ORBS_GRID=80x22` is narrower still and is
-where a sentence stops fitting — worth a look, even though the game itself no
-longer reaches it.
+**The session pane is 104 columns, not 120.** The tower rail takes 16 off the
+right, so the grid's width is never this surface's. It **was 60** while the
+second pane held telemetry; a surface authored against that has 44 columns of
+slack it did not have. `ORBS_GRID=80x22` drops the rail entirely and is where a
+sentence stops fitting — worth a look, even though the game itself no longer
+reaches it.
 
 ```bash
 # Nothing earned: the bar reads `0 of 100`, the ley line's one station draws
@@ -650,10 +1093,11 @@ decides who the arrows belong to, and `ORBS_WALK` presses them:
 ```bash
 # The maze beside the transcript. **There is no fog** (§19) — every wall is on
 # screen from the moment it opens; what fills in as you walk is the marks.
-# **It pans** at the game's own grid: a session pane is 58 columns and the whole
-# picture wants 35, which does not leave the transcript its floor, so the block
-# shows the part the reading is standing in. That is the designed fallback, not a
-# defect — see `stacks::split`.
+# **The whole picture now fits at the game's own grid**, and used to pan: the
+# session pane was 58 columns against a 35-column maze, and the tower rail taking
+# the telemetry pane's place left it 102. Panning is still what `stacks::split`
+# does below that — `ORBS_GRID=80x22` is where to see it — and it is the designed
+# fallback rather than a defect.
 ORBS_BOOT=0 ORBS_DUMP="attend archive; research" cargo run -p orbs
 
 # ...opening as it goes. `▒` walked once, `░` finished with, `☼` the reading,
@@ -667,6 +1111,20 @@ ORBS_BOOT=0 ORBS_DUMP="attend archive; research; follow east; follow east" \
 ORBS_BOOT=0 ORBS_DUMP="attend archive; research; wander" \
   ORBS_WALK="<right>\n<right>\n<down>\n<down>\n<left>" cargo run -p orbs
 ```
+
+**Leaving a surface on a *held* key is a case no dump can reach, and it shipped
+broken.** Escaping the maze with a finger still on an arrow put `wander` back in
+the prompt: key repeat kept arriving, the maze had let go, and an arrow at the
+prompt means *recall history*. `HeldOver` drops keys whose press went to another
+surface until they are released — see §19, including why the watch that notices
+the handoff has to be **ungated** (`type_into_line` is gated on a keystroke
+arriving, so the frames it needs to have seen are the ones it never runs on).
+
+It applies to all four surfaces, not just the maze — the editor and the weave
+screen hand the keyboard back the same way. **`ORBS_WALK` cannot show any of it**,
+because a dump writes no key events and holds nothing down; the gate is
+`leaving_the_maze_leaves_nothing_in_the_prompt`, which needs real `KeyCode`s
+because the harness's own `press` stamps every key `KeyA`.
 
 **`ORBS_SEED` is how you see a *second* maze.** The reading starts in a random
 corner and the way out is drawn against a weighting that leans on the opposing
@@ -859,7 +1317,7 @@ they can press and no brew advances while they do. Three versions went through
 the prompt's queue first; all were some flavour of too slow, because the queue
 was solving the wrong problem.
 
-`ORBS_WALK` therefore steps **nothing**: check `tick` in the telemetry pane after
+`ORBS_WALK` therefore steps **nothing**: check `tick` at the tower rail's foot after
 a long walk and it should be exactly what it was before. If a dump of eight
 presses has advanced the clock eight seconds, something has gone back through
 `submit`.
@@ -869,15 +1327,29 @@ presses has advanced the clock eight seconds, something has gone back through
 executed. Use `Sim::replay` rather than matching on `Submission` by hand; three
 test files had their own copy of that match and they are one now.
 
-**Watching a spell solve it is the point of the map, and `debug_spell threading`
-is how you get one.** The ladder is twenty-four rungs across eighty lines; it
-lives in `crates/orbs-sim/content/dev_spells.toml`, and the word that writes it
-out is `cfg(debug_assertions)` like `debug_spawn` — a release build has neither
-the word nor the text. **A spell is written *for* a domain, so it refuses
-anywhere but the archive**, naming the room.
+**Watching a spell solve it is the point of the map, and `threading` is the
+solver.** The ladder is twenty-four rungs across eighty lines; it lives in
+`crates/orbs-sim/content/dev_spells.toml`.
+
+**Every dev spell is on the grimoire's shelf from tick 0 in a debug build**, so
+`invoke threading`, `scribe threading` and `peruse threading.spell` all work with
+no `debug_spell` first. A shelved spell carries its own `Domain` from the file,
+which is why it needs no room check — `scribe::write` homes a *new* spell to where
+you stand, and nothing shelved is new.
+
+**A release build has none of it**: `raise_grimoire` shelves them under
+`cfg(debug_assertions)` and `dev_spells.toml` is `include_str!`'d under the same
+`cfg`, so neither the nodes nor the eighty lines exist. Both halves are held —
+`the_dev_spells_are_on_the_shelf_from_the_first_tick` and, in release,
+`a_release_shelf_holds_only_the_shipped_spells`.
+
+`debug_spell <name>` stays for the other job it does: handing back a **fresh
+copy** after one has been edited or purged. It still refuses outside the spell's
+own domain, because that path really does write a new file.
 
 ```bash
-ORBS_BOOT=0 ORBS_DUMP="debug_spell" cargo run -p orbs          # what it can write
+ORBS_BOOT=0 ORBS_DUMP="survey grimoire" cargo run -p orbs      # all four, shelved
+ORBS_BOOT=0 ORBS_DUMP="debug_spell" cargo run -p orbs          # what it can rewrite
 
 # An ordinary maze: the way out, and a fragment for reaching it.
 ORBS_SEED=11 ORBS_BOOT=0 ORBS_GRID=160x45 \
@@ -982,7 +1454,8 @@ cargo run -p orbs      # then drag it wide, tall, and square
 - the picture stays 4:3 and centred; bars grow on one axis, never both
 - **no text reflows** — the same words stay on the same rows throughout, which is
   the whole point and is what a resize used to break
-- the telemetry pane's `scale` row tracks the drag while `cols` and `rows` hold
+- the **tower rail's foot** tracks the drag on its `scale` row while `grid` holds
+  — it was the telemetry pane's row until the rail replaced that pane
 - one `window … -> scale … -> grid 120×45` line per resize in the log
 
 `ORBS_CAPTURE=1` earns its keep here for once, because the bars are pixels and

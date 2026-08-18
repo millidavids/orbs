@@ -45,6 +45,7 @@ impl Plugin for ShellPlugin {
         app.init_resource::<Screen>()
             .init_resource::<Line>()
             .init_resource::<super::input::Offered>()
+            .init_resource::<super::input::HeldOver>()
             .init_resource::<super::input::Ghost>()
             .init_resource::<super::input::Panel>()
             .init_resource::<super::input::Scroll>()
@@ -124,6 +125,14 @@ impl Plugin for ShellPlugin {
                     // the player, and holding the keyboard over a pane with no
                     // map on it is the worst of the three ways that ends.
                     super::wandering::close_when_gone.run_if(super::wandering::walking),
+                    // **Ungated, and after every surface that can let go.** It
+                    // watches for the keyboard changing hands, which is an edge
+                    // `type_into_line` cannot see for itself — that system is
+                    // gated on a keystroke arriving, so the frames where a surface
+                    // held the keyboard in silence are invisible to it. See
+                    // `HeldOver`: this is what stops a held arrow putting `wander`
+                    // back in the prompt on the way out of the maze.
+                    super::input::watch_focus,
                     // **No `not_editing` here.** It has to *run* to throw the
                     // keystrokes away — a reader that never runs keeps its
                     // cursor, and everything typed while another surface had the
@@ -280,17 +289,24 @@ fn drive_panes(time: Res<Time>, mut panes: ResMut<PaneTransition>) {
 
 /// Panes the main window holds outside a siege.
 ///
-/// **A constant, since the grid became one.** This was
-/// `screen.grid.fits(DEEP_FOCUS_FLOOR)` — a second pane only where there was
-/// room for one, because a resize could take the room away. The grid no longer
-/// moves and clears that floor by construction, so the test could only ever
-/// answer yes, and a condition that cannot fail is a lie in the shape of a test.
+/// **One, since the tower rail replaced the telemetry pane** (§19, Phase 2). It
+/// was two, and the second held nine developer readings; the rail carries five
+/// of them in sixteen columns down the right, and the session pane gets the rest
+/// — **102 columns of body against the 58 it had**, which is what a transcript
+/// beside an instrument panel and a maze map actually wants.
 ///
-/// The decision it encoded is not gone: `ORBS_DUMP` can still be handed a grid
-/// below the floor, and `dump.rs` still asks. §9 caps the count at four, and the
-/// siege multiplex is what raises it — which is why `PaneTransition` survives
-/// with nothing left to animate here.
-const PANES: u8 = 2;
+/// **`F4` is visibly inert at one pane, and that is recorded rather than fixed.**
+/// §9 makes the focus mode a setting the player may change at any time and §19
+/// fixes the switch on `F4`; reassigning it to toggle the rail would re-litigate
+/// both. With one pane the two tilings are identical, so the key changes nothing
+/// until multiplexing returns the second pane in Phase 9a — at which point it
+/// reclaims its job with no code to change.
+///
+/// The decision the old constant encoded is not gone: `ORBS_DUMP` can still be
+/// handed a grid below the floor, and `dump.rs` still asks. §9 caps the count at
+/// four, and the siege multiplex is what raises it — which is why
+/// `PaneTransition` survives with nothing left to animate here.
+const PANES: u8 = 1;
 
 /// Hand a finished line to the sim.
 ///
@@ -491,9 +507,24 @@ mod tests {
             // Not read by `type_into_line`; the whole point is that text comes
             // from `text`, not from a physical or logical key.
             key_code: KeyCode::KeyA,
-            logical_key,
+            logical_key: logical_key.clone(),
             state: ButtonState::Pressed,
             text: text.map(Into::into),
+            repeat: false,
+            window: Entity::PLACEHOLDER,
+        });
+        // **And released, which is what `tap` next door already knew.** Its doc
+        // says it outright: a key left down means the *next* press of it is not a
+        // fresh one. Because `press` stamps every keystroke `KeyCode::KeyA`, one
+        // unreleased press left `A` held for the rest of the test — invisible while
+        // nothing read `key_code`, and a false failure the moment `watch_focus`
+        // did. A keystroke is a press and a release; modelling half of one is what
+        // made a correct fix look broken.
+        app.world_mut().write_message(KeyboardInput {
+            key_code: KeyCode::KeyA,
+            logical_key,
+            state: ButtonState::Released,
+            text: None,
             repeat: false,
             window: Entity::PLACEHOLDER,
         });
@@ -1162,15 +1193,27 @@ mod tests {
         // ...and what actually changed: the split the two modes ask the tiler
         // for. Without this the test would pass on a `cycle_mode` that only set
         // a field nobody reads.
+        //
+        // **Two panes explicitly, not `PANES`.** `PANES` is 1 since the tower
+        // rail replaced the telemetry pane, and one pane tiles identically in
+        // both modes — so asking about the live count made this assert that `F4`
+        // does something it currently cannot. What it is really holding is that
+        // **the two modes ask the tiler for different shapes**, which is a
+        // property of `cycle_mode` and the tiler and is as true today as it will
+        // be when multiplexing puts the second pane back (Phase 9a).
+        //
+        // The half that is genuinely lost — that `F4` changes what is on screen
+        // *right now* — is recorded on `PANES` rather than asserted here,
+        // because a test cannot hold a claim the game has stopped making.
         let request = |screen: Screen| orbs_render::ScreenRequest {
-            main_panes: PANES,
+            main_panes: 2,
             mode: screen.mode,
             ..orbs_render::ScreenRequest::single(screen.grid)
         };
         assert_ne!(
             orbs_render::ScreenLayout::compute(&request(before)).main(),
             orbs_render::ScreenLayout::compute(&request(after)).main(),
-            "the two focus modes tile identically, so F4 does nothing visible",
+            "the two focus modes tile identically, so F4 could never do anything",
         );
     }
 
@@ -1183,5 +1226,106 @@ mod tests {
         press(&mut app, Key::Enter, Some("\r"));
         app.update();
         assert!(messages(&app).is_empty(), "a function key was typed");
+    }
+
+    /// Press or release a key carrying its **real** `key_code`.
+    ///
+    /// `press` above stamps every keystroke `KeyCode::KeyA` on the stated grounds
+    /// that `type_into_line` does not read the field. `watch_focus` does — it has
+    /// to, because what it tracks is which *physical* key is still down — so a test
+    /// about it that used `press` would put every key in one bucket and pass
+    /// against a fix that swallowed the keyboard for ever.
+    fn physical(app: &mut App, key_code: KeyCode, logical_key: Key, state: ButtonState) {
+        app.world_mut().write_message(KeyboardInput {
+            key_code,
+            logical_key,
+            state,
+            text: None,
+            repeat: false,
+            window: Entity::PLACEHOLDER,
+        });
+    }
+
+    #[test]
+    fn leaving_the_maze_leaves_nothing_in_the_prompt() {
+        let mut app = app();
+        type_line(&mut app, "attend archive");
+        app.world_mut().resource_mut::<Tower>().step();
+        app.update();
+        type_line(&mut app, "research");
+        app.world_mut().resource_mut::<Tower>().step();
+        app.update();
+        type_line(&mut app, "wander");
+        app.world_mut().resource_mut::<Tower>().step();
+        app.update();
+        assert!(
+            app.world().resource::<crate::shell::Walk>().is_open(),
+            "the arrows never took the maze, so this asserts nothing",
+        );
+
+        // Walking: the arrow goes down and **stays** down, which is the state the
+        // bug needs. Nothing releases it before the Escape.
+        physical(
+            &mut app,
+            KeyCode::ArrowUp,
+            Key::ArrowUp,
+            ButtonState::Pressed,
+        );
+        app.update();
+
+        physical(&mut app, KeyCode::Escape, Key::Escape, ButtonState::Pressed);
+        app.update();
+        assert!(!app.world().resource::<crate::shell::Walk>().is_open());
+
+        // **The held arrow outliving the Escape is how the word came back.** Key
+        // repeat keeps delivering while a finger is on the key, and by this frame
+        // the maze has let go — so the arrow reaches the prompt, where an arrow
+        // means *recall history*, and the newest entry is the `wander` that opened
+        // the maze.
+        physical(
+            &mut app,
+            KeyCode::ArrowUp,
+            Key::ArrowUp,
+            ButtonState::Pressed,
+        );
+        app.update();
+
+        assert_eq!(
+            app.world().resource::<Line>().text(),
+            "",
+            "the prompt kept the word that opened the maze",
+        );
+        assert!(
+            app.world().resource::<crate::shell::Ghost>().0.is_empty(),
+            "a suggestion outlived the line it trailed",
+        );
+        assert!(
+            app.world().resource::<crate::shell::Offered>().is_empty(),
+            "a Tab listing outlived the maze",
+        );
+
+        // **And the other half, which is what makes the fix a fix.** Let go of the
+        // arrow and press it again: that is a real keystroke and history recall must
+        // still work. A version that swallowed the keyboard from the moment a
+        // surface closed would pass everything above and break `Up` for ever.
+        physical(
+            &mut app,
+            KeyCode::ArrowUp,
+            Key::ArrowUp,
+            ButtonState::Released,
+        );
+        app.update();
+        physical(
+            &mut app,
+            KeyCode::ArrowUp,
+            Key::ArrowUp,
+            ButtonState::Pressed,
+        );
+        app.update();
+        assert_eq!(
+            app.world().resource::<Line>().text(),
+            "wander",
+            "a fresh press of Up no longer recalls history",
+        );
     }
 }

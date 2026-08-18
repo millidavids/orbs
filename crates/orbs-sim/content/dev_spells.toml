@@ -194,6 +194,92 @@ lines = [
 # The scroll is left in the lectern for `empty lectern`, deliberately: emptying
 # from inside the loop would make the spell wait out its own twenty-tick
 # assembly every lap.
+# The ladder that breaks a ward, and the reason the lens is automatable at all.
+#
+# **It cannot deduce and it cannot revert**, and both are facts about §8's
+# language rather than about this file: there are no variables, so a spell cannot
+# remember what a socket held before a bad press, and it cannot turn `aligned 2,
+# astray 1` into a next guess. What it *can* do is walk a fixed order and act on
+# what the world writes down.
+#
+# Two things in the world make that enough:
+#
+#   the ratchet    a press that does not gain snaps the aperture back, so a
+#                  wrong dial costs a press and never progress
+#   the settle     a socket that gained *as the only one that moved* is provably
+#                  right, is latched, and refuses a later dial
+#
+# So the walk is monotone: `aligned` only ever rises, settled sockets only ever
+# accumulate, and the ladder cannot destroy what it has already got right. That
+# is Trémaux's property in a second shape — a *rule* with a proof, not a search.
+#
+# **Four rungs, one per socket**, guarded on `untried` so a socket with nothing
+# left is skipped and the next takes over on the same tick. `probe` opens a
+# reading when none is open, so there is no setup rung and no `scry`: the first
+# lap of the outer loop starts the reading and presses it in one word.
+#
+# **It was twenty-four, and twenty-four did not work.** One rung per socket *and
+# sigil* was the only shape available before `dial <socket>` took an optional
+# sigil: with no variables a spell cannot name the sigil it has not tried, so it
+# had to spell all six out per socket and use the per-socket mark count as an
+# index. Both halves of that were wrong — see `Ward::tried` — and the spell
+# stopped earning partway through a session while still holding the tower's one
+# production slot. Measured: seed 1 froze at tick 4800 and never recovered.
+#
+# Measured over all 360 codes: **about 23 presses**, against a deducing player's
+# 4.1. That gap is the domain, not a defect — a bound solver earns less per ward
+# and runs while the player is in the laboratory, which is §8's argument for
+# automation landing through concurrency rather than through speed.
+#
+# `repeat until the prism is idle` is the bound, and **`is empty` is the wrong
+# word for it** — `spell::watch` answers `empty` by asking whether the node has
+# *children*, and a prism's children are its published readings, of which there
+# are none until the first press lands. Bounded on `empty` this spell ended on
+# its own first instruction, having pressed once and looked finished. An open
+# ward reports `working`, exactly as an open maze does.
+#
+# **It keeps going, unlike `threading`, and that is the difference between the
+# two domains.** A maze solver stops at one so a single walk can be observed; a
+# ward solver is a *faucet* — the whole reason to bind one is that it breaks
+# seals while you are in the laboratory. The body's last instruction opens the
+# next reading, so the loop never falls out.
+#
+# It would keep going either way: `bind` re-casts a spell that runs off the end,
+# so a loop that exited would simply be re-entered. What the structure decides is
+# only which of the two does the lapping. To watch *one* ward, `meditate` less.
+#
+# **The guards ask `untried`, not `loose` alone.** Every rung for a socket asks
+# the same `loose` question, so a ladder guarded on that alone fires its first
+# rung for ever. `untried` is what moves: a dial aimed at a socket records the
+# sigil whether or not anything shifted, so the count falls each lap — and a gain
+# puts them all back, because the ratchet has moved the baseline and every sigil
+# is worth trying again against the new figure.
+[breaking]
+domain = "lens"
+lines = [
+    "probe",
+    "repeat until the prism is idle",
+    "if the first has 1 or more untried",
+    "dial first",
+    "else",
+    "if the second has 1 or more untried",
+    "dial second",
+    "else",
+    "if the third has 1 or more untried",
+    "dial third",
+    "else",
+    "if the fourth has 1 or more untried",
+    "dial fourth",
+    "else",
+    "wait",
+    "end",
+    "end",
+    "end",
+    "end",
+    "probe",
+    "end",
+]
+
 [assembling]
 domain = "archive"
 lines = [

@@ -134,6 +134,19 @@ fn begins_work(intent: &Intent) -> bool {
     if crate::execute::spending(intent).is_some() {
         return false;
     }
+    // **`dial` is an operation that takes no slot**, and it is the first verb
+    // for which those are different questions. `is_operation` answers *"is this
+    // word scoped to one instrument"* — which is how the lens keeps both its
+    // verbs out of the tower-wide vocabulary — and this asks *"will it hold the
+    // tower's one production slot"*. Turning a dial is free by design, because
+    // the domain's cost is the press.
+    //
+    // Left alone, a spell's `dial first nitre` would have queued behind a brew
+    // in the laboratory and burned `PATIENCE` doing nothing, which is exactly
+    // the defect the scroll case above records one paragraph up.
+    if intent.verb == Verb::Dial {
+        return false;
+    }
     intent.verb.is_operation() || matches!(intent.verb, Verb::Wield | Verb::Research | Verb::Purge)
 }
 

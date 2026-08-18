@@ -119,14 +119,21 @@ impl Scene {
             .any(|word| word.eq_ignore_ascii_case(phrase))
     }
 
-    /// Whether a per-instrument verb has its instrument here.
+    /// Whether a verb's fixture stands here.
     ///
-    /// Always true for a verb that is not one — the core vocabulary goes
+    /// Always true for a verb with no fixture — the core vocabulary goes
     /// everywhere, because `attend`, `survey` and `peruse` are how you *reach* a
     /// domain and gating them would lock the key inside the door.
+    ///
+    /// **It asks [`Verb::anchor`], and it used to ask `Verb::is_operation`.** That
+    /// is the production-slot question, so every verb that took no slot was offered
+    /// in every room — `help` in the laboratory listed `research`, `follow` and
+    /// `wander`, none of which can do anything there. §19 records the two-word
+    /// version of that as a debt waiting on a mechanism; `anchor` is the mechanism.
     #[must_use]
     pub fn offers(&self, verb: Verb) -> bool {
-        !verb.is_operation() || self.operations.contains(&verb)
+        verb.anchor()
+            .is_none_or(|anchor| self.operations.contains(&anchor))
     }
 
     /// Everything in the scene.

@@ -1349,3 +1349,32 @@ fn a_spell_not_written_yet_is_quoted_rather_than_resolved() {
     let reading = read(&["make a potion of clarity"]);
     assert_eq!(reading[0].heard, "recall clarity");
 }
+
+#[test]
+fn a_forward_reference_holds_however_many_spells_already_exist() {
+    // **The half above could not see.** A forward reference matches no spell
+    // well, so *which* resolution the parser returns depends on how many spells
+    // are on the shelf: one, and it resolves (the verb is weighted double); four,
+    // and it ties between them and comes back `Ambiguous`. `names_a_spell` only
+    // covered the first two shapes, so the second called a forward reference a
+    // fault — `spell_missing`, on a line §8 uses as its own worked example.
+    //
+    // Shelving the dev ladders in a debug build is what surfaced it, but a player
+    // with four spells of their own would have found it just the same. So this
+    // asserts the property against a grimoire that has grown, rather than against
+    // whatever it happens to hold today.
+    let mut sim = Sim::new(1);
+    sim.submit("attend laboratory");
+    sim.step();
+    for name in ["one", "two", "three"] {
+        sim.write_spell(name, &["grind sage".to_owned()]);
+        sim.step();
+    }
+
+    let reading = sim.read_spell("laboratory", &["invoke not_written_yet".to_owned()]);
+    assert_eq!(reading[0].heard, "invoke not_written_yet");
+    assert_eq!(
+        reading[0].fault, None,
+        "a forward reference became a fault once the grimoire filled up",
+    );
+}

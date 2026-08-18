@@ -1,4 +1,5 @@
 mod bench;
+mod board;
 mod dump;
 mod editing;
 mod editor;
@@ -9,6 +10,7 @@ mod loom;
 mod panel;
 mod plugin;
 mod prompt;
+mod rail;
 mod reveal;
 mod screen;
 mod sheet;

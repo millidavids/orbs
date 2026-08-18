@@ -42,6 +42,28 @@ alembic = 8
 stacks = 4
 lectern = 4
 
+# The lens (§10). **8 for a broken ward**, which is the alembic's tier and is
+# arrived at the same way the others are: measured, then checked against the
+# flagship.
+#
+# A hand-played solve takes 4.14 presses on average over all 360 codes, at 12
+# ticks each — so about 50 ticks for 8, or 0.161 per tick, just under the
+# clarity chain's 0.170. A bound solver takes ~22.8 presses and earns 6, which is
+# 0.022 — unspectacular, three times better than walking the archive's maze, and
+# exactly the background faucet this domain is for.
+#
+# **The first draft halved the yield per press past par and it is withdrawn.** At
+# 23 presses that lands on a floor of 1, while the ladder already pays 5.5× the
+# ticks — so the penalty double-counted and drove automated scrying below the
+# maze. The tick cost does the work; `execute::scry::yield_of` only rewards
+# playing well, at three quarters beyond par.
+#
+# The oculus is deliberately absent. It carries an `Operation` so `scry` is
+# scoped to this room, but opening a reading is not work and pays nothing —
+# `worth` returns 0 for a name this table does not price, which is the same
+# answer with no line to maintain.
+prism = 8
+
 # ---------------------------------------------------------------------------
 # THE LEY LINE - the straight path.
 #

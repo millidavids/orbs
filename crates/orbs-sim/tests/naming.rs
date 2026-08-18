@@ -24,9 +24,14 @@ fn scene() -> Scene {
     // game has, all live at once. Out in the archive the laboratory's four are
     // not candidates at all, so a collision pinned here is narrower in play than
     // it looks on the page.
+    // **Every *anchor*, and it was every operation.** `Scene::offers` asks
+    // `Verb::anchor` now rather than `is_operation` — the production-slot question
+    // — so a scene built from the latter left `research`, `follow` and `wander`
+    // unresolvable and had this file measuring the scoping rule after all, which
+    // is the one thing the paragraph above says it must not do.
     Verb::ALL
         .into_iter()
-        .filter(|verb| verb.is_operation())
+        .filter_map(Verb::anchor)
         .fold(Scene::new(), Scene::offering)
         .with(NounKind::Place, "/tower/laboratory")
         .with(NounKind::File, "feed.log")
@@ -363,12 +368,26 @@ fn ambiguous_synonym_prefixes_are_known() {
     // argument about the mortar being in only one room. Renaming the manual to
     // `recall` (§19) removed the clash outright — the set is one shorter than it
     // was, which is the direction it should move in.
+    //
+    // **`pro` joined it with the lens**, and it is the mildest entry here:
+    // `probe` is a *canonical* and `progress` is one of `weave`'s plain
+    // synonyms, so an exact `probe` beats the fuzzy reading outright and the
+    // clash costs a prompt only on a genuine abbreviation. The two are also as
+    // far apart as two words in this game get — one is the scrying room's work,
+    // the other opens the progression screen — so a player who meant either and
+    // typed `pro` is being asked a fair question.
+    //
+    // The canonical `pro` is unshared, which is the rule that actually binds:
+    // `three_character_canonical_prefixes_name_at_most_one_verb` has no
+    // exemptions, and it is why `scry` is not a verb (`scr` reaches `scribe`)
+    // and why `seat` became `dial` (`sea` reaches `sift`'s `search`).
     assert_eq!(
         ambiguous,
         [
             ("aut", vec!["bind", "scribe"]),
             ("dec", vec!["empty", "recall", "research"]),
             ("ins", vec!["scribe", "verify"]),
+            ("pro", vec!["probe", "weave"]),
             // **`res` is `research`'s own prefix, and `rest` wins it.** `rest`
             // is `meditate`'s, four letters to `research`'s eight, so the
             // coverage half of the prefix score puts it ahead (962 to 906) and
@@ -401,7 +420,14 @@ fn the_words_the_naming_pass_replaced_still_resolve() {
     // Renaming a player-facing command must not strand the old word — and for
     // `decant` it must not *release* it either, since an unclaimed `decant`
     // lands on `decoct`.
-    let scene = Scene::new()
+    // Every anchor offered, for the same reason the shared `scene()` above does it:
+    // this test is about a *word* still reaching its verb, and a scene that scoped
+    // `research` out would have it measuring the scoping rule instead. `decipher`
+    // resolving to nothing is the scope, not the naming.
+    let scene = Verb::ALL
+        .into_iter()
+        .filter_map(Verb::anchor)
+        .fold(Scene::new(), Scene::offering)
         // `siphon` takes a **place** now (§10.1): the product sits in the
         // instrument that made it, not in a vessel.
         .with(NounKind::Place, "/tower/laboratory/alembic")

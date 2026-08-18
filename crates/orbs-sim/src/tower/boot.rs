@@ -167,10 +167,13 @@ mod tests {
         let listed = rows(&sim, RecordKind::Entry);
         // **The rule restated, not the function called.** `execute::offered` is
         // what the report uses; asserting against it would only prove the report
-        // calls what it calls. This says what the list *means* — and the
-        // `!is_operation()` half is the form the report hardcoded before the
-        // filter was shared, so agreeing here is what pins that generalising to
-        // `Scene::offers` changed no list at the root.
+        // calls what it calls. This says what the list *means*.
+        //
+        // **`anchor().is_none()`, and it was `!is_operation()`.** The two agreed
+        // until scoping stopped being the production-slot question: `research` is
+        // declared by the stacks and takes no slot, so the old form listed it here
+        // at the tower root, where it is not a word. That is the dead end the
+        // paragraph above says this list exists to avoid, and it was in the list.
         // ...and the shared filter agrees with that rule, at the root where the
         // report is written. `recall`'s overview calls the same function in rooms
         // that *do* offer operations, which is the half this cannot see.
@@ -181,7 +184,7 @@ mod tests {
         assert_eq!(shared, listed, "the report and `execute::offered` disagree");
 
         for verb in Verb::ALL {
-            let wanted = is_live(verb) && !verb.is_operation() && !is_gated(verb, sim.world());
+            let wanted = is_live(verb) && verb.anchor().is_none() && !is_gated(verb, sim.world());
             assert_eq!(
                 listed.iter().any(|name| name == verb.canonical()),
                 wanted,

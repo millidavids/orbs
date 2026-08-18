@@ -57,6 +57,17 @@ pub(super) fn attend(intent: &Intent, world: &mut World) {
     }
 
     world.insert_resource(Cwd(node));
+
+    // **Walking in is what clears the rail's mark**, and it is the only thing
+    // that does. §9's minimised half exists to say *something happened over
+    // there*; once you are standing in the room, the room itself is saying it,
+    // and a marker that outlived the visit would be a light nobody could turn
+    // off. A timer was the alternative and is worse — it would clear while the
+    // player was making tea, which is the case idle play is made of.
+    if let Some(name) = world.get::<tower::Name>(node).map(|name| name.0.clone()) {
+        tower::clear_mark(world, &name);
+    }
+
     let path = tower::path_of(world, node);
     world
         .resource_mut::<Scrollback>()

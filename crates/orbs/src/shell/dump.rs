@@ -240,11 +240,15 @@ pub(crate) fn run(seed: u64, wizard: Option<String>) -> bool {
     if screen.is_hostable() {
         // Settled: a dump is a still, and a still of a pane halfway in would be
         // a picture of a moment rather than of the screen.
-        let panes = PaneTransition::settled(if grid.fits(orbs_render::DEEP_FOCUS_FLOOR) {
-            2
-        } else {
-            1
-        });
+        //
+        // **One pane, at every grid**, since the tower rail replaced the
+        // telemetry pane. This asked `grid.fits(DEEP_FOCUS_FLOOR)` and settled
+        // at two — which after `PANES` became 1 left the dump drawing a screen
+        // the game does not have: a half-width session pane beside a second one
+        // nothing painted. Whether the *rail* fits is `ScreenLayout::compute`'s
+        // decision and is taken from the grid there, so there is nothing left
+        // for this branch to ask.
+        let panes = PaneTransition::settled(1);
         let typed = std::env::var(LINE).map_or_else(|_| Line::default(), |text| Line::typed(&text));
         // If a `scribe` in `ORBS_DUMP` asked for the editor, open it — and let
         // `ORBS_EDIT` type into it. Without this the one surface the whole item
@@ -310,6 +314,8 @@ pub(crate) fn run(seed: u64, wizard: Option<String>) -> bool {
             instruments: sim.instruments(),
             domain: orbs_sim::parser::leaf(&sim.location()).to_owned(),
             stacks: sim.stacks(),
+            ward: sim.ward(),
+            briefs: sim.briefs(),
         };
         super::prompt::paint(
             &mut frame,

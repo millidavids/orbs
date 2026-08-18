@@ -4,7 +4,7 @@
 //! submits a line and steps, so what they exercise is the *dispatch* — the seam
 //! `execute` is — rather than any one module's internals.
 
-use orbs_render::{FieldName, RecordKind, Role, Value};
+use orbs_render::{FieldName, Outcome, RecordKind, Role, Value};
 
 use super::{MAX_MEDITATE, is_live};
 use crate::Sim;
@@ -157,11 +157,27 @@ fn sample(verb: Verb) -> (&'static str, &'static str) {
         // working: this table asks whether the world answered, and *"the orb
         // cannot hold a spell yet"* is the world answering.
         Verb::Bind => ("tower", "bind first_light"),
-        Verb::Invoke => ("tower", "invoke night_watch"),
+        // **A spell that exists, for the reason `bind` above names** — and this
+        // one drifted the other way. `invoke night_watch` was *unresolved* while
+        // `first_light.spell` was the only script in the grimoire, so the parser
+        // said so and that counted as the world answering. Shelving the dev
+        // ladders in a debug build put four scripts there, and a name matching
+        // none of them well became **ambiguous** instead: a numbered prompt of
+        // `Echo` records, which this filters out, so the verb looked dead.
+        //
+        // §19 records the same drift at `brew`, and CLAUDE.md's rule from it — if
+        // you want an ambiguity fixture, reach for `purge` deliberately rather
+        // than depending on how many nouns happen to exist.
+        Verb::Invoke => ("tower", "invoke first_light"),
         Verb::Unfurl => ("tower", "unfurl"),
         Verb::Weave => ("tower", "weave"),
         Verb::Follow => ("archive", "follow north"),
         Verb::Wander => ("archive", "wander"),
+        // The lens (§10). `probe` opens a reading and presses it in one word, so
+        // it needs no setup; `dial` before one is open refuses with *"probe
+        // first"*, which is the world answering and is what this table asks for.
+        Verb::Probe => ("lens", "probe"),
+        Verb::Dial => ("lens", "dial first alum"),
     }
 }
 
@@ -256,17 +272,28 @@ fn an_instruments_verb_is_only_a_word_where_the_instrument_is() {
     for line in ["grind sage", "mix sage and rock-salt", "distil sage"] {
         let before = sim.scrollback().records().len();
         run(&mut sim, line);
-        let said: Vec<String> = sim
-            .scrollback()
-            .records()
-            .iter()
-            .skip(before)
-            .map(|record| record.to_line())
-            .collect();
+        let records = sim.scrollback();
+        let new: Vec<_> = records.records().iter().skip(before).collect();
+
+        // **The outcome and the fields, not the sentence.** This matched the
+        // substring `"nothing here"` and broke when the refusal improved to name
+        // the missing fixture — a test depending on wording is the thing rule 6
+        // puts prose in a file to prevent. `Outcome::Unresolved` plus the fixture
+        // in `Source` is the same claim, held where it cannot drift.
         assert!(
-            said.iter().any(|line| line.contains("nothing here")),
-            "{line:?} did not say it was the wrong room: {said:?}"
+            new.iter()
+                .any(|record| record.outcome() == Some(Outcome::Unresolved)),
+            "{line:?} did not say it was the wrong room: {new:?}"
         );
+        assert!(
+            new.iter().any(|record| matches!(
+                record.field(FieldName::Source),
+                Some(Value::Text(fixture)) if !fixture.is_empty()
+            )),
+            "{line:?} refused without naming the tool the archive has not got: {new:?}"
+        );
+
+        let said: Vec<String> = new.iter().map(orbs_render::Record::to_line).collect();
         assert!(
             !said.iter().any(|line| line.contains("sift")),
             "{line:?} drifted to another verb: {said:?}"

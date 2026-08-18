@@ -437,6 +437,30 @@ const TWO_REAGENTS: &[Slot] = &[
 /// One of the archive's four readings. A `Place`, because that is the only kind
 /// the place half of a spell's question resolves against.
 const WAY: &[Slot] = &[Slot::required(NounKind::Place)];
+
+/// `seat <socket> <sigil>` — which dial, and what to turn it to.
+///
+/// **Both `Place`, and no new `NounKind`.** The lens's sockets and sigils are
+/// `Role::Reading` fixtures exactly as the archive's compass bearings are, so
+/// they resolve against the kind `WAY` already uses. verbs.md warns that a new
+/// kind leaks into tab completion, `compile::fix` and the bare-argument prompt;
+/// the cheapest new kind is the one you did not need.
+///
+/// The cost is that `seat laboratory nitre` parses, and the handler refuses it
+/// in voice — the same shape `research::named` already has for `follow`.
+/// **The sigil is optional, and bare means *try something else here*.**
+///
+/// A variable-free script cannot name the sigil it has not tried yet — that is
+/// what forced a ladder to spell all six out per socket, twenty-four rungs using
+/// a mark count as an index. `dial first` asks the ward instead, which is the one
+/// sentence the language could not otherwise form. `Ward::advance` has the rest.
+///
+/// Optional rather than a second verb, on `recall`'s precedent (`TOPIC_OPTIONAL`):
+/// bare and argumented are the same act — turning that dial — at two scopes.
+const SOCKET_AND_SIGIL: &[Slot] = &[
+    Slot::required(NounKind::Place),
+    Slot::optional(NounKind::Place),
+];
 const SCRIPT: &[Slot] = &[Slot::required(NounKind::Script)];
 // `scribe` coins a name rather than naming something that exists — see
 // `NounKind::Name`. `bind` and `invoke` keep `SCRIPT`, because a spell they name
@@ -577,11 +601,39 @@ pub enum Verb {
     /// `walk` are already taken, by `attend` and by `follow`. `wander` is 500 at
     /// worst and `wan` is a free three-character prefix.
     Wander,
+    /// `probe` — press the aperture against a far orb's ward, opening a reading
+    /// if none is open.
+    ///
+    /// **Two acts in one word, which is §19's per-instrument idiom**: `grind
+    /// sage` is a `move` and a `wield`, and this is a `scry` and a press. It
+    /// collapses the command a player types most, and it costs nothing in
+    /// clarity here because the aperture opens on a fixed figure — so the first
+    /// press means the same thing every time and there is nothing to set before
+    /// it.
+    ///
+    /// **`scry` was the opener and never shipped.** It is §10's word for the
+    /// domain and it had to go: `tests/naming.rs` forbids two canonicals sharing
+    /// a three-character prefix outright, with the exemption it once had deleted
+    /// on the grounds that *"an exemption that outlives its cause is how a guard
+    /// quietly stops guarding"* — and `scr` reaches `scribe`. The domain is still
+    /// scrying; the room is `lens/`; the word you type is `probe`.
+    Probe,
+    /// `dial <socket> <sigil>` — turn one dial of the aperture.
+    ///
+    /// Free, because turning a dial is not work; only [`Probe`](Self::Probe)
+    /// takes a tick. **Both channels use this same word**: a player dials what
+    /// they have deduced, a spell dials what its ladder reached, and the
+    /// difference is entirely in which readings they consult.
+    ///
+    /// `seat` was the first name and lost to the same rule that took `scry`:
+    /// `sea` reaches `sift`'s plain synonym `search`. `dial` is free, and it is
+    /// the better word anyway — a ward is a lock, and this is what a lock has.
+    Dial,
 }
 
 impl Verb {
-    /// Every verb in the Phase 0 vocabulary.
-    pub const ALL: [Self; 27] = [
+    /// Every verb in the Phase 0 vocabulary, and what the phases since have added.
+    pub const ALL: [Self; 29] = [
         Self::Attend,
         Self::Survey,
         Self::Peruse,
@@ -612,6 +664,8 @@ impl Verb {
         Self::Weave,
         Self::Follow,
         Self::Wander,
+        Self::Probe,
+        Self::Dial,
     ];
 
     /// The longest a canonical verb may be.
@@ -661,7 +715,12 @@ impl Verb {
             | Self::Kindle
             | Self::Research
             | Self::Follow
-            | Self::Wander => Group::Work,
+            | Self::Wander
+            // The lens's two are work for the same reason the archive's are:
+            // a player looking for what to *do* in this room wants them
+            // together, not sorted by which of them happens to cost a tick.
+            | Self::Probe
+            | Self::Dial => Group::Work,
             Self::Scribe | Self::Bind | Self::Invoke => Group::Spells,
             Self::Status
             | Self::Recall
@@ -719,6 +778,8 @@ impl Verb {
             Self::Weave => "weave",
             Self::Follow => "follow",
             Self::Wander => "wander",
+            Self::Probe => "probe",
+            Self::Dial => "dial",
         }
     }
 
@@ -728,12 +789,79 @@ impl Verb {
     /// see [`Scene::offers`](super::Scene::offers). `wield` is deliberately not
     /// one: it names the tool explicitly, works anywhere there is a tool, and is
     /// what a script writes when the instrument is the variable.
+    ///
+    /// **The lens's two are here, and that is what stops a third debt.** §19
+    /// records `follow` and `wander` as tower-wide words waiting on a mechanism
+    /// that does not exist — a fixture carries exactly one `Operation`, and the
+    /// archive's one fixture had spent it. The lens has five fixtures that can
+    /// carry one, so `probe` and `dial` are both scoped without any new
+    /// mechanism, and neither means anything in the laboratory.
+    ///
+    /// **It is not the same question as "does this take the production slot"**,
+    /// and the lens is where the two came apart: `dial` is a scoped operation
+    /// that schedules nothing. See `spell::block::begins_work`.
     #[must_use]
     pub const fn is_operation(self) -> bool {
         matches!(
             self,
-            Self::Grind | Self::Digest | Self::Mix | Self::Distil | Self::Kindle
+            Self::Grind
+                | Self::Digest
+                | Self::Mix
+                | Self::Distil
+                | Self::Kindle
+                | Self::Probe
+                | Self::Dial
         )
+    }
+
+    /// The fixture verb that must stand in the room for this one to mean anything.
+    ///
+    /// # This is the mechanism §19 recorded as missing
+    ///
+    /// [`Scene::offers`](super::Scene::offers) used to ask
+    /// [`is_operation`](Self::is_operation), which is the *production slot*
+    /// question — so every verb that did not take the slot was offered in every
+    /// room. `research`, `follow` and `wander` were therefore listed by `help` in
+    /// the laboratory and the lens, where none of them can do anything: §19 called
+    /// two of them a debt *"waiting on one missing mechanism"* and said that a
+    /// third would be the argument for building it. `research` was the third.
+    ///
+    /// The two questions are now genuinely separate. A verb can be **scoped to a
+    /// fixture and take no slot** (`research`, `follow`, `wander`, `dial`), or take
+    /// the slot and be scoped (`grind`), and neither implies the other.
+    ///
+    /// # Most of it is derived, and the test is what keeps it that way
+    ///
+    /// A verb that some `Branch` in `tower::build` declares as its `operation` is
+    /// *self-anchored* — the content already says which room it belongs to, so
+    /// nothing here needs a list of rooms. `every_self_anchored_verb_is_declared_by
+    /// _a_fixture` fails the build if this arm and `BRANCHES` disagree, which is
+    /// what stops the pair drifting the way three entangled lists already did.
+    ///
+    /// `follow` and `wander` are the exception and are spelled out: they act on the
+    /// *reading inside* the stacks rather than on a fixture of their own, and a
+    /// fixture carries exactly one `Operation`, which the stacks had spent on
+    /// `research`.
+    #[must_use]
+    pub const fn anchor(self) -> Option<Self> {
+        match self {
+            // Declared by a fixture, so the fixture's room is the scope.
+            Self::Grind
+            | Self::Digest
+            | Self::Mix
+            | Self::Distil
+            | Self::Kindle
+            | Self::Probe
+            | Self::Dial
+            | Self::Research => Some(self),
+            // The maze's other two words, anchored to the stacks.
+            Self::Follow | Self::Wander => Some(Self::Research),
+            // **`wield` is deliberately not anchored**, and neither is `empty`,
+            // `stop` or `move`: they name their target explicitly and work
+            // wherever one stands, which is what a script writes when the
+            // instrument is the variable.
+            _ => None,
+        }
     }
 
     /// Whether finishing this turns an instrument's contents into something.
@@ -801,6 +929,8 @@ impl Verb {
             Self::Weave => "weaving",
             Self::Follow => "following",
             Self::Wander => "wandering",
+            Self::Probe => "probing",
+            Self::Dial => "dialling",
         }
     }
 
@@ -822,7 +952,14 @@ impl Verb {
             | Self::Unfurl
             | Self::Weave
             | Self::Research
-            | Self::Wander => NOTHING,
+            | Self::Wander
+            // **`probe` takes nothing**, for the reason `research` does: there
+            // is one prism to press, so naming it would be naming the only
+            // thing there is. What changes between presses is the *aperture*,
+            // and `dial` is what changes it.
+            | Self::Probe => NOTHING,
+            // A socket and a sigil, both `Role::Reading` places.
+            Self::Dial => SOCKET_AND_SIGIL,
             // A way, which is a place — see `Role::Reading`.
             Self::Follow => WAY,
             Self::Recall => TOPIC_OPTIONAL,
@@ -992,12 +1129,19 @@ mod tests {
         // the archive now has both the word it needs and the debt it owes, and a
         // fifth would mean the missing mechanism had been deferred once too
         // often.
+        // **Still 22, and the lens is the argument holding.** Phase 2 added two
+        // verbs and neither is tower-wide: the lens has five fixtures that can
+        // carry an `Operation`, so `probe` and `dial` are both scoped without
+        // the missing mechanism and without a third debt. A domain that needs
+        // more words than it has fixtures is the case that would finally force
+        // it.
         assert_eq!(tower_wide.count(), 22);
 
-        // One per instrument the laboratory raises: `grind`, `digest`, `mix`,
-        // `distil` and the athanor's `kindle`.
-        let laboratory = Verb::ALL.iter().filter(|verb| verb.is_operation());
-        assert_eq!(laboratory.count(), 5);
+        // One per instrument that has a word of its own: the laboratory's
+        // `grind`, `digest`, `mix`, `distil` and `kindle`, and the lens's
+        // `probe` and `dial`.
+        let scoped = Verb::ALL.iter().filter(|verb| verb.is_operation());
+        assert_eq!(scoped.count(), 7);
 
         assert!(
             !Verb::ALL.iter().any(|verb| verb.canonical() == "decoct"),

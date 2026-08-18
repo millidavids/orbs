@@ -56,6 +56,65 @@ use crate::tower::{self, Store};
 /// as part of the game.
 pub const SPAWN: &str = "debug_spawn";
 
+/// `debug_learn [name]` — hand the player a recipe the lens would have found.
+///
+/// **A state worth testing costs six broken wards to reach**, which is about
+/// four hundred ticks of pressing, and the roll is a roll — so a See-it line for
+/// discovery would otherwise be *"scry until it happens"*. This is the same
+/// argument `debug_spawn` was built on, one domain over.
+///
+/// Bare, it learns the next unfound secret in the file's own order, which is the
+/// order the lens itself reveals them in. Named, it learns that one — and refuses
+/// a name that is not a secret, because learning something already known is a
+/// state the game cannot reach and therefore not one worth testing from.
+pub const LEARN: &str = "debug_learn";
+
+/// What a `debug_learn` line asked for.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Lesson {
+    /// The secret to learn, or `None` for the next one.
+    pub name: Option<String>,
+}
+
+/// `debug_ward` — make the open ward's answer whatever the aperture holds.
+///
+/// The next `probe` breaks the seal. Everything downstream runs as it would
+/// have: the yield scales with presses spent, the spill is drawn from the same
+/// stream, the discovery is the same roll. What is skipped is the deduction,
+/// which is not what a See-it line for the *spill* is looking at.
+pub const WARD: &str = "debug_ward";
+
+/// Whether this line is a `debug_ward`.
+#[must_use]
+pub fn giveaway(line: &str) -> bool {
+    line.trim() == WARD
+}
+
+/// `debug_swap` — substitute a reagent where the player is standing.
+///
+/// §8.1's world surface arrives on a 1200-tick roll, which is twenty minutes of
+/// waiting for a See-it line. Same argument as every other word in this file.
+pub const SWAP: &str = "debug_swap";
+
+/// Whether this line is a `debug_swap`.
+#[must_use]
+pub fn swapping(line: &str) -> bool {
+    line.trim() == SWAP
+}
+
+/// Read a `debug_learn` line, if that is what this is.
+#[must_use]
+pub fn lesson(line: &str) -> Option<Lesson> {
+    let rest = line.trim().strip_prefix(LEARN)?;
+    if !rest.is_empty() && !rest.starts_with(char::is_whitespace) {
+        return None;
+    }
+    let name = rest.trim();
+    Some(Lesson {
+        name: (!name.is_empty()).then(|| name.to_owned()),
+    })
+}
+
 /// What a tester asked for, if this line is a spawn order at all.
 ///
 /// `debug_spawn ground-sage` is one; `debug_spawn ground-sage 5` is five. A count

@@ -351,6 +351,33 @@ pub const SYNONYMS: &[Synonym] = &[
     // it is the *plain* register only and never the word the orb answers in.
     syn(Verb::Wander, Register::Arcane, &["wander"]),
     syn(Verb::Wander, Register::Plain, &["roam"]),
+    // The lens (§10). All three are domain-scoped (`Verb::is_operation`), so a
+    // near miss here can only ever be a near miss *inside the lens* — which is
+    // what makes a three-verb domain affordable at all.
+    //
+    // **`gaze` is deliberately absent from `scry`'s plain register**: it is 600
+    // against `graze`, which nothing owns, and an unclaimed collision is the one
+    // §19 records as worse than a claimed one.
+    //
+    // **`probe` has no shell register**, and neither does `wander`. The obvious
+    // words are taken: `open` is `peruse`'s and `run` is `invoke`'s, and this
+    // vocabulary's own rule is that an *unclaimed* collision is the dangerous
+    // kind — a word owned by two verbs costs a prompt on a typo, which is a
+    // price worth paying for nothing here.
+    //
+    // **`scry` is not a verb, and §10's own word for the domain losing to a
+    // three-character prefix is worth the paragraph.** `tests/naming.rs` forbids
+    // two canonicals sharing one, having deleted its last exemption on the
+    // grounds that an exemption outliving its cause is how a guard stops
+    // guarding — and `scr` reaches `scribe`. `probe` opens a reading when none
+    // is open, which is `grind`'s move-and-wield idiom one room over.
+    syn(Verb::Probe, Register::Arcane, &["probe"]),
+    syn(Verb::Probe, Register::Plain, &["spy", "peek", "try"]),
+    // `set` is the shell word anyone would reach for; the arcane form is `dial`,
+    // which is what a lock has and what a ward is.
+    syn(Verb::Dial, Register::Arcane, &["dial"]),
+    syn(Verb::Dial, Register::Plain, &["put"]),
+    syn(Verb::Dial, Register::Shell, &["set"]),
 ];
 
 impl Register {

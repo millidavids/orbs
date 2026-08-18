@@ -36,6 +36,12 @@ pub fn purge(world: &mut World, target: Entity) {
     // tampering you cannot do anything about is its own dead end.
     if sabotage::poisoned(world, target) {
         world.entity_mut(target).remove::<sabotage::Poisoned>();
+        // **And put the name back**, for a substituted thing. Removing `Poisoned`
+        // alone reported `cleansed` and repaired nothing — the pile kept the name
+        // the enemy gave it, so the spell that named it stayed broken and the next
+        // roll renamed it again. §7 makes destruction maintenance; this is the
+        // half of that which is *repair*.
+        let name = sabotage::restore(world, target).unwrap_or(name);
         world
             .resource_mut::<Scrollback>()
             .records_mut()

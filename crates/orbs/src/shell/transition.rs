@@ -65,10 +65,12 @@ impl PaneTransition {
         }
     }
 
-    /// The pane count the screen is heading towards.
-    pub(crate) const fn panes(&self) -> u8 {
-        self.to
-    }
+    // **`panes()` was here and is gone with the telemetry pane.** Its one caller
+    // was `prompt`'s `carry_readings`, which asked *"is there a second pane to
+    // put the readings in"*; the rail answers that question now, and `PANES` is
+    // 1, so this accessor could only ever have returned the same number. It
+    // comes back with multiplexing, which is the only thing that will make the
+    // count vary again.
 
     /// Whether the panes have arrived.
     pub(crate) fn is_settled(&self) -> bool {
@@ -139,11 +141,18 @@ impl PaneTransition {
     }
 }
 
+/// **The rail is always asked for, and the layout decides whether it fits.**
+///
+/// Not a setting and not animated: it is awareness, it is not commandable, and
+/// `ScreenLayout::compute` drops it whole below the grid that can host it (§9's
+/// "the minimised half yields"). Making it a toggle here would put the decision
+/// in two places, and making it animate would be `PaneTransition`'s job for a
+/// thing that never arrives or leaves.
 fn settled_layout(grid: GridSize, mode: DisplayMode, panes: u8, input_rows: u16) -> ScreenLayout {
     ScreenLayout::compute(&ScreenRequest {
         grid,
         main_panes: panes,
-        sidebar_panes: 0,
+        rail: true,
         mode,
         input_rows,
     })
@@ -237,7 +246,10 @@ mod tests {
         let three_quarters_in = transition.progress();
 
         transition.retarget(1);
-        assert_eq!(transition.panes(), 1);
+        // The field directly, since `panes()` went with the telemetry pane — the
+        // property under test is that retargeting *moves the target* while
+        // resuming the motion, and that is what `to` is.
+        assert_eq!(transition.to, 1);
         assert!(
             transition.progress() < three_quarters_in,
             "reversing restarted the motion instead of resuming it",

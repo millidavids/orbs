@@ -82,6 +82,8 @@ fn execute(intent: &Intent, world: &mut World) {
         Verb::Research => super::research::research(intent, world),
         Verb::Follow => super::research::follow(intent, world),
         Verb::Wander => super::wander::wander(world),
+        Verb::Probe => super::scry::probe(world),
+        Verb::Dial => super::scry::dial(intent, world),
         Verb::Move => pipeline::carry(intent, world),
         Verb::Wield => pipeline::wield(intent, world),
         // §10.1's per-instrument verbs. One arm, because the instrument is found
@@ -180,6 +182,12 @@ pub const fn is_live(verb: Verb) -> bool {
             // name the way forward, so neither is the dead end this list
             // exists to keep off the scaffold.
             | Verb::Wander
+            // The lens's two. Each refuses in voice where it cannot work — no
+            // ward open, a socket that is not one, a sigil that is not one —
+            // and every refusal names the way forward, which is the test this
+            // list applies rather than "does it always succeed".
+            | Verb::Probe
+            | Verb::Dial
     )
 }
 

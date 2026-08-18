@@ -187,6 +187,24 @@ with = "grey"
 [haste]
 tint = "green"
 
+# The three another wizard knew (§10, `lens/`), each **the colour of the leaving
+# it was distilled from** — which is not a flourish but the rule
+# `the_flasks_products_are_the_colour_of_what_makes_them` already enforces on
+# every alembic product. It is also what makes them read as *found* rather than
+# invented: a potion the colour of ash is one somebody worked out from what was
+# on the floor.
+#
+# `potash` is grey, `sediment` and `dregs` are brown. A first pass gave these
+# three prettier colours and the lint caught all of them.
+[mending]
+tint = "grey"
+
+[dreaming]
+tint = "brown"
+
+[vigour]
+tint = "brown"
+
 # The two ported essences, each the colour of the draught it came from.
 [insight]
 tint = "green"

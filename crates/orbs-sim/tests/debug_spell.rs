@@ -60,6 +60,32 @@ fn the_word_does_nothing_in_a_release_build() {
     );
 }
 
+#[cfg(not(debug_assertions))]
+#[test]
+fn a_release_shelf_holds_only_the_shipped_spells() {
+    // **The other half of shelving them**, and the half that matters to a player.
+    // `raise_grimoire` puts the dev ladders on the shelf under
+    // `cfg(debug_assertions)`; if that guard were ever dropped, a release build
+    // would ship a working maze solver, a working ward solver and the answer to
+    // the archive's central puzzle — which §12 wants the player to find, and
+    // `dev_spells.toml`'s own header says is the whole reason it is not
+    // `spells.toml`.
+    //
+    // Named rather than derived: `execute::dev_spells` does not exist in this
+    // build, so there is nothing to iterate. That absence is the point.
+    let sim = archive();
+    for name in ["threading", "breaking", "assembling"] {
+        assert!(
+            sim.spell(name).is_none(),
+            "a release build shipped the dev spell {name}",
+        );
+    }
+    assert!(
+        sim.spell("first_light").is_some(),
+        "the shipped spell is missing, so this asserts nothing",
+    );
+}
+
 // ---------------------------------------------------------------------------
 // One input, one submission
 // ---------------------------------------------------------------------------
@@ -157,25 +183,36 @@ fn a_session_that_used_it_replays_to_the_same_world() {
 
 #[cfg(debug_assertions)]
 #[test]
-fn the_dev_spells_never_reach_the_grimoire_on_their_own() {
-    // **The one that would go unnoticed.** If the dev book were merged into the
-    // `Spells` resource, these would be spawned into `/grimoire` at construction
-    // — on the shelf, in `peruse`, in the scene's nouns and in the boot report —
-    // in the one build where a tester is trying to see what the game does.
+fn the_dev_spells_are_on_the_shelf_from_the_first_tick() {
+    // **Reversed deliberately.** This used to assert the opposite — that a dev
+    // ladder reached the grimoire only when `debug_spell` wrote it — on the
+    // argument that a tester looking at what the game does should not see
+    // scaffolding. In practice the first thing a tester does with one is cast it,
+    // and making them type `debug_spell breaking` first was a step that taught
+    // nothing. They are shelved at construction now, in a debug build only.
+    //
+    // A shelved spell carries its **own** `Domain` from the file, which is why
+    // this can skip the room check `debug_spell` needs: `scribe::write` homes a
+    // *new* spell to where the player stands, and nothing here is new.
+    // **`Sim::spell`, not the transcript.** The version of this that asserted the
+    // opposite read `said(&sim)` — the sentences said so far — which contains no
+    // spell name either way, so it passed against a grimoire holding every ladder.
+    // An absence test that cannot see the thing it forbids is not a test.
     let sim = archive();
-    let shelved = said(&sim);
-    for (name, _) in orbs_sim::execute::dev_spells().iter() {
-        assert!(
-            !shelved.contains(name),
-            "{name} was on the shelf before anybody asked for it",
-        );
+    for (name, spell) in orbs_sim::execute::dev_spells().iter() {
+        let held = sim
+            .spell(name)
+            .unwrap_or_else(|| panic!("{name} is not on the shelf"));
+        assert_eq!(held, spell.lines, "{name} was shelved with the wrong lines");
     }
+
+    // Readable and castable without `debug_spell` having run at all.
     let mut sim = archive();
     sim.submit("peruse threading.spell");
     sim.step();
     assert!(
-        !said(&sim).contains("repeat"),
-        "a dev spell was readable without being written: {}",
+        said(&sim).contains("repeat"),
+        "a shelved dev spell could not be read: {}",
         said(&sim),
     );
 }
