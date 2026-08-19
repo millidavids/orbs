@@ -7,12 +7,9 @@ use bevy::prelude::*;
 use bevy::window::WindowResized;
 
 use super::input::{SubmittedMessage, type_into_line};
-use super::line::Line;
-use super::linear::Linear;
-use super::reveal::Reveal;
-use super::screen::{Screen, cycle_mode, spawn_camera, track_window};
-use super::transition::PaneTransition;
+use super::window::{cycle_mode, spawn_camera, track_window};
 use crate::sim::Tower;
+use orbs_shell::{Line, Linear, PaneTransition, Reveal, Screen};
 
 /// Ordering within `Update`, so the frame that draws a keystroke is the frame
 /// that received it.
@@ -44,11 +41,11 @@ impl Plugin for ShellPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Screen>()
             .init_resource::<Line>()
-            .init_resource::<super::input::Offered>()
+            .init_resource::<orbs_shell::Offered>()
             .init_resource::<super::input::HeldOver>()
-            .init_resource::<super::input::Ghost>()
-            .init_resource::<super::input::Panel>()
-            .init_resource::<super::input::Scroll>()
+            .init_resource::<orbs_shell::Ghost>()
+            .init_resource::<orbs_shell::Panel>()
+            .init_resource::<orbs_shell::Scroll>()
             .init_resource::<super::input::Quiet>()
             .init_resource::<Linear>()
             .init_resource::<PaneTransition>()
@@ -171,7 +168,7 @@ impl Plugin for ShellPlugin {
                     // §14 makes the linear stream a first-class view of the
                     // frame. Nothing had ever shown it, which is how a stream
                     // that is subtly wrong stays that way.
-                    super::linear::toggle.run_if(input_just_pressed(KeyCode::F5)),
+                    orbs_shell::toggle_linear.run_if(input_just_pressed(KeyCode::F5)),
                     // §6 requires the parser explain itself, and the Phase 0
                     // gate acts on failure *clustering*. Every reading is kept
                     // as it happens; this is what gets it out to a spreadsheet.
@@ -182,6 +179,10 @@ impl Plugin for ShellPlugin {
                     // is "clear the line" muscle memory, and quitting the game
                     // mid-sentence is not a recoverable surprise.
                     quit.run_if(input_just_pressed(KeyCode::F10)),
+                    // **Gated on the world having moved**, like the other four
+                    // handshakes: `submit` resolves the verb and marks `Tower`
+                    // changed, so this runs on that frame and no other.
+                    quit_requested.run_if(resource_changed::<crate::sim::Tower>),
                     // **PageUp/PageDown, not the arrows.** Up and Down walk the
                     // command history (§19) and must keep doing so — a shell
                     // where Up sometimes scrolls and sometimes recalls is a shell
@@ -228,7 +229,7 @@ impl Plugin for ShellPlugin {
                     // `was_lit` and `was_charged` *true* precisely so a tower
                     // that opens with a fire already going does not flare on the
                     // first frame it is looked at.
-                    super::bench::advance
+                    super::motion::advance
                         .in_set(ShellSystems::Drive)
                         .after(super::input::refresh_panel),
                 )
@@ -315,7 +316,7 @@ const PANES: u8 = 1;
 fn submit(
     mut lines: MessageReader<SubmittedMessage>,
     mut tower: ResMut<Tower>,
-    mut scroll: ResMut<super::input::Scroll>,
+    mut scroll: ResMut<orbs_shell::Scroll>,
 ) {
     for submitted in lines.read() {
         tower.submit(&submitted.line);
@@ -327,52 +328,15 @@ fn submit(
     }
 }
 
-/// A **conservative** row budget for the transcript body.
-///
-/// The pane's own body is shorter than the grid once its border, the prompt, a
-/// Tab listing and §10.1's instrument panel are taken out, and `paint` is the
-/// only thing that knows exactly. Under-estimating is the safe direction: a page
-/// that moves slightly less than a screenful overlaps the last one by a line or
-/// two, which is what a reader wants anyway.
-fn page_rows(screen: &Screen) -> u16 {
-    screen.grid.rows.saturating_sub(6).max(1)
-}
+// `page_rows` and `page_step` — how many *records* a screenful of transcript
+// holds — moved to `orbs_shell::page_step`. It is not a keyboard question: it is
+// what the transcript would fit, measured with the same `RecordView` the
+// transcript is drawn with, and a second measure of the same stream would page
+// by a different amount than it showed.
 
-/// How many records the transcript is currently showing.
-///
-/// **Measured, not assumed.** [`Scroll`](super::input::Scroll) moves in records,
-/// and the step used to be the pane's *row* count on the reasoning that a record
-/// costs at least one row, so a page can never hold more records than rows. That
-/// bound runs the other way: "at least a row each" caps records-per-page *above*,
-/// so stepping by the row count moves further than a screenful and `PgUp` jumped
-/// clean over the lines in between — drawn at neither end of the jump. It is now
-/// wrong by more than it was, because `RecordView` opens every command with a
-/// blank row and wraps a long line over several.
-///
-/// So this runs the same monotone search `prompt::session` draws with: the
-/// smallest skip whose measured height fits. The step is then the page the player
-/// is actually looking at, and paging can only ever overlap.
+/// The shared measurement, with this frontend's `Tower` unwrapped.
 fn page_step(screen: &Screen, tower: &Tower, back: usize) -> usize {
-    let sim = tower.sim();
-    let records = sim.scrollback().records();
-    let visible = records.drawn_len().saturating_sub(back);
-    if visible == 0 {
-        return 1;
-    }
-    let rows = page_rows(screen);
-    let cols = screen.grid.cols.saturating_sub(2);
-    let prompt = sim.prompt();
-    let view = orbs_render::RecordView::prompt(&prompt);
-    let (mut narrowest, mut widest) = (0, visible);
-    while narrowest < widest {
-        let candidate = narrowest + (widest - narrowest) / 2;
-        if view.height(cols, records.drawn().take(visible).skip(candidate)) <= rows {
-            widest = candidate;
-        } else {
-            narrowest = candidate + 1;
-        }
-    }
-    (visible - narrowest).max(1)
+    orbs_shell::page_step(screen, tower.sim(), back)
 }
 
 /// Hand the transcript the keyboard when `unfurl` has asked for it.
@@ -386,7 +350,7 @@ fn page_step(screen: &Screen, tower: &Tower, back: usize) -> usize {
 /// find out whether the word did anything.
 fn start_reading(
     mut tower: ResMut<Tower>,
-    mut scroll: ResMut<super::input::Scroll>,
+    mut scroll: ResMut<orbs_shell::Scroll>,
     screen: Res<Screen>,
 ) {
     // Peeked first — see `editing::open_requested` for why reaching for `&mut`
@@ -407,23 +371,19 @@ fn start_reading(
 /// step out of the one you are in. It deliberately does *not* scroll back to the
 /// newest output — a player who read back and pressed Escape wants to type, not
 /// to lose their place, and `PgDn` is still there to walk forward.
-fn stop_reading(mut scroll: ResMut<super::input::Scroll>) {
+fn stop_reading(mut scroll: ResMut<orbs_shell::Scroll>) {
     scroll.stop_reading();
 }
 
 /// Look further back through the transcript.
-fn scroll_back(mut scroll: ResMut<super::input::Scroll>, screen: Res<Screen>, tower: Res<Tower>) {
+fn scroll_back(mut scroll: ResMut<orbs_shell::Scroll>, screen: Res<Screen>, tower: Res<Tower>) {
     let total = tower.sim().scrollback().records().drawn_len();
     let step = page_step(&screen, &tower, scroll.back());
     scroll.page(step, true, total);
 }
 
 /// Come back toward the newest output.
-fn scroll_forward(
-    mut scroll: ResMut<super::input::Scroll>,
-    screen: Res<Screen>,
-    tower: Res<Tower>,
-) {
+fn scroll_forward(mut scroll: ResMut<orbs_shell::Scroll>, screen: Res<Screen>, tower: Res<Tower>) {
     let step = page_step(&screen, &tower, scroll.back());
     scroll.page(step, false, 0);
 }
@@ -433,22 +393,12 @@ fn scroll_forward(
 /// TSV beside the binary, per §19: no dependency, survives `grep`, pastes into a
 /// spreadsheet. One row per *candidate*, not per input, because the gate needs
 /// to know whether a miss was the verb or the argument.
-const TRACE_PATH: &str = "orbs-parse.tsv";
+use orbs_shell::TRACE_PATH;
 
 /// Write the parse trace to disk.
 fn export_trace(tower: Res<Tower>) {
-    let log = tower.sim().parse_log();
-    match std::fs::write(TRACE_PATH, log.to_tsv()) {
-        Ok(()) => info!(
-            "parse trace -> {TRACE_PATH}: {} inputs, {} resolved, {} forced, {} ambiguous, \
-             {} incomplete, {} unresolved",
-            log.records().len(),
-            log.resolved(),
-            log.forced(),
-            log.ambiguous(),
-            log.incomplete(),
-            log.unresolved(),
-        ),
+    match orbs_shell::export_trace(tower.sim()) {
+        Ok(summary) => info!("{summary}"),
         // A failed export must not take the session down with it — the tester
         // whose run it was recording is still playing.
         Err(error) => warn!("parse trace -> {TRACE_PATH} failed: {error}"),
@@ -466,9 +416,35 @@ fn cycle_register(mut tower: ResMut<Tower>) {
     info!("register: {:?}", tower.cycle_register());
 }
 
-/// Leave the orb.
+/// Leave the orb, because `F10` was pressed.
 fn quit(mut exit: MessageWriter<AppExit>) {
     exit.write(AppExit::Success);
+}
+
+/// Leave the orb, because the word was typed.
+///
+/// The fifth take-once handshake, beside `scribe`, `unfurl`, `weave` and
+/// `wander`: the sim records the decision and the frontend decides what leaving
+/// *means*. Here it is an `AppExit`; in the terminal build it is raw mode being
+/// put back.
+fn quit_requested(mut tower: ResMut<Tower>, mut exit: MessageWriter<AppExit>) {
+    // **Peeked before it is taken**, exactly as the other four handshakes are.
+    // `quitting` needs `&mut`, and reaching through `ResMut` for it stamps
+    // `Tower`'s change tick — and this system's own run condition is
+    // `resource_changed::<Tower>`, so from the first frame Tower changed it
+    // re-armed itself for ever and dragged `refresh_panel`, `suggest` and the
+    // four `open_requested` systems back to frame rate with it. `Panel::refresh`
+    // calls `Sim::briefs`, which walks every built room and builds two
+    // `QueryState`s per call.
+    //
+    // `editing::open_requested`'s comment records this happening once already.
+    // The peek that stops it was added with `quit` and then called by nothing.
+    if !tower.is_quitting() {
+        return;
+    }
+    if tower.quitting() {
+        exit.write(AppExit::Success);
+    }
 }
 
 /// Typing, end to end, with no window and no GPU.
@@ -590,9 +566,7 @@ mod tests {
         // way out and nothing on screen to type into.
         let mut app = app();
         assert!(
-            !app.world()
-                .resource::<super::super::input::Scroll>()
-                .is_reading(),
+            !app.world().resource::<orbs_shell::Scroll>().is_reading(),
             "the transcript had the keyboard before anyone asked",
         );
 
@@ -603,17 +577,13 @@ mod tests {
         app.world_mut().resource_mut::<Tower>().step();
         app.update();
         assert!(
-            app.world()
-                .resource::<super::super::input::Scroll>()
-                .is_reading(),
+            app.world().resource::<orbs_shell::Scroll>().is_reading(),
             "`unfurl` did not hand over the keyboard",
         );
 
         tap(&mut app, KeyCode::Escape, Key::Escape);
         assert!(
-            !app.world()
-                .resource::<super::super::input::Scroll>()
-                .is_reading(),
+            !app.world().resource::<orbs_shell::Scroll>().is_reading(),
             "escape did not return to the prompt",
         );
     }
@@ -629,9 +599,7 @@ mod tests {
         // works, and the run conditions were where this could go wrong.
         let mut app = app();
         app.world_mut().resource_mut::<Line>().clear();
-        app.world_mut()
-            .resource_mut::<super::super::input::Scroll>()
-            .read();
+        app.world_mut().resource_mut::<orbs_shell::Scroll>().read();
 
         type_only(&mut app, "survey");
         assert_eq!(
@@ -642,7 +610,7 @@ mod tests {
 
         // ...and it comes back the moment reading ends.
         app.world_mut()
-            .resource_mut::<super::super::input::Scroll>()
+            .resource_mut::<orbs_shell::Scroll>()
             .stop_reading();
         type_only(&mut app, "survey");
         assert_eq!(
@@ -907,10 +875,7 @@ mod tests {
         press(&mut app, Key::Tab, Some("\t"));
         app.update();
 
-        let offered = &app
-            .world()
-            .resource::<super::super::input::Offered>()
-            .options;
+        let offered = &app.world().resource::<orbs_shell::Offered>().options;
         assert!(offered.len() > 1, "expected a list, got {offered:?}");
         assert!(offered.iter().any(|name| name == "alembic"), "{offered:?}");
     }
@@ -949,9 +914,7 @@ mod tests {
         }
         // ...and the list says which one the line is holding.
         assert_eq!(
-            app.world()
-                .resource::<super::super::input::Offered>()
-                .current,
+            app.world().resource::<orbs_shell::Offered>().current,
             Some(2),
             "the listing does not mark where the cycle has reached"
         );
@@ -969,9 +932,7 @@ mod tests {
 
         type_only(&mut app, "a");
         assert_eq!(
-            app.world()
-                .resource::<super::super::input::Offered>()
-                .current,
+            app.world().resource::<orbs_shell::Offered>().current,
             None,
             "the cycle survived a keystroke"
         );

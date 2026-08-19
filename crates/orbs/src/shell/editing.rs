@@ -78,7 +78,7 @@ pub(crate) fn editing(editing: Res<Editing>) -> bool {
 /// So `type_into_line` runs whenever there are keys and decides for itself; the
 /// invariant that exactly one surface consumes a keystroke now lives in one
 /// function rather than in a pair of predicates that had to stay complements.
-pub(crate) fn reading(scroll: Res<super::input::Scroll>) -> bool {
+pub(crate) fn reading(scroll: Res<orbs_shell::Scroll>) -> bool {
     scroll.is_reading()
 }
 

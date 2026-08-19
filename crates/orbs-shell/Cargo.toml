@@ -1,0 +1,28 @@
+[package]
+name = "orbs-shell"
+description = "O.R.B.S. — the shell every frontend shares: painters, surfaces, and the headless dump."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+# **Deliberately engine-free.** This crate decides what a screen *is* — where the
+# panel goes, what the rail says, what the editor does with a keystroke — and
+# hands back a `Frame`. Drawing that Frame is a frontend's, and there are two:
+# `orbs` puts it on a GPU behind a CRT, `orbs-tui` writes it to a terminal.
+#
+# `bevy_ecs` is here and `bevy` is not, which is architectural rule 1 as written:
+# the crate with the strictest headless requirement in the workspace already
+# takes exactly this dependency. It buys the `Resource` derive on the nine types
+# the Bevy build keeps between frames, costs `orbs-tui` nothing — `bevy_ecs` is
+# already in its tree via `orbs-sim` — and adds no renderer, no window and no GPU.
+# `tests/boundaries.rs` holds the line.
+[dependencies]
+orbs-sim = { path = "../orbs-sim" }
+orbs-render = { path = "../orbs-render" }
+bevy_ecs.workspace = true
+tracing.workspace = true
+
+[lints]
+workspace = true

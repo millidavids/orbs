@@ -3,7 +3,7 @@
 use bevy::prelude::*;
 
 use super::drive::{advance, announce, booting};
-use super::stage::Boot;
+use orbs_shell::Boot;
 
 /// The orb waking up (DESIGN.md §4).
 pub struct BootPlugin;

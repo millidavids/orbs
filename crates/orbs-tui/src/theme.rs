@@ -1,0 +1,436 @@
+//! Where a [`Style`] finally becomes a colour, on this side of rule 2.
+//!
+//! `orbs-render` decides *what* appears and never emits a hue; everything here
+//! decides *how* it is drawn, and nothing here may add information the Frame did
+//! not carry. It is the exact counterpart of the Bevy build's `render::palette`,
+//! and it answers the same questions with sixteen colours instead of a solved
+//! four-theme palette.
+//!
+//! # Indexed ANSI 0–15, inheriting the user's terminal theme
+//!
+//! DESIGN.md §19 settles this and it is not re-litigated here: *"Colour: indexed
+//! ANSI 0–15; inherits the user's terminal theme. Phosphor themes are
+//! Bevy-only."* So there is no palette table to tune and no contrast to verify —
+//! the numbers belong to whoever configured the terminal, and a player who has
+//! chosen a readable scheme gets a readable game.
+//!
+//! What that costs is the guarantee §14 asks for. The Bevy palette is *solved*:
+//! every accent pair is ≥1.25:1 apart in greyscale luminance, asserted by a
+//! test. Sixteen colours we do not own cannot be held to that, which is why the
+//! design leans on the other half of the rule instead — **the glyph carries the
+//! identity and the colour is a hint**. A meter's value is read off a `█`/`▓`
+//! boundary against `░`, the ward's six sigils are six shapes, and every `Role`
+//! reaches the linear stream beside its text.
+//!
+//! # Three accepted degradations
+//!
+//! - **`Presentation` is ignored.** Eldritch and Tampered pick a *face* in the
+//!   glyph atlas, and the face here is whatever the user's terminal is set to.
+//!   §19 allows this by name: `verify` is the authoritative sabotage detector on
+//!   every surface, and the visual tell is a speed bonus for players reading
+//!   inside the Bevy orb.
+//! - **A mixed [`Wash`] takes its first tint.** The flask's `green+bone` band is
+//!   the one region that is two colours becoming one, and sixteen indices cannot
+//!   average. The band is already distinguishable by *position* — it grows from
+//!   the fill end while both ingredients shrink — which is the glyph-carries-
+//!   identity rule doing its job.
+//! - **No CRT, no phosphor, no blinking caret.** The terminal draws its own
+//!   cursor, which is better: it is the one a screen reader tracks.
+
+use crossterm::style::Color;
+use orbs_render::{Density, Depiction, Heat, Intensity, Roil, Role, Style, Tint, Wash};
+
+/// A resolved pen: what colour, and how heavy.
+///
+/// Weight is separate from colour because the base hue is the *terminal's*
+/// foreground and §4 gives ordinary text only one axis to vary on — intensity.
+/// Reaching for a grey would be picking a colour the user did not choose.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Ink {
+    /// The foreground, or `None` for the terminal's own.
+    pub(crate) colour: Option<Color>,
+    /// Dim, plain, or bold.
+    pub(crate) weight: Weight,
+}
+
+/// The three steps of [`Intensity`], as a terminal can draw them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum Weight {
+    /// SGR 2.
+    Dim,
+    /// Neither attribute.
+    #[default]
+    Plain,
+    /// SGR 1.
+    Bold,
+}
+
+impl Ink {
+    /// The terminal's own foreground, unweighted.
+    pub(crate) const PLAIN: Self = Self {
+        colour: None,
+        weight: Weight::Plain,
+    };
+
+    const fn coloured(colour: Color) -> Self {
+        Self {
+            colour: Some(colour),
+            weight: Weight::Plain,
+        }
+    }
+}
+
+impl From<Intensity> for Weight {
+    fn from(intensity: Intensity) -> Self {
+        match intensity {
+            Intensity::Dim => Self::Dim,
+            Intensity::Normal => Self::Plain,
+            Intensity::Bright => Self::Bold,
+        }
+    }
+}
+
+/// Resolve one cell.
+///
+/// The order mirrors the Bevy build's `Phosphor::resolve_tinted` exactly, and
+/// has to: a tint that declines there and resolves here would mean the two
+/// frontends disagree about what a fouled instrument looks like.
+///
+/// 1. A material's [`Wash`], if there is one and it does not decline.
+/// 2. Otherwise the cell's [`Depiction`] — fire, liquid, sediment.
+/// 3. Otherwise the [`Role`], varied by [`Intensity`] only when it is `Normal`.
+pub(crate) fn resolve(style: Style, wash: Option<Wash>) -> Ink {
+    // **`depicted()`, never `style.depiction`.** The accessor yields `None` on
+    // any accented cell, so a `Role::Danger` cell can never render in flame
+    // colours. `orbs-render`'s own doc names this crate as the place it would be
+    // got wrong, because there is one call site per frontend in different crates.
+    let depiction = style.depicted();
+
+    if let Some(wash) = wash
+        && let Some(ink) = tinted(wash, style.role, style.intensity, depiction)
+    {
+        return ink;
+    }
+    if let Some(ink) = depicted(depiction) {
+        return ink;
+    }
+    accent(style.role, style.intensity)
+}
+
+/// A material's colour family, or `None` if the tint declines.
+///
+/// **All three declines are reproduced**, and each is load-bearing:
+///
+/// - An accent outranks a tint. *"An accent is a signal; a tint is a hint. The
+///   signal wins."* Without this a fouled instrument's red label goes brown.
+/// - Fire is never tinted. The athanor burns orange on every tube by decision
+///   (§19), so a green reagent in a lit hearth still burns orange.
+/// - Sediment declines, so waste always looks like waste.
+fn tinted(wash: Wash, role: Role, intensity: Intensity, depiction: Depiction) -> Option<Ink> {
+    if role != Role::Normal {
+        return None;
+    }
+    if depiction.is_flame() || depiction.is_spark() || depiction.is_smoke() {
+        return None;
+    }
+    if matches!(depiction, Depiction::Sediment) {
+        return None;
+    }
+
+    // A mixture takes its first tint — see the module note. `with` is `Some`
+    // only for the flask's mid-combination band, which is already told apart by
+    // where it is rather than by what colour it is.
+    let colour = hue(wash.tint);
+    let weight = match depiction.roil() {
+        Some(Roil::Still) => Weight::Dim,
+        Some(Roil::Stirred) => Weight::Plain,
+        Some(Roil::Rolling) => Weight::Bold,
+        None => intensity.into(),
+    };
+    Some(Ink {
+        colour: Some(colour),
+        weight,
+    })
+}
+
+/// The eight material families, as the eight ANSI hues.
+///
+/// `orbs-render`'s own `Tint` documentation predicted this: *"`orbs-tui` will
+/// resolve the same eight names to ANSI indices and be right."* The closed set
+/// is what makes it right — eight names, eight hues, no fallback and no default,
+/// so a tint added to the enum breaks this build on purpose.
+const fn hue(tint: Tint) -> Color {
+    match tint {
+        Tint::Green => Color::Green,
+        Tint::Brown => Color::DarkYellow,
+        Tint::Grey => Color::Grey,
+        Tint::Gold => Color::Yellow,
+        Tint::Violet => Color::Magenta,
+        Tint::Red => Color::Red,
+        Tint::Blue => Color::Blue,
+        Tint::Bone => Color::White,
+    }
+}
+
+/// What a cell is a *picture* of, if it is a picture of anything.
+///
+/// Carries no meaning by design (§19's fourth channel), which is exactly why it
+/// is allowed to be colour alone: a channel that says nothing has nothing to
+/// withhold from a listener.
+///
+/// # Four steps out of two hues, using the weight axis
+///
+/// **The first version of this ran the fire from `DarkRed` to `White`, and it
+/// was wrong in the one way §19 names**: *"the athanor burns orange on every
+/// tube by decision."* `ember.rs`'s ramp is `#CC7024 → #EB9429 → #FFB838 →
+/// #FFE375` — orange to pale yellow, with no red at the cool end and nothing
+/// white at the hot one. Sixteen indices hold exactly two colours in that family,
+/// `DarkYellow` and `Yellow`, which is two steps for four heats.
+///
+/// So the missing steps come from [`Weight`], which was already carrying
+/// [`Intensity`] for ordinary text and had nothing to do here. Dim-dark, dark,
+/// bright, bold-bright: four steps, monotonic in brightness, and every one of
+/// them still a fire.
+///
+/// The liquid ramp had the same fault at its top — `Rolling` was `White` — and
+/// takes the same fix, so a rolling bath is emphatically teal rather than
+/// briefly colourless.
+const fn depicted(depiction: Depiction) -> Option<Ink> {
+    let (colour, weight) = match depiction {
+        Depiction::None => return None,
+        // Flame and spark share a ramp, as they do on the other side.
+        Depiction::FlameEmber | Depiction::SparkEmber => (Color::DarkYellow, Weight::Dim),
+        Depiction::FlameBody | Depiction::SparkBody => (Color::DarkYellow, Weight::Plain),
+        Depiction::FlameBlaze | Depiction::SparkBlaze => (Color::Yellow, Weight::Plain),
+        Depiction::FlameCore | Depiction::SparkCore => (Color::Yellow, Weight::Bold),
+        Depiction::SmokeThin => (Color::DarkGrey, Weight::Dim),
+        Depiction::SmokeThick => (Color::Grey, Weight::Plain),
+        // Teal, which is the fire's opposite.
+        Depiction::LiquidStill => (Color::DarkCyan, Weight::Dim),
+        Depiction::LiquidStirred => (Color::Cyan, Weight::Plain),
+        Depiction::LiquidRolling => (Color::Cyan, Weight::Bold),
+        // Waste declines the tint so that waste always looks like waste, and it
+        // must not be mistakable for smoke — hence grey rather than a dark grey.
+        Depiction::Sediment => (Color::Grey, Weight::Dim),
+    };
+    Some(Ink {
+        colour: Some(colour),
+        weight,
+    })
+}
+
+/// Ordinary text, or one of the three things that mean something.
+///
+/// **Intensity is ignored on an accent**, matching the Bevy side exactly: an
+/// accent is already a signal and dimming it would dilute the one channel §14
+/// reserves for meaning.
+fn accent(role: Role, intensity: Intensity) -> Ink {
+    match role {
+        Role::Normal => Ink {
+            colour: None,
+            weight: intensity.into(),
+        },
+        Role::Danger => Ink::coloured(Color::Red),
+        Role::Cost => Ink::coloured(Color::Blue),
+        Role::Success => Ink::coloured(Color::Green),
+    }
+}
+
+/// Smoke has two densities and both are grey; this keeps the mapping honest.
+const _: () = {
+    assert!(matches!(Density::Thin, Density::Thin));
+    assert!(matches!(Heat::Ember, Heat::Ember));
+};
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_tint_resolves_to_its_own_hue() {
+        // Eight names, eight distinct indices. Two tints sharing a colour would
+        // make two materials indistinguishable in a bar that is all one glyph.
+        let mut seen = Vec::new();
+        for tint in Tint::ALL {
+            let colour = hue(tint);
+            assert!(
+                !seen.contains(&colour),
+                "{} shares a colour with something already mapped",
+                tint.name(),
+            );
+            seen.push(colour);
+        }
+    }
+
+    #[test]
+    fn the_three_accents_are_three_colours() {
+        // §14: colour never carries meaning *alone*, but where it carries any it
+        // must at least separate. Danger reading as Success is the one confusion
+        // this frontend can still make on its own.
+        let danger = accent(Role::Danger, Intensity::Normal);
+        let cost = accent(Role::Cost, Intensity::Normal);
+        let success = accent(Role::Success, Intensity::Normal);
+        assert_ne!(danger, cost);
+        assert_ne!(cost, success);
+        assert_ne!(danger, success);
+    }
+
+    #[test]
+    fn ordinary_text_keeps_the_terminals_own_foreground() {
+        // The base hue is the user's, and intensity is the only axis §4 lets
+        // ordinary text vary on. Picking a grey here would be choosing a colour
+        // the player did not.
+        for intensity in [Intensity::Dim, Intensity::Normal, Intensity::Bright] {
+            let ink = accent(Role::Normal, intensity);
+            assert_eq!(ink.colour, None, "ordinary text took a colour");
+        }
+        assert_eq!(accent(Role::Normal, Intensity::Dim).weight, Weight::Dim);
+        assert_eq!(accent(Role::Normal, Intensity::Bright).weight, Weight::Bold);
+    }
+
+    #[test]
+    fn an_accent_ignores_intensity() {
+        // The Bevy side asserts the same thing about its palette. Two frontends
+        // disagreeing about whether a dim breach is dimmer would be rule 2
+        // broken in the direction nobody checks.
+        for role in [Role::Danger, Role::Cost, Role::Success] {
+            let dim = accent(role, Intensity::Dim);
+            let bright = accent(role, Intensity::Bright);
+            assert_eq!(dim, bright, "{role:?} was diluted by intensity");
+        }
+    }
+
+    #[test]
+    fn a_tint_declines_to_an_accent() {
+        // "An accent is a signal; a tint is a hint. The signal wins."
+        let wash = Wash::plain(Tint::Green);
+        for role in [Role::Danger, Role::Cost, Role::Success] {
+            assert!(
+                tinted(wash, role, Intensity::Normal, Depiction::None).is_none(),
+                "{role:?} was overpainted by a material's colour",
+            );
+        }
+        assert!(tinted(wash, Role::Normal, Intensity::Normal, Depiction::None).is_some());
+    }
+
+    #[test]
+    fn a_tint_declines_to_fire_and_to_waste() {
+        let wash = Wash::plain(Tint::Green);
+        for depiction in Depiction::ALL {
+            let declines = tinted(wash, Role::Normal, Intensity::Normal, depiction).is_none();
+            let should = depiction.is_flame()
+                || depiction.is_spark()
+                || depiction.is_smoke()
+                || matches!(depiction, Depiction::Sediment);
+            assert_eq!(
+                declines, should,
+                "{depiction:?} disagreed with the Bevy build about declining",
+            );
+        }
+    }
+
+    #[test]
+    fn a_mixture_takes_its_first_tint() {
+        // The accepted degradation, stated so it cannot drift into a bug report.
+        let mixed = Wash::mixing(Tint::Green, Tint::Bone);
+        let plain = Wash::plain(Tint::Green);
+        assert_eq!(
+            tinted(mixed, Role::Normal, Intensity::Normal, Depiction::None),
+            tinted(plain, Role::Normal, Intensity::Normal, Depiction::None),
+        );
+    }
+
+    /// How bright a resolved ink reads, for comparing steps of one ramp.
+    fn brightness(ink: Ink) -> u8 {
+        let base = match ink.colour {
+            Some(Color::DarkYellow | Color::DarkCyan | Color::DarkGrey) => 0,
+            Some(Color::Yellow | Color::Cyan | Color::Grey) => 2,
+            _ => 4,
+        };
+        base + match ink.weight {
+            Weight::Dim => 0,
+            Weight::Plain => 1,
+            Weight::Bold => 2,
+        }
+    }
+
+    #[test]
+    fn the_fire_is_orange_all_the_way_up() {
+        // **§19: *"the athanor burns orange on every tube by decision."*** The
+        // first version of this ramp ran `DarkRed` → `White`, so the cool end
+        // read as red and the hot end as colourless — a fire that is neither
+        // orange nor, at the top, a colour at all. `ember.rs` is
+        // `#CC7024 → #FFE375` throughout.
+        for heat in [Heat::Ember, Heat::Flame, Heat::Blaze, Heat::Core] {
+            for depiction in [Depiction::flame(heat), Depiction::spark(heat)] {
+                let ink = depicted(depiction).expect("fire is a picture of something");
+                assert!(
+                    matches!(ink.colour, Some(Color::DarkYellow | Color::Yellow)),
+                    "{depiction:?} drew {:?}, which is not a fire",
+                    ink.colour,
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn every_ramp_climbs() {
+        // A meter is read off *where the colour steps*, so a ramp that is not
+        // monotonic is a meter that cannot be read. Four heats out of two hues
+        // only works because `Weight` supplies the steps between them.
+        let fire: Vec<_> = [Heat::Ember, Heat::Flame, Heat::Blaze, Heat::Core]
+            .map(|heat| brightness(depicted(Depiction::flame(heat)).expect("fire")))
+            .to_vec();
+        assert!(
+            fire.windows(2).all(|pair| pair[0] < pair[1]),
+            "the flame ramp does not climb: {fire:?}",
+        );
+
+        let liquid: Vec<_> = [Roil::Still, Roil::Stirred, Roil::Rolling]
+            .map(|roil| brightness(depicted(Depiction::liquid(roil)).expect("liquid")))
+            .to_vec();
+        assert!(
+            liquid.windows(2).all(|pair| pair[0] < pair[1]),
+            "the liquid ramp does not climb: {liquid:?}",
+        );
+
+        let smoke: Vec<_> = [Density::Thin, Density::Thick]
+            .map(|density| brightness(depicted(Depiction::smoke(density)).expect("smoke")))
+            .to_vec();
+        assert!(
+            smoke[0] < smoke[1],
+            "the smoke ramp does not climb: {smoke:?}"
+        );
+    }
+
+    #[test]
+    fn the_bath_is_teal_and_waste_is_not() {
+        // The fire's opposite stays a colour, and waste stays tellable from the
+        // smoke it sits under — `Sediment` and `SmokeThin` were both dark grey.
+        for roil in [Roil::Still, Roil::Stirred, Roil::Rolling] {
+            let ink = depicted(Depiction::liquid(roil)).expect("liquid");
+            assert!(
+                matches!(ink.colour, Some(Color::DarkCyan | Color::Cyan)),
+                "{roil:?} drew {:?}, which is not the bath",
+                ink.colour,
+            );
+        }
+        assert_ne!(
+            depicted(Depiction::Sediment),
+            depicted(Depiction::smoke(Density::Thin)),
+            "waste and thin smoke resolved identically",
+        );
+    }
+
+    #[test]
+    fn a_role_never_reads_its_depiction_field_directly() {
+        // The trap `orbs-render` names this crate in. An accented cell that also
+        // carries a depiction must resolve as the accent, which only happens if
+        // `resolve` went through `depicted()`.
+        let style = Style::DANGER.with_depiction(Depiction::FlameCore);
+        assert_eq!(
+            resolve(style, None),
+            accent(Role::Danger, Intensity::Normal)
+        );
+    }
+}

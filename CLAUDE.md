@@ -56,10 +56,25 @@ crates/
 │                   — ZERO Bevy dependency, headless, fully testable
 ├── orbs-render/    Frame / cell-buffer, layout, semantic styling
 │                   — consumed by every frontend, no backend deps
+├── orbs-shell/     the shell both frontends share: painters, surfaces, the dump
+│                   — orbs-sim + orbs-render + bevy_ecs; never `bevy`
 ├── orbs/           Bevy frontend: GPU cell renderer, CRT, audio, Steam
 ├── orbs-tui/       terminal frontend (second-class, cuttable)
 └── orbs-balance/   CLI harness driving orbs-sim
 ```
+
+**`orbs-shell` decides what a *screen* is; `orbs-render` decides what a *cell*
+is.** Where the instrument panel goes, what the rail says about a room nobody is
+standing in, what the editor does with Backspace — all of it takes a `Sim` and a
+`Screen` and hands back a `Frame`. Both frontends draw that Frame and neither
+decides any of it.
+
+It needs `orbs-sim` **and** `orbs-render`, and neither may depend on the other in
+that direction, so the painters had nowhere else to live. For four phases that
+was fine because there was one frontend; §19 even rests part of its
+editor-ownership argument on *"`orbs-tui` is ten lines with nothing to diverge
+from."* The moment a second frontend is real, the choice is one shell or two that
+disagree.
 
 ## Architectural Rules — do not break these
 
@@ -1477,11 +1492,257 @@ im = Image.open('orbs-screenshot.png')
 im.crop((240,840,700,1080)).resize((1380,720), Image.NEAREST).save('/tmp/corner.png')"
 ```
 
-`ORBS_BOOT` takes `dark`, `frame` or `post` for the dump, and `0` to skip the
-sequence in the running game. Boot happens once per launch and runs for
+**The POST card names what the machine is made of, and each frontend answers for
+itself.** `ORBS_BOOT=post` is halfway through the card, where only the studio has
+typed itself — so the two version lines had no See-it line at all until
+`:<fraction>` was added. The engine line is the one thing on that card that
+differs between the builds, and each holds its own pin to its own manifest with a
+test:
+
+```bash
+ORBS_BOOT=post:1 ORBS_DUMP=1 cargo run -q -p orbs        # ...bevy 0.19.0
+ORBS_BOOT=post:1 cargo run -q -p orbs-tui -- --dump 1    # ...crossterm 0.29
+```
+
+`ORBS_BOOT` takes `dark`, `frame` or `post` for the dump — each with an optional
+`:<fraction>` naming how far through — and `0` to skip the sequence in the
+running game. Boot happens once per launch and runs for
 thirteen seconds, so without the latter every "see it" pass on anything else
 costs that wait. **`0` is the only skip there is** — the keypress skip was
 removed (§19), so a player sits through the whole sequence every time.
+
+### The terminal build — the game, driven and read back
+
+**`ORBS_DUMP` is a still photograph and this is the running game.** A dump builds
+no `App`, advances no clock and presses no keys, so every animated thing, every
+*edge* and every interactive surface needs an environment variable of its own —
+there are **eighteen** of them now. `orbs-tui` needs none: it is the same `Frame`
+through the same painters, with a real clock and a real keyboard, under `tmux`.
+
+```bash
+scripts/tui.sh start                      # 120x45 — `orbs_render::GRID`
+scripts/tui.sh start 177 38               # ...or any size
+scripts/tui.sh type 'attend laboratory' 'kindle charcoal' 'grind sage'
+scripts/tui.sh key Down Down Left         # arrows and named keys — `key F5`
+scripts/tui.sh wait 20                    # let the world run
+scripts/tui.sh see                        # the screen, as text
+scripts/tui.sh ink 158 159                # ...and what colour each cell is
+scripts/tui.sh stop
+```
+
+**`ink` is the one instrument nothing else in the project has.** `ORBS_DUMP`
+prints glyphs and a list of tinted *regions*; the terminal build resolves colour
+somewhere else entirely (`orbs-tui/src/theme.rs`), so a fire drawn in the wrong
+ramp is invisible to every other tool. `see -e` hands back escape sequences
+nobody can read down a column. `ink` walks the SGR state machine and prints, per
+cell, what the terminal was actually told to draw:
+
+```text
+  7  '█':dark-yellow/dim      ← the athanor, at its cool end
+ 30  '█':yellow/bold          ← ...and its core, twenty rows down
+```
+
+**It found a real one on its first use.** The flame ran `dark-red → white`, which
+is red at the cool end and colourless at the hot one, against §19's *"the athanor
+burns orange on every tube by decision"* and `ember.rs`'s `#CC7024 → #FFE375`.
+Sixteen indices hold two colours in that family, so the other two steps come from
+the **weight** axis — dim-dark, dark, bright, bold-bright. `every_ramp_climbs`
+and `the_fire_is_orange_all_the_way_up` hold it now.
+
+...which is `tmux` and nothing else, if you would rather see it:
+
+```bash
+cargo build -p orbs-tui                   # **build first** — `cargo run` prints
+tmux new-session -d -s orbs -x 120 -y 45 \#   its progress into the pane
+  target/debug/orbs-tui
+tmux send-keys -t orbs 'attend laboratory' Enter
+tmux capture-pane -t orbs -p              # `-e` keeps the colour escapes
+tmux kill-session -t orbs
+```
+
+**Resize it while it runs** — that is a screen worth looking at, and it was
+broken until `blit::Screen::resize` learned to wipe. The layout reflows, the rail
+drops into the border title when the columns run short, and below 80×22 the
+"orb needs a larger window" card takes over:
+
+```bash
+for s in 170x45 60x18 140x40 90x24 120x45; do
+  tmux resize-window -t orbs -x "${s%x*}" -y "${s#*x}"; sleep 1.6
+  tmux capture-pane -t orbs -p | head -2
+done
+```
+
+**Pace typing to the tick, or commands batch.** `Sim::submit` queues a line for
+the *next* tick, so two lines sent inside one second land on the same tick with
+no time passing between them — `empty mortar_and_pestle` and the `grind` that
+needed it arrive together and the second refuses. `tui.sh type` sleeps 1.1 s per
+line; `tui.sh key` does not, because `Sim::walk` is the third entry point and
+spends no world time at all. **Check `tick` at the rail's foot after a long
+walk**: eight arrow presses must not have advanced it eight seconds.
+
+**All four surfaces work, and three of them are keys rather than words.**
+
+```bash
+scripts/tui.sh start
+scripts/tui.sh type 'attend archive' 'research' 'wander'
+scripts/tui.sh key Down Down Left         # the reading walks; `▒` marks the trail
+scripts/tui.sh key Escape                 # ...and the prompt has the keys back
+```
+
+- **the editor** — `scribe <name>`, then `edit`, the lines, `Escape`, `quit`.
+  There is still no `save`: stop typing and the buffer writes itself out a beat
+  later, which is the same `Editor::settle` the Bevy build runs.
+- **the weave screen** — `weave` opens it and **`quit` closes it**; `Escape` only
+  returns to command mode, exactly as on the other side.
+- **the maze** — `wander` hands over the arrows, `Escape` gives them back.
+- **the transcript** — `unfurl`, then `PgUp`/`PgDn`, `Escape` out. It pages by
+  *records*, measured with `orbs_shell::page_step`, which both frontends share.
+  **`PgUp` works without `unfurl` too**, in both builds: the word exists because
+  the *key* could not be discovered, not because the key needs permission.
+
+**Every key the Bevy build binds, the terminal build binds** — and it shipped
+once without them, while `prompt.rs` drew `F4 deep` into the border on every
+frame. A key the screen offers and the build ignores is §19's *"the first
+affordance the game showed was one that did not work"*, so the rules behind them
+live in `orbs_shell::shortcuts` where a second copy cannot go missing.
+
+| Key | Does | In a terminal |
+|---|---|---|
+| `F4` | flips the focus mode | the border's own hint moves; **the tiling does not**, in either build, until Phase 9a returns the second pane |
+| `F5` | §14's linear stream | the pane describes itself instead of drawing — the accessibility route, and this is the build §14 calls the cheapest one |
+| `F6` | writes `orbs-parse.tsv` | silent on success in both builds; the file appearing is the confirmation |
+| `F7` | cycles the tonal register | **visibly inert** — `Presentation` picks a glyph-atlas *face* and a terminal has the user's. The world still moves, and `F6`'s `register` column shows it |
+| `F10` | leaves | as it does under Bevy. `Ctrl-C` and `Ctrl-D` also do, because raw mode makes them ours to answer |
+
+**...and `quit` is the word for it**, in both builds. Every key above was
+undiscoverable — §6 makes this a game played by typing, and nothing on screen
+said how to stop. It is the fifth take-once handshake beside `scribe`, `unfurl`,
+`weave` and `wander`: the sim records the decision, the frontend decides what
+leaving means. **It lands on the tick**, like every verb's effect — a frontend
+checking at `submit` time finds the flag unset, which is what the first attempt
+did.
+
+`logout`, `put it down` and `stop playing` reach it too. **`leave` and `exit` do
+not, and §19 records why**: both fuzzy-collide (with `weave` and `edit`), and
+that is the one ambiguity prompt that would offer ending the session beside a
+verb people type constantly.
+
+```bash
+scripts/tui.sh start && scripts/tui.sh type 'quit'   # the session ends
+ORBS_BOOT=0 ORBS_DUMP="quit" cargo run -q -p orbs    # ...and the same word here
+```
+
+`F2` (phosphor) and `F12` (screenshot) are **not** bound, and cannot be: there
+are no themes to cycle and no pixels to capture. That is rule 2 working — the
+terminal loses enrichment and no information.
+
+**`--dump` is the boundary proof, and it is in CI.** Both binaries reach
+`orbs_shell::dump_script` through the same painters from the same `Sim`, so:
+
+```bash
+ORBS_WIZARD=wizard ORBS_BOOT=0 sh -c '
+  diff <(ORBS_DUMP="attend laboratory; grind sage" target/debug/orbs) \
+       <(target/debug/orbs-tui --dump "attend laboratory; grind sage")'
+```
+
+...prints nothing, or the shell has grown a frontend-shaped hole in it. Every
+`ORBS_*` switch works against `orbs-tui` too, so a See-it line written for one
+frontend runs against the other unchanged.
+
+**`scripts/dumps.sh <dir>` captures every surface the game can draw** — 56
+screens — and is the instrument for a refactor whose gate is that nothing
+changes. Run it before and after, then `diff -r`. It pins `ORBS_WIZARD`, because
+a baseline that varies with who ran it is not a baseline.
+
+### `scripts/play.sh` — the game, played, as a test suite
+
+**92 scenarios that type at a real terminal and read the screen back.** This is
+the third layer: `orbs-sim`'s tests prove the rules and `orbs-render`'s prove the
+picture, and neither presses a key. Run it **after anything touching the sim, the
+shell, or the loop** — `orbs-balance`'s standing, for the same reason.
+
+```bash
+scripts/play.sh                     # all of it, ~1 minute at six threads
+scripts/play.sh routing::           # one area
+scripts/play.sh -- --test-threads 1 # one at a time, to watch it play
+```
+
+**Not in the gate.** Every scenario is `#[ignore]`d, so `cargo test --workspace`
+skips them; CI runs them in a **separate non-blocking job**. Without `tmux` they
+print SKIPPED and pass, so read the output rather than the exit code somewhere
+new.
+
+**One test target, `tests/playing/main.rs`, and the layout is load-bearing.**
+Cargo runs test *binaries* one after another and parallelises only *within* one,
+so nine files would be slower than one. `tests/playing.rs` **does not compile** —
+a crate root resolves `mod play;` against `tests/`, not `tests/playing/`; cargo
+auto-discovers `tests/*/main.rs` instead and leaves the siblings as modules.
+
+**Assertions are scoped to the newest command block, never to the screen**, and
+both of the obvious alternatives were tried and measured:
+
+- a plain substring search **matches history** — the clarity chain empties the
+  mortar twice, six steps apart and both visible, so the second wait returned in
+  **1 ms** against the first one's line and the driver went green on an
+  assertion that was factually wrong;
+- counting occurrences instead **deadlocks** — the pane holds exactly **8
+  command blocks** at 120×45, so from the ninth repeat each new line pushes an
+  old one off and the count never rises again.
+
+Four more things the driver has to do, each of which failed loudly first:
+
+- **`send-keys -l`, with Enter on its own call.** Without the literal flag tmux
+  reads a word as a *key name* wherever one matches: `end` becomes the End key,
+  `up` an arrow, `home` Home. `end` closes every `repeat` and `if` in the spell
+  language. `scripts/tui.sh` had this bug for two versions.
+- **Flatten before matching.** `RecordView` wraps rather than clips, so
+  `research`'s answer lands as `…a way out` / `    is in them` and a needle
+  written the way a person reads it matches neither row.
+- **`opens()`, not `does()`, for `scribe`/`weave`/`wander`.** They take the whole
+  pane, transcript included, so the answer to the word is a *screen* and a
+  block-scoped wait waits for something that has been painted over.
+- **`meditates(n)`, never `does("meditate 20", "meditate")`.** The prompt echoes
+  `→ meditate 20` at once, so waiting for the word is satisfied before a single
+  tick passes. It caught three scenarios, one of which asked for 7,200 ticks and
+  got none.
+
+**Seeds are chosen, not tolerated.** `drift` poisons a log at 1/300 per tick and
+`substitution` renames a base reagent at 1/3600, both from the seeded `Threat`
+stream — so the schedule is fixed in tick space. Measured: seed 3 poisons a log
+inside 200 ticks and seed 0 swaps a reagent inside 7200; **11 and 42 are quiet
+through both**, and `play::QUIET` is 11.
+
+**Both frontends boot** (§19, `0.3.12`). `orbs-tui` skipped §4's sequence for a
+version on an "instant-startup" argument that was really about the development
+loop — which `ORBS_BOOT=0` already answered. The clock, the stages and the card
+are `orbs-shell`'s; the terminal supplies a frame and the engine line, so the
+card reads `crossterm 0.29` where the other says `bevy 0.19.0`.
+
+**The world does not tick through it**, and that is a determinism rule rather
+than a nicety: `tower::drift` rolls once per tick, so a sim running through nine
+and a half seconds of animation would reach a different world on the same seed
+depending on how fast the machine drew a logo. Nothing is typed during boot
+either — except **leaving**, which a terminal needs because raw mode makes
+`Ctrl-C` ours to answer or nobody's.
+
+```bash
+cargo run -p orbs-tui              # ...and watch it. 9.6s, then the tower
+ORBS_BOOT=0 cargo run -p orbs-tui  # ...or don't
+```
+
+**Colour is indexed ANSI 0–15 and inherits the user's terminal theme** (§19), so
+there is no palette to tune here and no contrast to verify — the numbers belong
+to whoever configured the terminal. What holds §14 up instead is the other half
+of the rule: the glyph carries the identity. Three degradations are accepted and
+recorded — `Presentation` renders identically, a mixed `Wash` takes its first
+tint, and there is no CRT.
+
+**Ambiguous-width glyphs are a correctness item, not polish.** CP437's symbols —
+`‼ ► ☼ ○ ♂ ♀ ♦ ♠ Ω ░ ▒` — are East Asian *Ambiguous*, so a CJK locale or a
+terminal set to `ambiguous = wide` gives them two columns, which shifts the row
+**and** invalidates the per-cell diff. `orbs-tui` measures rather than assumes:
+it prints one at a known column and reads the cursor back, then swaps in ASCII if
+the answer is two. `cargo test -p orbs-tui` holds the table.
 
 ### Read the log, not only the screen
 

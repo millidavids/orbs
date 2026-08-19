@@ -36,6 +36,32 @@ pub struct Meter {
     pub done: u64,
     /// The whole.
     pub total: u64,
+    /// What the two numbers are counting.
+    ///
+    /// **A meter is not always a duration, and the rail said it was.** Four of
+    /// the six things that raise one are ticks — an instrument at work, a scour,
+    /// a fire burning, a fire banked — and two are not: the stacks count *cells
+    /// explored* and the prism counts *sigils aligned*. `brief.rs` suffixed all
+    /// of them with `t`, so the archive reported `st 350t` for 350 unwalked
+    /// squares and the lens reported `pr 4t` for four sigils still astray —
+    /// counting **down** 4 → 1 as the player won, which reads on the rail as a
+    /// job about to finish.
+    ///
+    /// The unit belongs here rather than in a `match` on the instrument's name
+    /// in a frontend, for the same reason [`Instrument::short`] does: rule 2
+    /// gives a frontend *how* a cell is drawn, not what the thing in it is.
+    pub unit: Unit,
+}
+
+/// What a [`Meter`]'s numbers count.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Unit {
+    /// Ticks — a duration, and the only one a `t` suffix is honest about.
+    Ticks,
+    /// Squares of maze.
+    Cells,
+    /// Sigils in the right socket.
+    Sigils,
 }
 
 /// What an instrument *does* — the action, not the noun.
@@ -396,7 +422,14 @@ fn craft_of(world: &World, node: Entity) -> Craft {
 fn read(world: &World, node: Entity, name: &str, now: Tick) -> (State, Option<Meter>) {
     if let Some(work) = world.get::<super::Working>(node) {
         let (done, total) = work.progress(now);
-        return (State::Working, Some(Meter { done, total }));
+        return (
+            State::Working,
+            Some(Meter {
+                done,
+                total,
+                unit: Unit::Ticks,
+            }),
+        );
     }
     // **Walking the stacks is work, and says so** — even though it takes no
     // production slot. `if stacks is working` is how a solver asks whether its
@@ -405,7 +438,14 @@ fn read(world: &World, node: Entity, name: &str, now: Tick) -> (State, Option<Me
     // player's rule decides.
     if let Some(maze) = world.get::<super::Maze>(node) {
         let (done, total) = maze.explored();
-        return (State::Working, Some(Meter { done, total }));
+        return (
+            State::Working,
+            Some(Meter {
+                done,
+                total,
+                unit: Unit::Cells,
+            }),
+        );
     }
     // **An open ward is work, and says so** — the same answer the stacks gives
     // for an open maze, and for the same two reasons.
@@ -433,13 +473,21 @@ fn read(world: &World, node: Entity, name: &str, now: Tick) -> (State, Option<Me
             Some(Meter {
                 done: u64::from(ward.best()),
                 total: super::ward::WIDTH as u64,
+                unit: Unit::Sigils,
             }),
         );
     }
     if let Some(triage) = world.get::<super::Triaging>(node) {
         let total = triage.ends.get().saturating_sub(triage.started.get());
         let done = now.get().saturating_sub(triage.started.get()).min(total);
-        return (State::Scouring, Some(Meter { done, total }));
+        return (
+            State::Scouring,
+            Some(Meter {
+                done,
+                total,
+                unit: Unit::Ticks,
+            }),
+        );
     }
 
     // The heat source answers on its own terms: it runs no operation, so its
@@ -447,7 +495,14 @@ fn read(world: &World, node: Entity, name: &str, now: Tick) -> (State, Option<Me
     if world.get::<super::HeatSource>(node).is_some() {
         if let Some(fire) = super::burning(world, node) {
             let (done, total) = fire.fuel(now);
-            return (State::Burning, Some(Meter { done, total }));
+            return (
+                State::Burning,
+                Some(Meter {
+                    done,
+                    total,
+                    unit: Unit::Ticks,
+                }),
+            );
         }
         let banked = super::banked(world, node);
         if banked > 0 {
@@ -456,6 +511,7 @@ fn read(world: &World, node: Entity, name: &str, now: Tick) -> (State, Option<Me
                 Some(Meter {
                     done: banked,
                     total: banked,
+                    unit: Unit::Ticks,
                 }),
             );
         }

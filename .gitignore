@@ -35,3 +35,7 @@ Thumbs.db
 
 # Screenshots from ORBS_CAPTURE / F12
 orbs-screenshot.png
+
+# The parse trace from F6, in either frontend. Its sibling above was ignored and
+# this never was — which went unnoticed while exactly one build could produce it.
+orbs-parse.tsv

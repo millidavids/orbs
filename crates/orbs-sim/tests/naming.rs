@@ -309,6 +309,17 @@ fn the_tolerated_collision_set_is_pinned() {
             // The two words diverge at the front, which is where a fuzzy match
             // is decided.
             ("search", "research"),
+            // **`audit` (verify) vs `quit`, and this one could not be dodged**:
+            // `quit` is the canonical name, so unlike `leave` and `exit` — which
+            // `vocabulary.rs` declines for exactly this reason — there is no
+            // alternative spelling to reach for.
+            //
+            // Tolerated because both are claimed, which is `("list", "light")`'s
+            // rule: an exact `audit` resolves to `verify` and never reaches the
+            // fuzzy path. They also take different argument shapes — `verify`
+            // names a thing and `quit` takes nothing — and they are two edits
+            // apart, further than most of this list.
+            ("audit", "quit"),
             ("audit", "edit"),
             // `("wait", "write")` **left this set**, and the set is one shorter
             // than it was. `wait` was `meditate`'s shell synonym; §8 needed it

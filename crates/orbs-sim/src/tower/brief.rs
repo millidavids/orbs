@@ -201,7 +201,15 @@ fn busiest(instruments: &[Instrument]) -> Option<&Instrument> {
 fn detail_of(instrument: &Instrument) -> Option<String> {
     let meter = instrument.meter?;
     let left = meter.total.saturating_sub(meter.done);
-    (left > 0).then(|| format!("{} {left}t", instrument.short))
+    // **`t` only when it is a duration.** This suffixed everything, so the
+    // archive read `st 350t` for 350 unwalked squares and the lens `pr 4t` for
+    // four sigils still astray — which counts *down* as the player wins and so
+    // reads, on the one surface meant for a glance, as a job about to finish.
+    // Two of the three built domains were glanceably wrong.
+    (left > 0).then(|| match meter.unit {
+        super::panel::Unit::Ticks => format!("{} {left}t", instrument.short),
+        _ => format!("{} {left}", instrument.short),
+    })
 }
 
 /// Every room a domain could be, by name.

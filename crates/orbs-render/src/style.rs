@@ -141,8 +141,11 @@ pub enum Heat {
 ///
 /// **A name, never a value.** This module forbids concrete colours and that
 /// still holds: `Green` says *which family*, and what green is on a given tube is
-/// the frontend's answer, exactly as it is for [`Role`]. `orbs-tui` will resolve
-/// the same eight names to ANSI indices and be right.
+/// the frontend's answer, exactly as it is for [`Role`]. **`orbs-tui` does
+/// resolve the same eight names to ANSI indices, and is right** — the prediction
+/// this comment used to make is now `orbs-tui`'s `theme::hue`, and the closed
+/// set is what makes it right: eight names, eight hues, no fallback, so a ninth
+/// tint breaks that build on purpose.
 ///
 /// # It carries a hint, and the hint is never the only carrier
 ///

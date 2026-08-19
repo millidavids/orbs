@@ -57,6 +57,15 @@ impl Tower {
         self.0.unfurling()
     }
 
+    /// Whether `quit` has asked for the session to end.
+    ///
+    /// The fifth, and the only one whose answer is not a surface: leaving is an
+    /// `AppExit` here and raw mode being put back in the terminal build, which
+    /// is exactly why the sim only records that it was asked for.
+    pub(crate) fn quitting(&mut self) -> bool {
+        self.0.quitting()
+    }
+
     /// Whether either request is waiting, **without** mutating.
     ///
     /// `opening`/`unfurling` take `&mut self`, so asking through `ResMut<Tower>`
@@ -71,6 +80,18 @@ impl Tower {
     /// See [`Tower::has_opening`].
     pub(crate) fn is_unfurling(&self) -> bool {
         self.0.is_unfurling()
+    }
+
+    /// Whether `quit` is waiting, **without** mutating.
+    ///
+    /// The fifth handshake was the one that shipped without its peek: `Sim` grew
+    /// this and nothing called it, while `quit_requested` reached for `ResMut`
+    /// unconditionally — so it stamped `Tower` on every frame it ran, and since
+    /// its own run condition is `resource_changed::<Tower>` it never stopped
+    /// running. See [`Tower::has_opening`] for the same regression the first
+    /// time.
+    pub(crate) fn is_quitting(&self) -> bool {
+        self.0.is_quitting()
     }
 
     /// Whether `weave` has asked for the progression screen, **without**
@@ -140,13 +161,10 @@ impl Tower {
     /// had no player-facing surface at all — they were proven by a `println!` in
     /// an example, which is not the same as having been looked at.
     pub(crate) fn cycle_register(&mut self) -> Presentation {
-        let next = match self.0.register() {
-            Presentation::Plain => Presentation::Eldritch,
-            Presentation::Eldritch => Presentation::Tampered,
-            Presentation::Tampered => Presentation::Plain,
-        };
-        self.0.set_register(next);
-        next
+        // The order the key walks is `orbs_shell::cycle_register`'s, because
+        // both frontends bind a key to it and two copies would eventually
+        // disagree about where `Tampered` sits in the cycle.
+        orbs_shell::cycle_register(&mut self.0)
     }
 }
 

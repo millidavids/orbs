@@ -1837,6 +1837,8 @@ orbs/
 │   │                   threat composition — no rendering deps, headless
 │   ├── orbs-render/    Frame / cell-buffer types, layout, semantic styling.
 │   │                   Consumed by BOTH frontends. No backend deps
+│   ├── orbs-shell/     The shell BOTH frontends share: painters, surfaces,
+│   │                   the headless dump. orbs-sim + orbs-render + bevy_ecs
 │   ├── orbs/           Bevy frontend: GPU cell renderer, CRT, audio, Steam
 │   ├── orbs-tui/       Terminal frontend: crossterm, raw mode, ANSI
 │   └── orbs-balance/   CLI harness driving orbs-sim (§11.5 sweeps)
@@ -2379,6 +2381,111 @@ they are re-pointed at the phases that now need them rather than quietly dropped
    price-shop — Exapunks is $19.99.
 
 ## 19. Decisions log
+
+### `quit` — the way out is a word, like every other way through
+
+**Leaving was reachable only by a key, and no key in this game is
+discoverable.** `F10` has always left; the terminal build added `Ctrl-C` because
+raw mode makes it ours to answer. Neither is on screen anywhere. §6 makes this a
+game played by typing, so a player who has learned twenty-five words for what
+happens inside the tower has learned nothing about how to stop — which is
+`unfurl`'s argument for `PageUp`, one level up, and the same answer.
+
+It reads right at three depths: `quit` closes the spell editor, `quit` closes the
+weave screen, and now `quit` closes the orb. One word meaning *leave the thing
+you are in*.
+
+| Question | Decision |
+|---|---|
+| Where it lives | The sim owns the **decision** and nothing else: a fifth take-once handshake beside `scribe`, `unfurl`, `weave` and `wander`. What leaving *means* is a frontend's, and the two answers have nothing in common — an `AppExit` here, raw mode being put back there |
+| Determinism | Untouched. Leaving is not a world event, so `(seed, submissions)` replays identically whether or not anyone quit; a replay simply runs past it, which is what you want when the recording outlives the session |
+| When it lands | On the **tick**, like every verb's effect. `submit` echoes and queues; the player sees the echo, then `quit_begins`, then the terminal comes back. A frontend checking at `submit` time would find the flag unset — the first attempt did, and did nothing |
+| The tower-wide count | **22 → 23**, and `verb.rs` pins that number with an argument rather than a budget. `quit` is the one word the ceiling was never about: it acts on the *orb*, not the tower, and there is no fixture in any room that leaving the game could be scoped to. The ceiling still stands for the case it was drawn for — a domain verb arriving there is still the argument for building the missing mechanism |
+| `leave` and `exit` are refused | Both fuzzy-collide — with `weave` and `edit`, one character each. Neither would *misresolve* (a claimed exact match beats a fuzzy one, which is `("list", "light")`'s rule), but the typo between them lands in an ambiguity prompt, and this is the one prompt that would offer **end the session** beside a verb typed all the time. Plain English arrives as a phrase instead: the collision check walks single words only |
+| `audit`/`quit` is pinned | Unavoidable, because `quit` is the canonical name. Tolerated on the same terms: both claimed, two edits apart, different argument shapes — `audit laboratory` still reaches `verify` |
+| The manual names no key | `man_quit_*` says what the word does and stops. Which keys exist is a frontend's answer and the two builds disagree, so prose the sim owns must not name `f10` or `ctrl-c` |
+
+### `orbs-shell` — one shell, because there are two frontends now
+
+**The painters needed `orbs-sim` *and* `orbs-render`, and neither may depend on
+the other in that direction**, so for four phases they lived in the Bevy crate.
+That was correct while there was one frontend, and this log even leaned on it:
+the editor-ownership entry below rests its third confirmation on *"`orbs-tui` is
+ten lines with nothing to diverge from."*
+
+A real terminal build expires that argument. The choice is one shell or two that
+disagree, and the failures would be the quiet kind — two line editors that treat
+Tab differently, two rules for deriving the prompt name, two answers to *how many
+records is a page*.
+
+| Question | Decision |
+|---|---|
+| What moved | ~9,100 lines: every painter, `Editor`, `Tapestry`, `Line`, `Bench`, `Screen`, the POST card, the boot clock, the content read path, `seed`/`wizard`, and `ORBS_DUMP` itself |
+| What stayed | Everything needing an engine: the camera and the 4:3 letterbox, the CRT, the glyph atlas, the phosphor palette, the system graph, and winit's press/release model with the held-key bookkeeping it forces |
+| Dependency | `orbs-sim` + `orbs-render` + **`bevy_ecs`, never `bevy`** — rule 1 as written. The crate with the strictest headless requirement already takes exactly this dependency; it buys the `Resource` derive on the nine types the Bevy build keeps between frames and costs `orbs-tui` nothing, since `bevy_ecs` is in its tree via `orbs-sim` anyway. `tests/boundaries.rs` holds it, plus a third guard: **the shell never names a colour** |
+| Not §15's extraction | ROADMAP's Phase 4 *"shared-engine extraction"* is one recipe table driving two **derived domains**, and is cut with them. This is frontends and has nothing to do with it |
+| "The axis is only knowable from the second consumer" | §13's own principle, applied with `ORBS_DUMP` as the partial second consumer it always was — a complete headless frontend that built the real `Frame` from the real `Sim` with no `App`. That file is why this was a move rather than a rewrite |
+| `pub` at the boundary | 142 items widened. CLAUDE.md's *"`pub` only for Plugin types"* is about a binary crate where `pub` means nothing; here the crate boundary **is** the frontend boundary. `missing_docs` cost nothing — all 142 were already documented — and `must_use_candidate` cost 58 attributes, which is the real price of the widening and was worth paying to keep the gate at strength |
+| The gate | **Byte-identical dumps.** 56 screens captured before and after by `scripts/dumps.sh`, `diff -r` clean, 1,119 tests still passing. The only thing that may differ is the POST card's version line, because the step bumps it |
+
+### The terminal build measures its glyph widths rather than assuming them
+
+**CP437's symbols are East Asian *Ambiguous*, not Narrow.** `‼` `►` `☼` `○` `♂`
+`♀` `♦` `♠` `Ω` `░` `▒` — under a CJK locale, or a terminal configured
+*ambiguous = wide*, any one of them takes two columns. The Bevy build is immune
+because it draws an 8×16 bitmap atlas and a glyph is one cell by construction.
+
+A terminal is not, and the consequence is worse than ugly: one double-width cell
+shifts the rest of the row **and** desynchronises the per-cell diff, because the
+shadow buffer and the screen stop agreeing about which column is which.
+
+So `orbs-tui` prints one at a known column at startup, reads the cursor position
+back, and believes the answer — swapping in ASCII for the at-risk glyphs if it
+comes back two. A terminal that will not answer is treated as narrow, which is
+the common case and costs nothing if wrong on a screen nobody is looking at yet.
+
+### A walk must land after its tick's step, or replay quietly diverges
+
+**The terminal build's loop steps the sim before it drains the keyboard, and the
+reason is `Sim::walk` rather than `Sim::submit`.**
+
+A typed line is queued: `submit` records it against the current tick and hands
+the command to the next `step`, so it executes at the start of tick N+1 whatever
+order a frontend runs in. Loop order changes only *which* tick a wall-clock
+keystroke lands on — latency, not replay.
+
+`Sim::walk` does not wait for a clock. It executes immediately, and `Sim::replay`
+already states the contract: a `Submission::Walked` *"already ran, during its
+tick, **after** that tick's step."* Drain an arrow before stepping and the walk
+runs before tick N's step while being recorded against tick N — and a replay
+applies it after.
+
+**Nothing fails.** The same number of ticks pass and the same squares are walked,
+so a test comparing either is green; the first draft of the test that now guards
+this compared ticks and proved nothing. What diverges is the *recording*, and
+from then on the log describes a session that did not happen. Bevy gets the order
+for free — `MainScheduleOrder` runs `RunFixedMainLoop` before `Update` — and a
+hand-rolled loop gets nothing for free.
+
+### What the terminal build gives up, and what it does not
+
+Three degradations, all accepted and none informational (rule 2):
+
+- **`Presentation` renders identically.** Eldritch and Tampered select a *face*
+  in the glyph atlas, and the face here is whatever the user's terminal is set
+  to. §8.1 already allows this by name: `verify` is the authoritative sabotage
+  detector on every surface.
+- **A mixed `Wash` takes its first tint.** The flask's `green+bone` band is the
+  one region that is two colours becoming one, and sixteen indices cannot
+  average. The band is still told apart by *position* — it grows from the fill
+  end while both ingredients shrink.
+- **No CRT, no phosphor, no blinking caret.** The terminal draws its own cursor,
+  which is better: it is the one a screen reader tracks, which is why `Frame`
+  keeps the cursor off `Cell` in the first place.
+
+What it does **not** give up is the screen. `orbs-tui --dump` and `ORBS_DUMP`
+print the same bytes, through the same painters, from the same `Sim`, and CI
+diffs them on every push.
 
 ### Scrying is a code-breaker, and the first design deleted its own puzzle
 
@@ -8787,6 +8894,193 @@ ORBS_SEED=11 ORBS_BOOT=0 ORBS_DUMP="attend archive; research; wander" cargo run 
 cargo test -p orbs-sim --lib research
 cargo test -p orbs-sim --test solver   # every swept seed is still solvable
 ```
+
+### A third test layer: the game, played (Standing, `0.3.11`)
+
+**1,155 tests and not one pressed a key.** They drive `Sim` directly or paint a
+`Frame` and read it back, so the event loop, the redraw diff, keyboard ownership
+between five surfaces, the clocks measured off `Time`, and colour as a terminal
+resolves it were covered by nothing at all. `orbs-tui/src/surfaces.rs` was 302
+lines with zero tests.
+
+Every defect found in that frontend was found by a person looking at a screen,
+and every one was invisible to the suite. So `crates/orbs-tui/tests/playing/`
+runs the real binary under `tmux`, types at it, and reads the screen back — 92
+scenarios, `#[ignore]`d, run by `scripts/play.sh` and by a non-blocking CI job.
+
+**Two findings on the first pass, both of which every other layer was blind to.**
+The ambiguous-glyph width probe was measuring `‼`, which is East Asian *Neutral*
+— one column on every terminal there is — so it reported `narrow` under every
+configuration and the whole fallback beneath it was unreachable. And the maze map
+ran a full second behind the arrow keys: `Panel` is rebuilt once a tick on the
+stated ground that *"the world moves at 1 Hz too"*, which `Sim::walk` — the third
+entry point, and the only thing that reaches the world without a tick — had
+falsified. The Bevy build never had it, because `walk` takes `Tower` by `&mut`
+and `refresh_panel` hangs on `resource_changed`; a bare loop has no such thing,
+so it is hand-rolled at the one keystroke that needs it.
+
+**An assertion is scoped to the newest command block, and the two obvious
+alternatives were built and measured before that was settled.** A plain substring
+search matches *history* — the clarity chain empties the mortar twice, six steps
+apart and both on screen, so the second wait returned in 1 ms against the first
+one's line and the driver went green on an expectation that was factually wrong.
+Counting occurrences instead deadlocks: the pane holds exactly eight command
+blocks, so past the ninth repeat each new line pushes an old one off and the
+count never rises. Position is the only thing about that pane that is stable.
+
+**A wait that cannot be fooled is worth more than a fast one.** Four of them
+failed by *passing*: `does("meditate 20", "meditate")` is satisfied by the echo
+before a single tick has passed, and it cost three scenarios — one of which asked
+for 7,200 ticks and got none. Anything whose evidence is a clock waits on the
+clock.
+
+**Ambient sabotage is chosen away rather than tolerated.** `drift` and
+`substitution` both draw from the seeded `Threat` stream, so their schedule is
+fixed in tick space: seed 3 poisons a log inside 200 ticks and seed 0 swaps a
+reagent inside 7200, while 11 and 42 are quiet through both. Pinning a measured
+seed is free and stronger than choosing survivable assertions.
+
+**Found here and then fixed: `orbs-tui` had no boot sequence** — see the entry
+below, which the suite is what surfaced.
+
+```bash
+scripts/play.sh                     # 95 scenarios, about half a minute
+scripts/play.sh routing::           # keyboard ownership, on its own
+```
+
+### The terminal build boots too — supersedes "no boot sequence" (Standing, `0.3.12`)
+
+`orbs-tui` skipped §4's sequence for a version, and the argument recorded in its
+own module docs was that a dev tool whose charter is *"instant-startup"* (§15)
+must not begin by making you wait.
+
+**That was the wrong trade, and the tell is that it was made silently.** The
+sequence is the game's opening image — a dark tube, an orb *found* rather than
+switched on, the machine taking an inventory of itself — and a second frontend
+that quietly omits it is not the same game with a different rasteriser. §13 lets
+this build lose *enrichment*; the opening is content.
+
+The argument was really about the **development loop**, and `ORBS_BOOT=0` had
+already answered that — on both sides, for exactly this reason. So the skip is
+where it belongs: in the switch, not in the build.
+
+**Almost nothing had to be written.** `Boot`, `Stage` and the card were already
+`orbs-shell`'s, and `Boot::default` already reads `ORBS_BOOT=0` itself. What the
+frontend supplies is what only it can: a `Duration` per frame, a `Frame` to paint
+into, and the **engine line** — `crossterm 0.29` where the other build says
+`bevy 0.19.0`, because the card is a diegetic inventory of *this* machine and a
+shared painter naming Bevy would put a component on the list that is not in the
+box.
+
+Three things the loop has to get right, and each is a rule rather than a detail:
+
+- **The tower's clock does not run.** `tower::drift` rolls once per tick, so a
+  sim left running through nine and a half seconds of animation advances its RNG
+  stream by a wall-clock-dependent number of draws — the same seed reaching a
+  different world depending on how fast the machine drew a logo.
+  `Stage::world_runs` already said so; the terminal loop now holds `ticked` at
+  `now` while booting, so the catch-up does not then replay the sequence as a
+  burst of ticks.
+- **Nothing is typed, and one thing still is.** Every keyed system in the Bevy
+  build is gated on `booted`, and §19 removed the keypress skip. Both hold here.
+  *Leaving* is the exception, and a terminal is why: under a window manager there
+  is always a way out of an animation, and raw mode takes that away — `Ctrl-C` is
+  ours to answer or nobody's. Answering the exit is not a skip; it ends the
+  session rather than jumping to the tower.
+- **No caret on that screen.** The `Prompt` stage was removed from the sequence
+  because an input line that cannot be typed into is an affordance that does not
+  work, offered before anything else on screen is.
+
+```bash
+cargo run -p orbs-tui                 # ...and watch it, which is the point
+scripts/play.sh presentation::        # the sequence, the card, and the still clock
+```
+
+### What a review of the played game found (Standing, `0.3.13`)
+
+The third test layer's first review, and the useful half of it was about the
+instruments rather than the game. Recorded because several are the *same* defect
+wearing different clothes.
+
+**An assertion that can be satisfied by the question is not an assertion.** The
+driver waited until the newest block began with `wizard $ <line>`, and then
+searched that block — which by construction contained the line just typed. So
+`does("move zzz …", "zzz")` passed on its own argument. It is the stale match and
+the saturating count a third time: not *an older answer* but *the question,
+mistaken for the answer*. `block` drops its header now, and a needle can no
+longer be found in the words the test typed.
+
+**A colour assertion that cannot see the thing it names reports coverage it does
+not have.** Both `ink` scenarios decoded the wrong columns — the fire test read
+the tower rail (the athanor burns at 100-101) and the tint test read the
+transcript, where `Role::Success` is already green and roughly seventy `√`
+markers sat before any sage moved. Restoring the `dark-red → white` ramp §19
+forbids would have passed. The tint scenario now takes a **control**: the same
+band, before and after, so green that was not there and then is can only have
+come from the material.
+
+**Five verbs, one list, and `quit` reached four of them.** It went into the
+vocabulary, `Verb::ALL`, `dispatch::execute` and the tower's own count —
+`spell::run::may_issue` was the one place it was missed, so a spell could raise
+`Quitting`, and a *bound* spell re-casts every time it runs off the end. The
+three verbs barred beside it are barred for seizing the keyboard; this one closed
+the game.
+
+**A peek that nothing called.** `quit_requested` reached for `ResMut<Tower>`
+unconditionally, stamping the change tick — and its own run condition is
+`resource_changed::<Tower>`, so it re-armed itself for ever and dragged
+`refresh_panel`, `suggest` and four `open_requested` systems to frame rate.
+`Sim::is_quitting` was added as exactly that peek and had zero callers.
+`editing::open_requested` records the same regression happening once already.
+
+**A meter is not always a duration.** The rail suffixed every one with `t`, but
+two of the three built domains count something else — the stacks count cells and
+the prism counts *sigils aligned*, which falls 4 → 1 as the player wins and so
+read, on the surface built for a glance, as a job about to finish. `Meter` now
+carries a `Unit`, because rule 2 gives a frontend how a cell is drawn and not
+what the thing in it is.
+
+**A cliff removed and then moved.** `Board::SHOWN` caps the ward sheet at twelve
+presses so it cannot outgrow its pane — and at the 80×22 floor twelve rows is one
+too tall, so the whole sheet vanished on the twelfth press. Refusing whole is
+right for columns and wrong for rows, because `SHOWN` already makes this a window
+on the recent end: ten of fifty-one is the same kind of view as twelve.
+
+**`MIN_RAIL_BOX` was raised for the third time**, 3 → 4 → 5, each time for the
+identical symptom one row up: a squeezed box keeps its name and drops the
+`►spell` row, which is the only thing saying a room is automated. It survived at
+four because the Bevy grid is fixed at 120×45; a terminal's is the window's, and
+`tui.sh start 177 38` sits inside the range that was wrong.
+
+**A conditional draw from a shared stream.** `substitution` hoists its roll above
+every early return and its comment names the hazard exactly; `drift` — the older
+of the two — returned first and drew second, so once every log was poisoned it
+stopped drawing and shifted the swap schedule. Adding a seventh domain would have
+silently changed every saved session's sabotage.
+
+**A pin measured in one world is a pin on that world.** `agrees.rs` hardcoded
+seed 0 while claiming three seeds had been measured in band; they had not — over
+seeds 0, 3, 11 and 42 clarity spans 0.1244 to 0.1383 against a 10% band, so seed
+3 failed and seed 0 passed on identical code. Sabotage is part of the economy, so
+that spread is the game; measuring it once was the error. The pin is held against
+the **mean** of four worlds now, which is sensitive to a regression (it moves
+every seed) and survives the luck of any one.
+
+**`--why` could not see a line that failed to parse.** Every parser outcome is
+`Role::Normal` by design, so `tally` dropped it into neither column — and CLAUDE.md
+tells a reader to check `cost` *before* the rate. `landed` was separately counting
+every success record rather than completed runs, reporting five before a command
+had been issued.
+
+**And three parity gaps in the terminal build**, all of the shape *a comment
+claiming parity sat near the code that broke it*: the editor swallowed
+`PageUp`/`PageDown` where Bevy pages behind it; `unfurl` took the keyboard
+without paging back, so the word did nothing visible; and there was no `HeldOver`,
+so leaving a surface on a held arrow leaked key repeat into history recall. The
+last has no direct port — a terminal sends no key-release event — so it is a
+**repeat-gap window** instead: auto-repeat lands every 30-40 ms and nobody
+double-taps an arrow inside 120, so an unbroken run out of a handover is a held
+key and the first gap is the release.
 
 ### A word only ever matches itself (Phase 1, parser correctness)
 

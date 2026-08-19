@@ -10,6 +10,34 @@ authors.workspace = true
 [dependencies]
 orbs-sim = { path = "../orbs-sim" }
 orbs-render = { path = "../orbs-render" }
+orbs-shell = { path = "../orbs-shell" }
+
+# The whole of this frontend's backend. `orbs-shell` decides what a screen is and
+# hands back a `Frame`; crossterm puts the cells on a terminal and reads keys off
+# it — architectural rule 2's "how a cell is drawn" and nothing else. A widget
+# framework would be a second layout model above the real one.
+#
+# Defaults are `bracketed-paste`, `events`, `windows` and `derive-more`, kept as
+# they come. **Pasting a spell into the editor does not need `bracketed-paste`
+# and does not use it**: a terminal sends a paste as ordinary keystrokes, so the
+# newlines arrive as `Enter` and the editor splits lines exactly as if they had
+# been typed — checked with `tmux paste-buffer`, three lines in, three lines out.
+# The feature is simply a default not worth the churn of turning off.
+#
+# **`event-stream` stays off**, and that one is deliberate: it is the only
+# feature that pulls `futures`. Rule 8 permits a frontend its backend's
+# concurrency but never to drive the sim, and the cleanest way to hold that line
+# is to have no futures in the tree at all. The synchronous `poll`/`read` pair is
+# the whole API this needs.
+crossterm = "0.29"
+
+# For the one thing this build can fail at mid-session and cannot put on screen:
+# `F6`'s trace export. There is no subscriber installed (see `main.rs` — one
+# writing to stderr would scribble across a raw-mode screen), so the macro
+# compiles to nothing by default and the warning is there for anyone who attaches
+# a subscriber to a file. Swallowing it instead would make a failed export
+# indistinguishable from a successful one.
+tracing.workspace = true
 
 [lints]
 workspace = true

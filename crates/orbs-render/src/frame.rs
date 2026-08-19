@@ -160,7 +160,11 @@ impl Frame {
     /// [`Frame::magnified`] does: the moment a frontend is handed something the
     /// Frame does not carry, the other frontend is playing a worse game rather
     /// than wearing a different skin. `orbs-tui` reads this and resolves the
-    /// same eight names to ANSI indices.
+    /// same eight names to ANSI indices — and reads it **per cell while
+    /// blitting**, because a tint is a region: a cell can be byte-identical
+    /// while the wash over it changed, which is what the flask's mixture band
+    /// growing looks like. A diff keyed on `Cell` alone would miss every frame
+    /// of it.
     ///
     /// **Later regions win**, so a caller may paint over an earlier tint without
     /// having to find and remove it — the same last-write-wins a `Cell` has.

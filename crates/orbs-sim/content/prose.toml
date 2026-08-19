@@ -252,6 +252,12 @@ scribe_nowhere = "a spell is written for a place. go where the work is first"
 # nobody has. The word is the way in, and the row it puts on screen is what the
 # player keeps afterwards.
 unfurl_begins = "you unfurl the record"
+
+# **Said before it happens**, so the log ends on a decision rather than simply
+# stopping. The tower keeps working whether or not anyone is looking — §5.0's
+# clock runs only while the window is open, so this is the wizard stepping away
+# rather than the world ending.
+quit_begins = "you let the orb go dark. the tower keeps its own counsel"
 # **As short as the `PgDn newest` it replaces.** This rides in the border title
 # beside the location, the tick, the tier and the grid, and at the 80-column
 # floor there is about twenty cells left - the first wording was 39 and drew as
@@ -938,6 +944,18 @@ man_undo_1 = "not built yet. the word resolves and does nothing,"
 man_undo_2 = "which is worth knowing before you rely on it"
 man_undo_3 = "until it lands, stop is what interrupts a run"
 man_undo_also = "stop, empty"
+
+# **No key is named here**, and that is not an omission. The numbered lines are
+# joined into one paragraph, so each has to flow into the next — and a manual the
+# sim owns must not name `f10` or `ctrl-c`, because which keys exist is a
+# frontend's answer and the two builds do not agree. The word is the part that is
+# true everywhere.
+man_quit_use = "quit"
+man_quit_gloss = "put the orb down and stop"
+man_quit_1 = "the tower stops when you do: nothing brews while the orb"
+man_quit_2 = "is dark, so what you built is here when you look again"
+man_quit_eg1 = "quit, when the fire is out and the shelf is stocked"
+man_quit_also = "status, weave"
 
 man_unfurl_use = "unfurl"
 man_unfurl_gloss = "read back through the record"

@@ -625,6 +625,16 @@ pub(super) const fn may_issue(verb: Verb) -> bool {
             // whole point of automating the archive; what a spell may not do is
             // decide who is holding the keyboard.
             | Verb::Wander
+            // **And it may not end the session.** `quit` was added to the
+            // vocabulary, to `Verb::ALL`, to `dispatch::execute` and to the
+            // tower's own count, and this list was the one place it was not —
+            // so a spell could raise `Quitting`, which is `AppExit::Success`
+            // under Bevy and a raw-mode teardown in the terminal. The three
+            // above are barred for *seizing the keyboard*; this one closes the
+            // game, and a **bound** spell re-casts every time it runs off the
+            // end, so it would do so on the orb's clock with nothing the player
+            // pressed able to intervene.
+            | Verb::Quit
     )
 }
 

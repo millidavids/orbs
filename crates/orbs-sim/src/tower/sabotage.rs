@@ -276,12 +276,26 @@ pub fn drift(
     logs: Query<Entity, (With<Log>, Without<Poisoned>)>,
     mut commands: Commands,
 ) {
+    // **Drawn before anything can return, and that is the whole shape of the
+    // bug this had.** An integer draw rather than a ratio helper: the same
+    // arithmetic on every platform and every `rand` release, which replay
+    // depends on.
+    //
+    // The draw used to sit *after* the "is there a log left to poison" check, so
+    // once every domain log was poisoned — roughly 1500 unattended ticks — this
+    // system stopped drawing and every subsequent `substitution` roll shifted
+    // one position along the shared `Threat` stream. `purge` un-poisons a log
+    // and shifts it back. The reagent-swap schedule was therefore a function of
+    // how many logs existed and when they filled, so **adding a seventh domain
+    // would silently change the swaps of every saved session**.
+    //
+    // `substitution` hoists its own roll for exactly this reason and says so in
+    // as many words; it was the newer of the two systems and only it got the
+    // fix. Both draw once per tick, unconditionally, for ever.
+    let roll: u64 = rngs.stream(RngStream::Threat).random();
     let Some(target) = logs.iter().next() else {
         return;
     };
-    // An integer draw rather than a ratio helper: the same arithmetic on every
-    // platform and every `rand` release, which replay depends on.
-    let roll: u64 = rngs.stream(RngStream::Threat).random();
     if roll.is_multiple_of(DRIFT_INTERVAL) {
         commands.entity(target).insert(Poisoned);
     }

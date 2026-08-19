@@ -387,6 +387,30 @@ fn a_spell_may_not_open_the_editor_or_pass_an_hour() {
 }
 
 #[test]
+fn a_spell_may_not_end_the_session() {
+    // **The one that got away when `quit` was added.** It went into the
+    // vocabulary, `Verb::ALL`, `dispatch::execute` and the tower's own verb
+    // count; `may_issue` was the single place it was missed, so a spell could
+    // raise `Quitting` — `AppExit::Success` under Bevy, a raw-mode teardown in
+    // the terminal.
+    //
+    // The three verbs barred beside it are barred for *seizing the keyboard*.
+    // This one closes the game, and a **bound** spell re-casts every time it
+    // runs off the end — so it would end the session on the orb's clock, with
+    // nothing the player pressed able to intervene.
+    let mut sim = with_spell("leaving", &["quit"]);
+    sim.submit("invoke leaving");
+    sim.step_n(6);
+
+    assert!(!sim.quitting(), "a spell ended the player's session",);
+    assert!(
+        mentioned(&sim, "will not do"),
+        "the scripted `quit` was allowed through: {:?}",
+        said(&sim),
+    );
+}
+
+#[test]
 fn an_empty_or_unknown_spell_says_so_rather_than_running_nothing() {
     // §6 forbids a bare error, and a cheerful "begun" over a spell that does
     // nothing is worse than one.

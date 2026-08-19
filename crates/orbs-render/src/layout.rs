@@ -89,12 +89,23 @@ const _: () = assert!(RAIL_FOOT_ROWS >= RAIL_FOOT_CONTENT);
 /// Below that the rail is **dropped rather than squeezed** — §9's rule that the
 /// minimised half yields and the main window never does.
 ///
-/// **Four, and it was three before the boxes were ruled off.** The rule is drawn
-/// by the box above the boundary and so costs that box a row; at three the
-/// squeezed box kept its name and state and silently dropped the spell, which is
-/// the one line telling a player that room is automated. The fixed 120×45 grid
-/// gives each box five, so this changes only where the rail yields.
-pub const MIN_RAIL_BOX: u16 = 4;
+/// **Five, and it has been three and then four.** Each raise was the same
+/// defect one row up: a squeezed box keeps its name and its state and silently
+/// drops the `►spell` line, which is the one row telling a player that room is
+/// automated. Four still did it — at grid heights 37 to 43, `(rows - 9) / 7` is
+/// four, `rail::paint` returns at `row >= floor` before the spell line, and
+/// nothing falls back.
+///
+/// It went unnoticed because the Bevy build's grid is fixed at 120×45, where
+/// each box gets five. **A terminal's grid is whatever size the window is**, and
+/// `scripts/tui.sh start 177 38` is in CLAUDE.md — so the range this was wrong
+/// over is one a person actually sits in.
+///
+/// The count is what a box has to say: a name, a state, the detail, the spell,
+/// **and the rule that closes it**. Below that the rail is dropped rather than
+/// squeezed — §9's rule that the minimised half yields and the main window never
+/// does — and its readings fall back into the session border's title.
+pub const MIN_RAIL_BOX: u16 = 5;
 
 /// The fewest columns the main window may be left with before the rail yields.
 ///

@@ -117,6 +117,25 @@ pub const SYNONYMS: &[Synonym] = &[
     //
     // `page up` is better than the word it replaced anyway: it is what a player
     // would say, and it happens to name the key that has always done this.
+    // **The two obvious words are refused, and a test is why.**
+    // `the_tolerated_collision_set_is_pinned` flagged `leave`/`weave` and
+    // `exit`/`edit`, both one character apart.
+    //
+    // Neither would *misresolve* — that is the whole point of claiming a word,
+    // and `("list", "light")` above records it: an exact match beats a fuzzy
+    // one, so typing `weave` gets `weave`. What a collision costs is the **typo**
+    // between them, which lands in an ambiguity prompt.
+    //
+    // That prompt is the reason to decline anyway. Every other pair in the
+    // pinned set offers two things you can undo; this one would offer *end the
+    // session* beside a verb a player types all the time, and picking wrong
+    // there cannot be typed back. Nothing is bought by it: `single_words` is
+    // what the collision check walks, so plain English arriving as a **phrase**
+    // reaches the verb with no collision at all.
+    syn(Verb::Quit, Register::Arcane, &["quit"]),
+    syn(Verb::Quit, Register::Shell, &["logout"]),
+    syn(Verb::Quit, Register::Plain, &["put", "it", "down"]),
+    syn(Verb::Quit, Register::Plain, &["stop", "playing"]),
     syn(Verb::Unfurl, Register::Arcane, &["unfurl"]),
     syn(Verb::Unfurl, Register::Shell, &["history"]),
     //

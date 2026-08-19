@@ -138,6 +138,7 @@ impl Sim {
         world.init_resource::<crate::execute::Opening>();
         world.init_resource::<crate::execute::Reloaded>();
         world.init_resource::<crate::execute::Unfurling>();
+        world.init_resource::<crate::execute::Quitting>();
         world.init_resource::<crate::execute::Weaving>();
         world.init_resource::<crate::execute::Wandering>();
         world.init_resource::<tower::spell::Caller>();
@@ -568,6 +569,22 @@ impl Sim {
         self.world
             .resource_mut::<crate::execute::Unfurling>()
             .take()
+    }
+
+    /// Whether a `quit` is waiting, without taking it. See [`Sim::has_opening`].
+    #[must_use]
+    pub fn is_quitting(&self) -> bool {
+        self.world.resource::<crate::execute::Quitting>().pending()
+    }
+
+    /// Whether `quit` has asked for the session to end.
+    ///
+    /// **Takes** rather than reads, like the four handshakes above it. What
+    /// leaving *means* is entirely a frontend's — dropping a window, or leaving
+    /// raw mode and putting the terminal back — and the two have nothing in
+    /// common, so the sim says only that it was asked for.
+    pub fn quitting(&mut self) -> bool {
+        self.world.resource_mut::<crate::execute::Quitting>().take()
     }
 
     /// Whether `weave` has asked for the progression screen.

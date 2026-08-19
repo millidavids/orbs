@@ -5,6 +5,9 @@
 //! aspirational: edit `prose.toml` with the game running and the next tick
 //! speaks the new line.
 //!
+//! Finding and parsing the file is [`orbs_shell::load`]'s, because every frontend
+//! needs that and only a hosted one can keep a background thread.
+//!
 //! # Why the watcher is here and not in `orbs-sim`
 //!
 //! Rule 8 forbids async in the sim, and rule 3 makes a frontend a *caller*
@@ -25,21 +28,16 @@
 //!
 //! Absent that, the game runs on the built-in text and starts no thread.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Mutex;
 use std::sync::mpsc::{Receiver, channel};
 
 use bevy::prelude::*;
 use notify::{RecursiveMode, Watcher as _};
-use orbs_sim::Prose;
+
+use orbs_shell::{CONTENT_DIR, PROSE, read};
 
 use super::driver::Tower;
-
-/// Environment variable naming a directory of content files.
-pub(crate) const CONTENT_DIR: &str = "ORBS_CONTENT";
-
-/// The prose file's name within that directory.
-const PROSE: &str = "prose.toml";
 
 /// A live watch on the content directory.
 ///
@@ -54,16 +52,6 @@ pub(crate) struct ContentWatch {
     /// contended — exactly one system reads this, on one thread.
     changes: Mutex<Receiver<()>>,
     prose: PathBuf,
-}
-
-/// Read the content directory once, with no watcher.
-///
-/// Shared with `ORBS_DUMP`, which builds no `App` and therefore cannot carry a
-/// watcher — but is the tool CLAUDE.md says to reach for first, so it has to see
-/// edited content or the rule-6 gate is only demonstrable through a window.
-pub(crate) fn load() -> Option<Prose> {
-    let dir = std::env::var_os(CONTENT_DIR).map(PathBuf::from)?;
-    read(&dir.join(PROSE))
 }
 
 /// Install the watcher, if `ORBS_CONTENT` names a readable directory.
@@ -136,30 +124,6 @@ pub(crate) fn install(app: &mut App) {
             .before(super::driver::advance)
             .run_if(resource_exists::<ContentWatch>),
     );
-}
-
-/// Read and parse the prose file, or explain why not.
-fn read(path: &Path) -> Option<Prose> {
-    let text = match std::fs::read_to_string(path) {
-        Ok(text) => text,
-        Err(error) => {
-            warn!("content: cannot read {} ({error})", path.display());
-            return None;
-        }
-    };
-    match Prose::parse(&text) {
-        Ok(prose) => Some(prose),
-        Err(error) => {
-            // Keep what we have. A writer mid-edit saves broken TOML constantly,
-            // and answering that by falling back to silence would make the tower
-            // go mute at the exact moment someone is looking at it.
-            warn!(
-                "content: {} is not valid ({error}); keeping the last good text",
-                path.display()
-            );
-            None
-        }
-    }
 }
 
 /// Apply any pending edit, between ticks.

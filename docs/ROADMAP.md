@@ -2748,9 +2748,57 @@ content item, never all of it true — move it here.
       `ORBS_DUMP` is a still photograph and now needs eighteen environment
       variables to pose; a terminal build is the running game under `tmux
       send-keys`, which is a test harness for everything that moves.
-      **See it:** `tmux new-session -d -s orbs -x 120 -y 45 target/debug/orbs-tui`,
-      then `send-keys 'attend laboratory' Enter` and `capture-pane -p` — the
+
+      ✅ **The boundary is real, and `orbs-shell` is what made it so** (`0.3.1`).
+      ~9,100 lines of painters and surfaces moved out of the Bevy crate into a
+      shell both frontends share, under a gate of 56 byte-identical dumps. §19
+      records what moved and why `bevy_ecs` is allowed there.
+      ✅ **It draws** (`0.3.2`) — the same `Frame`, in ANSI, with a shadow-buffer
+      diff and a startup probe for ambiguous glyph widths.
+      ✅ **It plays** (`0.3.3`) — a clock, the shared key table, and the
+      step-before-drain rule a walk's replay depends on.
+      ✅ **All four surfaces** (`0.3.4`) — editor, weave screen, maze, unfurled
+      transcript.
+      ✅ **Every key the Bevy build binds** (`0.3.7`) — `F4` `F5` `F6` `F7`
+      `F10`, and `PgUp`/`PgDn` without `unfurl`. It shipped once without them
+      while the border drew `F4 deep` on every frame; the rules now live in
+      `orbs_shell::shortcuts` so a second copy cannot go missing.
+      ✅ **The fire burns orange** (`0.3.8`) — the ramp ran `dark-red → white`
+      against §19's *"orange on every tube"*. Four heats out of two ANSI hues,
+      using the weight axis. `scripts/ink.py` is what found it and is the only
+      instrument in the project that can see a resolved colour.
+      ✅ **`quit`** (`0.3.9`) — the way out is a word, in both builds. §19
+      records the tower-wide count going 22 → 23 and why `leave` and `exit` are
+      refused.
+      ✅ **Resizing reflows instead of scrambling** (`0.3.10`) — the shadow
+      buffer told the truth about itself and a lie about the screen, so every
+      cell the new frame left blank kept its old glyph.
+      ✅ **The game is played, as a test suite** (`0.3.11`) — 92 scenarios that
+      type at a real terminal and read the screen back, plus the first unit tests
+      `surfaces.rs` has ever had. It found the width probe measuring a glyph that
+      cannot vary, and the maze map running a whole second behind the arrow keys.
+      ✅ **It boots** (`0.3.12`) — §4's sequence runs here too, naming `crossterm`
+      where the other build names `bevy`. It was skipped on an "instant-startup"
+      argument that was really about the development loop, which `ORBS_BOOT=0`
+      already answered. The world's clock stays still through it, which is a
+      determinism rule and not a nicety.
+      ✅ **Reviewed, and the instruments fixed first** (`0.3.13`) — nine defects,
+      several of them in the suite rather than the game: assertions satisfied by
+      the command they typed, colour scenarios decoding the wrong columns, a
+      spell that could end the session, a rail calling sigils seconds, a ward
+      sheet vanishing at the authoring floor, and three keyboard-parity gaps
+      whose comments all claimed parity. §19 records the set.
+
+      What is left is what accretes: every screen built after this either goes
+      through the Frame or quietly does not, and this is the only thing that can
+      tell the difference.
+      **See it:** `scripts/tui.sh start`, then
+      `scripts/tui.sh type 'attend laboratory'` and `scripts/tui.sh see` — the
       tower, played and read back, with no window anywhere
+      **...and driven:** `scripts/play.sh` plays the whole game in half a minute;
+      `scripts/play.sh brewing::` plays one room of it
+      **...and it opens properly:** `cargo run -p orbs-tui` — a dark tube, then
+      the card printing its own name, then the tower
 
 ---
 

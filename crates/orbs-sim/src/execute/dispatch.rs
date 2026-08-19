@@ -75,6 +75,7 @@ fn execute(intent: &Intent, world: &mut World) {
         Verb::Meditate => meditate(intent, world),
         Verb::Status => status(world),
         Verb::Unfurl => super::unfurl::unfurl(world),
+        Verb::Quit => super::quit::quit(world),
         Verb::Weave => super::weave::weave(world),
         Verb::Peruse => files::peruse(intent, world),
         Verb::Sift => files::sift(intent, world),
@@ -171,6 +172,12 @@ pub const fn is_live(verb: Verb) -> bool {
             // launch teaches from, would be exactly the affordance-nobody-can-
             // discover problem it was added to solve — one level up.
             | Verb::Unfurl
+            // **The way out has to be offered everywhere**, and for a stronger
+            // reason than the rest of this list: a player who cannot find how to
+            // stop is not stuck in a room, they are stuck in the game. It is
+            // also the only verb here whose absence a player discovers by
+            // reaching for the window's close button.
+            | Verb::Quit
             // **Live and never gated**, unlike `bind` below. At experience 0 it
             // shows the first threshold named and nothing taken, which is the
             // onboarding value rather than a dead end — a new player learns what

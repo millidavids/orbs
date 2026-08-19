@@ -30,6 +30,7 @@ mod dispatch;
 mod files;
 mod navigate;
 mod pipeline;
+mod quit;
 mod recall;
 mod research;
 mod scribe;
@@ -64,6 +65,7 @@ pub use scroll::Scroll;
 // Crate-internal, and the reason is the defect it closed: `spell::block` has to
 // ask the same question `wield` asks, or a scripted spend is charged a
 // production slot the typed one is not.
+pub use quit::Quitting;
 pub(crate) use scroll::spending;
 pub use scry::land as land_probe;
 pub use unfurl::Unfurling;

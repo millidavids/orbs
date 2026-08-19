@@ -26,10 +26,26 @@ use orbs_sim::Sim;
 /// **Two hours, and an hour was not enough.** A policy pays its first lap's setup
 /// once and amortises it over the run, and the ambient sabotage surface
 /// (`tower::sabotage`) costs a few minutes an hour — so at 3600 ticks a single
-/// badly-timed swap moves the rate by more than the tolerance band, and the test
-/// would fail on the seed rather than on the game. Three seeds at this length were
-/// measured inside the band before it was pinned.
+/// badly-timed swap moves the rate by more than the tolerance band.
+///
+/// **Length alone does not fix it, which this file used to claim it did.** The
+/// note here said *"three seeds at this length were measured inside the band"*,
+/// and that was not true of the tree it was written against: measured over seeds
+/// 0, 3, 11 and 42, clarity spans 0.1244 to 0.1383 against a pinned 0.140 — a
+/// seed-to-seed spread wider than the 10% band, so seed 3 fails and seed 0
+/// passes on identical code. Sabotage is *part of the economy*, so that spread
+/// is the game rather than noise; what is wrong is measuring it once.
+///
+/// [`SEEDS`] is the fix: the pin is held against the **mean** of several worlds.
 const SPAN: u64 = 7200;
+
+/// The worlds a pinned rate is averaged over.
+///
+/// Four, and chosen to include an unlucky one: seed 3 draws roughly twice the
+/// sabotage of seed 0 over this span, and a pin that quietly excluded it would be
+/// pinning a fair-weather economy. Averaging keeps the test sensitive to a real
+/// regression — which moves every seed — while surviving the luck of any one.
+const SEEDS: [u64; 4] = [0, 3, 11, 42];
 
 /// The sampling interval. Coarse: nothing here reads the intermediate rows.
 const EVERY: u64 = 600;
@@ -47,7 +63,12 @@ const BY_HAND: &[&str] = &[
     "empty mortar_and_pestle",
     "digest ground-sage",
     "meditate 14",
-    "siphon balneum_mariae",
+    // **`siphon` used to be here and is not a word any more** (§19): the
+    // pipeline reaches into an unbusy instrument before the shelf, so `mix`
+    // takes the tincture out of the bath itself. Left in, it was a fuzzy miss
+    // costing the reference a tick and quietly widening the very anchor this
+    // file exists to hold — a dead command inside the number everything else is
+    // compared against.
     "grind rock-salt",
     "meditate 9",
     "empty mortar_and_pestle",
@@ -163,14 +184,31 @@ fn every_pinned_rate_is_one_a_sweep_still_reaches() {
             // one run is one sample. `report::EXPECTED` says so.
             continue;
         };
-        let run = drive::run(policy, 0, SPAN, EVERY);
-        let rate = run.rate();
+        // **Averaged over worlds, not measured in one.** A single hardcoded seed
+        // made this test's sensitivity worse than the spread it was ignoring:
+        // seed 3 leaves clarity, damped and grind all outside the band while
+        // seed 0 passes, so any real regression smaller than that gap was
+        // invisible and any seed change was a false alarm.
+        let runs: Vec<_> = SEEDS
+            .iter()
+            .map(|seed| drive::run(policy, *seed, SPAN, EVERY))
+            .collect();
+        #[allow(clippy::cast_precision_loss)]
+        let mean = runs.iter().map(drive::Run::rate).sum::<f64>() / runs.len() as f64;
+        let spread: Vec<String> = runs
+            .iter()
+            .zip(SEEDS)
+            .map(|(run, seed)| format!("{seed}:{:.4}", run.rate()))
+            .collect();
+        let cost: usize = runs.iter().map(|run| run.cost).sum();
         assert!(
-            !report::off_by(rate, want),
-            "{} measured {rate:.4} against its pinned {want:.4} — either the game \
-             changed or the policy has: {} of its commands cost something",
+            !report::off_by(mean, want),
+            "{} averaged {mean:.4} over {} worlds against its pinned {want:.4} — \
+             either the game changed or the policy has. Per seed: {}. {cost} \
+             commands cost something across all of them",
             policy.name,
-            run.cost,
+            SEEDS.len(),
+            spread.join(", "),
         );
     }
 }

@@ -19,6 +19,7 @@ mod sim;
 
 use bevy::prelude::*;
 use bevy::window::WindowResolution;
+use orbs_shell::{seed, wizard};
 
 /// 1280×720 puts the 960×720 picture at **exactly** native cell size — scale
 /// 1.0, an 8×16 glyph — with 160 pixels of bar down each side.
@@ -29,32 +30,15 @@ use bevy::window::WindowResolution;
 /// thinks to drag the window.
 const INITIAL_WINDOW: (u32, u32) = (1280, 720);
 
-/// The seed the game starts from until saves exist.
-const SEED: u64 = 0x0B5;
-
-/// The seed, or `ORBS_SEED`'s if it names a number.
-///
-/// **A See-it affordance, not a setting.** Anything the world *generates* — the
-/// archive's stacks first, sabotage and sieges later — is one seed's worth of
-/// evidence per run, and one sample cannot show a distribution. Three dumps of
-/// the same maze looked like proof that randomising it had failed; they were
-/// three copies of one seed.
-///
-/// Tests sweep seeds directly through `Sim::new` and always could. This is the
-/// same reach from outside the binary, so a person can look rather than trust a
-/// test — which is the whole of §15's gate.
-fn seed() -> u64 {
-    std::env::var("ORBS_SEED")
-        .ok()
-        .and_then(|value| value.trim().parse().ok())
-        .unwrap_or(SEED)
-}
-
 fn main() -> AppExit {
     let seed = seed();
     // Before the App, because the whole value of it is needing none of the App.
-    // See `shell::dump`.
-    if shell::dump(seed, wizard()) {
+    // See `orbs_shell::dump` — and note it is the *shared* dump, so
+    // `orbs-tui --dump` prints the same text through the same painters.
+    //
+    // The engine line is the one thing this frontend has to tell it: the card is
+    // an inventory of the machine, and only this binary knows Bevy is in it.
+    if orbs_shell::dump(seed, wizard(), &boot::engine()) {
         return AppExit::Success;
     }
 
@@ -87,34 +71,6 @@ fn main() -> AppExit {
         .run()
 }
 
-/// Who is at the orb.
-///
-/// §4's framing is *"always inside"* — the player never sees the wizard, because
-/// the player **is** the wizard — so the prompt wears their own name.
-///
-/// | Source | Wins when |
-/// |---|---|
-/// | `ORBS_WIZARD` | set, and not blank |
-/// | `USER` | POSIX — macOS and Linux |
-/// | `USERNAME` | Windows, which does not set `USER` |
-/// | the orb's own name | none of them do |
-///
-/// `USERNAME` is not optional politeness: §13 ships Windows through Steam, so
-/// leaving it out would mean the platform most players are on always falls back
-/// to `orbs $ ` while the two development platforms quietly look right.
-///
-/// `ORBS_WIZARD` exists because the alternative was renaming a wizard by
-/// overriding a system variable, which works by accident rather than by
-/// intention. The real answer is a settings screen, which §15 puts in Phase 11
-/// alongside the rest of the options; until then this is the switch.
-///
-/// Read here rather than inside the sim, deliberately: the environment is not
-/// deterministic, and although a name feeds nothing but the prompt, reaching for
-/// it from inside a world that must replay identically from a seed is a habit
-/// worth not starting.
-fn wizard() -> Option<String> {
-    ["ORBS_WIZARD", "USER", "USERNAME"]
-        .into_iter()
-        .filter_map(|key| std::env::var(key).ok())
-        .find(|name| !name.trim().is_empty())
-}
+// Who is at the orb, and which seed the world grows from, are
+// `orbs_shell::environment`'s — read outside the sim on purpose, and shared so
+// that two frontends cannot derive the prompt name by two different rules.

@@ -170,6 +170,7 @@ fn sample(verb: Verb) -> (&'static str, &'static str) {
         // than depending on how many nouns happen to exist.
         Verb::Invoke => ("tower", "invoke first_light"),
         Verb::Unfurl => ("tower", "unfurl"),
+        Verb::Quit => ("tower", "quit"),
         Verb::Weave => ("tower", "weave"),
         Verb::Follow => ("archive", "follow north"),
         Verb::Wander => ("archive", "wander"),

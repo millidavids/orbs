@@ -90,8 +90,14 @@ first, port fixes back into the skill, then update its `targets_bevy` and
 cargo check --workspace          # fast iteration
 cargo test -p orbs-sim           # headless sim tests — no GPU, no window
 cargo run -p orbs                # Bevy frontend — opens a window, Esc to quit
-cargo run -p orbs-tui            # terminal frontend (stub until Phase 1)
-cargo run -p orbs-balance -- ... # economy sweeps (stub until Phase 1)
+cargo run -p orbs-tui            # terminal frontend — plays; F10 leaves, as in
+                                 #   the Bevy build (Ctrl-C and Ctrl-D also do)
+cargo run -p orbs-balance -- ... # economy sweeps
+
+scripts/tui.sh start             # ...the terminal build under tmux, drivable
+scripts/tui.sh type 'attend laboratory'
+scripts/tui.sh see               # the screen, as text
+scripts/tui.sh stop
 ```
 
 ### The gate — after every step
@@ -102,6 +108,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
 cargo build -p orbs              # must LINK, not merely check
+cargo build -p orbs-tui          # ...and so must the terminal build
 ```
 
 **`cargo check` does not substitute for `cargo build -p orbs`.** `check` stops at
@@ -191,6 +198,29 @@ It also asserts §9's Deep/Wide parity rule.
 boot text that CP437 cannot draw, and pane content overwriting a border because
 no sub-painter was established. Add a screen to it whenever a new surface is
 built.
+
+### Playing it, as a test — `scripts/play.sh`
+
+**92 scenarios that type at a real terminal and read the screen back.** Needs
+`tmux`; without it every scenario prints SKIPPED and passes, so read the output
+rather than the exit code the first time you run it somewhere.
+
+```sh
+scripts/play.sh                     # all of it, about a minute
+scripts/play.sh brewing::           # one area
+scripts/play.sh -- --test-threads 1 # one at a time, to watch it play
+```
+
+**Deliberately not in the gate.** Every scenario is `#[ignore]`d so
+`cargo test --workspace` skips them, and CI runs them in a separate
+non-blocking job. Its standing is `orbs-balance`'s: **run it after anything that
+touches the sim, the shell, or the loop.**
+
+It is the only layer that exercises the event loop, the redraw diff, keyboard
+ownership between five surfaces, the clocks measured off `Time`, and colour as a
+terminal resolves it. CLAUDE.md documents the driver's rules — why an assertion
+is scoped to the newest command block, and the four ways a wait can look like it
+passed without the game having done anything.
 
 ### Dev iteration speed
 

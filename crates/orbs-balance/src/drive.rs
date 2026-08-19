@@ -171,12 +171,34 @@ pub fn run(policy: Policy, seed: u64, ticks: u64, every: u64) -> Run {
 /// [`Role::Success`]: orbs_render::Role::Success
 /// [`Role::Danger`]: orbs_render::Role::Danger
 fn tally(sim: &Sim) -> (usize, usize, BTreeMap<String, usize>) {
-    use orbs_render::{FieldName, Role, Value};
+    use orbs_render::{FieldName, Outcome, RecordKind, Role, Value};
 
     let (mut cost, mut landed) = (0, 0);
     let mut reasons: BTreeMap<String, usize> = BTreeMap::new();
 
     for record in sim.scrollback().records().iter() {
+        // **A line that never resolved costs the policy a tick and used to be
+        // invisible here.** Every parser outcome is `Role::Normal` by design —
+        // `parser/report.rs` says the accent triad is danger, cost and success,
+        // and *"a parser needing one more word is none of those"* — so a
+        // command the tower could not read at all fell through the arm below
+        // and contributed to neither column.
+        //
+        // That is precisely the misdiagnosis `--why` exists to prevent: the
+        // downstream shape of an ambient reagent swap is `grind sage` ceasing to
+        // parse, and the reader was shown a `cost` column that could not see it
+        // and a reasons list pointing somewhere else entirely.
+        let unread = matches!(
+            record.outcome(),
+            Some(Outcome::Unresolved | Outcome::Incomplete | Outcome::Candidate)
+        );
+        if unread {
+            cost += 1;
+            if let Some(Value::Text(why)) = record.field(FieldName::Message) {
+                *reasons.entry(why.to_owned()).or_default() += 1;
+            }
+            continue;
+        }
         match record.role() {
             Role::Cost | Role::Danger => {
                 cost += 1;
@@ -184,8 +206,27 @@ fn tally(sim: &Sim) -> (usize, usize, BTreeMap<String, usize>) {
                     *reasons.entry(why.to_owned()).or_default() += 1;
                 }
             }
-            Role::Success => landed += 1,
-            Role::Normal => {}
+            // **A `Completion` that earned something**, not any success. This
+            // counted every `Role::Success` record, so `attend`, `kindle`,
+            // `empty` and each concentration gain all inflated it — `sweep
+            // --ticks 0` reported five landed runs before a command had been
+            // issued, against a field documented as *"runs that finished
+            // successfully — the work the rate is made of"*.
+            //
+            // The rate is experience over ticks, so *the work the rate is made
+            // of* is precisely a run that yielded experience. Both halves are
+            // structural — a record kind and a counted field — so neither
+            // depends on prose the way a match on the message would.
+            Role::Success
+                if record.kind() == RecordKind::Completion
+                    && matches!(
+                        record.field(FieldName::Quantity),
+                        Some(Value::Count(earned)) if earned > 0
+                    ) =>
+            {
+                landed += 1;
+            }
+            Role::Success | Role::Normal => {}
         }
     }
     (cost, landed, reasons)
@@ -297,5 +338,44 @@ fn walk_one(sim: &mut Sim) {
         // Walled in on all four sides is unreachable in a carved maze, but a
         // step that does nothing would spin the driver for ever. Burn the tick.
         None => sim.step(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::tally;
+    use orbs_sim::Sim;
+
+    #[test]
+    fn a_line_the_tower_cannot_read_at_all_is_counted_and_named() {
+        // **The gap `--why` was built to close, and could not see.** Every
+        // parser outcome is `Role::Normal` — `parser/report.rs` reserves the
+        // accent triad for danger, cost and success — so a command the tower
+        // never resolved fell into neither column, and CLAUDE.md's instruction
+        // to *"read the `cost` column before the rate"* was reading a number
+        // that could not include it.
+        let mut sim = Sim::new(0);
+        sim.submit("xyzzy plugh");
+        sim.step();
+
+        let (cost, _, reasons) = tally(&sim);
+        assert!(
+            cost > 0,
+            "an unreadable line cost the policy a tick and was tallied as free",
+        );
+        assert!(
+            !reasons.is_empty(),
+            "the line was counted but `--why` has nothing to say about it",
+        );
+    }
+
+    #[test]
+    fn nothing_lands_before_any_work_is_done() {
+        // `landed` counted every `Role::Success` record, so a sim that had
+        // issued no commands at all still reported finished runs — against a
+        // field documented as *"the work the rate is made of"*.
+        let sim = Sim::new(0);
+        let (_, landed, _) = tally(&sim);
+        assert_eq!(landed, 0, "the tower reported finished work at tick zero");
     }
 }

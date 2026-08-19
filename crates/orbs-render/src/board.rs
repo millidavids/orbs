@@ -161,8 +161,50 @@ impl Board {
     /// fifty-press walk would be a sheet frozen at the beginning.
     #[must_use]
     pub fn showing(&self) -> &[Attempt] {
-        let from = self.attempts.len().saturating_sub(Self::SHOWN);
+        self.showing_capped(Self::SHOWN)
+    }
+
+    /// The most recent `cap` presses, for a pane with less room than `SHOWN`.
+    ///
+    /// **A shorter window, not a lost comparison.** `split` refuses the sheet
+    /// whole rather than clipping it, on the argument that *"a sheet showing
+    /// four of six presses has lost the two a player was about to compare"* —
+    /// which is right about columns and wrong about rows, because [`SHOWN`] has
+    /// always made this a window on the recent end anyway. Ten of fifty-one is
+    /// the same kind of view as twelve of fifty-one.
+    ///
+    /// [`SHOWN`]: Self::SHOWN
+    #[must_use]
+    pub fn showing_capped(&self, cap: usize) -> &[Attempt] {
+        let from = self.attempts.len().saturating_sub(cap.min(Self::SHOWN));
         self.attempts.get(from..).unwrap_or(&[])
+    }
+
+    /// How many presses a pane this many rows tall can show.
+    ///
+    /// Zero when it cannot show even one, which is where the sheet does refuse.
+    #[must_use]
+    pub const fn presses_within(rows: u16) -> usize {
+        let furniture = Self::HEAD + Self::FOOT;
+        if rows <= furniture {
+            return 0;
+        }
+        (rows - furniture) as usize
+    }
+
+    /// The rows a sheet showing `presses` of them wants.
+    #[must_use]
+    pub const fn rows_for(presses: usize) -> u16 {
+        // Capped at `SHOWN` first, which is 12 — so the widening is exact and
+        // there is nothing for a cast to truncate.
+        let presses = if presses > Self::SHOWN {
+            Self::SHOWN
+        } else {
+            presses
+        };
+        #[allow(clippy::cast_possible_truncation)]
+        let presses = presses as u16;
+        presses + Self::HEAD + Self::FOOT
     }
 
     /// Rows above the presses: the socket-name header.
@@ -191,7 +233,16 @@ impl Board {
     /// tried*, then *what I will try next*.
     #[must_use]
     pub fn row(&self, index: usize) -> Option<Vec<(char, Style, Option<Tint>)>> {
-        let shown = self.showing();
+        self.row_capped(index, Self::SHOWN)
+    }
+
+    /// One row of a sheet showing only its most recent `cap` presses.
+    ///
+    /// See [`showing_capped`](Self::showing_capped) for why a short pane gets a
+    /// smaller sheet rather than none.
+    #[must_use]
+    pub fn row_capped(&self, index: usize, cap: usize) -> Option<Vec<(char, Style, Option<Tint>)>> {
+        let shown = self.showing_capped(cap);
         let count = shown.len();
         let index = u16::try_from(index).ok()?;
 

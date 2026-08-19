@@ -35,7 +35,7 @@ pub use node::{
     Cwd, Domain, Fixture, HeatSource, Held, Keep, Name, Nameable, NodeId, NodeIds, Operation,
     Protected, Reading, Store, children_of, domain_of, filesystem_root, path_of, root, where_at,
 };
-pub use panel::{Craft, Instrument, Meter, State, instruments, instruments_in, state_at};
+pub use panel::{Craft, Instrument, Meter, State, Unit, instruments, instruments_in, state_at};
 pub use sabotage::{
     Log, Poisoned, Substituted, drift, emit_lines, poison, poisoned, restore, settling, substitute,
     substitution, verify,

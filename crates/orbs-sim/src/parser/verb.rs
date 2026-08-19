@@ -517,6 +517,18 @@ pub enum Verb {
     /// wants_it` names this exact scenario a word in advance. `und` and `unf`
     /// part at the third character, which is the length the naming pass governs.
     Unfurl,
+    /// Put the orb down and leave.
+    ///
+    /// **A word for a key that already worked**, which is `unfurl`'s argument
+    /// exactly: `F10` has always left and nothing on screen says so. §6 makes
+    /// this a game played by typing, so the way out should be a word like every
+    /// other way through it.
+    ///
+    /// The name is free of the naming pass's traps — no other verb begins with
+    /// `q`, so `qui` names one verb and always will. It is also the word the
+    /// spell editor and the weave screen already use for *close this*, which
+    /// makes it mean one thing at three depths rather than three things.
+    Quit,
     /// Fast-forward the clock.
     Meditate,
     /// Carry a reagent from one place to another.
@@ -633,7 +645,7 @@ pub enum Verb {
 
 impl Verb {
     /// Every verb in the Phase 0 vocabulary, and what the phases since have added.
-    pub const ALL: [Self; 29] = [
+    pub const ALL: [Self; 30] = [
         Self::Attend,
         Self::Survey,
         Self::Peruse,
@@ -643,6 +655,7 @@ impl Verb {
         Self::Verify,
         Self::Undo,
         Self::Unfurl,
+        Self::Quit,
         Self::Meditate,
         Self::Move,
         Self::Wield,
@@ -727,6 +740,7 @@ impl Verb {
             | Self::Undo
             | Self::Unfurl
             | Self::Weave
+            | Self::Quit
             | Self::Meditate => Group::Orb,
             // Kept in step with `is_destructive`, which had no reader until now
             // — a test asserts the two agree rather than trusting this list.
@@ -760,6 +774,7 @@ impl Verb {
             Self::Verify => "verify",
             Self::Undo => "undo",
             Self::Unfurl => "unfurl",
+            Self::Quit => "quit",
             Self::Meditate => "meditate",
             Self::Move => "move",
             Self::Wield => "wield",
@@ -911,6 +926,7 @@ impl Verb {
             Self::Verify => "verifying",
             Self::Undo => "undoing",
             Self::Unfurl => "unfurling",
+            Self::Quit => "leaving",
             Self::Meditate => "meditating",
             Self::Move => "moving",
             Self::Wield => "wielding",
@@ -950,6 +966,7 @@ impl Verb {
             Self::Status
             | Self::Undo
             | Self::Unfurl
+            | Self::Quit
             | Self::Weave
             | Self::Research
             | Self::Wander
@@ -1135,7 +1152,20 @@ mod tests {
         // the missing mechanism and without a third debt. A domain that needs
         // more words than it has fixtures is the case that would finally force
         // it.
-        assert_eq!(tower_wide.count(), 22);
+        //
+        // **23, and `quit` is the one word the ceiling was never about.** Every
+        // entry above it acts on the tower or reports on it, and the budget
+        // exists to stop a *domain's* vocabulary sprawling because it lacked the
+        // mechanism to scope a word to a fixture. `quit` is not waiting on that
+        // mechanism and never could be: it addresses the orb rather than the
+        // tower, it touches no world state, and there is no fixture in any room
+        // that leaving the game could be scoped to. It is `Group::Orb`'s, beside
+        // `status` and `unfurl`, and like `unfurl` it exists because the thing it
+        // does was previously reachable only by a key nobody could discover.
+        //
+        // The ceiling still stands for the case it was drawn for. A domain verb
+        // arriving here is still the argument for building the mechanism.
+        assert_eq!(tower_wide.count(), 23);
 
         // One per instrument that has a word of its own: the laboratory's
         // `grind`, `digest`, `mix`, `distil` and `kindle`, and the lens's

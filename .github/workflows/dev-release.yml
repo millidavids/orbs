@@ -71,10 +71,69 @@ jobs:
       - name: Link the game
         run: cargo build -p orbs
 
+      - name: Link the terminal build
+        # `clippy --workspace --all-targets` stops at metadata for the same
+        # reason `cargo check` does, so nothing above this actually links
+        # `orbs-tui`. Without it the second frontend rots between the times
+        # anyone looks at it — which is precisely the failure it exists to fix
+        # for everything else.
+        run: cargo build -p orbs-tui
+
+      - name: The two frontends draw the same screen
+        # Rule 2, as a check rather than a claim. Both binaries reach
+        # `orbs_shell::dump_script` through the same painters, from the same
+        # `Sim`; if they ever disagree, the shell has grown a frontend-shaped
+        # hole in it. `ORBS_WIZARD` is pinned because the prompt name otherwise
+        # falls back to `$USER`, which differs between the two invocations only
+        # by accident.
+        env:
+          ORBS_WIZARD: wizard
+          ORBS_BOOT: "0"
+        run: |
+          script='attend laboratory; kindle charcoal; grind sage'
+          diff <(ORBS_DUMP="$script" ./target/debug/orbs) \
+               <(./target/debug/orbs-tui --dump "$script")
+
       - name: The screens example
         # CLAUDE.md: "It has already found bugs that the full test suite did
         # not." It costs seconds and it exercises the real Frame path.
         run: cargo run -p orbs-render --example screens > /dev/null
+
+  play:
+    name: Play
+    # **A job of its own, and deliberately not blocking.** The ninety-odd
+    # scenarios drive a real terminal at wall-clock speed — a minute here
+    # against seconds for everything above — and they are the layer most likely
+    # to be *slow* rather than wrong on a loaded runner. Red here is worth
+    # reading every time; it is not worth stopping a promotion over until it has
+    # a few weeks of green behind it.
+    #
+    # It needs none of `gate`'s Bevy dependencies: `orbs-tui` is crossterm and
+    # the shell, with no engine under it, so this builds in a fraction of the
+    # time the game does.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable channel (pinned)
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+
+      - name: Install tmux
+        # The scenarios skip loudly without it rather than failing, so this is
+        # what keeps a green run from meaning "nothing ran".
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends tmux
+
+      - name: Play the game
+        # Fewer threads than the desk: a shared runner has two cores, and every
+        # scenario is a terminal repainting through one tmux server.
+        run: ./scripts/play.sh -- --test-threads 4
 
   # ---------------------------------------------------------------------------
   # STEAM — commented out until there is a steamworks integration to package.

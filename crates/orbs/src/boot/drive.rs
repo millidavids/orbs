@@ -5,7 +5,7 @@
 
 use bevy::prelude::*;
 
-use super::stage::Boot;
+use orbs_shell::Boot;
 
 /// Let the sequence run.
 ///

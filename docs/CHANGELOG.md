@@ -15,6 +15,62 @@
   at 1.0 (DESIGN.md §19).
 -->
 
+## [v0.3.13] - 2026-08-19
+
+### Description
+In development — a dev log, not patch notes. The orb learned to break another
+wizard's seal, every room got its own line on a rail down the side of the
+screen, and the whole game now runs in a plain terminal — boot sequence and all.
+
+### Added
+- **Another wizard's orb, sealed with four sigils of six.** Press it and it tells
+  you how many are in the right socket and how many are merely present. Turn a
+  dial, press again, and narrow it down. The orb keeps no list of what is still
+  possible — working that out is the puzzle, and handing it to the machine would
+  be handing away the game.
+- **Three recipes nobody taught you.** A broken seal spills the far wizard's
+  working log, and somewhere in it is a way to make something you had no recipe
+  for. Until you find it the orb cannot make it, cannot name it, and has no page
+  about it.
+- **A rail down the side of the screen**, one box per room, so you can see the
+  laboratory working while standing in the archive. It says what each room is
+  doing, marks a room that has news, and marks one where something has gone
+  wrong — and going to look is what clears it.
+- **Spells can drive the lens.** A four-rung spell solves any seal, because a
+  socket can be told to try the next sigil it has not tried yet without your
+  having to name which one that is.
+- **The whole game runs in a terminal.** Same tower, same words, same screens —
+  no window, no graphics card. Every surface works: writing spells, walking the
+  stacks with the arrow keys, the progression screen, reading back through the
+  transcript. It opens the way the other one does, with the orb waking up.
+- **A way to stop playing.** `quit` ends the session in both builds, and so do
+  the keys you would expect. Nothing on screen used to say how to leave.
+
+### Changed
+- **Reading a seal costs nothing.** A press used to take twelve seconds of the
+  one thing your laboratory could be doing instead. Now a solver can run beside
+  a full brewing loop without either waiting on the other.
+- **The instrument panel and the maze got out of each other's way** on small
+  screens: where the pictures no longer fit, the one that yields does so cleanly
+  instead of half-drawing.
+
+### Fixed
+- **A spell could end your session.** `quit` written into a spell closed the
+  game, and a spell you had bound would do it again every time it looped.
+- **The rail called things seconds that were not seconds.** The archive reported
+  unwalked shelves and the lens reported sigils, both with a `t` on the end — so
+  the lens counted *down* as you won, which read as a job about to finish.
+- **The seal's working sheet vanished** on a small screen once you had pressed
+  twelve times — exactly when a long solve most needed it. It now shows fewer
+  rows rather than none.
+- **A room running a spell could stop saying so** at some window heights, which
+  is the one line telling you that room is automated.
+- **Reading back through the transcript** now works from behind an open spell
+  editor, steps one entry at a time with the arrow keys, and actually moves the
+  moment you ask for it.
+- **Letting go of an arrow key** on the way out of the stacks no longer types
+  into the prompt.
+
 ## [v0.2.0] - 2026-08-16
 
 ### Description
