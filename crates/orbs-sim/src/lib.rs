@@ -14,6 +14,7 @@ pub mod session;
 pub mod tower;
 
 mod rng;
+pub mod save;
 mod schedule;
 mod sim;
 mod tick;
@@ -21,6 +22,7 @@ mod tick;
 pub use content::{ContentError, Prose};
 pub use execute::{LOG, MAX_MEDITATE, Request};
 pub use rng::{RngStream, Rngs};
+pub use save::{Save, SaveError};
 pub use schedule::{SimSchedule, new_sim_schedule};
 pub use session::{
     Choices, DEFAULT_WIZARD, Pending, Queued, Scrollback, Skip, Submission, Submissions, Wizard,

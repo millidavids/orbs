@@ -10,7 +10,7 @@ members = ["crates/*"]
 #
 # It becomes ordinary semver at 1.0, and the switch is one-way: DESIGN.md §19
 # records it so the jump from `0.<phase>` to `1.<minor>` is not read as a phase.
-version = "0.3.13"
+version = "0.3.16"
 edition = "2024"
 # bevy_ecs 0.19 requires 1.95. Declaring it makes the resolver MSRV-aware and
 # turns "too old toolchain" into a clear error instead of a cryptic type failure.

@@ -23,10 +23,65 @@ use orbs_sim::Sim;
 /// room that finished it*.
 fn with_a_potion() -> Sim {
     let mut sim = Sim::new(1);
+    // **§10.1's whole chain, from endless stock, with no debug door in it.**
+    //
+    // It used to open with `debug_spawn clarified-draught`, which is
+    // `cfg(debug_assertions)` — so every test in this file **failed under `cargo
+    // test --release`** and had done since the file was written, because nobody
+    // ran that profile. Six siblings answer the same problem by gating
+    // themselves off in release; that is the wrong answer here, because the
+    // arsenal is a shipped room and a room with no release test is the half that
+    // matters going untested.
+    //
+    // Brewing it properly costs about fifty ticks and needs no door at all:
+    // sage, rock-salt and charcoal are all `Holding::endless`. It also makes the
+    // fixture say what its own doc claims — a potion *carried out of the room
+    // that finished it*, having really been finished there.
+    sim.submit("attend laboratory");
+    sim.step();
+    sim.submit("kindle charcoal");
+    sim.step();
+    brew_one(&mut sim);
+    sim.submit("move clarity to arsenal");
+    sim.step();
+
+    assert!(
+        !kept(&sim).is_empty(),
+        "the chain did not reach a potion, so every test in this file proves nothing",
+    );
+    sim
+}
+
+/// §10.1's five stages, once, leaving a `clarity` on the laboratory's shelf.
+///
+/// Assumes the athanor is already lit and the player is standing in the
+/// laboratory — two of the five stages want heat.
+fn brew_one(sim: &mut Sim) {
+    // **Scoured before use, never after fouling** — `orbs-balance`'s rule, and
+    // the reason a second lap through this chain used to refuse silently: `mix`
+    // leaves the flask charged, so the *next* run's `mix` has nowhere to land.
+    // A clean instrument refuses these harmlessly.
     for line in [
-        "attend laboratory",
-        "kindle charcoal",
-        "debug_spawn clarified-draught",
+        "empty mortar_and_pestle",
+        "empty balneum_mariae",
+        "empty flask_and_rod",
+        "empty alembic",
+    ] {
+        sim.submit(line);
+        sim.step();
+    }
+
+    for line in [
+        "grind sage",
+        "meditate 9",
+        "empty mortar_and_pestle",
+        "digest ground-sage",
+        "meditate 14",
+        "grind rock-salt",
+        "meditate 9",
+        "empty mortar_and_pestle",
+        "mix sage-tincture with ground-salt",
+        "meditate 12",
         "distil clarified-draught",
     ] {
         sim.submit(line);
@@ -35,9 +90,6 @@ fn with_a_potion() -> Sim {
     sim.step_n(60);
     sim.submit("empty alembic");
     sim.step();
-    sim.submit("move clarity to arsenal");
-    sim.step();
-    sim
 }
 
 /// Every message the orb has said.
@@ -177,9 +229,9 @@ fn the_arsenal_is_not_a_second_dispensary() {
     let mut sim = with_a_potion();
     sim.submit("attend laboratory");
     sim.step();
-    // A second clarity, on the shelf this time.
-    sim.submit("debug_spawn clarity");
-    sim.step();
+    // A second clarity, on the shelf this time — **brewed, not spawned**, so
+    // this test runs in a release build where `debug_spawn` does not exist.
+    brew_one(&mut sim);
 
     sim.submit("move clarity to flask_and_rod");
     sim.step();

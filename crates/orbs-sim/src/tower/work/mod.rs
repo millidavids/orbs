@@ -41,7 +41,7 @@ pub use land::finish;
 pub use produce::{Product, contents};
 pub use quicken::{QUICKENED_BY, QUICKENED_TICKS, Quickened, quickened};
 pub use slot::{
-    Busy, CAPACITY, DIVINE_TICKS, PURGE_TICKS, Triaging, Working, begin, busy, in_flight, occupied,
-    refuse_busy, stop,
+    Bidden, Busy, CAPACITY, DIVINE_TICKS, PURGE_TICKS, Triaging, Working, begin, busy, in_flight,
+    occupied, refuse_busy, stop,
 };
 pub use triage::purge;

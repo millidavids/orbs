@@ -80,6 +80,30 @@ impl Records {
         Self::default()
     }
 
+    /// An empty stream that has already dropped `dropped` records.
+    ///
+    /// # Why a save needs this
+    ///
+    /// A save carries a **bounded tail** of the stream, not all of it: the
+    /// stream grows without bound, and `.log` files are a view over it rather
+    /// than files with contents of their own, so dropping it entirely would
+    /// empty every log in the tower. What cannot be dropped is
+    /// [`sequence`](Self::sequence), because a running spell's cursor is a
+    /// position in it and [`dropped`](Self::dropped) is what turns that position
+    /// back into an index.
+    ///
+    /// So a restore opens the stream here with the count of records it is *not*
+    /// carrying, then pushes the tail. `sequence()` lands back on what it was
+    /// and `dropped()` reports the gap, which is precisely the truncation the
+    /// sequence number was invented to survive.
+    #[must_use]
+    pub fn resume(dropped: u64) -> Self {
+        Self {
+            pushed: dropped,
+            ..Self::default()
+        }
+    }
+
     /// The register everything emitted from now on is spoken in.
     ///
     /// DESIGN.md §3 puts the eldritch treatment on *messages*, not on call

@@ -701,6 +701,124 @@ pub fn socket_of(name: &str) -> Option<usize> {
     SOCKETS.iter().position(|socket| *socket == leaf)
 }
 
+/// Reading a ward out into a save, and back.
+///
+/// # Why this lives here rather than in `crate::save`
+///
+/// Because every field of [`Ward`] is private, and deliberately: §19 records
+/// that scrying's first design *"deleted its own puzzle"* by letting the orb
+/// keep a candidate set, and `code` is the answer. Ten public getters would put
+/// the answer within reach of any future system that wanted a shortcut.
+///
+/// One pair of methods, beside the fields they read, is both narrower and
+/// stronger: adding a field to `Ward` puts the compiler error **in this file**,
+/// next to the field being added, rather than in a lint that only fires if a
+/// test happened to build a world with a ward open in it.
+impl Ward {
+    /// Everything a save needs to put this ward back.
+    pub(crate) fn to_save(&self) -> crate::save::WardSave {
+        crate::save::WardSave {
+            code: self.code.to_vec(),
+            aperture: self.aperture.to_vec(),
+            held: self.held.to_vec(),
+            aligned: self.aligned,
+            astray: self.astray,
+            best: self.best,
+            pressed: self.pressed,
+            spent: self.spent,
+            shift: self.shift.map(|shift| shift.word().to_owned()),
+            sigil_marks: self.sigil_marks.to_vec(),
+            socket_marks: self.socket_marks.to_vec(),
+            tried: self
+                .tried
+                .iter()
+                .map(|socket| socket.iter().map(|&t| if t { 'x' } else { '.' }).collect())
+                .collect(),
+            settled: self.settled.to_vec(),
+            touched: self.touched.to_vec(),
+            history: self
+                .history
+                .iter()
+                .map(|(figure, aligned, astray)| crate::save::HistorySave {
+                    figure: figure.to_vec(),
+                    aligned: *aligned,
+                    astray: *astray,
+                })
+                .collect(),
+        }
+    }
+
+    /// Put one back.
+    ///
+    /// **Draws no randomness**, unlike [`Ward::new`] — the code is read rather
+    /// than rolled. That is what lets a restore happen without moving
+    /// `RngStream::Lens`, which every later roll in the session depends on.
+    ///
+    /// A hand-edited save is the one caller that can pass nonsense here, and §15
+    /// accepts that: *"hand-editing a TOML file only affects the person doing
+    /// it."* Lengths are clamped rather than trusted, so the worst a bad file
+    /// does is make a strange ward rather than panic on the way in.
+    pub(crate) fn from_save(save: &crate::save::WardSave) -> Self {
+        fn sockets<T: Copy + Default>(values: &[T]) -> [T; WIDTH] {
+            std::array::from_fn(|i| values.get(i).copied().unwrap_or_default())
+        }
+
+        /// A socket's worth of sigil indices, **range-checked**.
+        ///
+        /// `seat` guards this on the way in, so live play can never seat a sigil
+        /// that does not exist — but a hand-edited file can, and `press` indexes
+        /// `sigil_marks` directly. Without this, `aperture = [0, 1, 2, 99]` in a
+        /// save panics on the next `probe` rather than on the way in, which is
+        /// the opposite of what this function's contract promises.
+        fn seated(values: &[usize]) -> [usize; WIDTH] {
+            std::array::from_fn(|i| {
+                values
+                    .get(i)
+                    .copied()
+                    .filter(|sigil| *sigil < SIGILS.len())
+                    .unwrap_or(i % SIGILS.len())
+            })
+        }
+
+        Self {
+            code: seated(&save.code),
+            aperture: seated(&save.aperture),
+            held: seated(&save.held),
+            aligned: save.aligned,
+            astray: save.astray,
+            best: save.best,
+            pressed: save.pressed,
+            spent: save.spent,
+            shift: save.shift.as_deref().and_then(Shift::named),
+            sigil_marks: std::array::from_fn(|i| save.sigil_marks.get(i).copied().unwrap_or(0)),
+            socket_marks: sockets(&save.socket_marks),
+            tried: std::array::from_fn(|socket| {
+                let row = save.tried.get(socket).map_or("", String::as_str);
+                std::array::from_fn(|sigil| row.as_bytes().get(sigil) == Some(&b'x'))
+            }),
+            settled: sockets(&save.settled),
+            touched: sockets(&save.touched),
+            history: save
+                .history
+                .iter()
+                .map(|entry| (sockets(&entry.figure), entry.aligned, entry.astray))
+                .collect(),
+        }
+    }
+}
+
+impl Shift {
+    /// The shift a word names, for reading a save back.
+    pub(crate) fn named(word: &str) -> Option<Self> {
+        match word {
+            "closer" => Some(Self::Gained),
+            "level" => Some(Self::Held),
+            "further" => Some(Self::Lost),
+            _ => None,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

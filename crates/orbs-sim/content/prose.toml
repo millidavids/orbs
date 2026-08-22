@@ -406,6 +406,25 @@ spell_unknown = "there is no {name} in your grimoire"
 spell_already = "{name} is already running"
 spell_empty = "{name} has nothing written in it"
 spell_homeless = "{name} names a place the tower no longer has"
+# Said on waking, when a spell was left running and its text has changed since.
+# The run stops rather than resuming into a program its position does not belong
+# to; a spell the orb was *holding* takes itself up again on the next tick.
+spell_moved_under_it = "{name} reads differently than when the orb took it up. it lets go"
+
+# Waking into a tower that was already there. Said in place of §4's boot report,
+# which a *new* world gets — `Sim::restored` deliberately writes no banner,
+# because the save carries the tail of the transcript and what a player sees on
+# waking is the screen they left.
+resumed = "the orb remembers. the tower is as you left it"
+# ...and how long it was dark. **Nothing accrued** — §5 opens "initially there is
+# no offline progression" and puts accrual in Phase 9a — so this says what
+# happened, which is nothing, rather than implying otherwise.
+resumed_away = "it was dark for {span}. nothing turned while you were gone"
+# The save was there and could not be read. Said rather than swallowed: a player
+# whose tower did not come back is owed the reason.
+save_unreadable = "the orb cannot make out what it wrote last. this tower is new"
+# ...and the other direction, said once however many times it fails.
+save_failed = "the orb cannot write what it remembers down"
 
 # Calling a spell off. **What it started keeps going** - stopping the spell is
 # not stopping the mortar, exactly as walking away from a brew you typed by hand

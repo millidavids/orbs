@@ -39,7 +39,17 @@ use crate::session::Scrollback;
 pub struct Experience(u64);
 
 impl Experience {
-    /// The total.
+    /// Put a total back, for a save.
+    ///
+    /// **Not `credit`**, which emits records and can announce an unlock. A
+    /// restore is not the player earning anything; it is the world being what it
+    /// already was, and a load that congratulated you on work you did yesterday
+    /// would be reporting a lie in voice.
+    pub(crate) const fn restore(&mut self, total: u64) {
+        self.0 = total;
+    }
+
+    /// The total earned.
     #[must_use]
     pub const fn get(self) -> u64 {
         self.0

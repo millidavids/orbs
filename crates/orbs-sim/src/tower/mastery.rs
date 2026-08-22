@@ -42,6 +42,11 @@ use super::Experience;
 pub struct Taken(Vec<String>);
 
 impl Taken {
+    /// Put a set of taken nodes back, for a save.
+    pub(crate) fn restore(&mut self, ids: Vec<String>) {
+        self.0 = ids;
+    }
+
     /// The ids taken, in the order they were taken.
     #[must_use]
     pub fn ids(&self) -> &[String] {

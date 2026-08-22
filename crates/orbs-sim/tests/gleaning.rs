@@ -11,6 +11,20 @@
 //! would be testing a state the game cannot arrive at.
 
 use orbs_render::{FieldName, Value};
+// **Most of this file is `cfg(debug_assertions)`, and the reason is the scroll.**
+//
+// A `gleaning-scroll` is four fragments assembled at the lectern, and a fragment
+// is one finished walk of the stacks — so the honest route to a single scroll is
+// four solved mazes, several thousand ticks apiece. `debug_spawn` is the door
+// that makes any of this testable at all, and it does not exist in a release
+// build: the line is simply unresolvable there, so the scroll never appears and
+// the test fails against a world that was never built.
+//
+// Gated per test rather than per file, which is this project's convention — the
+// handful below that need no door still run in either profile. Where a fixture
+// *can* be built without one it is (`arsenal`, `fetching` and `binding` all brew
+// §10.1's chain from endless stock instead); a scroll cannot.
+
 use orbs_sim::Sim;
 use orbs_sim::parser::NounKind;
 
@@ -88,6 +102,7 @@ fn every_scroll_the_lectern_makes_can_be_spent() {
     assert!(!scrolls().is_empty(), "the lectern makes no scroll at all");
 }
 
+#[cfg(debug_assertions)]
 #[test]
 fn four_fragments_become_a_scroll_that_is_a_scroll() {
     // The kind, not just the name: `Recipes::kind_of` is what `debug_spawn` and
@@ -110,6 +125,7 @@ fn four_fragments_become_a_scroll_that_is_a_scroll() {
     );
 }
 
+#[cfg(debug_assertions)]
 #[test]
 fn a_gleaning_errand_scatters_spoils_and_withdraws_the_way_out() {
     let mut sim = with_a_gleaning_scroll(3);
@@ -185,6 +201,7 @@ fn the_lectern_still_assembles_with_an_errand_published_on_it() {
     );
 }
 
+#[cfg(debug_assertions)]
 #[test]
 fn a_spell_can_ask_which_errand_the_stacks_are_on() {
     // **The point of the whole mechanic**, and the reason the errand is a named
@@ -262,6 +279,7 @@ fn verified(sim: &Sim) -> (usize, usize) {
     (named("stacks"), named("north"))
 }
 
+#[cfg(debug_assertions)]
 #[test]
 fn a_scroll_with_nothing_to_work_on_is_kept() {
     // §7's *"destruction is a tool, not a trap"*, applied to a thing four
@@ -289,6 +307,7 @@ fn a_scroll_with_nothing_to_work_on_is_kept() {
     assert_eq!(maze.spoils.len(), 5, "the refusal had eaten the scroll");
 }
 
+#[cfg(debug_assertions)]
 #[test]
 fn spending_a_scroll_takes_no_production_slot() {
     // `CAPACITY` is 1, and `wield` is the verb that fills it — so if spending a
@@ -460,6 +479,7 @@ fn threading() -> Vec<String> {
         .expect("dev_spells.toml has no threading ladder")
 }
 
+#[cfg(debug_assertions)]
 #[test]
 fn abandoning_a_gleaning_maze_takes_the_word_with_it() {
     // **The errand is a child node, so it can outlive the thing it describes.**
@@ -542,6 +562,7 @@ fn meter(sim: &Sim) -> Option<(u64, u64)> {
         .map(|meter| (meter.done, meter.total))
 }
 
+#[cfg(debug_assertions)]
 #[test]
 fn quickening_halves_what_is_left_and_the_run_lands_early() {
     // **The interval is the whole effect.** `Working { started, ends }` is what
@@ -574,6 +595,7 @@ fn quickening_halves_what_is_left_and_the_run_lands_early() {
     );
 }
 
+#[cfg(debug_assertions)]
 #[test]
 fn a_quickened_run_is_the_same_however_the_ticks_are_taken() {
     // `meditate` collapses hundreds of ticks inside one `step`, and three
@@ -622,6 +644,7 @@ fn a_quickened_run_is_the_same_however_the_ticks_are_taken() {
     assert_eq!(meter(&watched), meter(&skipped), "and left different state");
 }
 
+#[cfg(debug_assertions)]
 #[test]
 fn quickening_with_nothing_running_makes_the_next_run_short() {
     // **The play the first version could not do.** Quicken the laboratory, then
@@ -646,6 +669,7 @@ fn quickening_with_nothing_running_makes_the_next_run_short() {
     assert_eq!(total, 28, "the run did not start quick: {total}");
 }
 
+#[cfg(debug_assertions)]
 #[test]
 fn a_run_started_in_the_window_stays_short_when_it_closes() {
     // **Speed follows heat.** §10.1 checks the athanor when a run *begins* and
@@ -707,6 +731,7 @@ fn quickened(sim: &Sim) -> bool {
     orbs_sim::tower::quickened(world, shelf)
 }
 
+#[cfg(debug_assertions)]
 #[test]
 fn quickening_also_hurries_what_is_already_running() {
     // One rule, not two: the state means *this room works at double speed*, and a
@@ -739,6 +764,7 @@ fn shelved(sim: &Sim) -> Vec<String> {
         .collect()
 }
 
+#[cfg(debug_assertions)]
 #[test]
 fn a_verdant_scroll_puts_one_herb_on_the_shelf_and_the_fourth_is_refused() {
     // **One each, not all three.** A scroll that unlocked everything would leave
@@ -793,6 +819,7 @@ fn a_verdant_scroll_puts_one_herb_on_the_shelf_and_the_fourth_is_refused() {
     );
 }
 
+#[cfg(debug_assertions)]
 #[test]
 fn an_unlocked_herb_is_as_endless_as_one_the_tower_opened_with() {
     // A base reagent that ran out would make a recipe written against it work
@@ -815,6 +842,7 @@ fn an_unlocked_herb_is_as_endless_as_one_the_tower_opened_with() {
     );
 }
 
+#[cfg(debug_assertions)]
 #[test]
 fn the_ported_herbs_reach_a_potion() {
     // **Driven the whole way**, because a route that reads well in `recall` and

@@ -62,6 +62,42 @@ impl Sim {
     /// malformed file rather than starting a tower whose work is worth nothing.
     #[must_use]
     pub fn with_schedule(seed: u64, build: impl FnOnce(&mut Schedule)) -> Self {
+        let mut world = Self::bare(seed);
+        let (commands, schedule, scene) = Self::schedules(build);
+
+        // The tower is raised before the first tick, so tick 0 already has a
+        // world to name.
+        tower::raise(&mut world);
+        tower::rebuild(&mut world);
+        tower::report(&mut world);
+
+        Self {
+            world,
+            commands,
+            schedule,
+            scene,
+        }
+    }
+
+    /// Every resource a world needs, and no tower in it.
+    ///
+    /// # Why this is a function rather than the top of [`with_schedule`]
+    ///
+    /// Because there are two ways to reach a world now — raising a new tower and
+    /// loading a saved one — and §13's whole argument is that two constructions
+    /// of one world are two different games. The list below is thirty-odd lines
+    /// of `init_resource` and is exactly where an omission would hide: a save
+    /// that built its own world and forgot one entry would start a tower missing
+    /// something no test asks about. So both callers get this list, and there is
+    /// only one of it.
+    ///
+    /// It is deliberately *not* a `Default`: it takes the seed, and a world with
+    /// an unseeded RNG is not a lesser world but a broken one.
+    ///
+    /// # Panics
+    ///
+    /// As [`with_schedule`](Self::with_schedule) documents.
+    fn bare(seed: u64) -> World {
         let mut world = World::new();
         world.insert_resource(Rngs::from_seed(seed));
         world.insert_resource(Tick::default());
@@ -143,6 +179,17 @@ impl Sim {
         world.init_resource::<crate::execute::Wandering>();
         world.init_resource::<tower::spell::Caller>();
 
+        world
+    }
+
+    /// The three passes a tick runs, in the order they run.
+    ///
+    /// Split out beside [`bare`](Self::bare) and for the same reason: the system
+    /// order below is load-bearing — two of these draw from one RNG stream and
+    /// the comments say what reordering them would cost — so there may be
+    /// exactly one place it is written down. A loaded world runs the same three
+    /// passes as a raised one or it is a different game.
+    fn schedules(build: impl FnOnce(&mut Schedule)) -> (Schedule, Schedule, Schedule) {
         // Its **own** schedule, run before the caller's. Adding `run_pending`
         // to the same schedule and relying on insertion order would be an
         // ambiguity, not an ordering: Bevy makes no promise about systems with
@@ -204,11 +251,68 @@ impl Sim {
         let mut scene = new_sim_schedule();
         scene.add_systems(tower::rebuild);
 
-        // The tower is raised before the first tick, so tick 0 already has a
-        // world to name.
+        (commands, schedule, scene)
+    }
+
+    /// Read this world out as a save document.
+    ///
+    /// **Takes `&self`**, which is the guarantee rather than a courtesy: saving
+    /// cannot perturb the world it is describing. A `&mut` here could build a
+    /// `QueryState`, which registers components and moves archetypes, and a save
+    /// that changed the thing it measured would make `tests/persistence.rs`
+    /// measure itself.
+    ///
+    /// **Take it at a tick boundary**, which §8 makes the rule: *"instruction
+    /// dispatch is atomic within a tick; saves are permitted only at tick
+    /// boundaries."* Immediately after [`step`](Self::step) is that moment, and
+    /// it is where both frontends take theirs.
+    ///
+    /// Writing the result to a file is a frontend's — see `orbs_shell::save`.
+    /// This crate never touches the filesystem.
+    #[must_use]
+    pub fn snapshot(&self) -> crate::save::Save {
+        crate::save::capture(&self.world)
+    }
+
+    /// Build a world from a save document.
+    ///
+    /// Raises the tower first and then applies the save over it, which is what
+    /// lets a save written before a domain existed open into a tower that has
+    /// one. `crate::save::restore` carries the reasoning.
+    ///
+    /// The result is a world standing exactly where the saved one stood: the
+    /// same tick, the same eight random-stream positions, the same work in
+    /// flight. Stepping it and stepping the world that wrote it produces the
+    /// same two worlds, which is the property `tests/persistence.rs` holds.
+    ///
+    /// # Panics
+    ///
+    /// As [`with_schedule`](Self::with_schedule) does, and for the same reason:
+    /// the built-in content is authored with the crate.
+    #[must_use]
+    pub fn restored(save: &crate::save::Save) -> Self {
+        let mut world = Self::bare(save.world.seed);
+        let (commands, schedule, scene) = Self::schedules(|_| {});
+
+        // Raised before the save is applied, never instead of it.
         tower::raise(&mut world);
+        crate::save::restore(&mut world, save);
         tower::rebuild(&mut world);
-        tower::report(&mut world);
+
+        // **No `tower::report` here, unlike `with_schedule`**, and the round-trip
+        // test is what settled it. `report` pushes §4's condition report onto the
+        // record stream — which `restore` has just rebuilt from the save — so a
+        // loaded world would carry thirty-odd records the world that wrote it
+        // never had, and `snapshot(loaded) != snapshot(saved)` on the first tick.
+        //
+        // The contract is worth more than the banner: **a restored world is the
+        // saved world, exactly.** Saying *"you are back, and the orb was dark for
+        // three hours"* is a frontend's line anyway — the away stamp is the
+        // frontend's, because the sim has no wall clock and must not acquire one.
+        //
+        // What a player actually sees on waking is better than a boot report: the
+        // save carries the tail of the stream, so the transcript is the screen
+        // they left.
 
         Self {
             world,
@@ -216,6 +320,88 @@ impl Sim {
             schedule,
             scene,
         }
+    }
+
+    /// Say that this tower was resumed, and how long it was dark.
+    ///
+    /// # Why the sim says it and the frontend measures it
+    ///
+    /// Rule 6 puts prose in content files, so the words are the sim's; §19
+    /// forbids the sim reading a wall clock, so the *gap* is the frontend's.
+    /// This is where the two meet — the caller hands over a number of seconds it
+    /// read from the machine, and the orb finds the sentence.
+    ///
+    /// # Why it is not inside [`restored`](Self::restored)
+    ///
+    /// Because a restored world must be **the saved world, exactly**: a banner
+    /// pushed there would put records in the loaded stream that the world which
+    /// wrote it never had, and `tests/persistence.rs` compares the two documents
+    /// byte for byte. Saying so is a thing a *session* does, not a thing a world
+    /// is, which is the same line `quit` draws.
+    ///
+    /// `away` is seconds, or `None` where the machine would not say — a save
+    /// written before the stamp existed, or a clock that has gone backwards.
+    pub fn say_resumed(&mut self, away: Option<u64>) {
+        let prose = self.world.resource::<Prose>().clone();
+        let mut scrollback = self.world.resource_mut::<Scrollback>();
+        let records = scrollback.records_mut();
+        records
+            .push(RecordKind::Message)
+            .text(orbs_render::FieldName::Message, &prose.line("resumed", &[]))
+            .finish();
+
+        if let Some(away) = away {
+            let span = crate::tick::span(away);
+            records
+                .push(RecordKind::Message)
+                .text(
+                    orbs_render::FieldName::Message,
+                    &prose.line("resumed_away", &[("span", &span)]),
+                )
+                .role(orbs_render::Role::Normal)
+                .finish();
+        }
+    }
+
+    /// Say that the tower could not be written out.
+    ///
+    /// # Why this is a record and not a `status` line
+    ///
+    /// Because §3 makes the record stream *the* output: a status line is a view
+    /// over records, and a thing that never becomes one is a thing `sift`, the
+    /// log, and the screen reader all cannot see. A player who never types
+    /// `status` would also never learn — and there is no `save` verb (§19), so
+    /// they have no reason to look.
+    ///
+    /// The caller says this **once**. A save is attempted every sixty ticks and
+    /// a read-only directory fails every one of them, so a line per attempt is
+    /// sixty an hour — which is the noise §19 deleted the editor's per-save
+    /// announcement over.
+    pub fn say_save_failed(&mut self) {
+        let message = self.world.resource::<Prose>().line("save_failed", &[]);
+        self.world
+            .resource_mut::<Scrollback>()
+            .records_mut()
+            .push(RecordKind::Message)
+            .text(orbs_render::FieldName::Message, &message)
+            .role(orbs_render::Role::Danger)
+            .finish();
+    }
+
+    /// Say that a save was there and could not be read.
+    ///
+    /// A first launch says nothing — there is nothing to say — but a tower that
+    /// did not come back is owed a reason, and the log is not where a player
+    /// looks.
+    pub fn say_save_unreadable(&mut self) {
+        let message = self.world.resource::<Prose>().line("save_unreadable", &[]);
+        self.world
+            .resource_mut::<Scrollback>()
+            .records_mut()
+            .push(RecordKind::Message)
+            .text(orbs_render::FieldName::Message, &message)
+            .role(orbs_render::Role::Danger)
+            .finish();
     }
 
     /// Advance the world by exactly one tick.
@@ -355,7 +541,7 @@ impl Sim {
             // something when they type one.
             Resolution::Ambiguous { candidates } => {
                 let readings = candidates.into_iter().map(|c| c.intent).collect();
-                self.world.resource_mut::<Choices>().offer(readings);
+                self.world.resource_mut::<Choices>().offer(line, readings);
             }
             Resolution::Incomplete { .. }
             | Resolution::Elsewhere { .. }

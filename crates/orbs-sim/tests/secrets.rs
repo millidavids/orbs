@@ -29,6 +29,16 @@ fn said(sim: &Sim) -> Vec<String> {
 /// The first secret the file reveals, which is what `debug_learn` bare takes.
 const FIRST: &str = "mending";
 
+/// **Gated, unlike its neighbours in this file.**
+///
+/// `debug_learn` is `cfg(debug_assertions)` and there is deliberately no way to
+/// force a find — the roll is the mechanic — so the only honest alternative to
+/// the door is solving wards until one spills a recipe, which is hours. A door
+/// in a release build is an ordinary unresolvable line rather than an error, so
+/// without this the test ran against a world where nothing had been learned and
+/// failed saying *"an unfound recipe read as ready to run"*, which is true and
+/// names nothing about why.
+#[cfg(debug_assertions)]
 #[test]
 fn a_secret_is_unmakeable_unnameable_and_unreadable_until_it_is_found() {
     let mut sim = Sim::new(1);
@@ -137,6 +147,16 @@ fn a_verdant_scroll_never_offers_a_secret_as_an_endless_herb() {
     }
 }
 
+/// **Gated, unlike its neighbours in this file.**
+///
+/// `debug_learn` is `cfg(debug_assertions)` and there is deliberately no way to
+/// force a find — the roll is the mechanic — so the only honest alternative to
+/// the door is solving wards until one spills a recipe, which is hours. A door
+/// in a release build is an ordinary unresolvable line rather than an error, so
+/// without this the test ran against a world where nothing had been learned and
+/// failed saying *"an unfound recipe read as ready to run"*, which is true and
+/// names nothing about why.
+#[cfg(debug_assertions)]
 #[test]
 fn the_panel_says_fouled_rather_than_charged_for_a_recipe_nobody_knows() {
     // Honest rather than coy: the player is holding something that makes

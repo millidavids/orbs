@@ -40,7 +40,7 @@
 use bevy_ecs::prelude::*;
 use orbs_render::{FieldName, Presentation, RecordKind, Records, Role};
 
-use super::node::Name;
+use super::node::{Name, NodeId};
 use crate::parser::Verb;
 use rand::Rng as _;
 
@@ -273,7 +273,7 @@ const DRIFT_INTERVAL: u64 = 300;
 /// so that adding a roll here cannot perturb the parser's.
 pub fn drift(
     mut rngs: ResMut<Rngs>,
-    logs: Query<Entity, (With<Log>, Without<Poisoned>)>,
+    logs: Query<(Entity, &Name, &NodeId), (With<Log>, Without<Poisoned>)>,
     mut commands: Commands,
 ) {
     // **Drawn before anything can return, and that is the whole shape of the
@@ -293,12 +293,45 @@ pub fn drift(
     // as many words; it was the newer of the two systems and only it got the
     // fix. Both draw once per tick, unconditionally, for ever.
     let roll: u64 = rngs.stream(RngStream::Threat).random();
-    let Some(target) = logs.iter().next() else {
+
+    // **Sorted by name, not query order — the other half of the fix above, and
+    // it took a save format to make it observable.** `logs.iter().next()` is
+    // archetype order, which in a *lived* world is a function of which log was
+    // poisoned when (inserting `Poisoned` moves an entity between tables and
+    // `swap_remove`s its row) and in a *rebuilt* one is simply spawn order. So a
+    // world reloaded from a save poisons a different log than the session that
+    // wrote it, from the same seed on the same tick.
+    //
+    // Nothing had ever rebuilt a world before, so nothing could see it — which
+    // is why the comment above says only `substitution` got this fix, and why
+    // this is the item that finally pays it.
+    let mut surfaces: Vec<(Entity, &Name, NodeId)> = logs
+        .iter()
+        .map(|(entity, name, id)| (entity, name, *id))
+        .collect();
+    // **`NodeId` breaks the tie, and without it the sort was not a total order.**
+    // `sort_unstable` promises nothing for equal keys, so two same-named logs
+    // would fall back to input order — which is the archetype order this sort
+    // exists to remove. Four domains have four distinct log names today; five
+    // more domains arrive by Phase 9a and nothing forbids two of them holding a
+    // `feed.log`. The id is safe as a secondary key because a save carries it.
+    surfaces.sort_unstable_by(|(_, a, x), (_, b, y)| a.0.cmp(&b.0).then(x.cmp(y)));
+
+    if !roll.is_multiple_of(DRIFT_INTERVAL) {
+        return;
+    }
+
+    // **Drawn from the pool, not `first()`**, for the reason `substitution`
+    // gives in full: a sort is a determinism fix, and taking its head turns that
+    // fix into content — `archive.log` first, every session, every seed. The
+    // index comes out of the *same* `roll`, whose quotient is untouched entropy
+    // once it has cleared `DRIFT_INTERVAL`, so this costs the shared `Threat`
+    // stream no extra draw.
+    let index = (roll / DRIFT_INTERVAL) as usize % surfaces.len().max(1);
+    let Some((target, _, _)) = surfaces.get(index).copied() else {
         return;
     };
-    if roll.is_multiple_of(DRIFT_INTERVAL) {
-        commands.entity(target).insert(Poisoned);
-    }
+    commands.entity(target).insert(Poisoned);
 }
 
 /// Swap a reagent somewhere in the tower, occasionally — §8.1's world surface.
@@ -317,7 +350,7 @@ pub fn drift(
 pub fn substitution(
     mut rngs: ResMut<Rngs>,
     fuels: Res<crate::content::Fuels>,
-    stock: Query<(Entity, &Name, &super::Stock), Without<Poisoned>>,
+    stock: Query<(Entity, &Name, &NodeId, &super::Stock), Without<Poisoned>>,
     mut commands: Commands,
 ) {
     // **Endless base stock only, and this is the load-bearing restriction.**
@@ -346,9 +379,9 @@ pub fn substitution(
     // hazard the split was built to avoid.
     let roll: u64 = rngs.stream(RngStream::Threat).random();
 
-    let mut piles: Vec<(Entity, &Name)> = stock
+    let mut piles: Vec<(Entity, &Name, NodeId)> = stock
         .iter()
-        .filter(|(_, _, stock)| matches!(stock, super::Stock::Endless))
+        .filter(|(_, _, _, stock)| matches!(stock, super::Stock::Endless))
         // **Fuel is exempt, and the reason is the paragraph above.** A swap is
         // honest because it costs *the spell that named the reagent* and nothing
         // half-made — and charcoal is named by no recipe at all. It is the
@@ -360,13 +393,16 @@ pub fn substitution(
         // shipped: `charcoal` sorts before `rock-salt` and `sage`, so the *first*
         // swap of every session took the fire and clarity's rate fell from 0.140
         // to 0.074 — half the laboratory, silently, on every seed.
-        .filter(|(_, name, _)| fuels.get(&name.0).is_none())
-        .map(|(node, name, _)| (node, name))
+        .filter(|(_, name, _, _)| fuels.get(&name.0).is_none())
+        .map(|(node, name, id, _)| (node, name, *id))
         .collect();
     // **Sorted by name, not query order.** `tower::node` records archetype order
     // as a defect that changes what a phrase resolves to with no test catching
     // it, and a replay has to swap the *same* pile from the same seed.
-    piles.sort_unstable_by(|(_, a), (_, b)| a.0.cmp(&b.0));
+    // Total, for the reason `drift` gives above: `sort_unstable` leaves equal
+    // keys in input order, and input order here is the archetype order the sort
+    // exists to remove.
+    piles.sort_unstable_by(|(_, a, x), (_, b, y)| a.0.cmp(&b.0).then(x.cmp(y)));
 
     if !roll.is_multiple_of(SWAP_INTERVAL) {
         return;
@@ -382,7 +418,7 @@ pub fn substitution(
     // position by a variable amount — the hazard this system was split out to
     // avoid. `roll` cleared `SWAP_INTERVAL`, so its quotient is untouched entropy.
     let index = (roll / SWAP_INTERVAL) as usize % piles.len().max(1);
-    let Some((target, name)) = piles.get(index).copied() else {
+    let Some((target, name, _)) = piles.get(index).copied() else {
         return;
     };
 

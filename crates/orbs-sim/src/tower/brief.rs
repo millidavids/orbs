@@ -77,6 +77,16 @@ pub enum Mark {
 pub struct Marks(std::collections::BTreeMap<String, Mark>);
 
 impl Marks {
+    /// Every domain with something to say, and what it is.
+    pub fn iter(&self) -> impl Iterator<Item = (&str, Mark)> {
+        self.0.iter().map(|(domain, mark)| (domain.as_str(), *mark))
+    }
+
+    /// Put a set of marks back, for a save.
+    pub(crate) fn restore(&mut self, marks: impl IntoIterator<Item = (String, Mark)>) {
+        self.0 = marks.into_iter().collect();
+    }
+
     /// What this domain wants noticed, if anything.
     #[must_use]
     pub fn get(&self, domain: &str) -> Option<Mark> {

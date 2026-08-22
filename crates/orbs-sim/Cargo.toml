@@ -26,5 +26,14 @@ serde = { workspace = true }
 thiserror = { workspace = true }
 toml = { workspace = true }
 
+# **`debug` only for tests.** `ComponentInfo::name` returns a `DebugName`, which
+# without this feature is the literal string "<Enable the debug feature to see
+# the name>" — so `tests/persistence.rs`'s completeness lint could tell you a
+# component was missing from the save format but not *which one*, which is the
+# only thing it has to do. Dev-dependencies are not built for `cargo build -p
+# orbs`, so the shipped binary is untouched.
+[dev-dependencies]
+bevy_ecs = { workspace = true, features = ["debug"] }
+
 [lints]
 workspace = true

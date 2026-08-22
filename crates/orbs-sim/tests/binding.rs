@@ -39,20 +39,23 @@ fn mentioned(sim: &Sim, needle: &str) -> bool {
 /// **Earned, not granted.** There is no public way to hand the sim experience
 /// and there should not be — the number is what a player works for, so a test
 /// that skipped the work would be testing a state the game cannot reach. Two
-/// distillations are 16, which is the cheapest honest route: the reagent is
-/// spawned, the *runs* are real.
+/// distillations are 16, which is the cheapest honest route.
+///
+/// The *reagent* used to be spawned, which made this whole file fail under
+/// `cargo test --release`: `debug_spawn` is `cfg(debug_assertions)`, and the
+/// line was gated but the test was not — so in release the draughts never
+/// appeared, both distillations refused, and nine tests failed on the assertion
+/// below saying the setup had not reached a slot. It had not, and nothing said
+/// why.
+///
+/// §10.1's chain needs no door at all — sage, rock-salt and charcoal are all
+/// `Holding::endless` — so both draughts are brewed now and `bind` is tested in
+/// the build that ships it.
 fn ready() -> Sim {
     let mut sim = Sim::new(1);
     run(&mut sim, &["attend laboratory", "kindle charcoal"]);
-    #[cfg(debug_assertions)]
-    run(&mut sim, &["debug_spawn clarified-draught 2"]);
     for _ in 0..2 {
-        run(&mut sim, &["distil clarified-draught"]);
-        sim.step_n(60);
-        // **Emptied between runs**, or the second never starts: the alembic is
-        // `Ready` with a clarity in it and a charged instrument will not take a
-        // second load. The same thing a player has to do, which is the point.
-        run(&mut sim, &["empty alembic"]);
+        brew_one(&mut sim);
     }
     assert_eq!(
         sim.concentration(),
@@ -70,6 +73,36 @@ fn ready() -> Sim {
     );
     sim.step();
     sim
+}
+
+/// §10.1's five stages, once, ending in a distilled `clarity`.
+///
+/// **Scoured before use, never after fouling** — `orbs-balance`'s rule. A second
+/// lap otherwise refuses in silence: `mix` leaves the flask charged and `distil`
+/// leaves the alembic so, and a charged instrument will not take a second load.
+/// That is the same thing a player has to do, which is the point.
+fn brew_one(sim: &mut Sim) {
+    run(
+        sim,
+        &[
+            "empty mortar_and_pestle",
+            "empty balneum_mariae",
+            "empty flask_and_rod",
+            "empty alembic",
+            "grind sage",
+            "meditate 9",
+            "empty mortar_and_pestle",
+            "digest ground-sage",
+            "meditate 14",
+            "grind rock-salt",
+            "meditate 9",
+            "empty mortar_and_pestle",
+            "mix sage-tincture with ground-salt",
+            "meditate 12",
+            "distil clarified-draught",
+        ],
+    );
+    sim.step_n(60);
 }
 
 /// How many grinds have completed.

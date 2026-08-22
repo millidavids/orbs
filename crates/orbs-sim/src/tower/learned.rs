@@ -73,6 +73,27 @@ impl Learned {
         !recipes.is_secret(name) || self.known.contains(name)
     }
 
+    /// Every secret recipe found so far, by name, in **alphabetical** order.
+    ///
+    /// **Not the same order as [`found`](Self::found)**, which walks
+    /// `recipes.toml` — `dreaming, mending, vigour` here against `mending,
+    /// dreaming, vigour` there. This is a `BTreeSet` and that is deliberate: a
+    /// save's bytes must not depend on insertion order, or two routes to one
+    /// world would write different files. Anything a *player* reads wants
+    /// `found`; this is for the save.
+    pub fn known(&self) -> impl Iterator<Item = &str> {
+        self.known.iter().map(String::as_str)
+    }
+
+    /// Put a found set back, for a save.
+    ///
+    /// **Not `discover`**, which rolls: a restore reads what was found rather
+    /// than finding it again, so `RngStream::Lens` does not move.
+    pub(crate) fn restore(&mut self, known: impl IntoIterator<Item = String>, since: u32) {
+        self.known = known.into_iter().collect();
+        self.since = since;
+    }
+
     /// Solves since the last discovery.
     #[must_use]
     pub const fn since(&self) -> u32 {

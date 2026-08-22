@@ -87,8 +87,45 @@ impl Rngs {
         }
     }
 
-    /// The seed every stream was derived from. Persisted in saves so a world can
-    /// be reconstructed exactly.
+    /// Every stream, wound forward to where it stood when the save was written.
+    ///
+    /// The master seed alone is **not** enough and never was: a stream is a
+    /// `ChaCha8Rng` that advances in place, so reconstructing from the seed
+    /// rewinds all eight to tick zero and the next roll is the *first* roll of
+    /// the session. `sabotage`'s two systems each draw once per tick
+    /// unconditionally, so a rewound stream would re-run the whole schedule of
+    /// drifts and swaps from the beginning.
+    ///
+    /// The positions go beside [`master_seed`](Self::master_seed) in a save.
+    /// Order is `RngStream`'s own fixed index order, which is never renumbered.
+    #[must_use]
+    pub fn positions(&self) -> [u128; RngStream::COUNT] {
+        std::array::from_fn(|i| self.streams[i].get_word_pos())
+    }
+
+    /// Rebuild from a seed and the positions [`positions`](Self::positions) gave.
+    ///
+    /// Derives each stream exactly as [`from_seed`](Self::from_seed) does, so a
+    /// save carries no key material, then winds each one forward.
+    ///
+    /// **The cost of deriving rather than storing: a change to
+    /// `derive_stream_seed` breaks every existing save silently.** The keys are
+    /// recomputed from the current mixing function and wound to the *old* word
+    /// positions, so nothing compares and nothing errors — the world simply
+    /// diverges from the session that wrote it on the first roll. Changing that
+    /// function is therefore a **format change**, and `save::FORMAT` says so.
+    #[must_use]
+    pub fn restore(master_seed: u64, positions: [u128; RngStream::COUNT]) -> Self {
+        let mut rngs = Self::from_seed(master_seed);
+        for (stream, position) in rngs.streams.iter_mut().zip(positions) {
+            stream.set_word_pos(position);
+        }
+        rngs
+    }
+
+    /// The seed every stream was derived from. Persisted in saves, with
+    /// [`positions`](Self::positions) beside it, so a world can be reconstructed
+    /// exactly.
     #[must_use]
     pub const fn master_seed(&self) -> u64 {
         self.master_seed
@@ -183,5 +220,45 @@ mod tests {
         let p: u64 = r.stream(RngStream::Parser).random();
         let t: u64 = r.stream(RngStream::Threat).random();
         assert_ne!(p, t, "stream seeds are insufficiently mixed");
+    }
+
+    #[test]
+    fn a_restored_set_of_streams_carries_on_rather_than_starting_over() {
+        // The property a save rests on. Draw unevenly across the streams first,
+        // because a restore that only worked when every stream stood in the same
+        // place would pass a symmetrical test and fail every real session.
+        let mut lived = Rngs::from_seed(0x0B5);
+        for (n, stream) in ALL.into_iter().enumerate() {
+            for _ in 0..=n * 3 {
+                let _: u64 = lived.stream(stream).random();
+            }
+        }
+
+        let mut loaded = Rngs::restore(lived.master_seed(), lived.positions());
+
+        for s in ALL {
+            let next: u64 = lived.stream(s).random();
+            let same: u64 = loaded.stream(s).random();
+            assert_eq!(next, same, "{s:?} did not resume where it stood");
+        }
+    }
+
+    #[test]
+    fn the_seed_alone_would_rewind_every_stream() {
+        // Why `positions` exists at all. If this ever stops holding, a
+        // `ChaCha8Rng` has become stateless and the save can drop eight fields.
+        let mut lived = Rngs::from_seed(7);
+        for _ in 0..16 {
+            let _: u64 = lived.stream(RngStream::Threat).random();
+        }
+
+        let mut rewound = Rngs::from_seed(lived.master_seed());
+        let carried_on: u64 = lived.stream(RngStream::Threat).random();
+        let from_the_top: u64 = rewound.stream(RngStream::Threat).random();
+
+        assert_ne!(
+            carried_on, from_the_top,
+            "a stream reconstructed from the seed alone would replay the session",
+        );
     }
 }

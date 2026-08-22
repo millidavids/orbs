@@ -192,35 +192,59 @@ impl Wizard {
 /// Emptied the moment anything else is typed: §6 forbids a modal prompt, so
 /// walking away from the question by asking a different one has to be free.
 #[derive(Resource, Debug, Default)]
-pub struct Choices(Vec<Intent>);
+pub struct Choices {
+    readings: Vec<Intent>,
+    /// The line that raised the question, so a save can ask it again.
+    ///
+    /// **The line, not the readings.** An [`Intent`] is the parser's resolved
+    /// form with typed arguments, and putting it in a save would drag the whole
+    /// parser type surface into the format and pin it against every future
+    /// parser change — for a question that survives until the next command.
+    ///
+    /// The line costs one string and reproduces the readings exactly, because
+    /// §19 settled that the parser's tie-break uses **no randomness**: ranking
+    /// is a total order over score, position in `Verb::ALL`, and the canonical
+    /// echo. `analyse` is a pure function of the line and the scene, so asking
+    /// it again on the way back in gives the same numbered list the player was
+    /// looking at.
+    asked: String,
+}
 
 impl Choices {
-    /// Offer these readings, best first.
-    pub fn offer(&mut self, readings: Vec<Intent>) {
-        self.0 = readings;
+    /// Offer these readings, best first, and remember what was asked.
+    pub fn offer(&mut self, line: &str, readings: Vec<Intent>) {
+        self.readings = readings;
+        self.asked = line.to_owned();
+    }
+
+    /// The line that raised the question, if one is open.
+    #[must_use]
+    pub fn asked(&self) -> Option<&str> {
+        (!self.readings.is_empty()).then_some(self.asked.as_str())
     }
 
     /// Forget the question.
     pub fn clear(&mut self) {
-        self.0.clear();
+        self.readings.clear();
+        self.asked.clear();
     }
 
     /// How many are on offer.
     #[must_use]
     pub const fn len(&self) -> usize {
-        self.0.len()
+        self.readings.len()
     }
 
     /// Whether the orb is waiting on an answer.
     #[must_use]
     pub const fn is_empty(&self) -> bool {
-        self.0.is_empty()
+        self.readings.is_empty()
     }
 
     /// The reading `choice` names, counting from **one** as the prompt shows.
     #[must_use]
     pub fn pick(&self, choice: usize) -> Option<&Intent> {
-        self.0.get(choice.checked_sub(1)?)
+        self.readings.get(choice.checked_sub(1)?)
     }
 }
 

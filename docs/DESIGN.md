@@ -2382,6 +2382,336 @@ they are re-pointed at the phases that now need them rather than quietly dropped
 
 ## 19. Decisions log
 
+### The save format — a snapshot, with the journal as its instrument (Phase 3, `0.3.14`)
+
+**Nothing in the workspace serialised anything.** ROADMAP said it twice from
+opposite directions: *"`Running` is not in any save format, because there is no
+save format"*, and the settings item sitting in Phase 11 because *"no `serde`, no
+`toml`, nothing in the workspace serialises anything yet."* Close the game and
+the tower was gone.
+
+§13 and §15 had already settled most of the shape — `serde` + `toml`, readable
+and editable, saves at tick boundaries only, in-flight duration-actions as
+first-class serialisable entities — so what follows is the part they left open.
+
+| Question | Decision |
+|---|---|
+| Snapshot or journal | **Snapshot.** `(seed, submissions)` is exactly true and had been recorded since Phase 0 with no consumer, but a journal is invalidated by any content patch and "editable" would mean editing a command log. §13 and §15 chose TOML state and are not re-litigated |
+| So what is the journal for | **A determinism check.** `two_routes_to_one_world_write_the_same_save` reaches one world by replay and by play and requires identical bytes — far more world state than the four message-stream replay tests that already existed, and the first consumer `(seed, submissions)` has ever had |
+| What catches a component nobody carried | **The lockstep test, and this was got wrong first.** The journal test runs `capture` on two worlds *neither of which was restored*, so a field `capture` omits is missing from both documents and it passes. `a_loaded_tower_keeps_running_the_same_world` is the instrument, because it is the only one that restores: drop `Burning` and the loaded athanor is cold, the heated stage never lands, and the divergence surfaces in fields the document does carry. The two completeness lints narrow the rest |
+| Is there a `save` verb | **No**, and three reasons. §8 already specifies autosave; §19's editor precedent deleted `save` as a word for the same chore one level down; and **`save` and `sage` are one edit apart**, which is the collision that refused `leave` and `exit` as `quit` synonyms |
+| How a node is addressed | **By path, never by `NodeId`.** An id is a counter in spawn order, stable only while `build.rs`'s tables are. A path is what the player types, survives a phase that adds a domain, and makes `subject = "/tower/laboratory/dispensary/sage"` legible. It is also what lets the lockstep test compare two documents at all — under id-keying a lived world and a rebuilt one hold different ids for the same nodes |
+| Whole tree, or a patch | **Raise first, then adopt.** `Sim::restored` runs `tower::raise` and reconciles by path. An authoritative save is simpler and wrong on a schedule: five domains arrive between here and Phase 9a, and every pre-existing save would open into a tower permanently lacking them. Refusing the old save by format version is not an answer — it deletes it |
+| What the RNG carries | **The master seed *and* eight word positions.** `Rngs::master_seed`'s doc already claimed a world could be reconstructed from the seed; it could not. A `ChaCha8Rng` advances in place, and `sabotage`'s two systems each draw once per tick unconditionally, so a rewound stream re-runs the session's whole schedule of drifts and swaps. `the_seed_alone_would_rewind_every_stream` pins it |
+| Offline progression | **Not built.** §5 opens *"initially there is no offline progression"* and puts accrual in Phase 9a. The save carries a **departure stamp** — `[away]`, stamped by the frontend because the sim has no wall clock and must not acquire one — so Phase 9a is a policy change rather than a format migration. A departure time cannot be recovered after the fact |
+
+#### `tower::drift` picked its target by query order, and only a rebuilt world could see it
+
+`logs.iter().next()` is archetype order, which in a **lived** world is a function
+of which log was poisoned when — inserting `Poisoned` moves an entity between
+tables and `swap_remove`s its row — and in a **rebuilt** one is simply spawn
+order. Same seed, same tick, different log.
+
+`substitution` fixed exactly this one function down and said so: *"**Sorted by
+name, not query order.** …a replay has to swap the *same* pile from the same
+seed."* `drift`'s own comment recorded the debt — *"it was the newer of the two
+systems and only it got the fix"* — and **nothing had ever rebuilt a world**, so
+nothing could observe it. The save format is what made it observable, and it is
+sorted now, with the index drawn from the roll that already fired so the shared
+`Threat` stream takes no extra draw.
+
+#### The transcript is not a transcript, and dropping it would have half-broken §8.1
+
+The first draft of this work saved no records at all, reasoning that closing a
+terminal loses its scrollback. That is wrong here: **a `.log` is a view over the
+record stream**, not a file with contents of its own — `tower::node` says so
+outright — so dropping the stream empties every log in the tower. Worse,
+`sabotage::emit_lines` builds the poisoned tell by *re-emitting existing lines*
+with a field struck out, so a restored tower with a `Poisoned` log would answer
+`verify` with *tampered* and then show the player nothing at all.
+
+So a **bounded tail** travels (500 records), built in `orbs-sim` over `Records`'s
+public API — `orbs-render`'s `[dependencies]` stays empty. What is *not* bounded
+is `Records::sequence`, which rides in `[world]`: a running spell's cursor is a
+position in that sequence, and `Records::resume` reopens the stream at the count
+it is not carrying so `dropped` reports the gap. Drop the counter instead and a
+held spell silently stops seeing anything, with every test green.
+
+#### A restored world is the saved world, exactly — so it prints no banner
+
+`Sim::restored` deliberately does **not** call `tower::report`, where
+`with_schedule` does. The round-trip test settled it: `report` pushes §4's
+condition report onto the stream `restore` has just rebuilt, so a loaded world
+carried thirty-odd records the world that wrote it never had.
+
+The contract is worth more than the banner, and what a player sees on waking is
+better than a boot report anyway — the save carries the tail of the stream, so
+the transcript is the screen they left. Saying *"the orb was dark for three
+hours"* is a frontend's line, because the away stamp is a frontend's.
+
+#### A resumed spell verifies its program before walking it
+
+`Running::program` is a derived view rebuilt from the spell's text at every cast,
+so the first draft excluded it. But `pc` is a **path into the tree the spell was
+cast against**, and two things can have moved since: the spell's own text, since
+editing one mid-flight is shipped, and a reagent's name, since §8.1's
+substitution surface is the point of the domain. Walk a stale `pc` into a freshly
+compiled tree and the orb runs the wrong line, or `program::at` returns nothing
+and the run ends with no reason given.
+
+So the save carries a fingerprint of the text the program was compiled from, and
+a mismatch **ends the run and says so** — §8's *"scripts always log and never
+halt"* forbids halting quietly. A `Bound` spell is cast again on the next tick
+from the top, which is the correct recovery and needed no code.
+
+#### The completeness lint keys on `TypeId`, and its reach is its world builder's
+
+A snapshot save has one fatal failure mode and it is silent: a component added in
+a later phase that nobody serialises. Every round-trip test still passes, because
+neither world has the field.
+
+`every_component_the_world_holds_is_one_the_save_knows_about` walks
+`world.archetypes()` and fails **by name**. Two things about it are worth
+recording rather than rediscovering:
+
+- **`ComponentInfo::name` is unusable here.** It returns a `DebugName`, which
+  without `bevy_utils`'s `debug` feature is the literal string `"<Enable the
+  debug feature to see the name>"` — and `crates/orbs` builds Bevy with
+  `default-features = false`. A lint keyed on it prints the same placeholder for
+  every entry and names nothing, which is the one thing it has to do. It keys on
+  `type_id()`, and `orbs-sim` takes `bevy_ecs`'s `debug` feature as a
+  **dev-dependency** so the message can carry a name under `cargo test` without
+  reaching the shipped binary.
+- **It only sees what is present.** Twelve components are conditional — a `Ward`
+  exists while a reading is open, a `Quickened` inside a window — so the lint is
+  exactly as strong as the world it is pointed at. It is pointed at the same
+  builder the lockstep test uses, and
+  `the_test_world_actually_holds_everything_it_is_meant_to` guards *that*, having
+  already caught the builder reaching its snapshot with **no work in flight at
+  all**: the grind was started twenty ticks too early, and every assertion in the
+  file had been comparing two worlds where nothing was happening.
+
+#### What a review of the built format found
+
+Three defects, each reproduced before it was fixed, and each invisible to the
+suite that was green when they were found:
+
+- **A renamed node changed slot on the way back in.** `sabotage::substitute`
+  renames a pile in place — `sage` becomes `sage-` — so its saved path matched
+  nothing the raised tower had; it was spawned and appended while the raised
+  `sage` was swept. `tower::node` opens by saying anything a player can see must
+  come from walking `Children` in insertion order, because §6 resolves noun ties
+  to whichever was registered first, so a reload silently changed what an
+  ambiguous phrase resolved to. `Children` order is now rebuilt to the
+  document's. The test that pins it had to **step to a real ambient swap**: the
+  first version used `debug_swap`, which takes `charcoal` — last in the
+  dispensary already, so re-appending it was invisible — and passed with the fix
+  removed.
+- **A record's register was written to the save and never read back.** §8.1's
+  poisoned-log tell is `Presentation::Tampered` on every third line, so a reload
+  answered `verify` with *tampered* and then drew the log clean.
+- **`purge` on a shipped spell was undone by the next load**, in a release build.
+  The sweep despawned only `Stock`; a spell is neither stock nor a fixture and
+  fell in the gap. It now sweeps anything destructible that is neither
+  `Protected` nor `Fixture`, and the cost is stated: a *destructible* thing added
+  by a later build is swept the first time an older save opens.
+
+Also corrected: a hand-edited ward could seat a sigil index past the end and
+panic on the next `probe` rather than on the way in; `find_by_path("")` answered
+with the nameless root, turning three "this path is gone" guards into guards that
+silently resolved; and the node's own `NodeId` now travels, because
+`spell::advance` orders running spells by it and a re-issued id would interleave
+two player-written spells differently.
+
+**The fixture failed `cargo test --release` and nobody had run it.** `debug_spawn`
+and the dev-spell shelf are `cfg(debug_assertions)`, so the release world had no
+experience, no bound spell and no quickening window — and the round-trip tests
+went green on it. Six sibling test files answer that by gating the whole file on
+`debug_assertions`; this one does not, because **the save format ships in
+release** and that is the half that matters. The debug-only commands are
+conditional and the coverage guard asserts only what the profile in hand can
+reach.
+
+**A resource lint was missing and the component lint could never have covered
+it.** `Choices` — the numbered disambiguation prompt — is a resource and survives
+until it is answered, so a save that dropped it left the question on the
+transcript with no answer that resolved: §15's dead end, arriving through the
+affordance `session` says exists to remove one.
+
+**The save carries the line, not the readings.** An `Intent` is the parser's
+resolved form with typed arguments, and putting it in the format would pin the
+format against every future parser change — for a question that survives until
+the next command. The line costs one string and reproduces the list exactly,
+because §19 already settled that the parser's tie-break draws **no randomness**:
+ranking is a total order over score, position in `Verb::ALL`, and the canonical
+echo, so `analyse` is a pure function of the line and the scene.
+
+That re-ask is its own step in the restore, **after the scene is rebuilt** —
+`analyse` takes the `Scene` *resource*, which at the top of a restore is still
+the empty default, so asking there resolved against a world that named nothing.
+(`spell::compile` is unaffected: `tower::scene_at` computes a scene from the
+world rather than reading the resource.)
+
+**Two sorts were not total orders.** `drift` and `substitution` both sort by name
+and `sort_unstable` promises nothing for equal keys — so two same-named logs
+would fall back to the archetype order the sort exists to remove. Four domains
+have four distinct log names today and five more arrive by Phase 9a. `NodeId` is
+the tie-break, and it is only safe as one *because* the save now carries it.
+
+**Every interval in the file is a start and a completion tick**, which is §8's
+own wording. `Triaging` holds an end and `Burning`/`Quickened` hold a budget, and
+one `SpanSave` used to carry whichever the component had in a field called
+`ticks` — so the same field name meant a tick in one row and a duration two rows
+down. Both round-tripped correctly; it was a trap for the reader, and §15 makes
+the reader the criterion.
+
+#### The file, and the three answers it can give (`0.3.15`)
+
+`orbs-shell` owns the path, the write and the wall clock; `orbs-sim` owns the
+document and touches no filesystem. Decisions worth keeping:
+
+| Question | Decision |
+|---|---|
+| Where | `orbs-save.toml`, **beside the binary**, on `TRACE_PATH`'s argument. `dirs` is §13's stack and Phase 11's settings screen is where it arrives with Steam Cloud; until then this is one function rather than a path in two frontends. The cost is named: an install directory can be read-only |
+| How | Written to `<path>.writing` and **renamed**. A save lands every sixty ticks for as long as the game is open, so a crash catching a half-written file is not theoretical; the rename turns *"the tower is corrupt"* into *"the tower is one minute stale"*. The scratch file is a **sibling**, because `rename` is only atomic within a filesystem |
+| What a dump does | **Neither loads nor saves unless `ORBS_SAVE` names a path** — the opposite of the running game's default. Otherwise every See-it line in CLAUDE.md becomes order-dependent on whether anyone has played in that directory, and `scripts/dumps.sh`'s baseline stops being one. Both it and the played-game suite pin `off` besides |
+| A save that will not open | **Kept, not deleted**, and said in voice. A later build may read it — the format refuses a *newer* file precisely so it is not half-read — and the next autosave overwrites it anyway. Losing a tower is bad; losing it silently and destroying the evidence is worse |
+| Three answers, not two | `Opened::{New, Restored, Unreadable}`. A first launch and a tower that did not come back both end in a new world and are **not** the same thing to tell a player |
+
+#### Leaving has four doors and only one of them is a word (`0.3.16`)
+
+`quit` is a verb, and `F10`, the window's close button and the terminal's
+`Ctrl-C` are not. None of the three touches the `Quitting` flag — `F10` writes an
+`AppExit` directly and so does `bevy_window` — so **ordering a save against
+`quit_requested` would have covered one exit in four** and looked complete.
+
+The Bevy build reads `AppExit` in `Last`, which is the one place every route has
+converged by. The terminal's loop became a function of its own so its caller has
+the same single place; its four exits include an `io::Error` off the terminal,
+which no flag could have carried at all.
+
+This is `quit`'s own §19 entry read from the other end. That one records the
+first attempt checking the flag at `submit` time and doing nothing; this one is
+the same mistake one level up — checking the *word* rather than the act.
+
+#### The orb says it remembers, and the sim never reads a clock
+
+Rule 6 puts the words in `prose.toml`; §19 forbids the sim reading a wall clock.
+So the frontend measures the gap and hands over a number of seconds, and
+`Sim::say_resumed` finds the sentence. **Not inside `Sim::restored`**, which must
+hand back the saved world *exactly* — a banner pushed there puts records in the
+loaded stream that the world which wrote it never had, and the round-trip test
+compares the two documents byte for byte. Saying so is a thing a *session* does,
+which is the line `quit` already draws.
+
+The span is deliberately coarse — *"9 hours"*, not *"9 hours, 14 minutes and 3
+seconds"*. A precise figure would imply the game had been counting, and §5 is
+explicit that it has not: **nothing accrues while the window is closed.** The
+sentence says so out loud rather than leaving it to be inferred.
+
+#### `SimPlugin::persist` is a field rather than an environment variable
+
+`ORBS_SAVE=off` exists and would have worked, except that `crates/orbs`'s own
+tests build a `SimPlugin` and run it for hundreds of ticks — and under `cargo
+test` the working directory is the crate root, so they would have read whatever
+save was lying there and written one every sixty ticks. The environment is
+per-process and `cargo test` runs threads, so one test's setting is every test's.
+
+A field has neither problem and says what it means at the call site.
+
+#### `cargo test --release` is not a gate, and one file was wrong about that
+
+CLAUDE.md's gate is debug-only, and the only release lines anywhere are two
+narrow ones — `--test debug_spawn` and `--test debug_spell` — both there to prove
+a *door is shut* in a release build rather than to test the game.
+
+**The convention is per-test, not per-file.** Seven test files carry
+`#[cfg(debug_assertions)]` on individual tests and none carries it at the top,
+which says the intent plainly: a test that needs a debug door is gated, and
+everything else is expected to run in either profile. (An earlier draft of this
+entry said six files gated themselves off wholesale. That was wrong, and the
+distinction matters — it is the difference between "release is not tested" and
+"release is tested except where a door is needed".)
+
+`tests/arsenal.rs` failed in release because its one fixture opened with
+`debug_spawn clarified-draught`, so all eight tests had been dead in that profile
+since the file was written. **Gating them would have been the wrong fix**: the
+arsenal is a shipped room, and a room whose only tests are debug-only is a room
+untested in the build that ships.
+
+**The symptom is what makes this class hard to see.** A debug door in a release
+build does not fail — it is an ordinary unresolvable line, so the setup silently
+does not happen and the assertion fails against a world that was never built.
+`fetching` reports *"the potion never reached the arsenal"* and `secrets` reports
+*"an unfound recipe read as ready to run"*; neither says the word `debug` and
+neither is what is actually wrong.
+
+The chain needs no door: sage, rock-salt and charcoal are all `Holding::endless`,
+so §10.1's five stages brew a `clarity` from nothing in about fifty ticks. The
+fixture now does that, which also makes it say what its own doc claimed — a
+potion *carried out of the room that finished it*, having really been finished
+there. A second lap needed the instruments scoured **before** use rather than
+after, which is `orbs-balance`'s rule and the reason the second brew silently
+refused: `mix` leaves the flask charged, so the next run's `mix` has nowhere to
+land.
+
+**Six files were affected in the end**, and the fix is a judgement per test
+rather than one sweep. Where the feature ships, the fixture was made real; where
+only a door can reach the state, the test is gated.
+
+| File | What was done |
+|---|---|
+| `arsenal`, `fetching`, `binding` | **Brewed.** All three wanted a `clarified-draught` and reached for `debug_spawn`; §10.1's chain makes one from endless stock in ~50 ticks, so all three now test shipped behaviour in the build that ships it |
+| `tampering` | **Waited for the real thing.** Three tests used `debug_swap`; they now step until the *ambient* swap fires, which is what CLAUDE.md says is the half that actually breaks. A fourth was **passing vacuously** in release — nothing was substituted and its `after > before` held anyway |
+| `secrets`, `gleaning`, `ward` | **Gated.** A secret needs `debug_learn` and the roll is the mechanic; a scroll is four solved mazes; a broken ward is `debug_ward`. Each has an honest route that is hours long, and in `ward`'s case the coverage is not lost — `a_blind_ladder_breaks_a_ward_through_the_real_verbs` brute-forces one through the real verbs in either profile |
+
+Two things worth keeping from doing it:
+
+- **`debug_swap` is not the ambient surface**, and a test that uses it is testing
+  a different pile. The shortcut takes the alphabetically-first endless pile,
+  which is the charcoal; the ambient half **exempts fuel**, so charcoal is
+  exactly what it can never take. `a_substitution_stops_a_spell_that_named_the_
+  reagent` had to be turned around — the swap happens first and the spell is
+  written after, naming whatever was actually hit.
+- **A whole-crate release run costs one link, not seventeen.** Checking these
+  file by file meant re-linking with `lto = "fat"` and `codegen-units = 1` each
+  time. `cargo test --release -p orbs-sim` once answers the same question, and
+  the debug gate — which is the gate — is 27 seconds.
+
+#### The completeness lint reads two worlds, because one cannot hold everything
+
+Its stated caveat is that it sees only components *present* in the world it is
+pointed at. Measured, that blind spot covered six: `triaging`, `banked`,
+`bidden`, `substituted`, `taken` and `marks` — four of them carried on faith,
+written symmetrically in `capture` and `adopt` and checked by nothing.
+
+Some are mutually exclusive with the busy tower by construction. `damp` requires
+`Burning` and removes it, so an athanor cannot be lit and banked at once; a
+spell-driven run and a player-driven one compete for the single production slot.
+Contorting one fixture to hold everything would have made it hold each thing less
+convincingly, so there are two, and both lints read both.
+
+Three words that fixture had to be taught, none of which is what a reader would
+guess:
+
+- **Damping has no verb.** It is what `stop athanor` *does* — `pipeline` says so
+  where it does it. A bare `damp` is ambiguous, and `damp athanor` fuzzy-matches
+  `purge`, which is how the first version of this fixture ended up scouring.
+- **`purge` on a log takes no triage slot**, because un-poisoning is instant.
+  Only an instrument leaves a `Triaging` in flight.
+- **`Bidden` needs a spell to have asked for the run.** The player's own `grind`
+  never sets it, so the fixture invokes `first_light` instead.
+
+#### The filesystem stays outside `orbs-sim`, and now a test says so
+
+`orbs-sim` had never touched a file — content is `include_str!`'d and the prose
+watcher lives in the frontend — but nothing enforced it, because nothing had ever
+been *tempted*. `capture` and `restore` turn a world into a document and back,
+and the obvious next line writes it to disk.
+`the_sim_never_touches_the_filesystem` joins the three guards already in
+`tests/boundaries.rs`, on the same argument §16 uses for the font asset: a rule
+that is only written down is a rule that gets broken during a hurried phase.
+
 ### `quit` — the way out is a word, like every other way through
 
 **Leaving was reachable only by a key, and no key in this game is

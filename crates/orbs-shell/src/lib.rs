@@ -47,6 +47,7 @@ mod prompt;
 mod prose;
 mod rail;
 mod reveal;
+mod save;
 mod screen;
 mod scrollback;
 mod sheet;
@@ -68,6 +69,10 @@ pub use offering::{Ghost, Offered};
 pub use prompt::{View, paint, paint_booting, paint_too_small};
 pub use prose::{CONTENT_DIR, PROSE, load, read};
 pub use reveal::Reveal;
+pub use save::{
+    OFF as SAVE_OFF, Opened, SAVE_PATH, SAVE_VAR, away_for, path as save_path, read as read_save,
+    write as write_save,
+};
 pub use screen::Screen;
 pub use scrollback::{Scroll, page_step};
 pub use shortcuts::{TRACE_PATH, cycle_register, export_trace};

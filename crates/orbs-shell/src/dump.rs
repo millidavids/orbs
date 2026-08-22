@@ -200,10 +200,48 @@ pub fn requested() -> Option<String> {
 /// painters, from the same `Sim` — so `orbs-tui --dump X` and `ORBS_DUMP=X orbs`
 /// print the same bytes or the shell has grown a frontend-shaped hole in it.
 pub fn run_script(seed: u64, wizard: Option<String>, engine: &str, request: &str) {
-    let mut sim = Sim::new(seed);
-    if let Some(name) = wizard {
-        sim.rename(&name);
-    }
+    // **A dump neither loads nor saves unless `ORBS_SAVE` names a path.**
+    //
+    // Not a convenience — the alternative breaks the instruments. A dump that
+    // loaded by default would make every See-it line in CLAUDE.md depend on
+    // whether anyone had played in that directory, and `scripts/dumps.sh` would
+    // stop being a baseline the first time one of its 56 screens wrote a save
+    // the next 55 then read. `orbs-save.toml` sitting in the repository root
+    // would silently change what a dump draws.
+    //
+    // So the default here is the opposite of the running game's: no file at all,
+    // and a path only when a person asks for one by name.
+    let asked = std::env::var_os(crate::save::SAVE_VAR).is_some();
+    let waiting = if asked {
+        crate::save::read()
+    } else {
+        crate::save::Opened::New
+    };
+    let mut sim = match waiting {
+        crate::save::Opened::Restored(save) => {
+            let mut resumed = Sim::restored(&save);
+            resumed.say_resumed(crate::save::away_for(&save));
+            resumed
+        }
+        crate::save::Opened::Unreadable => {
+            let mut fresh = Sim::new(seed);
+            if let Some(name) = wizard {
+                fresh.rename(&name);
+            }
+            fresh.say_save_unreadable();
+            fresh
+        }
+        crate::save::Opened::New => {
+            let mut fresh = Sim::new(seed);
+            // Only a *new* world takes its wizard from the environment: a save
+            // carries one, and `session::Wizard` is explicit that a save
+            // outranks the machine.
+            if let Some(name) = wizard {
+                fresh.rename(&name);
+            }
+            fresh
+        }
+    };
     // Authored content, if `ORBS_CONTENT` names a directory (rule 6). A dump
     // builds no `App` and so has no watcher, but it must still read what is on
     // disk — otherwise the one tool CLAUDE.md says to reach for first is the one
@@ -227,6 +265,16 @@ pub fn run_script(seed: u64, wizard: Option<String>, engine: &str, request: &str
     // world having actually run rather than a pose struck for the screenshot.
     if request != "1" {
         drive(&mut sim, request);
+    }
+
+    // Written after the script has run, because what a dump is *for* is the
+    // world the script reached. There is no `quit` involved: a dump has no
+    // session to leave, and `run_script` never reads `Quitting`.
+    if asked && crate::save::write(&sim.snapshot()).is_err() {
+        // In voice, not on stderr — this runs before the frame is painted, so
+        // it lands on the transcript where §3 says output belongs. A dump is
+        // also the one place a person is *looking* for what the orb said.
+        sim.say_save_failed();
     }
 
     let grid = grid();

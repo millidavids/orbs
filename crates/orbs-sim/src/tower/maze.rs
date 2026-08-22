@@ -569,6 +569,104 @@ impl Maze {
         }
     }
 }
+/// Reading a maze out into a save, and back.
+///
+/// # Why this lives here rather than in `crate::save`
+///
+/// The same argument [`Ward::to_save`](crate::tower::Ward::to_save) makes: the
+/// fields are private, and putting the conversion beside them means a new field
+/// breaks the build *here*, in the file being edited.
+///
+/// It also pays a debt this module already recorded. `Maze` was named as *"the
+/// first component in the game not reconstructible from names and `NodeId`s,
+/// which is a debt against §8"* — §8 requiring in-flight state to be
+/// serialisable. This is the pair of methods that settles it.
+impl Maze {
+    /// Everything a save needs to put this maze back.
+    ///
+    /// **The walls go out as a picture and the marks as a sparse list.** 33 × 23
+    /// is 759 squares, and an array-of-tables of `Square` would be several
+    /// hundred lines of `{ wall = true, marks = 0 }` — the save file would *be*
+    /// the maze. §15 makes readable-and-editable a stated criterion, and this is
+    /// the one field big enough to decide whether it is met.
+    pub(crate) fn to_save(&self) -> crate::save::MazeSave {
+        crate::save::MazeSave {
+            width: self.width,
+            at: self.at,
+            exit: self.exit,
+            came: self.came.map(|way| crate::save::way_word(way).to_owned()),
+            errand: crate::save::errand_word(self.errand).to_owned(),
+            spoils: self.spoils.clone(),
+            walls: self
+                .squares
+                .chunks(self.width.max(1))
+                .map(|row| {
+                    row.iter()
+                        .map(|square| if square.wall { '#' } else { '.' })
+                        .collect::<String>()
+                })
+                .collect::<Vec<_>>()
+                .join("\n"),
+            marks: self
+                .squares
+                .iter()
+                .enumerate()
+                .filter(|(_, square)| square.marks > 0)
+                .map(|(at, square)| (at, square.marks))
+                .collect(),
+        }
+    }
+
+    /// Put one back.
+    ///
+    /// **Draws no randomness**, unlike the generator — the layout is read rather
+    /// than dug. A restore that re-dug the maze would move `RngStream::Archive`
+    /// and change every later roll in the session.
+    pub(crate) fn from_save(save: &crate::save::MazeSave) -> Self {
+        let squares: Vec<Square> = save
+            .walls
+            .lines()
+            .flat_map(str::chars)
+            .map(|glyph| Square {
+                wall: glyph == '#',
+                marks: 0,
+            })
+            .collect();
+
+        // **Range-checked, because §15 invites hand-editing.** Nothing here can
+        // panic today — every consumer of `at` and `exit` reaches through
+        // `.get()` — but a maze whose reading stands outside its own grid is a
+        // maze `follow` can never move and `survey` reports nothing about, which
+        // is a silently unplayable archive rather than a loud one. Clamped to a
+        // real square instead.
+        let width = save.width.max(1);
+        let squares: Vec<Square> = squares;
+        let last = squares.len().saturating_sub(1);
+        let mut maze = Self {
+            width,
+            at: save.at.min(last),
+            exit: save.exit.min(last),
+            came: save.came.as_deref().and_then(crate::save::way_from),
+            errand: crate::save::errand_from(&save.errand),
+            // A spoil outside the grid is unreachable, so it is dropped rather
+            // than left as an errand the player can never finish.
+            spoils: save
+                .spoils
+                .iter()
+                .copied()
+                .filter(|at| *at < squares.len())
+                .collect(),
+            squares,
+        };
+        for &(at, marks) in &save.marks {
+            if let Some(square) = maze.squares.get_mut(at) {
+                square.marks = marks;
+            }
+        }
+        maze
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

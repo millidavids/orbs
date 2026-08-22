@@ -62,6 +62,9 @@ fn main() -> AppExit {
             sim::SimPlugin {
                 seed,
                 wizard: wizard(),
+                // The real game keeps its tower between sessions. Only this
+                // crate's own tests do not — see `SimPlugin::persist`.
+                persist: true,
             },
             render::RenderPlugin,
             crt::CrtPlugin,

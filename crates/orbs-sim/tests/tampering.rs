@@ -41,11 +41,49 @@ fn fields(sim: &Sim, wanted: FieldName) -> Vec<String> {
         .collect()
 }
 
+/// Step until the **ambient** swap fires, and answer with what it renamed.
+///
+/// # Why not `debug_swap`
+///
+/// Because that word is `cfg(debug_assertions)`, so under `cargo test --release`
+/// it is an ordinary unresolvable line: nothing is swapped, and the assertions
+/// below fail against a tower where no sabotage ever happened. Three tests in
+/// this file were dead in that profile.
+///
+/// And because the shortcut is not the surface. CLAUDE.md is explicit that
+/// *"`debug_swap` is the tester's shortcut, and the **ambient** half is what
+/// breaks"* — three defects shipped with every See-it line green because only
+/// the shortcut had ever been exercised. Waiting for the real roll costs a few
+/// thousand ticks, which is under a second, and tests the thing that ships.
+///
+/// The two differ in what they take: `debug_swap` takes the alphabetically-first
+/// endless pile, which is the charcoal, and the ambient system **exempts fuel**
+/// — so a caller that needs to know which pile was hit has to ask rather than
+/// assume. That is what the return value is for.
+fn wait_for_a_swap(sim: &mut Sim) -> String {
+    for _ in 0..20_000 {
+        sim.step();
+        // **Asked of the world, not of the transcript.** `fields` reads the
+        // record stream, which only names a pile once something has surveyed
+        // it — so a helper that watched *that* would wait for ever on a tower
+        // nobody had looked at. The save document is the world itself.
+        if let Some(was) = sim
+            .snapshot()
+            .nodes
+            .into_iter()
+            .find_map(|node| node.substituted.map(|lie| lie.was))
+        {
+            return was;
+        }
+    }
+    panic!("no ambient swap in 20000 ticks, so this test would assert nothing");
+}
+
 #[test]
 fn a_swapped_reagent_is_both_visible_and_verifiable() {
     let mut sim = Sim::new(1);
     run(&mut sim, "attend laboratory");
-    run(&mut sim, "debug_swap");
+    wait_for_a_swap(&mut sim);
 
     // **Channel one: it is on screen.** `survey` lists the shelf and one pile is
     // not what it was — the structural signature §8.1 asks for, perceptible to a
@@ -104,37 +142,38 @@ fn a_substitution_stops_a_spell_that_named_the_reagent() {
     // missing`"*. This is what makes the world a surface worth inspecting — the
     // sabotage is felt as a spell that stopped working, and finding out *why* is
     // the thing scrying exists for.
-    // **`kindle charcoal`, because `debug_swap` takes the shelf's first pile by
-    // name and that is the charcoal.** A spell naming a reagent the swap did not
-    // touch would pass this test while proving nothing — the first version wrote
-    // `grind charcoal`, which fails on a tower with no sabotage at all because
-    // charcoal is fuel and not a mortar input.
+    // **The spell has to name the pile the swap really took**, or it passes while
+    // proving nothing. `debug_swap` made that easy by always taking the charcoal
+    // — and it is the one pile the *ambient* system can never take, because fuel
+    // is exempt. So the swap comes first here and the spell is written after,
+    // naming what was actually hit.
+    //
+    // That reverses the shape of the test and it is the honest way round: the
+    // orb learns a name is a lie by failing on it, and this now checks that with
+    // whatever reagent the world chose rather than the one a door was known to
+    // pick.
     let mut sim = Sim::new(1);
     run(&mut sim, "attend laboratory");
-    sim.write_spell("tending", &["kindle charcoal".to_owned()]);
-    sim.step();
 
-    // It works before the swap, which is what makes the failure afterwards mean
-    // something.
-    run(&mut sim, "invoke tending");
-    sim.step_n(4);
-    assert!(
-        said(&sim).iter().any(|line| line.contains("takes light")),
-        "the spell did not work before the swap: {:?}",
-        said(&sim),
-    );
-
+    let was = wait_for_a_swap(&mut sim);
+    // `grind` takes a mortar input, and the exempted fuel is what the ambient
+    // swap will never hand back — so whatever it took, this is a real operation
+    // on it. `purge` first, so the *pile* is what stops the spell rather than a
+    // poisoned surface refusing it for another reason.
     let before = said(&sim).len();
-    run(&mut sim, "stop athanor");
-    sim.step_n(6);
-    run(&mut sim, "debug_swap");
+    sim.write_spell("tending", &[format!("grind {was}")]);
+    sim.step();
     run(&mut sim, "invoke tending");
     sim.step_n(6);
 
     let after: Vec<String> = said(&sim).into_iter().skip(before).collect();
     assert!(
-        !after.iter().any(|line| line.contains("takes light")),
-        "the fire lit from a reagent that is no longer called that: {after:?}",
+        !after.iter().any(|line| line.contains("dispensary to")),
+        "the mortar took a reagent that is no longer called that: {after:?}",
+    );
+    assert!(
+        !after.is_empty(),
+        "the spell said nothing at all, so this asserts nothing",
     );
 }
 
@@ -150,7 +189,12 @@ fn the_swap_leaves_the_pile_where_it_was() {
     run(&mut sim, "survey dispensary");
     let before = fields(&sim, FieldName::Name).len();
 
-    run(&mut sim, "debug_swap");
+    // **The real swap, not the shortcut.** This one *passed* in release while
+    // asserting nothing: `debug_swap` was an unresolvable line, nothing was
+    // substituted, and `after > before` still held because a second `survey`
+    // lists the same shelf again. A test that goes green on a tower with no
+    // sabotage in it is the failure this file exists to catch.
+    wait_for_a_swap(&mut sim);
     run(&mut sim, "survey dispensary");
     let after = fields(&sim, FieldName::Name).len();
 
@@ -181,7 +225,13 @@ fn a_lie_nobody_catches_settles_back_to_the_truth() {
 
     let mut sim = Sim::new(1);
     run(&mut sim, "attend laboratory");
-    run(&mut sim, "debug_swap");
+    // **The pile the ambient system actually took**, which is not the one
+    // `debug_swap` would have: that word takes the alphabetically-first endless
+    // pile and the ambient half *exempts fuel*, so charcoal is exactly what it
+    // will never choose. The old version asserted `charcoal` got its name back
+    // and would have been checking the wrong pile the moment it stopped using
+    // the shortcut.
+    let was = wait_for_a_swap(&mut sim);
     run(&mut sim, "verify dispensary");
     assert_eq!(
         verdict(&sim).as_deref(),
@@ -205,8 +255,8 @@ fn a_lie_nobody_catches_settles_back_to_the_truth() {
     run(&mut sim, "survey dispensary");
     let names = fields(&sim, FieldName::Name);
     assert!(
-        names.iter().any(|name| name == "charcoal"),
-        "the pile settled without getting its name back: {names:?}",
+        names.contains(&was),
+        "the pile settled without getting its name back: wanted {was:?} in {names:?}",
     );
 }
 

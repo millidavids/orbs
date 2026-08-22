@@ -108,3 +108,46 @@ fn the_sim_never_depends_on_bevy_the_engine() {
         );
     }
 }
+
+#[test]
+fn the_sim_never_touches_the_filesystem() {
+    // Rule 1. This crate must compile and test headlessly, in milliseconds, with
+    // no window — and `crates/orbs-sim/Cargo.toml` states the corollary in as
+    // many words: *"this crate never watches a file — a frontend owns the
+    // watcher and hands new content in at a tick boundary."* `orbs/src/sim/
+    // content.rs` gives the reason the other way round: *"a watcher inside the
+    // sim would also make every headless test touch the filesystem, which is the
+    // thing rule 1 exists to prevent."*
+    //
+    // Until the save format landed, nothing here was *tempted*. `save::capture`
+    // and `save::restore` turn a world into a document and back, and the obvious
+    // next line is the one that writes it to a file. It belongs in `orbs-shell`,
+    // beside `prose::read` and `shortcuts::export_trace`, and this is what says
+    // so at build time rather than in a comment nobody reads in a hurried phase.
+    //
+    // `include_str!` is untouched: content compiled *into* the binary is the
+    // opposite of this, and is what makes the headless promise keepable.
+    //
+    // **A tripwire, not a wall, and worth saying so.** A substring scan is
+    // trivially walked around — `use std::fs;` then a bare `fs::write`, or
+    // `OpenOptions`, or `Command::new("cp")` — and it cannot see the thing the
+    // rule is most about, which is a filesystem-capable *dependency* arriving in
+    // `Cargo.toml`. It is aimed at the accidental `std::fs::write` in a hurried
+    // phase, which is the way this rule would actually be broken, and it catches
+    // that. `the_sim_never_depends_on_bevy_the_engine` above reads the manifest
+    // and is the shape to copy if a dependency ever needs guarding too.
+    for path in sources() {
+        let source = fs::read_to_string(&path).unwrap_or_else(|error| panic!("{path:?}: {error}"));
+        // `std::fs` covers the module however it is spelled at the call site.
+        // A bare `read_to_string` is deliberately *not* a needle: it is an
+        // inherent method name common enough to fail this build for a reason
+        // that has nothing to do with rule 1.
+        for name in ["std::fs", "File::open", "File::create", "File::create_new"] {
+            assert!(
+                !source.contains(name),
+                "{}: reaches for `{name}` — rule 1 keeps the filesystem out of orbs-sim",
+                path.display(),
+            );
+        }
+    }
+}

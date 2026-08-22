@@ -118,10 +118,31 @@ fn main() -> ExitCode {
 
 /// Take the terminal, play, and give it back.
 fn play(seed: u64) -> std::io::Result<()> {
-    let mut sim = Sim::new(seed);
-    if let Some(name) = wizard() {
-        sim.rename(&name);
-    }
+    // **The save outranks the seed and the environment both**, as it does in the
+    // other build. `session::Wizard` puts it the other way round: a name is world
+    // state, so it is read from the machine only when there is no world yet.
+    let mut sim = match orbs_shell::read_save() {
+        orbs_shell::Opened::Restored(save) => {
+            let mut resumed = Sim::restored(&save);
+            resumed.say_resumed(orbs_shell::away_for(&save));
+            resumed
+        }
+        orbs_shell::Opened::Unreadable => {
+            let mut fresh = Sim::new(seed);
+            if let Some(name) = wizard() {
+                fresh.rename(&name);
+            }
+            fresh.say_save_unreadable();
+            fresh
+        }
+        orbs_shell::Opened::New => {
+            let mut fresh = Sim::new(seed);
+            if let Some(name) = wizard() {
+                fresh.rename(&name);
+            }
+            fresh
+        }
+    };
     // Authored content, if `ORBS_CONTENT` names a directory (rule 6). No
     // watcher: that is `notify` and a background thread, and it belongs to the
     // frontend that already has one. A terminal build reads the file once.

@@ -191,7 +191,17 @@ impl Game {
         // fails *silently* — so a seed set with `Command::env` would be ignored
         // on any machine that already had a tmux server up, and every scenario
         // would quietly run on the default world with nothing to show for it.
-        for pair in [format!("ORBS_SEED={seed}"), format!("ORBS_WIZARD={WIZARD}")] {
+        // **`ORBS_SAVE=off`, so no scenario can inherit another's tower.**
+        // `spawn_with` already gives each scenario a unique directory and hands
+        // it to `tmux -c`, so this is deliberate isolation rather than a fix for
+        // a live collision — but a scenario that types `quit` writes a save, and
+        // a suite whose scenarios could load one another's is one where a
+        // failure depends on the order the threads happened to run in.
+        for pair in [
+            format!("ORBS_SEED={seed}"),
+            format!("ORBS_WIZARD={WIZARD}"),
+            "ORBS_SAVE=off".to_owned(),
+        ] {
             args.push("-e".to_owned());
             args.push(pair);
         }

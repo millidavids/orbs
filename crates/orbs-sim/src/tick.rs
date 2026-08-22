@@ -66,6 +66,33 @@ impl Tick {
     }
 }
 
+/// A span of seconds, as a person would say it.
+///
+/// **Coarse on purpose.** The only caller is *"the orb was dark for …"*, and a
+/// player who left overnight wants *"9 hours"* rather than *"9 hours, 14 minutes
+/// and 3 seconds"*. §3's voice is plain and short, and a precise number here
+/// would also imply the game had been counting — which §5 is explicit it has
+/// not: nothing accrues while the window is closed.
+#[must_use]
+pub fn span(seconds: u64) -> String {
+    /// Singular where it should be. `1 hours` is the sort of thing that reads as
+    /// a machine talking, which §3 spends its whole budget avoiding.
+    fn plural(n: u64, unit: &str) -> String {
+        if n == 1 {
+            format!("{n} {unit}")
+        } else {
+            format!("{n} {unit}s")
+        }
+    }
+
+    match seconds {
+        0..60 => plural(seconds.max(1), "second"),
+        60..3_600 => plural(seconds / 60, "minute"),
+        3_600..86_400 => plural(seconds / 3_600, "hour"),
+        _ => plural(seconds / 86_400, "day"),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -78,6 +105,22 @@ mod tests {
     #[test]
     fn seconds_convert_one_to_one() {
         assert!((Tick::new(90).as_seconds() - 90.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn a_span_reads_as_a_person_would_say_it() {
+        assert_eq!(span(1), "1 second");
+        assert_eq!(span(45), "45 seconds");
+        assert_eq!(span(60), "1 minute");
+        assert_eq!(span(3_599), "59 minutes");
+        assert_eq!(span(3_600), "1 hour");
+        assert_eq!(span(9 * 3_600 + 847), "9 hours");
+        assert_eq!(span(86_400), "1 day");
+        assert_eq!(span(3 * 86_400), "3 days");
+        // Nought seconds is not an absence anyone noticed, and `away_for`
+        // filters it — but if one ever arrives here it must not say "0 seconds",
+        // which reads as a bug rather than as a moment.
+        assert_eq!(span(0), "1 second");
     }
 
     #[test]

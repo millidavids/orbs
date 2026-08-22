@@ -2390,6 +2390,124 @@ So the grimoire composes **spells out of spell parts** — named, reusable piece
 one spell invokes — which needs no vocabulary change and is what the directory
 already holds.
 
+**Three boxes at the head of this phase are not Spellcraft**, and that is stated
+rather than smuggled: the save format serves no part of the exit criterion above.
+It goes here because Phase 3 is next and because **every phase from here adds
+state to it** — Spellcraft's own spell-parts item adds the first. Building the
+format after five domains have shipped means retrofitting six phases of state,
+and it leaves Phase 11's settings item and Phase 9a's offline progression blocked
+until then. §19 records the placement argument in full.
+
+- [x] ✅ **The save document, headless.** `Sim::snapshot` reads a world out as
+      plain TOML and `Sim::restored` puts one back, and neither touches a file —
+      `orbs-sim` builds the document, a frontend writes it. Nodes are addressed
+      by **path**, not `NodeId`; a restore **raises the tower first and then
+      adopts it**, so a save written before a domain existed opens into a tower
+      that has one. Closes Phase 1's stated debt — *"`Running` is not in any save
+      format, because there is no save format."*
+      - **The journal became the instrument.** `(seed, submissions)` had been
+        recorded since Phase 0 with no consumer; `two_routes_to_one_world_write_
+        the_same_save` reaches one world by replay and by play and requires the
+        same bytes from both, which is what pins the snapshot as a *complete*
+        description rather than a partial one
+      - **`tower::drift` picked its target by query order** and a rebuilt world
+        picked a different one. Its own comment had recorded the debt — *"only
+        [`substitution`] got the fix"* — and nothing had ever rebuilt a world, so
+        nothing could see it. Sorted by name, and the target drawn from the roll
+        that already fired, exactly as `substitution` does
+      - **A resumed spell verifies its program before walking it.** `pc` is a
+        path into the tree the spell was cast against, so the save carries a
+        fingerprint of the text it compiled and a mismatch ends the run in voice
+        rather than resuming into the wrong program
+      - **The record tail travels.** A `.log` is a *view* over the record stream,
+        not a file with contents, so dropping the stream would empty every log in
+        the tower — and §8.1's poisoned-log tell is built by re-emitting existing
+        lines, so `verify` would have said *tampered* and shown nothing
+      - **An independent review found five reproduced defects**, §19 lists them:
+        a renamed pile changed slot on reload and silently changed what an
+        ambiguous phrase resolved to; a record's register was written and never
+        read back; `purge` on a shipped spell was undone by the next load in a
+        release build; a hand-edited ward panicked on the next `probe`; and an
+        open numbered prompt came back unanswerable. The fixture also **failed
+        `cargo test --release`** and nobody had run it
+      **See it:** `cargo test -p orbs-sim --test persistence`, then read one:
+      `cargo test -p orbs-sim --test persistence -- --ignored show_a_save
+      --nocapture` — the maze is drawn as a maze, a node's path stands where an
+      id would have been, and an instrument mid-run says which tick it lands on
+- [x] ✅ **The save file, and the tools that must not see it.** `orbs-shell`
+      owns the path, the atomic write and the `[away]` wall-clock stamp — which
+      is the frontend's because the sim has no clock and §19 forbids it acquiring
+      one. `ORBS_SAVE` names a file and **`off` keeps none**.
+      - **Written to one side and renamed.** A save lands every sixty ticks for
+        as long as the game is open, so a crash catching a half-written file is
+        not theoretical; the rename turns *"the tower is corrupt"* into *"the
+        tower is one minute stale"*
+      - **A dump neither loads nor saves unless asked**, which is the opposite of
+        the running game's default. Otherwise every See-it line in CLAUDE.md
+        becomes order-dependent on whether anyone has played in that directory,
+        and `scripts/dumps.sh`'s baseline stops being one. Both it and the
+        played-game suite pin `off` besides
+      - **A save that will not open is kept, not deleted**, and says why in the
+        log. A later build may read it; the next autosave overwrites it anyway
+      **See it:** leave mid-brew, come back, and the clock continues rather than
+      restarting — `tick = 8` then `tick = 10`, with the first run's transcript
+      still on screen. Then `printf 'garbage' > "$S"` and watch the session draw
+      a new tower instead of falling over:
+      ```bash
+      S=/tmp/orbs-save.toml; rm -f "$S"
+      ORBS_SAVE=$S ORBS_BOOT=0 ORBS_DUMP="attend laboratory; kindle charcoal; \
+        grind sage; meditate 4" cargo run -p orbs
+      ORBS_SAVE=$S ORBS_BOOT=0 ORBS_DUMP="survey mortar_and_pestle; status" \
+        cargo run -p orbs
+      cat "$S"
+      ```
+      ...and the one that matters most, because it is the hazard the step exists
+      to close — a save deliberately left in the repository root, and the
+      56-screen baseline byte-identical across it:
+      ```bash
+      ORBS_SAVE=orbs-save.toml ORBS_BOOT=0 ORBS_DUMP="attend archive; research" \
+        cargo run -p orbs
+      scripts/dumps.sh /tmp/b1 && scripts/dumps.sh /tmp/b2 && diff -r /tmp/b1 /tmp/b2
+      ```
+- [x] ✅ **Both frontends load, autosave and save on the way out.** A save
+      outranks the seed *and* the environment — `session::Wizard` says a name is
+      world state, so `USER` seeds only a new tower.
+      - **Every exit path, not only `quit`.** `F10` writes an `AppExit` directly
+        and so does the window's close button; the terminal's `Ctrl-C`/`Ctrl-D`
+        return straight out of the loop. None touches `Quitting`, so ordering
+        against `quit_requested` would have covered **one exit in four**. Bevy
+        reads `AppExit` in `Last`; the terminal's loop became a function so its
+        caller has one place every route converges on
+      - **Autosave every 60 world ticks, in both builds.** Read off the sim's own
+        clock, never a counter of the frontend's — one would drift the moment
+        `meditate` ran three hundred ticks inside a `step`
+      - **Three answers, not two.** *No save* and *a save that would not open*
+        both end in a new tower and are not the same thing to tell a player, so
+        `Opened` distinguishes them and the orb says which
+      - **`SimPlugin::persist` is a field, not an environment variable.** This
+        crate's own tests build a plugin and run it for hundreds of ticks, and
+        under `cargo test` the working directory is the crate root — they would
+        have read and written a save there. `ORBS_SAVE` is process-global and
+        `cargo test` runs threads
+      **See it** — the terminal build, twice, leaving by a different route each
+      time, because a dump has no window and no clock:
+      ```bash
+      S=/tmp/tui.toml; rm -f "$S"
+      tmux new-session -d -s orbs -x 120 -y 45 -e ORBS_SAVE=$S -e ORBS_BOOT=0 \
+        target/debug/orbs-tui
+      # attend laboratory; kindle charcoal; grind sage — then `quit`
+      # reopen: the transcript and the lit athanor are both still there
+      # leave by F10, and again by Ctrl-C: `tick` climbs 7 → 42 → 67
+      ```
+      ...and the voices, which a dump *can* reach:
+      ```bash
+      ORBS_SAVE=$S ORBS_BOOT=0 ORBS_DUMP="status" cargo run -p orbs
+      #   the orb remembers. the tower is as you left it
+      #   it was dark for 3 minutes. nothing turned while you were gone
+      printf 'garbage' > "$S" && ORBS_SAVE=$S ORBS_BOOT=0 ORBS_DUMP="status" cargo run -p orbs
+      #   the orb cannot make out what it wrote last. this tower is new
+      ```
+
 - [ ] Naming pass for the remaining ~35 canonical commands, moved here from
       Phase 1 — §18 lists it **blocking**, and it goes *ahead* of the domains
       that coin the most verbs

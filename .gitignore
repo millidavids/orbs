@@ -39,3 +39,8 @@ orbs-screenshot.png
 # The parse trace from F6, in either frontend. Its sibling above was ignored and
 # this never was — which went unnoticed while exactly one build could produce it.
 orbs-parse.tsv
+
+# The save, from either build. Its two siblings above are ignored and it would
+# be the third thing a `git status` in a played-in checkout kept offering.
+orbs-save.toml
+orbs-save.toml.writing

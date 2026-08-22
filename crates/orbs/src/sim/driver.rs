@@ -23,6 +23,31 @@ impl Tower {
         Self(Sim::new(seed))
     }
 
+    /// The tower a save describes.
+    ///
+    /// **Not renamed afterwards.** `session::Wizard` is explicit that this is
+    /// world state and *"a save outranks the environment"* — a frontend seeds
+    /// the name from `USER` only when it is building a new world, or a player
+    /// who renamed their wizard would be renamed back on every load.
+    pub(crate) fn restored(save: &orbs_sim::Save) -> Self {
+        Self(Sim::restored(save))
+    }
+
+    /// Say the tower was resumed, and how long it was dark.
+    pub(crate) fn say_resumed(&mut self, away: Option<u64>) {
+        self.0.say_resumed(away);
+    }
+
+    /// Say a save was there and could not be read.
+    pub(crate) fn say_save_unreadable(&mut self) {
+        self.0.say_save_unreadable();
+    }
+
+    /// Say the tower could not be written out.
+    pub(crate) fn say_save_failed(&mut self) {
+        self.0.say_save_failed();
+    }
+
     /// Hand a finished line to the sim.
     ///
     /// The **only** other way the frontend touches the world, and it does not

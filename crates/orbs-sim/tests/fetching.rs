@@ -132,11 +132,30 @@ fn a_whole_brew_needs_no_move() {
 fn move_is_still_the_only_way_finished_work_leaves_the_room() {
     // The reason the verb stays. Nothing else carries between domains, and this is
     // what a proposal to retire `move` from the laboratory has to answer.
+    // **§10.1's chain, from endless stock, with no debug door in it.** It used to
+    // open with `debug_spawn clarified-draught`, which is `cfg(debug_assertions)`
+    // — so under `cargo test --release` the line was simply unresolvable, the
+    // draught never appeared, and this failed on a world that was never built.
+    // The failure said *"the potion never reached the arsenal"* and named
+    // nothing about a door, which is what makes the class hard to see.
+    //
+    // `move` carrying finished work between rooms is shipped behaviour, so the
+    // fix is to brew properly rather than to gate the test off the build that
+    // ships it.
     let mut sim = Sim::new(1);
     for line in [
         "attend laboratory",
         "kindle charcoal",
-        "debug_spawn clarified-draught",
+        "grind sage",
+        "meditate 9",
+        "empty mortar_and_pestle",
+        "digest ground-sage",
+        "meditate 14",
+        "grind rock-salt",
+        "meditate 9",
+        "empty mortar_and_pestle",
+        "mix sage-tincture with ground-salt",
+        "meditate 12",
         "distil clarified-draught",
     ] {
         run(&mut sim, line);

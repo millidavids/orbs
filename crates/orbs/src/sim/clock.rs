@@ -94,6 +94,7 @@ mod tests {
             .add_plugins(SimPlugin {
                 seed: 1,
                 wizard: None,
+                persist: false,
             })
             .insert_resource(TimeUpdateStrategy::ManualDuration(frame_time));
 
@@ -113,12 +114,14 @@ mod tests {
                 app.add_plugins(SimPlugin {
                     seed: 1,
                     wizard: None,
+                    persist: false,
                 })
                 .add_plugins(TimePlugin);
             } else {
                 app.add_plugins(TimePlugin).add_plugins(SimPlugin {
                     seed: 1,
                     wizard: None,
+                    persist: false,
                 });
             }
             app.insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs(1)));
@@ -233,6 +236,7 @@ mod tests {
         app.add_plugins(TimePlugin).add_plugins(SimPlugin {
             seed: 1,
             wizard: None,
+            persist: false,
         });
         app.insert_resource(TimeUpdateStrategy::ManualDuration(Duration::ZERO));
         app.update();

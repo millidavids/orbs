@@ -139,6 +139,17 @@ fn a_blind_ladder_breaks_a_ward_through_the_real_verbs() {
     }
 }
 
+/// **Gated.** `debug_ward` makes the answer whatever the aperture holds, and
+/// `debug_spell` writes the solver ladder — both `cfg(debug_assertions)`, and
+/// both unresolvable lines in a release build rather than errors. Without this
+/// the test ran against a ward nobody had broken and a spell that was never
+/// written, and failed saying the seed could not bind anything.
+///
+/// The honest alternative is brute-forcing a 360-code ward per seed, which
+/// `a_blind_ladder_breaks_a_ward_through_the_real_verbs` already does through
+/// the real verbs and in either profile — so what is gated here is the
+/// *shortcut*, not the coverage.
+#[cfg(debug_assertions)]
 #[test]
 fn the_solver_spell_keeps_solving_and_never_goes_quiet() {
     // **The test above is a *reference* ladder, written in Rust, and it does not
@@ -395,6 +406,17 @@ fn a_press_is_instant_and_takes_no_slot() {
     );
 }
 
+/// **Gated.** `debug_ward` makes the answer whatever the aperture holds, and
+/// `debug_spell` writes the solver ladder — both `cfg(debug_assertions)`, and
+/// both unresolvable lines in a release build rather than errors. Without this
+/// the test ran against a ward nobody had broken and a spell that was never
+/// written, and failed saying the seed could not bind anything.
+///
+/// The honest alternative is brute-forcing a 360-code ward per seed, which
+/// `a_blind_ladder_breaks_a_ward_through_the_real_verbs` already does through
+/// the real verbs and in either profile — so what is gated here is the
+/// *shortcut*, not the coverage.
+#[cfg(debug_assertions)]
 #[test]
 fn a_solver_keeps_working_after_the_player_walks_out() {
     // **The domain's own selling point, and nothing covered it.** `land` runs in
@@ -442,6 +464,17 @@ fn a_solver_keeps_working_after_the_player_walks_out() {
     );
 }
 
+/// **Gated.** `debug_ward` makes the answer whatever the aperture holds, and
+/// `debug_spell` writes the solver ladder — both `cfg(debug_assertions)`, and
+/// both unresolvable lines in a release build rather than errors. Without this
+/// the test ran against a ward nobody had broken and a spell that was never
+/// written, and failed saying the seed could not bind anything.
+///
+/// The honest alternative is brute-forcing a 360-code ward per seed, which
+/// `a_blind_ladder_breaks_a_ward_through_the_real_verbs` already does through
+/// the real verbs and in either profile — so what is gated here is the
+/// *shortcut*, not the coverage.
+#[cfg(debug_assertions)]
 #[test]
 fn a_bound_solver_leaves_the_tower_a_share_of_its_one_slot() {
     // **It takes *none* of it now, and that is the assertion.** §19 refuses the

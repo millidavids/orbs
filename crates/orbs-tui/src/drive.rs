@@ -33,6 +33,8 @@ const FRAME: Duration = Duration::from_millis(33);
 /// Everything the loop keeps between frames.
 struct Session {
     sim: Sim,
+    /// Whether a failed write has already been complained about.
+    save_failed: bool,
     line: Line,
     offered: Offered,
     ghost: String,
@@ -105,6 +107,7 @@ impl Session {
             held_over: None,
             engine,
             sim,
+            save_failed: false,
             line: Line::default(),
             offered: Offered::default(),
             ghost: String::new(),
@@ -138,6 +141,11 @@ impl Session {
     /// Returns `false` when the world says the session is over.
     fn tick(&mut self) -> bool {
         self.sim.step();
+        // §8 permits a save at a tick boundary and nowhere else, and this is one
+        // — `step` has returned, so `Pending` is drained and `Skip` is spent.
+        if self.sim.tick().get().is_multiple_of(AUTOSAVE_TICKS) {
+            self.keep();
+        }
         // **`quit` lands here, not at `submit`**, and that is not a delay worth
         // engineering away. `submit` echoes and queues; every verb's *effect*
         // runs at the next `step`, which is what keeps effects tick-aligned
@@ -487,6 +495,38 @@ impl Session {
     }
 }
 
+/// How often the tower writes itself out, in world ticks.
+///
+/// The Bevy build's `sim::persist` carries the reasoning and picks the same
+/// number: §8 asks for *"every N ticks and on significant events"*, and a minute
+/// is the most a crash may cost in a game whose slowest single action is 94
+/// ticks. Two builds, one cadence — a player who moved between them and found
+/// the terminal lost four times as much would be right to call that a bug.
+const AUTOSAVE_TICKS: u64 = 60;
+
+impl Session {
+    /// Write the tower out, and complain **once** if it will not go.
+    ///
+    /// Once, for the reason the other build gives: there is no `save` verb, so a
+    /// silent failure is a whole session lost with nothing said — and a save is
+    /// attempted every sixty ticks, so a line per attempt is sixty an hour.
+    fn keep(&mut self) {
+        let Err(error) = orbs_shell::write_save(&self.sim.snapshot()) else {
+            self.save_failed = false;
+            return;
+        };
+        if !self.save_failed {
+            self.save_failed = true;
+            // The terminal is in raw mode and the screen is ours, so this cannot
+            // go to stdout. `tracing` is where the other build's goes too.
+            tracing::error!("the tower could not be written out: {error}");
+            // And in voice: the terminal is in raw mode, so `tracing` reaches
+            // nobody until the session is over.
+            self.sim.say_save_failed();
+        }
+    }
+}
+
 /// Play, until the player leaves.
 ///
 /// # Errors
@@ -496,6 +536,21 @@ pub(crate) fn run(sim: Sim, engine: String) -> std::io::Result<()> {
     let narrow = term::symbols_are_narrow().unwrap_or(true);
     let grid = term::grid()?;
     let mut session = Session::new(sim, grid, narrow, engine);
+
+    let result = play(&mut session);
+
+    // **Every way out converges here**, which is why the loop is a function of
+    // its own. There are four exits — the `quit` verb, `F10`, `Ctrl-C`/`Ctrl-D`,
+    // and an `io::Error` off the terminal — and only the first goes through the
+    // `Quitting` flag. Saving at each `return` in turn would have covered one in
+    // four and looked complete; the Bevy build reads `AppExit` in `Last` for
+    // exactly the same reason.
+    session.keep();
+    result
+}
+
+/// The loop itself, so [`run`] has somewhere to stand afterwards.
+fn play(session: &mut Session) -> std::io::Result<()> {
     let mut out = stdout();
 
     let start = Instant::now();

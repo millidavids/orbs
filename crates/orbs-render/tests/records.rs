@@ -941,3 +941,32 @@ fn watch_output_arrive() {
         println!("{}", frame.to_text());
     }
 }
+
+/// A stream reopened part-way through, which is what a save's bounded tail is.
+///
+/// `sequence` must land back on what it was and `dropped` must report the gap.
+/// A running spell's cursor is a position in the sequence, and `dropped` is the
+/// only thing that turns that position back into an index — so a restore that
+/// reopened at zero would leave every held spell's cursor pointing past the end.
+#[test]
+fn a_resumed_stream_keeps_its_place_in_the_sequence() {
+    let mut records = Records::resume(3_713);
+    assert_eq!(records.sequence(), 3_713);
+    assert_eq!(records.dropped(), 3_713);
+    assert!(records.is_empty());
+
+    for name in ["sage", "rock-salt"] {
+        records
+            .push(RecordKind::Entry)
+            .text(FieldName::Name, name)
+            .finish();
+    }
+
+    assert_eq!(records.sequence(), 3_715, "the tail continues the sequence");
+    assert_eq!(
+        records.dropped(),
+        3_713,
+        "and the gap is what was not carried"
+    );
+    assert_eq!(records.len(), 2);
+}

@@ -51,6 +51,17 @@ impl NodeId {
 pub struct NodeIds(u64);
 
 impl NodeIds {
+    /// Make sure the next identity issued is above `id`.
+    ///
+    /// A save restores each node's own [`NodeId`], so the counter has to clear
+    /// the highest of them or the next node the tower spawns is handed an
+    /// identity something already has.
+    pub(crate) const fn wind_past(&mut self, id: u64) {
+        if self.0 <= id {
+            self.0 = id + 1;
+        }
+    }
+
     /// The next identity.
     pub const fn issue(&mut self) -> NodeId {
         let id = NodeId(self.0);
@@ -315,6 +326,63 @@ pub fn children_of(world: &World, node: Entity) -> Vec<Entity> {
         .get::<Children>(node)
         .map(|children| children.iter().collect())
         .unwrap_or_default()
+}
+
+/// The path of the node carrying `id`, if the tower still holds one.
+///
+/// # Why a save needs this
+///
+/// Components that must survive a save hold a [`NodeId`] rather than an
+/// `Entity`, for the reason this module already gives — an `Entity` is a
+/// generational index and means nothing across a save. But a `NodeId` is a
+/// counter in spawn order, so it is stable only while `build`'s tables are, and
+/// a save keyed on one would be invalidated by a phase that adds a domain.
+///
+/// So the document spells every reference as a **path**, and this is the one
+/// direction of that translation. [`find_by_path`] is the other.
+#[must_use]
+pub fn path_of_id(world: &World, id: NodeId) -> Option<String> {
+    let root = filesystem_root(world, world.resource::<Cwd>().0);
+    walk(world, root, &mut |entity| {
+        (world.get::<NodeId>(entity) == Some(&id)).then(|| path_of(world, entity))
+    })
+}
+
+/// The node at `path`, if there is one.
+#[must_use]
+pub fn find_by_path(world: &World, path: &str) -> Option<Entity> {
+    // **An empty path names nothing, and used to name the root.** `split('/')`
+    // over `""` yields no segments, so the walk below returned the node it
+    // started from — which turned every "this path is gone" guard that relies on
+    // `None` into a guard that silently resolved to the filesystem root. A
+    // player standing there has no prompt content, and a `Working` re-inserted
+    // against it is a run that can never land.
+    if path.split('/').all(str::is_empty) {
+        return None;
+    }
+    let mut at = filesystem_root(world, world.resource::<Cwd>().0);
+    for segment in path.split('/').filter(|part| !part.is_empty()) {
+        at = children_of(world, at).into_iter().find(|child| {
+            world
+                .get::<Name>(*child)
+                .is_some_and(|name| name.0 == segment)
+        })?;
+    }
+    Some(at)
+}
+
+/// Depth-first, in `Children` order, stopping at the first answer.
+///
+/// The ordering rule this module opens with: insertion order, never a global
+/// query, because archetype order is not insertion order and §6 resolves noun
+/// ties to whichever was registered first.
+fn walk<T>(world: &World, from: Entity, seen: &mut impl FnMut(Entity) -> Option<T>) -> Option<T> {
+    if let Some(found) = seen(from) {
+        return Some(found);
+    }
+    children_of(world, from)
+        .into_iter()
+        .find_map(|child| walk(world, child, seen))
 }
 
 #[cfg(test)]

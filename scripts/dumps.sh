@@ -23,6 +23,12 @@ cargo build -q -p orbs --manifest-path "$root/Cargo.toml"
 orbs="$root/target/debug/orbs"
 
 export ORBS_WIZARD=david
+# **A live hazard, not belt-and-braces.** This runs from the repository root, so
+# without the pin one captured screen could write `orbs-save.toml` and the next
+# 55 would load it — a baseline that varies with what is lying in the directory
+# is not a baseline. A dump ignores the file entirely unless `ORBS_SAVE` names
+# one, and `off` says so out loud rather than relying on that default.
+export ORBS_SAVE=off
 
 # name=env-assignments...  — one capture per line, `%` separating name from env.
 run() {
