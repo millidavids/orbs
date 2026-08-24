@@ -154,83 +154,131 @@ lines = [
 # The scroll is left in the lectern for `empty lectern`, deliberately: emptying
 # from inside the loop would make the spell wait out its own twenty-tick
 # assembly every lap.
-# The ladder that breaks a ward, and the reason the lens is automatable at all.
+# The sweep that breaks a ward, and the reason the lens is automatable at all.
 #
-# **It cannot deduce and it cannot revert**, and both are facts about §8's
-# language rather than about this file: there are no variables, so a spell cannot
-# remember what a socket held before a bad press, and it cannot turn `aligned 2,
-# astray 1` into a next guess. What it *can* do is walk a fixed order and act on
-# what the world writes down.
+# **It cannot deduce**, and that is a fact about §8's language rather than about
+# this file: there are no variables, so a spell cannot turn `aligned 2, astray 1`
+# into a next guess. What it *can* do is move one thing at a time and read which
+# way the answer went — which is the whole of what a codemaker ever says.
 #
-# Two things in the world make that enough:
+# **One socket at a time, left to right, and nothing else moves.** That is what
+# repeated sigils bought (§19): a dial used to *exchange* with whichever socket
+# held the sigil you wanted, so `aligned` rising could not be attributed to
+# either — and the ward needed a ratchet, a settle-lock and a per-socket tally of
+# untried sigils to be solvable at all. All three were the orb keeping the
+# player's notes. With one socket moving, the answer is unambiguous:
 #
-#   the ratchet    a press that does not gain snaps the aperture back, so a
-#                  wrong dial costs a press and never progress
-#   the settle     a socket that gained *as the only one that moved* is provably
-#                  right, is latched, and refuses a later dial
+#   further   `aligned` fell, and only this socket moved — so it was right
+#             before. Put it back and press again to re-sync the baseline.
+#   closer    `aligned` rose the same way — this socket has arrived. Leave it.
+#   level     neither; keep turning.
 #
-# So the walk is monotone: `aligned` only ever rises, settled sockets only ever
-# accumulate, and the ladder cannot destroy what it has already got right. That
-# is Trémaux's property in a second shape — a *rule* with a proof, not a search.
+# **Termination is a proof, not a budget.** A socket's walk starts one step off a
+# sigil that is *not* the code's and steps cyclically through six, so it reaches
+# the code's within five — and only that arrival can raise `aligned`.
 #
-# **Four rungs, one per socket**, guarded on `untried` so a socket with nothing
-# left is skipped and the next takes over on the same tick. `probe` opens a
-# reading when none is open, so there is no setup rung and no `scry`: the first
-# lap of the outer loop starts the reading and presses it in one word.
+# **The restore rung is worth 1.9 presses.** Without it a socket that was already
+# right pays six turns to come all the way round; with it, two. Measured over all
+# 1296 codes: **11.93 presses, worst 21**, against 13.80 and 24 for the plain
+# sweep and a deducing player's 5.15. That gap is the domain, not a defect — a
+# bound solver earns less per ward and runs while the player is in the
+# laboratory, which is §8's argument for automation landing through concurrency
+# rather than through speed.
 #
-# **It was twenty-four, and twenty-four did not work.** One rung per socket *and
-# sigil* was the only shape available before `dial <socket>` took an optional
-# sigil: with no variables a spell cannot name the sigil it has not tried, so it
-# had to spell all six out per socket and use the per-socket mark count as an
-# index. Both halves of that were wrong — see `Ward::tried` — and the spell
-# stopped earning partway through a session while still holding the tower's one
-# production slot. Measured: seed 1 froze at tick 4800 and never recovered.
+# **The re-press after a restore is load-bearing.** The deltas are measured
+# against the *previous press*, so restoring without pressing leaves the next
+# rung comparing against a figure that was never sent. Solves 924 of 1296.
 #
-# Measured over all 360 codes: **about 23 presses**, against a deducing player's
-# 4.1. That gap is the domain, not a defect — a bound solver earns less per ward
-# and runs while the player is in the laboratory, which is §8's argument for
-# automation landing through concurrency rather than through speed.
+# **Both bounds are about the ward closing under the spell's feet**, which is a
+# thing that happens on one solve in six: the last socket to arrive can be the
+# second or the third, and every rung after it would then be dialling at nothing.
 #
-# `repeat until the prism is idle` is the bound, and **`is empty` is the wrong
-# word for it** — `spell::watch` answers `empty` by asking whether the node has
-# *children*, and a prism's children are its published readings, of which there
-# are none until the first press lands. Bounded on `empty` this spell ended on
-# its own first instruction, having pressed once and looked finished. An open
-# ward reports `working`, exactly as an open maze does.
+#   `if the prism is working`    wraps each rung. Without it the next rung's
+#                                `probe` opens a *fresh* ward and dials into it
+#                                from the middle of a sweep whose restore
+#                                literals assume the opening aperture.
+#   `until not ... has level`    bounds the walk. `until ... has closer` looks
+#                                like the same thing and is not: a closed ward
+#                                publishes *nothing*, so `has closer` answers a
+#                                flat no and the loop goes round for ever — which
+#                                is exactly what it did, probing a new ward open
+#                                and disturbing it. `level` is what the walk is
+#                                waiting to stop seeing, and its absence stops
+#                                the loop the same way its answer does.
 #
-# **It keeps going, unlike `threading`, and that is the difference between the
-# two domains.** A maze solver stops at one so a single walk can be observed; a
-# ward solver is a *faucet* — the whole reason to bind one is that it breaks
-# seals while you are in the laboratory. The body's last instruction opens the
-# next reading, so the loop never falls out.
+# The spell ends instead of thrashing, and `bind` re-casts it from the top, which
+# is how the faucet laps.
 #
-# It would keep going either way: `bind` re-casts a spell that runs off the end,
-# so a loop that exited would simply be re-entered. What the structure decides is
-# only which of the two does the lapping. To watch *one* ward, `meditate` less.
+# **`is empty` is the wrong word for the working question** — `spell::watch`
+# answers `empty` by asking whether the node has *children*, and a prism's
+# children are its published readings, of which there are none until the first
+# press lands.
 #
-# **The guards ask `untried`, not `loose` alone.** Every rung for a socket asks
-# the same `loose` question, so a ladder guarded on that alone fires its first
-# rung for ever. `untried` is what moves: a dial aimed at a socket records the
-# sigil whether or not anything shifted, so the count falls each lap — and a gain
-# puts them all back, because the ratchet has moved the baseline and every sigil
-# is worth trying again against the new figure.
+# **`has level`, not `is level`.** `Condition::Is` takes a closed three-word
+# vocabulary — idle/free/still, working/busy/running, empty/bare — so a reading
+# is always asked for with `has`.
+#
+# The four restore literals are the opening aperture, which `Ward::new` fixes at
+# nitre, alum, borax, quartz precisely so that a spell can name them.
 [breaking]
 domain = "lens"
 lines = [
     "probe",
-    "repeat until the prism is idle",
-    "if the first has 1 or more untried",
+
+    "if the prism is working",
     "dial first",
-    "else if the second has 1 or more untried",
-    "dial second",
-    "else if the third has 1 or more untried",
-    "dial third",
-    "else if the fourth has 1 or more untried",
-    "dial fourth",
-    "else",
-    "wait",
-    "end",
     "probe",
+    "if the prism has further",
+    "dial first nitre",
+    "probe",
+    "else",
+    "repeat until not the prism has level",
+    "dial first",
+    "probe",
+    "end",
+    "end",
+    "end",
+
+    "if the prism is working",
+    "dial second",
+    "probe",
+    "if the prism has further",
+    "dial second alum",
+    "probe",
+    "else",
+    "repeat until not the prism has level",
+    "dial second",
+    "probe",
+    "end",
+    "end",
+    "end",
+
+    "if the prism is working",
+    "dial third",
+    "probe",
+    "if the prism has further",
+    "dial third borax",
+    "probe",
+    "else",
+    "repeat until not the prism has level",
+    "dial third",
+    "probe",
+    "end",
+    "end",
+    "end",
+
+    "if the prism is working",
+    "dial fourth",
+    "probe",
+    "if the prism has further",
+    "dial fourth quartz",
+    "probe",
+    "else",
+    "repeat until not the prism has level",
+    "dial fourth",
+    "probe",
+    "end",
+    "end",
     "end",
 ]
 

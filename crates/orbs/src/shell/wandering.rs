@@ -31,6 +31,7 @@
 use bevy::input::ButtonState;
 use bevy::input::keyboard::{Key, KeyboardInput};
 use bevy::prelude::*;
+#[cfg(test)]
 use orbs_sim::tower::Way;
 
 use crate::sim::Tower;
@@ -115,23 +116,25 @@ pub(crate) fn type_into_maze(
         if chord && !stale_chord {
             continue;
         }
-        let way = match &event.logical_key {
-            // **`break`, not `continue`.** A frame can carry several keystrokes,
-            // and going on to the rest of the batch walked the reading *after*
-            // the player had left the mode — the exact hazard the comment below
-            // worries about, in the one place it was reachable.
-            Key::Escape => {
-                walk.close();
-                break;
-            }
-            Key::ArrowUp => Way::North,
-            Key::ArrowRight => Way::East,
-            Key::ArrowDown => Way::South,
-            Key::ArrowLeft => Way::West,
-            // **Everything else is swallowed, not passed on.** A surface that
-            // owns the keyboard owns all of it; letting text through would put
-            // characters into a prompt the player cannot see a caret in.
-            _ => continue,
+        // **`break`, not `continue`.** A frame can carry several keystrokes, and
+        // going on to the rest of the batch walked the reading *after* the
+        // player had left the mode — the exact hazard the comment below worries
+        // about, in the one place it was reachable.
+        if matches!(&event.logical_key, Key::Escape) {
+            walk.close();
+            break;
+        }
+        // The arrow-to-`Way` table is `orbs-shell`'s; it was written here, in
+        // `orbs-tui`, and a third time in `dump.rs`.
+        //
+        // **Everything else is swallowed, not passed on.** A surface that owns
+        // the keyboard owns all of it; letting text through would put characters
+        // into a prompt the player cannot see a caret in.
+        let Some(way) = super::input::pressed(event)
+            .as_ref()
+            .and_then(orbs_shell::apply_to_maze)
+        else {
+            continue;
         };
         // **Straight into the world, on this frame.** No message, no queue, no
         // waiting for a tick — see this module's header for the two slower

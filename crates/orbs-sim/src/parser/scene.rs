@@ -185,6 +185,14 @@ impl Scene {
             phrases.extend_from_slice(words);
         }
 
+        // **Asked once per phrase, not once per phrase per noun.** `is_known` is
+        // a scan of the known set and the answer cannot depend on which noun is
+        // being scored, so having it inside the loop below made one resolution
+        // O(nouns x known) — a few hundred by a few hundred, every command. The
+        // set doubled when every verb word joined it, which is what made the
+        // shape worth noticing.
+        let known: Vec<bool> = phrases.iter().map(|phrase| self.is_known(phrase)).collect();
+
         let mut found: Vec<NounMatch> = Vec::new();
         for noun in &self.nouns {
             if !kind.accepts(noun.kind) {
@@ -192,12 +200,22 @@ impl Scene {
             }
             let Some(score) = phrases
                 .iter()
-                .map(|phrase| {
+                .zip(&known)
+                .map(|(phrase, known)| {
                     let score = score_against(noun, phrase);
                     // A word only ever matches itself. See `knowing`: fuzzing a
                     // real substance into a *different* real substance is how
                     // `digest ground-sage` came to digest ground-salt.
-                    if score < fuzzy::EXACT && self.is_known(phrase) {
+                    //
+                    // **Unless it is abbreviating**, which is not fuzzing and is
+                    // the affordance `knowing`'s own note preserves. The rule was
+                    // written over substances, where no known word is a strict
+                    // prefix of another, so the distinction never came up. It
+                    // does the moment the known set holds every verb word:
+                    // `check` is `verify`'s, and a spell called `check.spell`
+                    // became unreachable by `invoke check` — a player's own file
+                    // name losing to a word they never typed.
+                    if score < fuzzy::EXACT && *known && !abbreviates(noun, phrase) {
                         0
                     } else {
                         score
@@ -226,6 +244,45 @@ impl Scene {
 /// A [`NounKind::Place`] also answers to its last path segment, so `attend
 /// laboratory` reaches `/tower/laboratory` — paths are places (§7), and players say
 /// the place, not the path.
+/// Whether `phrase` is the start of what this noun is called.
+///
+/// **The line between abbreviating and mistyping**, and the only reason
+/// `knowing` needs one: `check` starts `check.spell` and `walk` does not start
+/// `wall`. `fuzzy` draws it too — a prefix scores from `PREFIX_FLOOR` while a
+/// typo is scored by edit distance — but the two bands overlap at short lengths,
+/// so this asks the structural question rather than reading a number.
+///
+/// A [`NounKind::Place`] answers to its leaf as well, for the reason
+/// [`score_against`] gives.
+fn abbreviates(noun: &Noun, phrase: &str) -> bool {
+    let phrase = phrase.to_lowercase();
+    let name = noun.name.to_lowercase();
+
+    // **Except the lie told about this very word.** §8.1's substitution renames
+    // a pile to its own name plus a struck sigil, so `sage-` is a strict
+    // extension of `sage` — and the rule below would read that as a player
+    // abbreviating, hand the pile back to the spell that named it, and leave the
+    // sabotage resolving at full confidence into nothing having happened. It is
+    // the counter-example to the premise this whole exemption was written on:
+    // *no known word is a strict prefix of another*. The swap is what makes one,
+    // and it makes one deliberately.
+    //
+    // Asked of `tower::sabotage` rather than spelled here, because a second copy
+    // of the lie's shape is a rule that comes apart the next time it changes.
+    if name == crate::tower::claimed(&phrase) {
+        return false;
+    }
+
+    if name.starts_with(&phrase) {
+        return true;
+    }
+    noun.kind == NounKind::Place
+        && name
+            .rsplit('/')
+            .next()
+            .is_some_and(|leaf| leaf.starts_with(&phrase))
+}
+
 fn score_against(noun: &Noun, phrase: &str) -> u32 {
     let direct = fuzzy::similarity(phrase, &noun.name);
     if noun.kind != NounKind::Place {
@@ -300,6 +357,33 @@ mod tests {
         assert_eq!(
             found.map(|found| found.name).as_deref(),
             Some("ground-salt")
+        );
+    }
+
+    #[test]
+    fn a_known_name_does_not_abbreviate_the_lie_told_about_it() {
+        // **§8.1's substitution, defeated by the abbreviation exemption.** The
+        // swap renames a pile to `claimed(name)` — its own name plus a struck
+        // sigil — so the lie is a strict *extension* of the truth and reads as
+        // an abbreviation of it. `grind sage` then resolved to the very pile the
+        // swap had just renamed, at full confidence, and the sabotage amounted
+        // to nothing having happened.
+        //
+        // Found by `tests/tampering.rs` waiting on the real ambient swap, which
+        // is seed-scheduled; this asks the rule directly so the next change to
+        // it fails here in milliseconds rather than there on one seed in four.
+        let lied = Scene::new()
+            .with(NounKind::Reagent, &crate::tower::claimed("sage"))
+            .knowing(["sage".to_owned()]);
+
+        assert!(
+            lied.candidates(NounKind::Any, &["sage"]).is_empty(),
+            "a swapped pile answered to the name it had stopped being called",
+        );
+        assert!(
+            !lied.candidates(NounKind::Any, &["sage-"]).is_empty(),
+            "the pile stopped answering to the name it now has, which is not \
+             sabotage but deletion",
         );
     }
 

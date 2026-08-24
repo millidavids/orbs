@@ -533,19 +533,17 @@ spell_unattended = "{name} needed you there. it stops"
 # offered, and none of these can only say no.
 verify_substituted = "something here is not what it says: {detail}"
 ward_title = "ward"
-ward_spoken = "{quantity} pressed, last {name} aligned {detail} astray, {state} held"
+ward_spoken = "{quantity} pressed, last {name} aligned {detail} astray"
 scry_opens = "a far orb swims up. four sigils hold it shut"
 scry_nowhere = "there is no lens here to look through"
 dial_unopened = "nothing is open to turn. probe first"
 dial_incomplete = "dial which socket, to what? name a socket and a sigil"
 dial_not_a_socket = "{name} is not a socket. the four are first to fourth"
 dial_not_a_sigil = "{detail} is not a sigil. survey the lens to see the six"
-dial_held = "the {name} will not turn. it is settled, or holds that already"
-# **Bare `dial <socket>` with nothing left to try.** Not the same refusal as
-# `dial_held`: that one means *you named a sigil it cannot take*, this one means
-# *it has been round them all since the last gain*. A ladder's next rung takes
-# over on the same tick, so this has to read as a state and not a fault.
-dial_spent = "the {name} has been round them all. something else must move first"
+# **The only way a dial refuses now.** It used to also mean *that sigil is in a
+# settled socket and cannot be taken from it* — the exchange rule, gone with the
+# no-repeats rule that forced it (§19). Nothing holds a socket shut any more.
+dial_held = "the {name} already holds that"
 dial_done = "the {name} socket turns to {detail}"
 probe_answered = "{quantity} aligned, {detail} astray. the ward is {state}"
 probe_broken = "the seal gives. the far orb spills its working, in {quantity}"
@@ -739,6 +737,28 @@ using_marks = "if north has fewer marks than east. a wall has none, so guard on 
 
 recall_gleaning = "the errand a gleaning-scroll sets: gather, and no way out"
 using_gleaning = "if the stacks has gleaning, to walk it a different way"
+
+# The six words a prism answers to, and the whole of what a spell may ask a ward.
+# The numbers themselves - aligned, astray, spent - are on the transcript and on
+# the sheet for the player, and are deliberately not askable: a codemaker says
+# which way the answer moved and nothing else (§19).
+recall_closer = "the last press put more sigils in their own sockets"
+using_closer = "if the prism has closer, after dialling one socket"
+
+recall_level = "the last press placed exactly as many as the one before"
+using_level = "repeat until not the prism has level, to keep turning"
+
+recall_further = "the last press placed fewer. that socket was right before"
+using_further = "if the prism has further, then dial it back and probe"
+
+recall_richer = "the figure is made of more of the right sigils than before"
+using_richer = "if the prism has richer, wherever they are sitting"
+
+recall_unchanged = "the figure is made of just as many right sigils as before"
+using_unchanged = "if the prism has unchanged, so nothing moved in or out"
+
+recall_poorer = "the figure is made of fewer of the right sigils than before"
+using_poorer = "if the prism has poorer, to put back what you took out"
 man_scripting_words = "words"
 man_scripting_asking = "questions"
 man_scripting_here = "nameable here"
@@ -855,7 +875,7 @@ man_start_archive = "research opens the stacks. wander walks them with the arrow
 man_solve_archive = "reach the way out for a fragment. four in the lectern, wield it"
 
 man_here_lens = "another wizard's orb, sealed with four sigils of six"
-man_start_lens = "dial a socket to a sigil, free. probe presses them, twelve ticks"
+man_start_lens = "dial a socket to a sigil. probe presses them. both are free"
 man_solve_lens = "aligned counts sigils in the right socket, astray the misplaced"
 
 # **Not `scribe a name to write one`, which was the first draft and was wrong
@@ -1086,26 +1106,25 @@ man_purge_also = "empty, stop, verify"
 
 man_dial_use = "dial <socket> [<sigil>]"
 man_dial_gloss = "turn one dial of the aperture"
-man_dial_1 = "the sockets are first, second, third and fourth"
-man_dial_2 = "dialling a sigil already in play swaps the two"
-man_dial_3 = "free, and instant. only probing costs the tower"
-# **The three a player has to be told**, and the last two are what make a dial
-# look like it was ignored. The ratchet is an undo and the settle is a lock; both
-# are the ward working, and neither is visible from the sentence a dial prints.
-man_dial_4 = "name no sigil and it turns to one it has not tried"
-man_dial_5 = "a press that does not gain snaps the aperture back"
-man_dial_6 = "a socket proved right settles, and will not turn again"
+man_dial_1 = "the sockets are first, second, third and fourth. one dial"
+# **The one rule a dial has**, and it used to have three. A dial that swapped two
+# sockets, an aperture that snapped back and a socket that latched itself shut
+# were all scaffolding for a code that could not repeat a sigil; none of them
+# survives (§19), and a player only has to be told the first line now.
+man_dial_2 = "turns one socket and nothing else moves, ever. dialling"
+man_dial_3 = "and probing are both free and instant. name no sigil"
+man_dial_4 = "and it steps round the six in order"
 man_dial_eg1 = "dial second borax, then probe"
 man_dial_eg2 = "dial first, which a spell uses: it can name no sigil"
 man_dial_also = "probe, survey, stop"
 
 man_probe_use = "probe"
 man_probe_gloss = "press a figure against a far orb's ward"
-man_probe_1 = "opens a reading if none is open. four sigils out"
-man_probe_2 = "of six hold it shut, none of them twice. aligned"
+man_probe_1 = "opens a reading if none is open. four sigils of six"
+man_probe_2 = "hold it shut, and one may sit in two sockets. aligned"
 man_probe_3 = "is right sigil right socket; astray is right sigil"
-man_probe_4 = "wrong socket. a press that does not gain snaps"
-man_probe_5 = "back, so a wrong guess costs time and nothing else"
+man_probe_4 = "wrong socket. that is all a ward will ever say, and"
+man_probe_5 = "a press stands: what you sent is what is there"
 man_probe_eg1 = "probe, then dial what you deduce and probe again"
 man_probe_also = "dial, survey, stop, recall lens"
 

@@ -19,11 +19,30 @@
 /// CLAUDE.md commits to `=0.19.0` and upgrading it is a deliberate one-window
 /// act in Phase 9c, so a number that can only change when someone edits the
 /// manifest is exactly as live as it needs to be.
-const BEVY: &str = "0.19.0";
+/// **A macro so the number is written once**, because `concat!` takes literals
+/// and not consts — and two copies of a version is exactly the drift this whole
+/// file exists to prevent.
+macro_rules! bevy_version {
+    () => {
+        "0.19.0"
+    };
+}
+
+/// Only the test reads this now — [`line`] builds the whole string at compile
+/// time from the same macro, so there is nothing left to interpolate at runtime.
+#[cfg(test)]
+const BEVY: &str = bevy_version!();
 
 /// The engine line for this frontend, as the POST card prints it.
-pub(crate) fn line() -> String {
-    format!("bevy {BEVY}")
+///
+/// **A `const`, not a `format!`.** This allocated, and `repaint` calls it once
+/// per frame for the whole boot sequence — some 780 allocations for a string
+/// with no runtime input at all. The surrounding code is unusually careful about
+/// exactly this: `Panel`, `Ghost` and `Bench::permitted` are all caches that
+/// exist because "twenty allocations at 60 Hz for 1 Hz data" was judged worth
+/// removing.
+pub(crate) const fn line() -> &'static str {
+    concat!("bevy ", bevy_version!())
 }
 
 #[cfg(test)]
@@ -40,10 +59,27 @@ mod tests {
         // would resolve `CARGO_MANIFEST_DIR` to a crate that pins no engine, and
         // pass by asserting nothing — which is exactly how `orbs-balance`'s
         // first `agrees.rs` was green while measuring nothing (§19).
+        // **Every declaration, not merely one.** `crates/orbs/Cargo.toml`
+        // declares bevy twice — once plainly and once under
+        // `cfg(target_os = "linux")` — and a `contains` passes if *either* still
+        // says `0.19.0`. That is the exact shape of a half-finished Phase 9c
+        // upgrade, and the half most likely to be left behind is the one that
+        // decides what a Linux build actually links.
         let manifest = include_str!("../../Cargo.toml");
-        assert!(
-            manifest.contains(&format!("\"={BEVY}\"")),
-            "the splash says bevy {BEVY}, which Cargo.toml does not pin",
+        let declared = manifest
+            .lines()
+            .filter(|line| line.trim_start().starts_with("bevy = "))
+            .count();
+        let pinned = manifest
+            .lines()
+            .filter(|line| line.trim_start().starts_with("bevy = "))
+            .filter(|line| line.contains(&format!("\"={BEVY}\"")))
+            .count();
+        assert!(declared > 0, "Cargo.toml declares no bevy at all");
+        assert_eq!(
+            pinned, declared,
+            "the splash says bevy {BEVY}; {pinned} of {declared} bevy \
+             declarations in Cargo.toml pin that version",
         );
     }
 

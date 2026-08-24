@@ -94,12 +94,64 @@ const fn sample_argument(verb: Verb) -> &'static str {
 }
 
 /// Single-word synonyms, with the verb that owns them.
-fn single_words() -> Vec<(&'static str, Verb)> {
-    SYNONYMS
-        .iter()
-        .filter(|entry| entry.words.len() == 1)
-        .map(|entry| (entry.words[0], entry.verb))
-        .collect()
+///
+/// **The sim's own accessor**, which this file used to duplicate. It is not a
+/// test helper any more: `tower::scene_at` registers exactly this list as
+/// `NounKind::Command` *and* hands it to `Scene::knowing`, so a word that is in
+/// a player's way here is in their way in the game for the same reason.
+use orbs_sim::parser::single_words;
+
+#[test]
+fn a_phrase_that_leads_with_another_verbs_word_is_pinned() {
+    // **`single_words` is all the collision check walks**, so a multi-word
+    // synonym has always been able to open with a word another verb owns
+    // outright — and `quit`'s own comment leans on that: *"plain English
+    // arriving as a **phrase** reaches the verb with no collision at all."*
+    // That is true of the *phrase*, and says nothing about what the player sees
+    // half way through typing it.
+    //
+    // It matters most for `quit`, which §19 is careful about for exactly this
+    // reason: it refuses `leave` and `exit` because an ambiguity prompt must
+    // never offer ending the session beside a verb people type constantly, and
+    // "picking wrong there cannot be typed back".
+    let owned: Vec<(&str, Verb)> = single_words();
+    let mut leading = Vec::new();
+    for entry in SYNONYMS.iter().filter(|entry| entry.words.len() > 1) {
+        let first = entry.words[0];
+        for (word, verb) in &owned {
+            if *word == first && *verb != entry.verb {
+                leading.push((first, entry.verb, *verb));
+            }
+        }
+    }
+
+    // Amending this list forces someone to check that a player typing the lead
+    // word alone gets an answer they can live with.
+    assert_eq!(
+        leading,
+        [
+            // `look for` (sift) opens with `look`, which `survey` owns. The
+            // benign shape and the reason the others are tolerated too: bare
+            // `look` is `survey`, which is what anyone typing it means, and the
+            // second word turns it into a search.
+            ("look", Verb::Sift, Verb::Survey),
+            // `put it down` (quit) opens with `put`, which `dial` owns as its
+            // plain synonym. **The phrase is not the hazard.** Bare `put`
+            // resolves to `dial` and always has — it predates `quit` entirely —
+            // so a player half way through this sees a lens refusal, not an
+            // offer to end the session.
+            ("put", Verb::Quit, Verb::Dial),
+            // `stop playing` (quit) opens with `stop`, which is a canonical verb
+            // and a destructive one. **Checked rather than assumed**, because
+            // this is the collision §19 would care about most: `stop athanor`
+            // damps the fire, `stop stacks` closes the maze, and bare `stop`
+            // asks what to stop. None of them offers to end the session, and the
+            // session is only ended by the whole phrase.
+            ("stop", Verb::Quit, Verb::Stop),
+        ],
+        "a multi-word synonym now opens with a word another verb owns; check \
+         what typing that word alone answers before pinning it",
+    );
 }
 
 #[test]
@@ -612,5 +664,175 @@ fn a_spell_cannot_name_a_verb_as_a_thing() {
         reading[0].fault.is_some(),
         "a spell named a verb as a thing and was believed: {:?}",
         reading[0],
+    );
+}
+
+/// Every word a `Sense` noun answers to, across every domain that has them.
+///
+/// **There was no sweep for these at all**, which is how `gained`/`held`/`lost`
+/// shipped: a reading is a `NounKind::Sense` and `NounKind::Any` reaches one, so
+/// `purge` and `verify` resolve against them from every room in the tower —
+/// `purge grind` fuzzy-matched `gained` at full confidence and answered *"there
+/// is no gained within reach"*. That was found by hand, twice, and both times
+/// after it had shipped.
+fn readings() -> Vec<&'static str> {
+    let mut out = orbs_sim::tower::maze::readings();
+    out.extend(orbs_sim::tower::ward::readings());
+    out
+}
+
+#[test]
+fn the_readings_that_score_against_a_typed_word_are_pinned() {
+    // A reading is nameable from every room, so it sits in the way of the whole
+    // vocabulary rather than of one domain's. Three score above the bar a
+    // canonical faces, and **all three are answered by the resolver rather than
+    // by a rename** — every verb word is now in `Scene::knowing`, so it can only
+    // ever match exactly and none of these is reachable by fuzzing. The two
+    // tests below drive that; this one keeps the list honest, because a *fourth*
+    // is a word somebody should look at before shipping it.
+    //
+    // It caught the ward's second delta on its first run:
+    // `fuller`/`steady`/`thinner` scored 667 against `filter` and `study`, and is
+    // `richer`/`unchanged`/`poorer`.
+    let mut collisions = Vec::new();
+    for reading in readings() {
+        for (word, _) in single_words() {
+            if similarity(reading, word) >= MIN_SIMILARITY {
+                collisions.push((reading, word));
+            }
+        }
+    }
+    collisions.sort_unstable();
+    assert_eq!(
+        collisions,
+        [
+            // `edit` (scribe) vs the maze's way out, at 750. `recall edit` used
+            // to answer with the way out of a maze.
+            ("exit", "edit"),
+            // `make` (recall) vs a way's walk count, at 600.
+            ("marks", "make"),
+            // `walk` (follow) vs a way with no way through, at 750 — the worst
+            // of the three, because both are words a player uses about the same
+            // screen.
+            ("wall", "walk"),
+        ],
+        "the readings scoring against a typed word have changed",
+    );
+}
+
+#[test]
+fn a_verb_word_never_fuzzes_into_a_noun() {
+    // **§19's `gained` leak, closed as a class.** A reading is a
+    // `NounKind::Sense`, which `NounKind::Any` reaches, so a destructive verb
+    // could name one from any room in the tower — and `walk`, `edit` and `make`
+    // all scored high enough to get there by typo. `purge walk` echoed `purge
+    // wall` and answered *"there is no wall within reach"* to a player who typed
+    // a word the game taught them.
+    //
+    // `Scene::knowing` holds every verb word now, so each of these falls through
+    // to the numbered prompt exactly as `purge grind` does.
+    let mut sim = orbs_sim::Sim::new(1);
+    sim.submit("attend archive");
+    sim.step();
+
+    for (typed, was) in [("walk", "wall"), ("edit", "exit"), ("make", "marks")] {
+        sim.submit(&format!("purge {typed}"));
+        sim.step();
+        assert!(
+            !offered(&sim).is_empty(),
+            "`purge {typed}` did not ask which",
+        );
+        assert!(
+            !offered(&sim).iter().any(|line| line.contains(was)),
+            "`purge {typed}` still reaches `{was}`: {:?}",
+            offered(&sim),
+        );
+    }
+}
+
+#[test]
+fn the_manual_answers_the_word_that_was_typed() {
+    // The other half of the same leak, and the worse one: `recall edit` is a
+    // player asking about the spell editor and it explained the *maze's way
+    // out*. Every one-word synonym is a `NounKind::Command` now, so a page is
+    // reachable by whichever word they know.
+    let mut sim = orbs_sim::Sim::new(1);
+    sim.submit("attend archive");
+    sim.step();
+
+    for (typed, page) in [
+        ("walk", "follow <way>"),
+        ("edit", "scribe <name>"),
+        ("make", "recall"),
+        ("light", "kindle"),
+    ] {
+        sim.submit(&format!("recall {typed}"));
+        sim.step();
+        let said: Vec<String> = sim
+            .scrollback()
+            .records()
+            .iter()
+            .filter_map(
+                |record| match record.field(orbs_render::FieldName::Message) {
+                    Some(orbs_render::Value::Text(text)) => Some(text.to_owned()),
+                    _ => None,
+                },
+            )
+            .collect();
+        assert!(
+            said.iter().any(|line| line.starts_with(page)),
+            "`recall {typed}` did not reach the {page:?} page",
+        );
+    }
+}
+
+#[test]
+fn a_word_the_game_knows_may_still_abbreviate() {
+    // **The affordance `knowing` must not eat, found by breaking it.** `check` is
+    // one of `verify`'s words, so once every verb word joined the known set a
+    // spell called `check.spell` stopped being reachable by `invoke check` —
+    // six tests went red at once, all of them on a player's own file name losing
+    // to a word they never typed.
+    //
+    // Prefixing is not fuzzing: `check` *starts* `check.spell`, where `walk` does
+    // not start `wall`. See `Scene::candidates`.
+    let mut sim = orbs_sim::Sim::new(1);
+    sim.submit("attend laboratory");
+    sim.step();
+    sim.write_spell("check", &["survey".to_owned()]);
+    sim.step();
+    sim.submit("invoke check");
+    sim.step();
+
+    assert!(
+        offered(&sim).is_empty(),
+        "`invoke check` asked which instead of finding check.spell: {:?}",
+        offered(&sim),
+    );
+}
+
+#[test]
+fn no_two_readings_fuzzy_match_each_other() {
+    // **Two readings colliding inside one domain is worse than a verb
+    // near-miss**, which is what rejected `warmer`/`even`/`cooler` for the ward's
+    // second delta: `cooler` scores 667 against `closer` and `even` 600 against
+    // `level`, so a spell's author could not tell which channel they had asked.
+    // `thicker`/`thinner` fails the same way at 715. They are
+    // `richer`/`unchanged`/`poorer`.
+    let words = readings();
+    let mut collisions = Vec::new();
+    for (index, reading) in words.iter().enumerate() {
+        for other in words.iter().skip(index + 1) {
+            if similarity(reading, other) >= MIN_SIMILARITY {
+                collisions.push(format!(
+                    "{reading} vs {other} at {}",
+                    similarity(reading, other),
+                ));
+            }
+        }
+    }
+    assert!(
+        collisions.is_empty(),
+        "two readings are in each other's way: {collisions:?}",
     );
 }

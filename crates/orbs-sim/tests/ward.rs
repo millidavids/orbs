@@ -4,10 +4,11 @@
 //! words resolve, the readings publish, a press costs the tower nothing, and a
 //! seal that opens pays what `progression.toml` says it does.
 //!
-//! **The ladder here is the one `debug_spell breaking` will write**, in Rust:
-//! walk the sockets and the sigils, keep what gains, and never revert — because
-//! §8's language has no variables and a spell cannot remember what a socket held.
-//! If this cannot solve a ward through `dial` and `probe`, no spell can either.
+//! **The sweep here is the one `debug_spell breaking` writes**, in Rust: one
+//! socket at a time, turning it until `aligned` moves, reading nothing but which
+//! way it went — because §8's language has no variables and a codemaker says
+//! nothing else. If this cannot solve a ward through `dial` and `probe`, no
+//! spell can either.
 
 use orbs_render::{FieldName, Value};
 use orbs_sim::Sim;
@@ -83,54 +84,55 @@ fn a_ward_opens_on_the_first_probe_and_publishes_what_it_answered() {
     );
 }
 
+/// The opening aperture, which `Ward::new` fixes so a spell can name it.
+///
+/// **The restore rung depends on this being a literal.** A spell has no
+/// variables, so the only way it can put a socket back is to name what was there
+/// — and the only figure it can know is the one every reading opens on.
+const OPENING: [&str; 4] = ["nitre", "alum", "borax", "quartz"];
+
+/// Break the ward in front of the player, the way `breaking` does.
+///
+/// Returns the last thing the prism said, so a caller can check it gave.
+fn solve(sim: &mut Sim) -> String {
+    let mut answer = press(sim);
+    for (socket, held) in SOCKETS.iter().zip(OPENING) {
+        // The `if the prism is working` each rung carries: a ward can give on the
+        // second socket, and every rung after it would be dialling at nothing.
+        if answer.contains("seal gives") {
+            break;
+        }
+        run(sim, &format!("dial {socket}"));
+        answer = press(sim);
+        // `aligned` fell and only this socket moved, so it was already right.
+        // Put it back — and press, or the next rung's delta is measured against
+        // a figure that was never sent.
+        if answer.contains("further") {
+            run(sim, &format!("dial {socket} {held}"));
+            answer = press(sim);
+            continue;
+        }
+        while answer.contains("level") {
+            run(sim, &format!("dial {socket}"));
+            answer = press(sim);
+        }
+    }
+    answer
+}
+
 #[test]
-fn a_blind_ladder_breaks_a_ward_through_the_real_verbs() {
-    // **The domain's whole automation claim, end to end.** No deduction, no
-    // revert, no memory beyond what the world publishes — and it must still
-    // finish, because the ward ratchets and a settled socket is refused.
+fn the_writable_sweep_breaks_a_ward_through_the_real_verbs() {
+    // **The domain's whole automation claim, end to end.** No deduction and no
+    // memory beyond the last press's delta — and it must still finish, because a
+    // socket's walk is cyclic and only its arrival can raise `aligned`.
     for seed in [1u64, 3, 7, 11, 17] {
         let mut sim = Sim::new(seed);
         run(&mut sim, "attend lens");
 
-        let mut answer = press(&mut sim);
-        let mut tried: Vec<(usize, usize)> = Vec::new();
-        let mut presses = 1;
-
-        while !answer.contains("seal gives") && presses < 120 {
-            let Some((socket, sigil)) = (0..SOCKETS.len())
-                .flat_map(|socket| (0..SIGILS.len()).map(move |sigil| (socket, sigil)))
-                .find(|pair| !tried.contains(pair))
-            else {
-                tried.clear();
-                continue;
-            };
-            tried.push((socket, sigil));
-
-            let before = said(&sim).len();
-            run(
-                &mut sim,
-                &format!("dial {} {}", SOCKETS[socket], SIGILS[sigil]),
-            );
-            // A dial the ward refused — settled, or already there. Nothing was
-            // spent, so try the next rung without pressing.
-            let turned = said(&sim)
-                .into_iter()
-                .skip(before)
-                .any(|line| line.contains("turns to"));
-            if !turned {
-                continue;
-            }
-
-            answer = press(&mut sim);
-            presses += 1;
-            if answer.contains("closer") {
-                tried.clear();
-            }
-        }
-
+        let answer = solve(&mut sim);
         assert!(
             answer.contains("seal gives"),
-            "seed {seed} survived {presses} presses: {answer:?}",
+            "seed {seed} survived the sweep: {answer:?}",
         );
         assert!(
             sim.experience() > 0,
@@ -209,76 +211,46 @@ fn the_solver_spell_keeps_solving_and_never_goes_quiet() {
 }
 
 #[test]
-fn a_bare_dial_turns_a_socket_and_publishes_what_is_left() {
-    // **The affordance the whole four-rung ladder rests on.** A spell has no
-    // variables, so it cannot name the sigil a socket has not tried — `dial
-    // <socket>` asks the ward instead. `Ward::untried` is the model's half; this
-    // is the half a spell can actually see, and a count the ward kept and never
-    // published would leave every ladder blind while the unit tests passed.
+fn a_bare_dial_walks_the_six_and_says_which_it_took() {
+    // **The affordance the whole sweep rests on.** A spell has no variables, so
+    // it cannot name the sigil a socket has not tried — `dial <socket>` steps the
+    // ward round instead, and the transcript names what it landed on, because a
+    // player watching a spell work needs to see what it tried.
+    //
+    // It was a candidate list the ward kept per socket, which is the player's own
+    // bookkeeping; it is a cycle now (§19).
     let mut sim = Sim::new(3);
     run(&mut sim, "attend lens");
     run(&mut sim, "probe");
     sim.step_n(PRESS);
 
-    let before = untried(&mut sim, 0);
-    assert_eq!(before, 6, "a fresh socket has every sigil left");
+    let mut took = Vec::new();
+    for _ in 0..SIGILS.len() {
+        let before = said(&sim).len();
+        run(&mut sim, "dial first");
+        let line = said(&sim)
+            .into_iter()
+            .skip(before)
+            .find(|line| line.contains("turns to"))
+            .unwrap_or_else(|| panic!("a bare dial refused: {:?}", said(&sim).last()));
+        took.push(
+            SIGILS
+                .iter()
+                .position(|sigil| line.contains(sigil))
+                .unwrap_or_else(|| panic!("{line:?} named no sigil")),
+        );
+    }
 
-    // **Spending a candidate is the claim, not moving the aperture.** The opening
-    // aperture already holds `nitre` in the first socket, so the first bare dial
-    // there turns nothing and still has to count — a ladder that only counted
-    // *movement* would aim at that socket for ever.
-    run(&mut sim, "dial first");
-    assert!(
-        !said(&sim)
-            .last()
-            .is_some_and(|line| line.contains("round them all")),
-        "a fresh socket refused a bare dial: {:?}",
-        said(&sim).last(),
-    );
+    // Six turns is every sigil once, and back where it started.
+    let mut seen = took.clone();
+    seen.sort_unstable();
+    seen.dedup();
     assert_eq!(
-        untried(&mut sim, 0),
-        before - 1,
-        "a bare dial did not spend a candidate",
+        seen.len(),
+        SIGILS.len(),
+        "the walk skipped a sigil: {took:?}"
     );
-
-    // ...and it does turn one when the sigil is not already there.
-    run(&mut sim, "dial second");
-    run(&mut sim, "dial second");
-    assert!(
-        said(&sim).iter().any(|line| line.contains("turns to")),
-        "no bare dial ever moved a socket: {:?}",
-        said(&sim),
-    );
-}
-
-/// What `survey <socket>` reports as `untried`, read through the real verb.
-///
-/// Through `survey` rather than the model, because what a spell guards on is the
-/// *published* reading — a count the ward held and never raised would satisfy an
-/// assertion on `Ward` and leave every ladder blind.
-fn untried(sim: &mut Sim, socket: usize) -> u32 {
-    let name = SOCKETS[socket];
-    run(sim, &format!("survey {name}"));
-    // **Backwards from the newest**, rather than skipping a prefix measured before
-    // the command: `Records` is a window, so an index taken earlier does not stay
-    // pointing at the same record and `skip` quietly walked past the answer.
-    let seen: Vec<u32> = sim
-        .scrollback()
-        .records()
-        .iter()
-        .filter_map(|record| match record.field(FieldName::Name) {
-            // **`Quantity` is `Text`, not `Count`.** `survey` writes
-            // `Stock::label()`, which is a string — endless stock draws `∞` and
-            // has no number at all — so matching `Value::Count` silently read
-            // every amount in the game as nought.
-            Some(Value::Text("untried")) => Some(match record.field(FieldName::Quantity) {
-                Some(Value::Text(count)) => count.parse().unwrap_or(0),
-                _ => 0,
-            }),
-            _ => None,
-        })
-        .collect();
-    seen.last().copied().unwrap_or(0)
+    assert_eq!(took.last(), Some(&0), "six turns did not come round");
 }
 
 #[test]
@@ -290,35 +262,8 @@ fn a_broken_seal_spills_a_log_that_only_says_true_things() {
     // their own tower.
     let mut sim = Sim::new(3);
     run(&mut sim, "attend lens");
-    let mut answer = press(&mut sim);
-    let mut tried: Vec<(usize, usize)> = Vec::new();
-
-    while !answer.contains("seal gives") {
-        let Some((socket, sigil)) = (0..SOCKETS.len())
-            .flat_map(|socket| (0..SIGILS.len()).map(move |sigil| (socket, sigil)))
-            .find(|pair| !tried.contains(pair))
-        else {
-            tried.clear();
-            continue;
-        };
-        tried.push((socket, sigil));
-        let before = said(&sim).len();
-        run(
-            &mut sim,
-            &format!("dial {} {}", SOCKETS[socket], SIGILS[sigil]),
-        );
-        if !said(&sim)
-            .into_iter()
-            .skip(before)
-            .any(|line| line.contains("turns to"))
-        {
-            continue;
-        }
-        answer = press(&mut sim);
-        if answer.contains("closer") {
-            tried.clear();
-        }
-    }
+    let answer = solve(&mut sim);
+    assert!(answer.contains("seal gives"), "the seal held: {answer:?}");
 
     // The spill is **quiet**, so it is in the stream and not on the transcript.
     let drawn = sim.scrollback().records().drawn().count();

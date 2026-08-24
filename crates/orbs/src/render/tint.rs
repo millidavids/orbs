@@ -156,6 +156,16 @@ pub(crate) const fn resolve(
         return None;
     }
 
+    // **The shared rule, asked once, before the ramp.** The arms below used to
+    // carry it themselves — `Sediment => None` and a ten-variant fire arm — and
+    // `orbs-tui`'s resolver carried its own copy of the same thing, under
+    // comments on both sides saying the two had to agree with nothing making
+    // them. `Depiction::declines_tint` is now the one statement of it; the
+    // reasoning that used to live on those arms has moved there with it.
+    if depiction.declines_tint() {
+        return None;
+    }
+
     let ramp = ramp(combined(wash));
     match depiction {
         // The bath: its own three steps, which happen to be this ramp's.

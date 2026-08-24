@@ -1,4 +1,5 @@
-//! The far orb: four sigils of six, and an aperture that ratchets.
+//! The far orb: four sigils of six, repeats and all, and nothing but the two
+//! numbers and which way they went.
 
 use crate::play::{Game, available};
 
@@ -84,24 +85,61 @@ fn a_dial_before_a_reading_says_to_probe_first() {
 
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
-fn survey_answers_three_different_questions_about_one_ward() {
+fn survey_answers_two_different_questions_about_one_ward() {
     if !available() {
         return;
     }
-    // **Two channels onto one ward**: a player reads `aligned`/`astray` and
-    // deduces, a spell reads `marks`, `untried` and `settled` and hill-climbs.
+    // **Two channels onto one ward**: a player reads the numbers and deduces, a
+    // spell reads which way each one moved. It was three questions — a socket
+    // also reported `settled`, `loose` and a count of what it had left to try,
+    // which is the orb answering *is this position right?* (§19).
     let game = Game::start();
     game.does("attend lens", "/tower/lens")
         .does("probe", "four sigils hold it shut")
-        // A socket reports what it holds, whether it is settled, and how many
-        // sigils it has left to try. **`marks` is not among them until it has
-        // been dialled** — an untouched socket has none — so the count a
-        // stateless ladder walks is `untried`.
+        // The prism carries the counts and both deltas; a socket carries what is
+        // in it, and nothing else at all.
         .does("survey prism", "aligned")
-        .does("survey second", "loose")
-        .expect("untried")
+        .expect("astray")
+        .expect("level")
         .does("dial second borax", "turns to borax")
-        .does("survey borax", "marks");
+        .does("survey second", "borax");
+}
+
+#[test]
+#[ignore = "plays a real game through tmux; run with scripts/play.sh"]
+fn a_socket_never_says_whether_it_is_right() {
+    if !available() {
+        return;
+    }
+    // **The rule the whole domain rests on, from the player's side.** No
+    // codemaker answers a question about one position; whether a socket is
+    // settled is the player's own bookkeeping. Three words used to leak it —
+    // `settled`, `loose` and `untried` — and the last did it silently, by
+    // falling to nought on exactly that fact.
+    let game = Game::start();
+    game.does("attend lens", "/tower/lens")
+        .does("probe", "four sigils hold it shut")
+        .does("survey second", "alum")
+        .expect_absent("settled")
+        .expect_absent("loose")
+        .expect_absent("untried");
+}
+
+#[test]
+#[ignore = "plays a real game through tmux; run with scripts/play.sh"]
+fn a_dial_moves_one_socket_and_a_sigil_may_repeat() {
+    if !available() {
+        return;
+    }
+    // **What allowing repeats bought.** A dial used to *exchange* with whichever
+    // socket held the sigil you named, so two moved at once and `aligned` rising
+    // could not be attributed to either. The opening aperture is
+    // `nitre alum borax quartz`, so this puts a second `alum` on the board.
+    let game = Game::start();
+    game.does("attend lens", "/tower/lens")
+        .does("probe", "four sigils hold it shut")
+        .does("dial first alum", "the first socket turns to alum")
+        .does("survey second", "alum");
 }
 
 #[test]

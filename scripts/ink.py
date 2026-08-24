@@ -60,7 +60,12 @@ def cells(line):
                 weight = "plain"
             elif code == 39:
                 colour = "default"
-            elif code == 38 and params[index + 1 : index + 2] == [5]:
+            # `params[index + 2]` without this guard raised IndexError on a
+            # truncated `ESC[38;5m` — and because `ink` is the tail of a pipe,
+            # one malformed sequence anywhere in the pane replaced the entire
+            # colour report with a traceback. The one instrument a colour bug
+            # needs should not fail closed on input it can simply skip.
+            elif code == 38 and params[index + 1 : index + 2] == [5] and len(params) > index + 2:
                 value = params[index + 2]
                 colour = ANSI.get(value, str(value))
                 index += 2

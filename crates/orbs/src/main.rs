@@ -38,7 +38,7 @@ fn main() -> AppExit {
     //
     // The engine line is the one thing this frontend has to tell it: the card is
     // an inventory of the machine, and only this binary knows Bevy is in it.
-    if orbs_shell::dump(seed, wizard(), &boot::engine()) {
+    if orbs_shell::dump(seed, wizard(), boot::engine()) {
         return AppExit::Success;
     }
 

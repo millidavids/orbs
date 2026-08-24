@@ -2168,19 +2168,28 @@ bound in the lens while the player brews.
 
 §10 gave this domain one line — *"deduction: parse noisy logs to find truth"* —
 and says outright that the forms are **a table, not a design**. The mechanic is
-now a code-breaker: a ward of four sigils drawn from six, 360 codes. The noisy
-logs survive as the **yield** rather than the mechanic — a broken seal spills the
-far wizard's laboratory into `lens.log`, and now and then it spells out a recipe.
+now a code-breaker: a ward of four sigils drawn from six, **repeats and all**,
+1296 codes. The noisy logs survive as the **yield** rather than the mechanic — a
+broken seal spills the far wizard's laboratory into `lens.log`, and now and then
+it spells out a recipe.
 
 **The exit criterion changed, and §19 records why.** *"Which of two contradicting
 accounts is lying"* was the only mechanic ever proposed for the domain and it was
-never designed. What replaced it had to survive one hard finding: 4-of-6
-Mastermind has **almost no skill ceiling** — consistent guessing solves in 4.24
-presses against the best play's 4.08 — so an orb that does the bookkeeping has
-done the whole puzzle, and `parser::question` is stateless so a spell can only act
-on what the world writes down. **Two channels onto one ward** is the resolution:
-`aligned`/`astray` for a person, `closer`/`marks`/`settled` for a ladder, 4.1
-presses against 22.8.
+never designed. What replaced it had to survive one hard finding: Mastermind has
+**almost no skill ceiling** for a machine — consistent guessing solves in ~5
+presses — so an orb that does the bookkeeping has done the whole puzzle, and
+`parser::question` is stateless so a spell can only act on what the world writes
+down. **Two channels onto one ward** is the resolution: the two counts for a
+person, the two *deltas* for a spell, 5.15 presses against 11.93.
+
+**And the ward was rebuilt once, at `0.3.22`.** It drew four sigils with **none
+repeated**, which forced a dial to *exchange* two sockets — and an exchange makes
+`aligned` rising unattributable, so the orb propped it up with a ratchet, a
+settle-lock and a per-socket `untried` count. All three answer *is this position
+correct?*, which is the one question a codemaker never answers. Repeats delete the
+exchange and all three go with it. §19's *"The lens is Mastermind now"* has the
+whole of it; the boxes below are re-verified against the new rules rather than
+reopened, because the exit criterion never moved.
 
 **It is cross-referencing *and* detection now.** `verify` caught a poisoned log
 from Phase 0; the **world** surface ships here, so a swapped reagent is found the
@@ -2221,25 +2230,29 @@ same way.
       ──────────────
       ```
 - [x] **The `lens/` domain, the ward, `probe` and `dial`.** Four sigils of six,
-      no repeats, 360 codes. The orb keeps **no candidate set and deduces
-      nothing** — see §19, which records the first design deleting its own puzzle
-      by doing the bookkeeping for the player.
+      **repeats allowed**, 1296 codes. The orb keeps **no candidate set and
+      deduces nothing** — see §19, which records *two* designs breaking that
+      rule, the second quietly.
       **See it:**
       ```bash
       ORBS_SEED=3 ORBS_BOOT=0 ORBS_DUMP="attend lens; probe; \
-        dial second borax; probe; survey prism; survey second; \
-        survey borax" cargo run -p orbs
+        dial second borax; probe; survey prism; survey second" cargo run -p orbs
       ORBS_BOOT=0 ORBS_DUMP="recall probe; recall dial" cargo run -p orbs
       cargo test -p orbs-sim --test ward
       ```
       **No `meditate`, because a press is instant and takes no slot** (§19).
       ROADMAP's own *"a read is not a brew"* scarcity for this domain is
       withdrawn: the lens now competes with the laboratory for nothing.
-      `survey second` reads `alum loose` after dialling borax, and that is the
-      **ratchet**: a press that does not gain snaps the aperture back, which is
-      the undo §8's variable-free language cannot express. Two channels onto one
-      ward — `aligned`/`astray` for a person, `closer`/`level`/`further` plus
-      `marks` and `settled` for a ladder.
+      `survey prism` reads the two counts and the two deltas; `survey second`
+      reads **only what is in it**, because whether a socket is right is the
+      player's own bookkeeping. Two channels onto one ward — the counts for a
+      person, `closer`/`level`/`further` and `richer`/`unchanged`/`poorer` for a
+      spell — and the second is strictly *weaker* than the first.
+      ```bash
+      # A dial moves one socket and only one, and a sigil may sit in two.
+      ORBS_SEED=3 ORBS_BOOT=0 ORBS_DUMP="attend lens; probe; dial first alum; \
+        survey first; survey second" cargo run -p orbs
+      ```
 - [x] **The board** — the ward as a sheet, beside the transcript. Not gated on a
       word, so a bound solver is watchable; columns never rows; refuses rather
       than clipping, because a row missing its pegs says a press answered
@@ -2254,12 +2267,14 @@ same way.
       ┌ ward ────┐
       │☼○♂♀  ○○  │   ← each row a press: the figure, then its pegs
       │☼♦♂♀  •○○ │
-      │♠♦♂♀  ••○ │
+      │♦♦♂♀  •○○○│   ← a sigil twice, and the full four pegs
       │──────────│
-      │♠♦♂♀  ■···│   ← the aperture, and which sockets are held
+      │♦♦♂♀      │   ← the aperture: what the next press will send
       ```
       **Six glyphs, not six colours** (§14) — `▪` failed the CP437 check and
       became `■`. Spoken once as a summary, never cell by cell.
+      **The aperture row used to carry `■···` settle marks** and does not: the
+      orb no longer decides that a socket is right (§19).
 - [x] **The spill, and recipes you do not know yet.** A broken seal writes a
       dozen lines of the far wizard's laboratory into `lens.log` — quiet, so the
       transcript gets one sentence — and rolls for a recipe on a chance that
@@ -2268,8 +2283,8 @@ same way.
       away a second use.
       **See it:**
       ```bash
-      ORBS_SEED=3 ORBS_BOOT=0 ORBS_DUMP="attend lens; probe; meditate 13; \
-        debug_ward; probe; meditate 13; peruse lens.log" cargo run -p orbs
+      ORBS_SEED=3 ORBS_BOOT=0 ORBS_DUMP="attend lens; probe; \
+        debug_ward; probe; peruse lens.log" cargo run -p orbs
       ORBS_BOOT=0 ORBS_DUMP="recall mending; debug_learn; recall mending" cargo run -p orbs
       cargo test -p orbs-sim --test secrets
       ```
@@ -2282,27 +2297,35 @@ same way.
       and prints the full route after it — **unmakeable, unnameable and
       unreadable, all flipping on the same tick.** The alembic reads `fouled` on
       a load it cannot transmute, which is honest rather than coy.
-- [x] **A solver spell for the lens.** `debug_spell breaking` — 24 rungs, one per
-      socket and sigil, guarded on `loose` and a per-socket tally. It cannot
-      deduce and it cannot revert; the **ratchet** and the **settle-lock** make a
-      blind walk monotone, which is Trémaux's property in a second shape.
+- [x] **A solver spell for the lens.** `debug_spell breaking` — one sweep, four
+      socket phases, reading nothing but which way `aligned` moved. It cannot
+      deduce; what makes a blind walk converge is that **one socket moves at a
+      time**, so a rise can only be that socket arriving. Trémaux's property in a
+      second shape.
       **See it:**
       ```bash
       ORBS_SEED=3 ORBS_BOOT=0 ORBS_DUMP="attend lens; probe; debug_ward; probe; \
         probe; debug_ward; probe; debug_spell breaking" \
         ORBS_THEN="bind breaking; meditate 3600; status" cargo run -p orbs
+
+      # ...and one ward, watched: fifteen presses on this seed.
+      ORBS_SEED=3 ORBS_BOOT=0 ORBS_GRID=200x45 \
+        ORBS_DUMP="attend lens; debug_spell breaking" \
+        ORBS_THEN="invoke breaking; meditate 200; peruse lens.log" cargo run -p orbs
       ```
-      → `experience 268`, linear. **Four rungs, not twenty-four** — `dial
-      <socket>` takes an optional sigil, so a spell can say *try something else
-      here* without naming what, which is the one sentence the variable-free
-      language could not form (§19).
-      **`bind`, not `invoke`, and that is new.** `repeat until the prism is idle`
-      exits when the ward closes; it only lapped before because a press was in
-      flight when the guard was asked. A binding re-casts a spell that has run off
-      the end, which is the faucet.
+      **It was 24 rungs, then 4, and it is 4 phases of 3** (§19). `dial <socket>`
+      takes an optional sigil, so a spell can say *try something else here*
+      without naming what — the one sentence the variable-free language could not
+      form. What the ratchet and the settle-lock used to do, a **restore rung**
+      does explicitly: `aligned` falling means that socket was right, so put the
+      opening sigil back and press again.
+      **`bind`, not `invoke`, and that is new.** A sweep breaks the ward in front
+      of it and stops. A binding re-casts a spell that has run off the end, which
+      is the faucet.
       **No contention at all**, where this line used to measure it: a press takes
       no slot, so the solver runs beside a full brewing loop rather than sharing
-      12 ticks in every 13 with it.
+      12 ticks in every 13 with it. `cargo run -p orbs-balance -- run scrying`
+      is what pins the rate.
 - [x] **The world sabotage surface**, moved here from Phase 1 — §8.1's second of
       four. A reagent is **substituted**: its name changes and its identity does
       not, so a spell that named it stops working and `verify` names what is
@@ -2340,7 +2363,7 @@ same way.
       ```
 - [x] `orbs-balance` CLI sweeping §11.5's first-pass numbers, moved here from
       Phase 1 — **before** five phases author durations on top of unswept ones.
-      Five policies, a per-tick rate against a pinned reference, and `--why` for
+      Six policies, a per-tick rate against a pinned reference, and `--why` for
       the sentences behind a refusal. **Four findings on its first clean run**,
       recorded in DESIGN.md §19: the design's rates are recipe-tick
       idealisations, §10.1's damping is *behind* not ahead, haste still
@@ -2363,22 +2386,38 @@ same way.
       **`cost` is the column to read first:** every entry should be a scour the
       policy asked for. Anything else means the loop has fallen out of phase with
       the tower and the rate beside it is measuring nobody's game.
-**Scarcity: the production slot.** A read occupies the tower for its duration
-exactly as a brew does, so *reading is not brewing* and which source to read
-first is the choice. No new currency, and §8.1's cooldown already prices repeated
-looking.
+      **`scrying` is the sixth of seven**, added with the ward rebuild at
+      `0.3.22` so that
+      the lens's automated rate is an instrument reading rather than a sentence
+      in §19 — where it had been priced at 0.022 and was 0.07. It reads **0.268**
+      now, above the flagship's 0.140, and it is the only policy here that never
+      waits on the tower: a press takes no slot, so the number is additive to
+      whatever the laboratory is doing rather than an alternative to it.
+**Scarcity: none, and this is the one place the phase's plan was withdrawn.**
+*"A read occupies the tower for its duration exactly as a brew does"* was the
+stated scarcity, priced at twelve ticks a press. `PRESS_TICKS` is 0: a press
+answers on the tick it is typed and takes nothing, so a bound solver runs beside
+a full brewing loop with no contention at all (§19). §8.1's cooldown still prices
+repeated looking, and is what remains.
 
 ---
 
 ## Phase 3 — Spellcraft
 
-> **Where this stands — `0.3.20`, and read this first if you are picking it up
-> cold.** The save format is closed (three boxes). The **language overhaul** is
-> four boxes in of seven: `else if`, a bound-spell policy in `orbs-balance`,
-> comparison-against-a-place, and variables-and-sets all ship. What remains is
-> **functions**, the **resolution policy**, **builtins that act**, and two
-> parallel items — and the shape of each is written into its own box below
-> rather than left in a plan file, deliberately.
+> **Where this stands, and read this first if you are picking it up cold.** The
+> save format is closed (three boxes). The **language overhaul** is four boxes
+> in of seven, reaching `0.3.20`: `else if`, a bound-spell policy in
+> `orbs-balance`, comparison-against-a-place, and variables-and-sets all ship.
+> What remains is **functions**, the **resolution policy**, **builtins that
+> act**, and two parallel items — and the shape of each is written into its own
+> box below rather than left in a plan file, deliberately.
+>
+> **`0.3.21` and `0.3.22` are not this phase.** They are Phase 2 and Standing
+> work — a review of the input paths, and the lens rebuilt as Mastermind — done
+> on another machine in parallel and rebased on top. Nothing in the language
+> overhaul depends on them; what they cost this phase is the `breaking` solver
+> being rewritten against a ward that no longer publishes `untried`, so the
+> `else if` box's own example spell is not the one in `dev_spells.toml` any more.
 >
 > The next box is **functions**, and it is gated on nothing except the decision
 > already recorded in §19: a step still costs a tick, and the weave tree is where
@@ -2537,7 +2576,15 @@ escape valve, and that the lens's automation pin is deleted.
 - [x] ✅ **`else if` — a chained `if`, and one `end` closes the ladder.** The
       shape every solver in the game is written in, and each rung used to nest one
       deeper and owe an `end` at the bottom: **49 of `threading`'s 98 lines were
-      `end` or `else`**. Now 3 of 52, and `breaking` went 21 → 15.
+      `end` or `else`**. Now 3 of 52.
+      - ⚠ **`breaking` was the second example and is not any more.** It went
+        21 → 15 here, and then `0.3.22` rebuilt the ward it solves: with
+        `untried` gone there is no per-socket question left to chain on, so the
+        shipped spell is four independent phases of three rungs and uses no
+        `else if` at all. It is 53 lines and **`for each socket` is what
+        collapses it** — left for the box that would do it rather than folded in
+        here, because a solver rewritten to prove a language feature is a solver
+        nobody measured
       - **A desugaring, not a new `Kind`.** `else if` pushes a chained `if` frame
         and one `end` unwinds the whole chain, so the runner, `step_past`,
         `guard_answers`, the save format and `interpret` need **nothing** — what
@@ -3132,6 +3179,13 @@ content item, never all of it true — move it here.
       argument that was really about the development loop, which `ORBS_BOOT=0`
       already answered. The world's clock stays still through it, which is a
       determinism rule and not a nicety.
+      ✅ **The input paths nobody had pressed** (`0.3.21`) — a second review,
+      run after `0.3.13` shipped. Backspace was dead on any terminal sending
+      `^H`, key repeat was filtered out entirely, the boot card ignored the
+      "too small" floor, a signal left the terminal in raw mode, and `ORBS_DUMP`
+      drew the opposite focus mode to the game. Plus the duplication behind
+      them: three key tables shared, the tint rule made one, `plugin.rs` split
+      to registration only. §19 records the set.
       ✅ **Reviewed, and the instruments fixed first** (`0.3.13`) — nine defects,
       several of them in the suite rather than the game: assertions satisfied by
       the command they typed, colour scenarios decoding the wrong columns, a

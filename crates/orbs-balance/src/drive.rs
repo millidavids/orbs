@@ -127,6 +127,7 @@ pub fn run(policy: Policy, seed: u64, ticks: u64, every: u64) -> Run {
     }
 
     let mut cycle = 0usize;
+    let mut sweep = Sweep::default();
     let every = every.max(1);
 
     while sim.tick().get() < ticks {
@@ -143,6 +144,7 @@ pub fn run(policy: Policy, seed: u64, ticks: u64, every: u64) -> Run {
                     issue(&mut sim, line);
                 }
                 Body::Stacks => walk_one(&mut sim),
+                Body::Scrying => press_one(&mut sim, &mut sweep),
                 Body::Bound {
                     earning,
                     name,
@@ -410,6 +412,85 @@ fn walk_one(sim: &mut Sim) {
         // Walled in on all four sides is unreachable in a carved maze, but a
         // step that does nothing would spin the driver for ever. Burn the tick.
         None => sim.step(),
+    }
+}
+
+/// The four sockets and the four sigils the aperture opens on.
+///
+/// **Spelled out rather than imported**, exactly as `orbs-sim/tests/ward.rs`
+/// spells them out: a policy is a thing a player types, so a rename that broke
+/// the *player's* vocabulary would still compile against `tower::ward::SOCKETS`
+/// and this sweep would go on measuring a game nobody can play.
+const SOCKETS: [&str; 4] = ["first", "second", "third", "fourth"];
+const OPENING: [&str; 4] = ["nitre", "alum", "borax", "quartz"];
+
+/// Where a scrying policy has got to in its sweep.
+///
+/// **Four sockets and a flag is the whole of it**, which is the point: §8's
+/// language has no variables, so a policy carrying more state than this would be
+/// measuring a spell nobody can write.
+#[derive(Debug, Default, Clone, Copy)]
+struct Sweep {
+    /// The socket being worked, left to right.
+    socket: usize,
+    /// Whether the last press said this socket was already right.
+    restore: bool,
+}
+
+/// One turn-and-press of the lens, chosen the way `breaking` chooses it.
+///
+/// Opens a reading if there is none — `probe` finds a far orb and presses it in
+/// one word — and otherwise turns the socket in hand and presses. Three
+/// outcomes, and they are the spell's three rungs:
+///
+/// 1. `aligned` fell, so this socket *was* right: put the opening sigil back and
+///    press again, which re-syncs the baseline the next delta is measured from.
+/// 2. `aligned` rose, so this socket has arrived: move to the next.
+/// 3. neither: turn it again.
+///
+/// **The deltas are recomputed from the board rather than read off a reading**,
+/// because `Sim` publishes the words to a *spell* and the numbers to a *record*.
+/// Comparing the last two attempts is the same arithmetic `Ward::press` does and
+/// cannot drift from it, whereas matching `the ward is closer` would be matching
+/// prose — which rule 6 puts in a file precisely so nothing in Rust depends on it.
+fn press_one(sim: &mut Sim, sweep: &mut Sweep) {
+    // No reading open — either the first lap, or the last one gave. `probe`
+    // opens the next and presses it, which is how a bound spell laps.
+    if sim.ward().is_none() {
+        *sweep = Sweep::default();
+        issue(sim, "probe");
+        return;
+    }
+
+    // Unreachable by the sweep's own proof — a socket's cyclic walk always
+    // arrives — and a spin here would be silent, so it starts over rather than
+    // pressing an aperture nothing is moving.
+    if sweep.socket >= SOCKETS.len() {
+        *sweep = Sweep::default();
+    }
+    let at = sweep.socket;
+
+    if sweep.restore {
+        issue(sim, &format!("dial {} {}", SOCKETS[at], OPENING[at]));
+        issue(sim, "probe");
+        sweep.restore = false;
+        sweep.socket += 1;
+        return;
+    }
+
+    issue(sim, &format!("dial {}", SOCKETS[at]));
+    issue(sim, "probe");
+
+    // The ward gave on that press. The next call opens another.
+    let Some(board) = sim.ward() else { return };
+    let mut recent = board.attempts.iter().rev();
+    let (Some(now), Some(before)) = (recent.next(), recent.next()) else {
+        return;
+    };
+    if now.aligned < before.aligned {
+        sweep.restore = true;
+    } else if now.aligned > before.aligned {
+        sweep.socket += 1;
     }
 }
 

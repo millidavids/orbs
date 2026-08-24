@@ -3,7 +3,7 @@
 //! CLAUDE.md rule 6 puts prose in data files so a writer can work without a
 //! compiler. Finding and parsing that file is plain `std::fs`, and every
 //! frontend needs it; keeping a *watch* on it is backend plumbing and lives in
-//! [`super::content`].
+//! the Bevy build's `sim::content`.
 //!
 //! `ORBS_DUMP` has always shared this path — it builds no `App` and therefore
 //! cannot carry a watcher, but it is the tool CLAUDE.md says to reach for first,

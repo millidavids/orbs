@@ -433,6 +433,42 @@ pub fn synonyms_of(verb: Verb) -> Vec<(Register, String)> {
     out
 }
 
+/// Every one-word way of saying any verb, with the verb that claims it.
+///
+/// **The set that is "a word the game knows".** A canonical is one of these —
+/// `canonical_names_are_one_short_word` guarantees it — so this is the whole
+/// typed vocabulary in one place, which is what `tower::scene_at` needs twice
+/// over: once to register them as [`NounKind::Command`](super::NounKind), and
+/// once to hand them to [`Scene::knowing`](super::Scene::knowing) so that a
+/// verb's own word can never *fuzz* into a noun.
+///
+/// **Multi-word phrases are deliberately absent.** They cannot be typed into a
+/// noun slot as a single token, and splitting them would put `to`, `here` and
+/// `it` into the known set for no gain.
+#[must_use]
+pub fn single_words() -> Vec<(&'static str, Verb)> {
+    SYNONYMS
+        .iter()
+        .filter(|entry| entry.words.len() == 1)
+        .map(|entry| (entry.words[0], entry.verb))
+        .collect()
+}
+
+/// The verb a single word names, canonical or synonym.
+///
+/// **Why `recall` cannot just compare canonicals.** A synonym is a
+/// `NounKind::Command` too, so `recall walk` resolves to the *word* `walk` and
+/// the page it wants is `follow`'s. Before this it resolved to no command at
+/// all, fuzzed into the maze's `wall` reading, and answered a question about
+/// walls (§19).
+#[must_use]
+pub fn verb_of_word(word: &str) -> Option<Verb> {
+    single_words()
+        .into_iter()
+        .find(|(known, _)| known.eq_ignore_ascii_case(word))
+        .map(|(_, verb)| verb)
+}
+
 /// The most words any single phrase spans. Bounds the longest-match window.
 pub const LONGEST_PHRASE: usize = 3;
 

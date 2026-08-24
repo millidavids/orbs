@@ -62,7 +62,7 @@ pub use dump::{requested as dump_requested, run as dump, run_script as dump_scri
 pub use editor::{Editor, Mode as EditorMode, Outcome as EditorOutcome};
 pub use environment::{RUSTC, SEED, seed, wizard};
 pub use glance::Panel;
-pub use keys::{Key, apply};
+pub use keys::{Key, apply, apply_to_editor, apply_to_maze, apply_to_weave};
 pub use line::Line;
 pub use linear::{Linear, toggle as toggle_linear};
 pub use offering::{Ghost, Offered};

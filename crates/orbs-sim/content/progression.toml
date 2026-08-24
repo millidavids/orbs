@@ -46,17 +46,23 @@ lectern = 4
 # arrived at the same way the others are: measured, then checked against the
 # flagship.
 #
-# A hand-played solve takes 4.14 presses on average over all 360 codes, at 12
-# ticks each — so about 50 ticks for 8, or 0.161 per tick, just under the
-# clarity chain's 0.170. A bound solver takes ~22.8 presses and earns 6, which is
-# 0.022 — unspectacular, three times better than walking the archive's maze, and
-# exactly the background faucet this domain is for.
+# A hand-played solve takes 5.15 presses on average over all 1296 codes, and a
+# press is free and instant — so a person's rate here is bounded by how fast they
+# type and not by the tower. What the economy actually sees is the *bound* rate,
+# and `orbs-balance`'s `scrying` policy is what measures it: ~12 presses at two
+# ticks apiece for 6, which is 0.268 per tick.
+#
+# **That is above the flagship, and it is additive rather than competing.** A
+# press takes no production slot (`PRESS_TICKS = 0`), so a bound solver runs
+# beside a full brewing loop instead of instead of one — see DESIGN.md §19,
+# which records the pricing this reverses and why.
 #
 # **The first draft halved the yield per press past par and it is withdrawn.** At
-# 23 presses that lands on a floor of 1, while the ladder already pays 5.5× the
-# ticks — so the penalty double-counted and drove automated scrying below the
-# maze. The tick cost does the work; `execute::scry::yield_of` only rewards
-# playing well, at three quarters beyond par.
+# 23 presses that lands on a floor of 1, while the walk already pays several
+# times the ticks — so the penalty double-counted and drove automated scrying
+# below the maze. The tick cost does the work; `execute::scry::yield_of` only
+# rewards playing well, at three quarters beyond par — and par is 6, measured
+# against the 1296-code space rather than the 360 it was set against.
 #
 # The oculus is deliberately absent. It carries an `Operation` so `scry` is
 # scoped to this room, but opening a reading is not work and pays nothing —

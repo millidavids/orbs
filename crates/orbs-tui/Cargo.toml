@@ -31,6 +31,19 @@ orbs-shell = { path = "../orbs-shell" }
 # the whole API this needs.
 crossterm = "0.29"
 
+# **The one exit `enter()`'s own doc did not cover.** It argues at length that
+# restoring the terminal must survive a panic — "no echo, no line editing, no
+# prompt… the shell would look dead" — and installs a hook for it. A signal
+# reaches the same state by a route the hook cannot see: `kill`, a dropped ssh
+# connection (SIGHUP), a session manager stopping the process. Nothing ran
+# `leave()`, and the user got their shell back in raw mode.
+#
+# `flag::register` is safe code — the workspace denies `unsafe` — and sets an
+# `AtomicBool` the loop already polls thirty times a second, so the game exits
+# through its ordinary return and `term::leave` runs on the way out. Already in
+# the tree under `crossterm`, so it costs no build time.
+signal-hook = "0.3"
+
 # For the one thing this build can fail at mid-session and cannot put on screen:
 # `F6`'s trace export. There is no subscriber installed (see `main.rs` — one
 # writing to stderr would scribble across a raw-mode screen), so the macro

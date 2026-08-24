@@ -15,7 +15,7 @@
 //! deliberate and is the same one the editor has.
 
 use bevy::input::ButtonState;
-use bevy::input::keyboard::{Key, KeyboardInput};
+use bevy::input::keyboard::KeyboardInput;
 use bevy::prelude::*;
 
 use super::{Tapestry, WeaveOutcome};
@@ -129,20 +129,11 @@ pub(crate) fn type_into_loom(
             if chord && !stale_chord {
                 continue;
             }
-            match &event.logical_key {
-                Key::Enter => outcome = screen.enter().or(outcome),
-                Key::Escape => screen.escape(),
-                Key::Backspace => screen.backspace(),
-                Key::ArrowUp => screen.step(0, -1),
-                Key::ArrowDown => screen.step(0, 1),
-                Key::ArrowLeft => screen.step(-1, 0),
-                Key::ArrowRight => screen.step(1, 0),
-                _ => {
-                    if let Some(text) = &event.text {
-                        screen.type_text(text);
-                    }
-                }
-            }
+            // `orbs-shell`'s table, which the terminal build also calls.
+            let Some(key) = super::input::pressed(event) else {
+                continue;
+            };
+            outcome = orbs_shell::apply_to_weave(&key, screen).or(outcome);
         }
     }
     if outcome == Some(WeaveOutcome::Close) {

@@ -1,7 +1,7 @@
 //! The line the player is typing.
 //!
 //! The buffer, the caret, the history, and what Tab and the ghost make of them.
-//! Nothing here reads a keystroke — [`input`](super::input) does that and calls
+//! Nothing here reads a keystroke — each frontend's own input path does that and calls
 //! these — so the whole editor is testable without a window, which is what the
 //! `Line`-only tests below rely on.
 //!

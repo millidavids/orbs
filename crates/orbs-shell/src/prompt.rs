@@ -561,10 +561,7 @@ fn to_u32(ticks: u64) -> u32 {
 /// fallback is the whole reason the readings are not simply the rail's: a player
 /// at the authoring floor has no rail and still needs to know the sim is ticking.
 const fn focus(screen: &Screen) -> &'static str {
-    match screen.mode {
-        DisplayMode::Deep => "deep",
-        DisplayMode::Wide => "wide",
-    }
+    screen.mode.word()
 }
 
 /// Draw the prompt and what is being typed into it.

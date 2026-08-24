@@ -465,7 +465,12 @@ pub(super) fn recall(intent: &Intent, world: &mut World) {
     // `NounKind::Command` and nothing else, so this cannot shadow a recipe — but
     // it is checked first anyway, because the day a recipe is named after a verb
     // the page is what the player meant.
-    if let Some(verb) = Verb::ALL.into_iter().find(|verb| verb.canonical() == topic) {
+    // **Asked of the whole word list, not of the canonicals.** `walk` is
+    // `follow`, `edit` is `scribe`, `make` is `recall` — and a player asks with
+    // the word they typed. Before this those three reached no page at all and
+    // fuzzed into the archive's readings instead, so `recall edit` explained the
+    // maze's way out to somebody asking about the spell editor (§19).
+    if let Some(verb) = crate::parser::verb_of_word(&topic) {
         page(world, verb);
         return;
     }

@@ -466,12 +466,14 @@ fn read(world: &World, node: Entity, name: &str, now: Tick) -> (State, Option<Me
     if let Some(ward) = world.get::<super::Ward>(node) {
         return (
             State::Working,
-            // **`best`, not `last().0`.** The meter is *progress*, and the last
-            // press's answer goes down as well as up — a gauge that fell back
-            // whenever a guess did not help would be reporting the guess rather
-            // than the reading.
+            // **The last press's answer, which now falls as well as rises.** It
+            // was `best()` while the ratchet held the aperture at the best figure
+            // ever sent — the meter was honest because the *aperture* was. With
+            // the ratchet gone (§19) a high-water mark would read `3 of 4` over
+            // an aperture holding one, which is the failure this note used to
+            // warn of pointing the other way.
             Some(Meter {
-                done: u64::from(ward.best()),
+                done: u64::from(ward.last().0),
                 total: super::ward::WIDTH as u64,
                 unit: Unit::Sigils,
             }),

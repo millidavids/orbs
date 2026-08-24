@@ -18,6 +18,10 @@
 //! So each frontend maps its own events onto [`Key`] and calls [`apply`].
 
 use orbs_sim::Sim;
+use orbs_sim::tower::Way;
+
+use crate::editor::{Editor, Outcome as EditorOutcome};
+use crate::tapestry::{Outcome as WeaveOutcome, Tapestry};
 
 use crate::line::Line;
 use crate::offering::Offered;
@@ -117,6 +121,122 @@ pub fn apply(key: &Key, line: &mut Line, offered: &mut Offered, sim: &Sim) -> Op
 /// it — and the sim already exports the canonical form.
 fn answering(sim: &Sim, line: &str) -> bool {
     !sim.choices().is_empty() && orbs_sim::parser::is_answer(line)
+}
+
+/// One keystroke, to the spell editor.
+///
+/// **The prompt's table was shared and the other three were not**, so the
+/// editor, the weave screen and the maze each had their key semantics written
+/// once per frontend — about sixty lines duplicated across two crates, in the
+/// one place `ORBS_DUMP` cannot reach. This module's own header already made the
+/// argument for sharing them: *"what a keystroke **means** is not backend-shaped
+/// at all… so each frontend maps its own events onto [`Key`] and calls
+/// [`apply`]."* It simply stopped after the first surface.
+///
+/// The cost was already paid once and is visible in the divergence: the Bevy
+/// build learned that two Enters in one frame must not discard a pending
+/// `SaveAndClose`, and the terminal build — written later, from the same shape —
+/// did not. That correction now lives here, where there is one copy of it.
+pub fn apply_to_editor(key: &Key, editor: &mut Editor) -> Option<EditorOutcome> {
+    match key {
+        // **`or`, not `=`.** Two Enters in one delivery — key repeat, a frame
+        // hitch, a practiced `wq<Enter>` — had the second overwrite the first:
+        // the command string is taken by the first call, so the second ran on an
+        // empty line, returned `None`, and discarded a pending `SaveAndClose`.
+        // The editor stayed open on a `quit` that looked ignored, with the
+        // buffer unflushed.
+        Key::Enter => editor.enter(),
+        Key::Escape => {
+            editor.escape();
+            None
+        }
+        Key::Backspace => {
+            editor.backspace();
+            None
+        }
+        Key::Left => {
+            editor.left();
+            None
+        }
+        Key::Right => {
+            editor.right();
+            None
+        }
+        Key::Up => {
+            editor.up();
+            None
+        }
+        Key::Down => {
+            editor.down();
+            None
+        }
+        Key::Home => {
+            editor.home();
+            None
+        }
+        Key::End => {
+            editor.end();
+            None
+        }
+        Key::Text(text) => {
+            editor.type_text(text);
+            None
+        }
+        Key::Tab => None,
+    }
+}
+
+/// One keystroke, to the progression screen.
+///
+/// See [`apply_to_editor`] for why these live here.
+pub fn apply_to_weave(key: &Key, screen: &mut Tapestry) -> Option<WeaveOutcome> {
+    match key {
+        Key::Enter => screen.enter(),
+        Key::Escape => {
+            screen.escape();
+            None
+        }
+        Key::Backspace => {
+            screen.backspace();
+            None
+        }
+        Key::Up => {
+            screen.step(0, -1);
+            None
+        }
+        Key::Down => {
+            screen.step(0, 1);
+            None
+        }
+        Key::Left => {
+            screen.step(-1, 0);
+            None
+        }
+        Key::Right => {
+            screen.step(1, 0);
+            None
+        }
+        Key::Text(text) => {
+            screen.type_text(text);
+            None
+        }
+        Key::Home | Key::End | Key::Tab => None,
+    }
+}
+
+/// One keystroke, to the archive's map — which way the reading walks.
+///
+/// See [`apply_to_editor`] for why these live here. This table was written
+/// **three** times: once in each frontend and once more in `dump.rs`.
+#[must_use]
+pub const fn apply_to_maze(key: &Key) -> Option<Way> {
+    match key {
+        Key::Up => Some(Way::North),
+        Key::Right => Some(Way::East),
+        Key::Down => Some(Way::South),
+        Key::Left => Some(Way::West),
+        _ => None,
+    }
 }
 
 #[cfg(test)]

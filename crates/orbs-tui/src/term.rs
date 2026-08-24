@@ -12,7 +12,10 @@ use crossterm::terminal::{
     EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
 };
 use crossterm::{cursor, execute, queue, style};
-use orbs_render::{GridSize, MIN_GRID};
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+
+use orbs_render::GridSize;
 
 /// Enter raw mode and the alternate screen, and arrange to leave them.
 ///
@@ -78,13 +81,41 @@ pub(crate) fn grid() -> std::io::Result<GridSize> {
     Ok(GridSize::new(cols, rows))
 }
 
-/// Whether this grid can host the game.
+// **There was a `fits(grid)` here, and it answered half a question.**
+// "Can this screen host the game" is `Screen::is_hostable`, which asks the grid
+// against the authoring floor *and* the scale; this asked only the first, at the
+// one call site that had already built a `Screen` two lines above it. Two
+// predicates for one question meant the two frontends could route to the "too
+// small" card by different rules — and the `--dump` parity diff could not catch
+// it, because the dump path was asking the whole question all along.
+
+/// Ask to be told when the process is being killed, rather than simply dying.
 ///
-/// Below the 80×22 authoring floor the answer is a "too small" card, never a
-/// refusal — §19 names *"a terminal the user shrank"* as a normal runtime state,
-/// and `ScreenLayout::compute` is total precisely so it stays one.
-pub(crate) const fn fits(grid: GridSize) -> bool {
-    grid.fits(MIN_GRID)
+/// **The exit `install_panic_hook`'s reasoning covers and its code does not.**
+/// That hook exists because leaving a terminal in raw mode with the alternate
+/// screen up "looks exactly like the shell having died" — and a signal reaches
+/// that state by a route no hook sees: `kill`, a dropped ssh connection
+/// (SIGHUP), a session manager stopping the process, Ctrl-\ delivering SIGQUIT.
+/// Raw mode disables ISIG for Ctrl-C, which is why that one is the loop's to
+/// answer; it does nothing about a signal sent from outside.
+///
+/// A flag rather than a handler that draws: a signal handler may do almost
+/// nothing safely, and the loop is already awake thirty times a second. It sees
+/// the flag, returns normally, and [`leave`] runs on the ordinary path.
+///
+/// # Errors
+///
+/// If the signals cannot be registered.
+pub(crate) fn dying() -> std::io::Result<Arc<AtomicBool>> {
+    let flag = Arc::new(AtomicBool::new(false));
+    for signal in [
+        signal_hook::consts::SIGTERM,
+        signal_hook::consts::SIGHUP,
+        signal_hook::consts::SIGQUIT,
+    ] {
+        signal_hook::flag::register(signal, Arc::clone(&flag))?;
+    }
+    Ok(flag)
 }
 
 /// A glyph whose width the terminal might disagree with us about.

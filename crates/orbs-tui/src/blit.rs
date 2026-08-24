@@ -202,41 +202,62 @@ impl Screen {
 ///
 /// So the map is **injective**, and `every_substitution_is_its_own_character`
 /// holds it that way — which is the test that was missing when this was written.
+const SUBSTITUTIONS: [(char, char); 24] = [
+    // The rail's fault marker and its "this room is automated" arrow.
+    ('‼', '!'),
+    ('►', '>'),
+    ('◄', '<'),
+    // The ward's six sigils.
+    ('☼', '*'),
+    ('♂', 'm'),
+    ('♀', 'f'),
+    ('♦', 'd'),
+    ('♠', 's'),
+    // **The three states, kept three.** Filled, hollow, faint — a taken node
+    // from an open one from a locked one, and an aligned peg from an astray one
+    // from a loose socket.
+    ('•', '+'),
+    ('○', 'o'),
+    ('·', '.'),
+    ('■', '#'),
+    // The maze's way out, and the transcript's outcome markers. `»` is
+    // deliberately not `>`: that is `►`, and they share a screen.
+    ('Ω', 'U'),
+    ('√', 'v'),
+    ('→', '-'),
+    ('≈', '~'),
+    ('¿', '?'),
+    ('»', '}'),
+    // The fire's sparks, and the boot card's furniture.
+    ('∙', ','),
+    ('°', '^'),
+    ('⌂', 'A'),
+    ('⌐', '='),
+    ('∟', 'L'),
+    // **Endless stock, and it was missing.** `Stock::label` draws `∞` for every
+    // inexhaustible pile, so `survey dispensary` prints three of them on an
+    // ordinary screen — and it is Ambiguous, so on the very terminal the probe
+    // exists to detect it takes two columns and shifts the row. `8` for the
+    // shape, and nothing else claims it.
+    ('∞', '8'),
+];
+
 const fn narrowed(glyph: char) -> char {
-    match glyph {
-        // The rail's fault marker and its "this room is automated" arrow.
-        '‼' => '!',
-        '►' => '>',
-        '◄' => '<',
-        // The ward's six sigils.
-        '☼' => '*',
-        '♂' => 'm',
-        '♀' => 'f',
-        '♦' => 'd',
-        '♠' => 's',
-        // **The three states, kept three.** Filled, hollow, faint — a taken node
-        // from an open one from a locked one, and an aligned peg from an astray
-        // one from a loose socket.
-        '•' => '+',
-        '○' => 'o',
-        '·' => '.',
-        '■' => '#',
-        // The maze's way out, and the transcript's outcome markers. `»` is
-        // deliberately not `>`: that is `►`, and they share a screen.
-        'Ω' => 'U',
-        '√' => 'v',
-        '→' => '-',
-        '≈' => '~',
-        '¿' => '?',
-        '»' => '}',
-        // The fire's sparks, and the boot card's furniture.
-        '∙' => ',',
-        '°' => '^',
-        '⌂' => 'A',
-        '⌐' => '=',
-        '∟' => 'L',
-        other => other,
+    // **The table and the test's copy of it are one thing now.** They were two
+    // literals a human kept aligned, and they had already drifted: the match had
+    // 23 arms and the array 21, so `⌐` and `∟` were covered by no test at all.
+    // That is precisely how the first version shipped `•` and `·` both mapping
+    // to `.`, collapsing *taken* into *locked* and *aligned* into *loose* — the
+    // defect the injectivity test exists to prevent, on arms the test could not
+    // see.
+    let mut index = 0;
+    while index < SUBSTITUTIONS.len() {
+        if SUBSTITUTIONS[index].0 == glyph {
+            return SUBSTITUTIONS[index].1;
+        }
+        index += 1;
     }
+    glyph
 }
 
 /// Every glyph the substitution table covers, for the tests below.
@@ -245,11 +266,11 @@ const fn narrowed(glyph: char) -> char {
 /// with `?` before a frame ever reaches here (§19 records it being rejected for
 /// the progression tree). A stand-in for a glyph that cannot occur would be a
 /// row in a table nobody can reach.
+/// Every glyph the table covers — derived, not retyped.
 #[cfg(test)]
-const SUBSTITUTED: [char; 21] = [
-    '‼', '►', '◄', '☼', '♂', '♀', '♦', '♠', '•', '○', '·', '■', 'Ω', '√', '→', '≈', '¿', '»', '∙',
-    '°', '⌂',
-];
+fn substituted() -> Vec<char> {
+    SUBSTITUTIONS.iter().map(|(from, _)| *from).collect()
+}
 
 /// Set the terminal's pen to `ink`.
 ///
@@ -396,7 +417,7 @@ mod tests {
     fn a_wide_terminal_gets_glyphs_it_can_draw_in_one_column() {
         // Every substitution is one column, or the table is making the problem
         // it exists to solve.
-        for glyph in SUBSTITUTED {
+        for glyph in substituted() {
             let swapped = narrowed(glyph);
             assert!(
                 swapped.is_ascii_graphic(),
@@ -415,7 +436,7 @@ mod tests {
         // that cannot fire at all, arriving from the other side.
         let probe = crate::term::PROBE;
         assert!(
-            SUBSTITUTED.contains(&probe),
+            substituted().contains(&probe),
             "{probe:?} is what the terminal is measured with, but this table \
              leaves it alone — so a wide terminal would be detected and then \
              drawn to exactly as if it were narrow",
@@ -431,7 +452,7 @@ mod tests {
         // progression node identical to a *locked* one and an *aligned* ward peg
         // identical to a *loose* socket.
         let mut seen: Vec<char> = Vec::new();
-        for glyph in SUBSTITUTED {
+        for glyph in substituted() {
             let swapped = narrowed(glyph);
             assert!(
                 !seen.contains(&swapped),
@@ -548,11 +569,10 @@ mod tests {
             sim.step();
         }
 
-        let picture = orbs_render::PICTURE;
-        let screen = Screen {
-            grid,
-            ..Screen::for_window((u32::from(picture.0), u32::from(picture.1)), None)
-        };
+        // **The same constructor the running loop uses**, so this test cannot
+        // be checking a frame drawn in a mode the terminal is never in. The
+        // three open-coded copies of this disagreed on exactly that field.
+        let screen = Screen::windowless(grid, None);
         let mut panel = Panel::default();
         panel.refresh(&sim);
 

@@ -36,6 +36,18 @@ set -euo pipefail
 session="${ORBS_TMUX_SESSION:-orbs}"
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+# **A private socket, the way `play.sh` has one.** This drove the *default* tmux
+# server and unconditionally killed a session called `orbs` — the obvious name to
+# pick in this repository — so running it destroyed a developer's own long-lived
+# session with no warning and `|| true` hiding the complaint. Inheriting
+# `~/.tmux.conf` also meant `default-terminal`, `remain-on-exit` and the status
+# line differed per machine, so `see` and `ink` were not reproducible between
+# two people even though `dumps.sh` pins `ORBS_WIZARD` for exactly that reason.
+#
+# `-f /dev/null` is the other half: a server started from here must not read the
+# user's config either.
+tmux() { command tmux -L orbs-tui -f /dev/null "$@"; }
+
 case "${1:-}" in
 start)
   shift

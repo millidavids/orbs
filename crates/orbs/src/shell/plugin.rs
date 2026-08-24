@@ -1,13 +1,18 @@
 //! Registration for the window shell.
 
-use bevy::app::AppExit;
 use bevy::input::common_conditions::input_just_pressed;
 use bevy::input::keyboard::KeyboardInput;
 use bevy::prelude::*;
 use bevy::window::WindowResized;
 
+use super::commanding::{cycle_register, export_trace, quit, quit_requested, submit};
 use super::input::{SubmittedMessage, type_into_line};
+use super::reading::{scroll_back, scroll_forward, start_reading, stop_reading};
+use super::revealing::{drive_panes, drive_reveal, finish_reveal};
 use super::window::{cycle_mode, spawn_camera, track_window};
+/// Registration itself names `Tower` only through `resource_changed::<...>`,
+/// which is fully qualified; the tests below drive it directly.
+#[cfg(test)]
 use crate::sim::Tower;
 use orbs_shell::{Line, Linear, PaneTransition, Reveal, Screen};
 
@@ -244,208 +249,12 @@ impl Plugin for ShellPlugin {
     }
 }
 
-/// Let the newest output arrive, a character at a time.
-///
-/// Reads the scrollback rather than listening for a message: output is produced
-/// by the sim on a tick, and the frontend is a *caller* of the sim rather than
-/// something it can notify (rule 3). The record count growing is the signal.
-fn drive_reveal(tower: Res<Tower>, time: Res<Time>, mut reveal: ResMut<Reveal>) {
-    let records = tower.sim().scrollback().records();
-    let cells = tail_cells(records, reveal.settled_len());
-    reveal.observe(records.drawn_len(), cells);
-    reveal.advance(time.delta_secs());
-}
-
-/// Characters in the records added since `from`.
-///
-/// Measured through `to_line`, which is what the view draws, so the budget and
-/// the drawing agree about what a character is.
-fn tail_cells(records: &orbs_render::Records, from: usize) -> u16 {
-    let counted: usize = records
-        .iter()
-        .skip(from)
-        .map(|record| record.to_line().chars().count())
-        .sum();
-    u16::try_from(counted).unwrap_or(u16::MAX)
-}
-
-/// Any keystroke puts the whole of the output on screen at once.
-///
-/// §9's parity rule in practice: waiting must never be something a player is
-/// made to do, or the animation stops being flavour and starts being a cost that
-/// an accessibility setting could buy its way out of.
-fn finish_reveal(mut reveal: ResMut<Reveal>) {
-    reveal.finish();
-}
-
-/// Aim the pane transition at what the current grid asks for, and let it move.
-///
-/// The pane count was derived inside `paint` every frame, which is why a pane
-/// used to appear between one frame and the next. It is decided here instead so
-/// that a *change* in it is something with a beginning.
-fn drive_panes(time: Res<Time>, mut panes: ResMut<PaneTransition>) {
-    panes.retarget(PANES);
-    panes.advance(time.delta_secs());
-}
-
-/// Panes the main window holds outside a siege.
-///
-/// **One, since the tower rail replaced the telemetry pane** (§19, Phase 2). It
-/// was two, and the second held nine developer readings; the rail carries five
-/// of them in sixteen columns down the right, and the session pane gets the rest
-/// — **102 columns of body against the 58 it had**, which is what a transcript
-/// beside an instrument panel and a maze map actually wants.
-///
-/// **`F4` is visibly inert at one pane, and that is recorded rather than fixed.**
-/// §9 makes the focus mode a setting the player may change at any time and §19
-/// fixes the switch on `F4`; reassigning it to toggle the rail would re-litigate
-/// both. With one pane the two tilings are identical, so the key changes nothing
-/// until multiplexing returns the second pane in Phase 9a — at which point it
-/// reclaims its job with no code to change.
-///
-/// The decision the old constant encoded is not gone: `ORBS_DUMP` can still be
-/// handed a grid below the floor, and `dump.rs` still asks. §9 caps the count at
-/// four, and the siege multiplex is what raises it — which is why
-/// `PaneTransition` survives with nothing left to animate here.
-const PANES: u8 = 1;
-
-/// Hand a finished line to the sim.
-///
-/// The sim resolves it immediately and queues any command for the next tick —
-/// see `orbs_sim::session` for why those are two different clocks.
-fn submit(
-    mut lines: MessageReader<SubmittedMessage>,
-    mut tower: ResMut<Tower>,
-    mut scroll: ResMut<orbs_shell::Scroll>,
-) {
-    for submitted in lines.read() {
-        tower.submit(&submitted.line);
-        // Back to the newest output. The player acted; what they want to see is
-        // what it did, and leaving them in history to watch their own command
-        // scroll past off screen is the one place terminal convention is wrong
-        // here — a terminal has no orb answering on its own clock.
-        scroll.rewind();
-    }
-}
-
 // `page_rows` and `page_step` — how many *records* a screenful of transcript
 // holds — moved to `orbs_shell::page_step`. It is not a keyboard question: it is
 // what the transcript would fit, measured with the same `RecordView` the
 // transcript is drawn with, and a second measure of the same stream would page
-// by a different amount than it showed.
-
-/// The shared measurement, with this frontend's `Tower` unwrapped.
-fn page_step(screen: &Screen, tower: &Tower, back: usize) -> usize {
-    orbs_shell::page_step(screen, tower.sim(), back)
-}
-
-/// Hand the transcript the keyboard when `unfurl` has asked for it.
-///
-/// The sim owns the *decision* and the frontend owns the scroll, exactly as it
-/// does for the editor — see `execute::unfurl`. `Sim::unfurling` takes rather
-/// than reads, so this fires once per `unfurl` rather than every frame.
-///
-/// **It pages back on the way in.** Entering a reading mode that showed the same
-/// screen you were already looking at would leave the player pressing a key to
-/// find out whether the word did anything.
-fn start_reading(
-    mut tower: ResMut<Tower>,
-    mut scroll: ResMut<orbs_shell::Scroll>,
-    screen: Res<Screen>,
-) {
-    // Peeked first — see `editing::open_requested` for why reaching for `&mut`
-    // unconditionally defeats every `resource_changed::<Tower>` guard.
-    if !tower.is_unfurling() {
-        return;
-    }
-    tower.unfurling();
-    scroll.read();
-    let total = tower.sim().scrollback().records().drawn_len();
-    let step = page_step(&screen, &tower, scroll.back());
-    scroll.page(step, true, total);
-}
-
-/// Give the keyboard back to the prompt.
-///
-/// **Escape, the same as the editor.** One meaning in every mode the game has:
-/// step out of the one you are in. It deliberately does *not* scroll back to the
-/// newest output — a player who read back and pressed Escape wants to type, not
-/// to lose their place, and `PgDn` is still there to walk forward.
-fn stop_reading(mut scroll: ResMut<orbs_shell::Scroll>) {
-    scroll.stop_reading();
-}
-
-/// Look further back through the transcript.
-fn scroll_back(mut scroll: ResMut<orbs_shell::Scroll>, screen: Res<Screen>, tower: Res<Tower>) {
-    let total = tower.sim().scrollback().records().drawn_len();
-    let step = page_step(&screen, &tower, scroll.back());
-    scroll.page(step, true, total);
-}
-
-/// Come back toward the newest output.
-fn scroll_forward(mut scroll: ResMut<orbs_shell::Scroll>, screen: Res<Screen>, tower: Res<Tower>) {
-    let step = page_step(&screen, &tower, scroll.back());
-    scroll.page(step, false, 0);
-}
-
-/// Where the parse trace is written.
-///
-/// TSV beside the binary, per §19: no dependency, survives `grep`, pastes into a
-/// spreadsheet. One row per *candidate*, not per input, because the gate needs
-/// to know whether a miss was the verb or the argument.
-use orbs_shell::TRACE_PATH;
-
-/// Write the parse trace to disk.
-fn export_trace(tower: Res<Tower>) {
-    match orbs_shell::export_trace(tower.sim()) {
-        Ok(summary) => info!("{summary}"),
-        // A failed export must not take the session down with it — the tester
-        // whose run it was recording is still playing.
-        Err(error) => warn!("parse trace -> {TRACE_PATH} failed: {error}"),
-    }
-}
-
-/// Step the orb's tonal register.
-///
-/// Type a command with the register on and the echo comes back in a different
-/// face; then `peruse orb.log` and the log lines come back **plain**, because §3
-/// exempts the diagnostic surfaces from the eldritch treatment and only from
-/// that one. A sabotage tell is not exempt anywhere, which is the asymmetry the
-/// whole disjointness rule buys.
-fn cycle_register(mut tower: ResMut<Tower>) {
-    info!("register: {:?}", tower.cycle_register());
-}
-
-/// Leave the orb, because `F10` was pressed.
-fn quit(mut exit: MessageWriter<AppExit>) {
-    exit.write(AppExit::Success);
-}
-
-/// Leave the orb, because the word was typed.
-///
-/// The fifth take-once handshake, beside `scribe`, `unfurl`, `weave` and
-/// `wander`: the sim records the decision and the frontend decides what leaving
-/// *means*. Here it is an `AppExit`; in the terminal build it is raw mode being
-/// put back.
-fn quit_requested(mut tower: ResMut<Tower>, mut exit: MessageWriter<AppExit>) {
-    // **Peeked before it is taken**, exactly as the other four handshakes are.
-    // `quitting` needs `&mut`, and reaching through `ResMut` for it stamps
-    // `Tower`'s change tick — and this system's own run condition is
-    // `resource_changed::<Tower>`, so from the first frame Tower changed it
-    // re-armed itself for ever and dragged `refresh_panel`, `suggest` and the
-    // four `open_requested` systems back to frame rate with it. `Panel::refresh`
-    // calls `Sim::briefs`, which walks every built room and builds two
-    // `QueryState`s per call.
-    //
-    // `editing::open_requested`'s comment records this happening once already.
-    // The peek that stops it was added with `quit` and then called by nothing.
-    if !tower.is_quitting() {
-        return;
-    }
-    if tower.quitting() {
-        exit.write(AppExit::Success);
-    }
-}
+// by a different amount than it showed. This frontend's wrapper is in
+// `reading.rs` with the keys that use it.
 
 /// Typing, end to end, with no window and no GPU.
 ///

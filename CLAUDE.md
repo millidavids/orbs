@@ -351,52 +351,61 @@ is hit depend on prior draws and invalidate every existing replay. The second is
 it cannot perturb the stream. A second draw taken only *when* a swap fires would —
 which is why the pile is chosen from the quotient of the roll that already fired.
 
-### The lens — a code-breaker, and the orb deduces nothing
+### The lens — Mastermind, and the orb deduces nothing
 
-**Four sigils of six, no repeats, 360 codes.** `probe` opens a reading if none is
-open and presses the aperture; `dial <socket> <sigil>` turns one dial and is
-free. **Both are instant and neither costs the tower anything** — a press was
-twelve ticks of the one production slot, which is ROADMAP's *"a read is not a
-brew"*, and that scarcity is withdrawn (§19). So `meditate` after a probe is no
-longer needed anywhere, and a bound solver runs beside a full brewing loop with no
-contention at all.
+**Four sigils of six, repeats allowed, 1296 codes.** `probe` opens a reading if
+none is open and presses the aperture; `dial <socket> <sigil>` turns one dial,
+`dial <socket>` steps it round the six. **All of it is instant and none of it
+costs the tower anything** — a press was twelve ticks of the one production slot,
+which is ROADMAP's *"a read is not a brew"*, and that scarcity is withdrawn
+(§19). So `meditate` after a probe is no longer needed anywhere, and a bound
+solver runs beside a full brewing loop with no contention at all.
 
-**The orb keeps no candidate set.** That is the rule the whole domain rests on:
-"press anything still consistent" solves in 4.24 presses against the best play's
-4.08, so an orb that does the bookkeeping has done the puzzle. §19 records the
-first design deleting its own puzzle exactly that way.
+**It was 360 codes with no repeats, and everything wrong with the domain came out
+of that** (§19, `0.3.22`). With no repeats a socket often cannot take the sigil
+you want because another holds it, so a dial had to *exchange* the two — and a
+dial that moves two sockets makes `aligned` rising unattributable, which is why
+the ward needed a **ratchet**, a **settle-lock** and a per-socket **`untried`**
+count to be solvable at all. All three answer *is this position correct?*, which
+is the one question a codemaker never answers. They are gone.
 
-**Two channels onto one ward.** A player reads `aligned` and `astray` and
-deduces; a spell reads `closer`/`level`/`further`, `marks` and `settled` and
-hill-climbs. 4.14 presses against 22.8.
+**The orb keeps no candidate set and says nothing about any one socket.** That is
+the rule the whole domain rests on: Mastermind's entire difficulty is the
+bookkeeping, and a machine gets bookkeeping for free.
+
+**Two channels onto one ward, and the spell's is strictly weaker.** A player
+reads `aligned` and `astray` as **numbers** and deduces; a spell reads only which
+way each moved — `closer`/`level`/`further` and `richer`/`unchanged`/`poorer`. The
+deltas are derivable from the counts and not the reverse. **5.15 presses against
+11.93.**
 
 ```bash
-# A ward, pressed and dialled. `survey` each of the three kinds of reading.
+# A ward, pressed and dialled. `survey` both kinds of reading.
 # **No `meditate`**: a press answers on the tick it is typed (§19).
 ORBS_SEED=3 ORBS_BOOT=0 ORBS_DUMP="attend lens; probe; \
-  dial second borax; probe; survey prism; survey second; \
-  survey borax" cargo run -p orbs
+  dial second borax; probe; survey prism; survey second" cargo run -p orbs
 ```
 ```text
-prism    aligned = 0   astray = 2   level   spent = 2
-second   alum   loose   marks = 1    ← borax was dialled in and snapped back
-borax    marks = 2
+prism    aligned = 0   astray = 1   level   spent = 2
+         steady                     ← the second delta: astray did not move either
+second   borax                      ← what is in it. that is the whole answer
 ```
 
-**A socket reports `marks` too, and that count is what a stateless ladder walks.**
-`dial` tallies the socket even when nothing moves, so a rung guarded on a socket
-being untried fires once rather than for ever — the defect §19 records as *"the
-ladder fired one rung for ever"*, when every rung asked the same `loose`.
+**`survey second` says `borax` and nothing else, and that is the point.** It used
+to add `loose`/`settled` and two tallies; a socket now reports what you put in it,
+because whether it is *right* is your bookkeeping.
 
-**`survey second` reading `alum` after you dialled `borax` is the ratchet, not a
-bug.** A press that does not gain snaps the aperture back — the undo §8's
-variable-free language cannot express, and what makes a blind ladder converge. It
-never blocks correct play, because putting the right sigil in its own socket
-always gains.
+**A dial moves one socket and only one, and a sigil may sit in two.** This is
+what repeats bought and it is the thing to check when touching `seat`:
 
-**A settled socket refuses a dial**, and that is the other half: a socket that
-gained *as the only one that moved* is provably right, so the ladder is barred
-from disturbing it. `dial_held` is what you get.
+```bash
+ORBS_SEED=3 ORBS_BOOT=0 ORBS_DUMP="attend lens; probe; dial first alum; \
+  survey first; survey second" cargo run -p orbs   # both read `alum`
+```
+
+**A press stands.** `aligned` falling is now observable, and it is the single most
+informative thing the lens says: only a socket that *was* right can make it drop
+when it alone moved. That is what the restore rung in `breaking` reads.
 
 **There is no `meditate` in a lens See-it line any more.** Every one of them used
 to carry `meditate 13` — one tick past a twelve-tick press — and a press is instant
@@ -406,6 +415,28 @@ now. A dump that still waits is testing the wait.
 `sea` reaches `sift`'s `search`, and `tests/naming.rs` allows no prefix
 exemption. The domain is still scrying; the words are `probe` and `dial`.
 
+**`tests/naming.rs` sweeps *readings* now, and it failed on its first run.** A
+reading is a `NounKind::Sense` and `NounKind::Any` reaches one, so a reading sits
+in the way of every room's vocabulary — §19 records `purge grind` fuzzy-matching
+`gained`. Nothing swept them until `0.3.22`; five collisions turned up at once.
+Two were the ward's new astray triple and are renamed (`fuller`→`richer`,
+`steady`→`unchanged`). **The other three were live and are fixed in the resolver
+rather than by renaming** — `purge walk` echoed `purge wall`, and `recall edit`
+explained the maze's way out to somebody asking about the spell editor.
+
+**Two widenings close the class**, both of rules that already existed:
+`Scene::knowing` holds **every verb word**, so a word the game knows can never
+fuzz into a noun; and every **one-word synonym** is a `NounKind::Command`, so
+`recall walk` reaches `follow`'s page. Reading-vs-reading is still the worse
+collision and is still only caught by looking — `thicker`/`thinner` scores 715.
+
+**A known word may still *abbreviate*, and that is the trap.** Adding the verb
+words to `knowing` made `invoke check` unreachable — `check` is one of `verify`'s
+words and the spell is `check.spell` — and six spell tests went red at once.
+Prefixing is not fuzzing, so `Scene::candidates` exempts a phrase that *starts*
+the noun's name. Touch `knowing` and run `cargo test -p orbs-sim --lib
+tower::spell` before believing it.
+
 **The board draws whenever a reading is open**, not when a word is typed — the
 map's rule, and what makes a bound solver watchable. Columns never rows, and it
 splits *after* the instrument panel.
@@ -414,14 +445,19 @@ splits *after* the instrument panel.
 ┌ ward ─────────────────────────────────┐
 │    first second  third fourth  answer │   ← the words `dial` takes
 │ 1    ☼      ○      ♂      ♀   ○ ○     │   ← a press: the figure, then its pegs
-│ 2    ☼      ♂      ○      ♀   ○ ○     │
+│ 2    ☼      ♦      ♂      ♀   • ○ ○   │
+│ 3    ♦      ♦      ♂      ♀   • ○ ○ ○ │   ← a sigil twice, and four pegs
 │───────────────────────────────────────│
-│ →    ☼      ○      ♀      ♂   · · · · │   ← the aperture, and which are held
+│ →    ♦      ♦      ♂      ♀           │   ← the aperture: what goes next
 │                                       │
 │ ☼ nitre   ○ alum    ♂ borax           │   ← without this, `♦` is unnameable
 │ ♀ quartz  ♦ pewter  ♠ ochre           │
 └───────────────────────────────────────┘
 ```
+
+**The aperture row carried `■ · · ·` and does not.** Those were the sockets the
+orb had proved right; the trailing blanks are the peg column, kept so every row
+is the same shape and a reader can compare two presses down a column.
 
 **39 cells, and it was 10** (§19). The compact version was correct and unreadable:
 nothing said which column was which socket, so a player counted along the row
@@ -429,10 +465,11 @@ before typing `dial second borax`, and nothing anywhere said `♦` was `pewter`.
 name tables come from the sim through `Ward::view` — they are content, and
 `orbs-render` may not depend on `orbs-sim`.
 
-**The gutter counts the real press, not the row.** The sheet still caps at the last
-twelve of a fifty-one press ladder; numbering those `1..12` would say the solve had
-just begun. It still fits the 80×22 floor beside a transcript, and still refuses
-whole rather than truncating.
+**The gutter counts the real press, not the row.** The sheet caps at the last
+twelve; numbering those `1..12` would say a long solve had just begun. It still
+fits the 80×22 floor beside a transcript, and still refuses whole rather than
+truncating. Twelve is chosen against hand play — the worst deducing solve over
+all 1296 codes is nine presses, so a person's whole reading always fits.
 
 **Six glyphs, not six colours** (§14): the tint is enrichment and the shape
 carries the identity, so the sheet reads in a dump. `▪` is not in CP437 and was
@@ -453,6 +490,7 @@ ORBS_SEED=3 ORBS_BOOT=0 ORBS_DUMP="attend lens; probe; \
 ```text
  5 mix phlegm            ← somebody else's laboratory
 10 distil dregs          ← a recipe you do not have. that is the hint, not a leak
+16 digest ground-mugwort
 ```
 
 **Three recipes are `secret = true` and have to be found.** `debug_learn` takes
@@ -498,45 +536,63 @@ unfiltered** — `execute::scroll`'s verdant unlock derives base reagents as *"i
 the vocabulary and made by nothing"*, so a filtered `Recipes::outputs` would
 offer an undiscovered potion as an inexhaustible herb.
 
-**`debug_spell breaking` is the solver — four rungs, one per socket.**
+**`debug_spell breaking` is the solver — one sweep, four socket phases.**
 
 ```
 probe
-repeat until the prism is idle
-if the first has 1 or more untried
+if the prism is working              ← ...and the same for second, third, fourth
 dial first
-else                                  ← ...and the same for second, third, fourth
+probe
+if the prism has further             ← it was already right
+dial first nitre                     ← restore, and re-press to re-sync
+probe
+else
+repeat until not the prism has level
+dial first
+probe
+end
+end
+end
 ```
 
 **`dial <socket>` with no sigil is what makes that possible** (§19). A spell has
 no variables, so it cannot name the sigil a socket has not tried — bare, the ward
-picks it, and `untried` is the count the guard reads. Without it the only shape
-available was six rungs per socket using the mark count as an index: **24 rungs,
-105 lines**, a spell nobody writes by hand.
+steps it round. **It was 24 rungs, then 4, and it is 4 phases of 3.**
 
-Three traps, all worth knowing before writing another lens spell:
+**Termination is a proof, not a budget.** One socket moves, so `aligned` can only
+change because of it; stepping it cyclically reaches the code's sigil within five
+and says so on arrival. Over all 1296 codes: **11.93 presses, worst 21**, against
+a deducing player's 5.15 and blind guessing's 648.
+
+**The restore rung is worth 1.9 presses** — a socket already right pays two turns
+instead of six — and **the re-press after it is load-bearing**: the deltas are
+measured against the *previous press*, so a restore with no press leaves the next
+phase comparing against a figure that was never sent. 924 of 1296 without it.
+
+Four traps, all worth knowing before writing another lens spell:
 
 - **`is empty` does not mean *no ward*.** `spell::watch` answers `empty` by
   asking whether a node has *children*, and a prism's children are its readings —
-  none until the first press lands. An open ward reports **`working`**, so the
-  bound is `repeat until the prism is idle`.
-- **Guard on `untried`, not on `loose` alone.** Every rung for a socket asks the
-  same `loose` question, so a ladder guarded only on that fires its first rung for
-  ever — and that rung dials a sigil the opening aperture already holds, so nothing
-  moves and nothing presses.
-- **A candidate is spent even when nothing turns.** `dial first` on a socket that
-  already holds the chosen sigil says `dial_held` and still lowers `untried` — a
-  ladder that counted only *movement* would aim at that socket for ever.
+  none until the first press lands. An open ward reports **`working`**.
+- **`until not ... has level`, never `until ... has closer`.** A ward that gives
+  mid-sweep publishes *nothing*, so `has closer` answers a flat no and the loop
+  goes round for ever — probing a fresh ward open and dialling into it from the
+  middle of a sweep. `level` is what the walk waits to stop seeing, and its
+  **absence** stops the loop the same way its answer does. Found by running it.
+- **Wrap each phase in `if the prism is working`** for the other half of that:
+  the last socket to arrive can be the second, and every phase after it would be
+  dialling at nothing. One solve in six.
+- **`has closer`, not `is closer`.** `Condition::Is` takes a closed three-word
+  vocabulary — idle/free/still, working/busy/running, empty/bare — so a *reading*
+  is always asked for with `has`.
 
 **`MAX_MEDITATE` is 3600, so a long run is several commands.** `meditate 9600`
 silently becomes 3600, which is how a first pass at measuring this "found" a
 plateau that was the cap. §19 records the retraction.
 
-**`invoke` solves one ward; `bind` is the faucet.** `repeat until the prism is
-idle` exits the moment the ward closes — it only lapped before because a press was
-*in flight* for twelve ticks when the guard was asked, so the invocation kept going
-by accident (§19). A binding re-casts a spell that has run off the end, which is
-the shape §8 already describes: an invocation is an act, a binding is standing
+**`invoke` solves one ward; `bind` is the faucet.** A sweep breaks the ward in
+front of it and stops. A binding re-casts a spell that has run off the end, which
+is the shape §8 already describes: an invocation is an act, a binding is standing
 automation.
 
 ```bash
@@ -544,21 +600,28 @@ automation.
 ORBS_SEED=3 ORBS_BOOT=0 ORBS_DUMP="attend lens; probe; debug_ward; probe; \
   probe; debug_ward; probe; debug_spell breaking" \
   ORBS_THEN="bind breaking; meditate 3600; status" cargo run -p orbs
-```
-→ `experience 268`, and it is **linear** — a faucet that stops is this domain's
-failure mode, not a crash. `cargo test -p orbs-sim --lib tower::ward` drives all
-360 codes for both halves of that: the ladder always has a socket left to turn
-(`Ward::replenish`), and the four-rung shape breaks every code.
 
-**It runs beside a brew with no contention at all**, because a press takes no slot.
-About **0.07/tick** against clarity's 0.140 — half, and additive rather than
-competing. It was a third of that, 12 ticks in every 13, when a press was work.
+# ...and one ward, watched end to end — fifteen presses on this seed.
+ORBS_SEED=3 ORBS_BOOT=0 ORBS_GRID=200x45 \
+  ORBS_DUMP="attend lens; debug_spell breaking" \
+  ORBS_THEN="invoke breaking; meditate 200; peruse lens.log" cargo run -p orbs
+```
+→ `experience 646`, and it is **linear** — a faucet that stops is this domain's
+failure mode, not a crash.
+
+**It runs beside a brew with no contention at all**, because a press takes no
+slot. `orbs-balance`'s `scrying` policy reads **0.268/tick** against clarity's
+0.140, and a real bound `breaking` ~0.18 — the gap is §8's interpreter spending a
+tick on every `if`, `else` and `end`. **Additive rather than competing**, which is
+what makes a rate above the flagship a decision rather than a defect (§19).
 
 ```bash
-cargo test -p orbs-sim --test ward        # a blind ladder solving through the real verbs
+cargo test -p orbs-sim --test ward        # the sweep, solving through the real verbs
 cargo test -p orbs-sim --test secrets     # the gate, and the verdant regression
-cargo test -p orbs-sim --lib tower::ward  # the model: 360 codes, the proofs
+cargo test -p orbs-sim --lib tower::ward  # the model: 1296 codes, the proofs
 cargo run -p orbs-render --example screens   # the sheet, no sim and no GPU
+cargo run -p orbs-balance -- run scrying --ticks 7200 --why
+scripts/play.sh lens::                    # ten scenarios, through a real tmux game
 ```
 
 ### The tower rail — every domain at a glance, and no telemetry pane
@@ -628,7 +691,7 @@ switch there, so reassigning it to toggle the rail would re-litigate both.
 ### `orbs-balance` — the economy, looked at rather than argued
 
 **Every duration in the game is a placeholder and this is what sweeps them.** It
-drives a real `Sim` through `submit` with five synthetic players and prints
+drives a real `Sim` through `submit` with six synthetic players and prints
 experience per tick against a pinned reference. It found four disagreements with
 DESIGN.md on its first clean run (§19), so treat a number in the design as an
 *idealisation* until this has been run against it.
@@ -653,7 +716,7 @@ swap moves a rate by more than its tolerance band and the table flags the seed
 rather than the game.
 
 **A `<-- drifted` marker is only a pin while somebody reads the column, so
-`tests/agrees.rs` reads it.** It runs the four pinned policies through the real
+`tests/agrees.rs` reads it.** It runs the five pinned policies through the real
 `drive::run` and fails when a measurement leaves its band. It exists because the
 first version of that file — named for this crate's See-it claim — drove `Sim` by
 hand in both its tests and would have passed with the whole harness deleted. The
@@ -686,6 +749,18 @@ a two-hour sweep. Only the sentence tells a wait from a refusal, which is why
 **A maze is one sample per seed** — `stacks` reads 0.0067 at seeds 0 and 11 and
 0.0144 at seed 3, so it is deliberately absent from the pinned table. Sweep it
 across several `--seed`s or conclude nothing.
+
+**A ward is not**, and the contrast is worth knowing: `scrying` reads 0.2656 to
+0.2703 across the same four seeds, because a two-hour run breaks hundreds of
+wards and the draw averages out. It is pinned at **0.268**.
+
+**Two policies model a *spell* by typing its commands, and neither pays the
+interpreter.** `stacks` and `scrying` both issue one command per tick, where a
+real bound spell also spends a tick on every `if`, `else` and `end` — `breaking`
+measures ~0.18 against the policy's 0.268. That is §19's *"the harness has no
+player"* applied to execution: a policy is a ceiling, and the column says what
+the loop is worth rather than what the language costs. **`bound` is the one that
+pays it**, which is the next paragraph.
 
 **`bound` is what measures the script engine, and nothing did before it.** It is
 `grind`'s loop again — the same two commands for ever — run by a bound spell
@@ -1055,9 +1130,20 @@ fails the build both ways, because a verb claiming an anchor nothing declares
 resolves in *no* room. And the refusal names the fixture now —
 `there is no stacks here to wander with`, from `tower::fixture_of`.
 
-**Check it in every room, and at the floor.** Primer plus listing fills the 80×22
-transcript exactly, and the 70-cell width lint is what keeps a line from wrapping
-there:
+**Check it in every room, and at the floor.** The 70-cell width lint keeps a
+single line from wrapping there.
+
+**Four rooms fit 80×22 whole; the laboratory and the archive do not, and that is
+not a defect.** Measured: the laboratory's page wants **26 rows** — it is the one
+room whose transcript is narrowed by the instrument panel, *and* the one with
+five extra verbs — and the archive is one row over. The primer lines are already
+inside the width lint, so the only way to make them fit would be to stop offering
+a verb, which is worse than scrolling. `help` is a record like any other and
+`PgUp` reaches it.
+
+This block used to claim the page "fills the 80×22 transcript exactly". It never
+did for the laboratory, which is the worst case and therefore the one a See-it
+line is least likely to be run against:
 
 ```bash
 for room in laboratory archive lens grimoire arsenal tower; do

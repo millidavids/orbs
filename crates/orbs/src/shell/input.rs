@@ -411,7 +411,7 @@ pub(crate) fn type_into_line(
 /// the space bar, and every multi-word command in §6.1 becomes untypeable.
 /// Nothing in a test suite catches that; it dies on the first keystroke a person
 /// types. `logical_key` is consulted for the named keys and nothing else.
-fn pressed(event: &KeyboardInput) -> Option<orbs_shell::Key> {
+pub(crate) fn pressed(event: &KeyboardInput) -> Option<orbs_shell::Key> {
     Some(match &event.logical_key {
         Key::Enter => orbs_shell::Key::Enter,
         Key::Backspace => orbs_shell::Key::Backspace,

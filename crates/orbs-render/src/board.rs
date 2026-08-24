@@ -45,11 +45,14 @@ pub struct Board {
     /// Every press so far, oldest first.
     pub attempts: Vec<Attempt>,
     /// What the next press will send.
+    ///
+    /// **A sigil may repeat here.** The ward draws four of six with repeats
+    /// allowed — 1296 codes — so two sockets holding the same glyph is an
+    /// ordinary figure rather than a bug in the painter.
     pub aperture: [usize; 4],
-    /// Which sockets are held, and refuse a dial.
-    pub settled: [bool; 4],
-    /// Presses each sigil has taken part in.
-    pub marks: [u32; 6],
+    // `settled` and `marks` are gone. The first said which sockets the *orb* had
+    // proved, which is the one thing Mastermind never tells you; the second was
+    // a per-sigil tally the player can keep themselves. §19 records the change.
     /// What the sockets are called, left to right.
     ///
     /// **Handed in by the sim, not held here.** `dial second borax` names a socket
@@ -86,18 +89,15 @@ pub const TINTS: [Tint; 6] = [
     Tint::Red,
 ];
 
-/// A socket the ward has settled.
-///
-/// A settled socket refuses a dial (`tower::ward`), so the mark is not
-/// decoration — it is the one thing on the board that changes what a player may
-/// *do*.
-///
-/// `■` is CP437 0xFE. `▪` is the obvious choice and is **not** in the
-/// repertoire — the same class of miss §19 records finding in DESIGN.md's own
-/// boot text, caught here by the test below rather than by a player.
-const HELD: char = '■';
-/// A socket still free to turn.
-const LOOSE: char = '·';
+// `HELD` (`■`) and `LOOSE` (`·`) drew the settle marks under the aperture. They
+// are gone with the mechanic: the orb no longer decides that a socket is right,
+// so there is nothing to mark. §19 records why — the marks were the orb
+// answering *"is this position correct?"*, which is the one question Mastermind
+// never answers.
+//
+// Worth keeping the note that cost something to learn: `■` is CP437 0xFE, and
+// `▪` — the obvious choice — is **not** in the repertoire. The next glyph added
+// to this file should be checked the same way.
 
 /// The pegs an answer is drawn with.
 ///
@@ -143,15 +143,15 @@ impl Board {
     /// The most presses a sheet shows at once.
     ///
     /// **A cap, because a sheet with no cap disappears.** `Ward::history` grows
-    /// once per press and a blind ladder averages 23 with a measured worst of 51 —
+    /// once per press and the writable spell averages 11.9 with a worst of 21 —
     /// past the pane's height the whole picture was refused, so it vanished with
     /// no explanation part-way through exactly the long solve it exists to make
     /// watchable.
     ///
     /// Twelve is what a deducing player ever needs to see: the worst hand-played
-    /// solve over all 360 codes is six presses, so a person's whole reading fits
-    /// twice over. Beyond that the older rows are the ladder's, and they are in
-    /// `lens.log` — a sheet is a working surface, not an archive.
+    /// solve over all 1296 codes is nine presses, so a person's whole reading
+    /// fits with room to spare. Beyond that the older rows are the spell's, and
+    /// they are in `lens.log` — a sheet is a working surface, not an archive.
     pub const SHOWN: usize = 12;
 
     /// The presses the sheet draws: the most recent [`SHOWN`](Self::SHOWN).
@@ -315,17 +315,17 @@ impl Board {
             row.extend(sigil_cell(sigil));
         }
 
-        // The settle marks sit under the pegs, in the same four columns, so a
-        // held socket lines up with the peg that held it.
-        for socket in 0..4usize {
-            let held = self.settled.get(socket).copied().unwrap_or(false);
-            row.push(if held {
-                (HELD, Style::SUCCESS, None)
-            } else {
-                (LOOSE, Style::DIM, None)
-            });
-            row.push((' ', Style::DIM, None));
-        }
+        // **No settle marks any more.** Four `■`/`·` cells used to sit under the
+        // pegs saying which sockets the orb had proved correct — which is the
+        // one thing Mastermind never tells you, and the reason the whole domain
+        // was rebuilt (§19). The aperture row is now just what the next press
+        // will send.
+        //
+        // **Padded to the full width all the same**, exactly as the legend rows
+        // are: every row being the same shape is what lets a reader compare two
+        // presses by looking down a column, and it is what the peg column's
+        // cells were incidentally providing here.
+        row.resize(usize::from(Self::COLS), (' ', Style::NORMAL, None));
         row
     }
 
@@ -423,8 +423,6 @@ mod tests {
                 },
             ],
             aperture: [0, 1, 3, 2],
-            settled: [true, false, false, false],
-            marks: [2, 2, 2, 2, 0, 0],
             sockets: NAMED_SOCKETS,
             sigils: NAMED_SIGILS,
         }
@@ -445,7 +443,7 @@ mod tests {
                 "{glyph:?} is not in the repertoire",
             );
         }
-        for glyph in [HELD, LOOSE, ALIGNED, ASTRAY] {
+        for glyph in [ALIGNED, ASTRAY] {
             assert!(
                 crate::cp437::is_renderable(glyph),
                 "{glyph:?} is not drawable",
@@ -515,15 +513,18 @@ mod tests {
     }
 
     #[test]
-    fn the_aperture_follows_a_rule_and_carries_the_settle_marks() {
+    fn the_aperture_follows_a_rule_and_is_only_what_will_be_sent() {
         let board = board();
         let rule = board
             .line(3)
             .expect("a rule between tries and the aperture");
         assert!(rule.chars().all(|glyph| glyph == '─'), "{rule:?}");
 
+        // It used to end `■ · · ·` — the sockets the orb had proved right, which
+        // is the one thing a codemaker never says (§19). The trailing blanks are
+        // the peg column, kept so every row is the same shape.
         let row = board.line(4).expect("the aperture has a row");
-        assert_eq!(row, " →    ☼      ○      ♀      ♂   ■ · · · ", "{row:?}");
+        assert_eq!(row, " →    ☼      ○      ♀      ♂           ", "{row:?}");
     }
 
     #[test]
@@ -563,8 +564,9 @@ mod tests {
         // **The failure this cap exists for.** `split` refuses whole rather than
         // clipping, so an uncapped sheet vanished with no explanation once the
         // presses outgrew the pane — part-way through the long solve the picture
-        // is *for*. A blind ladder averages 23 presses and its measured worst is
-        // 51.
+        // is *for*. The writable spell averages 11.9 presses and its worst over
+        // the 1296 codes is 21; the fifty-one below is headroom, and it was the
+        // measured worst under the rules the domain used to have.
         let mut board = board();
         board.attempts = (0..51)
             .map(|n| Attempt {

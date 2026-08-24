@@ -38,8 +38,8 @@ pub use node::{
 };
 pub use panel::{Craft, Instrument, Meter, State, Unit, instruments, instruments_in, state_at};
 pub use sabotage::{
-    Log, Poisoned, Substituted, drift, emit_lines, poison, poisoned, restore, settling, substitute,
-    substitution, verify,
+    Log, Poisoned, Substituted, claimed, drift, emit_lines, poison, poisoned, restore, settling,
+    substitute, substitution, verify,
 };
 pub use scene::{Topics, rebuild, scene_at};
 pub use stock::{Stock, give, give_endless, held, holdings, take};

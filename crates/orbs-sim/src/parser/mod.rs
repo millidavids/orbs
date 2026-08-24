@@ -57,4 +57,4 @@ pub use spellword::{
 };
 pub use trace::{Outcome, ParseLog, ParseRecord};
 pub use verb::{Group, NounKind, Slot, Verb};
-pub use vocabulary::{Register, SYNONYMS, Synonym, synonyms_of};
+pub use vocabulary::{Register, SYNONYMS, Synonym, single_words, synonyms_of, verb_of_word};

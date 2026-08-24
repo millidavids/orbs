@@ -3023,6 +3023,13 @@ diffs them on every push.
 
 ### Scrying is a code-breaker, and the first design deleted its own puzzle
 
+> **Half-superseded — see *"The lens is Mastermind now"* below.** The vice this
+> entry names is standing and is the reason the domain exists in this shape. What
+> is withdrawn is the **no-repeats rule** and everything built on it: the
+> exchange, the ratchet, the settle-lock, `untried`, and every number measured
+> over 360 codes. Kept whole rather than rewritten, because the second design's
+> argument only reads with the first one next to it.
+
 **§10's form for this domain was one line — *"deduction: parse noisy logs to find
 truth"* — and §10 says outright that the forms are a table, not a design.** The
 mechanic is now a ward: a far wizard's orb sealed with four sigils drawn from
@@ -3050,6 +3057,10 @@ buys 0.09 presses out of 4.24, and it means the orb is deducing.
 
 #### The fix: two channels onto one ward
 
+> **The shape stands; the contents are superseded.** A spell reads only
+> `closer`/`level`/`further` and `richer`/`unchanged`/`poorer` now — `marks` and
+> `settled` are gone — and the presses are 5.15 against 11.93 over 1296 codes.
+
 | | The player | A spell |
 |---|---|---|
 | Reads | `aligned`, `astray` | `closer`/`level`/`further`, `marks`, `settled` |
@@ -3066,6 +3077,11 @@ runs while you are in the laboratory, which is §8's argument for automation
 landing through concurrency rather than speed.
 
 #### The ratchet, and the settle-lock
+
+> **Superseded in full.** Both are gone with the no-repeats rule that forced
+> them. The reasoning below is correct *given* an exchange, which is what makes
+> it worth keeping: it is the record of a prop being derived honestly from a rule
+> that should not have been there.
 
 **A press that does not gain snaps the aperture back.** This is the undo §8's
 variable-free language cannot express: without it a blind ladder destroys the
@@ -3121,11 +3137,22 @@ holding it would starve every other spell. A press is twelve ticks and gives the
 slot back between presses — so the lens can honour ROADMAP's stated scarcity,
 *"a read is not a brew"*, where the archive could not.
 
+> **Superseded: `PRESS_TICKS` is 0 and *"a read is not a brew"* is withdrawn.** A
+> press answers on the tick it is typed and takes no slot at all, so the lens
+> does not compete with the laboratory for anything — which is what makes the
+> faucet *additive* rather than an alternative. The conclusion held; the
+> arithmetic under it did not.
+
 **A ward between presses is `charged`, not `fouled`.** It holds no stock, so the
 panel's fall-through read *"holding only what the last run fouled it with"* and
 the prism reported a mess it did not have.
 
 #### What a solve pays
+
+> **The tier stands and the rates are superseded.** `prism = 8` is unchanged;
+> par is 6 rather than 5, hand play is 5.15 presses over 1296 codes, and a bound
+> solver reads 0.268 rather than 0.022 — see *"The faucet roughly quadrupled"*
+> below. The twelve-tick press this arithmetic assumes is also gone.
 
 `prism = 8`, the alembic's tier, and the yield curve is much gentler than the
 first draft's. Halving per press past par lands a 23-press ladder on a floor of 1,
@@ -3194,6 +3221,16 @@ Phase 8, where §5.1 puts adversarial aberrations — with no siege they have no
 producer, and an item that cannot close does not belong in a numbered phase.
 
 ### The solver spell, and the two words it taught the lens
+
+> **Half-superseded.** The `is empty` finding is standing and is why every
+> instrument bound is `idle`. Everything about the *ladder* — the per-socket
+> tally, the settled socket that is deliberately not marked, the twelve-ticks-in-
+> thirteen occupancy below — went with the ratchet; see *"The lens is Mastermind
+> now"*. `breaking` is a four-socket sweep now, and its bound is
+> `until not the prism has level` for a reason this entry could not have found.
+>
+> **It was 24 rungs, then 4, and it is 4 phases of 3.** The middle version is the
+> one this entry describes.
 
 `debug_spell breaking` is 24 rungs, one per socket and sigil, and writing it
 found two things the design had assumed rather than checked.
@@ -9006,6 +9043,14 @@ Two things follow, and both are balance facts rather than opinions:
   0.2460, grind 0.0958), because no policy scrys. The harness cannot see this
   change, which is exactly why the number above is stated here.
 
+> **The second bullet is the one worth learning from, and it is fixed.** *"The
+> harness cannot see this change, which is exactly why the number above is stated
+> here"* is a sentence admitting the instrument had a hole in it, and the fix was
+> to state a number in prose instead of closing the hole. The ward rebuild then
+> moved that number to **0.268** and nothing failed. There is a `scrying` policy
+> now. **A sentence in a decisions log is not an instrument** — if a claim is a
+> rate, pin it where a test reads it.
+
 Hand-play is the part that plainly improves: deduction over four sigils should not
 wait twelve seconds per press, and now it does not.
 
@@ -9028,6 +9073,15 @@ domain's rates were derived against, and pricing a press again should change one
 line rather than reintroduce a concept.
 
 ### `dial <socket>` with no sigil — the state that makes the ward scriptable
+
+> **Half-superseded — see *"The lens is Mastermind now"*.** The **verb** is
+> standing and is still what makes the ward scriptable: a variable-free spell
+> cannot name the sigil it has not tried. What is withdrawn is the *state behind
+> it* — `Ward::tried`, `untried`, `replenish` and the clear-on-gain rule are all
+> gone, and a bare dial is now a plain cyclic step. The socket published `untried`
+> as a count, and a count that falls to nought exactly when a socket is proved
+> right is the orb answering *is this position correct?*, which is what the
+> rebuild deleted. The measurements below are over 360 codes and do not carry.
 
 **The question was whether the lens can really be scripted.** It could, and the
 script was twenty-four rungs across eighty lines. That is a spell nobody writes; it
@@ -9121,13 +9175,19 @@ pairing every glyph with its word.
 ```
     first second  third fourth  answer
  1    ☼      ○      ♂      ♀   ○ ○
- 2    ☼      ♂      ○      ♀   ○ ○
- 3    ☼      ○      ♀      ♂   • ○
+ 2    ☼      ♦      ♂      ♀   • ○ ○
+ 3    ♦      ♦      ♂      ♀   • ○ ○ ○
 ───────────────────────────────────────
- →    ☼      ○      ♀      ♂   · · · ·
+ →    ♦      ♦      ♂      ♀
  ☼ nitre   ○ alum    ♂ borax
  ♀ quartz  ♦ pewter  ♠ ochre
 ```
+
+> **The aperture row carried `· · · ·` settle marks and does not** — the orb no
+> longer decides that a socket is right (*"The lens is Mastermind now"*). Its
+> peg-column cells are blank now, padded so every row stays the same shape, which
+> is the property the whole sheet rests on. And a figure may repeat a sigil,
+> which row 3 above is.
 
 **The words come from the sim, through `Ward::view`.** They are content
 (`tower::ward::SOCKETS` and `SIGILS`), and `orbs-render` may not depend on
@@ -9624,6 +9684,330 @@ last has no direct port — a terminal sends no key-release event — so it is a
 double-taps an arrow inside 120, so an unbroken run out of a handover is a held
 key and the first gap is the release.
 
+### The second review, and the input paths nobody had pressed (Standing, `0.3.21`)
+
+A review run *after* `0.3.13` shipped, which is where three of these were found —
+so they were live for an afternoon. Recorded together because the shape repeats:
+**a comment claiming parity, sitting next to the code that broke it.**
+
+**Backspace was dead on a whole class of terminal.** A terminal configured `stty
+erase ^H` — PuTTY's shipped default — sends `0x08`, crossterm turns every
+`0x01..=0x1A` byte into `Char(letter) + CONTROL`, and the chord guard swallowed
+everything that was not `c` or `d`. So Backspace did nothing at the prompt, in
+the spell editor, or on the weave screen, in a game §6 makes entirely typed. It
+is translated to `KeyCode::Backspace` before the guard now, which costs a
+deliberate `Ctrl-H` chord the game does not bind.
+
+**And key repeat was filtered out entirely.** The loop accepted only
+`KeyEventKind::Press`; crossterm reports `Repeat` whenever the terminal has
+keyboard-enhancement flags pushed — which this build never does, but the flags
+live on a *terminal* stack, so a crashed editor leaves them set for everything
+launched after it. Holding an arrow moved one square. It also made the held-key
+guard below dead code on exactly those terminals: a guard against key repeat, on
+a loop that dropped key repeat.
+
+**The held-key window was longer than our own script's spacing.** `HELD_OVER` was
+120 ms and `scripts/tui.sh key` sleeps 100, so `key Escape Up Up` after any
+surface lost both arrows and the documented way to drive this build could never
+reach history recall. Sixty now, with `Repeat` believed outright where the
+terminal reports it — and the remaining case, a repeat rate slower than the
+window, is the one only a key-release event could fix.
+
+**The boot card ignored the floor.** The sequence painted before the hostable
+check, so below 80×22 a player watched the logo run off the edge and through the
+pane border for the whole thirteen seconds, and only then got the card explaining
+it. §19 already called a shrunk terminal a normal runtime state; it is normal
+during boot too.
+
+**A signal left the terminal in raw mode.** `install_panic_hook` argues at length
+that failing to restore "looks exactly like the shell having died" — and covers
+only panics. `kill`, a dropped ssh connection, a session manager: none of them
+run `leave()`. A `signal-hook` flag the loop already polls thirty times a second
+now takes the ordinary exit.
+
+**`ORBS_DUMP` drew the opposite focus mode to the game.** It derived the mode
+from the grid — the only call to `DisplayMode::default_for` in the workspace —
+so the project's primary See-it instrument printed `focus deep` where every
+running frontend printed `focus wide`. One pane makes both tilings identical
+today, so it was two labels; when Phase 9a returns the second pane it would have
+been a layout the game never draws, in the output CLAUDE.md's own See-it blocks
+quote.
+
+**Four more of the same family.** The rail's ten state words were a second copy
+of `State::label` and had already diverged on `Empty` — `idle` on the rail,
+`empty` in the pane and to a screen reader. `∞` is drawn for every endless pile
+and was missing from the wide-terminal substitution table, whose test list had
+itself drifted two arms behind the table it checks. `rail::truncate` was a third
+char-safe cut where `orbs_render::arriving` existed. And the ward sheet's new
+row-windowing drew a sheet with **zero press rows** at exactly eight rows rather
+than refusing, which is the inverse of the rule it implements.
+
+**The tint rule was written twice and tested against itself.** Both frontends
+encoded *"an accent outranks a tint; fire is never tinted; sediment declines"*
+independently, under comments on both sides saying the two had to agree — and
+each build's test re-derived the predicate locally and compared the function
+against a copy of itself, so each proved only that it agreed with itself.
+`Depiction::declines_tint` is the one statement of it now.
+
+**And the three surfaces `orbs-shell::keys` left behind.** The prompt's key table
+was extracted for both frontends and the editor, weave screen and maze were not —
+about sixty lines duplicated across two crates, with the arrow-to-`Way` table
+written a *third* time in `dump.rs`. The cost was already visible: the Bevy build
+had learned that two Enters in one delivery must not discard a pending
+`SaveAndClose`, and the terminal build, written later from the same shape, had
+not. `apply_to_editor`, `apply_to_weave` and `apply_to_maze` sit beside `apply`
+now and both builds call them.
+
+**`plugin.rs` was 1,299 lines against a rule saying registration only.** Fifteen
+system bodies moved into `revealing.rs`, `reading.rs` and `commanding.rs` —
+grouped by concern, per CLAUDE.md, rather than into a `systems.rs`.
+
+**Two claims corrected rather than coded around.** `help` does *not* fit the
+80×22 floor in the laboratory — it wants 26 rows, being the one room narrowed by
+the instrument panel *and* holding five extra verbs — and its primer lines are
+already inside the width lint, so the only way to make it fit is to stop offering
+a verb. It scrolls, like any record. And the terminal build's last frame before
+`quit` was never visible: it painted onto the alternate screen that `leave` tears
+down microseconds later, while `F10` and `Ctrl-C` drew nothing at all. The
+record in the scrollback was always the real point.
+
+### The lens is Mastermind now — supersedes the ratchet and the settle-lock (Standing, `0.3.22`)
+
+**The ward was Mastermind-shaped without being Mastermind, and a player who has
+played the real thing could tell.** Three things the orb did that a codemaker may
+not, and all three trace to one rule.
+
+| The orb said | Which is | And it came from |
+|---|---|---|
+| `settled` per socket | *is this position correct?* | the exchange |
+| `untried` per socket | the same fact, falling to nought | the exchange |
+| a **ratchet** — a press that did not gain was silently reverted | an undo you did not ask for | the exchange |
+
+**The root cause was the no-repeats rule.** Four of six with none repeated is
+6P4 = 360, and it means a socket often *cannot* take the sigil you want, because
+another holds it — so `seat` exchanged the two. Once a dial moves **two**
+sockets, `aligned` rising cannot be attributed to either, and the three
+mechanisms above are all scaffolding under that one ambiguity. Classic Mastermind
+allows repeated colours. Allowing them here deletes the exchange, and all three
+props go with it.
+
+#### What the domain is now
+
+| | |
+|---|---|
+| The code | four sigils of six, **repeats allowed** — 1296 codes |
+| Shown to the player | the two counts, per press, as Mastermind shows pegs |
+| Askable by a spell | two three-valued deltas: `closer`/`level`/`further` for `aligned`, `richer`/`unchanged`/`poorer` for `astray` |
+| Actions | `dial <socket>` steps round the six; `dial <socket> <sigil>` jumps; `probe`. **No new verbs** |
+| Ratchet, settling, locking | gone. Nothing forces a socket to change, so nothing needs protecting |
+
+**No `lock` verb**, which was the first instinct and is unnecessary: with the
+exchange gone there is nothing to protect a socket from. It also scores **750**
+against `look` — the figure §19 has twice used to reject a name — and the verb
+budget is one `verb.rs` calls *"22 is a number to defend"*.
+
+**The spell channel is strictly weaker than the player's**, which is the property
+that makes the two channels honest rather than merely different: the deltas are
+*derivable* from the counts and not the reverse. The orb is told less than the
+person, and it is told nothing about any one position.
+
+#### `Ward::answer` was wrong under repeats, and had been all along
+
+`astray` was computed with `code.contains(sigil)` — a **set** test where
+Mastermind needs a multiset intersection. The two coincide only while no sigil
+repeats, so it was correct on the day it was written and would have become wrong
+the moment the code space widened. Over the 1296 pairs it disagrees on **30.6%**:
+four nitre against a code holding one nitre drew four pegs on a four-socket lock.
+
+It was also invisible to its own guard. `an_answer_is_always_one_figure_s_and_never_two`
+asserts `aligned + astray <= 4`, which the broken form satisfies *by
+construction*. Fixed first, in its own commit, where it is a provable no-op —
+which is the only way a change like this can be landed without hiding a second
+one inside it.
+
+#### The spell a player can write
+
+Four rungs became one sweep, and it reads the way a person would explain it:
+
+```
+probe
+if the prism is working
+    dial first / probe
+    if the prism has further        ← it was already right
+        dial first nitre / probe    ← restore, and re-press to re-sync
+    else
+        repeat until not the prism has level
+            dial first / probe
+        end
+    end
+end
+    ...and the same for second, third, fourth
+```
+
+**Termination is a proof, not a budget.** One socket moves, so `aligned` can only
+change because of that socket; stepping it cyclically reaches the code's sigil
+within five and says so on arrival.
+
+**The re-press after a restore is load-bearing.** The deltas are measured against
+the *previous press*, so a restore with no press leaves the next rung comparing
+against a figure that was never sent — 924 of 1296 without it.
+
+**`until not ... has level`, not `until ... has closer`.** They look like the same
+bound and are not: a ward that gives mid-sweep publishes *nothing*, so `has
+closer` answers a flat no and the loop goes round for ever — probing a fresh ward
+open and disturbing it from the middle of a sweep whose restore literals assume
+the opening aperture. `level` is what the walk is waiting to stop seeing, and its
+*absence* stops the loop the same way its answer does. Found by running it, not
+by reading it.
+
+**`if the prism is working` wraps each rung** for the other half of the same
+hazard: the last socket to arrive can be the second, and every rung after it
+would otherwise be dialling at nothing.
+
+| | mean | worst | solves |
+|---|---|---|---|
+| deducing player, from the opening aperture | **5.15** | 9 | — |
+| the sweep above | **11.93** | 21 | 1296/1296 |
+| the same sweep without the restore rung | 13.80 | 24 | 1296/1296 |
+| guessing codes at random | 648 | — | — |
+
+**The margin is 2.3×**, down from the 5.5 the old table claimed and still the
+domain. `deduction_beats_the_ladder` pins the *best expressible* spell rather
+than the first one written, or it is measuring the author's restraint.
+
+#### The ratchet had a second job, and repeats do not do it
+
+The old blind ladder — walk (socket, sigil) pairs, restart on a gain — broke all
+360 codes because the settle-lock froze what was proved and the ratchet undid
+what was not. Under the new rules it breaks **21 of 1296**. Moving without
+reading a per-press delta destroys its own progress as fast as it makes it.
+
+That is why `readings()` still publishes the two deltas at all: without them
+there is no writable spell and the lens would be hand-play only. It is pinned by
+`a_ladder_that_never_reads_the_answer_cannot_break_the_seal`, because a prop
+being unnecessary *for this shape* is not the same claim as it being unnecessary.
+
+#### `best` goes rather than stays, and `PAR` becomes 6
+
+The prism's meter read `Ward::best()` — the high-water mark — and that was honest
+*because* of the ratchet: the aperture always was the best figure ever sent.
+Without it a high-water meter would read `3 of 4` over an aperture holding one,
+which is the exact failure the code comment there warned of, pointing the other
+way. It is the last press's answer now, and it falls.
+
+`PAR` was five against an average of 4.14 over 360 codes. At 1296 a deducing
+player averages 5.15 with a worst of 9, so five would put roughly half of
+*competent* hand play into `yield_of`'s three-quarter tier — a penalty for
+playing well.
+
+#### Nothing had ever swept a *reading*, and three are in a player's way
+
+The second delta needed three words, and this log already records
+`gained`/`held`/`lost` leaking — a reading is a `NounKind::Sense`, which
+`NounKind::Any` reaches, so `purge grind` fuzzy-matched `gained` and answered
+*"there is no gained within reach"* from the laboratory. Both that finding and
+its replacement were made **by hand**, because `tests/naming.rs` walked verbs and
+synonyms and nothing else.
+
+There is a sweep now, and it failed on its first run — on five words, only two of
+them new:
+
+| | scores | against |
+|---|---|---|
+| `fuller` | 667 | `filter` (sift) |
+| `steady` | 667 | `study` (research) |
+| `wall` | **750** | `walk` (follow) |
+| `exit` | **750** | `edit` (scribe) |
+| `marks` | 600 | `make` (recall) |
+
+The first two are mine and are renamed — the astray triple is
+`richer`/`unchanged`/`poorer`, and `thicker`/`thinner` was rejected on the way at
+715 *against each other*, which is the collision this log calls worse than a verb
+near-miss. **The last three were the archive's and were shipping**: `purge walk`
+echoed `purge wall`, `purge edit` echoed `purge exit`, and the manual was worse
+than the prompt — `recall edit` explained the *maze's way out* to somebody asking
+about the spell editor.
+
+#### The fix is the resolver, not three renames
+
+Renaming `wall`, `exit` and `marks` would close three instances of an open class,
+and the class is what matters: any future reading, in any domain, sits in the way
+of every word a player types. Two changes close it, and both are widenings of
+rules that already existed:
+
+**`Scene::knowing` holds every verb word.** Its rule — *a phrase that is itself a
+word the game knows only ever matches exactly* — was installed over substances
+alone, after `digest ground-sage` digested ground-salt. A verb's own word is no
+less a word the game knows, and `walk` was fuzzing into `wall` for exactly the
+reason `ground-sage` fuzzed into `ground-salt`. Each of the three now falls
+through to the numbered prompt, which is what `purge grind` has always done.
+
+**Every one-word synonym is a `NounKind::Command`.** The table held canonicals
+only, so `recall walk` reached no page at all and fell through to the noun
+vocabulary. It reaches `follow`'s now, `recall edit` reaches `scribe`'s, and
+`recall light` reaches `kindle`'s — a page answers to whichever word the player
+knows, which is what §6.1's three registers are for.
+
+**And a known word may still abbreviate**, which is the half that broke first.
+`check` is one of `verify`'s words, so a spell called `check.spell` stopped being
+reachable by `invoke check` — six spell tests went red at once, every one of them
+a player's own file name losing to a word they never typed. Prefixing is not
+fuzzing: `check` *starts* `check.spell` where `walk` does not start `wall`, and
+`Scene::candidates` asks that structurally rather than reading a score. The
+substance rule is untouched, because `ground-salt` does not start with
+`ground-sage`.
+
+The sweep stays, and it is what makes the next reading safe by default. It is
+also what caught the two new ones before they shipped.
+
+#### The faucet roughly quadrupled, and that is a decision
+
+This log priced automated scrying at **0.022 XP/tick** and then measured it at
+0.07 once a press became free. `orbs-balance`'s new `scrying` policy measures the
+sweep at **0.268**, and a real bound `breaking` at ~0.18 — against the flagship
+clarity's 0.140.
+
+**Left alone deliberately.** The old rate was low because the ladder was
+thrashing against the exchange rule, not because anybody chose it; ~23 presses at
+twelve ticks each was the cost of a puzzle the spell could not express cleanly.
+And the number is **additive rather than competing**: a press takes no production
+slot, so a bound solver runs *beside* a full brewing loop, which is §8's own
+argument for automation landing through concurrency. What it does mean is that
+recipe discovery — `learned.rs` rolls once per solve — speeds up by the same
+factor, and that is the thing to watch when Phase 3 prices spellcraft.
+
+The rate is pinned in `report::EXPECTED` rather than argued here, which is what
+that table is for: **a sentence in a decisions log is not an instrument.**
+
+#### Everything a seeded lens dump used to print has changed
+
+`Ward::new` keeps its four draws — the count must not vary with the values or
+every replay is invalidated — but their values are different, so every
+`ORBS_SEED=3` lens line in this document, in CLAUDE.md, in ROADMAP and in
+`scripts/dumps.sh` prints something else. Expected, not a regression.
+
+**See it:**
+
+```bash
+# A dial moves one socket and only one — the thing repeats buy. Both hold alum.
+ORBS_SEED=3 ORBS_BOOT=0 ORBS_DUMP="attend lens; probe; dial first alum; \
+  survey first; survey second" cargo run -p orbs
+
+# The counts are there; nothing says which socket is right.
+ORBS_SEED=3 ORBS_BOOT=0 ORBS_DUMP="attend lens; probe; dial second borax; \
+  probe; survey prism" cargo run -p orbs
+
+# The spell, end to end — fifteen presses on this seed.
+ORBS_SEED=3 ORBS_BOOT=0 ORBS_GRID=200x45 \
+  ORBS_DUMP="attend lens; debug_spell breaking" \
+  ORBS_THEN="invoke breaking; meditate 200; peruse lens.log" cargo run -p orbs
+
+cargo run -p orbs-balance -- run scrying --ticks 7200 --why
+cargo test -p orbs-sim --lib tower::ward
+cargo test -p orbs-sim --test ward
+scripts/play.sh lens::
+```
+
 ### A word only ever matches itself (Phase 1, parser correctness)
 
 `digest ground-sage`, with no ground-sage on the shelf, digested **ground-salt**
@@ -9649,6 +10033,49 @@ ORBS_BOOT=0 ORBS_DUMP="attend laboratory; debug_spawn ground-salt 2; \
 # ...and the typo it must not stop forgiving.
 ORBS_BOOT=0 ORBS_DUMP="attend laboratory; debug_spawn ground-salt 2; \
   digest ground-slat" cargo run -p orbs
+```
+
+#### The abbreviation exemption undid §8.1's substitution (`0.3.22`)
+
+The rule above grew an exemption when `Scene::knowing` widened to hold every verb
+word: `check` is one of `verify`'s, so a player's own `check.spell` became
+unreachable by `invoke check` — a file name losing to a word they never typed.
+**A known word may still abbreviate**, and `Scene::candidates` says so
+structurally rather than by score, because a prefix and a typo overlap at short
+lengths.
+
+Its stated premise was *"no known word is a strict prefix of another"*, and
+**the substitution surface is a counter-example built on purpose.** A swap
+renames a pile to its own name plus a struck sigil, so `sage-` is a strict
+extension of `sage` — read as an abbreviation, which handed the pile straight
+back to the spell that named it.
+
+**And the echo rewrote the player's own command to prove it.** `kindle charcoal`
+against a swapped pile echoed **`kindle charcoal-`** and loaded it, which is the
+defect above wearing the opposite face: not a word dropped, but a word the player
+never typed put in their mouth at full confidence. The heat system then declined
+it — *"the athanor has nothing in it to burn"* — so the sabotage half-landed,
+which is worse than either outcome whole, because the sentence names no cause a
+player could act on.
+
+| Question | Decision |
+|---|---|
+| Why it survived | §8.1's tell was never *enforced*; it fell out of this rule as a side effect. A contract held by accident is one any widening of the resolver can drop, and this is the widening that did |
+| The fix | `abbreviates` asks `tower::sabotage::claimed` whether the name is the lie told about *this very phrase*, and refuses only that. Not spelled twice: a second copy of the lie's shape is a rule that comes apart the next time it changes |
+| What is still owed | The durable form is a `Substituted` marker the `Scene` carries, so the pile refuses its true name by **identity** rather than by spelling. That is what §8.1 actually says — *"substituted entities fail ID check"* — and it would survive a lie shaped some other way |
+| How it was found | The two lines of work meeting. `tampering` had been rewritten to wait on the **real ambient swap** rather than `debug_swap`, and the lens branch had widened `knowing`; neither alone fails. The full suite was green on both sides |
+
+**A seed-scheduled test is not where a rule this cheap should be pinned**, so
+`parser::scene` asks it directly — the ambient version still runs, and it is what
+proves the two halves agree.
+
+```bash
+# `debug_swap` takes the charcoal, so `kindle` is the operation it stops. The
+# echo is the thing to read: `kindle`, with the word dropped — and it used to
+# read `kindle charcoal-`.
+ORBS_BOOT=0 ORBS_DUMP="attend laboratory; debug_swap; kindle charcoal" cargo run -p orbs
+cargo test -p orbs-sim --lib parser::scene
+cargo test -p orbs-sim --test tampering
 ```
 
 ### A fixed 4:3 picture — supersedes the fidelity tiers (Phase 1, `0.1.24`)

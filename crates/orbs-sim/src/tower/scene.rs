@@ -144,6 +144,30 @@ pub fn scene_at(world: &World, at: Entity) -> Scene {
         .filter(|name| !is_hidden(name))
         .collect();
     scene = scene.knowing(substances);
+
+    // **And every word a verb answers to, for the same rule and the same
+    // reason.** `Scene::knowing`'s rule is *a phrase that is itself a word the
+    // game knows only ever matches exactly*, and it was installed over
+    // substances alone — so a **verb's** own word could still fuzz into a noun.
+    // Three did, all at or above the score that rejected a name elsewhere:
+    //
+    //   `purge walk` -> `wall`    750, and the two are words about one screen
+    //   `purge edit` -> `exit`    750
+    //   `purge make` -> `marks`   600
+    //
+    // Each is §19's `gained` leak: a reading is a `NounKind::Sense`, which
+    // `NounKind::Any` reaches, so a destructive verb answered *"there is no wall
+    // within reach"* to a player who typed a word the game taught them. Renaming
+    // the readings would have closed three instances of an open class; this
+    // closes the class, and the next reading anybody authors is safe by default.
+    //
+    // It reaches the manual too, and that was the worse half: `recall edit`
+    // answered with the *maze's way out* rather than with the spell editor.
+    scene = scene.knowing(
+        crate::parser::single_words()
+            .into_iter()
+            .map(|(word, _)| word.to_owned()),
+    );
     {
         let topics = world.resource::<Topics>();
         for topic in &topics.0 {
@@ -163,8 +187,15 @@ pub fn scene_at(world: &World, at: Entity) -> Scene {
     // `recall` shows what works in this room (§7); a *page* answers from
     // anywhere, because a manual you can only read in the right room has a lock
     // on it. Places and spells already have this exemption for the same reason.
-    for verb in crate::parser::Verb::ALL {
-        scene = scene.with(NounKind::Command, verb.canonical());
+    // **Every *word*, not every canonical.** `recall walk` and `recall edit` are
+    // questions a player asks with the word they typed, and a table holding only
+    // the arcane form answered neither — both fell through to the noun
+    // vocabulary and came back with a maze reading. `single_words` includes each
+    // canonical, because a canonical is a one-word arcane entry by rule
+    // (`canonical_names_are_one_short_word`), so this is a widening rather than a
+    // second list to keep in step.
+    for (word, _) in crate::parser::single_words() {
+        scene = scene.with(NounKind::Command, word);
     }
 
     // **Every spell, wherever the player is standing.**
@@ -253,11 +284,17 @@ pub fn scene_at(world: &World, at: Entity) -> Scene {
     }
 
     // **And the lens's, for exactly the same reason.** A spell is compiled at
-    // cast, when no ward is open — so `aligned`, `settled` and `marks` all
-    // resolve against nothing unless they are here unconditionally. A solver
-    // whose every rung compiled to a dead branch is the defect this chain exists
-    // to prevent, and it would be silent: the spell casts, runs, and does
-    // nothing for ever.
+    // cast, when no ward is open — so `closer` and `further` resolve against
+    // nothing unless they are here unconditionally. A solver whose every rung
+    // compiled to a dead branch is the defect this chain exists to prevent, and
+    // it would be silent: the spell casts, runs, and does nothing for ever.
+    //
+    // **Six words, and they are all deltas.** `aligned`, `astray` and `spent`
+    // are published as *counts on the record* — the player reads them, the sheet
+    // draws them — and are deliberately absent from this list, so a spell cannot
+    // ask for them. That is the whole of §19's correction: a codemaker answers
+    // *which way did it move*, and everything else was the orb doing the
+    // player's bookkeeping.
     for reading in super::ward::readings() {
         scene = scene.with(NounKind::Sense, reading);
     }

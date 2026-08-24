@@ -1,7 +1,10 @@
+mod commanding;
 mod editing;
 mod input;
 mod motion;
 mod plugin;
+mod reading;
+mod revealing;
 mod wandering;
 mod weaving;
 mod window;

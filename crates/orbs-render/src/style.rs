@@ -522,6 +522,29 @@ impl Depiction {
     pub const fn is_smoke(self) -> bool {
         matches!(self, Self::SmokeThin | Self::SmokeThick)
     }
+
+    /// Whether a material's tint must **not** be painted over this picture.
+    ///
+    /// **One rule, in the crate that owns the vocabulary.** Both frontends
+    /// resolve tints and both encoded this independently — `orbs-tui` as three
+    /// `if`s, the Bevy build as an exhaustive `match` — under a comment saying
+    /// the two had *to* agree, because a tint that declines in one and
+    /// resolves in the other means the two builds disagree about what a fouled
+    /// instrument looks like. Nothing enforced it: each build's test re-derived
+    /// the same predicate locally and compared the function against a copy of
+    /// itself, so each proved only that it agreed with itself.
+    ///
+    /// Fire is never tinted — it is its own light source, and a green flame is
+    /// a different substance rather than a hinted one. Sediment is waste, and
+    /// §10.1 gives waste one look so it reads as waste at a glance.
+    ///
+    /// This is a fact about a *picture*, not about a phosphor or an ANSI index,
+    /// which is why it belongs here and not in either resolver. It is the same
+    /// rule [`Style::depicted`] enforces for the other channel.
+    #[must_use]
+    pub const fn declines_tint(self) -> bool {
+        self.is_flame() || self.is_spark() || self.is_smoke() || matches!(self, Self::Sediment)
+    }
 }
 
 /// The complete semantic style of a cell.

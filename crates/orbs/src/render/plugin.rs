@@ -258,7 +258,7 @@ fn repaint(
     if let Some(boot) = booting {
         // The orb waking up. It paints the parts of the screen that exist yet
         // and nothing else, so `Dark` really is dark — see `boot::stage`.
-        crate::shell::paint_booting(frame, boot.stage(), boot.progress(), &crate::boot::engine());
+        crate::shell::paint_booting(frame, boot.stage(), boot.progress(), crate::boot::engine());
     } else if screen.is_hostable() {
         crate::shell::paint(
             frame,

@@ -130,10 +130,10 @@ fn tinted(wash: Wash, role: Role, intensity: Intensity, depiction: Depiction) ->
     if role != Role::Normal {
         return None;
     }
-    if depiction.is_flame() || depiction.is_spark() || depiction.is_smoke() {
-        return None;
-    }
-    if matches!(depiction, Depiction::Sediment) {
+    // **`orbs-render`'s rule, not a second copy of it.** This was three `if`s
+    // mirroring the Bevy build's exhaustive `match`, under a comment saying the
+    // two had to agree — with nothing making them.
+    if depiction.declines_tint() {
         return None;
     }
 
@@ -317,14 +317,18 @@ mod tests {
     fn a_tint_declines_to_fire_and_to_waste() {
         let wash = Wash::plain(Tint::Green);
         for depiction in Depiction::ALL {
+            // **Against `orbs-render`'s predicate, which is what the other
+            // frontend also calls.** This used to re-derive the rule here and
+            // compare `tinted` against a copy of itself, while its own failure
+            // message claimed a disagreement with the Bevy build it never
+            // consulted. Now there is one rule and this checks that this
+            // resolver honours it.
             let declines = tinted(wash, Role::Normal, Intensity::Normal, depiction).is_none();
-            let should = depiction.is_flame()
-                || depiction.is_spark()
-                || depiction.is_smoke()
-                || matches!(depiction, Depiction::Sediment);
             assert_eq!(
-                declines, should,
-                "{depiction:?} disagreed with the Bevy build about declining",
+                declines,
+                depiction.declines_tint(),
+                "{depiction:?} resolves a tint the shared rule declines, or the \
+                 other way round — the two frontends would draw it differently",
             );
         }
     }

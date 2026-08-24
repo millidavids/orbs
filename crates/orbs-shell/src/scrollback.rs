@@ -1,7 +1,7 @@
 //! Where in the transcript the player is looking, and whether it has the keys.
 //!
 //! Pure arithmetic over a record count. The keys that move it are
-//! [`super::plugin`]'s; the word that hands it the keyboard is `unfurl`.
+//! each frontend's own; the word that hands it the keyboard is `unfurl`.
 
 use bevy_ecs::prelude::Resource;
 use orbs_sim::Sim;

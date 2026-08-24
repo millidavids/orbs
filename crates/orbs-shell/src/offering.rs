@@ -7,7 +7,7 @@
 //! input changes that often.
 //!
 //! Nothing here reads a keystroke or touches a window. The system that fills
-//! them in is [`super::input`]'s; this is the state it fills.
+//! them in is the Bevy build's `shell::input`; this is the state it fills.
 
 use bevy_ecs::prelude::Resource;
 

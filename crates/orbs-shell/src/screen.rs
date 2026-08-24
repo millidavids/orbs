@@ -3,7 +3,7 @@
 //! DESIGN.md §4 and §19: the picture is **4:3** and the grid is a constant
 //! ([`orbs_render::GRID`]), so a window decides the *size* of a cell and never
 //! the number of them. This module holds the answer; feeding it a window and
-//! drawing the letterbox are the Bevy frontend's, in [`super::window`].
+//! drawing the letterbox are the Bevy frontend's, in its `shell::window`.
 //!
 //! This used to resolve a fidelity tier — an integer scale picked so the grid
 //! landed near 80×22 whatever the window — which meant every resize moved every
@@ -18,7 +18,7 @@
 //! one cell per cell is as true as it is for a 1280×720 window.
 //!
 //! **`window` stays pixels rather than a resolved `f32`** so this keeps `Eq`,
-//! which [`super::window::track_window`] leans on twice: once to skip a repaint
+//! which `shell::window::track_window` leans on twice: once to skip a repaint
 //! when nothing moved, and once as the "has the player chosen a mode yet?"
 //! sentinel.
 
@@ -105,6 +105,37 @@ impl Screen {
         }
     }
 
+    /// A screen with no window behind it — a terminal, or a dump.
+    ///
+    /// **The constructor three callers were open-coding.** `for_window` is the
+    /// only other one and it hard-codes `grid: GRID`, so everything without a
+    /// window had to know two separate things to work around it: that
+    /// [`orbs_render::PICTURE`] is the honest stand-in — it makes [`scale`]
+    /// come out at exactly `MIN_SCALE`, so hostability turns entirely on the
+    /// *grid* — and that `grid` must then be struct-update-overridden on top.
+    ///
+    /// That knowledge was transcribed in `dump.rs`, in `orbs-tui`'s loop, and in
+    /// `orbs-tui`'s boundary test, and the three had already drifted apart on
+    /// the third field: one derived the mode from the grid, one passed the
+    /// player's, one passed `None`. The fake window is an implementation detail
+    /// and belongs here, where the module header already explains the rule and
+    /// stopped short of providing it.
+    ///
+    /// [`scale`]: Self::scale
+    #[must_use]
+    pub fn windowless(grid: GridSize, mode: Option<DisplayMode>) -> Self {
+        Self {
+            grid,
+            ..Self::for_window(
+                (
+                    u32::from(orbs_render::PICTURE.0),
+                    u32::from(orbs_render::PICTURE.1),
+                ),
+                mode,
+            )
+        }
+    }
+
     /// The mode the player has settled on.
     ///
     /// §9: *"the player be able to override it at any time, including
@@ -113,10 +144,9 @@ impl Screen {
     /// and once overridden it survives every resize.
     #[must_use]
     pub const fn flipped(self) -> DisplayMode {
-        match self.mode {
-            DisplayMode::Deep => DisplayMode::Wide,
-            DisplayMode::Wide => DisplayMode::Deep,
-        }
+        // The rule is `DisplayMode`'s — a frontend holding only a mode should
+        // not have to build a screen to ask it.
+        self.mode.flipped()
     }
 }
 

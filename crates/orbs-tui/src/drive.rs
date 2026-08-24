@@ -168,6 +168,28 @@ impl Session {
 
     /// Take one keystroke. Returns `false` when the player asked to leave.
     fn typed(&mut self, event: KeyEvent) -> bool {
+        // **`Ctrl-H` is Backspace on a great many terminals, and the chord guard
+        // below was eating it.** A terminal configured `stty erase ^H` — which
+        // is PuTTY's shipped default — sends `0x08` for the Backspace key, and
+        // crossterm turns every `0x01..=0x1A` byte into `Char(letter) +
+        // CONTROL`. So the key arrived as a chord, the guard swallowed
+        // everything that was not `c` or `d`, and **Backspace did nothing
+        // anywhere in the game**: the prompt, the spell editor, the weave
+        // screen. §6 makes this a game played entirely by typing, so a typo
+        // became uncorrectable short of clearing the whole line.
+        //
+        // Translated rather than special-cased in the guard, because every
+        // surface reads `KeyCode::Backspace` and none of them should have to
+        // know this. The cost is that a deliberate `Ctrl-H` chord is
+        // unavailable — the game binds none, and it is not distinguishable from
+        // Backspace at this layer anyway.
+        let event = if event.code == KeyCode::Char('h')
+            && event.modifiers.contains(KeyModifiers::CONTROL)
+        {
+            KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE)
+        } else {
+            event
+        };
         // **F10 leaves, from anywhere — the Bevy build's binding, ungated there
         // too.** Not Escape: the moment there is a text field, Escape is what a
         // player presses to get out of something *smaller*, and every one of the
@@ -242,7 +264,7 @@ impl Session {
         if owner == Owner::Prompt {
             // The prompt has the keys — unless a surface only just gave them up
             // and the player has not let go yet.
-            if self.still_held(event.code) {
+            if self.still_held(&event) {
                 return true;
             }
         } else {
@@ -312,24 +334,51 @@ impl Session {
     /// keys a surface holds down and the only ones whose prompt meaning —
     /// recall history — silently rewrites the command line. A letter arriving
     /// this way is visible and a player can see to delete it.
-    fn still_held(&mut self, code: KeyCode) -> bool {
+    fn still_held(&mut self, event: &KeyEvent) -> bool {
         let arrow = matches!(
-            code,
+            event.code,
             KeyCode::Up | KeyCode::Down | KeyCode::Left | KeyCode::Right
         );
         let Some(since) = self.held_over else {
             return false;
         };
+        if !arrow {
+            // A key nobody holds down to walk with. They have let go.
+            self.held_over = None;
+            return false;
+        }
+        // **When the terminal says so, believe it.** With keyboard-enhancement
+        // flags active crossterm reports `Repeat` outright, which is the exact
+        // answer a key-release event would have given — no timing involved.
+        if event.kind == KeyEventKind::Repeat {
+            self.held_over = Some(Instant::now());
+            return true;
+        }
         let now = Instant::now();
-        if arrow && now.duration_since(since) <= HELD_OVER {
-            // Still down. Keep the window open behind the repeat, or a long hold
-            // would break through the moment it outlasted one interval.
+        if now.duration_since(since) <= HELD_OVER {
             self.held_over = Some(now);
             return true;
         }
-        // A gap, or a key nobody holds down to walk with. They have let go.
         self.held_over = None;
         false
+    }
+
+    /// This terminal as a [`Screen`] — no window behind it, so the picture is
+    /// the stand-in and hostability turns entirely on the grid.
+    fn screen(&self) -> Screen {
+        Screen::windowless(self.grid, Some(self.mode))
+    }
+
+    /// Whether this terminal can host the game.
+    ///
+    /// **`Screen::is_hostable`, not a private copy of half of it.** `term::fits`
+    /// asked only the grid question, while the shell's answer is two — the grid
+    /// against the authoring floor *and* the scale — so the two frontends routed
+    /// to the "too small" card by different rules, and the `--dump` diff in CI
+    /// could not see the difference because the dump path already asked the
+    /// whole question.
+    fn hostable(&self) -> bool {
+        self.screen().is_hostable()
     }
 
     /// The function keys that are neither the prompt nor a surface.
@@ -350,7 +399,9 @@ impl Session {
             // with one pane both tilings are identical, which §19 records as
             // deliberate rather than broken. The Bevy build is equally inert and
             // equally bound.
-            KeyCode::F(4) => self.mode = self.mode_flipped(),
+            // Through `DisplayMode::flipped` rather than a second `match`, so
+            // the two builds cannot disagree about what the other mode is.
+            KeyCode::F(4) => self.mode = self.mode.flipped(),
             // §14's linear stream — the same pane, described instead of drawn.
             // The terminal build is the one DESIGN.md calls the cheapest route
             // to screen-reader support, so it is the last that should lack it.
@@ -385,38 +436,12 @@ impl Session {
         true
     }
 
-    /// The focus mode `F4` would move to.
-    ///
-    /// Through `Screen::flipped` rather than a second `match`, so the two builds
-    /// cannot disagree about what the other mode is.
-    const fn mode_flipped(&self) -> DisplayMode {
-        Screen {
-            grid: self.grid,
-            mode: self.mode,
-            window: (0, 0),
-        }
-        .flipped()
-    }
-
     /// One crossterm key, as the shared prompt understands it.
     ///
     /// The table itself is `orbs-shell`'s; this is only the mapping, which is
     /// the part that is genuinely backend-shaped.
     fn key(&self, code: KeyCode) -> Option<Key> {
-        Some(match code {
-            KeyCode::Enter => Key::Enter,
-            KeyCode::Backspace => Key::Backspace,
-            KeyCode::Esc => Key::Escape,
-            KeyCode::Left => Key::Left,
-            KeyCode::Right => Key::Right,
-            KeyCode::Up => Key::Up,
-            KeyCode::Down => Key::Down,
-            KeyCode::Home => Key::Home,
-            KeyCode::End => Key::End,
-            KeyCode::Tab => Key::Tab,
-            KeyCode::Char(glyph) => Key::Text(glyph.to_string()),
-            _ => return None,
-        })
+        as_key(code)
     }
 
     /// Ask the shell for a screen and put it on the terminal.
@@ -428,6 +453,18 @@ impl Session {
         // for exactly that reason — an input line that could not be typed into.
         if !self.boot.is_live() {
             self.frame.reset(self.grid);
+            // **The floor applies to the card too, and it did not.** This
+            // returned before the hostable check below, so a player launching
+            // into a small terminal watched the logo run off the right edge and
+            // print through the pane border for the whole thirteen seconds —
+            // and only then got the card explaining what was wrong. `§19` calls
+            // a shrunk terminal a normal runtime state; it is normal during boot
+            // as well.
+            if !self.hostable() {
+                orbs_shell::paint_too_small(&mut self.frame, &self.sim);
+                self.frame.set_cursor(None);
+                return self.screen.draw(&self.frame, out);
+            }
             orbs_shell::paint_booting(
                 &mut self.frame,
                 self.boot.stage(),
@@ -440,14 +477,7 @@ impl Session {
             return self.screen.draw(&self.frame, out);
         }
 
-        let picture = orbs_render::PICTURE;
-        let screen = Screen {
-            grid: self.grid,
-            ..Screen::for_window(
-                (u32::from(picture.0), u32::from(picture.1)),
-                Some(self.mode),
-            )
-        };
+        let screen = self.screen();
 
         // How far `PageUp` moves is measured from the screen it is about to
         // draw, so a resize changes the page on the same frame it changes the
@@ -455,7 +485,7 @@ impl Session {
         self.page = orbs_shell::page_step(&screen, &self.sim, self.scroll.back());
 
         self.frame.reset(self.grid);
-        if term::fits(self.grid) {
+        if screen.is_hostable() {
             orbs_shell::paint(
                 &mut self.frame,
                 &mut self.linear,
@@ -553,12 +583,21 @@ pub(crate) fn run(sim: Sim, engine: String) -> std::io::Result<()> {
 fn play(session: &mut Session) -> std::io::Result<()> {
     let mut out = stdout();
 
+    // **Asked for before the first frame**, so a process killed during boot puts
+    // the terminal back too. A failure to register is not worth refusing to
+    // start over — the game runs, it just cannot tidy up after a signal.
+    let dying = term::dying().unwrap_or_default();
+
     let start = Instant::now();
     let mut ticked = start;
     let mut painted = start - FRAME;
     session.draw(&mut out)?;
 
     loop {
+        // Leave the way `quit` does, so `term::leave` runs on the ordinary path.
+        if dying.load(std::sync::atomic::Ordering::Relaxed) {
+            return Ok(());
+        }
         // ── 1. The world, before anything the player did this iteration ──
         //
         // **This order is load-bearing, and the reason is `walk`, not `submit`.**
@@ -597,10 +636,17 @@ fn play(session: &mut Session) -> std::io::Result<()> {
                 ticked = now;
             }
             if !session.tick() {
-                // Draw the last frame before going: `quit_begins` was pushed on
-                // this tick, and a word whose whole job is to be discoverable
-                // should be seen answering.
-                session.draw(&mut out)?;
+                // **No last frame, and that was wishful.** This drew one on the
+                // argument that `quit_begins` "should be seen answering" — but
+                // the paint lands on the alternate screen that `term::leave`
+                // tears down microseconds later, so nothing of it ever reached a
+                // person, and `F10`/`Ctrl-C` returned here without drawing at
+                // all. Two exits, two last frames, neither visible.
+                //
+                // The record is the point and it is kept: `execute::quit` puts
+                // it in the scrollback, which is the log a player can `peruse`
+                // next session — so a recording ends with someone choosing to
+                // stop rather than simply stopping.
                 return Ok(());
             }
         }
@@ -627,7 +673,22 @@ fn play(session: &mut Session) -> std::io::Result<()> {
                 // application that cannot be left for ten seconds is a trap, and
                 // answering the exit is not a skip: it ends the session rather
                 // than jumping to the game.
-                Event::Key(key) if key.kind == KeyEventKind::Press => {
+                // **`Repeat` as well as `Press`, or auto-repeat is lost.**
+                // crossterm reports a third kind whenever the terminal has
+                // keyboard-enhancement flags pushed — which this build never
+                // does, but the flags live on a *terminal* stack, so a crashed
+                // editor leaves them set for everything launched afterwards. In
+                // that state holding Backspace deleted exactly one character and
+                // holding an arrow in the maze moved exactly one square, because
+                // the first press arrives as `Press` and every repeat after it
+                // was dropped here.
+                //
+                // It also made [`Session::held_over`] dead code on precisely
+                // those terminals: a guard against key repeat, on a loop that
+                // filtered key repeat out.
+                Event::Key(key)
+                    if matches!(key.kind, KeyEventKind::Press | KeyEventKind::Repeat) =>
+                {
                     if !session.boot.is_live() {
                         if leaving(&key) {
                             return Ok(());
@@ -676,15 +737,51 @@ fn play(session: &mut Session) -> std::io::Result<()> {
 /// belongs to offline progression, which is Phase 9a's.
 const CATCH_UP: u32 = 5;
 
+/// One crossterm key, as every shared table understands it.
+///
+/// **A free function, because all four surfaces need it**, not only the prompt.
+/// Mapping a backend's events onto [`Key`] is the genuinely backend-shaped half;
+/// what each surface then *does* with one is `orbs-shell`'s, and was written
+/// twice until it was not.
+pub(crate) fn as_key(code: KeyCode) -> Option<Key> {
+    Some(match code {
+        KeyCode::Enter => Key::Enter,
+        KeyCode::Backspace => Key::Backspace,
+        KeyCode::Esc => Key::Escape,
+        KeyCode::Left => Key::Left,
+        KeyCode::Right => Key::Right,
+        KeyCode::Up => Key::Up,
+        KeyCode::Down => Key::Down,
+        KeyCode::Home => Key::Home,
+        KeyCode::End => Key::End,
+        KeyCode::Tab => Key::Tab,
+        KeyCode::Char(glyph) => Key::Text(glyph.to_string()),
+        _ => return None,
+    })
+}
+
 /// The longest gap that still counts as one held arrow rather than two presses.
 ///
-/// Auto-repeat lands every 30-40 ms on every common configuration; the fastest
-/// a person double-taps an arrow is well over 150. So this separates *a key that
-/// is still down* from *a key pressed again*, which is the distinction a
-/// key-release event would give for free and a terminal does not send.
+/// **The fallback, and only the fallback.** Where the terminal reports
+/// `KeyEventKind::Repeat` the answer is exact and this is never consulted; this
+/// is for the ordinary case, where auto-repeat and a deliberate press are the
+/// same event and only their spacing tells them apart.
+///
+/// **Sixty, and it was a hundred and twenty.** Auto-repeat lands every 30-40 ms
+/// on a default configuration, so sixty catches it with room to spare — while
+/// 120 was long enough to swallow *scripted* input: `scripts/tui.sh key` spaces
+/// its presses 100 ms apart, so `key Escape Up Up` after any surface lost both
+/// arrows and the project's own driving tool could never reach history recall.
+/// Being off by twenty milliseconds against our own script is the kind of
+/// constant that is only ever wrong in one direction.
+///
+/// It is a heuristic and it has a floor: a repeat rate slower than this (`xset r
+/// rate 660 2`, some accessibility settings) breaks through on a terminal with
+/// no enhancement flags. That case is the one a key-release event would fix and
+/// nothing here can.
 ///
 /// See [`Session::held_over`].
-const HELD_OVER: Duration = Duration::from_millis(120);
+const HELD_OVER: Duration = Duration::from_millis(60);
 
 /// Whether this key ends the session, asked while the boot card has the screen.
 ///

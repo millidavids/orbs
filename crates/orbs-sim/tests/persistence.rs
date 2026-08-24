@@ -435,15 +435,22 @@ fn the_test_world_actually_holds_everything_it_is_meant_to() {
         has("maze the reading has entered", maze.came.is_some());
 
         // A ward that has been pressed rather than merely opened — the answer,
-        // the aperture and the marks are what a save has to carry, and an
-        // unpressed ward carries none of them.
+        // the aperture and the press history are what a save has to carry, and
+        // an unpressed ward carries none of them.
         let ward = save
             .nodes
             .iter()
             .find_map(|n| n.ward.as_ref())
             .expect("a ward");
         has("pressed ward", ward.pressed && ward.spent > 0);
-        has("dialled socket", ward.socket_marks.iter().any(|&m| m > 0));
+        has("press history", ward.history.len() > 1);
+
+        // A socket dialled off the opening figure. `socket_marks` said this
+        // directly and went with the ratchet that needed it, so what a save
+        // carries now is where the aperture ended up — and `Ward::new` opens it
+        // on the first four sigils, fixed, precisely so this comparison means
+        // something.
+        has("dialled socket", ward.aperture != [0, 1, 2, 3]);
 
         // **The record tail, checked for content rather than length.** `!is_empty`
         // was true of `Sim::new` alone, because `tower::report` writes the boot

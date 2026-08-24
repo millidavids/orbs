@@ -187,34 +187,16 @@ pub(crate) fn type_into_editor(
             continue;
         }
         stale |= chord && stale_chord;
-        match &event.logical_key {
-            // Both of these mean something in both states, and **the editor
-            // decides which** — see `Editor::enter` and `Editor::escape`. This
-            // loop branching on the mode itself would be a second copy of the
-            // state machine, in the one place neither the tests nor `ORBS_DUMP`
-            // can reach.
-            // **`or`, not `=`.** Two Enters in one frame — key repeat, a frame
-            // hitch, a practiced `wq<Enter>` — had the second overwrite the
-            // first: `run_command` takes the command string, so the second call
-            // ran on an empty line, returned `None`, and discarded a pending
-            // `SaveAndClose`. The editor stayed open on a `quit` that looked
-            // ignored, with the buffer unflushed.
-            Key::Enter => outcome = editor.enter().or(outcome),
-            Key::Escape => editor.escape(),
-            Key::Backspace => editor.backspace(),
-            Key::ArrowLeft => editor.left(),
-            Key::ArrowRight => editor.right(),
-            Key::ArrowUp => editor.up(),
-            Key::ArrowDown => editor.down(),
-            Key::Home => editor.home(),
-            Key::End => editor.end(),
-            _ => {
-                let Some(text) = &event.text else {
-                    continue;
-                };
-                editor.type_text(text);
-            }
-        }
+        // **The table is `orbs-shell`'s**, and both frontends call it. Both of
+        // these keys mean something in both of the editor's states and **the
+        // editor decides which** — branching on the mode out here would be a
+        // second copy of that state machine. The table was a second copy of a
+        // different kind, and the terminal build had already been written from
+        // it without the `or` correction that lives in it now.
+        let Some(key) = super::input::pressed(event) else {
+            continue;
+        };
+        outcome = orbs_shell::apply_to_editor(&key, editor).or(outcome);
     }
 
     if stale {

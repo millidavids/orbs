@@ -165,6 +165,23 @@ pub fn substitute(world: &mut World, node: Entity, as_named: &str) {
     world.entity_mut(node).insert(Poisoned);
 }
 
+/// The name a pile is *made to claim* when the swap takes it.
+///
+/// It must be a real word or the tell would read as corruption rather than as
+/// substitution. Its own name with a sigil struck through it is the cheapest
+/// honest lie: `sage` sitting in the dispensary calling itself something a
+/// recipe will not take.
+///
+/// **One function because the parser reads the shape too.** A lie built this way
+/// is a strict *extension* of the truth, which makes it a resolver problem as
+/// well as a content one — `parser::scene`'s abbreviation rule would otherwise
+/// hand the pile straight back to the spell that named it. Spelling it twice is
+/// how that rule would silently come apart again the next time this changes.
+#[must_use]
+pub fn claimed(was: &str) -> String {
+    format!("{was}-")
+}
+
 /// What a substituted thing is really called, and when the lie landed.
 ///
 /// The name is held beside the lie rather than instead of it, which is what makes
@@ -422,11 +439,7 @@ pub fn substitution(
         return;
     };
 
-    // The name it is *made to claim*, which must be a real word or the tell
-    // would read as corruption rather than as substitution. Its own name with a
-    // sigil struck through it is the cheapest honest lie: `sage` sitting in the
-    // dispensary calling itself something a recipe will not take.
-    let claimed = format!("{}-", name.0);
+    let claimed = claimed(&name.0);
     commands.queue(move |world: &mut World| {
         substitute(world, target, &claimed);
     });

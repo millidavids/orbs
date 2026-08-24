@@ -70,7 +70,8 @@ run fault_latched ORBS_BOOT=0 ORBS_DUMP="attend laboratory; scribe broken" \
   ORBS_THEN="invoke broken; meditate 20; attend archive"
 
 # --- the lens --------------------------------------------------------------
-run lens_ward  ORBS_SEED=3 ORBS_BOOT=0 ORBS_DUMP="attend lens; probe; dial second borax; probe; survey prism; survey second; survey borax"
+run lens_ward  ORBS_SEED=3 ORBS_BOOT=0 ORBS_DUMP="attend lens; probe; dial second borax; probe; survey prism; survey second"
+run lens_twice ORBS_SEED=3 ORBS_BOOT=0 ORBS_DUMP="attend lens; probe; dial first alum; probe; survey first; survey second"
 run lens_spill ORBS_SEED=3 ORBS_BOOT=0 ORBS_DUMP="attend lens; probe; debug_ward; probe; peruse lens.log"
 
 # --- the archive -----------------------------------------------------------

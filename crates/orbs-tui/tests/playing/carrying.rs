@@ -180,6 +180,13 @@ fn purging_a_kept_potion_actually_empties_the_arsenal() {
         .does("debug_spawn clarity", "all along")
         .does("survey arsenal", "clarity")
         .does("purge clarity", "clarity")
+        // **A tick between the purge and the look, or this is a race.** A
+        // `purge` queues its despawn for the *next* tick like every other
+        // effect, and `does` waits only for the echo — which the prompt prints
+        // at once. Two lines can therefore land inside one tick, and the survey
+        // then reads a world the purge has not been applied to yet. It passed
+        // for as long as the screen happened to be slow enough.
+        .wait_ticks(2)
         .does("survey arsenal", "arsenal");
     assert!(
         !game.last_block().contains("clarity"),

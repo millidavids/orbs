@@ -51,13 +51,20 @@ pub enum Body {
     /// The one policy that must read the world: a maze is generated per seed and
     /// no fixed sequence of `follow`s can solve two of them.
     Stacks,
+    /// Break a ward one socket at a time, then open another.
+    ///
+    /// The second policy that must read the world, and it reads **less** than
+    /// the player does: only which way `aligned` moved on the last press, which
+    /// is all `dev_spells.toml`'s `breaking` can ask for either.
+    Scrying,
     /// Earn a slot by hand, bind a spell, and then do nothing at all.
     ///
     /// **The only policy that measures the script engine**, which is the point
-    /// of it: every other one models a player typing, so the whole of §8 — the
-    /// per-step tick cost, `PATIENCE`, the wait on the production slot, a
-    /// binding re-casting a spell that has run off the end — is invisible to
-    /// this harness without it.
+    /// of it: every other one issues its commands the way a player types them,
+    /// [`Scrying`](Self::Scrying) included, so the whole of §8 — the per-step
+    /// tick cost, `PATIENCE`, the wait on the production slot, a binding
+    /// re-casting a spell that has run off the end — is invisible to this
+    /// harness without it.
     Bound {
         /// A cycle, played by hand, until the orb can hold a spell.
         ///
@@ -74,12 +81,13 @@ pub enum Body {
 
 impl Policy {
     /// Every policy the harness knows, in the order `list` prints them.
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::CLARITY,
         Self::DAMPED,
         Self::HASTE,
         Self::GRIND,
         Self::STACKS,
+        Self::SCRYING,
         Self::BOUND,
     ];
 
@@ -223,6 +231,45 @@ impl Policy {
         body: Body::Stacks,
     };
 
+    /// The lens, swept the way a spell sweeps it.
+    ///
+    /// **This is the number §19's pricing argument now rests on**, and it moved:
+    /// the ward went from 360 codes to 1296 and lost the ratchet, the settle-lock
+    /// and the per-socket tally with them, so the whole automated rate is a
+    /// different quantity than the one the design was priced against. A sentence
+    /// in a decisions log is not an instrument; this is.
+    ///
+    /// **It reads the deltas and nothing else** — `dial <socket>` bare, `probe`,
+    /// and *did `aligned` rise, hold or fall* — because that is the whole of what
+    /// `breaking` can ask. It does **not** deduce, so it is not a model of a
+    /// player; a player averages 5.15 presses against this policy's ~12, and §19's
+    /// *"the harness has no player"* is why the faster of the two is the one
+    /// absent from this file.
+    ///
+    /// **A press takes no slot**, so unlike every policy above it this one never
+    /// waits on the tower — which is the balance claim worth watching. A bound
+    /// solver is meant to run *beside* a full brewing loop rather than compete
+    /// with it, and a `cost` column that starts filling here is that claim
+    /// breaking.
+    ///
+    /// **Read `landed` as presses, not solves.** A `probe` answers with
+    /// `{quantity} aligned`, so every press whose figure placed at least one
+    /// sigil satisfies [`drive`](crate::drive)'s structural test for finished
+    /// work. Nothing in the tally can tell that from a yield without matching
+    /// prose, which rule 6 forbids; the column is a diagnostic, and this is what
+    /// it is diagnosing here.
+    ///
+    /// **It still issues its own commands**, so it measures the *loop* and not
+    /// the runner — [`BOUND`](Self::BOUND) below is the one that pays §8's
+    /// per-step tick. A real bound `breaking` reads ~0.18 against this policy's
+    /// 0.268, and that gap is the interpreter.
+    const SCRYING: Self = Self {
+        name: "scrying",
+        gloss: "the lens, swept one socket at a time as a bound spell sweeps it",
+        setup: &["attend lens"],
+        body: Body::Scrying,
+    };
+
     /// [`GRIND`](Self::GRIND)'s loop again, run by a spell instead of by hand.
     ///
     /// **The comparison is the measurement.** The two policies issue the same
@@ -236,9 +283,9 @@ impl Policy {
     /// exists before the overhaul rather than after it. §19 records the
     /// decision that a step still costs a tick, with the weave tree as the
     /// escape valve; both halves of that are claims about this number, and
-    /// nothing in the harness could see it. The other five policies model a
-    /// player typing, so `SCRIPT_BUDGET`, `PATIENCE` and the whole runner were
-    /// unmeasured.
+    /// nothing in the harness could see it. The other six policies issue their
+    /// commands the way a player types them, so `SCRIPT_BUDGET`, `PATIENCE` and
+    /// the whole runner were unmeasured.
     ///
     /// **`empty mortar_and_pestle` is in the spell, not beside it.** A binding
     /// re-casts a spell that has run off the end, so a lapping spell has to

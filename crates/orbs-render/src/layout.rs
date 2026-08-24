@@ -160,6 +160,37 @@ pub enum DisplayMode {
 }
 
 impl DisplayMode {
+    /// The word for this mode, as the rail and the border title both print it.
+    ///
+    /// **Two private copies of this lived in one crate** — `prompt::focus` and
+    /// `rail::focus`, feeding the border title's fallback readings and the
+    /// rail's `focus` row, which are on screen together. Nothing bound them, so
+    /// renaming a mode or adding a third would have updated one and left the
+    /// other saying something else.
+    #[must_use]
+    pub const fn word(self) -> &'static str {
+        match self {
+            Self::Deep => "deep",
+            Self::Wide => "wide",
+        }
+    }
+
+    /// The other mode — what `F4` would give you.
+    ///
+    /// **A property of the mode, not of a `Screen`.** It lived on `Screen`, so a
+    /// frontend holding only a `DisplayMode` had to build a whole screen with a
+    /// sentinel `window: (0, 0)` to reach it — and that sentinel is load-bearing
+    /// elsewhere as *"has the player chosen a mode yet?"*, so a method later
+    /// added to `Screen` that consulted `window` would have answered for a
+    /// screen that does not exist.
+    #[must_use]
+    pub const fn flipped(self) -> Self {
+        match self {
+            Self::Deep => Self::Wide,
+            Self::Wide => Self::Deep,
+        }
+    }
+
     /// The default mode for a grid.
     ///
     /// Window size and font scale are proxies for visual acuity, not

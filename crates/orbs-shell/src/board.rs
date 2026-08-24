@@ -72,7 +72,17 @@ pub fn split(area: Rect, board: Option<&Board>) -> Split {
         .min(orbs_render::Board::presses_within(inside));
     let tall = orbs_render::Board::rows_for(presses).saturating_add(2);
 
-    if block.saturating_add(GUTTER + TRANSCRIPT_FLOOR) > area.cols || tall > area.rows {
+    // **`presses == 0` refuses**, which the first version of this windowing did
+    // not check. At exactly eight rows the arithmetic came out `tall == 8` and
+    // the guard below is `8 > 8` — false — so the sheet was laid out and painted
+    // with a header, a rule, an aperture and two legend rows and **no presses at
+    // all**, while still taking 41 columns off the transcript. That is the exact
+    // inverse of this module's rule, and `presses_within` names the zero case as
+    // *"where the sheet does refuse"*.
+    if presses == 0
+        || block.saturating_add(GUTTER + TRANSCRIPT_FLOOR) > area.cols
+        || tall > area.rows
+    {
         return nothing;
     }
 
@@ -135,8 +145,11 @@ fn speak(painter: &mut Painter<'_>, board: &Board, prose: &Prose) {
         .attempts
         .last()
         .map_or((0, 0), |attempt| (attempt.aligned, attempt.astray));
-    let held = board.settled.iter().filter(|settled| **settled).count();
-
+    // **No count of held sockets any more.** The sheet used to say how many
+    // positions were proven, which is the one thing a codemaker may not tell you
+    // (§19) — the reader got a better game than the player. What is left is the
+    // last answer and what it cost, which is what a sighted player reads off the
+    // rows.
     painter.announce(
         UtteranceKind::Progress,
         Role::Normal,
@@ -146,7 +159,6 @@ fn speak(painter: &mut Painter<'_>, board: &Board, prose: &Prose) {
                 ("quantity", &spent.to_string()),
                 ("name", &aligned.to_string()),
                 ("detail", &astray.to_string()),
-                ("state", &held.to_string()),
             ],
         ),
     );

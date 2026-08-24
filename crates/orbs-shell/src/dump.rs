@@ -21,7 +21,7 @@
 //! ORBS_DUMP=1 ORBS_GRID=120x33 cargo run -p orbs
 //! ```
 
-use orbs_render::{DisplayMode, Frame, GridSize};
+use orbs_render::{Frame, GridSize};
 use orbs_sim::Sim;
 
 use super::line::Line;
@@ -278,22 +278,20 @@ pub fn run_script(seed: u64, wizard: Option<String>, engine: &str, request: &str
     }
 
     let grid = grid();
-    let screen = Screen {
-        grid,
-        // The window the picture is native on. A dump has no window at all, and
-        // this is the honest stand-in: scale 1.0, which is what the game opens
-        // at, so `is_hostable` turns entirely on the *grid* here — the half of
-        // it `ORBS_GRID` can still move.
-        window: (
-            u32::from(orbs_render::PICTURE.0),
-            u32::from(orbs_render::PICTURE.1),
-        ),
-        // Still derived, unlike the running game's. `ORBS_GRID` can ask for the
-        // 80×22 authoring floor, where §9 puts the readings in the border title
-        // rather than a second pane, and that decision has to keep working
-        // somewhere now that the game itself always clears the floor.
-        mode: DisplayMode::default_for(grid),
-    };
+    // **Wide, which is what every running frontend opens in.** This derived the
+    // mode from the grid instead — the only call to `DisplayMode::default_for`
+    // in the workspace — so the project's primary See-it instrument drew the
+    // *opposite* focus mode to the game it is the instrument for: a dump printed
+    // `focus deep` and `F4 wide` where the running terminal printed `focus wide`
+    // and `F4 deep`.
+    //
+    // It is only the two labels today, because one pane makes both tilings
+    // identical and §19 records `F4` as visibly inert until Phase 9a returns the
+    // second pane. When it does, every dump would have shown a layout the game
+    // never draws — and CLAUDE.md's own See-it blocks quote this output. Its
+    // rule for exactly this: *"a See-it line that describes a different screen
+    // is worse than none."*
+    let screen = Screen::windowless(grid, None);
 
     let mut frame = Frame::new(grid);
     // `ORBS_BOOT=frame` dumps that stage instead of the game. Boot runs once per

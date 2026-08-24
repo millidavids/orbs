@@ -14,7 +14,6 @@
 use crossterm::event::KeyCode;
 use orbs_shell::{Editor, EditorOutcome, Scroll, Tapestry};
 use orbs_sim::Sim;
-use orbs_sim::tower::Way;
 
 /// The surfaces that can hold the keyboard, in the order they take it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -166,46 +165,16 @@ impl Surfaces {
         // the editor decides which.** Branching on the mode here would be a
         // second copy of that state machine, in the one place neither the tests
         // nor `ORBS_DUMP` can reach.
-        let outcome = match code {
-            KeyCode::Enter => editor.enter(),
-            KeyCode::Esc => {
-                editor.escape();
-                None
-            }
-            KeyCode::Backspace => {
-                editor.backspace();
-                None
-            }
-            KeyCode::Left => {
-                editor.left();
-                None
-            }
-            KeyCode::Right => {
-                editor.right();
-                None
-            }
-            KeyCode::Up => {
-                editor.up();
-                None
-            }
-            KeyCode::Down => {
-                editor.down();
-                None
-            }
-            KeyCode::Home => {
-                editor.home();
-                None
-            }
-            KeyCode::End => {
-                editor.end();
-                None
-            }
-            KeyCode::Char(glyph) => {
-                editor.type_text(&glyph.to_string());
-                None
-            }
-            _ => None,
+        //
+        // And the table itself is `orbs-shell`'s, for the same reason the
+        // prompt's is: what a key *means* to an editor is not backend-shaped.
+        // This was a second copy, and it had already missed the correction the
+        // other one carries — two Enters in a delivery discarding a pending
+        // `SaveAndClose`.
+        let Some(key) = crate::drive::as_key(code) else {
+            return;
         };
+        let outcome = orbs_shell::apply_to_editor(&key, editor);
 
         match outcome {
             Some(EditorOutcome::Save) => save(editor, sim),
@@ -224,54 +193,27 @@ impl Surfaces {
         let Some(screen) = &mut self.weaving else {
             return;
         };
-        let outcome = match code {
-            KeyCode::Enter => screen.enter(),
-            KeyCode::Esc => {
-                screen.escape();
-                None
-            }
-            KeyCode::Backspace => {
-                screen.backspace();
-                None
-            }
-            KeyCode::Up => {
-                screen.step(0, -1);
-                None
-            }
-            KeyCode::Down => {
-                screen.step(0, 1);
-                None
-            }
-            KeyCode::Left => {
-                screen.step(-1, 0);
-                None
-            }
-            KeyCode::Right => {
-                screen.step(1, 0);
-                None
-            }
-            KeyCode::Char(glyph) => {
-                screen.type_text(&glyph.to_string());
-                None
-            }
-            _ => None,
+        let Some(key) = crate::drive::as_key(code) else {
+            return;
         };
+        let outcome = orbs_shell::apply_to_weave(&key, screen);
         if outcome == Some(orbs_shell::WeaveOutcome::Close) {
             self.weaving = None;
         }
     }
 
     fn maze_took(&mut self, code: KeyCode, sim: &mut Sim) {
-        let way = match code {
-            KeyCode::Esc => {
-                self.walking = false;
-                return;
-            }
-            KeyCode::Up => Way::North,
-            KeyCode::Right => Way::East,
-            KeyCode::Down => Way::South,
-            KeyCode::Left => Way::West,
-            _ => return,
+        if code == KeyCode::Esc {
+            self.walking = false;
+            return;
+        }
+        // The arrow-to-`Way` table is `orbs-shell`'s. It was written three
+        // times — once per frontend and once more in `dump.rs`.
+        let Some(way) = crate::drive::as_key(code)
+            .as_ref()
+            .and_then(orbs_shell::apply_to_maze)
+        else {
+            return;
         };
         // **`walk`, not `submit` and `step`.** A tick per arrow would mean a
         // player walks as slowly as the world moves, and eight presses would

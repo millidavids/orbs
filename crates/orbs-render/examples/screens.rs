@@ -1467,15 +1467,18 @@ fn ward(grid: GridSize) -> Frame {
                 aligned: 1,
                 astray: 2,
             },
+            // **A repeated sigil, and four pegs.** Both are things this sheet
+            // could not show before: a code may hold a sigil twice now (§19), so
+            // a figure may too — and `aligned + astray` reaching the full width
+            // is the widest the peg column ever gets. These three rows answer a
+            // real code, `quartz pewter pewter borax`.
             orbs_render::Attempt {
-                figure: [5, 4, 2, 3],
-                aligned: 2,
-                astray: 1,
+                figure: [4, 4, 2, 3],
+                aligned: 1,
+                astray: 3,
             },
         ],
-        aperture: [5, 4, 2, 3],
-        settled: [true, false, false, false],
-        marks: [2, 1, 3, 3, 2, 1],
+        aperture: [4, 4, 2, 3],
         // `tower::ward`'s own words. The sim hands these through `Ward::view`; an
         // example has no sim, so it repeats them — and this is the surface where a
         // header wider than its column, or a legend that runs into the border,

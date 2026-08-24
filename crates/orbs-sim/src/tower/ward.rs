@@ -1,42 +1,49 @@
 //! The seal on a far wizard's orb, and the two ways a player breaks it.
 //!
 //! DESIGN.md §10 gives scrying *deduction*, and this is the shape it took: four
-//! sigils drawn from six, no repeats, 360 codes. You press figures against the
-//! ward and read how it answers.
+//! sigils drawn from six, **repeats allowed**, 1296 codes. You press figures
+//! against the ward and read how it answers. It is Mastermind, and §19 records
+//! the version that was Mastermind-shaped without being Mastermind.
 //!
 //! # The orb keeps no candidate set and deduces nothing
 //!
-//! **This is the load-bearing rule of the whole domain**, and the design it
-//! replaced broke it. A first pass had the sim track which codes were still
-//! consistent and publish each sigil's standing; measured over all 360 codes,
-//! "press anything still consistent" solves in **4.24 presses** and the best play
-//! there is manages **4.08** — so an orb that does the bookkeeping has done the
-//! entire puzzle, and there is nothing left for the player to be good at.
+//! **This is the load-bearing rule of the whole domain**, and two designs have
+//! broken it. The first had the sim track which codes were still consistent and
+//! publish each sigil's standing: "press anything still consistent" solves in
+//! ~4.2 presses, so an orb that does the bookkeeping has done the entire puzzle.
 //! Mastermind's difficulty *is* the bookkeeping.
 //!
+//! The second broke it more quietly. It said `settled` per socket — *this
+//! position is correct* — and `untried`, which falls to nought on the same fact.
+//! No codemaker answers a question about one position, and a player who could
+//! ask it never has to deduce.
+//!
 //! So what is stored here is only what a player could keep on paper: the code,
-//! the aperture, the last answer, a tally of presses per socket and sigil, and
-//! whether a socket's last change helped. Nothing is inferred from any of it.
+//! the aperture, the last answer, and which way each half of it moved. Nothing
+//! is inferred from any of it.
 //!
 //! # Two channels onto one ward
 //!
 //! | | The player | A spell |
 //! |---|---|---|
-//! | Reads | `aligned` and `astray` | `gained`/`held`/`lost`, `marks`, `settled` |
-//! | Method | deduction | greedy hill-climbing |
-//! | Presses | ~4.1 | ~22.8 |
+//! | Reads | `aligned` and `astray`, as numbers | `closer`/`level`/`further` and `richer`/`unchanged`/`poorer` |
+//! | Method | deduction | one socket at a time |
+//! | Presses | ~5.15 | ~11.93 |
 //!
-//! Both use the same two verbs. What differs is what they read, and that is what
-//! lets §8's language automate a puzzle it cannot possibly solve: the language
-//! has no variables and no accumulator (`parser::question`), so a spell can only
-//! act on what the world has written down — and *did this help* is a fact the
-//! world can write down without deducing anything.
+//! Both use the same two verbs, and the spell's channel is strictly *less* than
+//! the player's — the deltas are derivable from the numbers and not the other way
+//! round. That is what lets §8's language automate a puzzle it cannot possibly
+//! solve: the language has no variables and no accumulator
+//! (`parser::question`), so a spell can only act on what the world has written
+//! down, and *which way did it move* is a fact the world can write down without
+//! deducing anything.
 //!
-//! **Greedy terminates, and the proof is why the domain works.** Put the right
-//! sigil into a wrong socket and `aligned` rises by at least one, so from any
-//! non-solution an improving move exists. Measured over all 360 codes it never
-//! failed, worst case 51 presses. A ladder is therefore a *rule*, not a search —
-//! exactly what Trémaux is for the archive's maze.
+//! **The sweep terminates, and the proof is why the domain works.** Move one
+//! socket and nothing else: `aligned` can then only change because of that
+//! socket, so stepping it cyclically through six reaches the code's sigil within
+//! five and says so on arrival. A sweep is therefore a *rule*, not a search —
+//! exactly what Trémaux is for the archive's maze. See `dev_spells.toml`'s
+//! `breaking` for the shape a player writes.
 
 use bevy_ecs::prelude::*;
 use rand::Rng as _;
@@ -65,10 +72,12 @@ pub const WIDTH: usize = SOCKETS.len();
 
 /// Presses a player is expected to need. Beyond it the yield drops (§11.5).
 ///
-/// **Five, and measured rather than chosen.** Consistent play averages 4.14 with
-/// a worst case of 6 over all 360 codes, so par is reachable by playing well and
-/// not by luck.
-pub const PAR: u32 = 5;
+/// **Six, and measured rather than chosen.** Consistent play from the opening
+/// aperture averages 5.15 with a worst case of 9 over all 1296 codes — so at
+/// five, roughly half of *competent* hand play fell into `yield_of`'s reduced
+/// tier, which reads as a penalty for playing well. It was five when the space
+/// was 360 codes and the average was 4.14.
+pub const PAR: u32 = 6;
 
 /// What one press costs the tower, in ticks.
 ///
@@ -120,8 +129,89 @@ impl Shift {
         }
     }
 
+    /// The word for the same movement in `astray`.
+    ///
+    /// **A second set, because one word cannot mean two things.** `closer` is
+    /// about placement and this is about *membership* — whether the figure is
+    /// made of more of the right sigils than the last one was, wherever they
+    /// sit. A spell that could not tell those apart could not tell *swap two of
+    /// these* from *none of these belong*.
+    ///
+    /// Comparatives again, for the reason [`word`](Self::word) gives, and
+    /// **swept rather than judged** — `tests/naming.rs` walks every reading in
+    /// the game against every word a player types, which is a sweep this file's
+    /// first three readings shipped without. Two earlier sets fail it:
+    ///
+    /// | | scores | against |
+    /// |---|---|---|
+    /// | `warmer`/`even`/`cooler` | 667, 600 | `closer` and `level` — two
+    ///   readings colliding *inside one domain*, worse than a verb near-miss |
+    /// | `fuller`/`steady`/`thinner` | 667, 667 | `filter` (sift) and `study`
+    ///   (research) — so `purge filter` resolved to `purge fuller` and answered
+    ///   *"there is no fuller within reach"*, which is exactly the leak §19
+    ///   records `gained`/`held`/`lost` causing |
+    ///
+    /// `thicker`/`thinner` fails too, at 715 against each other.
+    #[must_use]
+    pub const fn drift_word(self) -> &'static str {
+        match self {
+            Self::Gained => "richer",
+            Self::Held => "unchanged",
+            Self::Lost => "poorer",
+        }
+    }
+
     /// Every word, for the scene to register unconditionally.
-    pub const ALL: [&'static str; 3] = ["closer", "level", "further"];
+    pub const ALL: [&'static str; 6] = [
+        "closer",
+        "level",
+        "further",
+        "richer",
+        "unchanged",
+        "poorer",
+    ];
+
+    /// The shift an `aligned` word names, for reading a save back.
+    ///
+    /// **Two readers, not one, because the two channels do not share a word.**
+    /// A single `named` covering all six would round-trip `closer` into the
+    /// `drift` field and `richer` into `shift`, which is a save that reads back
+    /// as a ward saying something it never said.
+    pub(crate) fn named(word: &str) -> Option<Self> {
+        Self::reading(word, Self::word)
+    }
+
+    /// The same, for the `astray` channel's word.
+    pub(crate) fn drift_named(word: &str) -> Option<Self> {
+        Self::reading(word, Self::drift_word)
+    }
+
+    /// Whichever shift spells itself `word` under `spelling`.
+    ///
+    /// Derived from the writer rather than written twice: a fourth `Shift` would
+    /// otherwise need remembering here, and the failure would be a save that
+    /// writes a word nothing reads back — silent, and only on reload.
+    fn reading(word: &str, spelling: fn(Self) -> &'static str) -> Option<Self> {
+        [Self::Gained, Self::Held, Self::Lost]
+            .into_iter()
+            .find(|&shift| spelling(shift) == word)
+    }
+}
+
+/// Which way a count moved between two presses.
+///
+/// **Against the previous press, never a high-water mark.** The ratchet used to
+/// make the aperture always *be* the best figure, so comparing to a running
+/// maximum was the same thing; with the revert gone the only honest baseline is
+/// the figure before this one.
+const fn shift_of(now: u32, before: u32) -> Shift {
+    if now > before {
+        Shift::Gained
+    } else if now < before {
+        Shift::Lost
+    } else {
+        Shift::Held
+    }
 }
 
 /// The readings the prism publishes, beside [`Shift::ALL`].
@@ -136,22 +226,11 @@ pub const ALIGNED: &str = "aligned";
 pub const ASTRAY: &str = "astray";
 /// Presses used on this reading.
 pub const SPENT: &str = "spent";
-/// Presses that have involved a sigil or a socket.
-pub const MARKS: &str = "marks";
-/// A socket whose last change gained.
-pub const SETTLED: &str = "settled";
-/// A socket whose last change did not.
-///
-/// **Not `open`**, which is `peruse`'s own shell synonym — a reading sharing a
-/// verb's word would resolve against `NounKind::Any` from anywhere in the tower
-/// and make `purge open` a coin toss.
-pub const LOOSE: &str = "loose";
-/// Sigils a socket has not been set to since the last gain.
-///
-/// Counted, so `if the first has 1 or more untried` works with the grammar the
-/// rest of the language already has. It is the guard a four-rung ladder needs —
-/// see [`Ward::untried`] for what the twenty-four rung version got wrong.
-pub const UNTRIED: &str = "untried";
+
+// **`marks`, `settled`, `loose` and `untried` were consts here** and are gone
+// with the props they served (§19). Each was a verdict on a *position* — is this
+// socket right, what has been tried in it — which is the one thing a codemaker
+// may never answer. What is left is [`Shift::ALL`]: which way each number moved.
 
 /// Every word a spell may ask a lens noun for.
 ///
@@ -161,13 +240,16 @@ pub const UNTRIED: &str = "untried";
 /// conditions in a solver unresolvable at the moment they are compiled.
 #[must_use]
 pub fn readings() -> Vec<&'static str> {
-    let mut out: Vec<&'static str> = COUNTS.to_vec();
-    out.extend(Shift::ALL);
-    out.push(MARKS);
-    out.push(SETTLED);
-    out.push(LOOSE);
-    out.push(UNTRIED);
-    out
+    // **Six words, and they are all deltas.** This used to publish `aligned`,
+    // `astray` and `spent` as counts, `marks` per socket and per sigil, and
+    // `settled`/`loose`/`untried` per socket — nine kinds of answer, several of
+    // which no codemaker may give.
+    //
+    // What is left is the only thing Mastermind tells you: which way each of the
+    // two numbers moved. The *counts themselves* are still shown to the player
+    // on the sheet and in the transcript — that is the game — but a spell asks
+    // about movement, and works out the rest or does not (§19).
+    Shift::ALL.to_vec()
 }
 
 /// A far orb's seal, and everything the player has learned about it.
@@ -177,78 +259,29 @@ pub struct Ward {
     code: [usize; WIDTH],
     /// What the next press will send.
     aperture: [usize; WIDTH],
-    /// The best figure pressed so far — what a press that does not gain reverts to.
-    ///
-    /// See [`press`](Self::press) for the ratchet this is half of.
-    held: [usize; WIDTH],
     /// The last press's answer — **both halves of one figure's**.
     ///
-    /// These were one field short of a pair: `astray` was committed
+    /// These were once one field short of a pair: `astray` was committed
     /// unconditionally while `aligned` only moved on a gain, so a non-improving
     /// press reported the *held* figure's aligned beside the *pressed* figure's
-    /// astray. Modelled over all 360 codes, 178 of them could report a pair
-    /// summing to more than four — `3 aligned, 2 astray` on a four-socket lock —
-    /// and a deducing player pruning on that pair can eliminate the true code.
-    /// The ratchet's high-water mark is [`best`](Self::best) and is a different
-    /// number.
+    /// astray, and a pair could sum to more than four on a four-socket lock. The
+    /// ratchet that made that possible is gone; the pairing rule remains.
+    ///
+    /// They are also the baseline the two deltas are measured against.
     aligned: u32,
     astray: u32,
-    /// The most sockets any press has aligned — what the ratchet compares to.
-    ///
-    /// Separate from [`aligned`](Self::aligned) because they answer different
-    /// questions: *what did that press say* and *how far have I got*. Conflating
-    /// them is what made the pair above impossible.
-    best: u32,
     /// Whether anything has been pressed yet.
     pressed: bool,
     /// How many presses this reading has taken.
     spent: u32,
-    /// Whether the last press helped.
+    /// Which way `aligned` moved on the last press.
     shift: Option<Shift>,
-    /// Presses each sigil has taken part in.
-    sigil_marks: [u32; SIGILS.len()],
-    /// Presses each socket has been changed for.
-    socket_marks: [u32; WIDTH],
-    /// Which sigils each socket has been set to **since the last gain**.
+    /// Which way `astray` moved on the last press.
     ///
-    /// # The state a stateless language could not keep
-    ///
-    /// A ladder's only question is *what have I not tried here yet*, and before
-    /// this the answer had to be inferred from [`socket_marks`](Self::socket_marks)
-    /// — six rungs per socket, each guarded on a different mark count, using the
-    /// count as an index into [`SIGILS`]. Twenty-four rungs for four sockets, and
-    /// wrong twice over:
-    ///
-    /// - **A mark is not an index.** `seat` marks a socket for every dial *aimed*
-    ///   at it, including one that moved nothing, and a swap marks the socket at
-    ///   the far end too. So the count outruns the sigils actually tried and a
-    ///   socket exhausts its rungs with candidates left.
-    /// - **Nothing reset it.** Once all four counts passed the last rung the
-    ///   ladder fired nothing at all, and the loop pressed an unchanged aperture
-    ///   for ever — holding the tower's one production slot and earning nothing.
-    ///   Measured: seed 1 stopped earning at tick 4800 and never resumed.
-    ///
-    /// **Cleared by a press that gains**, which is the other half. A gain moves
-    /// the baseline the ratchet keeps, so every sigil is worth trying again from
-    /// the new figure — the reference ladder in `tests/ward.rs` did exactly this
-    /// with `tried.clear()`, and that reset is why it solved where the spell it
-    /// was supposed to be modelling did not.
-    tried: [[bool; SIGILS.len()]; WIDTH],
-    /// Sockets whose last change gained, and which are therefore held.
-    ///
-    /// **A lock, not a note** — and that is what makes the domain automatable.
-    /// §8's language has no variables, so a ladder cannot remember what a socket
-    /// held before a bad press and cannot undo one. The world holds the undo
-    /// instead: a socket that gained is refused to any later [`seat`](Self::seat),
-    /// so a blind walk can only ever move forward and terminates in at most
-    /// `WIDTH × (SIGILS - 1) + 1` presses.
-    ///
-    /// This is the maze's trick in a second shape. Trémaux needs no memory
-    /// beyond marks in the passages; a ward needs none beyond a latch on the
-    /// sockets it has already got right.
-    settled: [bool; WIDTH],
-    /// Sockets changed since the last press, so a gain settles the right ones.
-    touched: [bool; WIDTH],
+    /// **The second channel, and Mastermind's other number.** A figure can be
+    /// wholly wrong in placement and still be made of the right sigils; without
+    /// this a spell cannot tell *swap two of these* from *none of these belong*.
+    drift: Option<Shift>,
     /// Every press and its answer, oldest first — the board's whole content.
     ///
     /// **History, and only history.** Each entry is a sentence the transcript
@@ -268,304 +301,190 @@ impl Ward {
     #[must_use]
     pub fn new(rngs: &mut Rngs) -> Self {
         let rng = rngs.stream(RngStream::Lens);
-        // A partial Fisher-Yates over the six sigils, taking four. Sampling with
-        // rejection would draw a variable number of times from the stream, which
-        // is the same replay hazard in a different shape.
-        let mut pool: Vec<usize> = (0..SIGILS.len()).collect();
+        // **Four independent draws, repeats and all — 1296 codes.** This was a
+        // partial Fisher-Yates taking four *distinct* sigils, and the uniqueness
+        // was the root of everything the domain had to build around it: with no
+        // repeats a socket often cannot take the sigil you want because another
+        // holds it, so a dial had to *exchange* the two — and a dial that moves
+        // two sockets makes `aligned` rising unattributable, which is why the
+        // ward needed a ratchet, a settle-lock and a per-socket tally to be
+        // solvable at all. Classic Mastermind allows repeated colours; allowing
+        // them here deletes the exchange and all three props with it (§19).
+        //
+        // **Still exactly four draws**, which is what replay depends on: the
+        // count must not vary with the values, which is the hazard `heat.rs`
+        // records and the reason the old form used Fisher-Yates over rejection.
         let mut code = [0usize; WIDTH];
         for slot in &mut code {
-            let pick = rng.random_range(0..pool.len());
-            *slot = pool.swap_remove(pick);
+            *slot = rng.random_range(0..SIGILS.len());
         }
 
         // **The aperture opens on the first four sigils, not on the code.** A
-        // random opening would make one reading in 360 already solved, and a
+        // random opening would make one reading in 1296 already solved, and a
         // fixed one makes the first press mean the same thing every time —
-        // which is what a player learning the domain needs.
+        // which is what a player learning the domain needs. It is deliberately
+        // four *distinct* sigils even though the code need not be: an opening
+        // with a repeat in it would teach the wrong first lesson.
         let aperture = [0, 1, 2, 3];
         Self {
             code,
             aperture,
-            held: aperture,
             aligned: 0,
             astray: 0,
-            best: 0,
             pressed: false,
             spent: 0,
             shift: None,
-            sigil_marks: [0; SIGILS.len()],
-            socket_marks: [0; WIDTH],
-            tried: [[false; SIGILS.len()]; WIDTH],
-            settled: [false; WIDTH],
-            touched: [false; WIDTH],
+            drift: None,
             history: Vec::new(),
         }
     }
 
-    /// Sigils this socket has not been set to since the last gain.
+    /// Turn `socket` to the next sigil round, and say which.
     ///
-    /// What a ladder's guard asks, and the reading behind [`UNTRIED`]. A settled
-    /// socket reports none: it refuses a dial, so there is nothing left to try
-    /// there and a rung that fired on it would spin.
-    #[must_use]
-    pub fn untried(&self, socket: usize) -> u32 {
-        if self.settled.get(socket).copied().unwrap_or(false) {
-            return 0;
-        }
-        let Some(tried) = self.tried.get(socket) else {
-            return 0;
-        };
-        u32::try_from(tried.iter().filter(|had| !**had).count()).unwrap_or(0)
-    }
-
-    /// Set `socket` to the first sigil it has not tried since the last gain.
+    /// **A cursor the ward no longer has to keep.** This used to take the first
+    /// sigil the socket had not tried *since the last gain*, which meant storing
+    /// a per-socket list of what had been tried — and that list was readable as
+    /// `untried`, a per-socket number that fell to zero when a socket was
+    /// proven. A count nobody could get from the two answers is the orb doing
+    /// the player's bookkeeping (§19).
     ///
-    /// **The whole point of the added state**, and what turns a twenty-four rung
-    /// ladder into four: a script can say *try something else here* without being
-    /// able to name which, which is the one sentence the variable-free language
-    /// could not otherwise form.
+    /// Cyclic-next needs no stored cursor at all: the sigil a socket holds *is*
+    /// the cursor, and it is on the board where the player can see it. Six dials
+    /// return it to where it started, which is what lets a blind sweep be
+    /// exhaustive without remembering anything.
     ///
-    /// Returns whether anything moved, exactly as [`seat`](Self::seat) does — and
-    /// it *is* a `seat`, so the ratchet, the settle-lock and the exchange rule all
-    /// apply unchanged. A socket with nothing left refuses.
-    pub fn advance(&mut self, socket: usize) -> bool {
-        let Some(sigil) = self.next_untried(socket) else {
+    /// It always moves, so it always returns `true` — a cyclic step from any
+    /// sigil lands on a different one.
+    pub const fn advance(&mut self, socket: usize) -> bool {
+        if socket >= WIDTH {
             return false;
-        };
-        self.seat(socket, sigil)
+        }
+        let next = (self.aperture[socket] + 1) % SIGILS.len();
+        self.seat(socket, next)
     }
 
-    /// Give every unsettled socket its candidates back when none has any left.
-    ///
-    /// **The termination guarantee, and without it "it can be scripted" is a
-    /// measurement rather than a claim.** A four-rung ladder falls through to
-    /// `wait` when every socket reports no `untried`, and then presses an
-    /// unchanged aperture for ever — holding the tower's one production slot and
-    /// earning nothing, which is worse than refusing. Six seeds over 14400 ticks
-    /// never reached it; *never observed* is not the same as *cannot happen*.
-    ///
-    /// It is not a reset of the puzzle. A settled socket keeps its lock, so the
-    /// state that makes the walk monotone — `aligned` only rises, settled sockets
-    /// only accumulate — is untouched. What comes back is only the ladder's list
-    /// of things left to try, which is exactly what a player with squared paper
-    /// would do on running out of ideas: start round again from what still moves.
-    fn replenish(&mut self) {
-        if self.broken() {
-            return;
-        }
-        let stuck = (0..WIDTH).all(|socket| self.untried(socket) == 0);
-        if !stuck {
-            return;
-        }
-        for socket in 0..WIDTH {
-            if !self.settled[socket] {
-                self.tried[socket] = [false; SIGILS.len()];
-            }
-        }
-    }
+    // `replenish`, `next_untried` and `best` are gone with the state they served.
+    //
+    // `replenish` existed because a four-rung ladder guarded on `untried` would
+    // fall through to `wait` once every socket was exhausted and then press an
+    // unchanged aperture for ever. A cyclic `advance` cannot exhaust, so the
+    // termination guarantee is now a property of the dial rather than a system
+    // that gives candidates back.
+    //
+    // `best` was honest only *because* of the ratchet: the aperture always was
+    // the best figure, so a high-water mark described what was on the lock. With
+    // the revert gone it would describe a figure the player no longer has — the
+    // panel's meter would read three of four while the aperture aligns one,
+    // which is exactly the "reporting the guess rather than the reading" failure
+    // `panel.rs` warns of. The meter reads [`last`](Self::last) instead.
 
-    /// Which sigil [`advance`](Self::advance) would take, without taking it.
+    /// Put `sigil` in `socket`. Returns whether anything moved.
     ///
-    /// So the sentence can name what was tried. A settled socket has none, which
-    /// is what makes `advance` refuse there rather than spin.
-    #[must_use]
-    pub fn next_untried(&self, socket: usize) -> Option<usize> {
-        if self.settled.get(socket).copied().unwrap_or(false) {
-            return None;
-        }
-        self.tried.get(socket)?.iter().position(|had| !*had)
-    }
-
-    /// The most sockets any press has aligned — progress, not the last answer.
+    /// **One socket, always — which is the whole of what allowing repeats
+    /// buys.** This used to *exchange*: with no repeats a socket could not
+    /// simply take a sigil another held, so a dial changed one socket or two,
+    /// and a press after a two-socket move could not say which of them the
+    /// answer had moved for. Everything the ward carried to work around that —
+    /// the ratchet, the settle-lock, the per-socket tally of what had been
+    /// tried — was scaffolding for an ambiguity the uniqueness rule created.
     ///
-    /// What the panel's meter fills against, and what the ratchet compares to.
-    /// [`last`](Self::last) is the other number and they are not
-    /// interchangeable.
-    #[must_use]
-    pub const fn best(&self) -> u32 {
-        self.best
-    }
-
-    /// Put `sigil` in `socket`, exchanging if it is already in play.
-    ///
-    /// **Exchanging rather than replacing is what keeps the two channels
-    /// honest.** With no repeats a socket cannot simply take a sigil another
-    /// holds, so a `seat` changes one socket or two — and that ambiguity is what
-    /// stops the `gained`/`lost` channel becoming a per-socket oracle. Made
-    /// unambiguous, hill-climbing would tell a player exactly which socket was
-    /// right and the deduction channel would be pointless.
-    ///
-    /// Returns whether anything moved. **A settled socket refuses**, on either
-    /// end of the exchange — see [`is_settled`](Self::is_settled) for why that
-    /// lock is what makes a blind ladder terminate.
-    pub fn seat(&mut self, socket: usize, sigil: usize) -> bool {
+    /// With a repeat allowed there is nothing to exchange with. A dial moves one
+    /// socket, so `aligned` rising after one is **entailed** to be that socket's
+    /// doing, and the player can make that inference themselves — which is the
+    /// only inference Mastermind ever offers and the one the orb used to make
+    /// for them (§19).
+    pub const fn seat(&mut self, socket: usize, sigil: usize) -> bool {
         if socket >= WIDTH || sigil >= SIGILS.len() {
             return false;
         }
-        // **A settled socket is not marked**, because it is not being tried: the
-        // latch means *stop looking here*, and a tally that kept climbing on a
-        // socket nobody may touch would tell a ladder it had made progress.
-        if self.settled[socket] {
-            return false;
-        }
-
-        // **A dial aimed at a socket marks it, even when nothing moves**, and
-        // this is what makes a stateless ladder able to walk.
-        //
-        // The tally is *attempts on this socket*, not *changes to it*. A ladder
-        // has no variables, so its only way to try a different sigil next lap is
-        // a guard that has moved — and `dial first nitre` when the first already
-        // holds nitre would otherwise leave every reading exactly as it was, so
-        // the same rung fires for ever and the spell spins without pressing.
-        // That is what the first `breaking` did: one press, then nothing, for six
-        // hundred ticks.
-        self.socket_marks[socket] = self.socket_marks[socket].saturating_add(1);
-        // **Recorded before the early returns, and for the same reason the mark
-        // is.** A dial at a sigil the socket already holds has *tried* it — that
-        // is precisely the case where nothing moves, and a ladder that did not
-        // record it would aim there again next lap and never advance.
-        self.tried[socket][sigil] = true;
-
         if self.aperture[socket] == sigil {
             return false;
         }
-        if let Some(other) = self.aperture.iter().position(|held| *held == sigil) {
-            if self.settled[other] {
-                return false;
-            }
-            self.aperture.swap(other, socket);
-            self.touched[other] = true;
-            self.socket_marks[other] = self.socket_marks[other].saturating_add(1);
-        } else {
-            self.aperture[socket] = sigil;
-        }
-        self.touched[socket] = true;
+        self.aperture[socket] = sigil;
         true
-    }
-
-    /// How many dials have been aimed at a socket.
-    #[must_use]
-    pub fn socket_marks(&self, socket: usize) -> u32 {
-        self.socket_marks.get(socket).copied().unwrap_or(0)
     }
 
     /// Send the aperture against the ward and record what came back.
     ///
-    /// # The ward ratchets: only a press that gains is kept
+    /// # It no longer ratchets, and that is the point
     ///
-    /// A press that holds or loses is answered honestly — `aligned` and `astray`
-    /// are reported for the figure that was actually sent — and then **the
-    /// aperture snaps back** to the best figure so far.
+    /// A press used to snap the aperture back to the best figure whenever it did
+    /// not gain, on the argument that a variable-free ladder cannot remember what
+    /// a socket held before a bad press. That is true, and it was still the orb
+    /// doing the player's bookkeeping: remembering which of *their* guesses was
+    /// best is the whole labour of Mastermind.
     ///
-    /// **This is the undo §8's language cannot express.** A ladder has no
-    /// variables, so it cannot remember what a socket held before a bad press;
-    /// without a ratchet a blind walk destroys the sockets it has already got
-    /// right and never converges. The world holds the undo instead, exactly as
-    /// the maze holds the search in its marks.
+    /// **What you dialled stands.** `aligned` can fall now, which the revert used
+    /// to make almost unobservable — and a fallen `aligned` is real information a
+    /// player can use, because dialling off a correct socket is the only thing
+    /// that causes it.
     ///
-    /// **It never blocks correct play**, which is what makes it fair rather than
-    /// merely convenient: putting the right sigil into its own socket raises
-    /// `aligned` by at least one, so every move a deducing player wants to make
-    /// is a move the ward keeps. What it costs is only the ability to hold a
-    /// *worse* figure, which nobody wants to do.
-    ///
-    /// And it makes a wrong press cost ticks and nothing else — §11.5's *"cost
-    /// is the resource, never progress"*.
+    /// Nothing settles here either. The orb makes no claim about any socket; the
+    /// player reads the two counts and decides (§19).
     pub fn press(&mut self) {
         let (aligned, astray) = self.answer();
         self.spent = self.spent.saturating_add(1);
 
-        // **Both halves of the pressed figure's answer, always.** What the ward
-        // *said* is a fact about the figure that was sent; how far the player has
-        // got is `best`. See the fields for the impossible pair conflating them
-        // produced.
-        self.aligned = aligned;
-        self.astray = astray;
-
-        // **Recorded before the ratchet**, so the sheet shows the figure that
-        // was actually sent rather than the one it snapped back to. A board that
-        // logged the reverted aperture would say a press answered something the
-        // press never asked.
-        self.history.push((self.aperture, aligned, astray));
-        self.shift = Some(match aligned.cmp(&self.best) {
-            std::cmp::Ordering::Greater => Shift::Gained,
-            std::cmp::Ordering::Equal => Shift::Held,
-            std::cmp::Ordering::Less => Shift::Lost,
+        // **Both deltas are against the previous press**, not against a
+        // high-water mark. That distinction is the ratchet's ghost: `best` was
+        // the baseline because the aperture always *was* the best figure, and
+        // with no revert the only honest comparison is to the figure before this
+        // one. It is also what makes the deltas usable — a spell dialling one
+        // socket learns what that socket did, which is the single inference
+        // Mastermind offers.
+        //
+        // **The first press has nothing to compare against**, so it holds. A
+        // player has learned nothing from one press either.
+        self.shift = Some(if self.pressed {
+            shift_of(aligned, self.aligned)
+        } else {
+            Shift::Held
+        });
+        self.drift = Some(if self.pressed {
+            shift_of(astray, self.astray)
+        } else {
+            Shift::Held
         });
 
-        // **Sigils are tallied from the figure that was sent**, before the revert
-        // rewrites the aperture. Counting after it credited the *reverted*
-        // figure's sigils a second time and left the pressed figure's untouched,
-        // which is the same class of mistake as the pair above: a field whose doc
-        // says *"presses each sigil has taken part in"* describing a press that
-        // never happened.
-        for sigil in self.aperture {
-            self.sigil_marks[sigil] = self.sigil_marks[sigil].saturating_add(1);
-        }
-
-        if self.shift == Some(Shift::Gained) || !self.pressed {
-            self.best = aligned;
-            self.held = self.aperture;
-            // **Only the sockets that moved forget what they have tried.**
-            //
-            // A gain moves the baseline the ratchet keeps, so a sigil rejected
-            // against the old figure says nothing about the new one — that is the
-            // argument for clearing, and clearing *everything* was the first
-            // version. Measured, it cost about a quarter of the faucet's rate: a
-            // ladder that forgets four sockets on every gain spends its next laps
-            // re-trying sigils that are still wrong, and the twenty-four rung
-            // version it replaced ran 186–440 experience per 14400 ticks against
-            // its 216–258.
-            //
-            // The sockets that did *not* move are unaffected by the new baseline in
-            // the only way that matters — their contribution to `aligned` is
-            // unchanged — so what they have ruled out stays ruled out.
-            for (socket, moved) in self.touched.iter().enumerate() {
-                if *moved {
-                    self.tried[socket] = [false; SIGILS.len()];
-                }
-            }
-        } else {
-            self.aperture = self.held;
-        }
+        self.aligned = aligned;
+        self.astray = astray;
+        self.history.push((self.aperture, aligned, astray));
         self.pressed = true;
-        self.replenish();
-
-        // **A gain settles a socket only when it was the only one that moved**,
-        // and both narrower versions of this rule were wrong before it.
-        //
-        // Settling every socket ever touched locked the whole aperture on the
-        // first gain. Settling every socket touched *by this press* is worse in
-        // a subtler way: with no repeats, seating a sigil already in play
-        // exchanges two sockets, so a gain of one settles both — and the other
-        // one can be wrong. Code `[0,1,3,4]` reaches `aligned 3` that way with
-        // its fourth socket locked at the wrong sigil, and no ladder can ever
-        // finish it.
-        //
-        // One socket moved and `aligned` rose is **entailed**, not inferred:
-        // nothing else changed, so that socket is now right. That is the only
-        // claim this may make, and it is what lets a spell safely skip a settled
-        // socket — the improving move a ward always has is provably reachable
-        // without disturbing one (see `seat`).
-        if self.shift == Some(Shift::Gained) && self.touched.iter().filter(|it| **it).count() == 1 {
-            for (socket, settled) in self.settled.iter_mut().enumerate() {
-                *settled |= self.touched[socket];
-            }
-        }
-        self.touched = [false; WIDTH];
     }
 
     /// What the ward says about the aperture, without recording it.
+    ///
+    /// # Astray is a multiset intersection, and it was a set test
+    ///
+    /// **The two coincide only while no sigil may repeat**, which is why this
+    /// has been correct so far and why nothing caught it. `code.contains(sigil)`
+    /// asks *does the code use this sigil at all*, so four of one sigil against
+    /// a code holding one of it counted **four** — four pegs on a four-socket
+    /// lock, from a figure that shares one.
+    ///
+    /// Mastermind's second number is the size of the **multiset** intersection,
+    /// less the exact matches: a sigil in the aperture may only be answered for
+    /// by a sigil in the code that no other has already claimed.
+    ///
+    /// The existing guard cannot see the difference —
+    /// `an_answer_is_always_one_figure_s_and_never_two` asserts
+    /// `aligned + astray <= 4`, and the set form satisfies that by construction
+    /// while being wrong about 30% of the pairs a repeating code space has.
     #[must_use]
     pub fn answer(&self) -> (u32, u32) {
         let aligned = (0..WIDTH)
             .filter(|slot| self.aperture[*slot] == self.code[*slot])
             .count();
-        let shared = self
-            .aperture
-            .iter()
-            .filter(|sigil| self.code.contains(sigil))
-            .count();
+
+        // Count each sigil on both sides and take the smaller — that *is* the
+        // multiset intersection, and it needs no allocation at this width.
+        let mut shared = 0usize;
+        for sigil in 0..SIGILS.len() {
+            let sent = self.aperture.iter().filter(|it| **it == sigil).count();
+            let held = self.code.iter().filter(|it| **it == sigil).count();
+            shared += sent.min(held);
+        }
+
         let aligned = u32::try_from(aligned).unwrap_or(0);
         let shared = u32::try_from(shared).unwrap_or(0);
         (aligned, shared.saturating_sub(aligned))
@@ -593,10 +512,17 @@ impl Ward {
         (self.aligned, self.astray)
     }
 
-    /// Whether the last press helped.
+    /// Which way `aligned` moved on the last press.
     #[must_use]
     pub const fn shift(&self) -> Option<Shift> {
         self.shift
+    }
+
+    /// Which way `astray` moved on the last press — the codemaker's other peg,
+    /// and the second half of everything a spell is allowed to know.
+    #[must_use]
+    pub const fn drift(&self) -> Option<Shift> {
+        self.drift
     }
 
     /// What is in a socket now.
@@ -605,17 +531,17 @@ impl Ward {
         SIGILS.get(*self.aperture.get(socket)?).copied()
     }
 
-    /// Whether a socket's last change gained.
+    /// What a socket is holding, as an index into [`SIGILS`].
     #[must_use]
-    pub fn is_settled(&self, socket: usize) -> bool {
-        self.settled.get(socket).copied().unwrap_or(false)
+    pub fn aperture_at(&self, socket: usize) -> usize {
+        self.aperture.get(socket).copied().unwrap_or(0)
     }
 
-    /// How many presses a sigil has taken part in.
-    #[must_use]
-    pub fn sigil_marks(&self, sigil: usize) -> u32 {
-        self.sigil_marks.get(sigil).copied().unwrap_or(0)
-    }
+    // `is_settled` and `sigil_marks` are gone. The first answered *"is this
+    // position correct?"* — the one question Mastermind never answers — and the
+    // second was a tally a stateless ladder walked, which is the player's own
+    // bookkeeping done for them. Neither is derivable from the two counts, which
+    // is precisely why neither belonged (§19).
 
     /// The aperture, for the board to draw.
     #[must_use]
@@ -668,8 +594,6 @@ impl Ward {
                 })
                 .collect(),
             aperture: self.aperture,
-            settled: self.settled,
-            marks: self.sigil_marks,
             // **The words, so the sheet can be typed from.** `dial second borax`
             // names a socket and a sigil by word, and a board of bare glyphs made
             // the player count columns and guess which shape was `pewter`. They go
@@ -720,22 +644,12 @@ impl Ward {
         crate::save::WardSave {
             code: self.code.to_vec(),
             aperture: self.aperture.to_vec(),
-            held: self.held.to_vec(),
             aligned: self.aligned,
             astray: self.astray,
-            best: self.best,
             pressed: self.pressed,
             spent: self.spent,
             shift: self.shift.map(|shift| shift.word().to_owned()),
-            sigil_marks: self.sigil_marks.to_vec(),
-            socket_marks: self.socket_marks.to_vec(),
-            tried: self
-                .tried
-                .iter()
-                .map(|socket| socket.iter().map(|&t| if t { 'x' } else { '.' }).collect())
-                .collect(),
-            settled: self.settled.to_vec(),
-            touched: self.touched.to_vec(),
+            drift: self.drift.map(|drift| drift.drift_word().to_owned()),
             history: self
                 .history
                 .iter()
@@ -759,17 +673,14 @@ impl Ward {
     /// it."* Lengths are clamped rather than trusted, so the worst a bad file
     /// does is make a strange ward rather than panic on the way in.
     pub(crate) fn from_save(save: &crate::save::WardSave) -> Self {
-        fn sockets<T: Copy + Default>(values: &[T]) -> [T; WIDTH] {
-            std::array::from_fn(|i| values.get(i).copied().unwrap_or_default())
-        }
-
         /// A socket's worth of sigil indices, **range-checked**.
         ///
         /// `seat` guards this on the way in, so live play can never seat a sigil
-        /// that does not exist — but a hand-edited file can, and `press` indexes
-        /// `sigil_marks` directly. Without this, `aperture = [0, 1, 2, 99]` in a
-        /// save panics on the next `probe` rather than on the way in, which is
-        /// the opposite of what this function's contract promises.
+        /// that does not exist — but a hand-edited file can, and both `answer`
+        /// and the board index [`SIGILS`] directly. Without this, `aperture =
+        /// [0, 1, 2, 99]` in a save panics on the next `probe` rather than on
+        /// the way in, which is the opposite of what this function's contract
+        /// promises.
         fn seated(values: &[usize]) -> [usize; WIDTH] {
             std::array::from_fn(|i| {
                 values
@@ -783,38 +694,17 @@ impl Ward {
         Self {
             code: seated(&save.code),
             aperture: seated(&save.aperture),
-            held: seated(&save.held),
             aligned: save.aligned,
             astray: save.astray,
-            best: save.best,
             pressed: save.pressed,
             spent: save.spent,
             shift: save.shift.as_deref().and_then(Shift::named),
-            sigil_marks: std::array::from_fn(|i| save.sigil_marks.get(i).copied().unwrap_or(0)),
-            socket_marks: sockets(&save.socket_marks),
-            tried: std::array::from_fn(|socket| {
-                let row = save.tried.get(socket).map_or("", String::as_str);
-                std::array::from_fn(|sigil| row.as_bytes().get(sigil) == Some(&b'x'))
-            }),
-            settled: sockets(&save.settled),
-            touched: sockets(&save.touched),
+            drift: save.drift.as_deref().and_then(Shift::drift_named),
             history: save
                 .history
                 .iter()
-                .map(|entry| (sockets(&entry.figure), entry.aligned, entry.astray))
+                .map(|entry| (seated(&entry.figure), entry.aligned, entry.astray))
                 .collect(),
-        }
-    }
-}
-
-impl Shift {
-    /// The shift a word names, for reading a save back.
-    pub(crate) fn named(word: &str) -> Option<Self> {
-        match word {
-            "closer" => Some(Self::Gained),
-            "level" => Some(Self::Held),
-            "further" => Some(Self::Lost),
-            _ => None,
         }
     }
 }
@@ -827,25 +717,59 @@ mod tests {
         Ward::new(&mut Rngs::from_seed(seed))
     }
 
-    /// Every code a ward can be — 6P4 = 360.
+    /// Every code a ward can be — 6⁴ = 1296.
+    ///
+    /// **It was 360**, because a code could not repeat a sigil. Everything the
+    /// domain used to need — the exchange, the ratchet, the settle-lock — came
+    /// out of that one rule, so widening it here is what those deletions rest on.
     fn every_code() -> Vec<[usize; WIDTH]> {
         let mut out = Vec::new();
         for a in 0..6 {
             for b in 0..6 {
                 for c in 0..6 {
                     for d in 0..6 {
-                        let code: [usize; WIDTH] = [a, b, c, d];
-                        let mut seen = code.to_vec();
-                        seen.sort_unstable();
-                        seen.dedup();
-                        if seen.len() == WIDTH {
-                            out.push(code);
-                        }
+                        out.push([a, b, c, d]);
                     }
                 }
             }
         }
         out
+    }
+
+    /// The shape `dev_spells.toml`'s `breaking` writes, as a function.
+    ///
+    /// **One socket at a time, left to right.** Dial it once and press: if
+    /// `aligned` fell, that socket was already right — put it back and press
+    /// again to re-sync the baseline. Otherwise keep dialling until `aligned`
+    /// rises, which can only be this socket arriving.
+    ///
+    /// The whole of what it reads is `closer` / `further`, which is the whole of
+    /// what a codemaker says. Returns the presses spent.
+    fn sweep(code: [usize; WIDTH]) -> u32 {
+        let mut ward = with_code(code);
+        ward.press();
+        for socket in 0..WIDTH {
+            if ward.broken() {
+                break;
+            }
+            // `if the prism is working` — the guard that stops a later rung
+            // dialling at a ward the earlier ones already broke.
+            let opening = ward.aperture_at(socket);
+            ward.advance(socket);
+            ward.press();
+            if ward.shift() == Some(Shift::Lost) {
+                ward.seat(socket, opening);
+                ward.press();
+                continue;
+            }
+            while ward.shift() != Some(Shift::Gained) {
+                assert!(ward.spent() < 200, "{code:?} never came round");
+                ward.advance(socket);
+                ward.press();
+            }
+        }
+        assert!(ward.broken(), "{code:?} survived the sweep");
+        ward.spent()
     }
 
     fn with_code(code: [usize; WIDTH]) -> Ward {
@@ -855,95 +779,97 @@ mod tests {
     }
 
     #[test]
-    fn a_ladder_always_has_a_socket_left_to_turn() {
-        // **`replenish`'s claim, and what makes a four-rung ladder safe.** A spell
-        // guarded on `untried` falls through to `wait` when every socket reports
-        // none, and the loop below it then presses an unchanged aperture for ever —
-        // holding the tower's one production slot and earning nothing. That is the
-        // failure a faucet has: not a crash, silence.
-        //
-        // Driven over every one of the 360 codes, because "six seeds never reached
-        // it" is not the same claim.
-        for code in every_code() {
-            let mut ward = with_code(code);
-            for _ in 0..60 {
-                if ward.broken() {
-                    break;
-                }
-                let left: u32 = (0..WIDTH).map(|socket| ward.untried(socket)).sum();
-                assert!(
-                    left > 0,
-                    "{code:?} left no socket to turn: settled {:?}, aperture {:?}",
-                    ward.settled,
-                    ward.aperture,
-                );
-                for socket in 0..WIDTH {
-                    ward.advance(socket);
-                }
-                ward.press();
-            }
-        }
-    }
-
-    #[test]
-    fn the_four_rung_ladder_breaks_every_one_of_the_360_codes() {
+    fn the_writable_spell_breaks_every_one_of_the_1296_codes() {
         // **The shape a player can actually write**, run against the whole code
-        // space rather than a handful of seeds: turn whatever socket still has a
-        // candidate, press, repeat. That is `dev_spells.toml`'s `breaking` with the
-        // `if`/`else` chain flattened, and it is only expressible because
-        // `dial <socket>` takes no sigil — a variable-free spell cannot name the
-        // one it has not tried.
+        // space rather than a handful of seeds. It is `dev_spells.toml`'s
+        // `breaking` with the four socket rungs collapsed into a loop, and it is
+        // only expressible because `dial <socket>` takes no sigil — a
+        // variable-free spell cannot name the one it has not tried.
+        //
+        // **Termination is a proof, not a measurement.** A socket's walk leaves
+        // a sigil that is not the code's and steps cyclically through six, so it
+        // reaches the code's within five — and only that arrival can raise
+        // `aligned`, because only that socket moved.
+        let codes = every_code();
         let mut worst = 0;
         let mut total = 0u32;
-        let codes = every_code();
         for code in &codes {
-            let mut ward = with_code(*code);
-            let mut presses = 0;
-            while !ward.broken() {
-                presses += 1;
-                assert!(presses <= 200, "{code:?} survived {presses} presses");
-                let socket = (0..WIDTH).find(|socket| ward.untried(*socket) > 0);
-                if let Some(socket) = socket {
-                    ward.advance(socket);
-                }
-                ward.press();
-            }
+            let presses = sweep(*code);
             worst = worst.max(presses);
             total += presses;
         }
 
         // **The mean is the margin the whole domain rests on**, so it is pinned
-        // rather than left to a comment. A deducing player averages 4.14 over these
-        // same 360 codes and the best play there is averages 4.08 — if a blind
-        // ladder ever came near that, automating the lens would have deleted the
-        // puzzle, which §19 records the first design doing.
+        // rather than left to a comment. A deducing player averages 5.15 over
+        // these same 1296 codes — if the spell ever came near that, automating
+        // the lens would have deleted the puzzle, which §19 records the first
+        // design doing.
         //
-        // **And it is not brute force**: trying codes at random until one fits
-        // averages 180. The ratchet and the settle-lock make this a monotone climb,
-        // so it lands an order of magnitude below that and a *long* way above a
-        // person.
-        let count = u32::try_from(codes.len()).expect("360 codes fit a u32");
+        // **And it is not brute force**: guessing codes at random until one fits
+        // averages 648. This sits between, which is the band the domain needs.
+        let count = u32::try_from(codes.len()).expect("1296 codes fit a u32");
         let mean = f64::from(total) / f64::from(count);
         assert!(
-            (8.0..40.0).contains(&mean),
-            "a blind ladder averages {mean:.1} presses; a person averages 4.14 and \
-             blind guessing averages 180 — this has left the band the domain needs",
+            (9.0..18.0).contains(&mean),
+            "the writable spell averages {mean:.2} presses; a person averages \
+             5.15 and blind guessing averages 648 — this has left the band",
         );
-        assert!(worst <= 200, "worst case {worst} presses");
+        assert!(worst <= 30, "worst case {worst} presses");
     }
 
     #[test]
-    fn a_ward_never_repeats_a_sigil() {
-        // The rule two other things rest on: `astray` stays informative, and a
-        // `seat` stays ambiguous enough that hill-climbing cannot become a
-        // per-socket oracle.
-        for seed in 0..200 {
-            let ward = ward(seed);
-            let mut seen = ward.code.to_vec();
-            seen.sort_unstable();
-            seen.dedup();
-            assert_eq!(seen.len(), WIDTH, "seed {seed} drew a repeat");
+    fn a_ward_may_repeat_a_sigil() {
+        // **The rule that was inverted**, and the one everything else turned on.
+        // 4 draws of 6 repeat something 44.9% of the time, so 200 seeds finding
+        // none would mean the draw had quietly gone back to being a shuffle.
+        let repeats = (0..200u64)
+            .filter(|seed| {
+                let ward = ward(*seed);
+                let mut seen = ward.code.to_vec();
+                seen.sort_unstable();
+                seen.dedup();
+                seen.len() < WIDTH
+            })
+            .count();
+        assert!(repeats > 40, "only {repeats} of 200 wards repeated a sigil");
+    }
+
+    #[test]
+    fn a_dial_moves_one_socket_and_only_one() {
+        // **What repeats buy, and the reason the props could go.** A dial used to
+        // *exchange* when the sigil it wanted was held elsewhere, so `aligned`
+        // rising could not be attributed to either socket — which is what the
+        // ratchet, the settle-lock and the per-socket tally were all propping up.
+        for socket in 0..WIDTH {
+            for sigil in 0..SIGILS.len() {
+                let mut ward = with_code([0, 1, 2, 3]);
+                let before = ward.aperture;
+                if !ward.seat(socket, sigil) {
+                    assert_eq!(ward.aperture, before, "a refused dial still moved");
+                    continue;
+                }
+                let moved = (0..WIDTH).filter(|at| ward.aperture[*at] != before[*at]);
+                assert_eq!(moved.count(), 1, "dialling {socket} moved more than it");
+                assert_eq!(ward.aperture_at(socket), sigil, "the dial missed");
+            }
         }
+    }
+
+    #[test]
+    fn a_bare_dial_walks_all_six_and_comes_back() {
+        // `advance` is the whole of what a variable-free spell can aim, so the
+        // walk has to be a cycle: six turns from anywhere returns what it started
+        // with, and every sigil is offered exactly once on the way.
+        let mut ward = with_code([0, 1, 2, 3]);
+        let mut seen = Vec::new();
+        for _ in 0..SIGILS.len() {
+            seen.push(ward.aperture_at(2));
+            assert!(ward.advance(2), "the walk stalled");
+        }
+        assert_eq!(ward.aperture_at(2), 2, "six turns did not come round");
+        seen.sort_unstable();
+        seen.dedup();
+        assert_eq!(seen.len(), SIGILS.len(), "the walk skipped a sigil");
     }
 
     #[test]
@@ -953,22 +879,67 @@ mod tests {
         // if it could, the orb would be holding knowledge the player has not
         // earned, which is what deleted the puzzle last time.
         //
-        // Two codes chosen to answer the opening press *identically* —
-        // `[1,0,2,3]` and `[0,1,3,2]` both read `aligned 2, astray 2` against
-        // the opening `[0,1,2,3]`. Every field the ward publishes must therefore
-        // match: if one of them differed, the orb would be holding knowledge the
-        // player has not earned.
-        let mut a = with_code([1, 0, 2, 3]);
-        let mut b = with_code([0, 1, 3, 2]);
-        a.press();
-        b.press();
-        assert_eq!(a.last(), (2, 2), "the fixture no longer answers as chosen");
-        assert_eq!(a.last(), b.last(), "the two codes answered differently");
-        assert_eq!(a.shift(), b.shift());
-        assert_eq!(a.settled, b.settled, "a settled socket leaked the code");
-        assert_eq!(a.sigil_marks, b.sigil_marks);
-        assert_eq!(a.socket_marks, b.socket_marks);
-        assert_eq!(a.broken(), b.broken());
+        // **Exhaustive, not a hand list.** The old version named the fields it
+        // could think of and missed `tried` — the leak §19 records — so this
+        // compares the *whole* published surface instead: every code is driven
+        // through one arbitrary but identical sequence of dials, and any two that
+        // answered every press alike must be indistinguishable afterwards.
+        //
+        // Everything a ward can be asked for goes in the tuple: the counts, both
+        // deltas, whether it is broken, and the whole board a player is shown.
+        // A field added to `Ward` that reaches the player and *not* this tuple is
+        // the failure mode; `view` is what makes that hard, since the board is
+        // the surface with the most in it.
+        type Surface = (
+            u32,
+            u32,
+            Option<Shift>,
+            Option<Shift>,
+            bool,
+            orbs_render::Board,
+        );
+        let told = |code: [usize; WIDTH]| -> (Vec<(u32, u32)>, Surface) {
+            let mut ward = with_code(code);
+            ward.press();
+            let mut answers = vec![ward.last()];
+            // An arbitrary walk that touches every socket and several sigils —
+            // the point is that it is the *same* walk for every code, so anything
+            // that differs afterwards differs because of the code.
+            for (socket, sigil) in [(0, 4), (1, 5), (2, 0), (3, 1), (0, 2), (2, 3)] {
+                ward.seat(socket, sigil);
+                ward.press();
+                answers.push(ward.last());
+            }
+            let surface = (
+                ward.last().0,
+                ward.last().1,
+                ward.shift(),
+                ward.drift(),
+                ward.broken(),
+                ward.view(),
+            );
+            (answers, surface)
+        };
+
+        let mut by_answers: std::collections::HashMap<Vec<(u32, u32)>, ([usize; WIDTH], Surface)> =
+            std::collections::HashMap::new();
+        let mut pairs = 0u32;
+        for code in every_code() {
+            let (answers, surface) = told(code);
+            if let Some((first, known)) = by_answers.get(&answers) {
+                pairs += 1;
+                assert_eq!(
+                    *known, surface,
+                    "{code:?} and {first:?} answer alike and the orb can still \
+                     tell them apart",
+                );
+            } else {
+                by_answers.insert(answers, (code, surface));
+            }
+        }
+        // The test is only worth anything if such pairs exist at all — a walk
+        // that happened to separate all 1296 codes would assert nothing.
+        assert!(pairs > 100, "only {pairs} codes answered alike");
     }
 
     #[test]
@@ -982,6 +953,7 @@ mod tests {
         // true code.
         //
         // Two invariants, and the second is what the arithmetic makes impossible.
+        let mut check = with_code([0, 0, 0, 0]);
         for code in every_code() {
             let mut ward = with_code(code);
             ward.press();
@@ -1003,7 +975,7 @@ mod tests {
 
                     // ...and it is the *sent* figure's answer, recomputed here
                     // from the figure the history recorded rather than trusted.
-                    let mut check = with_code(code);
+                    check.code = code;
                     check.aperture = sent;
                     assert_eq!(
                         check.answer(),
@@ -1016,39 +988,24 @@ mod tests {
     }
 
     #[test]
-    fn a_sigil_is_tallied_for_the_press_it_was_actually_in() {
-        // Counting after the ratchet credited the *reverted* figure's sigils a
-        // second time and left the pressed figure's untouched.
-        let mut ward = with_code([0, 1, 2, 3]);
+    fn a_press_that_does_not_help_stands() {
+        // **The ratchet is gone, and this is what that means.** A press used to
+        // be silently reverted unless it improved, so the aperture always held
+        // the best figure ever sent and `aligned` could not be observed to fall.
+        // That is a codemaker undoing your move for you — and with it gone, the
+        // fall is the single most informative thing the lens says: only a socket
+        // that *was* right can make `aligned` drop when it alone moved.
+        // The opening aperture is `[0,1,2,3]`, so this code has socket 0 already
+        // right and socket 3 already wrong — one press in, `aligned` is 3.
+        let mut ward = with_code([0, 1, 2, 4]);
         ward.press();
-        assert_eq!(ward.sigil_marks(4), 0, "pewter was never pressed");
-
-        // Seat pewter, press, lose, snap back — pewter took part all the same.
-        assert!(ward.seat(0, 4));
+        let before = ward.last().0;
+        assert_eq!(before, 3, "the fixture no longer opens at three");
+        assert!(ward.seat(0, 5));
         ward.press();
-        assert_eq!(
-            ward.shift(),
-            Some(Shift::Lost),
-            "the fixture stopped losing"
-        );
-        assert_eq!(
-            ward.sigil_marks(4),
-            1,
-            "a reverted press did not credit the sigil it sent",
-        );
-    }
-
-    #[test]
-    fn the_meter_only_rises() {
-        // What `best` is for. A gauge fed from the last answer would fall back
-        // whenever a guess did not help, reporting the guess and not the reading.
-        let mut ward = with_code([0, 1, 2, 3]);
-        ward.press();
-        let high = ward.best();
-        assert!(ward.seat(0, 4));
-        ward.press();
-        assert!(ward.last().0 < high, "the fixture stopped losing ground");
-        assert_eq!(ward.best(), high, "progress went backwards");
+        assert_eq!(ward.aperture_at(0), 5, "the press was reverted");
+        assert!(ward.last().0 < before, "aligned did not fall");
+        assert_eq!(ward.shift(), Some(Shift::Lost), "the fall was not reported");
     }
 
     #[test]
@@ -1074,106 +1031,151 @@ mod tests {
     }
 
     #[test]
-    fn a_blind_ladder_breaks_every_ward_within_its_budget() {
-        // **What `debug_spell breaking` will do, and it cannot revert.** §8's
-        // language has no variables, so the ladder has no way to remember what a
-        // socket held before a bad press — it can only move forward. That is
-        // exactly what the settle-lock makes safe: a socket that gains is held,
-        // every other seat is still available, and the walk cannot cycle.
+    fn a_ladder_that_never_reads_the_answer_cannot_break_the_seal() {
+        // **The prop that did not fall out of the repeats change**, recorded here
+        // rather than in a comment. A ladder that walks (socket, sigil) pairs and
+        // only restarts on a gain used to break all 360 codes — because the
+        // settle-lock froze a socket that gained and the ratchet undid anything
+        // that did not, so the walk could not destroy its own progress. Both are
+        // gone, and moving without reading a per-press delta now loses ground as
+        // fast as it makes it.
         //
-        // **The budget is measured, not derived**, and the arithmetic that looks
-        // like a bound is not one: four sockets times five sigils plus the
-        // opening is 21, and a real ladder needs more, because a `repeat until`
-        // re-walks its rungs after every gain and a socket that was already
-        // right at the opening costs five presses to prove it should not move.
-        //
-        // 80 against a measured worst of 51 in the Python model this design was
-        // settled on — headroom, because a budget fitted to the measurement is a
-        // budget that fails on the first content change.
+        // This is why `readings()` still publishes the two deltas at all: without
+        // them there is no writable spell, and the domain would be hand-play only.
         const BUDGET: u32 = 80;
-        let mut worst = 0;
-        for code in every_code() {
-            let mut ward = with_code(code);
-            ward.press();
-            let mut tried: Vec<(usize, usize)> = Vec::new();
-
-            while !ward.broken() && ward.spent() < BUDGET {
-                let next = (0..WIDTH)
-                    .filter(|socket| !ward.is_settled(*socket))
-                    .flat_map(|socket| (0..SIGILS.len()).map(move |sigil| (socket, sigil)))
-                    .find(|pair| !tried.contains(pair));
-                let Some((socket, sigil)) = next else { break };
-                tried.push((socket, sigil));
-                if !ward.seat(socket, sigil) {
-                    continue;
-                }
+        let codes = every_code();
+        let broke = codes
+            .iter()
+            .filter(|code| {
+                let mut ward = with_code(**code);
                 ward.press();
-                if ward.shift() == Some(Shift::Gained) {
-                    tried.clear();
+                let mut tried: Vec<(usize, usize)> = Vec::new();
+                while !ward.broken() && ward.spent() < BUDGET {
+                    let next = (0..WIDTH)
+                        .flat_map(|socket| (0..SIGILS.len()).map(move |sigil| (socket, sigil)))
+                        .find(|pair| !tried.contains(pair));
+                    let Some((socket, sigil)) = next else { break };
+                    tried.push((socket, sigil));
+                    if !ward.seat(socket, sigil) {
+                        continue;
+                    }
+                    ward.press();
+                    if ward.shift() == Some(Shift::Gained) {
+                        tried.clear();
+                    }
                 }
-            }
-            assert!(
-                ward.broken(),
-                "{code:?} survived {BUDGET} presses at {} aligned",
-                ward.last().0,
-            );
-            worst = worst.max(ward.spent());
-        }
-        // Pinned well under the budget, so the headroom stays headroom: a worst
-        // case creeping toward 80 is the signal that the ladder has stopped
-        // being a rule and started being a search.
+                ward.broken()
+            })
+            .count();
         assert!(
-            worst <= 60,
-            "the blind ladder's worst case is now {worst} presses",
+            broke * 4 < codes.len(),
+            "a delta-blind ladder broke {broke} of {} codes — the props it needed \
+             have come back",
+            codes.len(),
         );
     }
 
     #[test]
     fn deduction_beats_the_ladder() {
         // **The claim the whole domain rests on**, pinned. A player who presses
-        // only figures consistent with every answer so far averages ~4.1; the
-        // blind ladder above averages ~22.8. If this margin ever collapses, the
-        // lens has no puzzle in it and the two channels have become one.
+        // only figures consistent with every answer so far averages ~5.15 over
+        // the 1296 codes; the writable spell above averages ~12. If this margin
+        // ever collapses, the lens has no puzzle in it and the two channels have
+        // become one.
         //
         // The player is modelled rather than played: consistent guessing is what
         // a careful person does, and it is the *upper* bound on how well the orb
         // could ever do without the deduction it deliberately does not hold.
+        //
+        // **One ward, re-aimed.** Building a fresh `Ward` per candidate means a
+        // fresh `Rngs` per candidate, and this loop asks for millions of answers;
+        // the code and the aperture are the only state `answer` reads.
         let codes = every_code();
+        let mut trial = with_code([0, 0, 0, 0]);
         let mut player = 0u32;
         for code in &codes {
             let mut live = codes.clone();
             let mut presses = 0;
+            // **The first press is the aperture the ward opens on**, because
+            // that is what a player who types `probe` sends. Opening on
+            // `live[0]` instead — `[0,0,0,0]` — costs them 0.6 of a press, and
+            // the margin should be measured against the play the room actually
+            // affords.
+            let mut guess = [0, 1, 2, 3];
             loop {
-                let guess = live[0];
                 presses += 1;
-                let mut trial = with_code(*code);
+                trial.code = *code;
                 trial.aperture = guess;
                 let (aligned, astray) = trial.answer();
                 if aligned as usize == WIDTH {
                     break;
                 }
                 live.retain(|candidate| {
-                    let mut probe = with_code(*candidate);
-                    probe.aperture = guess;
-                    probe.answer() == (aligned, astray)
+                    trial.code = *candidate;
+                    trial.answer() == (aligned, astray)
                 });
+                guess = live[0];
             }
             player += presses;
         }
         let mean = f64::from(player) / f64::from(u32::try_from(codes.len()).unwrap_or(u32::MAX));
+        // 5.15 measured; the band leaves room for the opening aperture changing
+        // and none for the margin closing. Knuth's minimax play is 4.48 on the
+        // standard board, so a person cannot get far under this either.
         assert!(
             mean < 6.0,
-            "a deducing player now needs {mean:.2} presses, so the ladder is competitive",
+            "a deducing player now needs {mean:.2} presses, so the spell is competitive",
         );
     }
 
     #[test]
-    fn seating_a_sigil_already_in_play_exchanges_rather_than_duplicates() {
+    fn astray_counts_a_sigil_once_per_copy_the_code_actually_holds() {
+        // **Mastermind's second number is a multiset intersection**, and this was
+        // a set test — `code.contains(sigil)` — which is the same thing only
+        // while no sigil repeats. It is therefore correct today and wrong the
+        // moment the code space allows a repeat, which is a change under
+        // consideration; pinned now so that change cannot land quietly.
+        //
+        // Hand-checked. Each row is (aperture, code) -> (aligned, astray).
+        for (sent, code, want) in [
+            // The everyday case, unaffected either way.
+            ([0, 1, 2, 3], [0, 1, 2, 3], (4, 0)),
+            ([0, 1, 2, 3], [3, 2, 1, 0], (0, 4)),
+            ([0, 1, 2, 3], [0, 1, 3, 2], (2, 2)),
+            // **Four of one sigil against a code holding exactly one.** The set
+            // form answered `(1, 3)` — three pegs claiming a sigil the code has
+            // one of.
+            ([0, 0, 0, 0], [0, 1, 2, 3], (1, 0)),
+            // Two sent, one held: one is answered for, the other is not.
+            ([0, 0, 1, 2], [0, 3, 4, 5], (1, 0)),
+            // Two sent and two held, neither in place.
+            ([0, 0, 4, 5], [1, 2, 0, 0], (0, 2)),
+            // ...and the same pair with one of them landing, which is the row
+            // that caught a wrong hand-count writing this table.
+            ([0, 0, 4, 5], [1, 0, 0, 2], (1, 1)),
+            // One sent against two held — the aperture's count is the cap too.
+            ([0, 4, 5, 1], [0, 0, 2, 3], (1, 0)),
+        ] {
+            let mut ward = with_code(code);
+            ward.aperture = sent;
+            assert_eq!(
+                ward.answer(),
+                want,
+                "aperture {sent:?} against code {code:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn seating_a_sigil_already_in_play_duplicates_it() {
+        // The inverse of what this asserted: it used to *exchange* the two
+        // sockets, because a figure could not repeat a sigil. It can now, and the
+        // far socket is left alone (§19).
         let mut ward = with_code([0, 1, 2, 3]);
         assert_eq!(ward.seated(0), Some("nitre"));
         assert!(ward.seat(0, 1), "nothing moved");
         assert_eq!(ward.seated(0), Some("alum"));
-        assert_eq!(ward.seated(1), Some("nitre"), "the sigil was duplicated");
+        assert_eq!(ward.seated(1), Some("alum"), "the far socket was dragged");
     }
 
     #[test]

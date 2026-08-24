@@ -121,13 +121,13 @@ pub(super) fn dial(intent: &Intent, world: &mut World) {
     );
 }
 
-/// `dial <socket>` with no sigil — turn it to whatever has not been tried.
+/// `dial <socket>` with no sigil — turn it one step round the six.
 ///
-/// Every refusal `dial` has keeps its shape: an unknown socket says so, and a
-/// socket with nothing left says `dial_spent` rather than pretending to move. The
-/// success line names the sigil the ward chose, because a player watching a spell
-/// work needs to see *what* it tried, and a script that could not name it still
-/// wants the transcript to.
+/// **This is what makes a solver writable at all.** §8's language has no
+/// variables, so a spell cannot name the sigil a socket has not tried; bare, the
+/// ward picks the next one. The success line names what it chose, because a
+/// player watching a spell work needs to see *what* it tried, and a script that
+/// could not name it still wants the transcript to.
 fn advance(world: &mut World, prism: Entity, socket: &str) {
     let Some(at) = ward::socket_of(socket) else {
         say(
@@ -140,46 +140,38 @@ fn advance(world: &mut World, prism: Entity, socket: &str) {
         return;
     };
 
-    // **Three outcomes, and the middle one is why `advance` is not just `seat`.**
-    // A candidate can be *spent* without the aperture moving — the socket already
-    // held that sigil — and a ladder needs exactly that to count as progress, or
-    // it aims at the same socket for ever. What the player is told still has to be
-    // true, so the three are told apart rather than collapsed into moved/not.
-    let chosen = world
-        .get::<Ward>(prism)
-        .and_then(|ward| ward.next_untried(at));
+    // **One outcome now: it turns.** This used to be a three-way match, because
+    // `advance` took the first sigil the socket had not *tried since the last
+    // gain* — so it could find none left (`dial_spent`) or land on the one
+    // already there (`dial_held`). Both were symptoms of the ward keeping a
+    // per-socket candidate list, which is the player's bookkeeping and is gone.
+    //
+    // A cyclic step always moves, so the only thing to say is which sigil it
+    // moved to. `dial_spent` has no reachable path left.
     let moved = world
         .get_mut::<Ward>(prism)
         .is_some_and(|mut ward| ward.advance(at));
+    let sigil = world
+        .get::<Ward>(prism)
+        .map_or(0, |ward| ward.aperture_at(at));
     publish(world, prism);
 
-    match (chosen, moved) {
-        // Settled, or every sigil tried since the last gain. A state the player can
-        // see on the sheet, and a refusal rather than a fault — which is what lets
-        // a ladder's next rung take over on the same tick.
-        (None, _) => say(
-            world,
-            Verb::Dial,
-            "dial_spent",
-            &[("name", socket)],
-            Role::Cost,
-        ),
-        // Spent a candidate and nothing turned: it was already there. The same
-        // sentence a named `dial` gets for the same reason.
-        (Some(_), false) => say(
-            world,
-            Verb::Dial,
-            "dial_held",
-            &[("name", socket)],
-            Role::Cost,
-        ),
-        (Some(sigil), true) => say(
+    if moved {
+        say(
             world,
             Verb::Dial,
             "dial_done",
             &[("name", socket), ("detail", ward::SIGILS[sigil])],
             Role::Success,
-        ),
+        );
+    } else {
+        say(
+            world,
+            Verb::Dial,
+            "dial_held",
+            &[("name", socket)],
+            Role::Cost,
+        );
     }
 }
 
@@ -493,12 +485,22 @@ pub(crate) fn publish(world: &mut World, prism: Entity) {
     if let Some(ward) = &ward
         && ward.pressed()
     {
+        // **The counts are still shown, and are no longer askable.** They reach
+        // the player as *record fields* — `survey prism` prints them and so does
+        // the sheet — which is the game: Mastermind shows you the pegs for every
+        // guess. What a spell may ask for is `readings()`, and that is now only
+        // the two deltas, so `if the prism has aligned` no longer resolves.
         let (aligned, astray) = ward.last();
         tower::raise_count(world, prism, ward::ALIGNED, aligned);
         tower::raise_count(world, prism, ward::ASTRAY, astray);
         tower::raise_count(world, prism, ward::SPENT, ward.spent());
+        // Which way each moved since the last press — the whole of what a
+        // codemaker may say, and the whole of what a spell can branch on.
         if let Some(shift) = ward.shift() {
             tower::raise_reading(world, prism, shift.word());
+        }
+        if let Some(drift) = ward.drift() {
+            tower::raise_reading(world, prism, drift.drift_word());
         }
     }
 
@@ -508,51 +510,13 @@ pub(crate) fn publish(world: &mut World, prism: Entity) {
         };
         clear(world, node);
         let Some(ward) = &ward else { continue };
-        // **What is in it, so `survey first` answers something.** A socket that
-        // published only `settled`/`open` would leave the player unable to read
-        // their own aperture back without the board.
+        // **What is in it, and nothing else.** A socket used to publish
+        // `settled`/`loose` and two tallies beside this — a verdict on the
+        // position and a count of what had been tried there. Both were the orb
+        // keeping the player's notes; what is left is the player reading their
+        // own dial back (§19).
         if let Some(sigil) = ward.seated(index) {
             tower::raise_reading(world, node, sigil);
-        }
-        tower::raise_reading(
-            world,
-            node,
-            if ward.is_settled(index) {
-                ward::SETTLED
-            } else {
-                ward::LOOSE
-            },
-        );
-        // **The counter a ladder walks.** `loose` says *you may turn this*; the
-        // tally says *how many times you have tried*, which is the only way a
-        // spell with no variables can take a different sigil on the next lap.
-        // Nought is not published, for the reason the maze's marks are not.
-        let marks = ward.socket_marks(index);
-        if marks > 0 {
-            tower::raise_count(world, node, ward::MARKS, marks);
-        }
-        // **What a four-rung ladder guards on.** `marks` counts dials *aimed* at
-        // this socket and a swap bumps the far end too, so it outruns the sigils
-        // actually tried — using it as an index exhausted a socket with candidates
-        // left and stalled the spell. This counts what is genuinely untried, and a
-        // gain puts them all back.
-        let untried = ward.untried(index);
-        if untried > 0 {
-            tower::raise_count(world, node, ward::UNTRIED, untried);
-        }
-    }
-
-    for (index, name) in ward::SIGILS.into_iter().enumerate() {
-        let Some(node) = reading(world, room, name) else {
-            continue;
-        };
-        clear(world, node);
-        let Some(ward) = &ward else { continue };
-        // Nought is not published, for the reason the maze's marks are not: a
-        // count that reaches zero is a node the rest of the tower despawns.
-        let marks = ward.sigil_marks(index);
-        if marks > 0 {
-            tower::raise_count(world, node, ward::MARKS, marks);
         }
     }
 }

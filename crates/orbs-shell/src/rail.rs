@@ -245,7 +245,7 @@ fn readings(painter: &mut orbs_render::Painter<'_>, sim: &Sim, screen: &Screen, 
         }
         painter.span(
             Pos::new(at.col, row),
-            &Span::new(&truncate(text, usize::from(at.cols))).with_style(Style::DIM),
+            &Span::new(truncate(text, usize::from(at.cols))).with_style(Style::DIM),
         );
         row = row.saturating_add(1);
     }
@@ -253,28 +253,29 @@ fn readings(painter: &mut orbs_render::Painter<'_>, sim: &Sim, screen: &Screen, 
 
 /// §9's focus mode, as a word.
 const fn focus(screen: &Screen) -> &'static str {
-    match screen.mode {
-        orbs_render::DisplayMode::Deep => "deep",
-        orbs_render::DisplayMode::Wide => "wide",
-    }
+    screen.mode.word()
 }
 
 /// What a domain is doing, in the panel's own vocabulary.
 ///
-/// The same words the instrument panel prints, so the rail and the pane cannot
-/// describe one room two ways.
+/// **[`State::label`] for nine of the ten, and one deliberate difference.**
+///
+/// This used to be a hand-written second copy of all ten arms, under a comment
+/// claiming *"the same words the instrument panel prints, so the rail and the
+/// pane cannot describe one room two ways"* — and they already did: `Empty` read
+/// `idle` here and `empty` there, so an untouched laboratory was `idle` on the
+/// rail and `empty` in the pane and to a screen reader.
+///
+/// The word is kept, because the two surfaces are describing different subjects.
+/// The panel labels an **instrument**, and an instrument with nothing in it is
+/// *empty*. The rail labels a **room** — `Brief::state` is what its busiest
+/// instrument is doing — and a room is not empty, it is idle. What was wrong was
+/// writing the other nine out again beside it, which is what let the difference
+/// become accidental instead of stated.
 const fn word(state: State) -> &'static str {
     match state {
         State::Empty => "idle",
-        State::Charged => "charged",
-        State::Gathering => "gathering",
-        State::Working => "working",
-        State::Scouring => "scouring",
-        State::Ready => "ready",
-        State::Fouled => "fouled",
-        State::Burning => "burning",
-        State::Banked => "banked",
-        State::Cold => "cold",
+        other => other.label(),
     }
 }
 
@@ -283,11 +284,16 @@ const fn word(state: State) -> &'static str {
 /// §19's frame rule is that **truncation is visual only** — the linear stream
 /// still carries the full text, so a narrow rail is a visual constraint and never
 /// an informational one.
-fn truncate(text: &str, width: usize) -> String {
-    if text.chars().count() <= width {
-        return text.to_owned();
-    }
-    text.chars().take(width).collect()
+fn truncate(text: &str, width: usize) -> &str {
+    // **`orbs_render::arriving`, which the instrument panel one file over has
+    // been calling all along.** This was a third hand-rolled char-safe cut in
+    // the workspace, and `char_index` — the helper `arriving` is built on —
+    // exists precisely because two private copies of that idiom in different
+    // crates desynchronised Tab completion once already.
+    //
+    // It also allocated: a `String` per call, four calls a box, seven boxes,
+    // every frame, for text that changes at 1 Hz.
+    orbs_render::arriving(text, u32::try_from(width).unwrap_or(u32::MAX))
 }
 
 #[cfg(test)]

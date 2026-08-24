@@ -230,38 +230,34 @@ pub struct MazeSave {
 }
 
 /// A ward, mid-solve.
+///
+/// **Seven fields shorter than it was, because the ward stopped keeping them.**
+/// It carried `held`, `best`, `sigil_marks`, `socket_marks`, `tried`, `settled`
+/// and `touched` while the code space was 360 and a dial *exchanged* two sockets
+/// — all of them scaffolding under that one ambiguity. Repeats deleted the
+/// exchange and the state went with it, so a save written against the old shape
+/// cannot be read: `code` and `aperture` are all it shares, and the two count as
+/// different formats. See `tower::ward` for the argument in full.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WardSave {
     /// The answer. Sigil indices, one per socket.
     pub code: Vec<usize>,
-    /// What the aperture is holding now.
+    /// What the aperture is holding now — and what the next press will send.
     pub aperture: Vec<usize>,
-    /// What the last press held — what a refused press snaps back to.
-    pub held: Vec<usize>,
     /// How many of the last press were right.
     pub aligned: u32,
     /// How many were the right sigil in the wrong socket.
     pub astray: u32,
-    /// The best `aligned` any press has reached.
-    pub best: u32,
     /// Whether the aperture has been pressed at all.
     pub pressed: bool,
     /// Presses spent.
     pub spent: u32,
-    /// Whether the last press gained, held or lost.
+    /// Which way `aligned` moved on the last press.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shift: Option<String>,
-    /// How many times each sigil has been dialled.
-    pub sigil_marks: Vec<u32>,
-    /// How many times each socket has been dialled.
-    pub socket_marks: Vec<u32>,
-    /// Which sigils each socket has already tried, as one string of `.`/`x` per
-    /// socket — a grid, drawn the way the board draws one.
-    pub tried: Vec<String>,
-    /// Sockets proved right and therefore locked.
-    pub settled: Vec<bool>,
-    /// Sockets dialled since the last press.
-    pub touched: Vec<bool>,
+    /// Which way `astray` moved on the last press — Mastermind's other number.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub drift: Option<String>,
     /// Every press and its answer, oldest first.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub history: Vec<HistorySave>,

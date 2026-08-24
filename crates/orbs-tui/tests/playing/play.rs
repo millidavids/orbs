@@ -466,6 +466,23 @@ impl Game {
         self
     }
 
+    /// Assert the newest command block does **not** contain something.
+    ///
+    /// **It waits for nothing, and that is what makes it safe.** A negative
+    /// claim has no event to pace itself against, so this is only honest after
+    /// an [`Self::expect`] on the same block has already landed — the answer is
+    /// on screen whole, and the question is what is missing from it. Use
+    /// [`Self::refute_after`] when the claim is about the future instead.
+    pub fn expect_absent(&self, needle: &str) -> &Self {
+        let block = flatten(&block(&self.screen()));
+        assert!(
+            !block.contains(&flatten(needle)),
+            "{needle:?} is in the newest block, and should not be:\n{}",
+            self.screen(),
+        );
+        self
+    }
+
     /// Let the world run, then assert something never showed up.
     ///
     /// **A negative assertion cannot pace itself**, which is why it takes a

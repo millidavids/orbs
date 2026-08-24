@@ -34,7 +34,7 @@ use crate::drive::Run;
 /// DESIGN.md keeps its idealisation with a §19 note saying what the loop costs on
 /// top. That makes this a regression pin: a number moving here means the *game*
 /// changed, which is exactly the alarm §16 wants.
-const EXPECTED: [(&str, f64); 4] = [
+const EXPECTED: [(&str, f64); 5] = [
     // 0.170 idealised (§19, "16, and why the anchor moved") against 0.140 looped.
     ("clarity", 0.140),
     // §10.1's claimed better play, measured **behind** the careless one — see
@@ -49,6 +49,23 @@ const EXPECTED: [(&str, f64); 4] = [
     // and the loop agree on exactly, because the loop is two commands and has no
     // fire, no byproduct and nothing to scour.
     ("grind", 0.100),
+    // **The number the lens redesign moved most, and the reason it is pinned at
+    // all.** Automated scrying read 0.07 while the ward exchanged sigils, took
+    // ~23 presses and paid twelve ticks for each; it reads 0.268 now — the same
+    // 8 a solve, over ~12 presses at two ticks apiece.
+    //
+    // It is *unlike* the four above in one way worth knowing before reading it:
+    // a press takes no production slot, so this is the only policy here that
+    // never waits on the tower and never competes with a brew. The rate is
+    // therefore **additive** to whatever the laboratory is doing rather than an
+    // alternative to it, which is what §8 wants automation to buy and is not
+    // something the table's single column can show.
+    //
+    // A real bound `breaking` measures ~0.18 over the same span, because §8's
+    // interpreter spends a tick on every `if`, `else` and `end`. This is a
+    // ceiling, exactly as `stacks` is — §19's *"the harness has no player"* puts
+    // execution outside what a policy models.
+    ("scrying", 0.268),
 ];
 
 /// How far a measurement may sit from its expectation before it is called out.
