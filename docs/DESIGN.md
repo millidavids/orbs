@@ -2176,7 +2176,7 @@ in the suite would have caught it, and none was ever written that could have.
 | **0. Vertical slice** | Parser + instrumentation, **the prompt — an interactive command line, built before the domains and used to verify them**, **brewing + archive (the two starting domains)**, **`orbs-render` Frame boundary**, **log-poisoning sabotage on brewing logs**, cell-grid renderer + fidelity tiers, worst-case CRT legibility test, structured-record output model, seeded-RNG + `step()` determinism spine, boot, scaffold tutorial | ~3k | 4 mo | Numeric gate below |
 | **1. Core loop** | World clock, script engine + **concentration** + failure taxonomy, remaining sabotage surfaces, 3 domains, minimal apprenticeship, content data format, balance CLI **sweeping §11.5's first-pass numbers**, **scrappy internal `orbs-tui` as a dev tool** | ~15k | 5 mo | A player automates a duty and feels clever; non-terminal testers in the loop |
 | **2. Scrying** | The `lens/` domain: deduction over sources that disagree. **World sabotage surface**, **`orbs-balance` sweeping §11.5's first-pass numbers** | ~6k | 3 mo | A player finds which of two accounts is lying, and a spell repeats it |
-| **3. Spellcraft** | The `grimoire/` domain: spells composed from reusable parts. **Naming pass (~35 verbs)**, hidden-directory authoring | ~6k | 3 mo | A spell is assembled from parts written earlier |
+| **3. Spellcraft** | The `grimoire/` domain: spells composed from reusable parts. **The language overhaul that composition needs** — values, variables, lists, `for each`, functions, builtins over the domains. **Naming pass (~35 verbs)**, hidden-directory authoring | ~7k | 5 mo | A spell is assembled from parts written earlier |
 | **4. Enchanting** | The `forge/` domain (derived): sequence + cost → a decaying buff on an instrument. **Shared-engine extraction**, pulled forward from 9a | ~4k | 2 mo | A buffed instrument is visibly faster and the buff runs out |
 | **5. Summoning** | The `menagerie/` domain (derived): allocation → a unit with a standing rule | ~4k | 2 mo | A summoned thing acts without being told to that tick |
 | **6. Defense** | The `battlements/` domain: wards under 1 Hz pressure. **Reflex-avoidance mechanism decided first**; **accessible mode decided here, not at 11** | ~5k | 3 mo | A pressure survived by choosing, not by reacting |
@@ -2188,8 +2188,9 @@ in the suite would have caught it, and none was ever written that could have.
 | **10. Onboarding + demo** | Polish apprenticeship, progressive reveal, grimoire, soft ending, **demo + capsule + trailer** | ~20k | 4 mo | A non-terminal player reaches hour two unaided |
 | **11. Ship** | Accessibility, screen-reader siege mode, options, Steam (**both launch options**), polish | ~5k | 3 mo | Release |
 
-**Total: 41 months of work against a 24-month target**, where it was 28 before
-the domains were given phases of their own. That gap is deliberate and should be
+**Total: 43 months of work against a 24-month target**, where it was 28 before
+the domains were given phases of their own and 41 before Spellcraft's language
+overhaul was priced into it. That gap is deliberate and should be
 read as the buffer being *already spent* — it is the number to attack with the
 cut line, not a scheduling error to hide. §16's "per-phase scope buffers"
 mitigation is only real if the calendar exists to measure against.
@@ -2381,6 +2382,209 @@ they are re-pointed at the phases that now need them rather than quietly dropped
    price-shop — Exapunks is $19.99.
 
 ## 19. Decisions log
+
+### The spell language grows up — and the two things that decides (Phase 3, planned)
+
+§10 gives Spellcraft *"composition — build spells from components"*, and the
+language could not hold one. Six control words, no values, no names, and a step
+reaches the world by re-parsing an English line through the NLU every time it
+runs. `threading` is the evidence: **six tiers × four ways, unrolled by hand**,
+because the language cannot say *"the way with the fewest marks."*
+
+So the phase gains values, variables, lists, `for each`, in-file functions, and
+builtins over the domains. **This supersedes the seven-language audit below that
+settled on no-variables** — that entry keeps its reasoning and gains a note
+rather than being rewritten, per this section's own convention.
+
+| Question | Decision |
+|---|---|
+| Do the published readings go away | **No, and the first plan was wrong to say so.** `research::refresh` and `scry::publish` were read as scaffolding that values would replace. They are `survey`: `attend archive; research; survey north` prints `[reading] wall` from exactly those `Sense` nodes, and six See-it lines read them. They are also §8.1's audit surface — a builtin reading `Maze::marks` off the component *is* the hidden channel `watch.rs` forbids, and log poisoning would have nothing to bite on. **Builtins read the published readings**, so a spell can still be lied to |
+| What a step costs | **Everything still costs a tick.** §8's *"a shorter spell is a faster spell"* stands, and so does the honest consequence: since every `Running` has its own budget, factoring into a function is *slower* than splitting into two `invoke`d spells. That is accepted rather than papered over |
+| ...so why write a function at all | **The weave answers it, not the budget.** `SCRIPT_BUDGET` stops being a `const` and becomes a number read from the Mastery tree, defaulting to 1; nodes raise it to 2, 3, 4+. They ship as markers like every other node, because making the tree takeable is the weave phase's item. Legibility is what factoring buys today; speed is what it buys once the tree is real |
+| The lens becoming automatable | **Accepted, and the pin is deleted.** Pillar 3 is *"automation is progression"*, so a deducing spell is the domain working rather than the domain broken. `deduction_beats_the_ladder` goes with it. The cost is named rather than hidden: the yield curve was weakened *because* a blind ladder paid ~23 presses against a player's ~4, and a deducing one lands under `PAR` at full yield. The lens is allowed to land where it lands |
+| A terser register | **Two registers, English always valid** — the shape §8 already uses to gate conditionals and loops. **Deferred within the phase**: it doubles what the parser, the manual and `interpret` must each cover, and `interpret` and `run_line` are two expressions of one rule that have disagreed twice already |
+| Migration | **Extend in place.** With the readings kept, nothing shipped changes meaning and the ~110 behavioural tests stay meaningful |
+
+**Two prerequisites, and the first is CLAUDE.md's own rule.** `orbs-balance` has
+**five policies and not one invokes or binds a spell**, so the harness is
+structurally blind to the script economy — the thing this changes most. A
+bound-spell policy is built *before* the language moves, not after. The second is
+a resolution policy: the ~10 string→handle lookups differ on five axes, and one
+of them — `pipeline::reachable`'s order — **is a game rule**, not an
+implementation detail.
+
+**And the largest step is the one that reads smallest.** A flat
+`fn(Verb, &[Value])` action call breaks `would_block` *silently*: `touches()`
+filters on `argument.kind == NounKind::Place`, so a flat list makes it return
+nothing, and **every spell that used to wait starts being refused** — with
+`waiting_since` never set, `PATIENCE` never tripped, and most tests still green.
+A typed call therefore **constructs an `Intent`**, kinds intact. The win is
+directness, not deleting the round-trip.
+
+### A spell can hold an answer, and walk a set (Phase 3, `0.3.20`)
+
+The second half of the language overhaul, and the half §10's *"composition"*
+actually needs. `roaming` walks the same maze `threading` does in **19 lines
+against 52**, with a true minimum where the ladder had two buckets over the same
+count.
+
+| Question | Decision |
+|---|---|
+| What a variable holds | **A name, and that is the ceiling.** Not a number, not a list, not an expression: everywhere a name may stand, the bound word stands for it. That is exactly what an accumulator needs — something to compare against and then act on — and nothing beyond it |
+| When the value resolves | **At cast, like every other name** (§8). `let m be mortar` binds `mortar_and_pestle`, and a word the room cannot place is a fault rather than a variable quietly holding a typo |
+| The word | **`let … be`, and it was `set … to` for an afternoon.** `set` is already a `dial` synonym and a spell word is matched *before* the fuzzy matcher, so `set second borax` at the prompt stopped reaching the lens. `spellword.rs` opens by naming three collisions it refused to add; this would have been a fourth, on a shipped verb. `be` rather than `to` for the same class of reason — `to` is §6 filler, invisible to every reader but the one that sees text before normalisation |
+| The cursor's name | **The set's own word.** `for each way` binds `way`, so the body reads `if way has spoil` with no second syntax. `it` was the obvious choice and is impossible: `it` is on the filler list, so `follow it` is stripped to `follow` before anything sees it |
+| What a set is | **Declared by the fixture** (`build::Branch::group`), not derived. `Role::Reading` covers the archive's four ways *and* the lens's four sockets *and* its six sigils, so a `for each` over the marker would hand a spell in the lens ten things when it asked for four |
+| Scoping | **None.** A `let` inside a branch binds a name the lines below can still say, and a cursor outlives its loop holding the last member. §8's language has no declarations; scoping would be a rule to teach and a rule to get wrong, for a program that fits on a screen |
+| Where the members come from | **Re-read from the world every pass**, with the loop carrying only an index. A spell runs in a live world, so a set that changes under it should be walked as it now is — and an index is one integer, which is what the save format already prefers per open block |
+
+**Three things had to learn that variables exist, and each was silent when it
+did not.**
+
+`compile` reports a name the room cannot place, and a bound name is exactly
+that — so without a lexical pass over the draft first, **every correct
+`for each` in the game raised `spell_nowhere` on every cast**. That record is
+`Role::Danger`, so it would also have latched the rail's fault mark on a working
+spell.
+
+`interpret` read `follow best` back as **`follow west`** — the fuzzy matcher
+finding the nearest place in the room, which is the one thing `best` is certainly
+not. The runner was always right, because it substitutes before the parser sees
+the line; the surface built to show a wrong resolution was the only liar. A line
+naming a bound word is quoted now, exactly as a line naming another spell is.
+
+And the save carries the store, because a spell suspended half way through
+filling an accumulator is in-flight state and §8 requires that to be
+serialisable. **The completeness lint cannot see it** — it keys on `TypeId`, so a
+new *field* on an existing component is invisible — which is why that test is
+written by hand.
+
+#### Fewer lines is not fewer ticks, and this is the number
+
+§8 charges a step per line, so `roaming`'s three passes over four ways cost ~27
+steps a move where `threading`'s ladder short-circuits at the first rung that
+fires. A **five**-pass version — adding `exit` and `spoil`, which would make it
+the same algorithm as `threading` — was written and measured at ~45 steps a move:
+seed 3 stopped finishing inside 7200 ticks.
+
+That is the step-cost decision recorded above arriving as a measurement rather
+than an argument. Both solvers ship, and the pair is the lesson: **legibility
+now, speed when the weave's steps-per-tick nodes are takeable.** `threading` stays
+the fast one and is not rewritten.
+
+**`breaking` could be shortened the same way** — `for each socket` collapses its
+four rungs to one — and deliberately is not, in this step. It would also change
+*when* the ward is pressed (all four sockets dialled, then one press, rather than
+one dial per press), which is a change to the lens's economy rather than to its
+spelling.
+
+### A comparison may name a place, and a walled way reads as nought (Phase 3, `0.3.19`)
+
+The first half of the language overhaul, and it turned out small because the
+tower was already shaped for it. `tower::build::raise_count` had written the
+thesis down two phases early: a maze's `marks` rides on `Stock` *"so that `has 2
+or more marks` is answered by the same arithmetic that answers `has 4 fragment`,
+rather than by a second notion of how many of something there is."*
+
+Every quantity in the game is therefore one read — a named child, and its
+`Stock`. What was missing was the **other side of the comparison**: it could only
+ever be a number the player typed.
+
+| Question | Decision |
+|---|---|
+| Where the value type goes | **On the count, not as a new `Condition`.** `Quantity::Count(1)` is exactly what a bare `has sage` always meant, so the change is additive by construction and the ~110 behavioural tests kept passing *through* it rather than being rewritten around it |
+| Named `Value` or `Quantity` | **`Quantity`.** `orbs_render::Value` is the record field type and `watch` imports it in the same file; two `Value`s in one module is a rename waiting to happen |
+| An expression tree | **No, and this is the ceiling being chosen.** One world read on each side, no arithmetic and no nesting. §6's posture is that a player types what they mean, and `has marks + 1 than east` is the different program wearing the game's clothes. Where more is wanted the answer is a list, not an operator |
+| Strict or inclusive | **Strict against a place, inclusive against a number**, which is English rather than an inconsistency: `has 2 or fewer marks` includes two, `has fewer marks than east` does not. *At least as many* is deliberately absent — `not … fewer … than` says it, which is the route already given for `!=` |
+| Whether it reads components | **No — the published `Sense` children**, through one `many_at` used by both sides. A builtin reading `Maze::marks` off the component is the hidden channel `watch.rs` opens by forbidding: *"forging the event and forging the evidence are the same act"* |
+
+**Two collisions, and both were found by running it rather than by reasoning.**
+
+`more than 1 fragment` and `fewer than 3 fragment` are spellings `BOUNDS` has read
+since counting arrived, and they share their first word with `more marks than
+east`. The discriminator is the **gap in the middle**: nothing between the
+comparative and its closer is the number form. Getting that wrong refused two
+rows of the table that holds every spelling.
+
+`north has fewer marks` — the comparative with nothing to compare against — used
+to fall through to the count path, which handed `fewer` to the thing's name; and
+`spell::compile`'s fuzzy resolution then **dropped it**, so the question silently
+became `north has marks`, which answers *yes* wherever the player's answers *no*.
+That is §19's *"the orb writes down a shorter command than it heard"* one grammar
+wider than where counting closed it. It refuses the line now.
+
+#### A walled way reads as nought marks, so a comparison cannot pick the least
+
+**`threading` was rewritten to use a true minimum and it did not solve a single
+maze.** The rung is expressible — `north has no wall and no back and no more
+marks than east and no more marks than south and no more marks than west` — and
+it is wrong, because an unwalked or **walled** way publishes no `marks` node at
+all. `many_at` answers nought for an absent thing (deliberately: see its own
+note, and the restock guard that reading exists for), so a walled way is the
+minimum of any four and every rung of the tier is false.
+
+The two-bucket tiers it replaced — `1 or fewer marks`, then `2 or more` — compare
+against a **literal**, and never ask about a way they have not already excluded.
+
+So *"follow the way with the fewest marks"* is not a comparison at all: it is a
+**filter, then a minimum**, over the ways that are open. That is a list, and it is
+the next step. The attempt is recorded rather than the conclusion, because the
+rung reads so plausibly that it will be written again.
+
+### The harness could not see a spell at all (Phase 3, `0.3.18`)
+
+`orbs-balance` shipped five policies and **not one of them invoked or bound a
+spell**. Every one models a player typing, so the whole of §8's runner —
+`SCRIPT_BUDGET`'s per-step tick, `PATIENCE`, the wait on the production slot, a
+binding re-casting a spell that has run off the end — was unmeasured by the
+instrument CLAUDE.md says to run *"after anything that touches the world"*.
+
+That matters now because the decision above turns on a number nothing could
+read: *a step still costs a tick, and the weave tree is the escape valve* is a
+claim about how much automation costs, and the harness had no column for it.
+
+| Question | Decision |
+|---|---|
+| What should it automate | **`grind`'s loop, and nothing cleverer.** The two policies issue the same two commands for ever, so everything except who is typing is equal and the gap is *only* the script engine. Pointed at clarity it would have been a mixture of engine overhead and the brew's own shape, and neither half recoverable |
+| Pin the rate | **No — pin the quotient.** `bound` reads 0.0814 on seed 3 against 0.0910 on seed 0 because sabotage costs it the same minutes it costs `grind`. The quotient cancels that and reads **0.910 on every seed measured**: one tick in eleven, the re-cast. An absolute pin would have been a pin on a world's luck |
+| How it writes its spell | **`Sim::write_spell`, the editor's own public entry.** `debug_spell` is `cfg(debug_assertions)`, so a release sweep would have measured nothing, and it hands back a *shipped* spell rather than one a policy chose. `write_spell` records the submission, so a swept session still replays |
+| How it earns the slot | **By grinding for it.** Concentration is derived from work completed, `debug_spawn` earns nothing and no public API hands the sim a number — so the policy plays the earning cycle by hand exactly as CLAUDE.md's See-it line does, then writes, then binds. Three tick boundaries, because each of the three waits on one |
+
+**A bound policy breaks the `cost` column's rule of thumb, and it is recorded
+rather than fixed.** CLAUDE.md says *"every entry in it should be a scour the
+policy asked for; anything else means the loop has fallen out of phase"* — true
+of a synthetic player typing, false of one watching a spell. `say_blocked`
+stamps `Role::Cost` for a **wait**, which is the runner doing exactly what §8
+asks, so `bound` carries ~640 perfectly healthy costs in a two-hour sweep. Only
+the sentence separates a wait from a refusal, which is what `--why` is for.
+
+**The driver's own first defect is the reason the second test exists.**
+`Sim::bound` answers `tending.spell` where a policy names `tending`, so a bare
+`==` never matched and `bind` was re-issued on every free tick — **1,920
+refusals** in a two-hour sweep, with the rate still reading correctly because the
+spell had bound on the first attempt. A policy that silently never binds would
+report the hand-played number, which is precisely the failure this instrument
+exists to prevent, arriving inside the instrument.
+
+### `else if` — a chained `if`, and half of `threading` was `end` (Phase 3, `0.3.17`)
+
+The ladder is the shape every solver in the game is written in — the ward's four
+rungs, the maze's twenty-four — and each rung nested one deeper and owed an `end`
+at the bottom. Measured: **49 of `threading`'s 98 lines were `end` or `else`**.
+After, 3 of 52. `breaking` went 21 → 15.
+
+| Question | Decision |
+|---|---|
+| A new `Kind`, or a desugaring | **A desugaring.** `else if` pushes a chained `if` frame; the runner, `step_past`, `guard_answers`, the save format and `interpret` see the nested tree that was always written by hand and need **nothing**. The one thing remembered is a `chained` flag on the parser's `Nesting` |
+| How the chain closes | **One `end` closes the whole ladder**, unwinding while the frame just shut was chained. The player wrote one construct and owes one close |
+| Where the condition is read | **The same reader a plain `if` uses**, on the tail after `else`. One reader, one set of complaint keys, and an unreadable rung raises `spell_unreadable_if` and runs neither half rather than being guessed at |
+| What an unclosed chain complains about | **The `if` at the top, once** — not once per rung. A chained frame is half of a construct someone else opened |
+
+**The tree-equality test needed a `shape()` helper**, and the reason is not
+incidental: the two spellings sit on different lines *by construction*, and the
+line number is load-bearing — §8.1 needs the log to name the player's line, not
+the desugared one. So the test flattens `line` and compares the rest, which is
+the thing that must be identical.
 
 ### The save format — a snapshot, with the journal as its instrument (Phase 3, `0.3.14`)
 
@@ -3869,6 +4073,14 @@ recipe claims to be a mixture, a missing colour is now a failure that names both
 the product and the input.
 
 #### The language audited against seven others: `until`, comparators, `marks`
+
+> **Superseded in part, Phase 3 (`0.3.17`).** *"There are no variables"* was the
+> premise this audit was given, not something it derived — and Spellcraft's exit
+> criterion needs composition the premise forbids. See **The spell language grows
+> up** at the head of this section for what replaced it, including why the
+> published readings survive anyway. **What the audit found is untouched**:
+> `until`, the comparators, `marks`, the no-signal-bus finding, and the per-step
+> tick cost all stand, and the last of those is re-affirmed rather than dropped.
 
 Asked to audit `.spell` against comparable languages and close whatever gaps stop
 it working *in this game*, keeping the rule that state lives on the object and

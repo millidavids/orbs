@@ -62,17 +62,56 @@ pub enum SpellWord {
     /// bound instead, and the shipped solver still says `repeat 20000` because
     /// the language could not say what it meant.
     Until,
+    /// Give a name to a place, so a later line can say it — `let best be north`.
+    ///
+    /// # A variable holds a **name**, and that is the ceiling
+    ///
+    /// Not a number, not a list, not an expression: it binds one word to
+    /// another, and everywhere a name may stand the bound word stands for it.
+    /// That is what *"follow the way with the fewest marks"* needs — an
+    /// accumulator you compare against and then act on — and it is the smallest
+    /// thing that gives it.
+    ///
+    /// The value is resolved against the room **at cast**, like every other name
+    /// in a spell (§8), so `let m be mortar` binds `mortar_and_pestle` and a
+    /// word the room cannot place is a fault rather than a variable holding a
+    /// typo.
+    ///
+    /// # `let … be`, and it was `set … to` for an afternoon
+    ///
+    /// **`set` is already a `dial` synonym** (`vocabulary.rs`, shell register),
+    /// and a spell word is matched *before* the fuzzy matcher — so `set second
+    /// borax` at the prompt stopped reaching the lens and answered *"that is a
+    /// spell word"* instead. This module's own opening paragraph names three
+    /// collisions it refused to add; this would have been a fourth, and a
+    /// shipped verb's would at that.
+    ///
+    /// `be` rather than `to` for a second reason of the same kind: `to` is on
+    /// §6's filler list, so a keyword `to` is invisible to every reader in the
+    /// parser except the one that gets the text before normalisation.
+    Let,
+    /// Do the block once for each of something — `for each way`.
+    ///
+    /// **The cursor is named after the group**, so `for each way` binds `way`
+    /// and the body says `if way has spoil`. No second syntax, and nothing to
+    /// learn beyond the group's own word.
+    ///
+    /// `it` was the obvious cursor and cannot be used: `it` is on §6's filler
+    /// list, so `follow it` is stripped to `follow` before anything sees it.
+    For,
 }
 
 impl SpellWord {
     /// Every one, for the naming pass and for the prompt's answer.
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 8] = [
         Self::Wait,
         Self::Repeat,
         Self::If,
         Self::Else,
         Self::End,
         Self::Until,
+        Self::Let,
+        Self::For,
     ];
 
     /// The word as it is written in a spell.
@@ -85,6 +124,8 @@ impl SpellWord {
             Self::Else => "else",
             Self::End => "end",
             Self::Until => "until",
+            Self::Let => "let",
+            Self::For => "for",
         }
     }
 
@@ -92,10 +133,25 @@ impl SpellWord {
     ///
     /// **`Until` does not**, even though it is always inside one: the block is
     /// `repeat`'s, and counting it here would want a second `end` for a loop
-    /// with a guard on it.
+    /// with a guard on it. **`Let` does not either** — it is one line that binds
+    /// one name, and nothing follows it that an `end` would close.
     #[must_use]
     pub const fn opens_block(self) -> bool {
-        matches!(self, Self::Repeat | Self::If)
+        matches!(self, Self::Repeat | Self::If | Self::For)
+    }
+
+    /// The word that must follow this one, if the grammar fixes it.
+    ///
+    /// `for each way` and never `for way`: the second word carries no
+    /// information and is required anyway, because `for` alone reads as the
+    /// preposition it is everywhere else in English and the sentence would be
+    /// ambiguous to a person long before it was to the parser.
+    #[must_use]
+    pub const fn particle(self) -> Option<&'static str> {
+        match self {
+            Self::For => Some("each"),
+            _ => None,
+        }
     }
 }
 

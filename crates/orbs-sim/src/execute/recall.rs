@@ -232,6 +232,21 @@ fn scripting(world: &mut World) {
         entry(world, &line, "");
     }
 
+    // **The sets, before the names**, because `for each <set>` is unusable
+    // without them and there is nowhere else to find one out: a set is not a
+    // place you can `survey` and not a word the scene offers, so a player who
+    // has read the word `for` still cannot write a line with it.
+    //
+    // Derived from the room rather than listed, so a domain that declares a
+    // group gets it here the same tick — the same rule `here` below follows.
+    let sets = tower::groups_at(world, cwd);
+    if !sets.is_empty() {
+        section(world, "man_scripting_sets");
+        for set in sets {
+            entry(world, &set, "");
+        }
+    }
+
     section(world, "man_scripting_here");
     for place in places {
         entry(world, &place, "");
@@ -244,10 +259,15 @@ fn scripting(world: &mut World) {
 }
 
 /// The shapes a question takes, in the order they are worth learning.
-const SHAPES: [&str; 4] = [
+///
+/// `than` sits after `count` because it is the same comparison with the world
+/// on both sides — a player who has not met a number in a question yet has no
+/// use for one.
+const SHAPES: [&str; 5] = [
     "man_scripting_shape_is",
     "man_scripting_shape_has",
     "man_scripting_shape_count",
+    "man_scripting_shape_than",
     "man_scripting_shape_join",
 ];
 
@@ -257,6 +277,8 @@ const fn spell_word_shape(word: crate::parser::SpellWord) -> &'static str {
         crate::parser::SpellWord::Repeat => "<count>",
         crate::parser::SpellWord::Until | crate::parser::SpellWord::If => "<question>",
         crate::parser::SpellWord::Wait => "<thing>",
+        crate::parser::SpellWord::Let => "<name> be <place>",
+        crate::parser::SpellWord::For => "each <set>",
         crate::parser::SpellWord::Else | crate::parser::SpellWord::End => "",
     }
 }

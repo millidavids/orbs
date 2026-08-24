@@ -167,6 +167,95 @@ fn a_swept_clarity_and_a_hand_played_one_agree() {
     );
 }
 
+/// What a bound spell keeps of the same loop played by hand.
+///
+/// **One tick in eleven, and it is the same on every world.** `grind` and
+/// `bound` issue the same two commands for ever, so everything about them is
+/// equal except who is typing — and the gap is exactly the tick a binding spends
+/// re-casting a spell that has run off the end. Measured over seeds 0, 3, 11 and
+/// 42 the ratio is 0.910, 0.911, 0.910, 0.910: the absolute rates move a lot
+/// with a world's luck at sabotage and this does not move at all, because it is
+/// a property of the script engine rather than of the tower.
+const AUTOMATION_KEEPS: f64 = 0.910;
+
+#[test]
+fn a_bound_spell_keeps_a_known_fraction_of_the_loop_it_automates() {
+    // **The instrument the harness did not have.** Five policies shipped and not
+    // one invoked or bound a spell, so `SCRIPT_BUDGET`, `PATIENCE`, the wait on
+    // the production slot and the re-cast a binding performs were all unmeasured
+    // — and DESIGN.md §19's decision that *a step still costs a tick* is a claim
+    // about precisely this number.
+    //
+    // **The ratio is pinned and the rate is not**, deliberately. An absolute pin
+    // would be a pin on the world's luck: `bound` reads 0.0814 on seed 3 against
+    // 0.0910 on seed 0, and `grind` moves with it, because sabotage costs both
+    // the same minutes. The quotient cancels that and leaves the engine.
+    //
+    // If the language overhaul moves this, it is **meant** to, and the failure
+    // here is the report — not a regression to paper over. Re-pin deliberately.
+    for seed in SEEDS {
+        let grind = drive::run(
+            Policy::named("grind").expect("the rate floor exists"),
+            seed,
+            SPAN,
+            EVERY,
+        )
+        .rate();
+        let bound = drive::run(
+            Policy::named("bound").expect("the bound-spell policy exists"),
+            seed,
+            SPAN,
+            EVERY,
+        )
+        .rate();
+
+        assert!(
+            bound < grind,
+            "seed {seed}: a bound spell ({bound:.4}) out-earned the same loop \
+             played by hand ({grind:.4}) — §8 charges a tick per step, so \
+             automation cannot be the faster of the two",
+        );
+        let kept = bound / grind;
+        assert!(
+            (kept - AUTOMATION_KEEPS).abs() < 0.02,
+            "seed {seed}: a bound spell kept {kept:.3} of the hand-played loop \
+             against a pinned {AUTOMATION_KEEPS:.3} — the script engine's \
+             overhead moved ({bound:.4} against {grind:.4})",
+        );
+    }
+}
+
+#[test]
+fn the_bound_policy_actually_gets_a_spell_bound() {
+    // **A policy that silently never binds would still report a rate**, and it
+    // would be the hand-played one — which is the failure mode this whole
+    // instrument exists to avoid, arriving inside the instrument. It happened
+    // once already: `Sim::bound` answers `tending.spell` where the policy names
+    // `tending`, so the driver re-issued `bind` on every free tick and a
+    // two-hour sweep carried 1,920 refusals.
+    let run = drive::run(
+        Policy::named("bound").expect("the bound-spell policy exists"),
+        0,
+        SPAN,
+        EVERY,
+    );
+
+    assert!(
+        !run.reasons
+            .keys()
+            .any(|why| why.contains("already holding")),
+        "the driver kept asking the orb to bind a spell it was already holding: \
+         {:?}",
+        run.reasons,
+    );
+    assert!(
+        run.reasons.keys().any(|why| why.contains("waits")),
+        "nothing in the run waited on an instrument, so no spell was running: \
+         {:?}",
+        run.reasons,
+    );
+}
+
 #[test]
 fn every_pinned_rate_is_one_a_sweep_still_reaches() {
     // **The pin, made load-bearing.** `report::EXPECTED` is documented as a

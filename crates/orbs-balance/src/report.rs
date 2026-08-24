@@ -62,6 +62,13 @@ const EXPECTED: [(&str, f64); 4] = [
 /// `stacks` is deliberately absent from [`EXPECTED`]: a maze is generated per
 /// seed and one run is one sample, so pinning it would pin a seed rather than a
 /// rate. Sweep it across several `--seed`s instead.
+///
+/// **`bound` is absent for the opposite reason** — not because one run says too
+/// little, but because its absolute rate is the wrong thing to hold. It moves
+/// with a world's luck at sabotage exactly as `grind` does (0.0814 on seed 3
+/// against 0.0910 on seed 0), while the quotient of the two is 0.910 on every
+/// seed measured, because that is a property of the script engine rather than of
+/// the tower. `tests/agrees.rs` pins the quotient; this table reports the rate.
 const TOLERANCE: f64 = 0.10;
 
 /// The summary table.

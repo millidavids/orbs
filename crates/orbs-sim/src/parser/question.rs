@@ -114,6 +114,80 @@ const BOUNDS: &[(&[&str], Bound, i64)] = &[
     (&["<"], Bound::AtMost, -1),
 ];
 
+/// What a count is compared *against*.
+///
+/// # The one thing the language could not say
+///
+/// Every quantity in the tower is read the same way — a named child, and its
+/// `Stock` — which is what lets `has 2 or more marks` and `has 4 fragment` be one
+/// piece of arithmetic (`tower::build::raise_count` says so outright). What was
+/// missing was the **other side**: a comparison could only ever name a number the
+/// player typed, so *"the way with the fewest marks"* — the sentence `threading`
+/// is 52 hand-unrolled lines for — was inexpressible.
+///
+/// **Named `Quantity` rather than `Value`.** `orbs_render::Value` is the record
+/// field type and `watch` imports it beside this; two things called `Value` in
+/// one file is a rename waiting to happen.
+///
+/// # Not an expression tree, and that is the ceiling being chosen
+///
+/// There is no arithmetic here and no nesting: a comparison has a world read on
+/// one side and a number **or one other world read** on the other. §6's posture
+/// is that a player types what they mean, and `if north has marks + 1 than east`
+/// is the different program wearing the game's clothes. Where more is needed the
+/// answer is a list and `for each`, not an operator.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Quantity {
+    /// A number the player wrote — `has 4 fragment`.
+    Count(u32),
+    /// What another place holds of the **same thing** — `has fewer marks than
+    /// east`.
+    ///
+    /// # Strictness rides on the bound, so there is no fourth spelling
+    ///
+    /// English gives three comparatives and they land exactly on the three
+    /// [`Bound`]s: `more … than` is strictly more, `fewer … than` strictly
+    /// fewer, `as many … as` equal. *At least as many* is deliberately absent —
+    /// `not north has fewer marks than east` already says it, which is the same
+    /// route the docs above give for `!=` rather than teaching an operator.
+    ///
+    /// The place is a **name**, resolved like every other, so a comparison
+    /// against somewhere the tower does not have is §8's *Referent missing* and
+    /// stops the question rather than answering it.
+    Elsewhere(String),
+}
+
+impl Default for Quantity {
+    /// One, which is what a bare `has sage` has always meant.
+    fn default() -> Self {
+        Self::Count(1)
+    }
+}
+
+/// Every way one place's count is compared against another's.
+///
+/// A table beside [`BOUNDS`] and for the same reason: the reader and the writer
+/// read one list, so a new spelling is a row rather than an arm in each.
+///
+/// The third column is the word that closes the phrase — `more marks **than**
+/// east`, `as many marks **as** east`. It is what [`Reader::span`] stops at, so
+/// the thing's name ends where the comparison's second half begins.
+const COMPARATIVES: &[(&[&str], Bound, &str)] = &[
+    (&["more"], Bound::AtLeast, "than"),
+    (&["fewer"], Bound::AtMost, "than"),
+    (&["less"], Bound::AtMost, "than"),
+    (&["as", "many"], Bound::Exactly, "as"),
+    (&["as", "much"], Bound::Exactly, "as"),
+];
+
+/// The words a thing's name may not run through.
+///
+/// `is` and `has` were the first two and the module docs say why. `than` and
+/// `as` join a comparison to its second half, so a span that ate them would give
+/// `more marks than east` a thing called *"marks than east"* — the same silent
+/// swallow, one grammar wider. Nothing in the tower is named any of the four.
+const STOPPERS: &[&str] = &["is", "has", "than", "as"];
+
 /// A question a spell can ask about the tower.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Condition {
@@ -137,7 +211,11 @@ pub enum Condition {
         /// `interpret` showed the shorter question. That is §19's *"the orb
         /// writes down a shorter command than it heard"* arriving through the
         /// one surface built to catch it.
-        count: u32,
+        ///
+        /// **A [`Quantity`], so the other side can be the world too.** It was a
+        /// bare `u32` and `Quantity::Count(1)` is exactly what that meant, so
+        /// every spell written against the old shape asks the same question.
+        count: Quantity,
         /// Which side of `count` satisfies it.
         ///
         /// **`AtLeast` with a count of nought is unrepresentable**, and that is
@@ -196,8 +274,20 @@ impl Condition {
     /// Visit every name in the tree, in the order it was written.
     fn walk<'a>(&'a self, visit: &mut impl FnMut(NounKind, &'a str)) {
         match self {
-            Self::Has { place, thing, .. } => {
+            // **Both places, and the compared-against one is a place.** It
+            // resolves and fails exactly as the subject does — a comparison
+            // against somewhere the tower lacks is §8's *Referent missing*, not
+            // an answer of no.
+            Self::Has {
+                place,
+                thing,
+                count,
+                ..
+            } => {
                 visit(NounKind::Place, place);
+                if let Quantity::Elsewhere(other) = count {
+                    visit(NounKind::Place, other);
+                }
                 visit(NounKind::Any, thing);
             }
             Self::Is { place, .. } => visit(NounKind::Place, place),
@@ -219,9 +309,19 @@ impl Condition {
     /// typed. See [`compile`](crate::tower::spell::compile).
     pub fn rename(&mut self, rename: &mut impl FnMut(NounKind, &str) -> Option<String>) {
         match self {
-            Self::Has { place, thing, .. } => {
+            Self::Has {
+                place,
+                thing,
+                count,
+                ..
+            } => {
                 if let Some(found) = rename(NounKind::Place, place) {
                     *place = found;
+                }
+                if let Quantity::Elsewhere(other) = count
+                    && let Some(found) = rename(NounKind::Place, other)
+                {
+                    *other = found;
                 }
                 if let Some(found) = rename(NounKind::Any, thing) {
                     *thing = found;
@@ -323,10 +423,34 @@ pub fn write_condition(condition: &Condition) -> String {
         // `or fewer` **is** written, because nothing else says it. That
         // asymmetry is visible in `interpret` and is the point: it shows which
         // direction is the default.
+        // **The comparative, written the way it was read.** One arm rather than
+        // three, because `COMPARATIVES` already pairs each bound with the word
+        // that closes it — so a new spelling is still a row in that table and
+        // cannot arrive here without a way back.
         Condition::Has {
             place,
             thing,
-            count: 1,
+            count: Quantity::Elsewhere(other),
+            bound,
+        } => {
+            // **Falls back rather than panicking**, and the fallback is a
+            // question the reader accepts: every `Bound` has a row today, and a
+            // writer that could crash the game over a table someone extended
+            // badly is a worse answer than one that writes the equality form.
+            // `a_comparative_exists_for_every_bound` is what actually holds the
+            // table complete, in a test rather than at a player's expense.
+            let (words, closer) = COMPARATIVES
+                .iter()
+                .find(|(.., row, _)| row == bound)
+                .map_or((&["as", "many"][..], "as"), |(words, _, closer)| {
+                    (words, *closer)
+                });
+            format!("{place} has {} {thing} {closer} {other}", words.join(" "))
+        }
+        Condition::Has {
+            place,
+            thing,
+            count: Quantity::Count(1),
             bound: Bound::AtLeast,
         } => format!("{place} has {thing}"),
         // **Nought at-least keeps its words, and that is a round-trip fix.**
@@ -338,19 +462,19 @@ pub fn write_condition(condition: &Condition) -> String {
         Condition::Has {
             place,
             thing,
-            count: 0,
+            count: Quantity::Count(0),
             bound: Bound::AtLeast,
         } => format!("{place} has 0 or more {thing}"),
         Condition::Has {
             place,
             thing,
-            count,
+            count: Quantity::Count(count),
             bound: Bound::AtLeast,
         } => format!("{place} has {count} {thing}"),
         Condition::Has {
             place,
             thing,
-            count,
+            count: Quantity::Count(count),
             bound: Bound::AtMost,
         } => format!("{place} has {count} or fewer {thing}"),
         // **Words, not the symbol that may have been typed.** `=` and `exactly`
@@ -360,7 +484,7 @@ pub fn write_condition(condition: &Condition) -> String {
         Condition::Has {
             place,
             thing,
-            count,
+            count: Quantity::Count(count),
             bound: Bound::Exactly,
         } => format!("{place} has exactly {count} {thing}"),
         Condition::Is { place, state } => format!("{place} is {}", state.canonical()),
@@ -478,6 +602,29 @@ enum Asking {
     Is,
 }
 
+/// What [`Reader::eat_comparative`] found.
+///
+/// # Three answers, and the third is why this is not an `Option`
+///
+/// A comparative that opens and never closes — `north has fewer marks`, with no
+/// `than` — must **refuse the line**, not fall through to the count path. Falling
+/// through hands `fewer` to the thing's name, and the fuzzy resolution in
+/// `spell::compile` then drops it: the question silently becomes
+/// `north has marks`, which answers yes wherever the player's answers no.
+///
+/// That is §19's *"the orb writes down a shorter command than it heard"* — the
+/// defect counting was added to close — reappearing one grammar wider. Here the
+/// line is kept exactly as typed and the orb says which line it could not read,
+/// which is this module's whole posture.
+enum Comparative {
+    /// No comparative word here; the words ahead are something else.
+    Absent,
+    /// `fewer marks than east` — the bound, the thing, and where to compare.
+    Read(Bound, String, String),
+    /// A comparative with nothing to compare against.
+    Unclosed,
+}
+
 impl<'a> Reader<'a> {
     fn peek(&self) -> Option<&'a str> {
         self.words.get(self.at).copied()
@@ -591,6 +738,61 @@ impl<'a> Reader<'a> {
         Some((count, Bound::AtLeast, false))
     }
 
+    /// A comparison against another place — `fewer marks than east`.
+    ///
+    /// Read as a **whole phrase or not at all**, because half of one is a
+    /// question with a different meaning rather than a question with a missing
+    /// word: `north has more marks` without the `than` is a shelf holding
+    /// something called *"more marks"*, which is nothing, and the all-or-nothing
+    /// rule would then refuse the line and say so. Putting the cursor back is
+    /// what lets that happen instead of a partial read.
+    ///
+    /// Returns the bound, the thing, and where to compare against — the thing
+    /// is read **here** rather than by the caller, because the comparative sits
+    /// on the wrong side of it (`fewer marks than`, not `marks fewer than`).
+    fn eat_comparative(&mut self) -> Comparative {
+        let start = self.at;
+        let Some((bound, closer)) = COMPARATIVES.iter().find_map(|(words, bound, closer)| {
+            let matched = words
+                .iter()
+                .enumerate()
+                .all(|(step, word)| self.words.get(self.at + step) == Some(word));
+            matched.then(|| {
+                self.at += words.len();
+                (*bound, *closer)
+            })
+        }) else {
+            return Comparative::Absent;
+        };
+
+        let thing = self.span();
+        self.at += thing.len();
+        // **Nothing between the comparative and its closer is the *number*
+        // form**, not a comparison missing its subject: `more than 1 fragment`
+        // is a spelling [`BOUNDS`] has always read, and it shares its first word
+        // with `more marks than east`. The gap in the middle is the whole
+        // discriminator, and getting it wrong refused two rows of the table that
+        // has held every spelling since counting arrived.
+        if thing.is_empty() {
+            self.at = start;
+            return Comparative::Absent;
+        }
+        if !self.eat(closer) {
+            self.at = start;
+            return Comparative::Unclosed;
+        }
+
+        // The place compared against runs to the next connective — it is a name
+        // like any other, so `balneum mariae` works here as it does anywhere.
+        let other = self.to_connective();
+        self.at += other.len();
+        if other.is_empty() {
+            self.at = start;
+            return Comparative::Unclosed;
+        }
+        Comparative::Read(bound, thing.join(" "), other.join(" "))
+    }
+
     fn disjunction(&mut self) -> Option<Condition> {
         let mut items = vec![self.conjunction()?];
         while self.eat("or") {
@@ -666,6 +868,11 @@ impl<'a> Reader<'a> {
             if matches!(word, "is" | "has") {
                 break;
             }
+            // A subject's own name still may not run through a comparison
+            // word — `than east has sage` names nothing on the left.
+            if matches!(word, "than") {
+                return None;
+            }
             // A connective before the question word means there was no question
             // here at all — `a and b is idle` names nothing on the left.
             if is_connective(word) || matches!(word, "not" | "either" | "both") {
@@ -714,6 +921,30 @@ impl<'a> Reader<'a> {
             // `is not idle`.
             Asking::Is => self.eat("not"),
         };
+        // **Tried before the count**, and the two cannot collide: a comparative
+        // opens with a word and `eat_bounded_count` needs a digit, so whichever
+        // fails puts the cursor back untouched. This one first only because it
+        // reads the thing itself, which the count path leaves to `span`.
+        if asking == Asking::Has {
+            match self.eat_comparative() {
+                Comparative::Absent => {}
+                Comparative::Unclosed => return None,
+                Comparative::Read(bound, thing, other) => {
+                    let condition = Condition::Has {
+                        place: name.to_owned(),
+                        thing,
+                        count: Quantity::Elsewhere(other),
+                        bound,
+                    };
+                    return Some(if negated {
+                        Condition::Not(Box::new(condition))
+                    } else {
+                        condition
+                    });
+                }
+            }
+        }
+
         // **After the negation and before the span**, which is the only place it
         // can go: `span` stops at a connective or a question word and would
         // otherwise take the digit as the first word of the thing's name — which
@@ -748,7 +979,7 @@ impl<'a> Reader<'a> {
             Asking::Has => Condition::Has {
                 place: name.to_owned(),
                 thing: span.join(" "),
-                count: if bare_nought { 1 } else { counted.unwrap_or(1) },
+                count: Quantity::Count(if bare_nought { 1 } else { counted.unwrap_or(1) }),
                 bound,
             },
             Asking::Is => Condition::Is {
@@ -781,7 +1012,7 @@ impl<'a> Reader<'a> {
     fn span(&self) -> Vec<&'a str> {
         self.to_connective()
             .into_iter()
-            .take_while(|word| !matches!(*word, "is" | "has"))
+            .take_while(|word| !STOPPERS.contains(word))
             .collect()
     }
 
@@ -920,7 +1151,7 @@ mod tests {
         Condition::Has {
             place: place.to_owned(),
             thing: thing.to_owned(),
-            count,
+            count: Quantity::Count(count),
             bound: Bound::AtLeast,
         }
     }

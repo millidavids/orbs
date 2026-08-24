@@ -178,6 +178,11 @@ pub(super) fn cast(
         waiting_since: None,
         said: already,
         unattended,
+        // **Empty at every cast**, including a binding's re-cast. A spell that
+        // has run off the end and starts again is a new pass over the same
+        // lines, and an accumulator left holding last lap's answer would make
+        // the first comparison of this one ask about a world that has moved.
+        vars: std::collections::BTreeMap::new(),
     });
     if !announce.is_empty() {
         say(world, announce, wanted, role);

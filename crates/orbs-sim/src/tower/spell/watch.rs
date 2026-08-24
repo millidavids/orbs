@@ -156,29 +156,32 @@ fn ask(world: &World, condition: &Condition, missing: &mut Vec<String>) -> Optio
             bound,
         } => {
             let at = find(world, place, missing)?;
-            let held = tower::children_of(world, at).into_iter().find(|held| {
-                world
-                    .get::<tower::Name>(*held)
-                    .is_some_and(|name| name.0 == *thing)
-            });
-            // **How many there are, where absent is nought and means it.** The
-            // other reading — a comparison needs something to count, so `or
-            // fewer` is false of an absent thing — was considered and refused:
-            // `if the dispensary has 2 or fewer sage` would then be **false with
-            // no sage at all**, which is the one case a restock guard is written
-            // for. A player who writes that sentence gets what it says.
-            //
-            // A thing with no `Stock` is one of it: a reading, a file, a spell.
-            let many = match held.map(|node| world.get::<tower::Stock>(node)) {
-                Some(Some(tower::Stock::Endless)) => u32::MAX,
-                Some(Some(tower::Stock::Counted(units))) => *units,
-                Some(None) => 1,
-                None => 0,
+            // **The other side is asked first, and unconditionally.** A
+            // comparison against a place the tower lacks must report that name
+            // even when this side already settles the answer — the same rule
+            // `every` follows for connectives, and the same reason: §8.1 wants
+            // the culprit named, not the first culprit.
+            let want = match count {
+                crate::parser::Quantity::Count(count) => *count,
+                crate::parser::Quantity::Elsewhere(other) => {
+                    let there = find(world, other, missing)?;
+                    many_at(world, there, thing)
+                }
             };
+            let many = many_at(world, at, thing);
+            // **Strict against another place, inclusive against a number**, and
+            // the asymmetry is English rather than an inconsistency: `has 2 or
+            // fewer marks` includes two and `has fewer marks than east` does
+            // not. `Quantity::Elsewhere`'s doc records that the third
+            // comparative — *at least as many* — is deliberately absent, because
+            // `not … fewer … than` already says it.
+            let strict = matches!(count, crate::parser::Quantity::Elsewhere(_));
             Some(match bound {
-                crate::parser::Bound::AtLeast => many >= *count,
-                crate::parser::Bound::AtMost => many <= *count,
-                crate::parser::Bound::Exactly => many == *count,
+                crate::parser::Bound::AtLeast if strict => many > want,
+                crate::parser::Bound::AtMost if strict => many < want,
+                crate::parser::Bound::AtLeast => many >= want,
+                crate::parser::Bound::AtMost => many <= want,
+                crate::parser::Bound::Exactly => many == want,
             })
         }
         // **The panel's word, not `busy()`.** The two are the same answer for the
@@ -198,6 +201,39 @@ fn ask(world: &World, condition: &Condition, missing: &mut Vec<String>) -> Optio
                 SpellState::Empty => tower::children_of(world, at).is_empty(),
             })
         }
+    }
+}
+
+/// How many of `thing` are at `at`, where absent is nought and means it.
+///
+/// **One read, used by both sides of a comparison**, which is what makes
+/// `north has fewer marks than east` an honest question rather than two notions
+/// of counting placed side by side. It is also the arithmetic
+/// `tower::build::raise_count` promises: *"`has 2 or more marks` is answered by
+/// the same arithmetic that answers `has 4 fragment`, rather than by a second
+/// notion of how many of something there is."*
+///
+/// **Absent is nought, and the other reading was refused.** A comparison needs
+/// something to count, so an argument exists that `or fewer` should be false of
+/// an absent thing — but then `if the dispensary has 2 or fewer sage` is **false
+/// with no sage at all**, which is the one case a restock guard is written for.
+/// A player who writes that sentence gets what it says.
+///
+/// A thing with no `Stock` is one of it: a reading, a file, a spell.
+fn many_at(world: &World, at: Entity, thing: &str) -> u32 {
+    // **A named child, and deliberately not `tower::holdings`** — see the note
+    // on `Condition::Has` above. Every maze and ward reading is a
+    // `Nameable(NounKind::Sense)` child, which `holdings` skips.
+    let held = tower::children_of(world, at).into_iter().find(|held| {
+        world
+            .get::<tower::Name>(*held)
+            .is_some_and(|name| name.0 == *thing)
+    });
+    match held.map(|node| world.get::<tower::Stock>(node)) {
+        Some(Some(tower::Stock::Endless)) => u32::MAX,
+        Some(Some(tower::Stock::Counted(units))) => *units,
+        Some(None) => 1,
+        None => 0,
     }
 }
 
@@ -376,6 +412,144 @@ mod tests {
         assert_eq!(
             asking(&sim, "mortar_and_pestle", SpellState::Idle),
             Some(false),
+        );
+    }
+
+    /// A maze, walked so the four ways carry different mark counts.
+    fn walked(sim: &mut Sim) {
+        for line in [
+            "attend archive",
+            "research",
+            "follow south",
+            "follow north",
+            "follow south",
+        ] {
+            sim.submit(line);
+            sim.step();
+        }
+    }
+
+    /// Whether the tower answers `place has <cmp> thing than other` yes, now.
+    fn comparing(
+        sim: &Sim,
+        place: &str,
+        thing: &str,
+        bound: crate::parser::Bound,
+        other: &str,
+    ) -> Option<bool> {
+        holds(
+            sim.world(),
+            &Condition::Has {
+                place: place.to_owned(),
+                thing: thing.to_owned(),
+                count: crate::parser::Quantity::Elsewhere(other.to_owned()),
+                bound,
+            },
+        )
+        .0
+    }
+
+    #[test]
+    fn a_comparison_reads_both_sides_off_the_same_published_count() {
+        // **The step the whole language overhaul rests on**, and it is small
+        // because the tower was already shaped for it: `raise_count` puts a
+        // maze's `marks` on `Stock` so that *"`has 2 or more marks` is answered
+        // by the same arithmetic that answers `has 4 fragment`"*. This makes the
+        // **other** side of that arithmetic a world read too.
+        //
+        // §8.1 is why it reads the published `Sense` children rather than
+        // `Maze::marks`: forging the event and forging the evidence have to stay
+        // the same act, or log poisoning has nothing to bite on.
+        use crate::parser::Bound;
+        let mut sim = Sim::new(1);
+        walked(&mut sim);
+
+        // South was walked twice and north once, whichever maze this seed drew.
+        let south = super::many_at(
+            sim.world(),
+            find(sim.world(), "south", &mut Vec::new()).expect("a way south"),
+            "marks",
+        );
+        let north = super::many_at(
+            sim.world(),
+            find(sim.world(), "north", &mut Vec::new()).expect("a way north"),
+            "marks",
+        );
+        assert_ne!(
+            south, north,
+            "the fixture walked the two ways the same number of times, so it \
+             cannot tell a working comparison from one that always says no",
+        );
+
+        let (fewer, more) = if south < north {
+            ("south", "north")
+        } else {
+            ("north", "south")
+        };
+        assert_eq!(
+            comparing(&sim, fewer, "marks", Bound::AtMost, more),
+            Some(true),
+            "{fewer} has fewer marks than {more} and the tower said otherwise",
+        );
+        assert_eq!(
+            comparing(&sim, more, "marks", Bound::AtMost, fewer),
+            Some(false),
+            "the comparison answered the same either way round",
+        );
+        assert_eq!(
+            comparing(&sim, more, "marks", Bound::AtLeast, fewer),
+            Some(true),
+        );
+    }
+
+    #[test]
+    fn a_comparison_against_itself_is_equal_and_not_more() {
+        // **Strict, which is what the English says.** `north has more marks than
+        // north` is false; `as many … as` is what asks the other question. The
+        // asymmetry against `has 2 or more marks` — which *does* include two —
+        // is English rather than an inconsistency, and `Quantity::Elsewhere`
+        // records it.
+        use crate::parser::Bound;
+        let mut sim = Sim::new(1);
+        walked(&mut sim);
+
+        assert_eq!(
+            comparing(&sim, "south", "marks", Bound::Exactly, "south"),
+            Some(true),
+        );
+        assert_eq!(
+            comparing(&sim, "south", "marks", Bound::AtLeast, "south"),
+            Some(false),
+            "a place had strictly more marks than itself",
+        );
+        assert_eq!(
+            comparing(&sim, "south", "marks", Bound::AtMost, "south"),
+            Some(false),
+        );
+    }
+
+    #[test]
+    fn a_comparison_against_a_place_the_tower_lacks_answers_nothing() {
+        // The far side resolves like the near one, so §8's *Referent missing*
+        // applies to it — a spell comparing against a room that is not there has
+        // stopped describing the world it runs in, and must not carry on.
+        use crate::parser::Bound;
+        let mut sim = Sim::new(1);
+        walked(&mut sim);
+
+        let (answer, missing) = holds(
+            sim.world(),
+            &Condition::Has {
+                place: "north".to_owned(),
+                thing: "marks".to_owned(),
+                count: crate::parser::Quantity::Elsewhere("gatehouse".to_owned()),
+                bound: Bound::AtMost,
+            },
+        );
+        assert_eq!(answer, None);
+        assert!(
+            missing.iter().any(|name| name == "gatehouse"),
+            "the name it could not place went unreported: {missing:?}",
         );
     }
 

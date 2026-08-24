@@ -456,6 +456,12 @@ spell_unreadable_if = "{name} line {count}: that question means nothing. neither
 spell_two_bounds = "{name} line {count}: a repeat takes a number or an until, not both"
 spell_stray_until = "{name} line {count}: until belongs to a repeat. ignored"
 spell_unreadable_until = "{name} line {count}: that question means nothing. the repeat stops"
+# `set` and `for each`, which fail by being half-written rather than by being
+# unanswerable. Both refuse the line whole: `set best` binds nothing and
+# `for way` walks nothing, and either read as the other would be the orb writing
+# down a line the player did not.
+spell_unreadable_let = "{name} line {count}: let wants a name, then be, then a place"
+spell_unreadable_for = "{name} line {count}: for wants each, then a set. nothing is walked"
 
 # A question about somewhere the tower does not have. §8's *Referent missing*,
 # and **not the same as the answer being no** - which is exactly the bug this
@@ -729,16 +735,18 @@ recall_spoil = "something worth picking up, one square that way"
 using_spoil = "if north has spoil. only a gleaning maze scatters them"
 
 recall_marks = "how often the square that way has been walked"
-using_marks = "if north has 2 or more marks. a wall has none, so guard on wall"
+using_marks = "if north has fewer marks than east. a wall has none, so guard on wall"
 
 recall_gleaning = "the errand a gleaning-scroll sets: gather, and no way out"
 using_gleaning = "if the stacks has gleaning, to walk it a different way"
 man_scripting_words = "words"
 man_scripting_asking = "questions"
 man_scripting_here = "nameable here"
+man_scripting_sets = "sets for each walks"
 man_scripting_shape_is = "<place> is idle, working or empty"
 man_scripting_shape_has = "<place> has <thing>"
 man_scripting_shape_count = "<place> has 2 or more <thing>, or at most 2, or exactly 2"
+man_scripting_shape_than = "<place> has more <thing> than <place>. or fewer, or as many"
 man_scripting_shape_join = "join them with and, or, not, either, both"
 
 recall_repeat = "do a block again. bare it runs for ever, or give it a count"
@@ -751,13 +759,19 @@ recall_if = "take the lines under it only when the tower answers yes"
 using_if = "if the mortar is idle, the lines, then end. else is the other half"
 
 recall_else = "what an if does when the answer is no"
-using_else = "put it between the two halves. every if may have one"
+using_else = "between the halves. else if <question> chains, and one end closes all"
 
 recall_end = "closes a block, whatever opened it"
 using_end = "one end for every repeat and every if, or the orb closes them"
 
 recall_wait = "hold here until something you name happens"
 using_wait = "wait for the mortar. it costs no tick and holds no slot"
+
+recall_let = "give a name to a place, so the lines below can say it"
+using_let = "let best be north. then follow best, or ask if best has spoil"
+
+recall_for = "do the block once for each of a set, in the order they stand"
+using_for = "for each way, the lines, then end. way is the one you are on"
 
 # What the archive is for, and what its verb does - the two manual entries the
 # domain has never had.

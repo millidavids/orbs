@@ -108,7 +108,13 @@ pub fn compile(world: &World, from: Entity, lines: &[String]) -> Program {
     let known = world.resource::<crate::content::Recipes>().vocabulary();
     let draft = super::program::read(lines);
     let mut complaints = draft.complaints;
-    let body = resolved(draft.body, &scene, &known, &mut complaints);
+    // **The names the spell binds, gathered before anything is resolved.** They
+    // are lexical — every `set` and every `for each` in the file — so this is a
+    // read of the text rather than a fact about the world, and it has to happen
+    // first: a bound name reaches `fix` looking exactly like a place the room
+    // does not have, and would be reported as one on every cast.
+    let bound = super::program::bindings(&draft.body);
+    let body = resolved(draft.body, &scene, &known, &bound, &mut complaints);
     // In line order, so what the orb says about a spell reads down the file
     // however the faults were found.
     complaints.sort_by_key(|complaint| complaint.line);
@@ -116,7 +122,13 @@ pub fn compile(world: &World, from: Entity, lines: &[String]) -> Program {
 }
 
 /// Every condition in a block, with its names fixed.
-fn resolved(body: Block, scene: &Scene, known: &[&str], complaints: &mut Vec<Complaint>) -> Block {
+fn resolved(
+    body: Block,
+    scene: &Scene,
+    known: &[&str],
+    bound: &[String],
+    complaints: &mut Vec<Complaint>,
+) -> Block {
     body.into_iter()
         .map(|Step { line, kind }| Step {
             line,
@@ -133,7 +145,7 @@ fn resolved(body: Block, scene: &Scene, known: &[&str], complaints: &mut Vec<Com
                 } => {
                     let unplaced = until
                         .as_mut()
-                        .map(|condition| fix(condition, scene, known))
+                        .map(|condition| fix(condition, scene, known, bound))
                         .unwrap_or_default();
                     // **Nought turns, not unbounded.** Dropping the guard and
                     // leaving `times` at `None` — which is what a *guarded*
@@ -155,7 +167,7 @@ fn resolved(body: Block, scene: &Scene, known: &[&str], complaints: &mut Vec<Com
                     Kind::Repeat {
                         times: turns,
                         until,
-                        body: resolved(body, scene, known, complaints),
+                        body: resolved(body, scene, known, bound, complaints),
                     }
                 }
                 Kind::If {
@@ -171,7 +183,7 @@ fn resolved(body: Block, scene: &Scene, known: &[&str], complaints: &mut Vec<Com
                     // of why a typo cannot answer quietly.
                     let unplaced = condition
                         .as_mut()
-                        .map(|condition| fix(condition, scene, known))
+                        .map(|condition| fix(condition, scene, known, bound))
                         .unwrap_or_default();
                     if unplaced
                         .iter()
@@ -185,8 +197,40 @@ fn resolved(body: Block, scene: &Scene, known: &[&str], complaints: &mut Vec<Com
                     }
                     Kind::If {
                         condition,
-                        body: resolved(body, scene, known, complaints),
-                        otherwise: resolved(otherwise, scene, known, complaints),
+                        body: resolved(body, scene, known, bound, complaints),
+                        otherwise: resolved(otherwise, scene, known, bound, complaints),
+                    }
+                }
+                // **The body is resolved, and forgetting that is silent.** A
+                // `for each` whose block never went through this would run with
+                // every name exactly as typed — so `if way has spoil` would ask
+                // about a *thing* called `spoil` the room never resolved, and a
+                // misspelt line inside a loop would be the one place in the
+                // language where a typo answered no for ever.
+                Kind::Each { group, body } => Kind::Each {
+                    group,
+                    body: resolved(body, scene, known, bound, complaints),
+                },
+                // **The value is a name and is resolved like one**, so
+                // `set m to mortar` binds `mortar_and_pestle`. A name the spell
+                // itself binds is left alone — `set best to way` is the whole
+                // point of an accumulator inside a `for each`.
+                Kind::Let { name, value } => {
+                    let held = bound.iter().any(|held| held.eq_ignore_ascii_case(&value));
+                    let found = if held {
+                        Some(value.clone())
+                    } else {
+                        clearly(scene, NounKind::Any, &value)
+                    };
+                    if found.is_none() {
+                        complaints.push(Complaint {
+                            line,
+                            key: "spell_unreadable_let",
+                        });
+                    }
+                    Kind::Let {
+                        name,
+                        value: found.unwrap_or(value),
                     }
                 }
                 other => other,
@@ -241,9 +285,24 @@ fn resolved(body: Block, scene: &Scene, known: &[&str], complaints: &mut Vec<Com
 /// culprit is never anonymous, not that one culprit is enough"* — and the
 /// compile half and the runtime half disagreeing on it is how a player fixes one
 /// typo, casts again, and is told about the next one.
-fn fix(condition: &mut Condition, scene: &Scene, known: &[&str]) -> Vec<Unplaced> {
+fn fix(
+    condition: &mut Condition,
+    scene: &Scene,
+    known: &[&str],
+    bound: &[String],
+) -> Vec<Unplaced> {
     let mut unplaced = Vec::new();
     condition.rename(&mut |kind, name| {
+        // **A name the spell binds is left exactly as written and is not a
+        // fault.** It stands for a place that will be known when the line runs
+        // and is not one now, so resolving it here is impossible and reporting
+        // it would put `spell_nowhere` on every correct `for each` in the game.
+        //
+        // Left alone rather than substituted, because the *value* is what gets
+        // resolved — at the `set` that binds it, in this same pass.
+        if bound.iter().any(|held| held.eq_ignore_ascii_case(name)) {
+            return None;
+        }
         let found = match kind {
             NounKind::Place => clearly(scene, NounKind::Place, name),
             _ => clearly(scene, NounKind::Any, name).or_else(|| {
@@ -426,14 +485,20 @@ pub fn interpret(world: &World, domain: &str, lines: &[String]) -> Vec<Reading> 
 
     // Faults about the *shape* of the file — a block nothing closed, a stray
     // `end` — belong to a line but are found by reading the whole thing.
-    let structural = super::program::read(lines).complaints;
+    let draft = super::program::read(lines);
+    let structural = draft.complaints;
+    // **The whole file's bindings, for every line of it.** A `set` on line 9 is
+    // a name line 2 may already say — `bindings` is deliberately not scoped, and
+    // this surface has to agree with the runner about that or it would paint a
+    // working line red.
+    let bound = super::program::bindings(&draft.body);
 
     lines
         .iter()
         .enumerate()
         .map(|(index, line)| {
             let at = index + 1;
-            let mut reading = one(line, &scene, &known);
+            let mut reading = one(line, &scene, &known, &bound);
             reading.line = at;
             if reading.fault.is_none() {
                 reading.fault = structural
@@ -450,7 +515,7 @@ pub fn interpret(world: &World, domain: &str, lines: &[String]) -> Vec<Reading> 
 }
 
 /// One line, read.
-fn one(line: &str, scene: &Scene, known: &[&str]) -> Reading {
+fn one(line: &str, scene: &Scene, known: &[&str], bound: &[String]) -> Reading {
     let trimmed = line.trim();
     let verbatim = |fault: Option<Fault>| Reading {
         line: 0,
@@ -503,12 +568,29 @@ fn one(line: &str, scene: &Scene, known: &[&str]) -> Reading {
         // A name the room cannot place: the one thing the file used to reveal by
         // being rewritten, and the reason this surface exists at all. **Asked of
         // `fix`**, which is the only thing that knows the rule — see there.
-        let fault = fault_of(&fix(&mut question, scene, known));
+        let fault = fault_of(&fix(&mut question, scene, known, bound));
         return Reading {
             line: 0,
             heard: format!("{lead} {}", crate::parser::write_condition(&question)),
             fault,
         };
+    }
+
+    // **A line naming something the spell binds is quoted, never resolved.**
+    // `follow best` read back as **`follow west`** — the fuzzy matcher finding
+    // the nearest place in the room, which is the one thing `best` is certainly
+    // not. The runner is right (it substitutes the bound value before `analyse`
+    // ever sees the line); this surface was the only liar, which is the exact
+    // shape of the bug it exists to catch, one grammar wider.
+    //
+    // Verbatim is the honest answer rather than a shortcut: what the orb hears
+    // is *"follow whatever `best` is"*, and it cannot know that until the line
+    // runs. The same call `names_a_spell` makes below, for the same reason.
+    if trimmed
+        .split_whitespace()
+        .any(|word| bound.iter().any(|held| held.eq_ignore_ascii_case(word)))
+    {
+        return verbatim(None);
     }
 
     // A command, read the way the runner will read it — through the same

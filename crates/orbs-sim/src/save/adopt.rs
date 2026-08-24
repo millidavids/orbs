@@ -38,6 +38,15 @@ pub(super) fn apply(world: &mut World, entity: Entity, node: &NodeSave) {
     marker(world, entity, node.poisoned, tower::Poisoned);
     marker(world, entity, node.log, tower::Log);
 
+    // **Removed then re-inserted, like every carried non-marker below.** A
+    // fixture that stopped being one of a set between two builds must lose the
+    // component, or a `for each` would walk a member the tower no longer groups.
+    let mut at = world.entity_mut(entity);
+    at.remove::<tower::Grouped>();
+    if !node.group.is_empty() {
+        at.insert(tower::Grouped(node.group.clone()));
+    }
+
     let mut at = world.entity_mut(entity);
     at.remove::<tower::Operation>();
     at.remove::<Stock>();
@@ -231,6 +240,7 @@ fn spell(world: &mut World, entity: Entity, node: &NodeSave) {
             at: at_id,
             waiting_since: run.waiting_since.map(Tick::new),
             said: run.said.clone(),
+            vars: run.vars.clone(),
         });
     }
 }
@@ -267,6 +277,11 @@ pub(super) fn loop_code(open: &spell::Loop) -> i64 {
         spell::Loop::Repeat(Some(turns)) => i64::from(*turns),
         spell::Loop::Repeat(None) => -1,
         spell::Loop::Branch => -2,
+        // **Below the two markers, one step per member.** `-3` is the first,
+        // `-4` the second. A `for each` is the third block shape and the first
+        // to carry a number *and* need a tag, which is why it takes a range
+        // rather than a single value.
+        spell::Loop::Each(index) => -3 - i64::from(*index),
     }
 }
 
@@ -275,6 +290,10 @@ fn loop_from(code: i64) -> spell::Loop {
     match code {
         -1 => spell::Loop::Repeat(None),
         -2 => spell::Loop::Branch,
+        // A hand-edited file could put anything here; a set walked from a member
+        // that does not exist simply ends, which is what `for each` does when it
+        // runs off the end anyway.
+        each if each <= -3 => spell::Loop::Each(u32::try_from(-3 - each).unwrap_or(0)),
         turns => spell::Loop::Repeat(Some(u32::try_from(turns).unwrap_or(0))),
     }
 }

@@ -51,16 +51,36 @@ pub enum Body {
     /// The one policy that must read the world: a maze is generated per seed and
     /// no fixed sequence of `follow`s can solve two of them.
     Stacks,
+    /// Earn a slot by hand, bind a spell, and then do nothing at all.
+    ///
+    /// **The only policy that measures the script engine**, which is the point
+    /// of it: every other one models a player typing, so the whole of §8 — the
+    /// per-step tick cost, `PATIENCE`, the wait on the production slot, a
+    /// binding re-casting a spell that has run off the end — is invisible to
+    /// this harness without it.
+    Bound {
+        /// A cycle, played by hand, until the orb can hold a spell.
+        ///
+        /// There is no way to grant experience: concentration is derived from
+        /// work completed and no public API hands the sim a number, so a policy
+        /// that wants a slot has to earn one exactly as a player does.
+        earning: &'static [&'static str],
+        /// What the spell is called.
+        name: &'static str,
+        /// What it holds, written the way a player would type it.
+        lines: &'static [&'static str],
+    },
 }
 
 impl Policy {
     /// Every policy the harness knows, in the order `list` prints them.
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 6] = [
         Self::CLARITY,
         Self::DAMPED,
         Self::HASTE,
         Self::GRIND,
         Self::STACKS,
+        Self::BOUND,
     ];
 
     /// Look one up by name.
@@ -201,5 +221,38 @@ impl Policy {
         gloss: "the archive's maze, walked by Trémaux as a spell would walk it",
         setup: &["attend archive"],
         body: Body::Stacks,
+    };
+
+    /// [`GRIND`](Self::GRIND)'s loop again, run by a spell instead of by hand.
+    ///
+    /// **The comparison is the measurement.** The two policies issue the same
+    /// two commands for ever, so everything else about them is equal and the gap
+    /// between their rates is *exactly* what automation costs: the per-step tick
+    /// §8 charges, the tick a bound spell spends re-casting when it runs off the
+    /// end, and nothing else. Pointed at any other loop the number would be a
+    /// mixture of that and the loop's own shape.
+    ///
+    /// **That gap is what the language overhaul moves**, and it is why this
+    /// exists before the overhaul rather than after it. §19 records the
+    /// decision that a step still costs a tick, with the weave tree as the
+    /// escape valve; both halves of that are claims about this number, and
+    /// nothing in the harness could see it. The other five policies model a
+    /// player typing, so `SCRIPT_BUDGET`, `PATIENCE` and the whole runner were
+    /// unmeasured.
+    ///
+    /// **`empty mortar_and_pestle` is in the spell, not beside it.** A binding
+    /// re-casts a spell that has run off the end, so a lapping spell has to
+    /// clear its own byproduct or the second pass refuses the load and every
+    /// pass after it complains about the same husks — the trap CLAUDE.md records
+    /// against `first_light`, which is why the shipped spell cannot be used here.
+    const BOUND: Self = Self {
+        name: "bound",
+        gloss: "the grind loop again, bound as a spell — what automation costs",
+        setup: &["attend laboratory"],
+        body: Body::Bound {
+            earning: &["grind sage", "empty mortar_and_pestle"],
+            name: "tending",
+            lines: &["grind sage", "empty mortar_and_pestle"],
+        },
     };
 }

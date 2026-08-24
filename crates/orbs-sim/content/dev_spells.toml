@@ -82,99 +82,59 @@ lines = [
     "repeat until the stacks is idle",
     "if north has spoil",
     "follow north",
-    "else",
-    "if east has spoil",
+    "else if east has spoil",
     "follow east",
-    "else",
-    "if south has spoil",
+    "else if south has spoil",
     "follow south",
-    "else",
-    "if west has spoil",
+    "else if west has spoil",
     "follow west",
-    "else",
-    "if north has exit",
+    "else if north has exit",
     "follow north",
-    "else",
-    "if east has exit",
+    "else if east has exit",
     "follow east",
-    "else",
-    "if south has exit",
+    "else if south has exit",
     "follow south",
-    "else",
-    "if west has exit",
+    "else if west has exit",
     "follow west",
-    "else",
-    "if north has passage",
+    "else if north has passage",
     "follow north",
-    "else",
-    "if east has passage",
+    "else if east has passage",
     "follow east",
-    "else",
-    "if south has passage",
+    "else if south has passage",
     "follow south",
-    "else",
-    "if west has passage",
+    "else if west has passage",
     "follow west",
-    "else",
-    "if north has 1 or fewer marks and not north has back and not north has wall",
+    # **These two tiers are what a real minimum would replace, and cannot yet.**
+    # `north has no more marks than east` is expressible now — but a *walled*
+    # east reads as nought marks, so a comparison against every other way is
+    # false unless this one is unwalked too, and every rung dies. Selecting the
+    # least-marked way among the ones that are *open* is a filter over a list,
+    # which is the next step's job, not a comparison's. §19 records it.
+    "else if north has 1 or fewer marks and not north has back and not north has wall",
     "follow north",
-    "else",
-    "if east has 1 or fewer marks and not east has back and not east has wall",
+    "else if east has 1 or fewer marks and not east has back and not east has wall",
     "follow east",
-    "else",
-    "if south has 1 or fewer marks and not south has back and not south has wall",
+    "else if south has 1 or fewer marks and not south has back and not south has wall",
     "follow south",
-    "else",
-    "if west has 1 or fewer marks and not west has back and not west has wall",
+    "else if west has 1 or fewer marks and not west has back and not west has wall",
     "follow west",
-    "else",
-    "if north has 2 or more marks and not north has back",
+    "else if north has 2 or more marks and not north has back",
     "follow north",
-    "else",
-    "if east has 2 or more marks and not east has back",
+    "else if east has 2 or more marks and not east has back",
     "follow east",
-    "else",
-    "if south has 2 or more marks and not south has back",
+    "else if south has 2 or more marks and not south has back",
     "follow south",
-    "else",
-    "if west has 2 or more marks and not west has back",
+    "else if west has 2 or more marks and not west has back",
     "follow west",
-    "else",
-    "if north has back",
+    "else if north has back",
     "follow north",
-    "else",
-    "if east has back",
+    "else if east has back",
     "follow east",
-    "else",
-    "if south has back",
+    "else if south has back",
     "follow south",
-    "else",
-    "if west has back",
+    "else if west has back",
     "follow west",
     "else",
-    "end",
-    "end",
-    "end",
-    "end",
-    "end",
-    "end",
-    "end",
-    "end",
-    "end",
-    "end",
-    "end",
-    "end",
-    "end",
-    "end",
-    "end",
-    "end",
-    "end",
-    "end",
-    "end",
-    "end",
-    "end",
-    "end",
-    "end",
     "end",
     "end",
 ]
@@ -261,20 +221,14 @@ lines = [
     "repeat until the prism is idle",
     "if the first has 1 or more untried",
     "dial first",
-    "else",
-    "if the second has 1 or more untried",
+    "else if the second has 1 or more untried",
     "dial second",
-    "else",
-    "if the third has 1 or more untried",
+    "else if the third has 1 or more untried",
     "dial third",
-    "else",
-    "if the fourth has 1 or more untried",
+    "else if the fourth has 1 or more untried",
     "dial fourth",
     "else",
     "wait",
-    "end",
-    "end",
-    "end",
     "end",
     "probe",
     "end",
@@ -290,5 +244,58 @@ lines = [
     "end",
     "wield lectern",
     "end",
+    "end",
+]
+
+# The same maze, written with a variable and a set — 15 lines against
+# `threading`'s 52, and a better algorithm inside them.
+#
+# **This is what `for each` and `let` are for**, and it is worth reading beside
+# `threading` rather than instead of it. Where the ladder unrolls six tiers by
+# four ways because the language could not say *"the way with the fewest marks"*,
+# this says it: an accumulator, and three passes that each narrow what it holds.
+#
+#   any open way          - the fallback, and the reason a dead end works
+#   not the way back      - preferred, when there is one
+#   the least walked      - of those, and a **true minimum** rather than
+#                           `threading`'s two buckets over the same count
+#
+# **Later loops override earlier ones**, so the priority reads bottom-up. The
+# `passage` tier `threading` needs is subsumed: an unwalked way publishes no
+# `marks` at all, which counts as nought, so it is already the minimum.
+#
+# **Fewer lines is not fewer ticks, and that is measured.** §8 charges a step per
+# line, so three passes over four ways cost ~27 steps a move where the ladder
+# short-circuits at the first rung that fires. A fourth and fifth pass — `exit`
+# and `spoil`, which would make this the same algorithm as `threading` — were
+# written, and at ~45 steps a move seed 3 stopped finishing inside 7200 ticks.
+# That is §19's step-cost decision arriving as a number rather than an argument:
+# legibility now, speed when the weave's steps-per-tick nodes are takeable.
+#
+# **The seed value must be a way that might be walled.** `let best be north`
+# looks wrong and is not: the first pass overwrites it with an open way, and the
+# only world where it survives is one with no open way at all, which a carved
+# maze does not have.
+[roaming]
+domain = "archive"
+lines = [
+    "repeat until the stacks is idle",
+    "let best be north",
+    "for each way",
+    "if way has no wall",
+    "let best be way",
+    "end",
+    "end",
+    "for each way",
+    "if way has no wall and no back",
+    "let best be way",
+    "end",
+    "end",
+    "for each way",
+    "if way has no wall and no back and fewer marks than best",
+    "let best be way",
+    "end",
+    "end",
+    "follow best",
     "end",
 ]

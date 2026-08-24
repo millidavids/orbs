@@ -11,6 +11,8 @@
 //! It does not need to be: a restore raises the tower before it adopts, so the
 //! root always exists already. See [`super::restore`].
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 
 /// A node, by path, with whatever is true of it.
@@ -57,6 +59,16 @@ pub struct NodeSave {
     /// A compass bearing, a socket, or a sigil.
     #[serde(default, skip_serializing_if = "not")]
     pub reading: bool,
+    /// The set a spell's `for each` walks this node as one of — `way`, `socket`.
+    ///
+    /// **Carried, exactly as [`reading`](Self::reading) is**, and for the reason
+    /// that field is: both are declared by `build`'s fixture tables and both are
+    /// re-inserted by `adopt`, so a restore that dropped them would leave a
+    /// tower whose ways answer `survey` and whose `for each way` walks nothing.
+    /// A save says what a node *is*; deriving half of that on load and reading
+    /// the other half is how the two halves come to disagree.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub group: String,
     /// What a recipe was for, as opposed to what it left behind.
     #[serde(default, skip_serializing_if = "not")]
     pub product: bool,
@@ -281,9 +293,16 @@ pub struct RunningSave {
     /// step inside the third, and a save with a position and no loop counts
     /// would resume every enclosing `repeat` from its first turn.
     pub pc: Vec<usize>,
-    /// Each open `repeat`'s remaining turns, outermost first. `-1` is a
-    /// `repeat until`, which counts nothing; anything else is a branch of an
-    /// `if`, which runs once.
+    /// Each open block, outermost first, as one number.
+    ///
+    /// Nought or more is a `repeat`'s remaining turns. `-1` is a `repeat until`,
+    /// which counts nothing. `-2` is a branch of an `if`, which runs once. `-3`
+    /// and below is a `for each`, at member `-3 - code` of its set.
+    ///
+    /// **One integer per block rather than a tagged table**, which is the call
+    /// this format made when there were two shapes and is worth restating now
+    /// there are three: a `loops = [2, -2, -4]` row is legible beside the `pc`
+    /// it belongs to, where three tables of one field each would bury it.
     pub loops: Vec<i64>,
     /// How far into the record stream this run has read.
     pub seen: u64,
@@ -299,6 +318,14 @@ pub struct RunningSave {
     /// Lines whose bad name has already been complained about.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub said: Vec<usize>,
+    /// What each name the spell has bound stands for.
+    ///
+    /// A map, so the file reads `[node.running.vars]` / `best = "north"` — which
+    /// §15's hand-editable criterion is what asks for. Ordered by key, because a
+    /// document whose rows moved between two runs of one seed would fail the
+    /// lockstep test that pins a snapshot as complete.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub vars: BTreeMap<String, String>,
     /// A fingerprint of the spell text this program was compiled from.
     pub fingerprint: u64,
 }

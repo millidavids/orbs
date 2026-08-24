@@ -148,6 +148,25 @@ pub struct Running {
     /// A `Vec` rather than a set because it holds one entry per broken line of
     /// one spell, and its order is part of a deterministic session.
     pub said: Vec<usize>,
+    /// What each name the spell has bound stands for.
+    ///
+    /// `set best to north` puts one here; `for each way` rebinds `way` at the
+    /// top of every pass. A value is a **name**, already resolved against the
+    /// room — see [`Kind::Let`](super::Kind::Let).
+    ///
+    /// # Ordered, and that is not decoration
+    ///
+    /// A `BTreeMap` rather than a `HashMap`: this travels to a save, and a
+    /// document whose rows moved between two runs of one seed would fail the
+    /// lockstep test that pins the snapshot as a complete description.
+    ///
+    /// # Cleared at cast, kept across a mid-flight edit
+    ///
+    /// The same answer `pc` and `loops` get, and for the reason `scribe` gives
+    /// for them: *"a diff that guesses wrong moves a running spell to a line the
+    /// player did not point it at."* A store rebuilt on every save would empty
+    /// an accumulator half way through the loop that was filling it.
+    pub vars: std::collections::BTreeMap<String, String>,
 }
 
 /// Work every running spell forward.
@@ -259,6 +278,10 @@ fn set_attribution(world: &mut World, spell: Option<&str>) {
 /// Run up to [`SCRIPT_BUDGET`] instructions of the spell on `entity`.
 fn step_one(world: &mut World, entity: Entity) {
     for _ in 0..SCRIPT_BUDGET {
+        // **Before the state is read, so every step sees its cursors.** Entry
+        // and lap both arrive here, which is what makes this the one writer —
+        // see [`bind_cursors`].
+        bind_cursors(world, entity);
         let Some(state) = world.get::<Running>(entity).cloned() else {
             return;
         };
@@ -338,7 +361,8 @@ fn step_one(world: &mut World, entity: Entity) {
                 world.insert_resource(Cwd(at));
                 let asked = condition
                     .as_ref()
-                    .map(|condition| super::watch::holds(world, condition));
+                    .map(|condition| standing_for(&state.vars, condition))
+                    .map(|condition| super::watch::holds(world, &condition));
                 world.insert_resource(Cwd(player));
                 asked
             });
@@ -383,10 +407,48 @@ fn step_one(world: &mut World, entity: Entity) {
             continue;
         }
 
+        // **A set is walked, and its cursor is bound before the body runs.**
+        // Entering is one budget step, exactly as a `repeat` is and for the same
+        // reason: a `for each` over an empty set that cost nothing would be a
+        // free lap, and the budget is what stands between a spell and a hang.
+        if let super::Kind::Each { group, body } = &step.kind {
+            let members = node_of(world, state.at)
+                .map(|room| tower::group_at(world, room, group).len())
+                .unwrap_or_default();
+            // Nothing to walk, or nothing to do with it. Both are stepped
+            // **past** rather than into, which is the answer `repeat 0` and an
+            // empty body already get — descending would put the path somewhere
+            // `at` cannot resolve, which the runner reads as the end of the
+            // spell.
+            if members == 0 || body.is_empty() {
+                advance_pc(world, entity);
+                continue;
+            }
+            if let Some(mut running) = world.get_mut::<Running>(entity) {
+                let Running { pc, loops, .. } = &mut *running;
+                super::program::enter_each(pc, loops);
+            }
+            continue;
+        }
+
+        // **A binding costs a step, like everything else** (§8: *"everything
+        // counts as a step"*). It reads no world and takes no slot, but a line
+        // that were free would make a spell of nothing but `set` an unbounded
+        // loop inside one tick.
+        if let super::Kind::Let { name, value } = &step.kind {
+            let stood_for = substituted(&state.vars, value);
+            if let Some(mut running) = world.get_mut::<Running>(entity) {
+                running.vars.insert(name.clone(), stood_for);
+            }
+            advance_pc(world, entity);
+            continue;
+        }
+
         // A `wait` reads the world rather than acting on it, so it costs no
         // position swap and no dispatch.
         if let super::Kind::Wait(wanted) = &step.kind {
-            if wait_for(world, entity, &state, wanted) == Progress::Blocked {
+            let wanted = substituted(&state.vars, wanted);
+            if wait_for(world, entity, &state, &wanted) == Progress::Blocked {
                 return;
             }
             continue;
@@ -395,6 +457,11 @@ fn step_one(world: &mut World, entity: Entity) {
         let super::Kind::Command(line) = step.kind else {
             continue;
         };
+        // **Bound names stand for what they hold, before the parser sees the
+        // line.** `follow way` has to reach the dispatch as `follow north`, and
+        // the substitution is word-wise rather than textual so a variable called
+        // `n` cannot rewrite the middle of `north`.
+        let line = substituted(&state.vars, &line);
 
         // The spell's own position, swapped in for exactly the length of one
         // instruction and swapped back before anything else can see it.
@@ -426,6 +493,108 @@ fn step_one(world: &mut World, entity: Entity) {
 
         if outcome == Progress::Blocked {
             return;
+        }
+    }
+}
+
+/// `text` with every bound name replaced by what it stands for.
+///
+/// **Word by word, never as a substring.** A variable called `n` substituted
+/// textually would rewrite `north` into `<value>orth`, and a spell whose names
+/// silently changed shape is the class of defect this language refuses
+/// everywhere else. Splitting on whitespace also means a bound name can only
+/// ever replace a whole word, which is what a player writing `follow way` means.
+///
+/// Case-folded on the way in, because `set` lowercases the name it binds and a
+/// player who writes `Way` in the body meant the same cursor.
+///
+/// Not recursive: a value is a name, and a name that stood for another name
+/// would be a chain nobody wrote. `set best to way` resolves `way` **once**,
+/// where the line runs — see [`Kind::Let`](super::Kind::Let).
+fn substituted(vars: &std::collections::BTreeMap<String, String>, text: &str) -> String {
+    if vars.is_empty() {
+        return text.to_owned();
+    }
+    text.split_whitespace()
+        .map(|word| {
+            vars.get(&word.to_lowercase())
+                .map_or(word, String::as_str)
+                .to_owned()
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// A question with every bound name replaced by what it stands for.
+///
+/// Through `Condition::rename`, which is the same walk `compile` uses to fix
+/// names against the room — so a variable reaches `holds` looking exactly like a
+/// name the player typed, and nothing downstream needs to know variables exist.
+fn standing_for(
+    vars: &std::collections::BTreeMap<String, String>,
+    condition: &crate::parser::Condition,
+) -> crate::parser::Condition {
+    if vars.is_empty() {
+        return condition.clone();
+    }
+    let mut copy = condition.clone();
+    copy.rename(&mut |_, name| vars.get(&name.to_lowercase()).cloned());
+    copy
+}
+
+/// Point every open `for each`'s cursor at the member it is on.
+///
+/// # Refreshed here rather than written once on entry
+///
+/// A cursor moves on every lap, and the lap happens inside
+/// [`step_past`](super::program::step_past) — which is pure, has no world, and
+/// deliberately knows nothing about sets. Binding on entry alone would leave
+/// `way` holding the first member for the whole loop.
+///
+/// So it is done in **one** place, at the top of every step, from the loop stack
+/// itself: idempotent, cheap, and correct for entry and lap alike. Two writers
+/// for one binding is how the two exits from a block came to disagree, which
+/// [`Loop`](super::Loop) already records.
+///
+/// # Walking the stack against the path
+///
+/// `loops` records one entry per descent, and the path elements each costs are
+/// not the same: a `repeat` and a `for each` cost one, a branch of an `if` costs
+/// two (`enter_branch` pushes the half *and* the step). Walking them together is
+/// what turns a stack position into the step that opened it.
+fn bind_cursors(world: &mut World, entity: Entity) {
+    let Some(state) = world.get::<Running>(entity).cloned() else {
+        return;
+    };
+    let Some(room) = node_of(world, state.at) else {
+        return;
+    };
+
+    let mut bound: Vec<(String, String)> = Vec::new();
+    let mut consumed = 0usize;
+    for open in &state.loops {
+        if consumed >= state.pc.len() {
+            break;
+        }
+        if let super::Loop::Each(index) = open
+            && let Some(step) = super::program::at(state.program.body(), &state.pc[..=consumed])
+            && let super::Kind::Each { group, .. } = &step.kind
+            && let Some(member) = tower::group_at(world, room, group)
+                .get(*index as usize)
+                .and_then(|node| world.get::<Name>(*node))
+        {
+            bound.push((group.clone(), member.0.clone()));
+        }
+        consumed += if matches!(open, super::Loop::Branch) {
+            2
+        } else {
+            1
+        };
+    }
+
+    if let Some(mut running) = world.get_mut::<Running>(entity) {
+        for (group, member) in bound {
+            running.vars.insert(group, member);
         }
     }
 }
@@ -714,11 +883,22 @@ fn advance_pc(world: &mut World, entity: Entity) {
     let guards = guard_answers(world, program.body(), at, &pc);
     if let Some(mut running) = world.get_mut::<Running>(entity) {
         let Running { pc, loops, .. } = &mut *running;
-        let again = |at: &[usize]| {
-            guards
-                .iter()
-                .find(|(path, _)| path.as_slice() == at)
-                .is_none_or(|(_, more)| *more)
+        let again = |at: &[usize], popped: super::Loop| {
+            let answer = guards.iter().find(|(path, _)| path.as_slice() == at);
+            match (popped, answer) {
+                // A `for each` goes round while the set has a member after the
+                // one just finished. **No entry means no set**, which is where a
+                // group the room does not have ends up — the loop stops rather
+                // than walking nothing for ever.
+                (super::Loop::Each(index), Some((_, Continues::Members(many)))) => {
+                    index + 1 < *many
+                }
+                (super::Loop::Each(_), _) => false,
+                // An unguarded `repeat` is absent from the list and that reads as
+                // yes, so it costs no world read at all.
+                (_, Some((_, Continues::Guard(more)))) => *more,
+                (_, _) => true,
+            }
         };
         if !super::program::step_past(program.body(), pc, loops, again) {
             // Off the end. `at` will return `None` next time round and the
@@ -780,6 +960,22 @@ fn say_missing(
     );
 }
 
+/// What a block that has run off the end needs to know to go round again.
+///
+/// **Two shapes because the two loops end for different reasons**, and folding
+/// them into one `bool` would put the arithmetic in the wrong place: a
+/// `repeat until` ends when the world says so and a `for each` ends when it runs
+/// out of members, so the walker owes the first an answer and the second a
+/// count. The runner does the comparison, because only it knows which member the
+/// loop is on.
+#[derive(Debug, Clone, Copy)]
+enum Continues {
+    /// A `repeat until`: whether the loop may take another turn.
+    Guard(bool),
+    /// A `for each`: how many members its set has, now.
+    Members(u32),
+}
+
 /// Whether each guarded loop may take another turn, by path.
 ///
 /// **Three answers folded into two, and the fold is a decision.** `until X`
@@ -800,13 +996,13 @@ fn guard_answers(
     body: &super::Block,
     at: Option<Entity>,
     pc: &[usize],
-) -> Vec<(Vec<usize>, bool)> {
+) -> Vec<(Vec<usize>, Continues)> {
     fn walk(
         world: &World,
         body: &super::Block,
         pc: &[usize],
         path: &mut Vec<usize>,
-        out: &mut Vec<(Vec<usize>, bool)>,
+        out: &mut Vec<(Vec<usize>, Continues)>,
     ) {
         for (index, step) in body.iter().enumerate() {
             path.push(index);
@@ -822,7 +1018,24 @@ fn guard_answers(
                         && pc.starts_with(path)
                     {
                         let more = matches!(super::watch::holds(world, condition).0, Some(false));
-                        out.push((path.clone(), more));
+                        out.push((path.clone(), Continues::Guard(more)));
+                    }
+                    walk(world, body, pc, path, out);
+                }
+                // **The set is measured, not the guard asked.** A `for each` has
+                // no question of its own: it goes round while the set has a
+                // member left, so what the walker owes the runner is a count.
+                // Same short-circuit as above — only a loop the path is inside
+                // can be unwound, and measuring the rest would be a read nobody
+                // asked for.
+                super::Kind::Each { group, body } => {
+                    if pc.starts_with(path) {
+                        let room = world.resource::<Cwd>().0;
+                        let many = tower::group_at(world, room, group).len();
+                        out.push((
+                            path.clone(),
+                            Continues::Members(u32::try_from(many).unwrap_or(u32::MAX)),
+                        ));
                     }
                     walk(world, body, pc, path, out);
                 }
@@ -839,7 +1052,7 @@ fn guard_answers(
                         path.pop();
                     }
                 }
-                super::Kind::Command(_) | super::Kind::Wait(_) => {}
+                super::Kind::Command(_) | super::Kind::Wait(_) | super::Kind::Let { .. } => {}
             }
             path.pop();
         }

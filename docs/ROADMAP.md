@@ -8,7 +8,7 @@ If the two disagree, DESIGN.md wins and this file is wrong.
 > game. An item without a See it line is not started; an item whose line does not
 > work is not finished, however green its tests are. DESIGN.md §15, §19.
 
-Last updated: 2026-08-17 · **Phases 0, 0.5, 1 and 2 closed. Phase 3 (Spellcraft) next.** The §15 numeric gate is deferred, not passed, and Phase 1's second exit clause moved to Phase 10 with the item that carries it. **Phases 2–7 are the tower's five remaining domains and the phase that makes them one machine; what was Phase 2 (Siege) is now Phase 8.** Two of §8.1's four sabotage surfaces now ship — logs and world state; script text and trigger clocks stay in Phase 8, where their producer is.
+Last updated: 2026-08-24 · **Phases 0, 0.5, 1 and 2 closed. Phase 3 (Spellcraft) in progress at `0.3.20`** — the save format is closed and the **language overhaul** is four boxes of seven: `else if`, a bound-spell balance policy, comparison-against-a-place, and variables-and-sets. Next is **functions**. The overhaul took the phase from 3 months to 5 and §15's total from 41 to 43. The §15 numeric gate is deferred, not passed, and Phase 1's second exit clause moved to Phase 10 with the item that carries it. **Phases 2–7 are the tower's five remaining domains and the phase that makes them one machine; what was Phase 2 (Siege) is now Phase 8.** Two of §8.1's four sabotage surfaces now ship — logs and world state; script text and trigger clocks stay in Phase 8, where their producer is.
 
 ---
 
@@ -2372,6 +2372,22 @@ looking.
 
 ## Phase 3 — Spellcraft
 
+> **Where this stands — `0.3.20`, and read this first if you are picking it up
+> cold.** The save format is closed (three boxes). The **language overhaul** is
+> four boxes in of seven: `else if`, a bound-spell policy in `orbs-balance`,
+> comparison-against-a-place, and variables-and-sets all ship. What remains is
+> **functions**, the **resolution policy**, **builtins that act**, and two
+> parallel items — and the shape of each is written into its own box below
+> rather than left in a plan file, deliberately.
+>
+> The next box is **functions**, and it is gated on nothing except the decision
+> already recorded in §19: a step still costs a tick, and the weave tree is where
+> that is answered.
+>
+> The four language boxes are worth reading in §19 before touching any of it —
+> three of them turned on a collision or a silent misreport that is not obvious
+> from the code, and all three are recorded there with the measurement.
+
 **Exit:** a spell is assembled from parts the player did not write that session,
 and the parts are reusable.
 
@@ -2508,6 +2524,222 @@ until then. §19 records the placement argument in full.
       #   the orb cannot make out what it wrote last. this tower is new
       ```
 
+**The language overhaul, and why it is in this phase.** *"Composition — build
+spells from components"* is this phase's whole subject, and the language cannot
+hold a component: six control words, no values, no names, and a step that reaches
+the world by re-parsing an English line through the NLU every time it runs.
+`threading` is the evidence — **six tiers × four ways, unrolled by hand**, because
+nothing in the language can say *"the way with the fewest marks."* DESIGN.md §19
+records the decisions, including that this **supersedes the seven-language audit's
+no-variables premise**, that a step still costs a tick with the weave tree as the
+escape valve, and that the lens's automation pin is deleted.
+
+- [x] ✅ **`else if` — a chained `if`, and one `end` closes the ladder.** The
+      shape every solver in the game is written in, and each rung used to nest one
+      deeper and owe an `end` at the bottom: **49 of `threading`'s 98 lines were
+      `end` or `else`**. Now 3 of 52, and `breaking` went 21 → 15.
+      - **A desugaring, not a new `Kind`.** `else if` pushes a chained `if` frame
+        and one `end` unwinds the whole chain, so the runner, `step_past`,
+        `guard_answers`, the save format and `interpret` need **nothing** — what
+        they see is the nested tree that was always written by hand
+      - **One reader for a condition.** The tail after `else` goes through the
+        same reader a plain `if` uses, so there is one set of complaint keys and
+        an unreadable rung runs neither half rather than being guessed at
+      - **An unclosed chain complains once**, about the `if` at the top — a
+        chained frame is half of a construct someone else opened
+      - **The tree test flattens line numbers**, because the two spellings sit on
+        different lines by construction and the line is load-bearing: §8.1 needs
+        the log to name the player's line, not the desugared one
+      **See it** — three branches and one `end`, read back by `interpret`:
+      ```bash
+      ORBS_BOOT=0 ORBS_GRID=100x30 ORBS_DUMP="attend archive; scribe ladder" \
+        ORBS_EDIT="edit\nif north has exit\nfollow north\nelse if east has exit\nfollow east\nelse\nfollow west\nend\n<esc>\ninterpret" \
+        cargo run -p orbs
+      ```
+      ...and the 52-line solver still walking out of three different mazes:
+      ```bash
+      for s in 3 11 17; do ORBS_SEED=$s ORBS_BOOT=0 \
+        ORBS_DUMP="attend archive; research; debug_spell threading" \
+        ORBS_THEN="invoke threading; meditate 3600; meditate 3600; survey cabinet" \
+        cargo run -q -p orbs; done      # `fragment 1` each time
+      ```
+- [x] ✅ **A bound-spell policy in `orbs-balance` — the instrument, before the
+      thing it measures.** Five policies shipped and **not one invoked or bound a
+      spell**, so `SCRIPT_BUDGET`, `PATIENCE`, the wait on the production slot and
+      the re-cast a binding performs were all unmeasured — and §19's decision that
+      a step still costs a tick is a claim about exactly that number.
+      - **`bound` is `grind`'s loop again, run by a spell**, so everything about
+        the two is equal except who is typing and the gap is purely what
+        automation costs. Pointed at any other loop the number would be a mixture
+        of that and the loop's own shape
+      - **It keeps 0.910 of the hand-played rate, on every seed measured.** The
+        absolute rates move with a world's luck at sabotage — 0.0814 on seed 3
+        against 0.0910 on seed 0, and `grind` moves with them — while the
+        quotient does not move at all, because it is a property of the script
+        engine rather than of the tower. So `tests/agrees.rs` **pins the
+        quotient** and the table reports the rate
+      - **It goes through `Sim::write_spell`**, the editor's own public entry,
+        not `debug_spell` — which is `cfg(debug_assertions)`, so a release sweep
+        would have measured nothing, and hands back a shipped spell rather than
+        one a policy chose
+      - **A slot has to be earned.** No public API hands the sim experience, so
+        the policy grinds for sixteen by hand exactly as a player does, then
+        writes, then binds — three tick boundaries, because each waits on one
+      - **A bound policy breaks the `cost` column's rule of thumb**, and that is
+        recorded rather than fixed: a spell that *waits* stamps `Role::Cost` too,
+        so `bound` carries ~640 healthy costs in a two-hour sweep. `--why` is
+        what separates a wait from a refusal
+      **See it:**
+      ```bash
+      cargo run -p orbs-balance -- run bound --ticks 7200 --why
+      #   bound  0  7200  655  1  0.0910  656  641
+      #   640  tending.spell waits: the mortar_and_pestle is working
+      cargo run -p orbs-balance -- run grind --ticks 7200   # 0.1000, the same loop by hand
+      ```
+- [x] ✅ **A comparison can name another place instead of a number.** The other
+      side of `has` was always a literal, so *"the way with the fewest marks"* —
+      the sentence `threading` is six tiers unrolled by hand for — could not be
+      written. `north has fewer marks than east`, `more … than`, `as many … as`.
+      - **Additive, and every existing spell means exactly what it meant.**
+        `Quantity::Count(1)` is what a bare `has sage` always was, so the ~110
+        behavioural tests kept passing through the change rather than being
+        rewritten around it
+      - **It reads the published `Sense` children, not the components.** Both
+        sides go through one `many_at`, which is the arithmetic
+        `tower::build::raise_count` already promised — *"`has 2 or more marks` is
+        answered by the same arithmetic that answers `has 4 fragment`"*. §8.1
+        keeps its teeth: forging the event and forging the evidence stay one act
+      - **Strict against a place, inclusive against a number**, which is English
+        rather than an inconsistency: `has 2 or fewer marks` includes two and
+        `has fewer marks than east` does not. *At least as many* is deliberately
+        absent — `not … fewer … than` says it, the same route the docs give for
+        `!=`
+      - **A half-written comparative refuses the line.** `north has fewer marks`
+        with no `than` used to fall through, hand `fewer` to the thing's name,
+        and have fuzzy resolution drop it — silently becoming `north has marks`,
+        which answers *yes* where the player's question answers *no*
+      - **`more than 1 fragment` still reads as a number**, and it shares its
+        first word. Nothing between the comparative and its closer is the whole
+        discriminator; getting it wrong refused two rows of the spelling table
+      **See it** — the same spell against three worlds, moving only when the
+      cabinet really has more:
+      ```bash
+      ORBS_BOOT=0 ORBS_GRID=110x34 \
+        ORBS_DUMP="attend archive; debug_spawn fragment 4; debug_spawn fragment 1 lectern; scribe weighing" \
+        ORBS_EDIT="edit\nif the cabinet has more fragment than the lectern\nmove fragment to lectern\nend\n<esc>\nquit" \
+        ORBS_THEN="invoke weighing; meditate 6; survey lectern" cargo run -p orbs
+      #   4 vs 1 -> lectern 2.   2 vs 2 -> lectern 2.   1 vs 3 -> lectern 3.
+      ```
+      ...and the manual, which teaches it beside the other question shapes:
+      ```bash
+      ORBS_BOOT=0 ORBS_GRID=100x40 ORBS_DUMP="attend archive; recall scripting" cargo run -p orbs
+      ORBS_BOOT=0 ORBS_DUMP="recall marks" cargo run -p orbs
+      ```
+      **What it does *not* yet do is rewrite `threading`, and that was tried.**
+      A walled way publishes no `marks`, so it reads as nought and is the minimum
+      of any four — every rung of a true least-walked tier dies. Selecting the
+      least-marked way *among the open ones* is a filter over a list, which is
+      the next box. §19 records the attempt.
+- [x] ✅ **Variables and sets — `let … be …` and `for each …`.** A spell can hold
+      an answer and say *"each of these"*, which is what §10's *"composition"*
+      needs and what `threading` was 52 unrolled lines for. `roaming` is the
+      same maze in **19**, and a better algorithm inside them: a true minimum
+      where the ladder had two buckets over the same count.
+      - **A variable holds a *name*, and that is the stated ceiling.** Not a
+        number, not a list, not an expression — everywhere a name may stand, the
+        bound word stands for it. That is exactly what an accumulator needs and
+        nothing more
+      - **The cursor is named after the set**, so `for each way` binds `way` and
+        the body reads `if way has spoil`. `it` was the obvious choice and is
+        impossible: `it` is §6 filler, so `follow it` is stripped to `follow`
+      - **`let … be`, because `set` is already a `dial` synonym** and a spell
+        word is matched *before* the fuzzy matcher — `set second borax` at the
+        prompt stopped reaching the lens. `spellword.rs` names three collisions
+        it refused to add; this would have been a fourth, on a shipped verb.
+        `be` rather than `to` for the same class of reason: `to` is filler
+      - **A set is declared by the fixture, not derived from `Role::Reading`** —
+        that marker covers the lens's four sockets *and* its six sigils, so a
+        loop over it would hand a spell ten things when it asked for four
+      - **`compile` had to learn what a spell binds.** A bound name reaches name
+        resolution looking exactly like a place the room does not have, so
+        without it every correct `for each` raised `spell_nowhere` — a
+        `Role::Danger` record, which also latches the rail's fault mark
+      - **`interpret` read `follow best` back as `follow west`**, the fuzzy
+        matcher finding the nearest place in the room. The runner was always
+        right; the one surface built to show a wrong resolution was the liar
+      - **Fewer lines is not fewer ticks, and it was measured.** §8 charges a
+        step per line, so three passes over four ways cost ~27 steps a move
+        where the ladder short-circuits. A five-pass version — the same
+        algorithm as `threading` — stopped finishing seed 3 inside 7200 ticks
+      **See it** — the solver, and it must walk out of three different mazes:
+      ```bash
+      ORBS_BOOT=0 ORBS_DUMP="peruse roaming.spell" cargo run -p orbs
+      for s in 3 11 17; do ORBS_SEED=$s ORBS_BOOT=0 \
+        ORBS_DUMP="attend archive; research" \
+        ORBS_THEN="invoke roaming; meditate 3600; meditate 3600; survey cabinet" \
+        cargo run -q -p orbs; done      # `fragment 1` each time
+      ```
+      ...and the manual, which now says which sets a room has — a `for each` is
+      unwritable without that, and nowhere else says it:
+      ```bash
+      for room in archive lens laboratory; do ORBS_BOOT=0 ORBS_GRID=100x40 \
+        ORBS_DUMP="attend $room; recall scripting" cargo run -q -p orbs; done
+      #   archive: way.   lens: socket, sigil.   laboratory: no such section
+      ORBS_BOOT=0 ORBS_DUMP="recall let; recall for" cargo run -p orbs
+      ```
+- [ ] **Functions, and `SCRIPT_BUDGET` becoming a number the weave tree sets.**
+      In-file definitions with a frame stack: `pc` addresses one tree, so a call
+      is a stack of `(spell, pc, loops, vars)` frames rather than a second `pc`.
+      - **`to` is the dangerous keyword** and is already spent besides — it is
+        the preposition in `move x to y`, and `let … be` avoided it for the same
+        reason. Pick a third word, not `to` and not `set`
+      - **The budget stops being a `const`** and becomes a number read from the
+        weave, defaulting to 1. Mastery nodes are authored that raise it to 2, 3,
+        4+, and **ship as markers** like every other node — making the tree
+        takeable is the weave phase's item, not this one
+      - **Functions ship unused, by decision** (§19). With every line still
+        costing a tick, factoring into a function is slower than splitting into
+        two `invoke`d spells, because each `Running` has its own budget. That is
+        written down rather than discovered; the weave nodes are the answer
+      - **The fingerprint weakens**: one covers one spell's text, and a frame
+        stack spanning several needs one each (`save::adopt`)
+      **See it:** a definition and its call resolved in `interpret`; the
+      steps-per-tick nodes on the weave screen, refusing like every other node
+- [ ] **A resolution policy** — the prerequisite for the box below, and the real
+      design work in it. The ~10 string→handle lookups differ on **five** axes:
+      scope (cwd children / whole tree / arsenal / fixed index), kind filter,
+      normalisation (path vs leaf), **ordering — which is a game rule**
+      (`pipeline::reachable` is §10.1's search order: unbusy instruments in raise
+      order, then stores, arsenal last), and failure mode (emit a record / return
+      `None` / push onto a `missing` vec).
+      **See it:** `cargo test -p orbs-sim --test fetching --test arsenal`, both
+      untouched — a per-call-site equivalence proof is the deliverable
+- [ ] **Builtins that act — a typed `Intent`, kinds intact.** The largest step
+      and the only one that cannot be additive.
+      - **A flat `fn(Verb, &[Value])` breaks `would_block` *silently*.**
+        `touches()` filters on `argument.kind == NounKind::Place`
+        (`spell/block.rs`), so a flat list makes it return empty, `would_block`
+        returns `None`, and **every spell that used to wait starts being
+        refused** — `waiting_since` never set, `PATIENCE` never tripped, most
+        tests still green. `begins_work` fails the same way via `spending`, and
+        `pipeline::carry`'s `slot(0)/slot(1)/slot(2)` reintroduces the
+        renumbering bug §19 records
+      - So a typed call **constructs an `Intent`**. The win is directness and
+        correctness, not deleting the round-trip
+      - **`may_issue` must be re-derived, not assumed** — it is a security
+        boundary and its own doc records `quit` being missed from it once
+      **See it:** a spell that should wait still waits rather than being refused
+- [ ] **The terse register — planned, deliberately not built here.** §8's gating
+      ladder earns a second spelling the way it earns conditionals, but it
+      doubles what the parser, the manual and `interpret` must each cover, and
+      `interpret` and `run_line` are already two expressions of one rule that
+      have disagreed twice. Nothing above needs it.
+      **See it:** the same spell written both ways, read back identically
+- [ ] **`RecordKind::ScriptLine` gets its first producer.** The §3 exemption is
+      wired and there are **zero** producers — a real §14 hole worth closing
+      while the language is open. Parallel to everything above, not blocking:
+      the language already nests four deep and already speaks flat.
+      **See it:** `F5` on a running spell describes its lines
 - [ ] Naming pass for the remaining ~35 canonical commands, moved here from
       Phase 1 — §18 lists it **blocking**, and it goes *ahead* of the domains
       that coin the most verbs

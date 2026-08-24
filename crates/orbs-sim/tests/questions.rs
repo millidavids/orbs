@@ -678,6 +678,109 @@ fn every_spelling_of_a_comparison_reads_and_none_is_swallowed() {
 }
 
 #[test]
+fn a_comparison_can_name_another_place_instead_of_a_number() {
+    // **The sentence the language could not say**, and the reason `threading`
+    // is six tiers unrolled by hand: every quantity in the tower is read the
+    // same way, but only one side of a comparison could ever be a world read.
+    //
+    // The canonical form is the words, so it round-trips through `interpret`
+    // exactly as the numeric spellings do.
+    table(&[
+        (
+            "north has fewer marks than east",
+            "north has fewer marks than east",
+        ),
+        (
+            "north has more marks than east",
+            "north has more marks than east",
+        ),
+        (
+            "north has less marks than east",
+            "north has fewer marks than east",
+        ),
+        (
+            "north has as many marks as east",
+            "north has as many marks as east",
+        ),
+        (
+            "north has as much marks as east",
+            "north has as many marks as east",
+        ),
+        // The place compared against may be several words, like any other name.
+        // **`balneum mariae` and not `mortar and pestle`**: a name carrying an
+        // `and` is one token in the tower (`mortar_and_pestle`) precisely
+        // because `and` is a connective here — the module docs say so.
+        (
+            "the mortar_and_pestle has more sage than the balneum mariae",
+            "mortar_and_pestle has more sage than balneum mariae",
+        ),
+        // It composes with everything else, because it is an operand rather
+        // than a clause of its own.
+        (
+            "north has fewer marks than east and the mortar is idle",
+            "north has fewer marks than east and mortar is idle",
+        ),
+        (
+            "not north has fewer marks than east",
+            "not north has fewer marks than east",
+        ),
+    ]);
+}
+
+#[test]
+fn a_comparative_exists_for_every_bound() {
+    // **What holds the table complete**, and the reason the writer falls back
+    // instead of panicking: a `Bound` with no comparative row would otherwise
+    // write a question the reader cannot read, so the round-trip breaks
+    // silently — or, with an `expect`, takes the game down in front of a player.
+    // Neither is a thing to discover at runtime.
+    for bound in [Bound::AtLeast, Bound::AtMost, Bound::Exactly] {
+        let question = Condition::Has {
+            place: "north".to_owned(),
+            thing: "marks".to_owned(),
+            count: orbs_sim::parser::Quantity::Elsewhere("east".to_owned()),
+            bound,
+        };
+        let written = write_condition(&question);
+        assert_eq!(
+            condition(&written).as_ref(),
+            Some(&question),
+            "{bound:?} wrote {written:?}, which does not read back as itself",
+        );
+    }
+}
+
+#[test]
+fn a_comparative_with_nothing_to_compare_against_refuses_the_line() {
+    // **The half-written one, and it must not fall through to the count path.**
+    // Falling through gives `fewer` to the thing's name, and `spell::compile`'s
+    // fuzzy resolution then drops it — so `north has fewer marks` silently
+    // becomes `north has marks`, which answers *yes* wherever the player's
+    // question answers *no*. That is §19's "the orb writes down a shorter
+    // command than it heard", one grammar wider than where counting closed it.
+    for half in [
+        "north has fewer marks",
+        "north has more marks",
+        "north has as many marks",
+        "north has fewer marks than",
+    ] {
+        assert_eq!(read(half), "-", "{half:?} was read as something");
+    }
+
+    // **And the numeric spellings that share their first word still read.**
+    // `more than 1 fragment` is `BOUNDS`, not a comparison: nothing sits
+    // between the comparative and its closer, which is the whole discriminator.
+    assert_eq!(
+        read("the cabinet has more than 1 fragment"),
+        "cabinet has 2 fragment",
+    );
+    assert_eq!(
+        read("the cabinet has fewer than 3 fragment"),
+        "cabinet has 2 or fewer fragment",
+    );
+}
+
+#[test]
 fn a_bound_with_no_number_keeps_its_words_rather_than_dropping_them() {
     // **Nothing vanishes, which is the whole property.** A bound with no number
     // is not a comparison, so the words go back and `span` takes them into the
@@ -754,7 +857,7 @@ fn bounded(place: &str, thing: &str, count: u32, bound: Bound) -> Condition {
     Condition::Has {
         place: place.to_owned(),
         thing: thing.to_owned(),
-        count,
+        count: orbs_sim::parser::Quantity::Count(count),
         bound,
     }
 }

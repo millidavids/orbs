@@ -72,6 +72,7 @@ const BRANCHES: &[Branch] = &[
         places: INSTRUMENTS,
         role: None,
         operation: None,
+        group: None,
     },
     Branch {
         name: "archive",
@@ -90,6 +91,7 @@ const BRANCHES: &[Branch] = &[
         places: ARCHIVE,
         role: None,
         operation: None,
+        group: None,
     },
     // **Scrying (§10), and the third domain the game opens.** A far wizard's orb
     // is sealed with a ward; you press figures against it and read how it
@@ -105,6 +107,7 @@ const BRANCHES: &[Branch] = &[
         places: LENS,
         role: None,
         operation: None,
+        group: None,
     },
     // **The one room you can reach from any other**, and it starts empty: what
     // is in it is what the player has finished. See [`Role::Keep`] and
@@ -122,6 +125,7 @@ const BRANCHES: &[Branch] = &[
         places: &[],
         role: Some(Role::Keep),
         operation: None,
+        group: None,
     },
 ];
 
@@ -152,6 +156,7 @@ const ARCHIVE: &[Branch] = &[
         places: &[],
         role: None,
         operation: None,
+        group: None,
     },
     // **Every domain that holds stock needs somewhere to put it**, and the
     // archive had none — so `empty lectern` answered *"there is nowhere here to
@@ -179,6 +184,7 @@ const ARCHIVE: &[Branch] = &[
         places: &[],
         role: Some(Role::Store),
         operation: None,
+        group: None,
     },
     // **The stacks: an endless library, and the maze lives here.**
     //
@@ -199,13 +205,19 @@ const ARCHIVE: &[Branch] = &[
         places: &[],
         role: None,
         operation: Some(Verb::Research),
+        group: None,
     },
+    // **The four ways are a set, and `for each way` walks it.** `Role::Reading`
+    // cannot say so on its own: the lens's sockets and its six sigils carry the
+    // same role, so a `for each` over the role would hand a spell in the lens
+    // ten things when it asked for four.
     Branch {
         name: "north",
         holds: &[],
         places: &[],
         role: Some(Role::Reading),
         operation: None,
+        group: Some("way"),
     },
     Branch {
         name: "east",
@@ -213,6 +225,7 @@ const ARCHIVE: &[Branch] = &[
         places: &[],
         role: Some(Role::Reading),
         operation: None,
+        group: Some("way"),
     },
     Branch {
         name: "south",
@@ -220,6 +233,7 @@ const ARCHIVE: &[Branch] = &[
         places: &[],
         role: Some(Role::Reading),
         operation: None,
+        group: Some("way"),
     },
     Branch {
         name: "west",
@@ -227,6 +241,7 @@ const ARCHIVE: &[Branch] = &[
         places: &[],
         role: Some(Role::Reading),
         operation: None,
+        group: Some("way"),
     },
 ];
 
@@ -262,6 +277,7 @@ const LENS: &[Branch] = &[
         places: &[],
         role: None,
         operation: Some(Verb::Probe),
+        group: None,
     },
     Branch {
         name: "first",
@@ -269,6 +285,7 @@ const LENS: &[Branch] = &[
         places: &[],
         role: Some(Role::Reading),
         operation: Some(Verb::Dial),
+        group: Some("socket"),
     },
     Branch {
         name: "second",
@@ -276,6 +293,7 @@ const LENS: &[Branch] = &[
         places: &[],
         role: Some(Role::Reading),
         operation: Some(Verb::Dial),
+        group: Some("socket"),
     },
     Branch {
         name: "third",
@@ -283,6 +301,7 @@ const LENS: &[Branch] = &[
         places: &[],
         role: Some(Role::Reading),
         operation: Some(Verb::Dial),
+        group: Some("socket"),
     },
     Branch {
         name: "fourth",
@@ -290,6 +309,7 @@ const LENS: &[Branch] = &[
         places: &[],
         role: Some(Role::Reading),
         operation: Some(Verb::Dial),
+        group: Some("socket"),
     },
     // The six sigils. Each publishes its own `marks`, which is the tally a
     // ladder walks; none of them publishes anything about the code.
@@ -299,6 +319,7 @@ const LENS: &[Branch] = &[
         places: &[],
         role: Some(Role::Reading),
         operation: None,
+        group: Some("sigil"),
     },
     Branch {
         name: "alum",
@@ -306,6 +327,7 @@ const LENS: &[Branch] = &[
         places: &[],
         role: Some(Role::Reading),
         operation: None,
+        group: Some("sigil"),
     },
     Branch {
         name: "borax",
@@ -313,6 +335,7 @@ const LENS: &[Branch] = &[
         places: &[],
         role: Some(Role::Reading),
         operation: None,
+        group: Some("sigil"),
     },
     Branch {
         name: "quartz",
@@ -320,6 +343,7 @@ const LENS: &[Branch] = &[
         places: &[],
         role: Some(Role::Reading),
         operation: None,
+        group: Some("sigil"),
     },
     Branch {
         name: "pewter",
@@ -327,6 +351,7 @@ const LENS: &[Branch] = &[
         places: &[],
         role: Some(Role::Reading),
         operation: None,
+        group: Some("sigil"),
     },
     Branch {
         name: "ochre",
@@ -334,6 +359,7 @@ const LENS: &[Branch] = &[
         places: &[],
         role: Some(Role::Reading),
         operation: None,
+        group: Some("sigil"),
     },
 ];
 
@@ -353,6 +379,7 @@ const INSTRUMENTS: &[Branch] = &[
         places: &[],
         role: None,
         operation: Some(Verb::Grind),
+        group: None,
     },
     Branch {
         name: "balneum_mariae",
@@ -360,6 +387,7 @@ const INSTRUMENTS: &[Branch] = &[
         places: &[],
         role: None,
         operation: Some(Verb::Digest),
+        group: None,
     },
     Branch {
         name: "flask_and_rod",
@@ -367,6 +395,7 @@ const INSTRUMENTS: &[Branch] = &[
         places: &[],
         role: None,
         operation: Some(Verb::Mix),
+        group: None,
     },
     Branch {
         name: "alembic",
@@ -374,6 +403,7 @@ const INSTRUMENTS: &[Branch] = &[
         places: &[],
         role: None,
         operation: Some(Verb::Distil),
+        group: None,
     },
     Branch {
         // `kindle` charges and lights in one, exactly as the other four charge
@@ -384,6 +414,7 @@ const INSTRUMENTS: &[Branch] = &[
         places: &[],
         role: Some(Role::Heat),
         operation: Some(Verb::Kindle),
+        group: None,
     },
     Branch {
         name: "dispensary",
@@ -399,6 +430,7 @@ const INSTRUMENTS: &[Branch] = &[
         places: &[],
         role: Some(Role::Store),
         operation: None,
+        group: None,
     },
 ];
 
@@ -484,6 +516,19 @@ struct Branch {
     role: Option<Role>,
     /// The verb that charges it and starts it — see [`Operation`].
     operation: Option<Verb>,
+    /// The set a `for each` walks, if this fixture is one of a set.
+    ///
+    /// **Content, not a `NounKind` and not [`Role`].** `Role::Reading` already
+    /// covers the archive's four ways *and* the lens's four sockets *and* its
+    /// six sigils, so a `for each` over it would give a spell in the lens ten
+    /// things when it asked for four. The set is a fact about the fixtures
+    /// rather than about the kind of thing they are, and a domain declares its
+    /// own — which is what keeps §10's five remaining rooms from each needing an
+    /// arm somewhere.
+    ///
+    /// **Singular, because it names the cursor too.** `for each way` binds
+    /// `way`, so the body reads `if way has spoil` with no second word to learn.
+    group: Option<&'static str>,
 }
 
 /// A fixture that is not an ordinary instrument.
@@ -663,6 +708,12 @@ fn raise_branch(world: &mut World, parent: Entity, branch: &Branch, protect: boo
 
     if let Some(operation) = branch.operation {
         world.entity_mut(at).insert(super::Operation(operation));
+    }
+
+    if let Some(group) = branch.group {
+        world
+            .entity_mut(at)
+            .insert(super::Grouped(group.to_owned()));
     }
 
     match branch.role {

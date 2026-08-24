@@ -87,6 +87,28 @@ pub enum Kind {
         /// What to do when it does not. Empty unless there is an `else`.
         otherwise: Block,
     },
+    /// Bind a name to a place, for the lines after it — `let best be north`.
+    ///
+    /// **One line, no block.** It is the accumulator half of *"follow the way
+    /// with the fewest marks"*: something to compare against and then act on.
+    Let {
+        /// The word the spell will use.
+        name: String,
+        /// What it stands for — a name, resolved against the room at cast like
+        /// every other, unless it is itself a name the spell binds.
+        value: String,
+    },
+    /// Do the enclosed steps once for each member of a set — `for each way`.
+    ///
+    /// The cursor is bound to `group` itself, so the body reads
+    /// `if way has spoil`. See [`SpellWord::For`](crate::parser::SpellWord::For)
+    /// for why it is not `it`.
+    Each {
+        /// The set to walk, and the name the cursor takes.
+        group: String,
+        /// What to do for each of them.
+        body: Block,
+    },
 }
 
 /// A run of steps.
@@ -167,6 +189,9 @@ enum Open {
         /// still reading the first half.
         taken: Option<Block>,
     },
+    Each {
+        group: String,
+    },
 }
 
 /// One entry on the block stack: where it opened, what it is, what is in it.
@@ -181,6 +206,13 @@ struct Nesting {
     line: usize,
     kind: Open,
     body: Block,
+    /// Opened by `else if`, so one `end` closes this **and** what it hangs from.
+    ///
+    /// An `else if` chain is one construct to the player — four rungs and one
+    /// `end` — and a tree of nested `if`s to the runner. This is the only thing
+    /// that has to be remembered to keep those two views apart, and it is why the
+    /// desugaring needs no new [`Kind`] and no runner change at all.
+    chained: bool,
 }
 
 /// Read `lines` as a shape, resolving nothing.
@@ -195,6 +227,7 @@ pub(super) fn read(lines: &[String]) -> Draft {
         line: 0,
         kind: Open::Spell,
         body: Vec::new(),
+        chained: false,
     }];
 
     for (index, line) in lines.iter().enumerate() {
@@ -257,6 +290,7 @@ pub(super) fn read(lines: &[String]) -> Draft {
                     line: at,
                     kind: Open::Repeat { times, until },
                     body: Vec::new(),
+                    chained: false,
                 });
             }
             Some(SpellWord::Until) => complaints.push(Complaint {
@@ -281,9 +315,25 @@ pub(super) fn read(lines: &[String]) -> Draft {
                         taken: None,
                     },
                     body: Vec::new(),
+                    chained: false,
                 });
             }
             Some(SpellWord::Else) => {
+                // **`else if` is a chained `if`, not a new word.** The ladder is
+                // the shape every solver in the game is written in — the ward's
+                // four rungs, the maze's twenty-four — and without this each rung
+                // nests one deeper and pays for an `end` at the bottom. Half of
+                // `threading` is `end` and `else`: 49 lines of 98.
+                //
+                // What follows `else` is read as an `if` line, so there is one
+                // reader for a condition and one set of complaint keys. A
+                // desugaring rather than a `Kind`, so the runner, `step_past`,
+                // `guard_answers`, the save format and `interpret` all need
+                // nothing: what they see is the nested tree that was always
+                // written by hand.
+                let tail = spell_argument(trimmed).trim();
+                let chaining = spell_word(tail) == Some(SpellWord::If);
+
                 // Only an `if` has an other half. Anywhere else it is a line the
                 // orb cannot place, kept as a complaint rather than silently
                 // starting a second branch on a loop.
@@ -295,10 +345,35 @@ pub(super) fn read(lines: &[String]) -> Draft {
                     }) if taken.is_none() => {
                         *taken = Some(std::mem::take(body));
                     }
-                    _ => complaints.push(Complaint {
+                    _ => {
+                        complaints.push(Complaint {
+                            line: at,
+                            key: "spell_stray_else",
+                        });
+                        continue;
+                    }
+                }
+
+                if chaining {
+                    let condition = crate::parser::condition(spell_argument(tail));
+                    if condition.is_none() {
+                        // The same treatment a plain `if` gets, from the same
+                        // reader — an unreadable rung runs neither half rather
+                        // than being guessed at.
+                        complaints.push(Complaint {
+                            line: at,
+                            key: "spell_unreadable_if",
+                        });
+                    }
+                    open.push(Nesting {
                         line: at,
-                        key: "spell_stray_else",
-                    }),
+                        kind: Open::If {
+                            condition,
+                            taken: None,
+                        },
+                        body: Vec::new(),
+                        chained: true,
+                    });
                 }
             }
             Some(SpellWord::End) => {
@@ -310,14 +385,47 @@ pub(super) fn read(lines: &[String]) -> Draft {
                     });
                     continue;
                 }
-                if let Some(frame) = open.pop() {
+                // **One `end` closes the whole chain.** Each `else if` pushed a
+                // frame; the player wrote one block and owes one close, so the
+                // unwind continues while the frame it just shut was chained.
+                while let Some(frame) = open.pop() {
+                    let chained = frame.chained;
                     close(&mut open, frame);
+                    if !chained || open.len() == 1 {
+                        break;
+                    }
                 }
             }
             Some(SpellWord::Wait) => {
                 let wanted = strip_filler(spell_argument(trimmed));
                 push(&mut open, at, Kind::Wait(wanted));
             }
+            Some(SpellWord::Let) => match binding(spell_argument(trimmed)) {
+                Some((name, value)) => push(&mut open, at, Kind::Let { name, value }),
+                // **A complaint, not a guess.** `set best` names nothing to bind
+                // and `set to north` binds nothing — either read as the other
+                // would be the orb writing a line the player did not, which is
+                // what every refusal in this file is protecting against.
+                None => complaints.push(Complaint {
+                    line: at,
+                    key: "spell_unreadable_let",
+                }),
+            },
+            Some(SpellWord::For) => match walked(spell_argument(trimmed)) {
+                Some(group) => open.push(Nesting {
+                    line: at,
+                    kind: Open::Each { group },
+                    body: Vec::new(),
+                    chained: false,
+                }),
+                // **No block is opened**, so the `end` the player wrote below is
+                // a stray one and says so. Opening an unnamed block instead
+                // would swallow the body into a loop over nothing, silently.
+                None => complaints.push(Complaint {
+                    line: at,
+                    key: "spell_unreadable_for",
+                }),
+            },
             None => push(&mut open, at, Kind::Command(trimmed.to_owned())),
         }
     }
@@ -329,10 +437,15 @@ pub(super) fn read(lines: &[String]) -> Draft {
         let Some(frame) = open.pop() else {
             break;
         };
-        complaints.push(Complaint {
-            line: frame.line,
-            key: "spell_unclosed",
-        });
+        // A chained frame is half of a construct someone else opened, so the
+        // complaint belongs to the `if` at the top of the ladder and is made
+        // once — not once per rung.
+        if !frame.chained {
+            complaints.push(Complaint {
+                line: frame.line,
+                key: "spell_unclosed",
+            });
+        }
         close(&mut open, frame);
     }
 
@@ -359,6 +472,20 @@ pub enum Loop {
     Repeat(Option<u32>),
     /// A branch of an `if`. Runs once, and its path carries which half.
     Branch,
+    /// A `for each`, with the index of the member currently bound.
+    ///
+    /// # An index, not the members themselves
+    ///
+    /// The set is re-read from the world at the top of every pass, and this says
+    /// only how far along it the loop has got. Two reasons, and the second is the
+    /// one that decides it:
+    ///
+    /// - a `Loop` is `Copy` and travels to a save as **one integer per open
+    ///   block**, which the save format's own note prefers to a tagged table;
+    /// - a spell runs in a live world, so a set that changes under it should be
+    ///   walked as it now is. Carrying a snapshot would have `for each way`
+    ///   iterate a maze that has since closed.
+    Each(u32),
 }
 
 /// The step at `pc`, if the path resolves.
@@ -377,14 +504,17 @@ pub fn at<'a>(body: &'a Block, pc: &[usize]) -> Option<&'a Step> {
         return Some(step);
     }
     match &step.kind {
-        Kind::Repeat { body, .. } => at(body, rest),
+        // **One path element, exactly like a `repeat`.** A `for each` has one
+        // body and no second half, so the arithmetic that walks out of it is the
+        // loop's rather than the branch's — see [`Loop::Each`].
+        Kind::Repeat { body, .. } | Kind::Each { body, .. } => at(body, rest),
         Kind::If {
             body, otherwise, ..
         } => {
             let (&branch, inner) = rest.split_first()?;
             at(if branch == 0 { body } else { otherwise }, inner)
         }
-        Kind::Command(_) | Kind::Wait(_) => None,
+        Kind::Command(_) | Kind::Wait(_) | Kind::Let { .. } => None,
     }
 }
 
@@ -399,16 +529,22 @@ pub fn at<'a>(body: &'a Block, pc: &[usize]) -> Option<&'a Step> {
 /// suspended spell from a `pc` alone would resume every enclosing loop from its
 /// first iteration — §8 requires in-flight state be serialisable, and a spell
 /// inside a loop is exactly that.
-/// `again` is asked whether a loop that still has turns left may take one, with
-/// the path pointing at the `repeat` itself. A loop with no `until` answers yes;
-/// this is the only thing in the walker that consults the world, and it is a
-/// closure rather than a `&World` parameter because `step_past` is otherwise
-/// pure and its three test callers have no world to give it.
+/// `again` is asked whether a block that has just run off the end may go round,
+/// with the path pointing at the block's own step and the [`Loop`] that was
+/// popped. A `repeat` with no `until` answers yes; a `for each` answers whether
+/// the set still has a member after the one just finished.
+///
+/// **It takes the popped loop as well as the path**, because those two questions
+/// need different things: the guard needs the step (to find its `until`) and the
+/// set needs the index (to know which member is next). This is the only thing in
+/// the walker that consults the world, and it is a closure rather than a
+/// `&World` parameter because `step_past` is otherwise pure and its test callers
+/// have no world to give it.
 pub fn step_past(
     body: &Block,
     pc: &mut Vec<usize>,
     loops: &mut Vec<Loop>,
-    mut again: impl FnMut(&[usize]) -> bool,
+    mut again: impl FnMut(&[usize], Loop) -> bool,
 ) -> bool {
     if pc.is_empty() {
         return false;
@@ -436,8 +572,19 @@ pub fn step_past(
             // refused at parse, so the two never meet here — but short-circuiting
             // keeps an exhausted loop from putting a question to the world on its
             // way out, which would be a read nobody asked for.
-            Some(Loop::Repeat(left)) if left.is_none_or(|turns| turns > 1) && again(pc) => {
+            Some(Loop::Repeat(left))
+                if left.is_none_or(|turns| turns > 1) && again(pc, Loop::Repeat(left)) =>
+            {
                 loops.push(Loop::Repeat(left.map(|turns| turns - 1)));
+                pc.push(0);
+                return true;
+            }
+            // **The set is asked, not counted here.** A `for each` walks a live
+            // world, so whether there is another member is a question for the
+            // tick the loop laps on rather than for the tick it started — see
+            // [`Loop::Each`].
+            Some(Loop::Each(index)) if again(pc, Loop::Each(index)) => {
+                loops.push(Loop::Each(index + 1));
                 pc.push(0);
                 return true;
             }
@@ -462,9 +609,66 @@ pub fn step_past(
     true
 }
 
+/// Every name a spell binds, anywhere in it.
+///
+/// # Lexical, and deliberately not scoped
+///
+/// A `set` inside an `if` binds a name the lines after the `end` can still say,
+/// and a `for each` cursor outlives its loop holding the last member. Both are
+/// the simple reading, and the simple reading is the right one here: §8's
+/// language has no declarations, so a player who writes `set best to north`
+/// inside a branch and reads `best` below it means what they wrote. Scoping
+/// would be a rule to teach and a rule to get wrong, for a program that fits on
+/// a screen.
+///
+/// The list is what [`compile`](super::compile) uses to tell a variable from a
+/// place the room does not have — a distinction it cannot otherwise make, since
+/// both are words that resolve to nothing at cast.
+#[must_use]
+pub(super) fn bindings(body: &Block) -> Vec<String> {
+    let mut names = Vec::new();
+    gather(body, &mut names);
+    names
+}
+
+fn gather(body: &Block, names: &mut Vec<String>) {
+    for step in body {
+        match &step.kind {
+            Kind::Let { name, .. } => {
+                if !names.iter().any(|already| already == name) {
+                    names.push(name.clone());
+                }
+            }
+            Kind::Each { group, body } => {
+                if !names.iter().any(|already| already == group) {
+                    names.push(group.clone());
+                }
+                gather(body, names);
+            }
+            Kind::Repeat { body, .. } => gather(body, names),
+            Kind::If {
+                body, otherwise, ..
+            } => {
+                gather(body, names);
+                gather(otherwise, names);
+            }
+            Kind::Command(_) | Kind::Wait(_) => {}
+        }
+    }
+}
+
 /// Descend into a `repeat`, recording how many times it should run.
 pub fn enter(pc: &mut Vec<usize>, loops: &mut Vec<Loop>, times: Option<u32>) {
     loops.push(Loop::Repeat(times));
+    pc.push(0);
+}
+
+/// Descend into a `for each`, at its first member.
+///
+/// One path element, like a `repeat` and unlike an `if`: there is one body and
+/// no half to record.
+pub fn enter_each(pc: &mut Vec<usize>, loops: &mut Vec<Loop>) {
+    loops.push(Loop::Each(0));
     pc.push(0);
 }
 
@@ -511,9 +715,61 @@ fn close(open: &mut [Nesting], frame: Nesting) {
                 otherwise: Vec::new(),
             },
         },
+        Open::Each { group } => Kind::Each {
+            group,
+            body: frame.body,
+        },
         Open::Spell => return,
     };
     push(open, line, kind);
+}
+
+/// `best be north` → the name and what it stands for.
+///
+/// # `be`, and not `to`
+///
+/// `to` is on §6's filler list — `move sage to mortar` fills two slots
+/// positionally and the preposition carries nothing — so a keyword `to` would be
+/// invisible to every reader in the parser except this one, which sees the text
+/// before normalisation. `be` carries the same sentence with none of that, and
+/// `let best be north` is the English either way.
+///
+/// **Both halves are required.** `let best` has nothing to bind and `let be
+/// north` has no name; either read as the other is the orb writing a line the
+/// player did not.
+fn binding(argument: &str) -> Option<(String, String)> {
+    let (name, value) = argument.split_once(" be ")?;
+    let (name, value) = (name.trim(), value.trim());
+    // A name is **one word**. `let the best way be north` would otherwise bind
+    // something no later line could spell, since a use site is matched word by
+    // word.
+    if name.is_empty() || value.is_empty() || name.split_whitespace().count() != 1 {
+        return None;
+    }
+    Some((name.to_lowercase(), value.to_owned()))
+}
+
+/// `each way` → the set to walk.
+///
+/// The particle is required and carries nothing:
+/// [`SpellWord::particle`](crate::parser::SpellWord::particle) says why.
+///
+/// **Not checked against the world here.** `read` resolves nothing — that is the
+/// whole of what [`Draft`] means — so a set the room does not have is caught by
+/// [`compile`](super::compile), in the room, where every other name is.
+fn walked(argument: &str) -> Option<String> {
+    let mut words = argument.split_whitespace();
+    let particle = SpellWord::For.particle()?;
+    if !words.next()?.eq_ignore_ascii_case(particle) {
+        return None;
+    }
+    let group = words.next()?;
+    // One word, and nothing after it. `for each way and socket` is two sets,
+    // which is a shape the language does not have and must not read as one.
+    if words.next().is_some() {
+        return None;
+    }
+    Some(group.to_lowercase())
 }
 
 /// `repeat 3` → `Some(3)`; a bare `repeat` → `None`.
@@ -817,6 +1073,19 @@ mod tests {
         assert_eq!(run(&program, 20), ["survey"]);
     }
 
+    /// The world these tests pretend to have: every guard says go round, and
+    /// every set has exactly two members.
+    ///
+    /// **Two, not one and not none**, because the arithmetic that can be wrong
+    /// is the lap: a set of one enters and leaves without ever exercising
+    /// `step_past`'s `Each` arm, and a set of none never enters at all.
+    fn a_set_of_two(_: &[usize], popped: Loop) -> bool {
+        match popped {
+            Loop::Each(index) => index + 1 < 2,
+            Loop::Repeat(_) | Loop::Branch => true,
+        }
+    }
+
     /// Run a program, taking `holds` for every condition.
     fn run_with(program: &Draft, budget: usize, holds: bool) -> Vec<String> {
         let mut pc = vec![0];
@@ -827,7 +1096,7 @@ mod tests {
                 None => break,
                 Some(Kind::Repeat { times, body, .. }) => {
                     if body.is_empty() {
-                        if !step_past(&program.body, &mut pc, &mut loops, |_| true) {
+                        if !step_past(&program.body, &mut pc, &mut loops, a_set_of_two) {
                             break;
                         }
                     } else {
@@ -840,7 +1109,7 @@ mod tests {
                 }) => {
                     let half = if holds { body } else { otherwise };
                     if half.is_empty() {
-                        if !step_past(&program.body, &mut pc, &mut loops, |_| true) {
+                        if !step_past(&program.body, &mut pc, &mut loops, a_set_of_two) {
                             break;
                         }
                     } else {
@@ -848,10 +1117,24 @@ mod tests {
                     }
                     continue;
                 }
+                // **A set of two, always**, so the walker needs no world. The
+                // runner reads the real one; what is under test here is the
+                // path arithmetic, which does not care what a member is called.
+                Some(Kind::Each { body, .. }) => {
+                    if body.is_empty() {
+                        if !step_past(&program.body, &mut pc, &mut loops, a_set_of_two) {
+                            break;
+                        }
+                    } else {
+                        enter_each(&mut pc, &mut loops);
+                    }
+                    continue;
+                }
                 Some(Kind::Command(line)) => out.push(line.clone()),
                 Some(Kind::Wait(what)) => out.push(format!("wait {what}")),
+                Some(Kind::Let { name, value }) => out.push(format!("set {name} {value}")),
             }
-            if !step_past(&program.body, &mut pc, &mut loops, |_| true) {
+            if !step_past(&program.body, &mut pc, &mut loops, a_set_of_two) {
                 break;
             }
         }
@@ -871,7 +1154,7 @@ mod tests {
                 thing: "sage".to_owned(),
                 // `has sage` *is* `has 1 sage` — the default that keeps every
                 // spell written before counting existed meaning what it meant.
-                count: 1,
+                count: crate::parser::Quantity::Count(1),
                 bound: crate::parser::Bound::AtLeast,
             }),
         );
@@ -939,6 +1222,194 @@ mod tests {
         let program = read(&lines(&["repeat 2", "grind sage", "else", "end"]));
         assert_eq!(program.complaints[0].key, "spell_stray_else");
         assert_eq!(run_with(&program, 20, true).len(), 2, "the loop still ran");
+    }
+
+    /// The same block with every line number flattened, for comparing trees.
+    ///
+    /// Two spellings of one program sit on different lines by construction, so a
+    /// bare `assert_eq!` on the bodies compares the thing that is *supposed* to
+    /// differ. This compares the thing that is not.
+    fn shape(body: &Block) -> Block {
+        body.iter()
+            .map(|step| Step {
+                line: 0,
+                kind: match &step.kind {
+                    Kind::Repeat { times, until, body } => Kind::Repeat {
+                        times: *times,
+                        until: until.clone(),
+                        body: shape(body),
+                    },
+                    Kind::If {
+                        condition,
+                        body,
+                        otherwise,
+                    } => Kind::If {
+                        condition: condition.clone(),
+                        body: shape(body),
+                        otherwise: shape(otherwise),
+                    },
+                    other => other.clone(),
+                },
+            })
+            .collect()
+    }
+
+    #[test]
+    fn else_if_is_exactly_the_nesting_it_saves_writing() {
+        // **The whole claim, as an equality.** `else if` adds no `Kind` and no
+        // runner change; it is a desugaring, so the tree it builds must be the
+        // one a player gets today by nesting and paying for the `end`s. If these
+        // two ever differ, the shorter form has become a second language.
+        let ladder = read(&lines(&[
+            "if the mortar is idle",
+            "grind sage",
+            "else if the alembic is idle",
+            "distil clarified-draught",
+            "else",
+            "survey",
+            "end",
+        ]));
+        let by_hand = read(&lines(&[
+            "if the mortar is idle",
+            "grind sage",
+            "else",
+            "if the alembic is idle",
+            "distil clarified-draught",
+            "else",
+            "survey",
+            "end",
+            "end",
+        ]));
+
+        // **Compared without line numbers, and that difference is not a defect.**
+        // The two spellings occupy different lines and each `Step` carries its
+        // own, because §8.1's contract is that the log names the line the player
+        // wrote. What must match is the tree.
+        assert_eq!(
+            shape(&ladder.body),
+            shape(&by_hand.body),
+            "the ladder is not the nesting",
+        );
+        assert!(ladder.complaints.is_empty(), "{:?}", ladder.complaints);
+        assert!(by_hand.complaints.is_empty(), "{:?}", by_hand.complaints);
+
+        // ...and it is two lines shorter for two rungs, which is the point: the
+        // saving is one `end` per rung, and `threading` has twenty-four rungs.
+        assert_eq!(7 + 2, 9, "the two spellings above are 7 lines against 9");
+    }
+
+    #[test]
+    fn a_ladder_of_rungs_closes_with_one_end() {
+        // The ward solver's shape. Four rungs nested four deep by hand, closed by
+        // four stacked `end`s; here, one.
+        let program = read(&lines(&[
+            "if the first has 1 or more untried",
+            "dial first",
+            "else if the second has 1 or more untried",
+            "dial second",
+            "else if the third has 1 or more untried",
+            "dial third",
+            "else if the fourth has 1 or more untried",
+            "dial fourth",
+            "else",
+            "wait",
+            "end",
+        ]));
+
+        assert!(
+            program.complaints.is_empty(),
+            "one end did not close the ladder: {:?}",
+            program.complaints,
+        );
+        assert_eq!(
+            program.body.len(),
+            1,
+            "a ladder is one step at the top level"
+        );
+
+        // Four rungs means four nested `if`s, and the innermost `else` holds the
+        // fallback. Walked rather than asserted shallowly, because the bug this
+        // guards is a chain that closes one frame too few.
+        let mut depth = 0;
+        let mut here = &program.body[0].kind;
+        while let Kind::If { otherwise, .. } = here {
+            depth += 1;
+            match otherwise.first().map(|step| &step.kind) {
+                Some(next @ Kind::If { .. }) => here = next,
+                _ => break,
+            }
+        }
+        assert_eq!(depth, 4, "the ladder is not four rungs deep: {program:?}");
+    }
+
+    #[test]
+    fn a_ladder_runs_down_to_the_rung_that_answers() {
+        // `run_with` answers every question the same way, so `false` walks the
+        // whole chain to the final `else` — which is exactly the path a ladder
+        // exists to make cheap, and the one an unclosed chain would truncate.
+        let program = read(&lines(&[
+            "if the mortar is idle",
+            "grind sage",
+            "else if the alembic is idle",
+            "distil clarified-draught",
+            "else",
+            "survey",
+            "end",
+        ]));
+        assert_eq!(run_with(&program, 20, false), ["survey"]);
+        assert_eq!(run_with(&program, 20, true), ["grind sage"]);
+    }
+
+    #[test]
+    fn an_unreadable_rung_is_said_once_and_the_ladder_still_closes() {
+        // A rung the orb cannot read gets the same treatment a plain `if` does —
+        // it runs neither half rather than being guessed at — and it must not
+        // also swallow the `end`.
+        let program = read(&lines(&[
+            "if the mortar is idle",
+            "grind sage",
+            "else if xyzzy plugh",
+            "survey",
+            "end",
+        ]));
+        let keys: Vec<&str> = program.complaints.iter().map(|c| c.key).collect();
+        assert_eq!(keys, ["spell_unreadable_if"], "{:?}", program.complaints);
+    }
+
+    #[test]
+    fn an_unclosed_ladder_is_one_complaint_rather_than_one_per_rung() {
+        // A chain is one construct to the player, so the missing `end` is one
+        // mistake — reported against the `if` at the top of it.
+        let program = read(&lines(&[
+            "if the mortar is idle",
+            "grind sage",
+            "else if the alembic is idle",
+            "survey",
+            "else if the flask_and_rod is idle",
+            "status",
+        ]));
+        let keys: Vec<&str> = program.complaints.iter().map(|c| c.key).collect();
+        assert_eq!(keys, ["spell_unclosed"], "{:?}", program.complaints);
+        assert_eq!(program.complaints[0].line, 1, "blamed the wrong line");
+    }
+
+    #[test]
+    fn else_if_without_an_if_is_still_a_stray_else() {
+        // The chain may only hang off an `if`. On a `repeat` it is the same
+        // misplaced word it always was, and it must not quietly open a branch.
+        let program = read(&lines(&[
+            "repeat 2",
+            "grind sage",
+            "else if the mortar is idle",
+            "survey",
+            "end",
+        ]));
+        let keys: Vec<&str> = program.complaints.iter().map(|c| c.key).collect();
+        assert_eq!(keys, ["spell_stray_else"], "{:?}", program.complaints);
+        assert!(
+            matches!(program.body[0].kind, Kind::Repeat { .. }),
+            "the loop stopped being a loop",
+        );
     }
 
     #[test]

@@ -60,6 +60,15 @@ pub struct Run {
     /// wording. So the number is *"things that cost something"* and
     /// [`reasons`](Self::reasons) is what tells you which — which is why `--why`
     /// exists rather than a cleverer classifier here.
+    ///
+    /// **A bound policy breaks the rule of thumb this column came with.**
+    /// *"Every entry should be a scour the policy asked for"* holds for a
+    /// synthetic player typing and not for one watching a spell: a spell that
+    /// **waits** stamps `Role::Cost` too — once per block, from `say_blocked` —
+    /// which is the runner doing exactly what §8 asks of it. `bound` carries
+    /// ~640 of them in a two-hour sweep and is perfectly healthy. Read `--why`
+    /// rather than the number: a wait is the loop working, a refusal is the loop
+    /// out of phase with the tower, and only the sentence separates them.
     pub cost: usize,
     /// Runs that finished successfully — the work the rate is made of.
     pub landed: usize,
@@ -134,6 +143,17 @@ pub fn run(policy: Policy, seed: u64, ticks: u64, every: u64) -> Run {
                     issue(&mut sim, line);
                 }
                 Body::Stacks => walk_one(&mut sim),
+                Body::Bound {
+                    earning,
+                    name,
+                    lines,
+                } => {
+                    if !hand_over(&mut sim, name, lines) {
+                        let line = earning[cycle % earning.len()];
+                        cycle += 1;
+                        issue(&mut sim, line);
+                    }
+                }
             }
         }
 
@@ -273,6 +293,58 @@ fn sample(sim: &Sim) -> Sample {
         experience: sim.experience(),
         concentration: sim.concentration(),
     }
+}
+
+/// Get a spell written and bound, one step at a time.
+///
+/// Returns whether the player's hands were busy this step — `false` means there
+/// is still experience to earn and the caller should play the earning cycle.
+///
+/// # Three visits, because each waits on a tick boundary
+///
+/// A slot has to be **earned**: concentration is derived from work completed,
+/// `debug_spawn` deliberately earns nothing, and no public API hands the sim a
+/// number, so the first stretch of this policy is a player grinding for sixteen
+/// experience exactly as CLAUDE.md's own See-it line does.
+///
+/// Then the write, which is queued through `Pending` like every other effect and
+/// lands on the next tick — so `bind` cannot be issued in the same breath, and a
+/// driver that tried would name a spell the tower does not have yet.
+///
+/// # It goes through `write_spell`, not through a debug door
+///
+/// `Sim::write_spell` is the editor's own public entry: it records the
+/// submission, so a swept session still replays, and it homes the spell to where
+/// the policy is standing. `debug_spell` would have worked and would have been
+/// wrong twice over — it is `cfg(debug_assertions)`, so a release sweep would
+/// have measured nothing, and it hands back a *shipped* spell rather than one a
+/// policy chose.
+fn hand_over(sim: &mut Sim, name: &str, lines: &[&str]) -> bool {
+    // **Compared by filename**, because that is what the tower holds. `bound()`
+    // answers `tending.spell` where a policy names `tending`, so a bare `==`
+    // never matched and the driver re-issued `bind` on every free tick — 1,920
+    // refusals in a two-hour sweep, and a `cost` column reading four times the
+    // work done. `with_extension` is the same normalisation every verb that
+    // names a spell already goes through.
+    let filename = orbs_sim::content::with_extension(name);
+
+    // Standing automation. There is nothing left for a player to do, which is
+    // the whole claim this policy measures — so burn the tick and watch.
+    if sim.bound().contains(&filename) {
+        sim.step();
+        return true;
+    }
+    if sim.concentration() == 0 {
+        return false;
+    }
+    if sim.spell(name).is_none() {
+        let lines: Vec<String> = lines.iter().map(|line| (*line).to_string()).collect();
+        sim.write_spell(name, &lines);
+        sim.step();
+        return true;
+    }
+    issue(sim, &format!("bind {name}"));
+    true
 }
 
 /// One step of the archive, chosen the way `threading` chooses it.

@@ -148,6 +148,10 @@ fn node(world: &World, entity: Entity) -> NodeSave {
         store: at.contains::<tower::Store>(),
         keep: at.contains::<tower::Keep>(),
         reading: at.contains::<tower::Reading>(),
+        group: at
+            .get::<tower::Grouped>()
+            .map(|tower::Grouped(named)| named.clone())
+            .unwrap_or_default(),
         product: at.contains::<tower::Product>(),
         poisoned: at.contains::<tower::Poisoned>(),
         log: at.contains::<tower::Log>(),
@@ -212,6 +216,7 @@ fn running(world: &World, run: &tower::spell::Running) -> RunningSave {
         at: tower::path_of_id(world, run.at).unwrap_or_default(),
         waiting_since: run.waiting_since.map(Tick::get),
         said: run.said.clone(),
+        vars: run.vars.clone(),
         // The text the program was compiled from, so a restore can tell whether
         // re-deriving it would land on the same tree. See `restore::spell`.
         fingerprint: tower::path_of_id(world, run.spell)

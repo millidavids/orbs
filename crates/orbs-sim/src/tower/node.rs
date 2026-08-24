@@ -181,6 +181,57 @@ pub struct Keep;
 #[derive(Component, Debug, Clone, Copy)]
 pub struct Reading;
 
+/// One of a set a spell's `for each` walks — `for each way`, `for each socket`.
+///
+/// **Not derivable from [`Reading`], which is why it exists.** The archive's
+/// four ways, the lens's four sockets and its six sigils all carry that marker,
+/// so a `for each` over the marker would hand a spell in the lens ten things
+/// when it asked for four. The set is a fact the fixtures declare
+/// (`build::Branch::group`), not a consequence of what kind of thing they are.
+///
+/// **Singular, because the word names the cursor as well as the set.**
+/// `for each way` binds `way`, and the body reads `if way has spoil` — one word
+/// to learn rather than two.
+#[derive(Component, Debug, Clone)]
+pub struct Grouped(pub String);
+
+/// Everything at `node` belonging to the set `group`, in the order it was
+/// raised.
+///
+/// **Raise order, never query order.** `tower::node` records archetype order as
+/// a bug that changes what a phrase resolves to with no test catching it, and a
+/// `for each` whose members came back in a different order on a rebuilt world
+/// would break replay — which is the whole reason [`children_of`] is what this
+/// walks.
+#[must_use]
+pub fn group_at(world: &World, node: Entity, group: &str) -> Vec<Entity> {
+    children_of(world, node)
+        .into_iter()
+        .filter(|child| {
+            world
+                .get::<Grouped>(*child)
+                .is_some_and(|Grouped(named)| named == group)
+        })
+        .collect()
+}
+
+/// Every set name `node` has children for, in raise order and without repeats.
+///
+/// What the manual lists and what `for each` will accept — derived rather than
+/// written down twice, so a domain that declares a set gets it in both places.
+#[must_use]
+pub fn groups_at(world: &World, node: Entity) -> Vec<String> {
+    let mut names: Vec<String> = Vec::new();
+    for child in children_of(world, node) {
+        if let Some(Grouped(named)) = world.get::<Grouped>(child)
+            && !names.iter().any(|already| already == named)
+        {
+            names.push(named.clone());
+        }
+    }
+    names
+}
+
 /// A file whose text is **stored**, rather than derived from the record stream.
 ///
 /// # Why this is not how `orb.log` works, and must not become it

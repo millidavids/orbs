@@ -672,9 +672,38 @@ is 0.170 idealised, 0.130 hand-played (`experience 16` at tick 123), 0.140
 looped. The gap is a tick of queue latency per command plus a `PURGE_TICKS` scour
 per fouled instrument, and it is not a defect in either number.
 
+**...except for `bound`, where a cost is usually the loop working.** A spell that
+**waits** stamps `Role::Cost` too — `say_blocked`, once per block — which is the
+runner doing exactly what §8 asks of it, so `bound` carries ~640 healthy costs in
+a two-hour sweep. Only the sentence tells a wait from a refusal, which is why
+`--why` matters more here than anywhere:
+
+```text
+640  tending.spell waits: the mortar_and_pestle is working   ← the loop working
+  1  the orb is already holding tending.spell                ← the loop broken
+```
+
 **A maze is one sample per seed** — `stacks` reads 0.0067 at seeds 0 and 11 and
 0.0144 at seed 3, so it is deliberately absent from the pinned table. Sweep it
 across several `--seed`s or conclude nothing.
+
+**`bound` is what measures the script engine, and nothing did before it.** It is
+`grind`'s loop again — the same two commands for ever — run by a bound spell
+instead of by hand, so everything about the two is equal except who is typing and
+the gap is purely what automation costs. **It keeps 0.910 of the hand-played
+rate, on every seed**, because that quotient is a property of the runner rather
+than of the world: the absolute rates both move with a world's luck at sabotage
+and the ratio does not move at all. So `tests/agrees.rs` pins the **quotient**
+and the table reports the rate.
+
+```bash
+cargo run -p orbs-balance -- run bound --ticks 7200 --why   # 0.0910
+cargo run -p orbs-balance -- run grind --ticks 7200         # 0.1000, by hand
+```
+
+**Run it after anything that touches the spell runner** — `SCRIPT_BUDGET`,
+`PATIENCE`, `would_block`, the compiler or the language. Those were unmeasured
+for four phases and §19 records what that cost.
 
 **Adding a policy: scour *before* use, never after fouling.** The byproduct a
 stage leaves blocks the *next* lap's load, so a purge placed after the stage that
@@ -1343,7 +1372,8 @@ executed. Use `Sim::replay` rather than matching on `Submission` by hand; three
 test files had their own copy of that match and they are one now.
 
 **Watching a spell solve it is the point of the map, and `threading` is the
-solver.** The ladder is twenty-four rungs across eighty lines; it lives in
+solver.** The ladder is twenty-four rungs across fifty-two lines — it was
+ninety-eight before `else if` — and it lives in
 `crates/orbs-sim/content/dev_spells.toml`.
 
 **Every dev spell is on the grimoire's shelf from tick 0 in a debug build**, so
@@ -1354,7 +1384,7 @@ you stand, and nothing shelved is new.
 
 **A release build has none of it**: `raise_grimoire` shelves them under
 `cfg(debug_assertions)` and `dev_spells.toml` is `include_str!`'d under the same
-`cfg`, so neither the nodes nor the eighty lines exist. Both halves are held —
+`cfg`, so neither the nodes nor the lines exist. Both halves are held —
 `the_dev_spells_are_on_the_shelf_from_the_first_tick` and, in release,
 `a_release_shelf_holds_only_the_shipped_spells`.
 
@@ -1363,7 +1393,7 @@ copy** after one has been edited or purged. It still refuses outside the spell's
 own domain, because that path really does write a new file.
 
 ```bash
-ORBS_BOOT=0 ORBS_DUMP="survey grimoire" cargo run -p orbs      # all four, shelved
+ORBS_BOOT=0 ORBS_DUMP="survey grimoire" cargo run -p orbs      # all five, shelved
 ORBS_BOOT=0 ORBS_DUMP="debug_spell" cargo run -p orbs          # what it can rewrite
 
 # An ordinary maze: the way out, and a fragment for reaching it.
@@ -1399,8 +1429,40 @@ ORBS_SEED=3 ORBS_BOOT=0 ORBS_GRID=160x45 \
 # -> back    marks = 1
 ```
 
-**The language has six control words**, not five: `wait`, `repeat`, `if`, `else`,
-`end`, `until`. **`repeat until <question>` is the bound a loop should have** —
+**The language has eight control words**: `wait`, `repeat`, `if`, `else`, `end`,
+`until`, `let`, `for`.
+
+**`let <name> be <place>` binds a name, and a variable holds a *name*** — not a
+number, not a list, not an expression. Everywhere a name may stand the bound word
+stands for it, which is exactly what an accumulator needs and nothing more. The
+value resolves against the room **at cast**, like every other name, so `let m be
+mortar` binds `mortar_and_pestle`.
+
+**It is `let … be` and not `set … to`, and both halves of that are collisions.**
+`set` is already a `dial` synonym and a spell word is matched *before* the fuzzy
+matcher, so `set second borax` at the prompt stopped reaching the lens; `to` is
+§6 filler and would be invisible to every reader but the one that sees text
+before normalisation. `spellword.rs` names three collisions it refused to add —
+this would have been a fourth, on a shipped verb.
+
+**`for each <set>` walks a set, and the cursor is named after it.** `for each way`
+binds `way`, so the body reads `if way has spoil` and `follow way`. **`it` is
+impossible**: it is on the filler list, so `follow it` is stripped to `follow`
+before anything sees it.
+
+**A set is declared by the fixture, never derived from `Role::Reading`** — that
+marker covers the archive's four ways *and* the lens's four sockets *and* its six
+sigils, so a loop over the marker would hand a spell in the lens ten things when
+it asked for four. `recall scripting` lists a room's sets, and is the only place
+that does:
+
+```bash
+for room in archive lens laboratory; do ORBS_BOOT=0 ORBS_GRID=100x40 \
+  ORBS_DUMP="attend $room; recall scripting" cargo run -q -p orbs; done
+#   archive: way.   lens: socket, sigil.   laboratory: no such section
+```
+
+**`repeat until <question>` is the bound a loop should have** —
 `repeat 20000` was a guessed constant chosen to outlast the longest walk, and the
 surplus laps spun doing nothing once the maze closed. The guard is asked before
 the first pass *and* at the end of each, so `repeat until <already true>` runs
@@ -1414,6 +1476,69 @@ and `= 2` mean exactly. **Symbols are accepted and never written back** — the
 fair copy is words, so a player who has never seen an operator can read it.
 `interpret` is where you check a spelling survived, because the ones that did not
 used to vanish in silence.
+
+**`else if` chains, and one `end` closes the whole ladder.** A desugaring rather
+than a `Kind` — the runner, the save format and `interpret` see the nested tree
+that was always written by hand — so nothing downstream knows about it. It took
+`threading` from 98 lines to 52: **49 of the 98 were `end` or `else`**.
+
+**And the other side of a comparison can be a place**: `north has fewer marks
+than east`, `more … than`, `as many … as`. Both sides go through one read of a
+named child's `Stock`, which is the arithmetic `raise_count` already promised.
+
+**Strict against a place, inclusive against a number** — `has 2 or fewer marks`
+includes two and `has fewer marks than east` does not. That is English, not an
+inconsistency, and *at least as many* is deliberately absent because
+`not … fewer … than` says it.
+
+**A comparison alone cannot pick "the way with the fewest marks", and the rung
+that looks like it does is wrong.** A walled or unwalked way publishes no `marks`
+node, so it counts as **nought** and is the minimum of any four — `threading`
+rewritten that way solves no maze at all. Least-of-the-*open*-ways is a **filter
+then a minimum**, which is what `let` and `for each` are for and what `roaming`
+does:
+
+```
+let best be north            ← the seed. it may be walled; the next pass fixes it
+for each way
+if way has no wall           ← any open way — the dead-end fallback
+let best be way
+end
+end
+for each way
+if way has no wall and no back        ← prefer one that is not where we came from
+...
+for each way
+if way has no wall and no back and fewer marks than best     ← the true minimum
+```
+
+**Later loops override earlier ones, so priority reads bottom-up.** The `passage`
+tier `threading` needs is subsumed: an unwalked way publishes no `marks` at all,
+which counts as nought, so it is already the minimum.
+
+**Fewer lines is not fewer ticks.** `roaming` is 19 lines against `threading`'s
+52 and costs ~27 steps a move where the ladder short-circuits at the first rung
+that fires. A **five**-pass version — adding `exit` and `spoil`, which makes it
+the same algorithm as `threading` — was measured at ~45 steps and stopped
+finishing seed 3 inside 7200 ticks. Both ship, and the pair is the lesson: §19's
+step-cost decision as a number rather than an argument.
+
+```bash
+ORBS_BOOT=0 ORBS_DUMP="peruse roaming.spell" cargo run -p orbs
+for s in 3 11 17; do ORBS_SEED=$s ORBS_BOOT=0 ORBS_DUMP="attend archive; research" \
+  ORBS_THEN="invoke roaming; meditate 3600; meditate 3600; survey cabinet" \
+  cargo run -q -p orbs; done      # `fragment 1` each time
+cargo test -p orbs-sim --test naming_things
+```
+
+```bash
+# The comparison, and the two cases where it must not fire.
+ORBS_BOOT=0 ORBS_GRID=110x34 \
+  ORBS_DUMP="attend archive; debug_spawn fragment 4; debug_spawn fragment 1 lectern; scribe weighing" \
+  ORBS_EDIT="edit\nif the cabinet has more fragment than the lectern\nmove fragment to lectern\nend\n<esc>\nquit" \
+  ORBS_THEN="invoke weighing; meditate 6; survey lectern" cargo run -p orbs
+#   4 vs 1 -> lectern 2.   2 vs 2 -> lectern 2.   1 vs 3 -> lectern 3.
+```
 
 **`recall` now teaches the language.** Nothing did before — control words are
 outside `Verb::ALL` and readings are `NounKind::Sense`, so `recall repeat`
