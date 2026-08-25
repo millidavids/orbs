@@ -20,7 +20,7 @@ mod sim;
 mod tick;
 
 pub use content::{ContentError, Prose};
-pub use execute::{LOG, MAX_MEDITATE, Request};
+pub use execute::{LOG, MAX_MEDITATE, Request, spell_expect, spell_vocabulary};
 pub use rng::{RngStream, Rngs};
 pub use save::{Save, SaveError};
 pub use schedule::{SimSchedule, new_sim_schedule};

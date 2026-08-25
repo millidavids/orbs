@@ -29,7 +29,50 @@ use super::block::{Blocked, would_block};
 /// Everything counts as a step — a command, checking a `wait`, entering a
 /// `repeat`, asking an `if`. Counting only *commands* would make block-heavy
 /// spells free, which is the opposite of the incentive.
+///
+/// **The floor, not the number.** It is what the orb can do untrained, and
+/// [`budget`] is what it can do now — the weave raises it. This stays a `const`
+/// because a default has to exist before any world does: `Taken` is a resource,
+/// and half the tests here build a program without one.
 pub const SCRIPT_BUDGET: usize = 1;
+
+/// How many steps a spell may take this tick.
+///
+/// # Why this stopped being a constant
+///
+/// A step costs a tick, so the budget *is* the speed of every piece of
+/// automation in the game — and §11.5 wants the weave to sell something, while
+/// §8's own note says at one step the budget is *"a mechanic"* rather than a
+/// guard. A number that is both the mechanic and the reward has to be readable
+/// from the tree, and a `const` cannot be.
+///
+/// **It reads `Taken`, which is empty and stays empty in this version.** Every
+/// Mastery node ships as a marker, so this answers [`SCRIPT_BUDGET`] today and
+/// the wiring is what is being built — making the tree takeable is the weave
+/// phase's item, not this one. The nodes are authored in `progression.toml` and
+/// on screen, so a player at 24 experience can see what the choice will be.
+///
+/// **Additive, and deliberately not a maximum.** Two nodes granting a step each
+/// give three, because a tier is *one of* its siblings — a player who takes the
+/// step node in two tiers has spent both choices on speed, and reading it as
+/// `max` would silently refund the second.
+#[must_use]
+pub fn budget(world: &World) -> usize {
+    let extra: usize = world.get_resource::<tower::Taken>().map_or(0, |taken| {
+        taken.ids().iter().filter_map(|id| steps_granted(id)).sum()
+    });
+    SCRIPT_BUDGET.saturating_add(extra)
+}
+
+/// What one Mastery node adds to the budget, if that is what it is for.
+///
+/// **The id is the contract**, exactly as `progression.toml` says: *"ids are
+/// decisions, not prose — they are what a taken node is stored as."* So the
+/// grant is derived from the id rather than from a second table that could
+/// disagree with the one the screen draws.
+fn steps_granted(id: &str) -> Option<usize> {
+    id.strip_prefix("steps_")?.parse().ok()
+}
 
 /// How long a blocked instruction waits before it is called a failure.
 ///
@@ -43,6 +86,23 @@ pub const SCRIPT_BUDGET: usize = 1;
 /// Generous on purpose: longer than any single §10.1 stage, so a legitimate wait
 /// never trips it.
 pub const PATIENCE: u64 = 120;
+
+/// How deep a part may call a part.
+///
+/// **Separate from [`MAX_DEPTH`], because the two guard different things.** That
+/// one bounds `invoke`, where each level is a whole second spell with its own
+/// budget and its own record attribution; this bounds a stack of descents inside
+/// one spell, which costs a [`Descent`] each and nothing else.
+///
+/// The budget is not the guard here either, and for §8's stated reason: at one
+/// step a tick a runaway recursion does not hang the game, it grows the save by
+/// a descent a second until nothing can read it. So it is bounded, and loudly —
+/// the same argument `MAX_DEPTH` makes, arrived at from the other side.
+///
+/// Eight rather than three: a part cannot take an argument, so recursion here is
+/// a shape nobody has a use for yet, and the number only has to be past what a
+/// person would write on purpose.
+pub const MAX_PARTS: usize = 8;
 
 /// How deep `invoke` may nest.
 ///
@@ -167,6 +227,59 @@ pub struct Running {
     /// player did not point it at."* A store rebuilt on every save would empty
     /// an accumulator half way through the loop that was filling it.
     pub vars: std::collections::BTreeMap<String, String>,
+    /// Which part's body the current frame is walking, or `None` for the
+    /// spell's own.
+    ///
+    /// A **name**, resolved through `program::tree` at every step, so a
+    /// definition that moves while the spell runs is still the same part (§8's
+    /// hot-reload is line-anchored and this is the same argument one level up).
+    pub part: Option<String>,
+    /// The callers waiting for the current frame to return, outermost first.
+    ///
+    /// **A stack of frames, not a second `pc`.** A path addresses one tree, and
+    /// a part is a different tree — so `gathering()` inside a `repeat` inside
+    /// `gathering` needs the caller's path *and* its open blocks kept whole
+    /// while the callee walks its own.
+    pub stack: Vec<Descent>,
+}
+
+/// One caller, waiting for the part it called to finish.
+///
+/// # Not the obvious word, and the same reason `Nesting` is not
+///
+/// The word for this everywhere else in computing is one of the four layout
+/// names `tests/boundaries.rs` forbids anywhere under `orbs-sim/src` — rule 2,
+/// matched by *substring* so the guard is unarguable rather than clever. The
+/// parser's stack entry already pays this toll; this is the second, and a call
+/// stack really is a stack of descents.
+///
+/// # `vars` is not here, and that is the decision
+///
+/// The roadmap's shape for this was `(spell, pc, loops, vars)`. Variables are
+/// **shared** instead: a part takes no arguments, so a private store would leave
+/// it with no way to be told anything at all, and `let` is the language's only
+/// way to pass a name. One store, which the caller fills and the part reads.
+///
+/// The cost is real and worth stating: `for each way` inside a part rebinds the
+/// caller's `way` if it had one. That is dynamic scope, it is the simple
+/// reading, and `bindings` already refuses to scope a `let` for the same reason
+/// — *"scoping would be a rule to teach and a rule to get wrong, for a program
+/// that fits on a screen."*
+///
+/// `spell` is not here either, and that one is **settled rather than pending**:
+/// a spell is contained to a single `.spell` file, so every descent belongs to
+/// the spell that opened it and there is nothing for the field to say (§19).
+/// A spell reaching into another spell's text is what `invoke` is for, and an
+/// `invoke` is a second [`Running`] with its own budget rather than a descent —
+/// which is the distinction that keeps this struct one spell wide.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Descent {
+    /// The body this frame was walking — `None` for the spell's own.
+    pub part: Option<String>,
+    /// Where in it, pointing at the call that suspended it.
+    pub pc: Vec<usize>,
+    /// Its open blocks, which the callee must not disturb.
+    pub loops: Vec<super::Loop>,
 }
 
 /// Work every running spell forward.
@@ -275,9 +388,15 @@ fn set_attribution(world: &mut World, spell: Option<&str>) {
         .attribute(spell);
 }
 
-/// Run up to [`SCRIPT_BUDGET`] instructions of the spell on `entity`.
+/// Run up to [`budget`] instructions of the spell on `entity`.
+///
+/// **Read once, before the first step.** A node cannot be taken mid-tick, so
+/// re-reading it per step would be a resource lookup for an answer that cannot
+/// change — and if it ever could, a budget that grew while it was being spent is
+/// the shape a loop guard must never have.
 fn step_one(world: &mut World, entity: Entity) {
-    for _ in 0..SCRIPT_BUDGET {
+    let allowance = budget(world);
+    for _ in 0..allowance {
         // **Before the state is read, so every step sees its cursors.** Entry
         // and lap both arrive here, which is what makes this the one writer —
         // see [`bind_cursors`].
@@ -286,10 +405,33 @@ fn step_one(world: &mut World, entity: Entity) {
             return;
         };
 
-        let Some(step) = super::program::at(state.program.body(), &state.pc).cloned() else {
+        let Some(step) = super::program::at(walking(&state), &state.pc).cloned() else {
+            // **Off the end of a *frame*, which is not the end of the spell.**
+            // A part that has run out returns to whoever called it; only the
+            // outermost frame running out finishes anything. This is the one
+            // place a frame is popped, exactly as `finish` is the one place a
+            // spell ends.
+            if returned(world, entity) {
+                continue;
+            }
             finish(world, entity, &state);
             return;
         };
+
+        // A **definition** is stepped past where it stands. Reaching one is
+        // ordinary — a spell is read top to bottom and its parts are written
+        // among its lines — and running it here would do the work twice for
+        // anyone who also called it.
+        if matches!(step.kind, super::Kind::Part { .. }) {
+            advance_pc(world, entity);
+            continue;
+        }
+
+        // A **call** suspends this frame and opens one on the part.
+        if let super::Kind::Call { name } = &step.kind {
+            called(world, entity, &state, step.line, name);
+            continue;
+        }
 
         // Entering a block **spends a budget step**, which looks wasteful and is
         // the guard: a `repeat` whose body never spends any — an empty one, or
@@ -577,7 +719,7 @@ fn bind_cursors(world: &mut World, entity: Entity) {
             break;
         }
         if let super::Loop::Each(index) = open
-            && let Some(step) = super::program::at(state.program.body(), &state.pc[..=consumed])
+            && let Some(step) = super::program::at(walking(&state), &state.pc[..=consumed])
             && let super::Kind::Each { group, .. } = &step.kind
             && let Some(member) = tower::group_at(world, room, group)
                 .get(*index as usize)
@@ -765,7 +907,8 @@ fn wait(world: &mut World, entity: Entity, state: &Running, blocked: &Blocked) -
 ///
 /// `execute::is_live` is the wrong instrument for this: it answers *"does this
 /// verb work"*, which is a different question that happens to overlap today.
-pub(super) const fn may_issue(verb: Verb) -> bool {
+#[must_use]
+pub const fn may_issue(verb: Verb) -> bool {
     !matches!(
         verb,
         // A spell does not walk. It is written **for** a domain and works
@@ -823,8 +966,86 @@ pub(super) const fn may_issue(verb: Verb) -> bool {
 /// numbered zero, which no file has.
 #[must_use]
 pub fn line_of(state: &Running) -> Option<u64> {
-    super::program::at(state.program.body(), &state.pc)
-        .map(|step| u64::try_from(step.line).unwrap_or(0))
+    super::program::at(walking(state), &state.pc).map(|step| u64::try_from(step.line).unwrap_or(0))
+}
+
+/// Hand the current frame back to whoever called it.
+///
+/// Returns whether there was one. `false` means the outermost frame has run out,
+/// which is the only thing that ends a spell.
+///
+/// The caller resumes **pointing at its own call**, and is stepped past it here
+/// rather than on the way in — a `pc` left pointing past the call would be a
+/// position the save could not explain, and §8 requires in-flight state to be
+/// serialisable at every tick boundary rather than at most of them.
+fn returned(world: &mut World, entity: Entity) -> bool {
+    // **Scoped, not `drop`ped.** The borrow has to end before `advance_pc` takes
+    // the world again, and a `drop` of a `Mut<'_, _>` is a no-op clippy rightly
+    // objects to — the block is what actually releases it.
+    let resumed = {
+        let Some(mut running) = world.get_mut::<Running>(entity) else {
+            return false;
+        };
+        let Some(descent) = running.stack.pop() else {
+            return false;
+        };
+        running.part = descent.part;
+        running.pc = descent.pc;
+        running.loops = descent.loops;
+        true
+    };
+    if resumed {
+        advance_pc(world, entity);
+    }
+    resumed
+}
+
+/// Suspend this frame and open one on `name`.
+///
+/// **Two refusals, both loud.** A part the spell does not define is a name the
+/// orb cannot place, and it is said once per line per cast like every other
+/// missing name (`Running::said`). A stack past [`MAX_PARTS`] is runaway
+/// recursion, and §8 will not have that stop silently.
+///
+/// Either way the call is **stepped past**, not halted: §8's taxonomy is titled
+/// *"scripts always log and never halt"*, so a call that cannot be made is a
+/// line that did nothing and a spell that carries on.
+fn called(world: &mut World, entity: Entity, state: &Running, line: usize, name: &str) {
+    if super::program::tree(state.program.body(), Some(name)).is_none() {
+        // Compilation already complains about this, so reaching it means the
+        // definition went away *while the spell ran* — §8's hot-reload, arriving
+        // at the one line that cannot survive it.
+        say_missing(world, entity, state, line, &[name.to_owned()]);
+        advance_pc(world, entity);
+        return;
+    }
+    if state.stack.len() >= MAX_PARTS {
+        say_failure(world, state, "spell_parts_too_deep", name, Role::Danger);
+        advance_pc(world, entity);
+        return;
+    }
+    if let Some(mut running) = world.get_mut::<Running>(entity) {
+        let descent = Descent {
+            part: running.part.clone(),
+            pc: running.pc.clone(),
+            loops: std::mem::take(&mut running.loops),
+        };
+        running.stack.push(descent);
+        running.part = Some(name.to_owned());
+        running.pc = vec![0];
+    }
+}
+
+/// The block the current frame is walking.
+///
+/// **Empty when the part it names has gone**, which is a real state rather than
+/// a defect: §8 hot-reloads a spell's text under it, so a player may delete a
+/// definition while a frame is inside it. An empty block reads as *off the end*
+/// at the next step, which pops the frame and carries on after the call — the
+/// gentlest true answer available, and the same one an empty part gives.
+fn walking(state: &Running) -> &super::Block {
+    static NOTHING: super::Block = Vec::new();
+    super::program::tree(state.program.body(), state.part.as_deref()).unwrap_or(&NOTHING)
 }
 
 /// Whether this casting has already complained about `line`, marking it said.
@@ -863,12 +1084,18 @@ fn node_of(world: &World, id: NodeId) -> Option<Entity> {
 /// instruction of a structure that is tens of steps at most, against threading a
 /// borrow through the whole runner.
 fn advance_pc(world: &mut World, entity: Entity) {
-    let Some(program) = world
+    let Some((program, part)) = world
         .get::<Running>(entity)
-        .map(|state| state.program.clone())
+        .map(|state| (state.program.clone(), state.part.clone()))
     else {
         return;
     };
+    // The frame's own tree, cloned with the program for the same borrow reason.
+    // An absent part is an empty block, which `step_past` walks straight off the
+    // end of — see [`walking`].
+    let body = super::program::tree(program.body(), part.as_deref())
+        .cloned()
+        .unwrap_or_default();
     // **Every guard answered before `Running` is borrowed mutably.** `holds`
     // wants the world and `step_past` wants `&mut Running`, and both live on this
     // entity — so the questions are asked first and the answers carried in.
@@ -880,7 +1107,7 @@ fn advance_pc(world: &mut World, entity: Entity) {
         .map_or((None, Vec::new()), |state| {
             (node_of(world, state.at), state.pc.clone())
         });
-    let guards = guard_answers(world, program.body(), at, &pc);
+    let guards = guard_answers(world, &body, at, &pc);
     if let Some(mut running) = world.get_mut::<Running>(entity) {
         let Running { pc, loops, .. } = &mut *running;
         let again = |at: &[usize], popped: super::Loop| {
@@ -900,7 +1127,7 @@ fn advance_pc(world: &mut World, entity: Entity) {
                 (_, _) => true,
             }
         };
-        if !super::program::step_past(program.body(), pc, loops, again) {
+        if !super::program::step_past(&body, pc, loops, again) {
             // Off the end. `at` will return `None` next time round and the
             // spell finishes there, so there is one place that ends a spell.
             pc.clear();
@@ -1052,7 +1279,16 @@ fn guard_answers(
                         path.pop();
                     }
                 }
-                super::Kind::Command(_) | super::Kind::Wait(_) | super::Kind::Let { .. } => {}
+                // **A definition is not walked into**, and this is the same
+                // reason `at` refuses to descend: its loops belong to a frame
+                // that is not this one. Walking in would ask the world about a
+                // `repeat` inside a part nobody has called — a read nobody
+                // asked for, and against a path this frame's `pc` can never hold.
+                super::Kind::Part { .. }
+                | super::Kind::Call { .. }
+                | super::Kind::Command(_)
+                | super::Kind::Wait(_)
+                | super::Kind::Let { .. } => {}
             }
             path.pop();
         }

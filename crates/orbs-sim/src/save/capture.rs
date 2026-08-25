@@ -217,6 +217,16 @@ fn running(world: &World, run: &tower::spell::Running) -> RunningSave {
         waiting_since: run.waiting_since.map(Tick::get),
         said: run.said.clone(),
         vars: run.vars.clone(),
+        part: run.part.clone(),
+        stack: run
+            .stack
+            .iter()
+            .map(|frame| super::DescentSave {
+                part: frame.part.clone(),
+                pc: frame.pc.clone(),
+                loops: frame.loops.iter().map(super::adopt::loop_code).collect(),
+            })
+            .collect(),
         // The text the program was compiled from, so a restore can tell whether
         // re-deriving it would land on the same tree. See `restore::spell`.
         fingerprint: tower::path_of_id(world, run.spell)

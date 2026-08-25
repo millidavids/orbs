@@ -57,6 +57,20 @@ pub enum UtteranceKind {
     /// cannot would be exactly that. Its own kind so verbosity can drop it:
     /// re-offered every keystroke, it is the most repetitive thing on screen.
     Hint,
+    /// A reference the player asked to have open — the scribing guide.
+    ///
+    /// **Its own kind for `Hint`'s reason, one step further.** A guide is
+    /// *content*, so §14 requires it to reach a reader: a definition a sighted
+    /// player can see and a listener cannot is precisely the visual constraint
+    /// becoming an informational one. But it is also a **standing reference**
+    /// rather than an answer to anything, and the stream is rebuilt from nothing
+    /// on every frame (`Speech::clear`) — so there is no "say it once" to reach
+    /// for, and without a kind of its own a reader would be read the whole
+    /// vocabulary continuously.
+    ///
+    /// So it is spoken, tagged, and droppable — the same bargain `Hint` strikes,
+    /// and the only one the speech model actually offers.
+    Guide,
     /// A duration-action finishing.
     ///
     /// §14 announces **completions only**: at endgame a player may have ~25

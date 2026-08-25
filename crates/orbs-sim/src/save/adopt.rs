@@ -241,6 +241,16 @@ fn spell(world: &mut World, entity: Entity, node: &NodeSave) {
             waiting_since: run.waiting_since.map(Tick::new),
             said: run.said.clone(),
             vars: run.vars.clone(),
+            part: run.part.clone(),
+            stack: run
+                .stack
+                .iter()
+                .map(|frame| spell::Descent {
+                    part: frame.part.clone(),
+                    pc: frame.pc.clone(),
+                    loops: frame.loops.iter().copied().map(loop_from).collect(),
+                })
+                .collect(),
         });
     }
 }

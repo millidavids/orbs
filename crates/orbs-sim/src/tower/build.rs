@@ -1108,11 +1108,15 @@ mod tests {
             sim.submit("peruse first_light.spell");
             sim.step();
 
+            // **`ScriptLine`, and this counted `LogLine` until `0.3.23`.** A
+            // spell read back as log output is the defect this test was written
+            // to catch wearing a different face, so the kind is now half of what
+            // it asserts rather than incidental to it.
             let lines = sim
                 .scrollback()
                 .records()
                 .iter()
-                .filter(|record| record.kind() == orbs_render::RecordKind::LogLine)
+                .filter(|record| record.kind() == orbs_render::RecordKind::ScriptLine)
                 .count();
             assert!(
                 lines >= 2,

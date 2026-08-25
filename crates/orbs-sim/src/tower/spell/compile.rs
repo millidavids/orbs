@@ -114,11 +114,131 @@ pub fn compile(world: &World, from: Entity, lines: &[String]) -> Program {
     // first: a bound name reaches `fix` looking exactly like a place the room
     // does not have, and would be reported as one on every cast.
     let bound = super::program::bindings(&draft.body);
+    // **Before names are resolved, and against the text rather than the room.**
+    // A part is a name the *spell* defines, so whether a call can be made is a
+    // question about the file and not about the tower — and asking it here means
+    // `interpret` and the cast agree, which §19 records two expressions of one
+    // rule failing to do twice.
+    let defined: Vec<String> = super::program::parts(&draft.body)
+        .into_iter()
+        .map(str::to_owned)
+        .collect();
+    check_calls(&draft.body, &defined, &mut complaints);
+    check_commands(&draft.body, &scene, &bound, &mut complaints);
     let body = resolved(draft.body, &scene, &known, &bound, &mut complaints);
     // In line order, so what the orb says about a spell reads down the file
     // however the faults were found.
     complaints.sort_by_key(|complaint| complaint.line);
     Program::new(body, complaints)
+}
+
+/// Say so about every call naming a part the spell does not define.
+///
+/// **At cast rather than at the call**, which is the difference between a player
+/// finding out when they write the spell and finding out on whichever tick the
+/// line is reached — possibly never, if it is inside a branch. `run::called`
+/// still answers for it, because a definition can be deleted while the spell
+/// runs (§8), but by then it is a report about an edit rather than about a typo.
+///
+/// Recursive, because a call can be anywhere a command can.
+fn check_calls(body: &Block, defined: &[String], complaints: &mut Vec<Complaint>) {
+    for Step { line, kind } in body {
+        match kind {
+            Kind::Call { name } => {
+                if !defined.iter().any(|part| part == name) {
+                    complaints.push(Complaint {
+                        line: *line,
+                        key: "spell_no_such_part",
+                    });
+                }
+            }
+            Kind::Repeat { body, .. } | Kind::Each { body, .. } | Kind::Part { body, .. } => {
+                check_calls(body, defined, complaints);
+            }
+            Kind::If {
+                body, otherwise, ..
+            } => {
+                check_calls(body, defined, complaints);
+                check_calls(otherwise, defined, complaints);
+            }
+            Kind::Command(_) | Kind::Wait(_) | Kind::Let { .. } => {}
+        }
+    }
+}
+
+/// Read each command's **verb** at cast, and say so when it is one a spell may
+/// not issue.
+///
+/// # Why the verb is knowable here and the arguments are not
+///
+/// A spell makes its own inputs. `digest ground-sage` is written above the line
+/// that produces any, so at cast the room has none and `analyse` drops the
+/// argument — `interpret` reads that line back as bare `digest`. **Freezing a
+/// whole `Intent` at cast would therefore break every pipeline spell in the
+/// game, silently**, which is what §19 records this pass being scoped down from.
+///
+/// The **verb** survives, because a verb is offered by the fixture standing in
+/// the room rather than by what is on the shelf: `mix`, `distil` and `digest`
+/// all read back at cast with their arguments gone and their verb intact. So the
+/// verb is the part that can be checked before the line ever runs.
+///
+/// # `may_issue` is a security boundary, and it was answered too late
+///
+/// `run_line` asks it when the line is **reached**, which for a line inside a
+/// branch may be never and for a bound spell may be hours after it was written.
+/// A `meditate 3600` sitting in an untaken branch said nothing at all — and its
+/// own doc calls a scripted `meditate` a hazard, because `Sim::step` drains
+/// `Skip` in a while-loop and an hour of world time runs inside one step.
+///
+/// Asked here as well, so the answer arrives when the spell is cast. **As well,
+/// not instead**: `run_line` keeps its check, because a boundary with one guard
+/// is a boundary that a future caster can walk around, and its doc already
+/// records `quit` being missed from the list once.
+fn check_commands(body: &Block, scene: &Scene, bound: &[String], complaints: &mut Vec<Complaint>) {
+    for Step { line, kind } in body {
+        match kind {
+            Kind::Command(text) => {
+                // **A line naming something the spell binds is left alone.** A
+                // variable holds nothing until the line runs, so resolving one
+                // here would read `follow way` as a `follow` with no bearing and
+                // report a fault about a line that is perfectly good.
+                if names_a_binding(text, bound) {
+                    continue;
+                }
+                let Resolution::Resolved { intent, .. } =
+                    crate::parser::analyse(text, scene, Mode::Calm).resolution
+                else {
+                    continue;
+                };
+                if !super::run::may_issue(intent.verb) {
+                    // **Its own key, not `run_line`'s.** A complaint is filled
+                    // with `name` and `count` and nothing else, so the runtime
+                    // key's `{detail}` would reach the player unsubstituted —
+                    // which is the orb saying `'{detail}'` out loud.
+                    complaints.push(Complaint {
+                        line: *line,
+                        key: "spell_forbidden_line",
+                    });
+                }
+            }
+            Kind::Repeat { body, .. } | Kind::Each { body, .. } | Kind::Part { body, .. } => {
+                check_commands(body, scene, bound, complaints);
+            }
+            Kind::If {
+                body, otherwise, ..
+            } => {
+                check_commands(body, scene, bound, complaints);
+                check_commands(otherwise, scene, bound, complaints);
+            }
+            Kind::Wait(_) | Kind::Let { .. } | Kind::Call { .. } => {}
+        }
+    }
+}
+
+/// Whether any word of `line` is a name the spell binds.
+fn names_a_binding(line: &str, bound: &[String]) -> bool {
+    line.split_whitespace()
+        .any(|word| bound.iter().any(|held| held.eq_ignore_ascii_case(word)))
 }
 
 /// Every condition in a block, with its names fixed.
@@ -486,7 +606,16 @@ pub fn interpret(world: &World, domain: &str, lines: &[String]) -> Vec<Reading> 
     // Faults about the *shape* of the file — a block nothing closed, a stray
     // `end` — belong to a line but are found by reading the whole thing.
     let draft = super::program::read(lines);
-    let structural = draft.complaints;
+    let mut structural = draft.complaints;
+    // **The same check the cast makes, on the same tree.** `interpret` and the
+    // runner disagreeing about a line is §19's recurring defect in this file;
+    // a call to a part nobody defined is exactly the kind of fault this surface
+    // exists to show before it runs.
+    let defined: Vec<String> = super::program::parts(&draft.body)
+        .into_iter()
+        .map(str::to_owned)
+        .collect();
+    check_calls(&draft.body, &defined, &mut structural);
     // **The whole file's bindings, for every line of it.** A `set` on line 9 is
     // a name line 2 may already say — `bindings` is deliberately not scoped, and
     // this surface has to agree with the runner about that or it would paint a
@@ -522,11 +651,49 @@ fn one(line: &str, scene: &Scene, known: &[&str], bound: &[String]) -> Reading {
         heard: trimmed.to_owned(),
         fault,
     };
+    // The orb's reading where it differs from the text — a call written
+    // `gathering ()` is heard as `gathering()`, which is the form the player has
+    // to type and the one this surface is for showing them.
+    let verbatim_as = |heard: &str, fault: Option<Fault>| Reading {
+        line: 0,
+        heard: heard.to_owned(),
+        fault,
+    };
 
     // A blank line and a comment are the player's own, and the orb has nothing
     // to say about either.
     if trimmed.is_empty() || trimmed.starts_with('#') {
         return verbatim(None);
+    }
+
+    // **A call, before the command resolver sees it — and after the language's
+    // own words, which is the order `read` uses.**
+    //
+    // `gathering()` is not a word the tower has, so falling through to the
+    // resolver would report *"no such thing"* about a line that is perfectly
+    // good; this surface exists to show a wrong resolution, not to invent one.
+    // Whether the part is *defined* is a fault about the file, and arrives from
+    // `check_calls` with the structural ones.
+    //
+    // The `spell_word` guard is what stops a **definition** being read as a
+    // malformed call. `call_name("part gathering()")` splits at the first `(`,
+    // finds a two-word head, and answers `Some(None)` — *a call with something
+    // in front of it* — so without this the canonical `part <name>()` fell into
+    // `spell_part_takes_nothing` and `interpret` reported the one form the
+    // language teaches as a line the orb could not read. `read` got it right
+    // because it reaches `call_name` only in `spell_word`'s `None` arm, so the
+    // spell compiled and ran while the surface built to catch bad lines lied
+    // about it.
+    if crate::parser::spell_word(trimmed).is_none()
+        && let Some(called) = super::program::call_name(trimmed)
+    {
+        return match called {
+            Some(name) => verbatim_as(&format!("{name}()"), None),
+            None => verbatim(Some(Fault {
+                key: "spell_part_takes_nothing",
+                detail: None,
+            })),
+        };
     }
 
     if let Some(word) = crate::parser::spell_word(trimmed) {

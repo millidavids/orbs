@@ -65,38 +65,21 @@ fn instrument(world: &World, path: &str) -> Option<(Entity, String)> {
 /// the floor, and `move`'s destination resolves through [`instrument`], which
 /// finds fixtures only. The bench and the shelf are one place now, and it is the
 /// dispensary.
+/// **The order itself lives in `tower::reach`**, because it is a rule about the
+/// world rather than about this file: a spell that resolves a name at cast and a
+/// verb body that looks it up at execution have to agree, and two copies of a
+/// search order are two answers to *what does `digest ground-sage` pick up*.
+///
+/// **The arsenal is last, wherever it is.** Its contents are nameable from every
+/// room (`tower::keep`), so they have to be *findable* from every room or `move
+/// clarity to flask_and_rod` resolves at full confidence and then reports "no
+/// such thing" — §15's dead end, arriving through the exemption that exists to
+/// remove one. Last is the point: a reagent in the room always outranks one
+/// carried, so adding it cannot change what an existing command picks up.
 fn reachable(world: &World, cwd: Entity) -> Vec<Entity> {
-    let here = tower::children_of(world, cwd);
-    let mut order: Vec<Entity> = Vec::new();
-
-    // One partition rather than two filtered passes over a cached bool: the
-    // instruments in raise order, then the stores.
-    let (stores, instruments): (Vec<Entity>, Vec<Entity>) = here
-        .into_iter()
-        .filter(|node| world.get::<tower::Fixture>(*node).is_some())
-        .partition(|node| world.get::<tower::Store>(*node).is_some());
-
-    for node in instruments {
-        // §10.1's lock covers taking as much as putting, and a scour is about to
-        // despawn everything in there.
-        if tower::busy(world, node).is_some() {
-            continue;
-        }
-        order.extend(tower::children_of(world, node));
-    }
-    for node in stores {
-        order.extend(tower::children_of(world, node));
-    }
-    // **The arsenal last, wherever it is.** Its contents are nameable from every
-    // room (`tower::keep`), so they have to be *findable* from every room or
-    // `move clarity to flask_and_rod` resolves at full confidence and then
-    // reports "no such thing" — §15's dead end, arriving through the exemption
-    // that exists to remove one.
-    //
-    // Last is the point: a reagent in the room always outranks one carried, so
-    // adding this cannot change what an existing command picks up.
-    order.extend(tower::keeping(world));
-    order
+    tower::reach::look(world)
+        .scope(tower::reach::Scope::Fetch(cwd))
+        .candidates()
 }
 
 /// Somewhere a `move` can name: an instrument here, or the arsenal.
@@ -735,10 +718,8 @@ pub(super) fn purge(intent: &Intent, world: &mut World) {
     // work at a distance, and it looked like a deliberate fallback rather than
     // the only path that ever fired.
     let leaf = crate::parser::leaf(&target).to_owned();
-    let cwd = world.resource::<Cwd>().0;
-    let found = tower::children_of(world, cwd)
-        .into_iter()
-        .find(|node| world.get::<tower::Name>(*node).is_some_and(|n| n.0 == leaf))
+    let found = tower::reach::look(world)
+        .find(&leaf)
         // **...and whatever the arsenal holds.** It is nameable from every room,
         // so `purge` has to reach it from every room: a destructive verb that
         // resolves and then says "no such thing" is worse than one that refuses,

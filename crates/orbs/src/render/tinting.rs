@@ -72,7 +72,7 @@ mod tests {
             .flat_map(|row| (0..80).map(move |col| Pos::new(col, row)))
             .filter(|at| {
                 frame.cell(*at).is_some_and(|cell| {
-                    theme.resolve_tinted(cell.style, frame.tint_at(*at))
+                    theme.resolve_tinted(cell.style, frame.tint_at(*at), frame.lit_at(*at))
                         == bevy::prelude::Color::from(sage)
                 })
             })

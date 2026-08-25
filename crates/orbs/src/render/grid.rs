@@ -186,7 +186,7 @@ pub(crate) fn build(frame: &Frame, theme: &Phosphor, showing: bool, mesh: &mut M
                 cell_width,
                 cell_height,
                 theme
-                    .resolve_tinted(cell.style, frame.tint_at(at))
+                    .resolve_tinted(cell.style, frame.tint_at(at), frame.lit_at(at))
                     .to_linear()
                     .to_f32_array(),
                 atlas::uv(index, cell.style.presentation),

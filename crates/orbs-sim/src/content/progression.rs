@@ -497,23 +497,33 @@ mod tests {
     }
 
     #[test]
-    fn the_shipped_tree_is_two_tiers_of_markers() {
-        // **Every node is `tbi` and that is the point**: the shape is visible
-        // from inside the game before anything is behind it, so a player who
-        // reaches 24 sees a tier open and sees that a choice is coming. The first
-        // real node is its own item.
+    fn the_shipped_tree_is_two_tiers_and_nothing_is_takeable() {
+        // **The shape is visible from inside the game before anything is behind
+        // it**, so a player who reaches 24 sees a tier open and sees that a
+        // choice is coming.
+        //
+        // It asserted that every id began with `tbi`, which was a way of saying
+        // *nothing is implemented*. That stopped being the same claim at
+        // `0.3.24`: `steps_<n>` nodes are read by `spell::budget`, so the wiring
+        // behind them is real while the **taking** is still the weave phase's
+        // item. What has to stay true is that nothing can be taken — which is
+        // `Taken`'s emptiness, not a spelling rule about ids.
         let curve = Progression::builtin();
         assert_eq!(curve.ley_line().len(), 1, "the ley line grew a step");
         assert_eq!(curve.ley_line()[0].at, 16);
         assert_eq!(curve.mastery().len(), 2);
         assert_eq!(curve.mastery()[0].at, 24);
         assert!(
-            curve
-                .mastery()
-                .iter()
-                .flat_map(|tier| &tier.nodes)
-                .all(|node| node.starts_with("tbi")),
-            "a node is behind something, and nothing implements one yet",
+            crate::tower::Taken::default().ids().is_empty(),
+            "a node can be taken now, and this whole tree still ships as markers",
         );
+        // Every id is one of the two kinds the game knows how to read. A third
+        // spelling would be a node that draws, refuses, and means nothing.
+        for node in curve.mastery().iter().flat_map(|tier| &tier.nodes) {
+            assert!(
+                node.starts_with("tbi") || node.starts_with("steps_"),
+                "{node} is neither a marker nor a grant anything reads",
+            );
+        }
     }
 }

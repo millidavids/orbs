@@ -391,7 +391,22 @@ pub const SYNONYMS: &[Synonym] = &[
     // guarding — and `scr` reaches `scribe`. `probe` opens a reading when none
     // is open, which is `grind`'s move-and-wield idiom one room over.
     syn(Verb::Probe, Register::Arcane, &["probe"]),
-    syn(Verb::Probe, Register::Plain, &["spy", "peek", "try"]),
+    // **Three synonyms, not one three-word phrase**, and it was the latter for a
+    // version. `words` is *one phrase, pre-split*, so `&["spy", "peek", "try"]`
+    // declared the phrase `spy peek try` and nothing else — `spy` at the prompt
+    // echoed `! spy` and reached nothing, and so did the other two. The lens had
+    // no plain-English way in at all.
+    //
+    // `every_verb_is_reachable_from_plain_english` passed throughout, because it
+    // asks whether a `Plain` *entry exists* rather than whether its words work.
+    // `multi_word_plain_synonyms_are_pinned` is what would have caught it, and is
+    // the guard now.
+    //
+    // Swept before splitting, like every other name here: `spy` and `try` score
+    // nothing at all, `peek` scores 500 against `pewter` — below the 600 band.
+    syn(Verb::Probe, Register::Plain, &["spy"]),
+    syn(Verb::Probe, Register::Plain, &["peek"]),
+    syn(Verb::Probe, Register::Plain, &["try"]),
     // `set` is the shell word anyone would reach for; the arcane form is `dial`,
     // which is what a lock has and what a ward is.
     syn(Verb::Dial, Register::Arcane, &["dial"]),
@@ -445,13 +460,24 @@ pub fn synonyms_of(verb: Verb) -> Vec<(Register, String)> {
 /// **Multi-word phrases are deliberately absent.** They cannot be typed into a
 /// noun slot as a single token, and splitting them would put `to`, `here` and
 /// `it` into the known set for no gain.
-#[must_use]
-pub fn single_words() -> Vec<(&'static str, Verb)> {
+///
+/// # An iterator, because three of the four callers are hot
+///
+/// It returned a `Vec` over the whole ~150-entry table, and the callers found
+/// it: `lexeme::names_a_verb` asks for the head word of **every line**, and
+/// `lex` runs once per drawn spell line per frame in `sheet::paint_line` and
+/// once per frame in `prompt::highlight` — twenty allocations at 60 Hz for a
+/// table that is `static`. `tower::scene_at` asks twice per call, and `scene_at`
+/// now runs on every keystroke through `Editor::refresh`.
+///
+/// None of them wanted the `Vec`: two search it and two iterate it once. This is
+/// the same *"allocating at 60 Hz for 1 Hz data"* the surrounding code — `Panel`,
+/// `Ghost`, `rail::truncate` — is written to avoid.
+pub fn single_words() -> impl Iterator<Item = (&'static str, Verb)> {
     SYNONYMS
         .iter()
         .filter(|entry| entry.words.len() == 1)
         .map(|entry| (entry.words[0], entry.verb))
-        .collect()
 }
 
 /// The verb a single word names, canonical or synonym.
@@ -464,7 +490,6 @@ pub fn single_words() -> Vec<(&'static str, Verb)> {
 #[must_use]
 pub fn verb_of_word(word: &str) -> Option<Verb> {
     single_words()
-        .into_iter()
         .find(|(known, _)| known.eq_ignore_ascii_case(word))
         .map(|(_, verb)| verb)
 }

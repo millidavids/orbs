@@ -153,19 +153,13 @@ pub(super) fn root(world: &World) -> Entity {
 
 /// The place `target` names, by full path or by last segment (§7).
 pub(super) fn find_place(world: &World, from: Entity, target: &str) -> Option<Entity> {
-    let mut stack = vec![from];
-    while let Some(node) = stack.pop() {
-        if world.get::<tower::Nameable>(node).map(|n| n.0) == Some(NounKind::Place)
-            && (tower::path_of(world, node) == target
-                || world
-                    .get::<tower::Name>(node)
-                    .is_some_and(|n| n.0 == target))
-        {
-            return Some(node);
-        }
-        stack.extend(tower::children_of(world, node));
-    }
-    None
+    tower::reach::look(world)
+        .scope(tower::reach::Scope::Under(from))
+        .kind(NounKind::Place)
+        // §7: a place answers to its own name and to its whole path, because a
+        // `Place` argument resolves to the path and the node carries the leaf.
+        .naming(tower::reach::Naming::LeafOrPath)
+        .find(target)
 }
 
 /// The place `named`, searched from the top of the tree.
@@ -197,17 +191,9 @@ pub fn find_domain(world: &World, named: &str) -> Option<Entity> {
 /// The extension is optional, because [`with_extension`](crate::content::with_extension)
 /// makes `first_light` and `first_light.spell` the same spell everywhere else.
 pub(super) fn find_script(world: &World, target: &str) -> Option<Entity> {
-    let wanted = crate::content::with_extension(target);
-    let mut stack = vec![tower::root(world)];
-    while let Some(node) = stack.pop() {
-        if world.get::<tower::Nameable>(node).map(|n| n.0) == Some(NounKind::Script)
-            && world
-                .get::<tower::Name>(node)
-                .is_some_and(|name| name.0 == wanted)
-        {
-            return Some(node);
-        }
-        stack.extend(tower::children_of(world, node));
-    }
-    None
+    tower::reach::look(world)
+        .scope(tower::reach::Scope::Tower)
+        .kind(NounKind::Script)
+        .naming(tower::reach::Naming::Script)
+        .find(target)
 }

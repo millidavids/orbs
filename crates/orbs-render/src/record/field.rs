@@ -26,6 +26,19 @@ pub enum FieldName {
     Quantity,
     /// When, in world time (DESIGN.md §5.0). Ticks, not wall-clock.
     Tick,
+    /// **Where in a file**, counting from one. A position, never a time.
+    ///
+    /// [`Tick`](Self::Tick) carried this for as long as a listing was numbered,
+    /// which made a spell's eleventh line announce itself as *"tick: 11"* — the
+    /// world clock, to a reader who has no other way to tell. A number spoken
+    /// under the wrong noun is worse than an unnumbered line, because it is
+    /// information rather than an absence, and it is wrong.
+    ///
+    /// It survives [`Record::write_line`](crate::Record::write_line) on a prose
+    /// record, unlike every other non-message field: the gutter of a listing is
+    /// what a player points at to say *fix line 11*, so dropping it would answer
+    /// a §14 defect by deleting the affordance it was about.
+    Line,
     /// Ticks left on a duration action.
     Remaining,
     /// Which subsystem produced this. `laboratory`, `battlements`, `lens`.
@@ -105,13 +118,14 @@ pub enum FieldName {
 
 impl FieldName {
     /// Every field name, in declaration order.
-    pub const ALL: [Self; 15] = [
+    pub const ALL: [Self; 16] = [
         Self::Name,
         Self::Path,
         Self::Kind,
         Self::State,
         Self::Quantity,
         Self::Tick,
+        Self::Line,
         Self::Remaining,
         Self::Source,
         Self::Origin,
@@ -136,6 +150,7 @@ impl FieldName {
             Self::State => "state",
             Self::Quantity => "qty",
             Self::Tick => "tick",
+            Self::Line => "line",
             Self::Remaining => "left",
             Self::Source => "source",
             Self::Origin => "from",

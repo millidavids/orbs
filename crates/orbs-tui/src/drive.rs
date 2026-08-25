@@ -30,6 +30,128 @@ const TICK: Duration = Duration::from_secs(1);
 /// down a pipe that may be a network. The diff in [`blit`] does the real work.
 const FRAME: Duration = Duration::from_millis(33);
 
+/// Whether the terminal this process was given has gone away.
+///
+/// # A leaked process that idles costs nothing; one that spins takes the machine
+///
+/// When the pty master closes — the tmux server dies, an ssh connection drops,
+/// the harness that spawned this is `SIGKILL`ed — the slave end reports
+/// `POLLHUP`. `crossterm::event::poll` then answers *ready* immediately and for
+/// ever, and `crossterm::event::read` responds to the EOF behind it by **looping
+/// inside itself** rather than returning or erroring. So `?` never fires, the
+/// read never comes back, and the process burns a core until something kills it.
+///
+/// 573 of these once took a 32-core machine to a load average of 581 with swap
+/// exhausted, leaked by test harnesses that were `SIGKILL`ed before their `Drop`
+/// could tear the tmux sessions down. The `SIGHUP` handler `term` installs
+/// cannot reach them: nothing signals a child already reparented away from a
+/// dead terminal.
+///
+/// # Why it asks the descriptor rather than crossterm
+///
+/// Because crossterm has no way to say it. A first attempt counted reads that
+/// came back with nothing usable, which is the right shape and never runs: the
+/// read that would have been counted is the one that does not return. The
+/// question has to be put **before** the read, and to the file descriptor.
+///
+/// Zero timeout, so an ordinary frame pays one non-blocking `poll` and nothing
+/// else.
+fn hung_up() -> bool {
+    gone(&rustix::stdio::stdin())
+}
+
+/// How often the watchdog asks whether the terminal is still there.
+///
+/// Half a second: a leaked process outlives its terminal by that much at most,
+/// and a live session pays one non-blocking `poll` twice a second.
+const HANGUP_CHECK: Duration = Duration::from_millis(500);
+
+/// Watch for the terminal going away, from a thread the loop cannot block.
+///
+/// # Why a thread, when the loop could just look
+///
+/// **Because the loop never gets the chance.** [`hung_up`] at the top of each
+/// pass is correct and is kept — it gives the tidy exit, through `term::leave`,
+/// whenever the loop is still turning. It does not fire for the case that
+/// matters: `crossterm::event::read`, having hit EOF on a dead pty, **loops
+/// inside itself and never returns**, so control never reaches the top of the
+/// loop again. A check that lives there cannot run, and measuring proved it —
+/// the process kept spinning at 82% with the check in place.
+///
+/// This thread is the answer, and it is why the fix is not simply *look before
+/// you read*. It also exits **hard**: `std::process::exit` skips `term::leave`,
+/// which is right rather than sloppy, because everything `leave` does is a write
+/// to the terminal that has just been established as gone.
+///
+/// The risk it carries is a false positive killing a live session, and `gone`
+/// answers only to `HUP`, `ERR` and `NVAL` — none of which a working terminal
+/// reports. Both directions are tested.
+fn watch_for_hangup() {
+    let deadline = lifetime().map(|span| Instant::now() + span);
+    std::thread::spawn(move || {
+        loop {
+            std::thread::sleep(HANGUP_CHECK);
+            if hung_up() || deadline.is_some_and(|end| Instant::now() >= end) {
+                std::process::exit(0);
+            }
+        }
+    });
+}
+
+/// How long this session may live, if something set a limit.
+///
+/// # A cap the harness sets and a player never has
+///
+/// `ORBS_LIFETIME`, in seconds, absent by default — so a real game runs until
+/// somebody stops it and nothing here can time a player out mid-brew.
+///
+/// The play harness sets it, and it closes the half [`watch_for_hangup`] cannot
+/// reach on its own. That watches for a terminal that has **died**; this is for
+/// one that is perfectly alive while the harness that owned it is not. A detached
+/// tmux server is nobody's child, so `SIGKILL`ing `cargo test` leaves its
+/// sessions running normally — drawing at 30fps, ~2.4% CPU each — until
+/// something happens to kill the server.
+///
+/// An unreadable value is treated as no limit rather than as zero: a typo in an
+/// environment variable should not make every game exit half a second after it
+/// starts.
+fn lifetime() -> Option<Duration> {
+    std::env::var("ORBS_LIFETIME")
+        .ok()?
+        .trim()
+        .parse()
+        .ok()
+        .map(Duration::from_secs)
+}
+
+/// Whether the far end of `fd` has closed.
+///
+/// Split from [`hung_up`] so it can be tested against a pipe: a `poll` that
+/// silently never reports `HUP` is a guard that does nothing, and the whole
+/// point of this one is that nothing else notices.
+///
+/// A pty slave whose master has closed reports `HUP | ERR` — measured, not
+/// assumed, because a pipe and a pty need not agree and it is the pty that
+/// matters here.
+fn gone<Fd: std::os::fd::AsFd>(fd: &Fd) -> bool {
+    use rustix::event::{PollFd, PollFlags, Timespec, poll};
+
+    // No flags requested: a hangup is reported whether or not anything was asked
+    // for, which is the point — this asks *is the far end still there*, not
+    // *is there input*. Crossterm answers the second question and cannot answer
+    // the first.
+    let mut watched = [PollFd::new(fd, PollFlags::empty())];
+    // `rustix` rather than `libc`: `unsafe_code` is denied workspace-wide, and a
+    // safe wrapper over one `poll` is exactly what that rule is for.
+    if poll(&mut watched, Some(&Timespec::default())).is_err() {
+        // A `poll` that will not run is itself a terminal that cannot be read.
+        return true;
+    }
+    watched[0]
+        .revents()
+        .intersects(PollFlags::HUP | PollFlags::ERR | PollFlags::NVAL)
+}
+
 /// Everything the loop keeps between frames.
 struct Session {
     sim: Sim,
@@ -168,6 +290,36 @@ impl Session {
 
     /// Take one keystroke. Returns `false` when the player asked to leave.
     fn typed(&mut self, event: KeyEvent) -> bool {
+        // **Escape arriving with a letter behind it is two keystrokes, and this
+        // build was throwing the first one away.** A terminal sends Escape as
+        // one byte, `\x1b`, with nothing to say where it ends; crossterm reads
+        // whatever is in the pty buffer in one syscall, and `\x1b` followed by
+        // any byte in the same read parses as `Alt+<that byte>`. So closing the
+        // spell editor and typing `quit` fast enough lands both in one read, the
+        // Escape vanishes, and `quit` goes into the buffer as a line of the
+        // spell. That is exactly what it looks like: the key doing nothing.
+        //
+        // **Splitting it back apart is lossless here, and only here.** Under no
+        // keyboard-enhancement flags — which this build never pushes, see the
+        // `Repeat` note in `run` — crossterm produces `Alt+Char` from precisely
+        // one thing, an `\x1b <byte>` pair. A *real* Alt chord on a special key
+        // (`Alt+Left`, `Alt+Home`) arrives CSI-encoded with a modifier
+        // parameter instead and is left alone, which matters: those are bound in
+        // plenty of terminals and turning one into Escape would drop a player
+        // out of the editor for pressing word-left.
+        //
+        // The game binds no Alt chord at all — the guard below excludes it
+        // deliberately, so AltGr can still type `@`, `#` and `\` — so there is
+        // no meaning being taken away. On Linux AltGr is a level shift that
+        // composes in the terminal and sends the finished character with no
+        // modifier, so it never reaches this branch.
+        if let Some(rest) = escape_prefixed(&event) {
+            if !self.typed(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)) {
+                return false;
+            }
+            // One level deep and no further: `rest` has Alt cleared.
+            return self.typed(rest);
+        }
         // **`Ctrl-H` is Backspace on a great many terminals, and the chord guard
         // below was eating it.** A terminal configured `stty erase ^H` — which
         // is PuTTY's shipped default — sends `0x08` for the Backspace key, and
@@ -588,6 +740,8 @@ fn play(session: &mut Session) -> std::io::Result<()> {
     // start over — the game runs, it just cannot tidy up after a signal.
     let dying = term::dying().unwrap_or_default();
 
+    watch_for_hangup();
+
     let start = Instant::now();
     let mut ticked = start;
     let mut painted = start - FRAME;
@@ -658,6 +812,13 @@ fn play(session: &mut Session) -> std::io::Result<()> {
         let now = Instant::now();
         let until_tick = (ticked + TICK).saturating_duration_since(now);
         let until_frame = (painted + FRAME).saturating_duration_since(now);
+        // **Before the read, and that placement is the whole fix.** A dead pty
+        // makes `poll` answer ready for ever and `read` never return at all, so
+        // anything that inspects the *result* of a read is code that never runs.
+        // See [`hung_up`] for what 573 of these cost once.
+        if hung_up() {
+            return Ok(());
+        }
         if crossterm::event::poll(until_tick.min(until_frame))? {
             match crossterm::event::read()? {
                 // **Nothing is typed during boot, and one thing still is.**
@@ -796,6 +957,25 @@ const HELD_OVER: Duration = Duration::from_millis(60);
 /// every keyed system is gated on `booted` and the way out of a nine-second
 /// animation is to close the window; raw mode takes that away, so `Ctrl-C` is
 /// ours to answer or nobody's.
+/// The keystroke hiding behind an `Alt+<letter>`, if that is what this is.
+///
+/// See the note at the top of [`Session::typed`]. `Some(rest)` means the
+/// terminal sent `\x1b` and a byte in one read and the pair should be replayed
+/// as Escape, then `rest`. Restricted to [`KeyCode::Char`] because that is the
+/// only shape crossterm builds from an escape-prefixed byte; every other Alt
+/// chord is CSI-encoded and is a chord the player really pressed.
+fn escape_prefixed(key: &KeyEvent) -> Option<KeyEvent> {
+    if !key.modifiers.contains(KeyModifiers::ALT) {
+        return None;
+    }
+    if !matches!(key.code, KeyCode::Char(_)) {
+        return None;
+    }
+    let mut rest = *key;
+    rest.modifiers.remove(KeyModifiers::ALT);
+    Some(rest)
+}
+
 fn leaving(key: &KeyEvent) -> bool {
     if key.code == KeyCode::F(10) {
         return true;
@@ -891,5 +1071,79 @@ mod tests {
             right, wrong,
             "the two orders recorded the same thing, so this test proves nothing",
         );
+    }
+}
+
+#[cfg(test)]
+mod hangup {
+    use super::gone;
+
+    /// A pipe whose writer is still open has not hung up.
+    #[test]
+    fn a_live_descriptor_is_not_gone() {
+        let (reader, writer) = rustix::pipe::pipe().expect("a pipe");
+        assert!(
+            !gone(&reader),
+            "a pipe with its writer open read as hung up"
+        );
+        drop(writer);
+    }
+
+    /// ...and one whose writer has closed has.
+    ///
+    /// **The half that silently does nothing if `poll` is asked wrongly.** The
+    /// request flags are empty on purpose — `HUP` is reported whether or not
+    /// anything was asked for — and getting that wrong gives a guard that never
+    /// fires, which is exactly the state this shipped in.
+    #[test]
+    fn a_descriptor_whose_far_end_closed_is_gone() {
+        let (reader, writer) = rustix::pipe::pipe().expect("a pipe");
+        drop(writer);
+        assert!(gone(&reader), "a pipe with its writer closed read as live");
+    }
+}
+
+/// The two keystrokes a terminal cannot tell apart from one.
+///
+/// See [`escape_prefixed`]. Kept apart from [`tests`] because these need no
+/// world at all — the split is a fact about VT input, not about the tower.
+#[cfg(test)]
+mod escaping {
+    use super::escape_prefixed;
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    /// Escape and a letter in one read are two keystrokes, not one chord.
+    ///
+    /// The case that shipped broken: closing the spell editor and typing `quit`
+    /// inside a frame put `quit` in the buffer as a line of the spell, because
+    /// `\x1bq` reached crossterm in one syscall and came back `Alt+q`.
+    #[test]
+    fn an_escape_prefixed_letter_splits_back_into_two_keys() {
+        let alt_q = KeyEvent::new(KeyCode::Char('q'), KeyModifiers::ALT);
+        let rest = escape_prefixed(&alt_q).expect("alt+letter is an escape pair");
+        assert_eq!(rest.code, KeyCode::Char('q'));
+        assert!(
+            !rest.modifiers.contains(KeyModifiers::ALT),
+            "the replayed key kept the modifier and would split again"
+        );
+    }
+
+    /// ...and a chord the player really pressed is left alone.
+    ///
+    /// `Alt+Left` is word-left in a great many terminals and arrives CSI-encoded
+    /// rather than escape-prefixed. Turning it into Escape would drop a player
+    /// out of the editor for pressing it — which is the failure this whole
+    /// split exists to stop, arriving from the other side.
+    #[test]
+    fn a_real_alt_chord_is_not_an_escape_pair() {
+        for code in [KeyCode::Left, KeyCode::Home, KeyCode::Backspace] {
+            let chord = KeyEvent::new(code, KeyModifiers::ALT);
+            assert!(
+                escape_prefixed(&chord).is_none(),
+                "{code:?} with Alt was read as an escape pair"
+            );
+        }
+        let plain = KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE);
+        assert!(escape_prefixed(&plain).is_none(), "a bare letter split");
     }
 }

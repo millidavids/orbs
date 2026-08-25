@@ -211,19 +211,28 @@ fn scripting(world: &mut World) {
         .filter(|node| world.get::<tower::Fixture>(*node).is_some())
         .filter_map(|node| world.get::<tower::Name>(node).map(|name| name.0.clone()))
         .collect();
-    // The readings belong to a way, so they are listed where there are ways —
-    // they resolve everywhere (a solver's `if` names them at cast, when no maze
-    // is open), but naming them in the laboratory would be teaching a word the
-    // room can never answer.
-    let readings = tower::children_of(world, cwd)
-        .into_iter()
-        .any(|node| world.get::<tower::Reading>(node).is_some());
+    // The readings belong to a **set** — a way, a socket — so they are listed
+    // where that set is. They resolve everywhere (a solver's `if` names them at
+    // cast, when no maze and no ward is open), but naming them in the laboratory
+    // would be teaching a word the room can never answer.
+    //
+    // **This asked `Reading` and then printed the maze's list regardless.** The
+    // lens's sockets and sigils carry that marker, so the gate opened in the
+    // lens and the page taught `passage wall exit back spoil marks gleaning`
+    // while naming none of the six deltas that are the whole of what a lens
+    // spell may ask. See [`readings_at`](tower::readings_at).
+    let readings = tower::readings_at(world, cwd);
 
     say(world, SCRIPTING, "recall_scripting");
 
     section(world, "man_scripting_words");
+    // **`SpellWord::shape`, not a copy of it.** This was a byte-identical second
+    // table, and the extraction that took the first copy out of `orbs-shell`
+    // walked straight past it — so adding `part` meant editing both, and the
+    // next word added to the language would have updated one and left this page
+    // printing a stale shape. That is the exact failure the extraction was for.
     for word in crate::parser::SpellWord::ALL {
-        entry(world, word.canonical(), spell_word_shape(word));
+        entry(world, word.canonical(), word.shape());
     }
 
     section(world, "man_scripting_asking");
@@ -251,10 +260,8 @@ fn scripting(world: &mut World) {
     for place in places {
         entry(world, &place, "");
     }
-    if readings {
-        for word in tower::maze::readings() {
-            entry(world, word, "");
-        }
+    for word in readings {
+        entry(world, word, "");
     }
 }
 
@@ -270,18 +277,6 @@ const SHAPES: [&str; 5] = [
     "man_scripting_shape_than",
     "man_scripting_shape_join",
 ];
-
-/// What a control word takes after it, for the listing.
-const fn spell_word_shape(word: crate::parser::SpellWord) -> &'static str {
-    match word {
-        crate::parser::SpellWord::Repeat => "<count>",
-        crate::parser::SpellWord::Until | crate::parser::SpellWord::If => "<question>",
-        crate::parser::SpellWord::Wait => "<thing>",
-        crate::parser::SpellWord::Let => "<name> be <place>",
-        crate::parser::SpellWord::For => "each <set>",
-        crate::parser::SpellWord::Else | crate::parser::SpellWord::End => "",
-    }
-}
 
 /// One row under a section: a name, and what follows it.
 fn entry(world: &mut World, name: &str, shape: &str) {

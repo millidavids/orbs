@@ -72,6 +72,14 @@ pub const QUIET: u64 = 11;
 /// The game's own grid, so a capture is directly comparable with `ORBS_DUMP`.
 pub const GRID: (u16, u16) = (120, 45);
 
+/// How long a game this harness starts may live, whatever happens to the harness.
+///
+/// **Ten minutes, and nothing here should come near it.** The whole suite is
+/// under thirty seconds; this is the backstop for a run that was killed, not a
+/// budget for a slow scenario. A test that genuinely wants longer is one to start
+/// deliberately rather than one to leave sitting.
+pub const LIFETIME: std::time::Duration = std::time::Duration::from_secs(600);
+
 /// A running game.
 pub struct Game {
     session: String,
@@ -86,6 +94,12 @@ impl Drop for Game {
         // a failure to kill a session it may already have lost is not worth
         // replacing the original assertion message with.
         let _ = tmux(&["kill-session", "-t", &self.session]).status();
+        // **And the scratch directory, which nothing was removing.** One per
+        // game, ~100 per run: a suite that leaves its own litter behind put 600
+        // of them in `/tmp` before anybody noticed. Removed here rather than in
+        // the script so an ordinary run leaves nothing at all; `play.sh` sweeps
+        // what a killed run could not, exactly as it does for the server.
+        let _ = std::fs::remove_dir_all(&self.dir);
     }
 }
 
@@ -201,6 +215,20 @@ impl Game {
             format!("ORBS_SEED={seed}"),
             format!("ORBS_WIZARD={WIZARD}"),
             "ORBS_SAVE=off".to_owned(),
+            // **A harness-spawned game gets a lifetime; a player's never does.**
+            // The whole suite is under thirty seconds, so ten minutes is a
+            // backstop rather than a budget: nothing here should approach it, and
+            // a scenario that wants longer has to be run deliberately rather than
+            // left to sit.
+            //
+            // It closes the half `drive::watch_for_hangup` cannot. That handles a
+            // game whose terminal *died*; this handles one whose terminal is
+            // perfectly alive and whose harness is not — a detached tmux server
+            // is nobody's child, so `SIGKILL`ing `cargo test` leaves the sessions
+            // running normally, drawing at 30fps, until something kills the
+            // server. Measured at ~2.4% CPU each, which is survivable and still
+            // not something to leave lying about.
+            format!("ORBS_LIFETIME={}", LIFETIME.as_secs()),
         ] {
             args.push("-e".to_owned());
             args.push(pair);
@@ -353,6 +381,28 @@ impl Game {
         self
     }
 
+    /// Type text and **stop** — no Enter.
+    ///
+    /// For everything that answers to where the caret is rather than to a
+    /// finished line: the scribing guide, Tab completion, the prompt's ghost.
+    /// Pressing Enter would move the caret to the next line and answer a
+    /// different question.
+    ///
+    /// **`-l`, and it matters more here than anywhere.** Without the literal
+    /// flag tmux reads a word as a *key name* wherever one matches — `end`
+    /// becomes the End key, `up` an arrow — and the half-typed lines this exists
+    /// for are exactly the ones that end mid-word.
+    pub fn send_text(&self, text: &str) -> &Self {
+        if text.is_empty() {
+            return self;
+        }
+        let status = tmux(&["send-keys", "-t", &self.session, "-l", "--", text])
+            .status()
+            .expect("tmux should send text");
+        assert!(status.success(), "tmux refused the text {text:?}");
+        self
+    }
+
     /// Type a line and press Enter, with no wait for a prompt block.
     ///
     /// For the surfaces: the editor and the weave screen take whole lines too,
@@ -479,6 +529,28 @@ impl Game {
             !block.contains(&flatten(needle)),
             "{needle:?} is in the newest block, and should not be:\n{}",
             self.screen(),
+        );
+        self
+    }
+
+    /// Wait for text to leave the **whole screen**.
+    ///
+    /// [`Self::expect_absent`] scopes to the newest command block, which is the
+    /// right question for a transcript and the wrong one for a pane: the
+    /// scribing guide, the tower rail and the instrument panel are all drawn
+    /// outside every block, so asking that about one of them passes without
+    /// looking at it. Both of this feature's first negative scenarios did.
+    ///
+    /// This waits, unlike `expect_absent`, and honestly: closing a pane **is**
+    /// an event — a redraw — so there is something to pace against, and the
+    /// alternative is a race against the frame that has not landed yet.
+    ///
+    /// Named for the screen rather than shortened to `expect_gone`, which is
+    /// already taken and means *the game has exited*.
+    pub fn expect_off_screen(&self, needle: &str) -> &Self {
+        self.until(
+            |screen| !flatten(screen).contains(&flatten(needle)),
+            &format!("waiting for {needle:?} to leave the screen"),
         );
         self
     }
@@ -710,4 +782,134 @@ fn parse_tick(screen: &str) -> Option<u64> {
         .next()?
         .parse()
         .ok()
+}
+
+/// A game whose terminal is destroyed exits instead of spinning.
+///
+/// **The scenario that took the machine down.** 573 orphaned `orbs-tui`
+/// processes once reached a load average of 581 on a 32-core box with swap
+/// exhausted — leaked by harness runs that were `SIGKILL`ed, so neither
+/// `Game::drop` nor `play.sh`'s trap could tear the tmux sessions down. Each
+/// orphan then span at ~11% CPU for ever, because a dead pty makes
+/// `crossterm::event::read` loop inside itself rather than return.
+///
+/// Nothing a parent writes can run after it is killed, so the fix is in the game
+/// — `drive::watch_for_hangup` — and this is what holds it.
+///
+/// # It watches one pid, and the first version did not
+///
+/// Counting `orbs-tui` processes globally passes alone and **fails in the
+/// suite**, because a hundred other scenarios are running games at the same time
+/// and the count never reaches zero. tmux is asked for this session's own pane
+/// pid instead, which is the only number that answers the question being asked.
+#[test]
+#[ignore = "plays a real game through tmux; run with scripts/play.sh"]
+fn a_game_whose_terminal_dies_does_not_outlive_it() {
+    if !available() {
+        return;
+    }
+    let socket = format!("hangup-{}", std::process::id());
+    let Some(pid) = probe(&socket) else {
+        panic!("the probe game never started, so this proves nothing");
+    };
+
+    let _ = Command::new("tmux")
+        .args(["-L", &socket, "kill-server"])
+        .status();
+
+    // Generous against `HANGUP_CHECK`'s half second: what is under test is
+    // *does it ever exit*, and a loaded machine must not make that a flake.
+    for _ in 0..40 {
+        if !running(pid) {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(250));
+    }
+    let _ = Command::new("kill").args(["-9", &pid.to_string()]).status();
+    panic!("a game outlived its terminal — it is spinning on a dead pty");
+}
+
+/// ...and one whose harness died while its terminal lived exits too, eventually.
+///
+/// The other half, and the one `watch_for_hangup` cannot see: a detached tmux
+/// server is nobody's child, so a `SIGKILL`ed harness leaves its games running
+/// **normally** against a live pty. [`LIFETIME`] is what ends those.
+///
+/// Ten minutes is far too long to sit in a test, so what is checked here is that
+/// the cap is *wired* — a one-second lifetime really does stop a game — rather
+/// than the shipped number itself, which is asserted directly.
+#[test]
+#[ignore = "plays a real game through tmux; run with scripts/play.sh"]
+fn a_game_stops_itself_when_its_lifetime_runs_out() {
+    if !available() {
+        return;
+    }
+    assert_eq!(
+        LIFETIME.as_secs(),
+        600,
+        "the shipped cap moved; a scenario should never approach it",
+    );
+
+    // **Five, not one.** The probe needs two seconds to come up and be asked its
+    // pid, and a one-second lifetime means the game is already gone by then —
+    // the first version of this test failed on exactly that, reporting a game
+    // that never started when what had happened was a game that had finished.
+    let socket = format!("lifetime-{}", std::process::id());
+    let Some(pid) = probe_with(&socket, &["ORBS_LIFETIME=5"]) else {
+        panic!("the probe game never started, so this proves nothing");
+    };
+
+    for _ in 0..40 {
+        if !running(pid) {
+            let _ = Command::new("tmux")
+                .args(["-L", &socket, "kill-server"])
+                .status();
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(250));
+    }
+    let _ = Command::new("kill").args(["-9", &pid.to_string()]).status();
+    let _ = Command::new("tmux")
+        .args(["-L", &socket, "kill-server"])
+        .status();
+    panic!("a game with a one-second lifetime was still running ten seconds on");
+}
+
+/// Start a game on a server of its own and return the pid tmux gave it.
+fn probe(socket: &str) -> Option<u32> {
+    probe_with(socket, &[])
+}
+
+/// The same, with extra environment for the game.
+fn probe_with(socket: &str, env: &[&str]) -> Option<u32> {
+    let _ = Command::new("tmux")
+        .args(["-L", socket, "kill-server"])
+        .status();
+    let mut start = Command::new("tmux");
+    start
+        .args(["-L", socket, "-f", "/dev/null", "new-session", "-d", "-s"])
+        .arg("probe")
+        .args(["-x", "120", "-y", "45"]);
+    for pair in env {
+        start.arg("-e").arg(pair);
+    }
+    // **`ORBS_SAVE=off` here as everywhere**: a probe must not read or write a
+    // tower another scenario is using.
+    start
+        .arg("-e")
+        .arg("ORBS_SAVE=off")
+        .arg(format!("ORBS_BOOT=0 {}", env!("CARGO_BIN_EXE_orbs-tui")));
+    start.status().ok()?;
+    std::thread::sleep(std::time::Duration::from_secs(2));
+
+    let out = Command::new("tmux")
+        .args(["-L", socket, "list-panes", "-F", "#{pane_pid}"])
+        .output()
+        .ok()?;
+    String::from_utf8_lossy(&out.stdout).trim().parse().ok()
+}
+
+/// Whether that pid is still alive.
+fn running(pid: u32) -> bool {
+    std::path::Path::new(&format!("/proc/{pid}")).exists()
 }

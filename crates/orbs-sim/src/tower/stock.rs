@@ -63,9 +63,9 @@ impl Stock {
 /// The thing called `named` directly inside `place`, if it is there.
 #[must_use]
 pub fn find(world: &World, place: Entity, named: &str) -> Option<Entity> {
-    super::children_of(world, place)
-        .into_iter()
-        .find(|node| world.get::<Name>(*node).is_some_and(|name| name.0 == named))
+    super::reach::look(world)
+        .scope(super::reach::Scope::In(place))
+        .find(named)
 }
 
 /// What `place` holds: each name once, with how many units of it are there.

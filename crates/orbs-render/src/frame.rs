@@ -14,7 +14,7 @@ use crate::cell::Cell;
 use crate::geometry::{GridSize, Pos, Rect};
 use crate::linear::Speech;
 use crate::paint::Painter;
-use crate::style::Wash;
+use crate::style::{Lexeme, Wash};
 
 /// One screen's worth of cells, plus its linearisation.
 ///
@@ -29,6 +29,14 @@ pub struct Frame {
     magnified: Option<Rect>,
     /// Regions drawn in a material's colour family. See [`Frame::tint_at`].
     tints: Vec<(Rect, Wash)>,
+    /// Runs of spell text, by part of speech. See [`Frame::lit`].
+    ///
+    /// Separate from [`tints`](Self::tints) rather than folded into it, and
+    /// that is the decision: `Tint` means **materials**, and the laboratory
+    /// draws an instrument panel two columns from the editor. A verb sharing a
+    /// colour name with a potion in the bar beside it would be one vocabulary
+    /// meaning two things on one screen.
+    syntax: Vec<(Rect, Lexeme)>,
 }
 
 impl Frame {
@@ -56,6 +64,7 @@ impl Frame {
         // Cleared, not reallocated — the panel writes the same handful of
         // regions every frame and this keeps the allocation across all of them.
         self.tints.clear();
+        self.syntax.clear();
     }
 
     /// The frame's dimensions.
@@ -194,6 +203,56 @@ impl Frame {
     #[must_use]
     pub fn tints(&self) -> &[(Rect, Wash)] {
         &self.tints
+    }
+
+    /// Draw a run of spell text in its part of speech's colour.
+    ///
+    /// # A side-table, for [`Wash`]'s reason
+    ///
+    /// `Cell` is pinned at eight bytes and `Style` has no spare one, so a fifth
+    /// field cost +28 KiB and ~1.2 µs a frame on every screen — measured, and
+    /// what `a_cell_stays_eight_bytes` rejected. A syntax run is a *region* in
+    /// exactly the way an instrument's bar is, so it is affordable here and
+    /// would not be per cell: a handful of entries on the one frame that has an
+    /// editor open, and none at all on every other screen.
+    ///
+    /// **Weight still carries the reading on its own.** The hue is a second,
+    /// finer cut — `ORBS_DUMP` has no colour, and §14 has to hold on a greyscale
+    /// tube — so [`Lexeme::weight`] is applied to the `Style` as the run is
+    /// painted and this is what a frontend adds on top of it.
+    ///
+    /// An empty rectangle is ignored rather than stored, as [`Self::set_tint`]
+    /// does:
+    /// the editor clips runs to a scrolled window and would otherwise leave
+    /// zero-area entries for [`lit_at`](Self::lit_at) to walk.
+    pub fn lit(&mut self, area: Rect, kind: Lexeme) {
+        let area = area.intersection(self.area());
+        // `None` is *"nothing to say about this"*, which is what an unlisted
+        // region already means — storing it would be a frontend asking twice.
+        if !area.is_empty() && kind != Lexeme::None {
+            self.syntax.push((area, kind));
+        }
+    }
+
+    /// What part of speech is drawn at `at`, if any.
+    ///
+    /// **Later regions win**, exactly as [`tint_at`](Self::tint_at) resolves, so
+    /// a caller may paint over an earlier run without finding and removing it.
+    #[must_use]
+    pub fn lit_at(&self, at: Pos) -> Option<Lexeme> {
+        self.syntax
+            .iter()
+            .rev()
+            .find(|(area, _)| area.contains(at))
+            .map(|(_, kind)| *kind)
+    }
+
+    /// Every lit region, for a frontend that would rather walk them than probe
+    /// per cell — and for the dump, which is the only instrument that can show
+    /// this at all.
+    #[must_use]
+    pub fn syntax(&self) -> &[(Rect, Lexeme)] {
+        &self.syntax
     }
 
     /// The linear stream for this frame.

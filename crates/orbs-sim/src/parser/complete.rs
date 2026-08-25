@@ -1,10 +1,13 @@
-//! What the player might be about to type.
+//! What the player might be about to type — **the prompt's view of it**.
 //!
-//! Lives here rather than in a frontend because it needs the vocabulary
-//! ([`SYNONYMS`](super::SYNONYMS)) and the live [`Scene`], both of which are the
-//! parser's — and because rule 2 says both frontends must be able to offer the
-//! same thing. It is also the only part of the prompt's editing behaviour that
-//! can be tested without a window.
+//! The answer itself is [`expect`](super::expect)'s, which three surfaces share.
+//! What is left here is the shape the prompt's Tab *listing* wants — strings
+//! rather than kinds — and §6's numbered answer.
+//!
+//! Lives here rather than in a frontend because it needs the vocabulary and the
+//! live [`Scene`], both of which are the parser's — and because rule 2 says both
+//! frontends must be able to offer the same thing. It is also the only part of
+//! the prompt's editing behaviour that can be tested without a window.
 //!
 //! # The shape is `rustyline`'s, for its reasons
 //!
@@ -20,8 +23,8 @@
 //! registered by full path and shown by leaf. It is not: the leaf is what the
 //! list shows *and* what goes into the line, because §6's matcher accepts it and
 //! the echo shows it back. Two fields that every construction site sets equal are
-//! two fields that can drift — `common()` read one and the Tab listing the other
-//! — so there is one until something genuinely needs two.
+//! two fields that can drift — the shared prefix read one and the Tab listing the
+//! other — so there is one until something genuinely needs two.
 //!
 //! # What it does not do
 //!
@@ -34,11 +37,7 @@
 
 use core::ops::Range;
 
-use orbs_render::char_index;
-
 use super::scene::Scene;
-use super::verb::{NounKind, Verb};
-use super::vocabulary::SYNONYMS;
 
 /// One thing the player might have meant: what a list shows and what a Tab
 /// inserts, which are the same string.
@@ -59,32 +58,14 @@ impl Completion {
     pub const fn is_empty(&self) -> bool {
         self.candidates.is_empty()
     }
-
-    /// The text every candidate agrees on, past what is already typed.
-    ///
-    /// GNU readline's `compute_lcd_of_matches`: with several matches, Tab
-    /// advances to the longest common prefix and lists only when that adds
-    /// nothing. Extending as far as everyone agrees is free progress.
-    #[must_use]
-    pub fn common(&self) -> String {
-        let mut candidates = self.candidates.iter();
-        let Some(first) = candidates.next() else {
-            return String::new();
-        };
-        let mut shared: Vec<char> = first.chars().collect();
-        for other in candidates {
-            let keep = shared
-                .iter()
-                .zip(other.chars())
-                .take_while(|(a, b)| **a == *b)
-                .count();
-            shared.truncate(keep);
-        }
-        shared.into_iter().collect()
-    }
 }
 
 /// What could finish the word ending at `caret`.
+///
+/// The prompt's view of [`expect`](super::expect): the same answer with the
+/// kinds dropped, because a Tab listing shows strings. `spell` is false — the
+/// prompt cannot run `repeat` or `end`, and offering them would teach a word
+/// that is refused the moment it is used.
 ///
 /// `prompt_open` turns completion off entirely: while §6's numbered prompt is
 /// waiting, the orb wants a **digit**, and offering verbs there — or ghosting one
@@ -92,154 +73,23 @@ impl Completion {
 /// resolution rate.
 #[must_use]
 pub fn complete(line: &str, caret: usize, scene: &Scene, prompt_open: bool) -> Completion {
-    if prompt_open {
-        return Completion::default();
-    }
-
-    let upto = char_index(line, caret);
-    let word = word_start(line, upto);
-    let partial = &line[word..upto];
-    let replaces = word..upto;
-
-    // The first phrase is a verb; anything later fills a slot of the verb that
-    // phrase named.
-    let leading = line[..word].trim();
-    let candidates = if leading.is_empty() {
-        verbs(partial, scene)
-    } else {
-        match verb_of(leading, scene) {
-            Some((verb, filled)) => nouns(verb, filled, partial, scene),
-            None => Vec::new(),
-        }
-    };
-
+    let found = super::expect::expect(
+        line,
+        caret,
+        &super::expect::Situation {
+            scene,
+            spell: false,
+            prompt_open,
+            // The prompt has no lines above it and cannot run a block anyway,
+            // nor a `for each`.
+            open: &[],
+            sets: &[],
+        },
+    );
     Completion {
-        replaces,
-        candidates,
+        candidates: found.texts(),
+        replaces: found.replaces,
     }
-}
-
-/// Every phrase that could be the verb being typed.
-///
-/// Canonical names *and* synonyms, **including the multi-word ones**: §6's whole
-/// claim is that all three registers reach the same command, and a `words.len()
-/// == 1` filter here made `go to`, `look for`, `get rid of`, `what's here`,
-/// `how do i` and `take it back` invisible to Tab — seven entries of the plain
-/// register, silently second class in the one surface that advertises them.
-fn verbs(partial: &str, scene: &Scene) -> Vec<Suggestion> {
-    let mut out: Vec<Suggestion> = SYNONYMS
-        .iter()
-        // Tab must not offer a word the parser would refuse. A per-instrument
-        // verb out of its domain is exactly that — see `Scene::offers` — and
-        // offering it would walk the player into the dead end §15 weighs above
-        // the raw resolution rate.
-        .filter(|entry| scene.offers(entry.verb))
-        .map(|entry| entry.words.join(" "))
-        .filter(|phrase| phrase.starts_with(partial))
-        .collect();
-    out.sort();
-    out.dedup();
-    out
-}
-
-/// The verb a line has already named, and how many argument slots follow it.
-///
-/// Matched through [`match_phrase`](super::resolve::match_phrase) — the same
-/// function `resolve` ranks with — rather than through
-/// [`resolve`](super::resolve) itself: a bare `wield ` has no argument yet, so a
-/// full resolution comes back `Incomplete` and yields no intent, which is
-/// precisely the moment completion is most wanted.
-///
-/// Going through the real matcher is what keeps Tab and Enter agreeing. A
-/// private single-word scan here disagreed twice over: multi-word phrases were
-/// invisible, so `look for ` offered places for `Survey` while the line resolves
-/// to `sift`, whose slot is free text and must offer **nothing**; and its
-/// `max_by_key` tie-break took the *last* maximum where `resolve` applies
-/// `named_exactly` → score → `verb_order`, so a tie would offer one verb's
-/// arguments and run another's.
-fn verb_of(leading: &str, scene: &Scene) -> Option<(Verb, usize)> {
-    let split = super::normalise::Tokens::split(leading);
-    let all = split.words();
-    let words = &all[super::normalise::skip_leading_filler(&all)..];
-
-    let (verb, consumed) = SYNONYMS
-        .iter()
-        .filter(|entry| scene.offers(entry.verb))
-        .filter_map(|entry| {
-            super::resolve::match_phrase(entry, words)
-                .map(|(score, span)| (score, entry.verb, span))
-        })
-        .max_by(|a, b| {
-            // Score, then **the longer phrase**, then table order. The span
-            // tie-break is not decoration: `match_phrase` clamps its
-            // `PHRASE_BONUS` at `fuzzy::EXACT`, so a typed-perfectly `look for`
-            // scores exactly what a typed-perfectly `look` does, and without
-            // this the two-word reading loses to whichever came first.
-            a.0.cmp(&b.0)
-                .then_with(|| a.2.cmp(&b.2))
-                .then_with(|| verb_order(b.1).cmp(&verb_order(a.1)))
-        })
-        .map(|(_, verb, span)| (verb, span))?;
-
-    // Filler between the verb and the caret is not a slot: `move sage to ` has
-    // filled one, not two, and counting `to` would offer the third slot's nouns
-    // for the second.
-    let filled = super::normalise::strip_filler(&words[consumed..]).len();
-    Some((verb, filled))
-}
-
-/// A verb's position in [`Verb::ALL`], mirroring `resolve`'s stable tie-break.
-fn verb_order(verb: Verb) -> usize {
-    Verb::ALL
-        .iter()
-        .position(|&other| other == verb)
-        .unwrap_or(usize::MAX)
-}
-
-/// Every noun that fits the slot the caret is in.
-fn nouns(verb: Verb, filled: usize, partial: &str, scene: &Scene) -> Vec<Suggestion> {
-    let signature = verb.signature();
-    let Some(slot) = signature.get(filled).or_else(|| signature.last()) else {
-        return Vec::new();
-    };
-
-    // Free text completes nothing. A pattern is whatever the player is searching
-    // for and a count is a number; offering the scene's nouns for either would
-    // be a lie about what the slot accepts.
-    if matches!(slot.kind, NounKind::Pattern | NounKind::Count) {
-        return Vec::new();
-    }
-
-    // **`Name` is the exception among the free-text kinds.** It cannot *resolve*
-    // against the scene — a spell being coined does not exist — but the commonest
-    // `scribe` is reopening one that does, and a verb whose argument is usually a
-    // file you already have should complete it. So completion offers the spells
-    // that exist while resolution still accepts anything typed.
-    let offered = if slot.kind == NounKind::Name {
-        NounKind::Script
-    } else {
-        slot.kind
-    };
-
-    scene
-        .nouns()
-        .iter()
-        .filter(|noun| offered.accepts(noun.kind))
-        .filter_map(|noun| {
-            // A place is shown and typed as its leaf (§7: players say the place,
-            // not the path) — through the same helper the echo uses, so Tab
-            // inserts exactly the form the echo will show back.
-            let leaf = super::intent::leaf(&noun.name);
-            leaf.starts_with(partial).then(|| leaf.to_owned())
-        })
-        .collect()
-}
-
-/// The byte index where the word ending at `upto` begins.
-fn word_start(line: &str, upto: usize) -> usize {
-    line[..upto].rfind(char::is_whitespace).map_or(0, |at| {
-        at + line[at..].chars().next().map_or(1, char::len_utf8)
-    })
 }
 
 /// Whether a line is only a number — an answer to §6's numbered prompt.
@@ -251,6 +101,7 @@ pub fn is_answer(line: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::parser::NounKind;
 
     fn tower() -> Scene {
         Scene::new()
@@ -317,19 +168,6 @@ mod tests {
     }
 
     #[test]
-    fn the_common_prefix_is_as_far_as_everyone_agrees() {
-        // readline's `compute_lcd_of_matches`. Two places share `m`... but only
-        // one starts with `mo`, so the whole name is common.
-        let completion = complete("wield m", 7, &tower(), false);
-        assert_eq!(completion.common(), "mortar_and_pestle");
-
-        // With nothing typed, the two laboratory instruments share nothing.
-        let both = complete("wield ", 6, &tower(), false);
-        assert!(both.candidates.len() > 1);
-        assert_eq!(both.common(), "");
-    }
-
-    #[test]
     fn nothing_is_offered_while_a_numbered_prompt_is_open() {
         // The orb wants a digit. Offering verbs — or ghosting one — walks the
         // player into a dead end, which §15 weighs above the resolution rate.
@@ -364,6 +202,43 @@ mod tests {
     #[test]
     fn an_unknown_verb_offers_nothing_for_its_arguments() {
         assert!(inserts("xyzzy pl").is_empty());
+    }
+
+    /// Verbs come back sorted and nouns come back in scene order.
+    ///
+    /// **Nine tests and only two of them asserted an order**, both by comparing
+    /// a one-element list — which pins nothing. `common()` reads the whole list
+    /// and Tab's listing shows it in the order it arrives, so the order is
+    /// player-visible behaviour with no gate on it.
+    ///
+    /// This is written *before* [`expect`](super::expect) grows ranking, so that
+    /// the day ranking lands the change is a failing assertion here rather than
+    /// a listing that quietly reshuffled.
+    #[test]
+    fn the_order_a_completion_arrives_in_is_part_of_the_answer() {
+        // Verbs: alphabetical, from `verbs`'s `sort`. Not table order, not
+        // score order — a listing a player scans wants one they can predict.
+        let mut sorted = inserts("s");
+        assert!(sorted.len() > 2, "too few to prove an order: {sorted:?}");
+        let unsorted = sorted.clone();
+        sorted.sort();
+        assert_eq!(unsorted, sorted, "verbs stopped arriving alphabetically");
+
+        // Nouns: **scene order**, which is the tower's own raise order and is
+        // emphatically not alphabetical — `balneum_mariae` is registered after
+        // `mortar_and_pestle` and comes back after it. Pinned whole rather than
+        // by a pair of indices, because the thing that would rot is the
+        // sequence.
+        assert_eq!(
+            inserts("wield "),
+            [
+                "laboratory",
+                "mortar_and_pestle",
+                "balneum_mariae",
+                "archive"
+            ],
+            "nouns stopped arriving in scene order",
+        );
     }
 
     #[test]

@@ -16,13 +16,15 @@
 ///
 /// Embedded newlines are **not** handled here — the caller splits on them first,
 /// which is what lets an empty line consume a row instead of vanishing.
-pub(crate) struct Wrap<'a> {
+pub struct Wrap<'a> {
     rest: &'a str,
     width: u16,
 }
 
 impl<'a> Wrap<'a> {
-    pub(crate) fn new(text: &'a str, width: u16) -> Self {
+    /// Fit `text` to `width` cells, greedily.
+    #[must_use]
+    pub fn new(text: &'a str, width: u16) -> Self {
         Self {
             rest: text.trim_start_matches(' '),
             width,

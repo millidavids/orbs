@@ -51,7 +51,10 @@ pub use debug::{
 pub use debug_spell::{
     Order as SpellOrder, SPELL, order as spell_order, run as run_spell_order, spells as dev_spells,
 };
-pub use dispatch::{LOG, MAX_MEDITATE, execute_one, is_gated, is_live, offered, run_pending};
+pub use dispatch::{
+    LOG, MAX_MEDITATE, execute_one, is_gated, is_live, offered, run_pending, spell_expect,
+    spell_vocabulary,
+};
 // Crate-internal: `Sim::stacks` needs it and `divine` is a private module, so
 // the re-export is what makes it nameable rather than what makes it public.
 pub use navigate::find_domain;

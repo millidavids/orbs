@@ -48,35 +48,7 @@ pub struct Line {
     /// What was being typed before a recall started, restored by walking back.
     draft: String,
     /// A Tab cycle in progress, if the last thing pressed was Tab.
-    cycle: Option<Cycle>,
-}
-
-/// Where a run of Tab presses has got to.
-///
-/// Repeated Tab **cycles** through the candidates rather than re-listing them —
-/// readline's `menu-complete`, and what a player expects after the first press
-/// says there is more than one answer. Holding the candidate list here rather
-/// than recomputing it each press is what makes the cycle stable: the scene can
-/// change under a player who is mid-cycle (a tick lands, an instrument finishes)
-/// and the list they are walking must not reorder beneath them.
-#[derive(Debug)]
-struct Cycle {
-    /// Byte offset where the completable word begins.
-    start: usize,
-    /// What currently sits there: the word the player typed until the first
-    /// advance, then whichever candidate replaced it.
-    ///
-    /// Kept so [`Line::advance_cycle`] can check the line still says what the
-    /// cycle last wrote before overwriting it.
-    filled: String,
-    /// The candidates, in the order the completer offered them.
-    candidates: Vec<String>,
-    /// Which one is in the line, or `None` before the first advance.
-    ///
-    /// The first Tab **lists without changing the line** — bash's default, and
-    /// the least surprising thing to do to someone who pressed Tab to ask a
-    /// question rather than to make a choice. Choosing starts on the second.
-    index: Option<usize>,
+    cycle: Option<crate::tabbing::Cycle>,
 }
 
 impl Line {
@@ -101,6 +73,35 @@ impl Line {
     #[must_use]
     pub fn text(&self) -> &str {
         &self.text
+    }
+
+    /// Where the visible window starts, as a **byte** offset into the line.
+    ///
+    /// The companion to [`viewport`](Self::viewport), and it exists for exactly
+    /// one caller: highlighting. `parser::lex` classifies partly by *position* —
+    /// the first word of a line is the verb — so lexing the visible slice of a
+    /// scrolled line would read a mid-line fragment as a line start, and mis-hue
+    /// precisely the long lines that scrolled far enough to need the help.
+    ///
+    /// So the prompt lexes the whole line and maps the runs through this.
+    #[must_use]
+    pub fn window_starts(&self, width: u16) -> usize {
+        // **`viewport(0)` is the one answer that is not a subslice.** It returns
+        // the literal `""`, which lives in rodata with no relation to this
+        // line's buffer, so the pointer arithmetic below would give 0 or a large
+        // arbitrary number depending on where the allocator put things. The
+        // 80×22 floor and `paint_too_small` keep the prompt from ever asking,
+        // but this is `pub` and its doc promises an offset into the line.
+        if width == 0 {
+            return 0;
+        }
+        let (visible, _) = self.viewport(width);
+        // A subslice of `self.text`, so its offset is the difference of the two
+        // pointers — the same arithmetic `parser::lexeme` uses to keep two
+        // identical words apart, and the only way to get it back out of a `&str`
+        // without threading it through the return type of a function five tests
+        // assert the shape of.
+        (visible.as_ptr() as usize).saturating_sub(self.text.as_ptr() as usize)
     }
 
     /// The window of the line that fits `width` cells, and the caret's column
@@ -323,9 +324,24 @@ impl Line {
         {
             return earlier[self.text.len()..].to_owned();
         }
-        let completion = orbs_sim::parser::complete(&self.text, self.caret, scene, prompt_open);
-        let common = completion.common();
-        let typed = &self.text[completion.replaces];
+        // **The same `expect` Tab reads, and the same `common`.** The ghost is a
+        // promise about what Tab will do, so a second opinion about either would
+        // have it drawing text the key then does not take.
+        let found = orbs_sim::parser::expect(
+            &self.text,
+            self.caret,
+            &orbs_sim::parser::Situation {
+                scene,
+                spell: false,
+                prompt_open,
+                // The prompt has no lines above it, cannot run a block, and
+                // cannot run a `for each`.
+                open: &[],
+                sets: &[],
+            },
+        );
+        let common = found.common();
+        let typed = &self.text[found.replaces];
         common.strip_prefix(typed).unwrap_or_default().to_owned()
     }
 
@@ -339,96 +355,39 @@ impl Line {
 
     /// Tab: extend as far as every candidate agrees, then cycle.
     ///
-    /// - **First press** extends to the longest common prefix, which is free
-    ///   progress (GNU readline's `compute_lcd_of_matches`). A lone candidate
-    ///   finishes with a trailing space and there is nothing left to choose.
-    /// - **When extending adds nothing** — the candidates share no more than what
-    ///   is already typed — it lists them and leaves the line alone. That is
-    ///   bash's default, and the least surprising answer to someone who pressed
-    ///   Tab to ask a question rather than to make a choice.
-    /// - **Every press after that** puts the next candidate in the line,
-    ///   wrapping. This is readline's `menu-complete`, and it is what makes the
-    ///   list an answer rather than a dead end the player types their way out of.
+    /// The rules are [`tabbing::tab`](crate::tabbing::tab)'s, shared with the
+    /// spell editor. What stays here is applying the decision, because a caret
+    /// is counted in characters at the prompt and in a row and a column in the
+    /// editor, and a shared function that moved both would need to know both.
     ///
     /// Returns the candidate list while a cycle is running, so the caller can
     /// show it with [`cycling`](Self::cycling) marking where the player is.
     pub fn tab(&mut self, scene: &orbs_sim::parser::Scene, prompt_open: bool) -> Vec<String> {
-        if let Some(candidates) = self.advance_cycle() {
-            return candidates;
-        }
-
-        let completion = orbs_sim::parser::complete(&self.text, self.caret, scene, prompt_open);
-        if completion.is_empty() {
-            // §6 forbids a bare error, and this is not even a failed command.
-            self.cycle = None;
-            return Vec::new();
-        }
-        let common = completion.common();
-        let typed = self.text[completion.replaces.clone()].to_owned();
-
-        if common.len() > typed.len() {
-            // There is agreement left to spend. Take it and stop — a second Tab
-            // re-enters here, finds nothing further shared, and starts cycling.
-            let lone = completion.candidates.len() == 1;
-            let mut insert = common;
-            if lone {
-                insert.push(' ');
+        let found = orbs_sim::parser::expect(
+            &self.text,
+            self.caret,
+            &orbs_sim::parser::Situation {
+                scene,
+                spell: false,
+                prompt_open,
+                // The prompt has no lines above it, cannot run a block, and
+                // cannot run a `for each`.
+                open: &[],
+                sets: &[],
+            },
+        );
+        match crate::tabbing::tab(&self.text, &found, &mut self.cycle) {
+            crate::tabbing::Tabbed::Nothing => Vec::new(),
+            crate::tabbing::Tabbed::Listed(candidates) => candidates,
+            crate::tabbing::Tabbed::Wrote {
+                replaces,
+                text,
+                candidates,
+            } => {
+                self.apply(replaces, &text);
+                candidates
             }
-            self.cycle = None;
-            self.apply(completion.replaces, &insert);
-            return Vec::new();
         }
-
-        // Nothing left to extend. One candidate means the word is already whole,
-        // so finish it; more than one starts the cycle on the first of them.
-        if completion.candidates.len() == 1 {
-            self.cycle = None;
-            let mut insert = completion.candidates[0].clone();
-            insert.push(' ');
-            self.apply(completion.replaces, &insert);
-            return Vec::new();
-        }
-
-        // Arm the cycle over what is already typed, and list. The line is not
-        // touched until the next press.
-        let candidates = completion.candidates;
-        self.cycle = Some(Cycle {
-            start: completion.replaces.start,
-            filled: typed,
-            candidates: candidates.clone(),
-            index: None,
-        });
-        candidates
-    }
-
-    /// Step a running cycle on, if there is one and the line still matches it.
-    ///
-    /// The guard is not paranoia. `Line` is edited from several places, and a
-    /// stale `start` would splice a candidate into the middle of a word. Checking
-    /// that what sits at the recorded span **is** the candidate that was put
-    /// there makes a forgotten cancellation harmless — the cycle simply restarts
-    /// rather than corrupting the line.
-    fn advance_cycle(&mut self) -> Option<Vec<String>> {
-        let cycle = self.cycle.as_mut()?;
-        let span = cycle.start..cycle.start.checked_add(cycle.filled.len())?;
-        if self.text.get(span.clone()) != Some(cycle.filled.as_str()) {
-            self.cycle = None;
-            return None;
-        }
-
-        let next = match cycle.index {
-            None => 0,
-            Some(index) => (index + 1) % cycle.candidates.len(),
-        };
-        let text = cycle.candidates.get(next)?.clone();
-        cycle.index = Some(next);
-        cycle.filled = text.clone();
-        let candidates = cycle.candidates.clone();
-
-        self.text.replace_range(span.clone(), &text);
-        let upto = span.start + text.len();
-        self.caret = self.text[..upto].chars().count();
-        Some(candidates)
     }
 
     /// Which candidate the cycle has put in the line, for the list to mark.
@@ -436,7 +395,7 @@ impl Line {
     /// `None` while the list is merely being shown, which is the first press.
     #[must_use]
     pub fn cycling(&self) -> Option<usize> {
-        self.cycle.as_ref().and_then(|cycle| cycle.index)
+        self.cycle.as_ref().and_then(crate::tabbing::Cycle::at)
     }
 
     /// Abandon any Tab cycle. Anything that is not another Tab ends it.

@@ -10,7 +10,7 @@ members = ["crates/*"]
 #
 # It becomes ordinary semver at 1.0, and the switch is one-way: DESIGN.md §19
 # records it so the jump from `0.<phase>` to `1.<minor>` is not read as a phase.
-version = "0.3.22"
+version = "0.3.35"
 edition = "2024"
 # bevy_ecs 0.19 requires 1.95. Declaring it makes the resolver MSRV-aware and
 # turns "too old toolchain" into a clear error instead of a cryptic type failure.
@@ -131,9 +131,31 @@ toml = "0.9"
 # player does.
 clap = { version = "4.5", features = ["derive"] }
 
+# **Our code unoptimised, our dependencies optimised.** It was `opt-level = 1`
+# for everything, which is the worst of both: Bevy's ~126 crates were built at a
+# level that does not make them fast, and *our* code — the only code that
+# changes — paid optimisation on every edit.
+#
+# This is Bevy's own recommendation, and it fits a text game especially well:
+# nothing here is a hot loop that needs our own code optimised to be playable at
+# 1 Hz.
+#
+# **The one thing that could have suffered got faster.** `orbs-balance` drives
+# hundreds of thousands of sim ticks and is the standing instrument CLAUDE.md
+# says to run after anything touching the world, so dropping `orbs-sim` to 0 was
+# the real risk here. Measured, `sweep --ticks 7200` went **22.24s → 17.74s** of
+# user CPU: the sim's hot path is `bevy_ecs` archetype iteration, and that crate
+# gaining two optimisation levels outweighs our own code losing one. Every rate
+# in the table was unchanged to four decimal places.
 [profile.dev]
-opt-level = 1
+opt-level = 0
 debug = "line-tables-only"
+
+# Every dependency, including all of Bevy. Built once and then cached, so the
+# level costs nothing on an ordinary rebuild and buys a game that runs properly
+# while being developed.
+[profile.dev.package."*"]
+opt-level = 3
 
 [profile.release]
 opt-level = 3

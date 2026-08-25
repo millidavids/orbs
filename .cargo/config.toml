@@ -1,0 +1,19 @@
+# Link with mold.
+#
+# **The gate links the Bevy binary at least twice** — `cargo test --workspace`
+# and `cargo build -p orbs` — and CLAUDE.md makes the second non-optional at
+# every step. Linking is most of what a warm rebuild costs: with a warm cache
+# `cargo fmt --check` is 8s and `cargo clippy` is 5s, while `cargo test
+# --workspace` is 267s, of which only ~35s is tests actually running.
+#
+# **No clang.** Bevy's docs give this as `-Clinker=clang -Clink-arg=-fuse-ld=mold`
+# because most distributions ship a gcc too old to drive mold. This one does not:
+# gcc 16.1.1 takes `-fuse-ld=mold` directly, so the second toolchain is not
+# needed and is not installed.
+#
+# `mold` itself is not vendored — it is a system package (`pacman -S mold` on
+# Arch). A machine without it fails at the link step with a clear message rather
+# than silently falling back, which is the right way round: a build that quietly
+# took the slow path is a measurement nobody can trust.
+[target.x86_64-unknown-linux-gnu]
+rustflags = ["-Clink-arg=-fuse-ld=mold"]

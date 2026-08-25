@@ -20,7 +20,7 @@
 //! would be exactly that.
 
 use bevy::prelude::*;
-use orbs_render::{Depiction, Intensity, Role, Style, Wash};
+use orbs_render::{Depiction, Intensity, Lexeme, Role, Style, Wash};
 
 use super::ember;
 
@@ -43,10 +43,71 @@ pub(crate) struct Phosphor {
     cost: Srgba,
     /// Completion.
     success: Srgba,
+    /// The parts of speech a spell is drawn in, indexed by [`syntax_slot`].
+    ///
+    /// # `None` is a real answer, and `monochrome` gives it
+    ///
+    /// A theme named for having one colour cannot sprout five, and a player who
+    /// wants a spell drawn in weight alone now has somewhere to go — which is
+    /// the §14 answer for anyone who reads hue poorly, and the same escape the
+    /// tube's own themes already offer for the phosphor.
+    ///
+    /// Weight carries the reading either way: `Lexeme::weight` is applied to the
+    /// `Style` before this is consulted, so a monochrome spell reads exactly as
+    /// every spell did before hue existed.
+    syntax: Option<[Srgba; SYNTAX]>,
     /// Behind everything. Never fully black — a dead screen and an idle one
     /// should not look the same (see `main.rs`).
     pub(crate) background: Srgba,
 }
+
+/// How many parts of speech depart from the base hue.
+///
+/// Five, not eight. `Name` is most of a spell and keeps the phosphor — colouring
+/// it would leave the departures with nothing to depart from — and `Comment` and
+/// `Filler` already recede on the weight axis, which survives a theme with no
+/// syntax palette at all.
+pub(crate) const SYNTAX: usize = 5;
+
+/// Where a lexeme sits in a theme's [`Phosphor::syntax`] table.
+///
+/// `None` for the three that keep the base hue. **`Call` shares `Control`'s
+/// slot**: both are the file's own scaffolding, and what tells a block keyword
+/// from a call to this file's own part is the `()`, not the colour.
+const fn syntax_slot(kind: Lexeme) -> Option<usize> {
+    match kind {
+        Lexeme::Control | Lexeme::Call => Some(0),
+        Lexeme::Verb => Some(1),
+        Lexeme::Number => Some(2),
+        Lexeme::Grammar => Some(3),
+        Lexeme::State => Some(4),
+        Lexeme::Name | Lexeme::Comment | Lexeme::Filler | Lexeme::None => None,
+    }
+}
+
+/// The syntax palette the three coloured themes share.
+///
+/// **One table rather than three, for now, and that is an admission.** The
+/// accents are tuned per theme because each sits against a different background;
+/// these are not, because they were authored without a window to judge them in.
+/// The field is per-theme so a pass with eyes on the tube can split them, which
+/// is the shape §15 asks for — build the instrument, then use it.
+///
+/// Chosen to sit *away* from all three phosphors rather than within them: the
+/// point of a hue here is to be told apart from the base, and amber's base is
+/// already gold.
+const SPELL: [Srgba; SYNTAX] = [
+    // Control and call — arcane, the register §14 already reads as magical.
+    rgb(0.78, 0.62, 1.00),
+    // Verb — what the tower answers to.
+    rgb(1.00, 0.78, 0.36),
+    // Number.
+    rgb(0.95, 0.62, 0.36),
+    // Grammar — what a question turns on.
+    rgb(0.40, 0.74, 0.76),
+    // State — what the answer may be.
+    rgb(0.46, 0.88, 0.94),
+];
 
 /// An opaque colour, written the way the tables below read best.
 ///
@@ -71,6 +132,7 @@ pub(crate) const MUTED_VIOLET: Phosphor = Phosphor {
     danger: rgb(0.88, 0.22, 0.26),
     cost: rgb(0.48, 0.79, 1.00),
     success: rgb(0.56, 1.00, 0.55),
+    syntax: Some(SPELL),
     background: rgb(0.055, 0.035, 0.075),
 };
 
@@ -89,6 +151,7 @@ pub(crate) const AMBER: Phosphor = Phosphor {
     danger: rgb(0.85, 0.29, 0.26),
     cost: rgb(0.19, 0.72, 0.95),
     success: rgb(0.60, 1.00, 0.50),
+    syntax: Some(SPELL),
     background: rgb(0.070, 0.045, 0.020),
 };
 
@@ -103,6 +166,7 @@ pub(crate) const GREEN: Phosphor = Phosphor {
     danger: rgb(0.95, 0.09, 0.15),
     cost: rgb(0.45, 0.68, 0.90),
     success: rgb(1.00, 0.92, 0.50),
+    syntax: Some(SPELL),
     background: rgb(0.020, 0.055, 0.030),
 };
 
@@ -131,6 +195,11 @@ pub(crate) const MONOCHROME: Phosphor = Phosphor {
     danger: rgb(0.95, 0.25, 0.24),
     cost: rgb(0.30, 0.62, 1.00),
     success: rgb(0.62, 1.00, 0.60),
+    // **The one theme that declines**, and the reason it is worth having: a
+    // theme named for one colour cannot sprout five, and a player who reads hue
+    // poorly now has a setting rather than a complaint. A spell here draws in
+    // weight alone, exactly as every spell did before hue existed.
+    syntax: None,
     // Cooler and darker than the phosphors', because there is no warm hue in the
     // text to sit against. Still not pure black — §4, and `main.rs`: a dead
     // screen and an idle one must not look the same.
@@ -149,7 +218,7 @@ impl Phosphor {
     /// Most of the screen. [`Phosphor::resolve_tinted`] is the same thing for
     /// the handful of cells inside an instrument's bar.
     pub(crate) fn resolve(&self, style: Style) -> Color {
-        self.resolve_tinted(style, None)
+        self.resolve_tinted(style, None, None)
     }
 
     /// The colour a cell draws in, given the colour family of whatever region it
@@ -159,14 +228,44 @@ impl Phosphor {
     /// (§4 keeps the triad for meaning) and on the fire (§19 makes it one orange
     /// ramp everywhere), so the two channels below it are reached exactly when a
     /// material has nothing to say about the cell.
-    pub(crate) fn resolve_tinted(&self, style: Style, wash: Option<Wash>) -> Color {
+    pub(crate) fn resolve_tinted(
+        &self,
+        style: Style,
+        wash: Option<Wash>,
+        syntax: Option<Lexeme>,
+    ) -> Color {
         if let Some(wash) = wash
             && let Some(tinted) =
                 super::tint::resolve(wash, style.role, style.intensity, style.depicted())
         {
             return tinted.into();
         }
+        if let Some(lit) = self.lexed(syntax, style.role) {
+            return lit.into();
+        }
         self.untinted(style)
+    }
+
+    /// A part of speech's colour under this theme, or `None` if it declines.
+    ///
+    /// # Two declines, and the first is §4's
+    ///
+    /// **An accent outranks a syntax colour**, exactly as it outranks a tint:
+    /// *"an accent is a signal; a tint is a hint. The signal wins."* A line
+    /// `interpret` could not read is drawn `Role::Danger`, and the fault is the
+    /// thing the eye must go to — highlighting over it would be decoration
+    /// beating meaning, which §4 forbids in one sentence. `orbs-shell` already
+    /// refuses to register a run on an accented row and this refuses it again,
+    /// because the equivalent hole in `orbs-tui` was real and its test caught it.
+    ///
+    /// **And a theme may have no palette at all** — `monochrome` does not, which
+    /// is what makes hue a setting rather than something imposed.
+    fn lexed(&self, syntax: Option<Lexeme>, role: Role) -> Option<Srgba> {
+        if role != Role::Normal {
+            return None;
+        }
+        let slot = syntax_slot(syntax?)?;
+        self.syntax.map(|palette| palette[slot])
     }
 
     /// The colour a cell of this style is drawn in.

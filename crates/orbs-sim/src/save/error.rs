@@ -44,4 +44,27 @@ pub enum SaveError {
         /// The format this build knows.
         understood: u32,
     },
+
+    /// It came from a build whose format this one has moved on *from*.
+    ///
+    /// **The other direction, and it is not symmetric.** [`Ahead`](Self::Ahead)
+    /// is a build that cannot know what changed; this is one that knows exactly
+    /// what changed and cannot undo it. The lens rework is why it exists:
+    /// `WardSave` lost seven fields and `shift` changed vocabulary — a recorded
+    /// reading's answers were produced by rules that no longer exist, so there
+    /// is nothing to migrate them *to*.
+    ///
+    /// Refused rather than half-read, for [`Ahead`](Self::Ahead)'s reason: serde
+    /// ignores the fields it no longer has, so the alternative is a tower that
+    /// loads, looks right, and resumes a puzzle whose answers were scored under
+    /// different rules.
+    #[error(
+        "the save is from an earlier version of the game (format {found}, this build reads {understood})"
+    )]
+    Behind {
+        /// The format the file claims.
+        found: u32,
+        /// The format this build knows.
+        understood: u32,
+    },
 }

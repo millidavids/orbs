@@ -232,6 +232,47 @@ pub fn groups_at(world: &World, node: Entity) -> Vec<String> {
     names
 }
 
+/// The reading words a room can answer `has` with, in set order.
+///
+/// # Keyed on the **set**, not on the room and not on [`Reading`]
+///
+/// `Reading` is the wrong question and asking it shipped a real defect:
+/// `recall scripting` gated the section on *does this room have any reading
+/// child* and then printed `maze::readings()` whatever the answer was about. The
+/// lens's four sockets and six sigils carry that marker, so the lens's scripting
+/// page taught the archive's `passage wall exit back spoil marks gleaning` and
+/// named none of the ward's six deltas — which are, since the lens rework, the
+/// whole of what a lens spell may branch on. The one page a player can learn
+/// that vocabulary from listed the wrong room's.
+///
+/// The set is the right key because it is already **declared**
+/// (`build::Branch::group`) rather than inferred, and because the vocabulary
+/// genuinely belongs to it: every `way` answers the same seven words, every
+/// `socket` the same six. A domain that adds a set adds an arm here, in the one
+/// place it was already adding a declaration — which is what keeps §10's five
+/// remaining rooms from each needing an arm scattered somewhere else.
+#[must_use]
+pub fn readings_at(world: &World, node: Entity) -> Vec<&'static str> {
+    let mut words: Vec<&'static str> = Vec::new();
+    for set in groups_at(world, node) {
+        for word in readings_of(&set) {
+            if !words.contains(&word) {
+                words.push(word);
+            }
+        }
+    }
+    words
+}
+
+/// What a set's members answer `has` with. See [`readings_at`].
+fn readings_of(set: &str) -> Vec<&'static str> {
+    match set {
+        "way" => super::maze::readings(),
+        "socket" | "sigil" => super::ward::readings(),
+        _ => Vec::new(),
+    }
+}
+
 /// A file whose text is **stored**, rather than derived from the record stream.
 ///
 /// # Why this is not how `orb.log` works, and must not become it

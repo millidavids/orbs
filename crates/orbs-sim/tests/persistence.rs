@@ -351,16 +351,44 @@ fn the_document_is_text_and_it_reads_back() {
 #[test]
 fn a_save_from_a_future_format_is_refused_rather_than_misread() {
     let sim = Sim::new(0);
+    let written = format!("format = {}", orbs_sim::save::FORMAT);
     let text = sim
         .snapshot()
         .to_toml()
         .unwrap()
-        .replace("format = 1", "format = 99");
+        .replace(&written, "format = 99");
 
     let error = Save::from_toml(&text).expect_err("a future format must not load");
     let said = error.to_string();
     assert!(
         said.contains("later version"),
+        "the refusal does not say why: {said}",
+    );
+}
+
+/// ...and so is one from an earlier build.
+///
+/// **The direction this did not check**, and the lens rework is why it matters:
+/// `WardSave` lost seven fields and `shift` changed vocabulary, and serde drops
+/// what it no longer knows without a word. A format-1 save therefore opened
+/// straight into the redesigned ward and resumed a reading whose answers were
+/// scored by a codemaker that no longer exists — a tower that loads, looks
+/// right, and is quietly wrong, which is exactly what the `Ahead` arm above
+/// refuses in the other direction.
+#[test]
+fn a_save_from_an_earlier_format_is_refused_rather_than_misread() {
+    let sim = Sim::new(0);
+    let written = format!("format = {}", orbs_sim::save::FORMAT);
+    let text = sim
+        .snapshot()
+        .to_toml()
+        .unwrap()
+        .replace(&written, "format = 1");
+
+    let error = Save::from_toml(&text).expect_err("an older format must not load");
+    let said = error.to_string();
+    assert!(
+        said.contains("earlier version"),
         "the refusal does not say why: {said}",
     );
 }
@@ -1220,4 +1248,61 @@ fn the_odd_states_travel_too() {
             }
         }
     }
+}
+
+/// A spell suspended **inside a part** comes back inside it.
+///
+/// §8 requires in-flight state to be serialisable, and a call stack is the newest
+/// thing that is. A save carrying `pc` and `loops` but not the descents beneath
+/// them would restore a spell that had forgotten who called it — and the failure
+/// is quiet: it would run to the end of the part and stop, which looks exactly
+/// like a spell that finished.
+#[test]
+fn a_spell_inside_a_part_comes_back_inside_it() {
+    let mut lived = Sim::new(11);
+    lived.submit("attend laboratory");
+    lived.step();
+    // Long enough that the run is *inside* the part rather than past it: the
+    // grind takes eight ticks and the call is reached on the third step.
+    lived.write_spell(
+        "tending",
+        &[
+            "part gathering()".to_owned(),
+            "grind sage".to_owned(),
+            "empty mortar_and_pestle".to_owned(),
+            "end".to_owned(),
+            "gathering()".to_owned(),
+        ],
+    );
+    lived.step();
+    lived.submit("invoke tending");
+    lived.step_n(4);
+
+    let save = lived.snapshot();
+    let inside = save
+        .nodes
+        .iter()
+        .find_map(|node| node.running.as_ref())
+        .expect("a spell is running");
+    assert_eq!(
+        inside.part.as_deref(),
+        Some("gathering"),
+        "the save does not say which part the spell is in",
+    );
+    assert!(
+        !inside.stack.is_empty(),
+        "the save carries no caller for the part to return to",
+    );
+
+    let text = save.to_toml().expect("a save renders");
+    let mut loaded = Sim::restored(&Save::from_toml(&text).expect("a save reads back"));
+
+    // Both worlds run on from the same place, and must reach the same one.
+    lived.step_n(30);
+    loaded.step_n(30);
+    same(
+        &loaded,
+        &lived,
+        "a reload inside a part ran on into a different world",
+    );
 }

@@ -118,7 +118,13 @@ impl Screen {
                 let Ok(col) = u16::try_from(col) else {
                     break;
                 };
-                let ink = theme::resolve(cell.style, frame.tint_at(Pos::new(col, row)));
+                // **Both side-tables, read per cell while blitting.** A cell can
+                // be byte-identical while the region over it changed — the
+                // flask's mixture band growing, or a spell line re-lexed after a
+                // keystroke — so a diff keyed on `Cell` alone would miss every
+                // frame of it.
+                let here = Pos::new(col, row);
+                let ink = theme::resolve(cell.style, frame.tint_at(here), frame.lit_at(here));
                 let glyph = self.glyph(cell.glyph);
                 let index = self.index(col, row);
                 if self.cells[index] == (glyph, ink) {
@@ -307,6 +313,40 @@ mod tests {
             .painter(grid.to_rect())
             .span(Pos::new(0, 0), &Span::new(text).with_style(Style::NORMAL));
         frame
+    }
+
+    /// A lit run reaches the wire as a colour.
+    ///
+    /// **The end of the chain, tested end to end**, because every link in it is
+    /// somewhere else: `parser::lexeme` classifies, `sheet` registers the region,
+    /// `Frame` stores it, `theme` picks the colour and this writes it. A break
+    /// anywhere shows up as a spell drawn in the base hue, which is exactly what
+    /// a spell looked like before any of it existed — the failure is invisible.
+    #[test]
+    fn a_lit_run_is_written_in_its_own_colour() {
+        let grid = GridSize::new(20, 3);
+        let mut frame = Frame::new(grid);
+        frame.painter(grid.to_rect()).span(
+            Pos::new(0, 0),
+            &Span::new("repeat").with_style(Style::NORMAL),
+        );
+        frame.lit(
+            orbs_render::Rect::new(0, 0, 6, 1),
+            orbs_render::Lexeme::Control,
+        );
+
+        let mut screen = Screen::new(grid, true);
+        let written = drawn(&mut screen, &frame);
+        // **`38;5;13`, not `35`.** crossterm writes every named colour through
+        // the 256-colour form, so `Color::Magenta` is index 13 rather than the
+        // SGR 35 an ANSI table would predict. Worth pinning: an ad-hoc reader
+        // written against `3x` sees no colour here at all and reports the whole
+        // feature missing, which is what `scripts/tui.sh ink` exists to stop
+        // anyone doing by hand — including me, ten minutes ago.
+        assert!(
+            written.contains("\x1b[38;5;13m"),
+            "a control word reached the terminal with no colour on it:\n{written:?}",
+        );
     }
 
     #[test]

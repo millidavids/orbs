@@ -36,7 +36,9 @@ mod dump;
 mod editor;
 mod environment;
 mod glance;
+mod guide;
 mod keys;
+mod lexing;
 mod line;
 mod linear;
 mod loom;
@@ -54,6 +56,7 @@ mod sheet;
 mod shortcuts;
 mod stacks;
 mod stage;
+pub mod tabbing;
 mod tapestry;
 mod transition;
 
@@ -62,6 +65,7 @@ pub use dump::{requested as dump_requested, run as dump, run_script as dump_scri
 pub use editor::{Editor, Mode as EditorMode, Outcome as EditorOutcome};
 pub use environment::{RUSTC, SEED, seed, wizard};
 pub use glance::Panel;
+pub use guide::{Entry, Guide, guide};
 pub use keys::{Key, apply, apply_to_editor, apply_to_maze, apply_to_weave};
 pub use line::Line;
 pub use linear::{Linear, toggle as toggle_linear};

@@ -73,7 +73,10 @@ impl Surfaces {
         if self.editing.is_none()
             && let Some(request) = sim.opening()
         {
-            self.editing = Some(Editor::open(&request.name, &request.domain, &request.lines));
+            let mut editor = Editor::open(&request.name, &request.domain, &request.lines);
+            // Opened on the vocabulary rather than blank until the first key.
+            editor.refresh(sim);
+            self.editing = Some(editor);
         }
         if self.weaving.is_none() && sim.weaving() {
             let mut screen = Tapestry::default();
@@ -174,7 +177,7 @@ impl Surfaces {
         let Some(key) = crate::drive::as_key(code) else {
             return;
         };
-        let outcome = orbs_shell::apply_to_editor(&key, editor);
+        let outcome = orbs_shell::apply_to_editor(&key, editor, sim);
 
         match outcome {
             Some(EditorOutcome::Save) => save(editor, sim),

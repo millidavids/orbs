@@ -163,11 +163,7 @@ pub fn scene_at(world: &World, at: Entity) -> Scene {
     //
     // It reaches the manual too, and that was the worse half: `recall edit`
     // answered with the *maze's way out* rather than with the spell editor.
-    scene = scene.knowing(
-        crate::parser::single_words()
-            .into_iter()
-            .map(|(word, _)| word.to_owned()),
-    );
+    scene = scene.knowing(crate::parser::single_words().map(|(word, _)| word.to_owned()));
     {
         let topics = world.resource::<Topics>();
         for topic in &topics.0 {

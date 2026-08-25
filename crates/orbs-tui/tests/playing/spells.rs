@@ -220,3 +220,94 @@ fn a_fault_latches_on_the_room_until_you_go_and_look() {
         .does("attend archive", "/tower/archive")
         .expect_drawn("‼");
 }
+
+#[test]
+#[ignore = "plays a real game through tmux; run with scripts/play.sh"]
+fn the_guide_lists_the_language_and_the_rooms_own_verbs() {
+    if !available() {
+        return;
+    }
+    // The pane is open by default — a guide nobody knows to ask for helps
+    // nobody — and the verbs are the **spell's** domain, not the player's.
+    let game = Game::start();
+    game.does("attend archive", "/tower/archive")
+        .opens("scribe threading", "threading.spell in archive")
+        .expect_drawn("the language")
+        .expect_drawn("here you can")
+        .expect_drawn("follow");
+
+    // `guide` closes it, and opens it again. **`expect_off_screen`, not
+    // `expect_absent`** — the latter asks about the newest command block and the
+    // guide is a pane, so it would pass without looking.
+    game.type_raw("guide");
+    game.expect_off_screen("the language");
+    game.type_raw("guide");
+    game.expect_drawn("the language");
+}
+
+#[test]
+#[ignore = "plays a real game through tmux; run with scripts/play.sh"]
+fn a_word_a_spell_may_not_issue_is_not_in_the_guide() {
+    if !available() {
+        return;
+    }
+    // `attend` passes `Scene::offers` and fails `may_issue`: a spell is written
+    // *for* a domain and does not walk. Listing it would teach a line the
+    // runner refuses, which is worse than a short list.
+    let game = Game::start();
+    game.does("attend laboratory", "/tower/laboratory")
+        .opens("scribe morning", "morning.spell in laboratory")
+        .expect_drawn("here you can")
+        // The listing has landed whole, so what is missing from it is now a
+        // fair question. `grind` proves we are reading the verbs and not an
+        // empty pane.
+        .expect_drawn("grind")
+        .expect_off_screen("attend");
+}
+
+#[test]
+#[ignore = "plays a real game through tmux; run with scripts/play.sh"]
+fn the_guide_answers_what_may_follow_where_the_caret_is() {
+    if !available() {
+        return;
+    }
+    // The reactive half, and the one the feature was asked for. `is ` has
+    // exactly eight answers and nothing on screen said so.
+    let game = Game::start();
+    game.does("attend laboratory", "/tower/laboratory")
+        .opens("scribe asking", "asking.spell in laboratory");
+    game.type_raw("edit");
+    // No Enter: the guide follows the caret, not the line.
+    game.send_text("if the mortar_and_pestle is ");
+    game.expect_drawn("what can follow")
+        .expect_drawn("idle")
+        .expect_drawn("working");
+
+    // **`wait` is not `is`.** It stores a thing and resolves it against the
+    // record stream, so offering a state there would teach a line that waits
+    // for ever and latches a fault.
+    game.press("Escape");
+    game.type_raw("quit");
+}
+
+#[test]
+#[ignore = "plays a real game through tmux; run with scripts/play.sh"]
+fn tab_finishes_a_word_in_the_editor() {
+    if !available() {
+        return;
+    }
+    // readline's rules, shared with the prompt: a lone candidate is written out
+    // whole with a space after it.
+    let game = Game::start();
+    game.does("attend laboratory", "/tower/laboratory")
+        .opens("scribe tabbing", "tabbing.spell in laboratory");
+    game.type_raw("edit");
+    game.send_text("gri");
+    game.press("Tab");
+    game.expect_drawn("grind");
+    game.send_text("sa");
+    game.press("Tab");
+    game.expect_drawn("grind sage");
+    game.press("Escape");
+    game.type_raw("quit");
+}

@@ -102,6 +102,10 @@ pub(crate) fn open_requested(mut tower: ResMut<Tower>, mut editing: ResMut<Editi
     // **Read before the first keystroke**, so a spell opened with a fault in it
     // says so on the way in rather than after the first pause in the typing.
     editor.set_reading(tower.sim().read_spell(&request.domain, &request.lines));
+    // **And the guide, for the same reason**: it opens on the vocabulary, and a
+    // pane that filled in only after the first keystroke would look broken to
+    // exactly the player it is there for.
+    editor.refresh(tower.sim());
     editing.open(editor);
 }
 
@@ -196,7 +200,7 @@ pub(crate) fn type_into_editor(
         let Some(key) = super::input::pressed(event) else {
             continue;
         };
-        outcome = orbs_shell::apply_to_editor(&key, editor).or(outcome);
+        outcome = orbs_shell::apply_to_editor(&key, editor, tower.sim()).or(outcome);
     }
 
     if stale {

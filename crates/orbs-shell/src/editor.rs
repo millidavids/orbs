@@ -153,6 +153,24 @@ pub struct Editor {
     /// than its reading, which is why every use of it is indexed rather than
     /// zipped.
     reading: Vec<orbs_sim::Reading>,
+    /// Whether the scribing guide is showing beside the buffer.
+    guiding: bool,
+    /// What the guide is showing, refreshed on the keystroke beat.
+    ///
+    /// **State, not something the painter works out.** Building it reaches
+    /// `scene_at`, which rebuilds every recipe, topic and node in the tower — at
+    /// 60 Hz that is the correction `offering` and `editing` have each already
+    /// paid for once (*"~59 frames in 60 rebuilt a string identical to the one
+    /// already on screen"*). It can only change when a key is pressed, so it is
+    /// computed when one is.
+    guide: crate::Guide,
+    /// A Tab cycle in progress, if the last thing pressed was Tab.
+    ///
+    /// The prompt keeps one of these too, and the rules that walk it are shared
+    /// — see [`tabbing`](crate::tabbing). What is *not* shared is the listing:
+    /// the prompt reserves a layout row for `Offered`, and the editor has the
+    /// guide pane, which is already showing the same candidates as you type.
+    cycle: Option<crate::tabbing::Cycle>,
 }
 
 /// How long the player must stop typing before the spell is written out.
@@ -203,6 +221,7 @@ pub enum Outcome {
 /// `no_two_editor_words_share_a_first_letter` holds them to.
 const WORDS: &[(&str, Word)] = &[
     ("edit", Word::Edit),
+    ("guide", Word::Guide),
     ("interpret", Word::Interpret),
     ("quit", Word::Quit),
 ];
@@ -237,6 +256,8 @@ const SHORTHAND: &[(&str, Word)] = &[
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Word {
     Edit,
+    /// Show or hide the scribing guide — see [`Editor::guiding`].
+    Guide,
     /// Show the buffer as the orb reads it — see [`Mode::Reading`].
     Interpret,
     Quit,
@@ -273,6 +294,19 @@ impl Editor {
             quiet_for: None,
             running_line: None,
             reading: Vec::new(),
+            cycle: None,
+            // **Open, and that is the whole point of the item.** The language
+            // grew past the size one person holds in their head, and a guide
+            // nobody knows to ask for helps nobody. `guide` closes it for the
+            // hands that no longer need it.
+            guiding: true,
+            // Replaced by the first `refresh` a frontend does; an empty listing
+            // is the honest opening value rather than a world read from a
+            // constructor that has no world.
+            guide: crate::Guide::Vocabulary {
+                control: Vec::new(),
+                verbs: Vec::new(),
+            },
         }
     }
 
@@ -381,6 +415,91 @@ impl Editor {
     #[must_use]
     pub const fn caret(&self) -> (usize, usize) {
         (self.row, self.column)
+    }
+
+    /// Whether the scribing guide is showing.
+    #[must_use]
+    pub const fn guiding(&self) -> bool {
+        self.guiding
+    }
+
+    /// What the guide is showing.
+    #[must_use]
+    pub const fn guide(&self) -> &crate::Guide {
+        &self.guide
+    }
+
+    /// Work out what the guide should show, now.
+    ///
+    /// **Called on the keystroke beat by whoever owns the keyboard**, never from
+    /// a painter — see [`Editor::guide`] for the 60 Hz correction this avoids.
+    /// Cheap to call redundantly and wrong to call per frame.
+    ///
+    /// # The caret it asks about is not always the caret on screen
+    ///
+    /// In [`Mode::Reading`] the pane shows `interpret`'s reading rather than the
+    /// buffer, and in [`Mode::Command`] the caret is drawn on the command row
+    /// while this one still points into the text. Both would have the guide
+    /// describing a word that is not in front of the player, so **the guide only
+    /// follows the caret while the buffer has it** — in the other two modes it
+    /// falls back to the listing, which is true in every mode.
+    pub fn refresh(&mut self, sim: &orbs_sim::Sim) {
+        let caret = if self.mode == Mode::Editing {
+            (self.row, self.column)
+        } else {
+            // A position no line has a word at, so `guide` answers with the
+            // vocabulary rather than a page about wherever the buffer cursor
+            // happens to be resting.
+            (usize::MAX, 0)
+        };
+        self.guide = crate::guide(sim, &self.lines, caret, &self.domain);
+    }
+
+    /// Tab: finish the word the caret is on, the way the prompt does.
+    ///
+    /// # The listing is the guide, and that is why this step is three lines
+    ///
+    /// The prompt needs `Offered` and a reserved layout row to show what it
+    /// found. The editor was going to need the same, and does not: the guide
+    /// pane is already showing exactly these candidates, live, as the line is
+    /// typed — so a Tab press here has nothing to *say*, only something to
+    /// write. Which is the argument for having built the guide first.
+    ///
+    /// **Editing state only.** In command state the caret is on the editor's own
+    /// word — `edit`, `guide`, `interpret`, `quit` — and completing four words
+    /// that are listed on screen a row below is help nobody needs.
+    pub fn tab(&mut self, sim: &orbs_sim::Sim) {
+        if self.mode != Mode::Editing {
+            return;
+        }
+        let Some(line) = self.lines.get(self.row) else {
+            return;
+        };
+        let open = orbs_sim::parser::open_blocks(&self.lines[..self.row]);
+        let found = orbs_sim::spell_expect(sim.world(), &self.domain, line, self.column, &open);
+
+        let crate::tabbing::Tabbed::Wrote { replaces, text, .. } =
+            crate::tabbing::tab(line, &found, &mut self.cycle)
+        else {
+            // Nothing to write. The guide is already showing whatever there was.
+            return;
+        };
+        let Some(line) = self.lines.get_mut(self.row) else {
+            return;
+        };
+        line.replace_range(replaces.clone(), &text);
+        // **Characters, never bytes** — the caret is a character count and an
+        // editor indexing by byte panics on the first pasted `é`.
+        let upto = replaces.start.saturating_add(text.len());
+        self.column = line
+            .get(..upto)
+            .map_or(self.column, |before| before.chars().count());
+        self.touched();
+    }
+
+    /// Abandon any Tab cycle. Anything that is not another Tab ends it.
+    pub fn end_cycle(&mut self) {
+        self.cycle = None;
     }
 
     /// The first visible line.
@@ -675,6 +794,13 @@ impl Editor {
             }
             Some(Word::Interpret) => {
                 self.mode = Mode::Reading;
+                None
+            }
+            // **A toggle rather than two words.** `guide`/`hide` would be two
+            // things to learn for one piece of state a player can see the answer
+            // to: the pane is either there or it is not.
+            Some(Word::Guide) => {
+                self.guiding = !self.guiding;
                 None
             }
             Some(Word::Save) => Some(Outcome::Save),

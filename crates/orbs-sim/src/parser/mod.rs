@@ -32,8 +32,10 @@
 
 mod arguments;
 mod complete;
+mod expect;
 mod fuzzy;
 mod intent;
+mod lexeme;
 mod normalise;
 mod question;
 mod report;
@@ -45,8 +47,10 @@ mod verb;
 mod vocabulary;
 
 pub use complete::{Completion, Suggestion, complete, is_answer};
+pub use expect::{Expectation, Expected, Reason, Situation, expect, open_blocks};
 pub use fuzzy::{EXACT, MIN_SIMILARITY, distance, is_near, similarity};
 pub use intent::{Argument, Candidate, Confidence, Intent, Mode, Resolution, leaf};
+pub use lexeme::{Lexed, lex};
 pub use normalise::is_filler;
 pub use question::{Bound, Condition, Quantity, State as SpellState, condition, write_condition};
 pub use report::report;

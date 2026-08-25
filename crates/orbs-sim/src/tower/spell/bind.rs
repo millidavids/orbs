@@ -40,7 +40,7 @@ use orbs_render::{FieldName, RecordKind, Role};
 use crate::content::{Prose, with_extension};
 use crate::parser::{Intent, Verb};
 use crate::session::Scrollback;
-use crate::tower::{self, Name, Nameable};
+use crate::tower::{self, Name};
 
 use super::run::Running;
 
@@ -193,18 +193,15 @@ pub fn stand(world: &mut World) {
 }
 
 /// The spell node called `wanted`, wherever it is kept.
+///
+/// **One of three byte-identical copies of this walk**, and now one call: see
+/// `tower::reach` for the rule and for what the other two cost.
 fn find(world: &World, wanted: &str) -> Option<Entity> {
-    let root = tower::root(world);
-    let mut stack = vec![root];
-    while let Some(node) = stack.pop() {
-        if world.get::<Nameable>(node).map(|kind| kind.0) == Some(crate::parser::NounKind::Script)
-            && world.get::<Name>(node).is_some_and(|name| name.0 == wanted)
-        {
-            return Some(node);
-        }
-        stack.extend(tower::children_of(world, node));
-    }
-    None
+    tower::reach::look(world)
+        .scope(tower::reach::Scope::Tower)
+        .kind(crate::parser::NounKind::Script)
+        .naming(tower::reach::Naming::Script)
+        .find(wanted)
 }
 
 /// Say one authored line about `named`.

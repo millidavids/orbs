@@ -116,8 +116,26 @@ grants = "concentration"
 # ---------------------------------------------------------------------------
 [[mastery]]
 at = 24
-nodes = ["tbi_a", "tbi_b"]
+nodes = ["steps_1", "tbi_b"]
 
 [[mastery]]
 at = 40
-nodes = ["tbi_c", "tbi_d"]
+nodes = ["steps_2", "tbi_d"]
+
+# ---------------------------------------------------------------------------
+# `steps_<n>` is a contract, not a label.
+#
+# A step of a spell costs a tick, so the script budget *is* the speed of every
+# piece of automation in the game - and `spell::budget` reads these ids to know
+# what it is. The number after the underscore is how many extra steps a tick the
+# node grants, parsed from the id itself rather than from a second table that
+# could disagree with the one `weave` draws.
+#
+# **Still markers, like everything else here.** Nothing can be taken in this
+# version, so the budget is 1 and stays 1; what exists is the wiring and the
+# shape on screen. Making the tree takeable is the weave phase's item.
+#
+# **Additive across tiers.** A tier grants one of its siblings, so a player who
+# takes the step node in both tiers has spent both choices on speed and gets
+# 1 + 1 + 2 = 4. Reading them as a maximum would refund the second silently.
+# ---------------------------------------------------------------------------

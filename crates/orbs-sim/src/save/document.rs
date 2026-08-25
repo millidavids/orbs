@@ -40,7 +40,15 @@ use super::node::NodeSave;
 /// streams to the recorded positions. Nothing compares and nothing errors; the
 /// world just diverges from the session that wrote it. Touch that function and
 /// bump this.
-pub const FORMAT: u32 = 1;
+/// **2 since the lens rework**, which is the first bump this constant has had.
+/// `WardSave` lost seven fields — `held`, `best`, `sigil_marks`, `socket_marks`,
+/// `tried`, `settled`, `touched` — and `shift` changed vocabulary from
+/// gained/held/lost to closer/level/further. Serde ignores what it no longer
+/// knows, so a format-1 save loaded silently into the redesigned ward: a reading
+/// whose recorded answers were scored by an exchange-and-ratchet codemaker,
+/// resumed against one that neither exchanges nor ratchets. `WardSave`'s own doc
+/// said the two shapes *"count as different formats"* and nothing enforced it.
+pub const FORMAT: u32 = 2;
 
 /// One tower, at one tick.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -248,6 +256,24 @@ impl Save {
         })?;
         if save.world.format > FORMAT {
             return Err(super::SaveError::Ahead {
+                found: save.world.format,
+                understood: FORMAT,
+            });
+        }
+        // **And older, which this did not check.** Refusing only the future is
+        // half a version gate: serde drops fields it no longer knows without a
+        // word, so a format-1 save opened straight into the redesigned ward and
+        // resumed a reading scored under rules that no longer exist. There is no
+        // migration to write — the old answers are not expressible in the new
+        // model — so refusing is the honest answer, and the same one `Ahead`
+        // gives for the same reason.
+        //
+        // This is a **pre-1.0 project with no shipped audience**: the cost is a
+        // developer's own save from before the rework, and §15 already invites
+        // deleting one. If that ever stops being true, this arm is where a
+        // migration hangs.
+        if save.world.format < FORMAT {
+            return Err(super::SaveError::Behind {
                 found: save.world.format,
                 understood: FORMAT,
             });

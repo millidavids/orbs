@@ -322,6 +322,37 @@ pub struct RunningSave {
     /// lockstep test that pins a snapshot as complete.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub vars: BTreeMap<String, String>,
+    /// Which part the spell is inside, if it is inside one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub part: Option<String>,
+    /// The callers waiting on it, outermost first.
+    ///
+    /// Defaulted rather than required: it is absent from a save written before
+    /// parts existed, and from every save of a spell that never calls one. An
+    /// empty stack is the ordinary case.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub stack: Vec<DescentSave>,
     /// A fingerprint of the spell text this program was compiled from.
+    ///
+    /// **One hash covers every descent, and it stays that way.** Each one walks
+    /// a tree found by name in *this* spell's text, and a spell is contained to
+    /// a single `.spell` file by decision (§19) — so one fingerprint answers for
+    /// the whole stack, and there is no shape where it would not.
+    ///
+    /// An `invoke`d spell is a second `Running` with a fingerprint of its own,
+    /// which is the same rule seen from the other side.
     pub fingerprint: u64,
+}
+
+/// One suspended caller of a part.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DescentSave {
+    /// The part this frame was walking, or absent for the spell's own body.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub part: Option<String>,
+    /// Where in it — pointing at the call that suspended it.
+    pub pc: Vec<usize>,
+    /// Its open blocks, coded as [`RunningSave::loops`] codes them.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub loops: Vec<i64>,
 }

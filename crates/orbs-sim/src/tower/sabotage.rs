@@ -465,13 +465,31 @@ pub struct Log;
 /// interference, and §8.1 wants the player to spot the odd one out.
 const TELL_EVERY: usize = 3;
 
-/// Copy `lines` into `into` as log output, damaging some if the source is
+/// Copy `lines` into `into` as a listing, damaging some if the source is
 /// poisoned.
 ///
 /// The damage is structural, never textual: a dropped field and the tampered
 /// face. §8.1's "malformed record boundaries" is exactly a record missing a
 /// field, which the table view already draws as a gap.
-pub fn emit_lines(into: &mut Records, verb: Verb, lines: &[String], tampered: bool) {
+///
+/// # `kind` is which of §3's diagnostic surfaces this is
+///
+/// [`RecordKind::LogLine`] for a view over the record stream,
+/// [`RecordKind::ScriptLine`] for a file the player wrote. Both are exempt from
+/// the eldritch treatment; what differs is how §14 says them. A log line is
+/// fielded and speaks as `label: value`; a **script** line is the player's own
+/// sentence and speaks as itself, which is why the kind had to reach this far
+/// rather than being decided at the painter.
+///
+/// It had no second producer for four phases, and the cost was audible rather
+/// than visible: every line of every spell announced itself as a `row`.
+pub fn emit_lines(
+    into: &mut Records,
+    verb: Verb,
+    kind: RecordKind,
+    lines: &[String],
+    tampered: bool,
+) {
     into.push(RecordKind::Completion)
         .text(FieldName::Name, verb.canonical())
         .count(
@@ -482,7 +500,7 @@ pub fn emit_lines(into: &mut Records, verb: Verb, lines: &[String], tampered: bo
 
     for (index, line) in lines.iter().enumerate() {
         let damaged = tampered && index % TELL_EVERY == 0;
-        let row = into.push(RecordKind::LogLine);
+        let row = into.push(kind);
         // The source field is what a well-formed line carries. Dropping it is
         // the malformed boundary — and it is dropped rather than blanked so the
         // record genuinely lacks it.
@@ -494,8 +512,15 @@ pub fn emit_lines(into: &mut Records, verb: Verb, lines: &[String], tampered: bo
                 .spoken(line)
                 .text(FieldName::Message, line)
         } else {
+            // **`Line`, and this was `Tick` for both kinds.** The number is
+            // `index + 1` — a position in this listing — and never the tick the
+            // line happened at, which is not carried here at all. A log read
+            // back at world tick 5 numbered its three lines 1, 2, 3 and called
+            // each one a tick, so the only field on the record was a fabricated
+            // time. It is silent on screen, where no label is drawn, and a
+            // reader heard every one of them.
             row.count(
-                FieldName::Tick,
+                FieldName::Line,
                 u64::try_from(index + 1).unwrap_or(u64::MAX),
             )
             .text(FieldName::Message, line)
@@ -511,7 +536,13 @@ mod tests {
     fn read(tampered: bool) -> Records {
         let mut records = Records::new();
         let lines: Vec<String> = (0..6).map(|n| format!("line {n}")).collect();
-        emit_lines(&mut records, Verb::Peruse, &lines, tampered);
+        emit_lines(
+            &mut records,
+            Verb::Peruse,
+            RecordKind::LogLine,
+            &lines,
+            tampered,
+        );
         records
     }
 
@@ -551,7 +582,7 @@ mod tests {
 
         for record in &damaged {
             assert!(
-                record.field(FieldName::Tick).is_none(),
+                record.field(FieldName::Line).is_none(),
                 "the boundary was not malformed",
             );
         }

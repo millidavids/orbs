@@ -35,7 +35,7 @@ use crate::linear::UtteranceKind;
 use crate::maze::{self, Stacks};
 use crate::mix;
 use crate::span::Span;
-use crate::style::{Presentation, Role, Style, Wash};
+use crate::style::{Lexeme, Presentation, Role, Style, Wash};
 use crate::wrap::Wrap;
 
 /// A clipped writer into a region of a [`Frame`].
@@ -503,6 +503,21 @@ impl<'a> Painter<'a> {
     pub fn tint(&mut self, area: Rect, wash: Wash) {
         let area = area.intersection(self.area);
         self.frame.set_tint(area, wash);
+    }
+
+    /// Draw this run of spell text in its part of speech's colour.
+    ///
+    /// Silent and structural, for [`tint`](Self::tint)'s reason: highlighting is
+    /// comfort and never a carrier (§14), and the row it belongs to has already
+    /// been announced whole — one utterance per line, not one per word.
+    ///
+    /// Clipped to this painter's own region, so a run cannot colour a
+    /// neighbouring pane any more than a glyph can reach one. That matters more
+    /// here than for a tint: the editor's buffer and its guide are two painters
+    /// side by side, and a long line runs at the seam between them.
+    pub fn lit(&mut self, area: Rect, kind: Lexeme) {
+        let area = area.intersection(self.area);
+        self.frame.lit(area, kind);
     }
 
     /// Draw the stacks, centred in `area` at their natural size.

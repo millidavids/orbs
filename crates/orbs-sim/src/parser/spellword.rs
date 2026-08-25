@@ -99,11 +99,48 @@ pub enum SpellWord {
     /// `it` was the obvious cursor and cannot be used: `it` is on §6's filler
     /// list, so `follow it` is stripped to `follow` before anything sees it.
     For,
+    /// Name a run of lines so the rest of the spell can say it —
+    /// `part gathering()`.
+    ///
+    /// # Why `part`, measured rather than chosen
+    ///
+    /// §10 calls this *"composition — build spells from components"* and the
+    /// design calls the component a **part**; a different word here would give
+    /// one phase two names for one idea.
+    ///
+    /// **A part lives in the spell that uses it**, and that is settled: a spell
+    /// is contained to a single `.spell` file (§19), so this word names the
+    /// whole of composition rather than the near half of it.
+    ///
+    /// It is also the word that survived a sweep. Every candidate was scored
+    /// against every word the game knows, and the obvious ones are all inside
+    /// `MIN_SIMILARITY`'s typo band — `rite` scores **800** against `write`,
+    /// `call` **750** against `wall`, `step` **750** against `stop`, `make`
+    /// **750** against `take`, and `form` **750** against `for`, which is a
+    /// control word already. `part` scores 500, its nearest neighbours being
+    /// `cast` and `east`, and it is neither filler nor anything the vocabulary
+    /// already spends.
+    ///
+    /// `to` and `set` were refused before the sweep ran: `to` is filler, and
+    /// `set` is a live `dial` synonym — [`Let`](Self::Let) records what taking
+    /// that one cost for an afternoon.
+    ///
+    /// # A call is punctuation, not a ninth word
+    ///
+    /// `gathering()` is the call, and the parentheses are the whole notation.
+    /// The alternative was a bare name, which needs a rule — *a part may not be
+    /// called something the tower already has a word for* — to stop `grind`
+    /// meaning two things; and a second keyword would have cost a word in a
+    /// language that argues its count one entry at a time. Punctuation costs
+    /// neither, and it is the one place symbols are **canonical** rather than
+    /// merely accepted: §19's comparison spellings write back as words because a
+    /// word exists to write back to, and here none does.
+    Part,
 }
 
 impl SpellWord {
     /// Every one, for the naming pass and for the prompt's answer.
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 9] = [
         Self::Wait,
         Self::Repeat,
         Self::If,
@@ -112,6 +149,7 @@ impl SpellWord {
         Self::Until,
         Self::Let,
         Self::For,
+        Self::Part,
     ];
 
     /// The word as it is written in a spell.
@@ -126,6 +164,30 @@ impl SpellWord {
             Self::Until => "until",
             Self::Let => "let",
             Self::For => "for",
+            Self::Part => "part",
+        }
+    }
+
+    /// What follows the word, for a listing that has to show how it is used.
+    ///
+    /// The same table `recall`'s overview prints, and deliberately the same
+    /// words: two answers to *what does `for` take* is one of them being wrong
+    /// later. It lived in `orbs-shell` for one version, which put a painter in
+    /// the business of knowing the grammar — the shape §19 records going wrong
+    /// three times over.
+    ///
+    /// `else` and `end` take nothing, and the empty string is the honest answer
+    /// rather than an absence a caller has to special-case.
+    #[must_use]
+    pub const fn shape(self) -> &'static str {
+        match self {
+            Self::Repeat => "<count>",
+            Self::Until | Self::If => "<question>",
+            Self::Wait => "<thing>",
+            Self::Let => "<name> be <place>",
+            Self::For => "each <set>",
+            Self::Part => "<name>()",
+            Self::Else | Self::End => "",
         }
     }
 
@@ -137,7 +199,7 @@ impl SpellWord {
     /// one name, and nothing follows it that an `end` would close.
     #[must_use]
     pub const fn opens_block(self) -> bool {
-        matches!(self, Self::Repeat | Self::If | Self::For)
+        matches!(self, Self::Repeat | Self::If | Self::For | Self::Part)
     }
 
     /// The word that must follow this one, if the grammar fixes it.

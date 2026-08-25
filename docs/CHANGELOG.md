@@ -15,6 +15,77 @@
   at 1.0 (DESIGN.md §19).
 -->
 
+## [v0.3.35] - 2026-08-24
+
+### Description
+In development — a dev log, not patch notes. The tower saves and loads now, the
+spell language grew variables, conditional loops and reusable parts, and the
+editor grew a guide that explains the word you are on and colours what you type.
+
+### Added
+- **The tower is saved, and closing the game no longer loses it.** It writes
+  itself out as readable text every minute or so, and picks up where you left
+  off. A save from an older build is refused rather than half-read — a tower
+  that opens and is quietly wrong is worse than one that says it cannot.
+- **A guide beside the spell editor.** By default it lists the language's own
+  words and the verbs the room you are writing for answers to. Rest the cursor
+  on a word and it becomes that word's page; move past it and the guide starts
+  telling you what may come next instead — the places a question can ask about,
+  then the answers that question accepts.
+- **Tab finishes a word while you write a spell**, the way it always has at the
+  prompt: it takes you as far as every candidate agrees, lists them when it
+  cannot, then walks the list.
+- **Spells can remember a name, and walk a set.** `let best be north` gives a
+  name to a place, and `for each way` walks the four ways in turn without your
+  naming them. Together they let a spell pick the least-walked way out of
+  whichever ones are open, which no fixed ladder of questions could do.
+- **A run of lines can be given a name and reused.** Write `part gathering()`
+  above a few lines and `gathering()` runs them, as many times as you like.
+- **Loops can stop when a question says so** — `repeat until the stacks is
+  idle` — instead of guessing a number big enough to outlast the work.
+- **A ladder of questions without the nesting.** `else if` chains, and one `end`
+  closes the whole thing.
+- **Spells can count.** `if the cabinet has 4 fragment` waits for four, and two
+  places can be compared against each other — `if north has fewer marks than
+  east` — in about seventeen ways of saying it, all written back in plain words.
+
+### Changed
+- **A spell is coloured now, not just weighted.** Its parts are drawn in
+  different colours as well as different weights: the language's own words, the
+  verbs, the numbers, and — the one that matters most — the small words a
+  question turns on, which used to look exactly like the filler the orb throws
+  away. The monochrome theme leaves it all in one colour on purpose, and the
+  words still read correctly with every colour taken away.
+- **The far wizard's seal lets a sigil repeat**, which takes it from 360
+  combinations to 1296 and makes it the puzzle it was shaped like. Turning a
+  dial now moves one socket and only that socket, so what changes afterwards is
+  attributable — and three props that existed to paper over the old ambiguity
+  are gone, along with the counting the orb was doing on your behalf.
+- **Every verb reaches the plain-English words that claim it.** The lens had no
+  plain way in at all: `spy`, `peek` and `try` were registered as one phrase
+  nobody could type, so all three reached nothing.
+
+### Fixed
+- **Backspace did nothing on a great many terminals** — anything configured the
+  way PuTTY ships. In a game played entirely by typing, a typo was
+  uncorrectable short of clearing the line.
+- **Holding a key down moved exactly one square**, and deleted exactly one
+  character, on terminals that report a held key at all.
+- **Escape followed quickly by a letter lost the Escape.** Closing the spell
+  editor and typing `quit` fast enough put `quit` in the buffer as a line of the
+  spell.
+- **The cursor sat on the word telling you how to start.** In the editor's
+  command row it rested on the `i` of `edit`, the first word on the row.
+- **The orb called a good line unreadable.** Naming a part — the exact form the
+  manual teaches — was reported as a line it could not read, while running
+  perfectly well.
+- **The lens's own scripting page listed the archive's words**, naming none of
+  the six the lens actually answers with.
+- **The boot sequence ran off the edge of a small window** for its whole
+  thirteen seconds, instead of saying the window was too small.
+- **Quitting could leave the terminal unusable** if the game was killed rather
+  than asked to stop.
+
 ## [v0.3.13] - 2026-08-19
 
 ### Description

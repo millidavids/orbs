@@ -396,6 +396,71 @@ fn the_scrollback_is_a_file_you_can_read() {
 }
 
 #[test]
+fn a_spell_is_read_as_a_script_and_a_log_as_a_log() {
+    // **§3 names three diagnostic surfaces and this one had no producer.** Both
+    // reads go through one `emit_lines`, so the only thing separating them is
+    // the kind it is handed — and for four phases it was handed `LogLine` for
+    // everything. A spell listing then linearised as `row  tick: 11, message:
+    // follow north`: a table row that is not one, under a world clock that is
+    // not one, for every line of a file the player wrote themselves.
+    let mut sim = Sim::new(1);
+    run(&mut sim, "peruse first_light.spell");
+
+    let script: Vec<_> = sim
+        .scrollback()
+        .records()
+        .iter()
+        .filter(|record| record.kind() == RecordKind::ScriptLine)
+        .collect();
+    assert!(!script.is_empty(), "a spell read back as no script lines");
+    assert!(
+        sim.scrollback()
+            .records()
+            .iter()
+            .all(|record| record.kind() != RecordKind::LogLine),
+        "a spell read back as log output",
+    );
+
+    // §14: a script line is the player's own sentence, so it speaks as itself
+    // rather than as `label: value`. The number survives — it is how they say
+    // which line they mean — and nothing else does.
+    let mut spoken = String::new();
+    script[0].speak(&mut spoken);
+    assert!(
+        !spoken.contains("message:") && !spoken.contains("tick"),
+        "a script line still speaks as a fielded row: {spoken:?}",
+    );
+}
+
+#[test]
+fn reading_the_log_does_not_sweep_up_the_last_spell_it_listed() {
+    // The doubling guard, which used to name one kind because there was only
+    // one. A listing is written back into the same stream it reads, so a
+    // `ScriptLine` left unfiltered means `peruse orb.log` reports the whole of
+    // whatever spell was last opened — as log lines, again, growing each time.
+    let mut sim = Sim::new(1);
+    run(&mut sim, "peruse first_light.spell");
+    run(&mut sim, "peruse orb.log");
+
+    let log: Vec<String> = sim
+        .scrollback()
+        .records()
+        .iter()
+        .filter(|record| record.kind() == RecordKind::LogLine)
+        .map(|record| record.to_line())
+        .collect();
+
+    assert!(
+        !log.is_empty(),
+        "the log read back empty, so this asserts nothing"
+    );
+    assert!(
+        !log.iter().any(|line| line.contains("kindle charcoal")),
+        "the log swallowed the spell listing before it: {log:?}",
+    );
+}
+
+#[test]
 fn sift_filters_the_log_and_finds_only_what_matches() {
     let mut sim = Sim::new(1);
     run(&mut sim, "meditate 2");

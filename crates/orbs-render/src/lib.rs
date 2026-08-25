@@ -109,6 +109,7 @@ mod tiling;
 mod tween;
 mod viewport;
 mod wrap;
+pub use wrap::Wrap;
 
 pub use bath::Steep;
 // `SIGILS` and `TINTS` alongside the types: the glyph table and the name table
@@ -136,7 +137,9 @@ pub use record::{
     contains_ignoring_case,
 };
 pub use span::Span;
-pub use style::{Density, Depiction, Heat, Intensity, Presentation, Roil, Role, Style, Tint, Wash};
+pub use style::{
+    Density, Depiction, Heat, Intensity, Lexeme, Presentation, Roil, Role, Style, Tint, Wash,
+};
 pub use viewport::{
     CELL_HEIGHT, CELL_WIDTH, GRID, INPUT_ROWS, MIN_GRID, MIN_SCALE, PICTURE, pixels, scale_for,
 };

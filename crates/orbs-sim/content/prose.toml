@@ -352,10 +352,12 @@ weave_unknown = "the orb weaves nothing called {name}"
 # **Authored to fit 28 cells**, which is the details panel's width inside its
 # border. Longer is clipped mid-word, and a sentence that stops at "while you
 # are" reads as a bug in the orb rather than as a pane that ran out of room.
-weave_node_tbi_a = "not taught yet"
 weave_node_tbi_b = "nor this"
-weave_node_tbi_c = "a deeper turning, unwritten"
 weave_node_tbi_d = "another, equally so"
+# The two the budget reads. Said as what it buys rather than as a number: a step
+# is a tick, so what a player gets is a spell that keeps up.
+weave_node_steps_1 = "one more step a second"
+weave_node_steps_2 = "two more steps a second"
 # What the Ley Line's one step gives, said as a capability rather than a number.
 weave_node_concentration = "hold a spell while away"
 
@@ -374,7 +376,14 @@ weave_node_concentration = "hold a spell while away"
 # **Three now.** `interpret` is the third, and it exists because the file stopped
 # being rewritten (§19): the orb's reading used to be visible in the saved spell,
 # and this is where it went. A validation step the player asks for.
-editor_words = "edit  interpret  quit"
+editor_words = "edit  guide  interpret  quit"
+
+# The scribing guide's own furniture. Terse: the pane is thirty cells wide and
+# every one of these shares it with the words it is heading.
+guide_title = "guide"
+guide_words = "the language"
+guide_verbs = "here you can"
+guide_next = "what can follow"
 editor_editing = "esc to stop writing"
 editor_reading = "what the orb hears. esc to go back"
 editor_unknown = "the orb does not know '{detail}' - try edit or quit"
@@ -462,6 +471,20 @@ spell_unreadable_until = "{name} line {count}: that question means nothing. the 
 # down a line the player did not.
 spell_unreadable_let = "{name} line {count}: let wants a name, then be, then a place"
 spell_unreadable_for = "{name} line {count}: for wants each, then a set. nothing is walked"
+
+# The five ways a part can be written wrong. Each names the line and says what
+# the orb did instead, because §8 forbids halting: the spell runs either way.
+# A verb no spell may issue, caught when the spell is cast rather than when the
+# line is reached — which for a line inside a branch may be never. Its own key,
+# because a complaint is given `name` and `count` and no `detail`.
+spell_forbidden_line = "{name} line {count}: that is a word the orb will not take from a spell"
+
+spell_unreadable_part = "{name} line {count}: part wants one name. nothing is set aside"
+spell_part_takes_nothing = "{name} line {count}: a part takes nothing between its brackets"
+spell_no_such_part = "{name} line {count}: no part of this spell is called that"
+spell_repeated_part = "{name} line {count}: that part is named above. this one is set aside"
+spell_nested_part = "{name} line {count}: a part belongs outside every block, not in one"
+spell_parts_too_deep = "{name} calls {detail} too deep to follow. it stops there and goes on"
 
 # A question about somewhere the tower does not have. §8's *Referent missing*,
 # and **not the same as the answer being no** - which is exactly the bug this
@@ -792,6 +815,9 @@ using_let = "let best be north. then follow best, or ask if best has spoil"
 
 recall_for = "do the block once for each of a set, in the order they stand"
 using_for = "for each way, the lines, then end. way is the one you are on"
+
+recall_part = "name a run of lines, so the rest of the spell can ask for it"
+using_part = "part gathering(), the lines, then end. say gathering() to do it"
 
 # What the archive is for, and what its verb does - the two manual entries the
 # domain has never had.

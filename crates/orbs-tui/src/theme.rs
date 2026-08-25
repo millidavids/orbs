@@ -14,6 +14,11 @@
 //! the numbers belong to whoever configured the terminal, and a player who has
 //! chosen a readable scheme gets a readable game.
 //!
+//! That holds for the syntax hues too, and it is why they are *indices* here and
+//! `Srgba` in the Bevy build: `syntax_colour` picks six of the sixteen the reader
+//! already chose, rather than six colours of its own. Most of a spell keeps the
+//! terminal's own foreground on purpose — see that function.
+//!
 //! What that costs is the guarantee §14 asks for. The Bevy palette is *solved*:
 //! every accent pair is ≥1.25:1 apart in greyscale luminance, asserted by a
 //! test. Sixteen colours we do not own cannot be held to that, which is why the
@@ -38,7 +43,7 @@
 //!   cursor, which is better: it is the one a screen reader tracks.
 
 use crossterm::style::Color;
-use orbs_render::{Density, Depiction, Heat, Intensity, Roil, Role, Style, Tint, Wash};
+use orbs_render::{Density, Depiction, Heat, Intensity, Lexeme, Roil, Role, Style, Tint, Wash};
 
 /// A resolved pen: what colour, and how heavy.
 ///
@@ -98,8 +103,9 @@ impl From<Intensity> for Weight {
 ///
 /// 1. A material's [`Wash`], if there is one and it does not decline.
 /// 2. Otherwise the cell's [`Depiction`] — fire, liquid, sediment.
-/// 3. Otherwise the [`Role`], varied by [`Intensity`] only when it is `Normal`.
-pub(crate) fn resolve(style: Style, wash: Option<Wash>) -> Ink {
+/// 3. Otherwise the [`Lexeme`] over it, if a spell is being read here.
+/// 4. Otherwise the [`Role`], varied by [`Intensity`] only when it is `Normal`.
+pub(crate) fn resolve(style: Style, wash: Option<Wash>, syntax: Option<Lexeme>) -> Ink {
     // **`depicted()`, never `style.depiction`.** The accessor yields `None` on
     // any accented cell, so a `Role::Danger` cell can never render in flame
     // colours. `orbs-render`'s own doc names this crate as the place it would be
@@ -114,7 +120,69 @@ pub(crate) fn resolve(style: Style, wash: Option<Wash>) -> Ink {
     if let Some(ink) = depicted(depiction) {
         return ink;
     }
+    // **After the pictures and before the accent.** A syntax run and an
+    // instrument bar never share a cell — the editor takes the whole pane — so
+    // the order is a statement of rank rather than a case anyone can reach: a
+    // picture of a thing outranks a colour for a word, and an accent outranks
+    // both.
+    if let Some(ink) = syntaxed(syntax, style.role, style.intensity) {
+        return ink;
+    }
     accent(style.role, style.intensity)
+}
+
+/// A part of speech's colour, or `None` if it declines.
+///
+/// # It declines on an accent, and asserting that is what found the hole
+///
+/// `orbs-shell` already refuses to register a run on an accented row, and this
+/// was written trusting it — under a comment claiming the rule was *"enforced
+/// twice on purpose"*, with nothing here enforcing it. The test one screen down
+/// failed on the first run: a line `interpret` could not read resolved violet
+/// instead of red, losing the one accent the game most needs legible.
+///
+/// That is §19's recurring defect exactly — a comment claiming a rule that
+/// nothing implements — and it is [`tinted`]'s first decline, for [`tinted`]'s
+/// reason: *"an accent is a signal; a tint is a hint. The signal wins."*
+fn syntaxed(syntax: Option<Lexeme>, role: Role, intensity: Intensity) -> Option<Ink> {
+    if role != Role::Normal {
+        return None;
+    }
+    let colour = syntax_colour(syntax?)?;
+    Some(Ink {
+        colour: Some(colour),
+        weight: intensity.into(),
+    })
+}
+
+/// A part of speech's colour, or `None` to keep the terminal's own foreground.
+///
+/// # Seven departures from the base, not eight
+///
+/// [`Lexeme::Name`] deliberately resolves to `None`. A name is most of a spell —
+/// every reagent, instrument, place and reading — so colouring it would override
+/// the user's own foreground for the bulk of the file and leave the *departures*
+/// with nothing to depart from. §19 settles that this build inherits the
+/// terminal's theme; the base hue is the reader's to choose, and the hues are
+/// what the language adds to it.
+///
+/// [`Lexeme::Comment`] and [`Lexeme::Filler`] resolve to `None` too, and already
+/// read as recessive: [`Lexeme::weight`] draws both dim, which is carried on the
+/// weight axis and survives a terminal with no colour at all.
+const fn syntax_colour(kind: Lexeme) -> Option<Color> {
+    match kind {
+        // The scaffolding, and a call to this file's own — arcane, which is the
+        // register §14 already reads as magical.
+        Lexeme::Control | Lexeme::Call => Some(Color::Magenta),
+        // Something the tower answers to.
+        Lexeme::Verb => Some(Color::Yellow),
+        Lexeme::Number => Some(Color::DarkYellow),
+        // The two halves of a question, told apart: what it turns on, and what
+        // the answer may be.
+        Lexeme::Grammar => Some(Color::DarkCyan),
+        Lexeme::State => Some(Color::Cyan),
+        Lexeme::Name | Lexeme::Comment | Lexeme::Filler | Lexeme::None => None,
+    }
 }
 
 /// A material's colour family, or `None` if the tint declines.
@@ -433,8 +501,68 @@ mod tests {
         // `resolve` went through `depicted()`.
         let style = Style::DANGER.with_depiction(Depiction::FlameCore);
         assert_eq!(
-            resolve(style, None),
+            resolve(style, None, None),
             accent(Role::Danger, Intensity::Normal)
+        );
+    }
+
+    /// Every part of speech that departs from the base gets its own colour.
+    ///
+    /// **Seven categories and six colours**, because `Control` and `Call` share
+    /// one: both are the file's own scaffolding, and telling a block keyword
+    /// from a call to this file's own part is what the `()` is for.
+    #[test]
+    fn each_part_of_speech_that_departs_has_its_own_colour() {
+        let departs = [
+            Lexeme::Control,
+            Lexeme::Verb,
+            Lexeme::Number,
+            Lexeme::Grammar,
+            Lexeme::State,
+        ];
+        let mut seen = Vec::new();
+        for kind in departs {
+            let colour = syntax_colour(kind).expect("a departing kind has a colour");
+            assert!(
+                !seen.contains(&colour),
+                "{kind:?} shares a colour with something already listed",
+            );
+            seen.push(colour);
+        }
+        assert_eq!(
+            syntax_colour(Lexeme::Call),
+            syntax_colour(Lexeme::Control),
+            "a call is the file's own scaffolding and reads as such",
+        );
+    }
+
+    /// ...and the ones that keep the reader's own foreground keep it.
+    ///
+    /// A name is most of a spell; colouring it would override the terminal's
+    /// theme for the bulk of the file and leave the departures with nothing to
+    /// depart from. Comments and filler already recede on the weight axis, which
+    /// is what survives a terminal with no colour at all.
+    #[test]
+    fn the_base_hue_still_carries_most_of_a_spell() {
+        for kind in [Lexeme::Name, Lexeme::Comment, Lexeme::Filler, Lexeme::None] {
+            assert_eq!(
+                syntax_colour(kind),
+                None,
+                "{kind:?} overrode the reader's own foreground",
+            );
+        }
+        // The weight axis is doing the work for those two, and still is.
+        assert_eq!(Lexeme::Comment.weight(), Intensity::Dim);
+        assert_eq!(Lexeme::Filler.weight(), Intensity::Dim);
+    }
+
+    /// An accent outranks a syntax colour, as it outranks a tint.
+    #[test]
+    fn a_fault_outranks_the_highlighting_here_too() {
+        assert_eq!(
+            resolve(Style::DANGER, None, Some(Lexeme::Control)),
+            accent(Role::Danger, Intensity::Normal),
+            "a line the orb could not read went violet instead of red",
         );
     }
 }

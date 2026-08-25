@@ -34,8 +34,8 @@ use super::{LOG, acknowledge, missing};
 pub(super) fn peruse(intent: &Intent, world: &mut World) {
     // Snapshot first: the stream being read is the stream being written to.
     let tampered = tampered_source(world, intent);
-    let lines = read_file(world, intent, None);
-    emit(world, Verb::Peruse, &lines, tampered);
+    let listing = read_file(world, intent, None);
+    emit(world, Verb::Peruse, &listing, tampered);
 }
 
 /// Filter a file.
@@ -49,8 +49,8 @@ pub(super) fn sift(intent: &Intent, world: &mut World) {
         return;
     };
     let tampered = tampered_source(world, intent);
-    let lines = read_file(world, intent, Some(&pattern));
-    emit(world, Verb::Sift, &lines, tampered);
+    let listing = read_file(world, intent, Some(&pattern));
+    emit(world, Verb::Sift, &listing, tampered);
 }
 
 /// Report whether a surface has been interfered with (§8.1).
@@ -79,14 +79,10 @@ pub(super) fn verify(intent: &Intent, world: &mut World) {
 /// makes a lookup impossible to call from anywhere already holding a shared
 /// borrow, for no reason the body can point at.
 fn here_or_place(world: &World, target: &str) -> Option<Entity> {
-    let cwd = world.resource::<Cwd>().0;
-    tower::children_of(world, cwd)
-        .into_iter()
-        .find(|node| {
-            world
-                .get::<tower::Name>(*node)
-                .is_some_and(|n| n.0 == target)
-        })
+    // Three scopes, widening, and the order is the rule: what is in the room
+    // outranks the same name elsewhere in the tower. See `tower::reach`.
+    tower::reach::look(world)
+        .find(target)
         .or_else(|| {
             let root = root(world);
             find_place(world, root, target)
@@ -129,13 +125,28 @@ fn tampered_source(world: &World, intent: &Intent) -> bool {
     })
 }
 
+/// What a read produced, and which of §3's diagnostic surfaces it came from.
+///
+/// The two travel together because the second is only knowable *here* — the
+/// branch below is the whole distinction, and by the time `emit` has the lines
+/// they are indistinguishable strings.
+struct Listing {
+    lines: Vec<String>,
+    kind: RecordKind,
+}
+
 /// The lines a file holds, optionally filtered.
 ///
 /// Owned because the borrow has to end before anything can be written back into
 /// the same stream — reading and writing one log is the normal case here.
-fn read_file(world: &World, intent: &Intent, pattern: Option<&str>) -> Vec<String> {
+fn read_file(world: &World, intent: &Intent, pattern: Option<&str>) -> Listing {
     let Some(file) = named_file(intent) else {
-        return Vec::new();
+        return Listing {
+            lines: Vec::new(),
+            // Nothing was named, so nothing was read. A log is the surface a
+            // bare read defaults to everywhere else in this file.
+            kind: RecordKind::LogLine,
+        };
     };
 
     // **Stored text wins, and does not fall through.** A `.spell` holds lines a
@@ -144,29 +155,44 @@ fn read_file(world: &World, intent: &Intent, pattern: Option<&str>) -> Vec<Strin
     // name and report whatever it found, which is the same class of defect as
     // `bind` falling through to `sift` — a wrong answer wearing a right one's
     // clothes. An empty spell reads as empty, which is true.
+    //
+    // **It is also the script/log split**, and nothing else in the tower draws
+    // one: `tower::Held` is exactly "text a person wrote" and its absence is
+    // exactly "a view over records". That is why the kind is decided here rather
+    // than by looking at the `.spell` suffix, which is a naming convention and
+    // would answer wrongly the first time anything else holds text.
     if let Some(node) = here_or_place(world, file)
         && let Some(held) = world.get::<tower::Held>(node)
     {
-        return held
-            .0
-            .iter()
-            .filter(|line| {
-                pattern.is_none_or(|pattern| orbs_render::contains_ignoring_case(line, pattern))
-            })
-            .cloned()
-            .collect();
+        return Listing {
+            lines: held
+                .0
+                .iter()
+                .filter(|line| {
+                    pattern.is_none_or(|pattern| orbs_render::contains_ignoring_case(line, pattern))
+                })
+                .cloned()
+                .collect(),
+            kind: RecordKind::ScriptLine,
+        };
     }
 
     let domain = (file != LOG).then(|| domain_names(world, file.trim_end_matches(".log")));
     let sift = pattern.map(Sift::new);
 
-    world
+    let lines = world
         .resource::<Scrollback>()
         .records()
         .iter()
         // Never its own output, or each run would match everything the last one
         // emitted and the stream would double every time.
-        .filter(|record| record.kind() != RecordKind::LogLine)
+        //
+        // **Both listing kinds, not just the log.** `emit_lines` pushes whichever
+        // of the two the read was, so once a spell listing became `ScriptLine` a
+        // `peruse` of the log would have swept up the last `peruse` of a spell —
+        // the same doubling, arriving by the other kind and only after somebody
+        // had read a file the tower had never had a second kind of.
+        .filter(|record| !matches!(record.kind(), RecordKind::LogLine | RecordKind::ScriptLine))
         .filter(|record| domain.as_ref().is_none_or(|names| in_domain(record, names)))
         .filter(|record| sift.as_ref().is_none_or(|sift| record.matches(sift)))
         // A search shows the fields it matched on; a read shows the drawn line.
@@ -178,7 +204,12 @@ fn read_file(world: &World, intent: &Intent, pattern: Option<&str>) -> Vec<Strin
                 record.to_line()
             }
         })
-        .collect()
+        .collect();
+
+    Listing {
+        lines,
+        kind: RecordKind::LogLine,
+    }
 }
 
 /// A domain's own name plus every fixture standing in it.
@@ -224,8 +255,14 @@ fn in_domain(record: &Record<'_>, names: &[String]) -> bool {
         })
 }
 
-/// Write `lines` back as log output, damaged if the source was poisoned.
-fn emit(world: &mut World, verb: Verb, lines: &[String], tampered: bool) {
+/// Write a listing back onto the transcript, damaged if the source was poisoned.
+fn emit(world: &mut World, verb: Verb, listing: &Listing, tampered: bool) {
     let mut scrollback = world.resource_mut::<Scrollback>();
-    tower::emit_lines(scrollback.records_mut(), verb, lines, tampered);
+    tower::emit_lines(
+        scrollback.records_mut(),
+        verb,
+        listing.kind,
+        &listing.lines,
+        tampered,
+    );
 }

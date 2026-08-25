@@ -562,8 +562,19 @@ const fn depiction_mark(depiction: Depiction) -> char {
 /// status line and a caret position all fit in 80 columns with room left for a
 /// spell, and that every one of them **speaks**.
 ///
-/// The real painter is `orbs::shell::sheet`. If this layout stops fitting, that
+/// The real painter is `orbs_shell::sheet`. If this layout stops fitting, that
 /// one has the same problem.
+///
+/// # What it deliberately does not show is the scribing guide
+///
+/// The guide needs a `Sim` — it lists the verbs of the spell's *domain* — so it
+/// cannot be reached from here at all, and a hand-built replica of it would be a
+/// second opinion about the vocabulary rather than a check on the layout.
+///
+/// It is also **absent at 80×22 in the real editor**, which is the size drawn
+/// here: the guide yields whole below 97 columns rather than cramping itself in.
+/// So this replica is accurate at the one size it draws, and `scripts/tui.sh` is
+/// the gate for the guide.
 fn editor_screen(grid: GridSize) -> Frame {
     const GUTTER: u16 = 5;
     let mut frame = Frame::new(grid);
@@ -591,10 +602,14 @@ fn editor_screen(grid: GridSize) -> Frame {
     // game's first modal surface — a player who does not know the words has
     // nowhere else to find them, so in command state this row *is* the whole
     // interface.
+    // **The editor's real vocabulary**, which this said nothing of for three
+    // versions: `save` and `discard` were never words — the buffer writes itself
+    // out a beat after the typing stops — and `guide` and `interpret` both
+    // arrived without this replica hearing about it.
     let status = grid.rows.saturating_sub(2);
     painter.span(
         Pos::new(1, status),
-        &Span::new("edit  save  quit  discard").with_style(Style::DIM),
+        &Span::new("edit  guide  interpret  quit").with_style(Style::DIM),
     );
     painter.span(
         Pos::new(grid.cols.saturating_sub(5), status),

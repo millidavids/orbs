@@ -31,7 +31,7 @@ use orbs_render::{FieldName, RecordKind, Role};
 use crate::content::Prose;
 use crate::parser::{Intent, Verb};
 use crate::session::Scrollback;
-use crate::tower::{self, Domain, Held, Name, NodeId};
+use crate::tower::{self, Domain, Held, NodeId};
 
 use super::run::Running;
 
@@ -183,6 +183,12 @@ pub(super) fn cast(
         // lines, and an accumulator left holding last lap's answer would make
         // the first comparison of this one ask about a world that has moved.
         vars: std::collections::BTreeMap::new(),
+        // A cast opens on the spell's own body with nothing suspended behind it,
+        // which is the same *"a new pass over the same lines"* the store above
+        // argues for: a binding that laps mid-part would otherwise resume inside
+        // a call the new pass never made.
+        part: None,
+        stack: Vec::new(),
     });
     if !announce.is_empty() {
         say(world, announce, wanted, role);
@@ -261,19 +267,15 @@ pub fn stop_spell(world: &mut World, named: &str) -> bool {
 }
 
 /// The spell node called `wanted`, wherever it is kept.
+///
+/// **One of three byte-identical copies of this walk**, and now one call: see
+/// `tower::reach` for the rule and for what the other two cost.
 fn find(world: &World, wanted: &str) -> Option<Entity> {
-    let root = tower::root(world);
-    let mut stack = vec![root];
-    while let Some(node) = stack.pop() {
-        if world.get::<tower::Nameable>(node).map(|kind| kind.0)
-            == Some(crate::parser::NounKind::Script)
-            && world.get::<Name>(node).is_some_and(|name| name.0 == wanted)
-        {
-            return Some(node);
-        }
-        stack.extend(tower::children_of(world, node));
-    }
-    None
+    tower::reach::look(world)
+        .scope(tower::reach::Scope::Tower)
+        .kind(crate::parser::NounKind::Script)
+        .naming(tower::reach::Naming::Script)
+        .find(wanted)
 }
 
 fn say(world: &mut World, key: &str, name: &str, role: Role) {

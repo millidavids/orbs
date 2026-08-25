@@ -51,7 +51,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev pkg-config
+            libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev pkg-config \
+            mold
 
       # CLAUDE.md's gate, verbatim and in the same order.
       - name: Format
@@ -126,9 +127,14 @@ jobs:
       - name: Install tmux
         # The scenarios skip loudly without it rather than failing, so this is
         # what keeps a green run from meaning "nothing ran".
+        #
+        # **And mold**, because `.cargo/config.toml` names it as the linker for
+        # this target: without it every job that links fails outright. That is
+        # deliberate — a build that quietly took the slow path is a measurement
+        # nobody can trust — so the answer is to install it, not to soften it.
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends tmux
+          sudo apt-get install -y --no-install-recommends tmux mold
 
       - name: Play the game
         # Fewer threads than the desk: a shared runner has two cores, and every

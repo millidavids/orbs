@@ -115,6 +115,14 @@ not a hue slider.
 Base hue carries all ordinary text through **intensity variation alone**, with a
 small accent set reserved strictly for meaning.
 
+**One exception, added at `0.3.35` and narrow on purpose: the text of a spell.**
+The language outgrew what three weights can separate — `is` and `the` are
+opposites and read identically — so spell text carries a second axis of hue
+beside its weight. Everything else on screen is unchanged, the accent triad still
+outranks it, and weight alone still carries the whole reading for a dump, a
+greyscale tube, and the `monochrome` theme, which declines the palette outright.
+§19 records the supersession and what it is bounded by.
+
 | Accent | Reserved for |
 |---|---|
 | Danger accent | Failure, breach, hostile action |
@@ -565,22 +573,35 @@ The Phase 0 vocabulary (16 commands), canonical arcane with synonym registers:
 | `attend <path>` | Move to a place | `cd` | go, enter, "go to" |
 | `survey [path]` | List what is here | `ls`, `dir` | look, list, "what's here" |
 | `peruse <file>` | Read a file | `cat`, `less` | read, open, show |
-| `sift <pat> <src>` | Filter for matches | `grep` | search, filter, "look for" |
+| `sift <pat> <src>` | Filter for matches | `grep`, `find` | search, filter, "look for" |
 | `status` | Tower overview (the boot report) | — | overview, "how are things" |
-| `recall <topic>` | In-world manual | `man`, `help`, `?` | explain, "how do I" |
+| `recall <topic>` | In-world manual | `man`, `help`, `?` | explain, "how do I", decoct, brew, make |
 | `meditate <n>` | Fast-forward the clock | `sleep` | rest, pass — **not `wait`, see §19** |
 | `verify <target>` | Detect tampering | `check` | inspect, audit |
 | `undo` | Revert the last command | — | revert, "take it back" |
-| `meditate <n>` | Fast-forward the clock | `wait`, `sleep` | rest, pass |
-| `decoct <essence>` | Brew a potion — **retired in Phase 1, see below** | — | brew, make, mix, distil |
+| `decoct <essence>` | Brew a potion — **retired in Phase 1, see below.** Its words point at `recall` | — | — |
 | `empty <place>` | Turn a tool out into the dispensary | — | unload, collect, decant, pour |
 | `purge <target>` | Destroy waste or spoilage | `rm` | clean, dump, "get rid of" |
-| `research` | Open a way into the stacks | — | divine, decipher, study, translate |
-| `scribe <name>` | Open a spell in the editor, making it if new | `vi`, `edit` | inscribe, author |
+| `research` | Open a way into the stacks — arcane also `divine` | — | decipher, decode, study, translate |
+| `scribe <name>` | Open a spell in the editor, making it if new | `vi`, `edit` | inscribe, write, author |
 | `bind <script>` | Attach a script to a trigger | `cron` | schedule, automate |
 | `invoke <script>` | Run a script or spell | `run`, `exec`, `./` | cast, do |
 
 Every row resolves from all three registers; the echo always shows column one.
+
+**This table had drifted from the code, and one row contradicted another** (§19,
+the `0.3.28` naming pass). `meditate` appeared **twice**, once saying *"not
+`wait`"* and once listing `wait` as a synonym; `wield` claimed `kindle`, which is
+its own verb now; `stop` claimed `damp` where the code says `quench`; `decoct`
+still listed `mix` and `distil`, both of which became verbs of their own. Six
+rows in all. `the_slice_table_in_this_document_matches_the_vocabulary` is what
+holds the two together now, and it reads this file.
+
+**The other fourteen verbs are not here on purpose.** This is the *slice*
+vocabulary — §6.1 is a Phase 0 section — and the domains coined the rest:
+`grind`, `digest`, `mix`, `distil`, `kindle`, `stop`, `probe`, `dial`, `follow`,
+`wander`, `weave`, `unfurl`, `quit`, `move`. `Verb::ALL` is the list, and
+`tests/naming.rs` is what keeps it honest.
 
 **Three canonical names changed in the Phase 0 naming pass** (§19) —
 `decant`→`siphon`, `decipher`→`research`, `inscribe`→`scribe`. Every original stays
@@ -607,8 +628,8 @@ pipeline (§10.1, §19) needs a way to move a thing, start a tool, and cancel on
 | Canonical | Does | Shell synonyms | Plain synonyms |
 |---|---|---|---|
 | `move <thing> from <src> to <dst>` | Move a thing between places | `mv` | transfer, transport, relocate |
-| `wield <tool>` | Start a tool working | — | use, begin, kindle |
-| `stop <tool>` | Cancel a tool, refunding inputs | — | cancel, halt, damp |
+| `wield <tool>` | Start a tool working | — | use, begin |
+| `stop <tool>` | Cancel a tool, refunding inputs | — | cancel, halt, quench |
 
 **`decoct` is retired.** It meant *"brew a potion"* when brewing was one command
 holding a slot for twenty ticks. It is now a pipeline — grind, digest, combine,
@@ -2176,7 +2197,7 @@ in the suite would have caught it, and none was ever written that could have.
 | **0. Vertical slice** | Parser + instrumentation, **the prompt — an interactive command line, built before the domains and used to verify them**, **brewing + archive (the two starting domains)**, **`orbs-render` Frame boundary**, **log-poisoning sabotage on brewing logs**, cell-grid renderer + fidelity tiers, worst-case CRT legibility test, structured-record output model, seeded-RNG + `step()` determinism spine, boot, scaffold tutorial | ~3k | 4 mo | Numeric gate below |
 | **1. Core loop** | World clock, script engine + **concentration** + failure taxonomy, remaining sabotage surfaces, 3 domains, minimal apprenticeship, content data format, balance CLI **sweeping §11.5's first-pass numbers**, **scrappy internal `orbs-tui` as a dev tool** | ~15k | 5 mo | A player automates a duty and feels clever; non-terminal testers in the loop |
 | **2. Scrying** | The `lens/` domain: deduction over sources that disagree. **World sabotage surface**, **`orbs-balance` sweeping §11.5's first-pass numbers** | ~6k | 3 mo | A player finds which of two accounts is lying, and a spell repeats it |
-| **3. Spellcraft** | The `grimoire/` domain: spells composed from reusable parts. **The language overhaul that composition needs** — values, variables, lists, `for each`, functions, builtins over the domains. **Naming pass (~35 verbs)**, hidden-directory authoring | ~7k | 5 mo | A spell is assembled from parts written earlier |
+| **3. Spellcraft** | The `grimoire/` domain: a spell factors into named parts, **within one `.spell` file** (§19 — cross-file sharing struck). **The language overhaul that composition needs** — values, variables, lists, `for each`, in-file parts, builtins over the domains. **Naming pass (~35 verbs)**, hidden-directory authoring | ~7k | 5 mo | A spell factors into named parts and still reads as one file |
 | **4. Enchanting** | The `forge/` domain (derived): sequence + cost → a decaying buff on an instrument. **Shared-engine extraction**, pulled forward from 9a | ~4k | 2 mo | A buffed instrument is visibly faster and the buff runs out |
 | **5. Summoning** | The `menagerie/` domain (derived): allocation → a unit with a standing rule | ~4k | 2 mo | A summoned thing acts without being told to that tick |
 | **6. Defense** | The `battlements/` domain: wards under 1 Hz pressure. **Reflex-avoidance mechanism decided first**; **accessible mode decided here, not at 11** | ~5k | 3 mo | A pressure survived by choosing, not by reacting |
@@ -2347,9 +2368,11 @@ they are re-pointed at the phases that now need them rather than quietly dropped
 1. Trace tuning across all three sources — accrual rates, the nuisance-rate
    composition rule, the ceiling, and the provocation threshold (§5.3).
    **→ Standing.** It accrues with content and has no state in which it is done.
-2. Naming pass for the remaining ~35 canonical commands and their synonym sets,
-   following §6.1's ≤7-character rule. **→ Phase 3**, ahead of the domains that
-   coin the most verbs.
+2. ~~Naming pass for the remaining ~35 canonical commands and their synonym
+   sets, following §6.1's ≤7-character rule.~~ **Done at `0.3.28`** — thirty
+   verbs, three registers, typed at a real prompt. It found the lens with no
+   plain-English way in and six drifted rows in §6.1's own table, and both are
+   lints now.
 3. Hidden-directory authoring plan — ~80 fragments' worth, placed to pace the
    first ten hours. **→ Phase 3**, which is what spends fragments.
 4. ~~What the brewing recipe puzzle actually is.~~ **Done at the head of Phase 1**,
@@ -2420,6 +2443,775 @@ nothing, and **every spell that used to wait starts being refused** — with
 `waiting_since` never set, `PATIENCE` never tripped, and most tests still green.
 A typed call therefore **constructs an `Intent`**, kinds intact. The win is
 directness, not deleting the round-trip.
+
+### The caret sat on the word telling you how to start (Phase 3, `0.3.35`)
+
+The editor's command row is two things at once: where a word is **typed**, and
+where the four words are **offered**. Both began at the same column, and command
+state opens with nothing typed — so the block caret rested where the first
+character would land, which was the third glyph of `edit  guide  interpret
+quit`. The cursor sat on the `i` of `edit`: the first word on the row, and the
+one that tells a player how to begin.
+
+Two columns now, because the two want opposite things — **a caret sits *after*
+what has been typed and *beside* what is merely being offered.** `TYPED` is where
+a character lands and `SAYING` is three cells past it, so the row reads
+`│     edit  guide …` with the caret in clear space to its left.
+
+The indent comes out of the room the message is clipped to, or a shifted line
+would run under the `1:1` position rather than stopping short of it. Every
+standing message moves, not just the listing, so the row does not jump when the
+mode changes.
+
+**Found by looking at a screenshot**, which is the whole of §15's rule: the tests
+were green, `ORBS_DUMP` prints no cursor, and the one instrument that would have
+shown it is a pair of eyes on the running game.
+
+### §4 is widened for spell text, and the reasoning at `0.3.29` is superseded (Phase 3, `0.3.35`)
+
+**This reverses a decision taken twelve versions earlier and reaffirmed six
+versions after that**, so it is recorded as a supersession rather than written as
+though it had always been so.
+
+§4 reads *"base hue carries all ordinary text through **intensity variation
+alone**, with a small accent set reserved strictly for meaning."* `0.3.29` cited
+that sentence to settle the medium for syntax highlighting, and drew a spell in
+three weights. Its own entry carried the cost as a ⚠: *"a verb and a name look
+alike, because three weights cannot hold seven categories and `Control` takes
+the bright one. Telling them apart needs a hue, which is the thing §4 forbids."*
+
+The design authority chose the hue. **A spell is no longer "ordinary text" for
+§4's purposes**, and that is the whole of the amendment — narrow on purpose:
+
+- The **accent triad is untouched** and still outranks everything. A line
+  `interpret` could not read stays wholly `Role::Danger`; the hue declines on it
+  in `orbs-shell`, in `orbs-tui` and in the Bevy palette, three times.
+- **Weight still carries the reading on its own.** `Lexeme::weight` is unchanged
+  in what it separates — scaffolding, content, noise — because `ORBS_DUMP` has no
+  colour, a greyscale tube is a §14 case, and `monochrome` now declines the
+  palette outright. Take every hue away and a spell reads exactly as it did.
+- **Everything that is not a spell is unchanged.** The transcript, the panel, the
+  rail and the boot card never register a run.
+
+#### `Grammar` is the variant that earned the change
+
+The ask was *"more colours"*; what the palette actually bought is that `is` and
+`has` stopped looking like the `the` beside them. Both are small words between
+the interesting ones and they are **opposites**: filler is what §6 *strips*, and
+grammar is what the question turns on. Three weights had them at the same one,
+and no amount of weight could have separated them — that is the ⚠ from `0.3.29`
+arriving in a place it mattered more than the verb-versus-name case it named.
+
+`empty` is the one word that is a verb *and* a state, so the state check sits
+below the verb check: above it, `empty mortar_and_pestle` would draw its verb as
+a state.
+
+#### Where the colour lives, and why not on `Style`
+
+`Cell` is pinned at eight bytes and `Style` at four with **no spare byte** — a
+fifth field cost +28 KiB and ~1.2 µs a frame when `Depiction` tried it, which is
+what `a_cell_stays_eight_bytes` exists to have said. So the hue rides a `Frame`
+side-table of `(Rect, Lexeme)`, which is [`Wash`]'s argument reused verbatim: *"a
+payload is affordable here and would not be on a `Cell`"*. A syntax run is a
+region in exactly the way an instrument's bar is. Cost is a handful of entries on
+the one frame with an editor open and none at all on every other screen.
+
+**Kept apart from `Tint` rather than folded into it**, and that was a real fork:
+`Tint` already has eight families both frontends resolve, which would have been
+free. It means **materials**, and the laboratory draws an instrument panel two
+columns from the editor — a verb sharing a colour name with a potion in the bar
+beside it is one vocabulary meaning two things on one screen.
+
+#### `monochrome` declines, and that is what makes it a setting
+
+A theme named for having one colour cannot sprout five. `Phosphor::syntax` is an
+`Option`, so a player who reads hue poorly has somewhere to go rather than a
+complaint — the same escape the tube's own themes already offer for the phosphor,
+and the §14 answer for this feature.
+
+⚠ **The three coloured themes share one syntax table.** The accents are tuned per
+theme because each sits against a different background; these were authored
+without a window to judge them in. The field is per-theme so a pass with eyes on
+the tube can split them, which is §15's shape — build the instrument, then use it.
+
+#### The instrument was the thing that failed first
+
+The terminal build drew the hues correctly on the first run and a hand-written
+SGR reader said it had not. crossterm writes every named colour through the
+**256-colour** form, so `Color::Magenta` is `38;5;13` and not the `35` an ANSI
+table predicts; a parser written against `3x` sees no colour at all and reports
+the whole feature missing.
+
+`scripts/tui.sh ink` exists for precisely this and reads it correctly. The lesson
+is the one §15 already states — *use the instrument the project has* — and it is
+recorded because the failure mode is maximally misleading: a broken reader and a
+broken feature produce identical output.
+
+### What an adversarial read of the whole change found (Phase 3, review of `0.3.23`–`0.3.34`)
+
+Twelve findings against the uncommitted work, all confirmed against a running
+game. Four are worth a decision rather than just a fix.
+
+**A save from an *earlier* format is now refused, and there is no migration.**
+`FORMAT` was 1 and the load path checked only `format > FORMAT`, so half a
+version gate: a build refused the future and opened the past. The lens rework had
+taken seven fields off `WardSave` and changed `shift`'s vocabulary from
+gained/held/lost to closer/level/further, and serde drops what it no longer knows
+without a word — so a pre-rework save opened straight into the redesigned ward
+and resumed a reading whose answers had been scored by an exchange-and-ratchet
+codemaker that no longer exists. `WardSave`'s own doc said the two shapes *"count
+as different formats"*; nothing enforced it.
+
+`FORMAT` is 2 and both directions are refused. **No migration is written and none
+should be**: the old answers are not expressible in the new model, so there is
+nothing to migrate them *to*. This is a pre-1.0 project with no shipped audience,
+which is what makes refusing cheap — the cost is a developer's own save. The
+`Behind` arm is where a migration hangs if that ever stops being true.
+
+**Reading vocabulary is keyed on the *set*, not the room and not `Reading`.**
+`recall scripting` gated its last section on *does this room have any reading
+child* and then printed `maze::readings()` regardless. The lens's sockets and
+sigils carry that marker, so the lens's page taught the archive's seven words and
+named none of the ward's six deltas — which are, since the rework, the whole of
+what a lens spell may branch on. The one page a player can learn that vocabulary
+from listed a different room's.
+
+The set is the right key because it is already **declared** (`Branch::group`)
+rather than inferred, and because the vocabulary genuinely belongs to it: every
+`way` answers the same seven words, every `socket` the same six. A field on
+`Branch` would have been better still and was tried; it needs the field on all
+twenty-eight branches, which buys nothing over one arm per set in `readings_of`.
+
+**`interpret` read the canonical `part <name>()` as a line it could not read.**
+It asked `call_name` before `spell_word`, where `read` — the real compiler —
+reaches `call_name` only in `spell_word`'s `None` arm. `call_name("part
+gathering()")` finds a two-word head and answers *a call with something in front
+of it*, so the definition fell into `spell_part_takes_nothing`. The spell
+compiled and ran; only the surface built to catch bad lines lied about it, and it
+lied about the one form `SpellWord::shape`, `recall part` and CLAUDE.md's own
+See-it line all teach.
+
+**A dump drew the guide as an empty box.** `dump.rs` sets the running line and
+the reading by hand — because a dump builds no `App` — and did not call
+`Editor::refresh`, the accessor added this change. Every dumped editor screen
+therefore showed a pane that was present, sized, thirty columns wide and blank,
+including several `scripts/dumps.sh` captures. That is precisely the
+dump-versus-game divergence `opened`'s own doc says it exists to prevent, and it
+is why the See-it rule is *looked at* rather than *ran*.
+
+The rest were fixes without decisions: `for each ` offered the room's contents
+instead of its sets; `things()` offered ~100 verb words as things to `wait` on;
+`open_blocks` offered a second `else` after the ladder was finished; a second
+copy of the shape table survived the extraction meant to kill it; `single_words`
+allocated a 150-element `Vec` on three per-frame paths; `play.sh` swept `/tmp`
+where the harness uses `TMPDIR` and did it unconditionally, deleting a concurrent
+run's live scratch; `window_starts(0)` did pointer arithmetic against a literal;
+and two comments pointed at a `HANGUP_SPINS` that was renamed before it shipped.
+
+#### Then the same questions were asked of the whole tree
+
+A finding is an instance; the useful move is to ask whether it is the only one.
+Four sweeps, three of which came back empty and are worth recording as such.
+
+**Stale symbol references** — the `HANGUP_SPINS` class. Every backticked
+identifier in every comment and every doc, checked against what the tree
+actually defines. Rust comments: **clean**. The prose found four more, all in
+docs and all present-tense claims about code:
+`a_real_chord_is_still_not_text` (the test is
+`a_chord_does_not_reach_enter_or_backspace`), `scribe::written_condition` (it is
+`spell::compile::fix`, and the module was wrong too), `Motion::Settling` (it is
+`Drifting`), and ROADMAP claiming manual topics derive from `grimoire_` keys when
+`Prose::topics` strips `recall_` and there are **zero** `grimoire_` keys.
+
+Most of the ~55 hits were correct: §19 records superseded designs, so naming
+`Fidelity::for_grid` or `walk_back` in an entry that says they were *replaced* is
+the entry working. The distinction that matters is tense — a doc saying a symbol
+*was* renamed is history, one saying it *does* something is a claim.
+
+**Duplicated string tables** — the `spell_word_shape` class. Twenty-two
+enum-to-`&'static str` tables scanned for identical arm sets. **None.**
+
+**Hardcoded `/tmp`** — the `play.sh` class. Two hits, both benign: a usage
+example in a `dumps.sh` comment and a path literal in a unit test that creates
+nothing.
+
+**Asking a marker where a declaration exists** — the `Reading` class. Every
+`get::<Reading>` in the tree asks *is this node a reading*, which is the right
+question. Only `recall::scripting` used it to pick a **vocabulary**, and that is
+the one that was wrong.
+
+**One more divergence fell out of the dump sweep.** `walked` latches `walking`
+on and never off, where both frontends release the keyboard when the maze closes
+(`Surfaces::tick`'s `if self.walking && sim.stacks().is_none()`). A dump whose
+spell solved the maze drew `wander` still owning the whole pane. Same class as
+the blank guide, one surface over, and found by asking the question rather than
+by anything failing.
+
+### One answer to *what may come next* (Phase 3, `0.3.31`–`0.3.34`)
+
+Four surfaces were about to hold four opinions about the same question. The
+prompt's Tab listing, the prompt's ghost, the spell editor's Tab and the
+scribing guide all ask *given this line and this caret, what could go there* —
+and §19 already records that shape going wrong three times over (the rail's state
+words, the substitution table, `is_live`), each a second opinion about something
+the sim already knew.
+
+`parser::expect(line, caret, &Situation)` is the question. `complete` became a
+view of it, `Line::ghost` reads it, and the editor's Tab is new.
+
+**The guide is deliberately not one of them.** It asks *what should I teach you*,
+and the difference is registers: `expect` offers all three of §6's, because Tab
+completing `l` to `ls` and `look` is the point, and a teaching list showing `ls`,
+`look`, `go to` and `what's here` beside each other is the overwhelm it exists to
+prevent. What they share is everything that could drift — `may_issue`, `is_live`,
+`Scene::offers`, and `SpellWord::shape`, which `orbs-shell` had been keeping its
+own copy of under a comment saying that two answers to *what does `for` take* is
+one of them being wrong later.
+
+#### `Reason` and `Lexeme` are two facts, and for one version they were one
+
+The first shape carried only the lexeme, on the argument that a control word is
+offered *because* it is a control word. That held until the question grammar
+arrived. `is`, `has`, `be` and `each` are words the language fixes in a position —
+as much scaffolding as `if` — and none of them is a `Lexeme::Control`, because
+`lex` reserves that for a `SpellWord` and **a completer must not disagree with
+the painter about how a word is drawn**.
+
+So `Expected` carries `why` and derives `kind()` from it. One mapping, in one
+place, rather than a second field every construction site sets.
+
+#### Three of the nine words cannot open a line, and the guide offered all nine
+
+`until` is `repeat`'s guard and is written on `repeat`'s own line; alone it is
+`spell_stray_until`. `end` with nothing open is `spell_stray_end`. `else` needs
+an `if` **directly** above it, which is why `open_blocks` keeps a stack and not a
+depth — a count cannot tell an `if` inside a `repeat` from a `repeat` inside an
+`if`.
+
+A listing of all nine offers three ways to make the orb refuse the line it has
+just suggested. That is §15's dead end, taught deliberately, which is worse than
+arriving at one by accident.
+
+#### The states belong to `is`, and the feature was specified the other way round
+
+The ask was *"typing `wait for the mortar_and_pestle to be…` should recommend the
+states"*. **`wait` takes a thing, not a state.** `program.rs` stores
+`Kind::Wait(<name>)` and `run.rs` resolves it by scanning the record stream for an
+event naming that thing; no state is ever read, and `be` is not on the filler
+list. So that line waits on a thing called `mortar_and_pestle be idle`, matches
+nothing, burns `PATIENCE`, and latches a fault on the rail.
+
+Offering it would have broken the guide's own rule — never teach a line the runner
+refuses. **That the language confused its author while he was specifying the tool
+meant to prevent exactly that is the argument for the tool**, and it is recorded
+here rather than quietly corrected because it is the clearest evidence the item
+had for its own necessity.
+
+#### Touching a word is a page; past it is an expectation
+
+The guide's caret rule changed. The space *after* a word used to still name it,
+on the reasonable argument that the moment a player most wants `repeat`'s page is
+right after typing it. It is not: what they want then is `repeat`'s **argument**,
+which is the thing the guide could not say at all until `expect` existed.
+
+Keeping both rules would have made `if ` explain `if` while `is ` listed the
+states — the difference being only whether the manual happens to have a page for
+the word, which is not a distinction a player could ever infer.
+
+#### The listing is the guide, which is why editor Tab was small
+
+The prompt needs `Offered` and a reserved layout row to show what Tab found. The
+editor was going to need the same, and does not: the guide pane is already
+showing those candidates, live, as the line is typed. Building the guide first
+turned this step's design work into nothing — worth recording as an argument for
+ordering, since the plan had listed *"where a listing draws inside a one-status-row
+editor"* as the step's hard part.
+
+What is shared instead is `orbs_shell::tabbing`: readline's rules, once. A second
+implementation would have drifted, because the rules are not obvious enough to
+reconstruct — *"the first Tab lists **without** changing the line"* is bash's
+default and the opposite of what a fresh attempt reaches for.
+
+#### Two lexemes are suppressed at the prompt
+
+`lex` is lexical and world-free, so it reads `repeat` as a control word and
+`gathering()` as a call wherever it finds them. In a spell that is right; at the
+prompt neither can run. Drawing them bright — the weight that says *the orb knows
+this word* — would make highlighting carry information, which §14 forbids, and
+the information would be false.
+
+**The whole line is lexed and only a window drawn**, because classification is
+positional. The case where that reaches a cell is a scrolled **comment**: dim
+throughout when lexed whole, coming apart into ordinary words when lexed from the
+window. It is the only one — `Verb` and `Name` both weigh `Normal`, so the tidier
+example draws identically either way. Recorded because the plan assumed the
+opposite, and a test written against the tidier example would have passed without
+testing anything.
+
+### The manual moved into the editor, and Escape stopped being a keystroke (Phase 3, `0.3.30`)
+
+The scribing guide, and one defect it flushed out that has nothing to do with it.
+
+**`recall <word>` is a command, so the manual was behind the one door you could
+not open from where you needed it.** The language reached nine control words, a
+question grammar with seventeen comparison spellings, in-file parts, variables
+and sets — past the size its own author could hold, which is how the feature was
+asked for. A pane down the right of the editor now holds the vocabulary, and the
+page for the word under the caret when there is one.
+
+Four decisions worth recording.
+
+**The listing is the *spell's* domain, not the player's.** A guide that named
+every verb in the tower would be the overwhelm it exists to prevent, so
+`execute::spell_vocabulary` filters by `spell::may_issue` and by the scene of the
+domain the **file** belongs to. A spell scribed in the archive offers `follow`;
+one in the laboratory does not, from the same editor in the same session.
+
+**It is held as state and refreshed on the keystroke, not computed in the
+painter.** `guide()` reaches `scene_at`, which rebuilds every recipe, topic and
+node — measured at ~197 µs. At 60 Hz that is a tenth of a frame spent
+re-deriving something that changes when a key is pressed. `offering.rs` and
+`editing.rs` have each already paid for this correction; this is the third time,
+so `apply_to_editor` gained `&Sim` and the `Guide` lives on the `Editor`.
+
+**A new `UtteranceKind`, because there is no "on change" in the speech model.**
+`Frame::reset` clears the stream every frame by design (§14), so a standing
+reference with no kind of its own would be recited continuously. `Guide` is what
+lets a reader drop the lot, exactly as `Hint` does.
+
+**The toggle is session-scoped and does not persist.** A save carries no editor
+state, and adding some for a view preference is Phase 11's settings item. Stated
+here rather than left to be noticed as an omission.
+
+#### Escape and a letter in one read were arriving as one keystroke
+
+The guide's refresh slowed the terminal build's input drain by ~200 µs a key, and
+two `play.sh` scenarios went red — closing the editor and typing `quit` put
+`quit` in the buffer as a **line of the spell**. The refresh was not the bug. It
+was the widening of a window that had always been open.
+
+A terminal sends Escape as one byte, `\x1b`, with nothing to say where it ends.
+crossterm reads whatever is in the pty buffer in one syscall, and `\x1b`
+followed by any byte in that same read parses as `Alt+<that byte>` — so the
+Escape does not arrive at all, and the letter behind it does. Anything that types
+faster than the loop drains hits it: the play harness always, a paste always, a
+fast typist sometimes. It is invisible in `ORBS_DUMP`, which writes no key events.
+
+**Splitting the pair back apart is lossless, and only for `Char`.** Under no
+keyboard-enhancement flags — which this build never pushes — crossterm builds
+`Alt+Char` from precisely one thing, an `\x1b <byte>` pair. A real Alt chord on a
+special key (`Alt+Left`, word-left in a great many terminals) arrives CSI-encoded
+with a modifier parameter instead, and turning *that* into Escape would drop a
+player out of the editor for pressing it — the same failure arriving from the
+other side. So `escape_prefixed` answers only for `KeyCode::Char`, and the game
+binds no Alt chord at all, so no meaning is taken away.
+
+The alternative was pushing `DISAMBIGUATE_ESCAPE_CODES`. Rejected: tmux does not
+report support for it by default, so it would not have fixed the case that found
+this — and the flags live on a *terminal* stack that a crashed process leaves
+set, which is a hazard `run` already carries a comment about.
+
+**What this cost is the general lesson.** The gate was green, every See-it line
+read correctly, and the failure surfaced only because a third layer —
+`play.sh` — types at a real terminal faster than a person can. Neither
+`orbs-sim`'s tests nor `orbs-render`'s press a key.
+
+### A spell is no longer flat text, and §4 chose the medium (Phase 3, `0.3.29`)
+
+The editor drew a spell as one undifferentiated run. Its parts now carry weight —
+and the interesting half of this item is that the design decided *how*, twice,
+against what was asked for.
+
+#### §4 refused colour — **superseded at `0.3.35`**
+
+> The reasoning below stood for six versions and the design authority overruled
+> it: §4 now exempts spell text, and a spell carries hue beside its weight. What
+> survives intact is everything this entry says about *weight* — that axis is
+> unchanged and still carries the whole reading on its own. See the `0.3.35`
+> entry for what the amendment is bounded by.
+
+The request was full syntax highlighting, names included. §4 answered it flatly:
+**"Base hue carries all ordinary text through intensity variation alone, with a
+small accent set reserved strictly for meaning."** A spell is ordinary text, so
+the only colours available were the accent triad — reserved for danger, cost and
+completion — or a widening of the palette of a game whose whole look is one
+phosphor colour in the dark.
+
+So the medium is **weight**, and three levels is what weight gives:
+
+| | |
+|---|---|
+| **Bright** | the scaffolding — where a block opens, closes, or calls |
+| Normal | the content: what it does, and to what |
+| Dim | the noise: filler §6 strips, and comments the orb never reads |
+
+| Question | Decision |
+|---|---|
+| Where the classification lives | `orbs-sim::parser::lexeme`, beside `read` and `analyse`. Which word is a control word is a fact only the language has, and a painter working it out again is a second opinion about the grammar — the shape §19 records going wrong three times over |
+| Whether it reads the world | **No.** Lexical, one line at a time. A spell keeps its shape when read from a room it was not written for, and does not change appearance as its own pipeline fills the shelf |
+| What it costs a reader | Nothing. `sheet` announces each row whole and draws its runs with `Painter::glyphs`, which is silent — the `0.3.23` change that made this feature possible, since highlighting multiplies the runs per line by five or six |
+| Where it stops | On an accent, and on the running line. A line `interpret` could not read stays wholly `Role::Danger`; the line the orb is executing stays uniformly bright. Both are `Style::depicted`'s rule applied again |
+| **Still owed** | A verb and a name are indistinguishable. Three weights cannot hold seven categories once `Control` takes the bright one, and telling those two apart needs a hue — which is the thing §4 forbids. Recorded rather than worked around |
+
+#### The eight-byte budget said no, and said it by failing
+
+`Lexeme` began as a fifth field on `Style`, mirroring `Wash` and `Depiction` so
+the classification would reach the Frame as *meaning* and a frontend could choose
+how to draw it. `a_cell_stays_eight_bytes` failed, and its own comment had
+already answered the question:
+
+> This is a budget, not a fact about the current fields: the next thing added to
+> `Style` has to fit in the spare byte or argue for the cost.
+
+There is no spare byte. The cost is what `Depiction` once cost — **+28 KiB and
+~1.2 µs a frame on every screen** — and it would have been paid so that *one*
+surface could carry a fact nothing else reads, since §4 had already settled that
+the rendering is intensity and there is no second answer for a frontend to pick.
+
+So the axis came off the hot path and the arbitration moved to the one caller
+that highlights. **The test that defended the field was mine and was wrong**: it
+asserted the lexeme reached the Frame, which was a property invented for the
+occasion rather than one anything needed. It is replaced by two that hold the
+rule which actually matters — the accent declines, and so does the running line.
+
+**See it** — `scripts/tui.sh ink` is the only instrument in the project that
+reports weight per cell, so it is the gate:
+
+```bash
+scripts/tui.sh start
+scripts/tui.sh type 'attend archive' 'scribe threading'
+scripts/tui.sh ink 6 40
+#   `repeat`/`until` bold, `the` dim, `stacks is idle` normal
+scripts/tui.sh stop
+```
+
+### The naming pass, and the domain with no way in (Phase 3, `0.3.28`)
+
+§18's second blocking item, run against all thirty verbs in all three registers.
+Two findings, and the second is about the tests rather than about the names.
+
+#### `spy`, `peek` and `try` reached nothing
+
+`Synonym::words` is **one phrase, pre-split into lowercase words** — so
+
+```rust
+syn(Verb::Probe, Register::Plain, &["spy", "peek", "try"]),
+```
+
+declares the phrase `spy peek try` and no synonym at all. At the prompt, `spy`
+echoed `! spy` and resolved to nothing; so did `peek` and `try`. **The lens had no
+plain-English way in**, in a game whose §6 posture is that half the gate's testers
+self-report no shell experience.
+
+**Two tests watched it happen for a whole phase.**
+`every_verb_is_reachable_from_plain_english` asks whether a `Plain` entry
+*exists*, and one did. `every_phrase_reaches_the_verb_that_claims_it` drives the
+declared phrase, and `spy peek try` reaches `probe` perfectly well. Both were
+asking about the shape of the table rather than about what a person would type,
+which is the same distance between *"the code does what it was written to do"*
+and *"it is the code worth writing"* that §15 opens on.
+
+The guard is `multi_word_plain_synonyms_are_pinned`: a plain synonym of more than
+one word is either a phrase a player says as a unit — `go to`, `get rid of` — and
+is listed, or it is several synonyms and must be `syn`'d separately. A new one
+fails with the phrase printed, which asks the question out loud.
+
+Split after sweeping, like every name here: `spy` and `try` score nothing at all
+and `peek` scores 500 against `pewter`, under the 600 band.
+
+#### §6.1's table had drifted, and one row contradicted another
+
+| Row | Table said | Code says |
+|---|---|---|
+| `meditate` | **listed twice** — *"not `wait`"* in one row, `wait` a synonym in the next | neither; `sleep` only |
+| `wield` | `kindle` | `kindle` is a verb of its own |
+| `stop` | `damp` | `quench` |
+| `decoct` | `mix`, `distil` | both are verbs of their own |
+| `sift` / `recall` / `research` / `scribe` | — | each had gained a word the table never heard about |
+
+Six rows wrong in the document whose own header calls it authoritative, and a
+self-contradiction sitting seven lines apart. **It is a lint now** —
+`the_slice_table_in_this_document_matches_the_vocabulary` reads DESIGN.md and
+compares canonical names and shell words against `SYNONYMS`.
+
+**The plain register is deliberately not compared.** It is prose — `"how do I"`,
+`explain` — written as English with quotes and capitals, which is what makes it
+readable and unparseable. What is held is the pair a player has to be able to
+trust: the canonical name and its shell synonyms, exact words in both places.
+
+§19 records this drift three times over already — the rail's ten state words
+against `State::label`, the wide-terminal substitution table against its own test
+list, `is_live` against `execute`'s match. Every one was found by a person reading
+two things side by side.
+
+**See it:**
+
+```bash
+for w in spy peek try probe; do
+  ORBS_BOOT=0 ORBS_DUMP="attend lens; $w" cargo run -q -p orbs; done
+#   every one echoes `probe`
+```
+
+### A spell is one file — supersedes cross-file parts (Phase 3, decided)
+
+**A spell is contained to a single `.spell` file.** Parts are named runs of lines
+*within* one spell, and there is no mechanism by which two spells share one.
+
+This supersedes the Spellcraft item *"spell parts: named, composable, invoked"*,
+whose See-it line was **two spells share a part, and editing the part changes
+both**. That item is struck rather than deferred: it is not waiting on anything.
+
+| Question | Decision |
+|---|---|
+| What composition means now | **Within a file.** `part gathering()` and `gathering()` are the whole of it, and they shipped at `0.3.24`. A spell is read top to bottom and its parts are written among its lines, which is what a player can hold in their head |
+| What the phase exits on | Rewritten. *"A spell is assembled from parts the player did not write that session, and the parts are reusable"* assumed a shared library; the exit is now that a spell **factors into named parts and reads as one file** |
+| What happens to *"what a part costs to hold"* | **Struck with it, and for a reason worth keeping.** That item put a composed spell's cost on the sidebar because parts were to be held separately and compete for concentration. An in-file part is not held separately — the spell is one file either way — so factoring costs nothing and there is no price to draw. Concentration still prices *spells*, which is where §11.5 put the scarcity in the first place |
+| Does `invoke` go too | **No.** A spell casting another spell is a different act and stays: it is a second `Running` with its own budget, its own record attribution and its own fingerprint, bounded by `MAX_DEPTH`. What is refused is one spell reaching into another's *text*, and `invoke` never did |
+| Why this is better | A part-call is a **descent** inside one program, so a save carries one fingerprint, `interpret` reads one file, and the editor's gutter points at a line that exists in the file on screen. Every one of those becomes a two-file problem the moment a part is shared, and none of them was bought back by anything a player wanted |
+
+**Nothing was built and then removed.** `program::tree` has only ever looked
+inside the running spell's own body, so the code already agreed with this before
+it was written down — what changed is three doc comments that pointed forward at
+a feature that is not coming.
+
+### One rule for what a name reaches, and half of *builtins* was wrong (Phase 3, `0.3.25`–`0.3.26`)
+
+Two boxes, and the second was **falsified by running it** before a line of it was
+written. They are recorded together because the first is what the second turned
+out to need, and the finding is the more useful half.
+
+#### The resolution policy — four axes about the world, one about the player
+
+Ten call sites answered *what does this word reach*, and each chose its own
+scope, kind filter, naming and search order. Three of them —
+`navigate::find_script`, `bind::find`, `invoke::find` — were the **same walk
+written out three times**. `tower::reach` names the axes and every lookup is one
+call that says which setting of each it wants.
+
+| Question | Decision |
+|---|---|
+| Which axes belong together | The four that are questions about the **world**. The fifth — whether a miss is a record, a `None`, or an entry on a `missing` vec — is a question about what the player should be told, and that is presentation. It stays at the call site |
+| Where the fetch order lives | `tower::reach`, moved out of `execute::pipeline`. §10.1's search order decides what `digest ground-sage` picks up; it is a rule about the world, and it has to be *one* rule the moment a spell resolves a name at cast and a verb body looks it up at execution |
+| What a bare call means | §7's plain rule — *inside where you stand, any kind, by leaf*. Every widening past that is then visible at the call site rather than buried in a helper, which is how `nameable` and `findable` came to disagree twice |
+| The proof | `fetching` and `arsenal` **untouched** and green, plus seven tests that pin each axis. A refactor whose deliverable is *nothing changed* needs the "nothing" to be something a test can hold |
+
+#### Builtins that act — and the half of the plan that could not work
+
+The plan was a typed call constructing an `Intent`. What it did not say is **which
+half of a line can be typed at cast**, and the answer is: the verb, and not the
+arguments.
+
+**A spell makes its own inputs.** `digest ground-sage` is written above the line
+that produces any, so at cast the room holds none, `analyse` drops the argument,
+and `interpret` reads the line back as bare `digest`:
+
+```text
+   1 grind sage
+   2 empty mortar_and_pestle
+   3 digest              ← what the orb hears at cast. the reagent is gone
+```
+
+Freezing a whole `Intent` there would have compiled `brewing`'s third line as a
+`digest` with nothing to digest — **every pipeline spell in the game, broken
+silently**, which is the same shape of failure the box warns about one level up.
+It was found by looking at `interpret` before writing anything, which is what
+that surface is for.
+
+The **verb** survives, because a verb is offered by the fixture standing in the
+room rather than by what is on the shelf. So the verb is the part that can be
+checked before the line ever runs.
+
+| Question | Decision |
+|---|---|
+| What is checked at cast | `may_issue`, which is a **security boundary** and was answered too late. `run_line` asks when the line is *reached* — never, for a line in an untaken branch — so a `meditate 3600` sat in a spell saying nothing, and its own doc calls a scripted `meditate` a hazard: `Sim::step` drains `Skip` in a while-loop, so an hour of world time runs inside one step |
+| As well or instead | **As well.** A boundary with one guard is one a future caster walks around, and `may_issue`'s own doc records `quit` being missed from the list once |
+| Lines naming a variable | Skipped. A variable holds nothing until the line runs, so resolving one at cast reads `follow way` as a `follow` with no bearing and reports a fault about a good line |
+| Its own prose key | `spell_forbidden_line`. A complaint is filled with `name` and `count` and nothing else, so reusing the runtime key made the orb say `'{detail}'` out loud — caught by running it |
+| What is left | The execution round-trip **stays**, and that is now a decision rather than a default. Replacing it is re-scoped into its own roadmap box, with the `would_block` regression guard already written against it |
+
+**See it:**
+
+```bash
+# A forbidden verb in a branch that never runs, refused when the spell is cast.
+ORBS_BOOT=0 ORBS_GRID=100x30 ORBS_DUMP="attend laboratory; scribe risky" \
+ORBS_EDIT="edit\nif the dispensary has quartz\nmeditate 3600\nend\nsurvey\n<esc>\nquit" \
+ORBS_THEN="invoke risky; meditate 8" cargo run -p orbs
+
+cargo test -p orbs-sim --test fetching --test arsenal   # the equivalence proof
+cargo test -p orbs-sim --lib tower::reach               # each axis, pinned
+```
+
+### A spell can name a run of its own lines (Phase 3, `0.3.24`)
+
+`part gathering()` names a run of lines, `gathering()` runs it, and a call is a
+stack of **descents** rather than a second `pc` — a path addresses one tree and a
+part is a different tree, so the caller's path *and* its open blocks have to
+survive the callee walking its own.
+
+#### The word was measured, not chosen
+
+Every candidate was scored against every word the game knows, and the obvious
+ones are all inside `MIN_SIMILARITY`'s 600 typo band:
+
+| candidate | scores | against |
+|---|---|---|
+| `rite` | **800** | `write` |
+| `call` | **750** | `wall` |
+| `step` | **750** | `stop` |
+| `make` | **750** | `take` |
+| `form` | **750** | `for` — a control word already |
+| `learn` | 600 | `clean` |
+| `part` | 500 | `cast`, `east` |
+
+`to` and `set` were refused before the sweep ran: `to` is filler, and `set` is a
+live `dial` synonym — §19 records what taking that one cost for an afternoon.
+**`part` is also the word §10 already uses**, and the next item in this phase is
+*"spell parts: named, composable, invoked"* — the same unit, later made shareable
+between files. A different word here would have given one phase two names for one
+idea.
+
+#### A call is punctuation, and that is the one place a symbol is canonical
+
+`gathering()`. The alternative was a bare name, which needs a rule — *a part may
+not be called something the tower already has a word for* — to stop `grind`
+meaning two things; and a second keyword would have cost a word in a language
+that argues its count one entry at a time. Punctuation costs neither.
+
+It inverts §19's comparison-spelling rule, deliberately: **symbols are accepted
+and never written back** there because a word exists to write back *to*, and here
+none does. The parentheses are the notation rather than a shorthand for it.
+
+#### Variables are shared, and the roadmap said otherwise
+
+That box specified a frame of `(spell, pc, loops, vars)`. `vars` is **not** in a
+descent, and the reason is that a part takes no arguments: a private store leaves
+it with no way to be told anything at all, and `let` is the language's only way to
+pass a name. One store, which the caller fills and the part reads.
+
+The cost is real and worth stating: `for each way` inside a part rebinds the
+caller's `way`. That is dynamic scope, and it is the same call `bindings` already
+makes about a `let` inside a branch — *"scoping would be a rule to teach and a
+rule to get wrong, for a program that fits on a screen."*
+
+`spell` is absent for a plainer reason: every descent belongs to one spell, and
+**the fingerprint covers all of them**. That was written here as a thing that
+would weaken once parts were shared between files; sharing is not happening — see
+*A spell is one file* below — so it does not weaken, and the field stays absent.
+
+#### Two rules, and both would have been silent
+
+A definition belongs at the **top level** — `tree` looks no deeper, so a `part`
+inside a `repeat` would be a run of lines nothing could call, and the runner steps
+past a definition wherever it finds one. And **one name means one part**, because
+`tree` answers with whichever is written first. Both are cut out and said, which
+is the call `progression.toml` already makes about a duplicate node id.
+
+| Question | Decision |
+|---|---|
+| Where a part's body is found | By **name**, at every step, through `program::tree`. A path or an index taken at the call would point at whatever moved into its place when the file was edited mid-flight (§8) |
+| A definition deleted while a frame is inside it | An empty block, which reads as *off the end* at the next step: the descent pops and the spell carries on after the call. The gentlest true answer, and the same one an empty part gives |
+| Recursion | Bounded at `MAX_PARTS` = 8, separate from `MAX_DEPTH`. At one step a tick a runaway does not hang the game — it grows the **save** by a descent a second until nothing can read it |
+| Why it is not called the obvious word | `Frame` is one of the four layout names `tests/boundaries.rs` forbids under `orbs-sim/src`, matched by substring. The parser's stack entry already pays this toll; `Descent` is the second |
+
+#### The budget stopped being a constant, and nothing can spend it yet
+
+A step costs a tick, so the script budget *is* the speed of every piece of
+automation in the game. `spell::budget` reads `Taken`; `steps_1` and `steps_2`
+are authored in `progression.toml`, drawn by `weave`, and **ship as markers** like
+every other node — so it answers 1 and what was built is the wiring. Additive
+across tiers rather than a maximum: a tier grants one of its siblings, so taking
+the step node twice is two choices spent on speed and reading it as `max` would
+refund the second in silence.
+
+**Parts ship unused, and that is the decision rather than an omission.** No dev
+spell was rewritten to use one: with every line still costing a tick, factoring
+into a part is *slower* than not — the call and the return are steps of their own.
+The weave nodes are the answer, and until one can be taken a part buys legibility
+and nothing else.
+
+**See it:**
+
+```bash
+ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="attend laboratory; scribe tending" \
+ORBS_EDIT="edit\npart gathering()\ngrind sage\nempty mortar_and_pestle\nend\nrepeat 2\ngathering()\nend\n<esc>\nquit" \
+ORBS_THEN="invoke tending; meditate 40; peruse laboratory.log" cargo run -p orbs
+#   two grinds, from one body
+```
+
+### A spell read aloud as a table of ticks (Phase 3, `0.3.23`)
+
+§3 names three corruption-exempt diagnostic surfaces and `RecordKind::ScriptLine`
+is one of them. It had been declared, wired into every match arm, and asserted by
+a test since Phase 0 — **with no producer at all.** So a spell listing was
+emitted as `LogLine`, and §14's linear stream said this for every line of a file
+the player had written themselves:
+
+```text
+row  tick: 11, message: follow north       ← what F5 said
+text 11, follow north                      ← what it says now
+```
+
+**Three claims in one line, and all three false.** It is not a `row`; a
+`LogLine` speaks `label: value` because it *is* columns, and a script line is a
+sentence. It is not a `tick`; `emit_lines` numbers with `index + 1`, a position
+in the listing, and the tick the line happened at is never carried there at all.
+And `message:` labels a field on a record whose only content is the message.
+
+| Question | Decision |
+|---|---|
+| Where the kind is decided | `tower::Held` — the component a `.spell` has and a log view does not. The split already existed in `read_file` and is exactly *text a person wrote* against *a view over records*; **not** the `.spell` suffix, which is a naming convention and would answer wrongly the first time anything else holds text |
+| The number | A new `FieldName::Line`. `Tick`'s own documentation says *"When, in world time. Ticks, not wall-clock"*, so a position under that name was a documented misuse. **Both kinds carried it** — this is not a script-only fix, and a log read back at world tick 5 numbered its three lines 1, 2, 3 |
+| Why prose keeps it | `presented()` narrows a prose record to `Message` and `Detail`, which is right for a sentence and wrong for a numbered file: the gutter is how a player says *fix line 11*. Answering a §14 defect by deleting the affordance it was about would be the worse repair |
+| The hazard it opened | A listing is written back into the stream it reads, and the guard against that doubling named one kind because there had only ever been one. `peruse orb.log` would have swallowed the last spell anyone opened |
+
+**Nothing on screen changed, and that is the point.** No label is drawn in the
+pane, so the whole defect lived in the half of §14 that only a screen reader
+receives — which is why the linear view exists as a **key** rather than as a
+test, and why §14 calls it *"a first-class view of the frame rather than a
+debugging aid"*. Reading it back is what found this; four phases of green tests
+did not.
+
+#### The editor had the same defect, through the painter instead
+
+The See-it line for this item was *"`F5` on a running spell describes its
+lines"*, and following it literally is what turned up the twin. **`F5` is inert
+over the editor** — `prompt::paint` returns early for all three modal surfaces,
+so the mirror never runs — but the editor's own stream is reachable in a dump,
+and it read like this:
+
+```text
+Text    1                        ← the gutter
+Text    repeat until the stacks is idle
+Text    2                        ← ...and the line, separately. Once per line.
+Text    if north has spoil
+```
+
+`sheet.rs` drew each row as two [`Painter::span`]s, and a span is one utterance.
+The comment sitting directly over the number had said, for four phases, that it
+*"is spoken with the line rather than drawn beside it — `1 attend laboratory` is
+what a screen reader should hear, not a bare command with no position."* It is
+the `0.3.21` review's finding restated exactly: **a comment claiming parity,
+sitting next to the code that broke it.**
+
+| Question | Decision |
+|---|---|
+| Why two spans | Colour. The number is dim, the code is not, and a line `interpret` could not read is `Role::Danger` — one span carries one style, so the row had to be drawn in runs |
+| The rule | **Colour does not decide where a sentence ends.** The row is `announce`d once, whole, and its runs drawn with `Painter::glyphs`, which is silent. That is the split `glyphs` exists for and its own doc already described |
+| The `»` marker | Silent now. The border says *"(the orb is on line 2)"* and speaks it as the pane's heading, so announcing the glyph as well tells a reader the same fact twice, the second time as a punctuation mark |
+| **Still owed** | `F5` over the editor, the loom and the maze. Three early returns in `prompt::paint`, and the mirror is the one instrument that would have shown either of these defects without a dump |
+
+**See it** — the records side through `F5`, and the painter side through a dump,
+because `F5` cannot reach it yet:
+
+```bash
+scripts/tui.sh start
+scripts/tui.sh type 'attend archive' 'peruse threading.spell'
+scripts/tui.sh key F5     # `text 11, follow north` — was `row  tick: 11, …`
+scripts/tui.sh stop
+
+ORBS_BOOT=0 ORBS_DUMP="attend archive; scribe threading" cargo run -p orbs
+#   `Text  1 repeat until the stacks is idle` — one utterance, not two
+```
 
 ### A spell can hold an answer, and walk a set (Phase 3, `0.3.20`)
 
@@ -6051,7 +6843,7 @@ run over a lit athanor, it is still hot, and liquid that hot does not stop
 moving because the timer did.
 
 So `Motion` is three states rather than a `bool`. `Standing` is dead flat;
-`Settling` runs at a third the rate with a third the bubbles and never reaches
+`Drifting` runs at a third the rate with a third the bubbles and never reaches
 the brightest step. The tempo is what keeps the rule intact — a bar moving that
 slowly is visibly a thing calming rather than a thing running.
 
@@ -6504,7 +7296,7 @@ back on the first key typed, with no focus event required.
 Platform-independent by construction. A real chord produces no text on macOS,
 and a control character on Windows and X11 — which both text fields already
 filter, because a control byte in the buffer would occupy a cell and draw
-nothing. `a_real_chord_is_still_not_text` pins that: `Cmd+Enter` carries
+nothing. `a_chord_does_not_reach_enter_or_backspace` pins that: `Cmd+Enter` carries
 `text: Some("\r")` and must stay guarded, which is the bug the guard was built
 for in the first place.
 
@@ -6530,7 +7322,7 @@ everything after it, including the place the question is about. `if` was
 therefore the only line in the language where the player's own phrasing had to
 match the tower's internal name character for character.
 
-`scribe::written_condition` now resolves the names in a question the way a
+`spell::compile::fix` now resolves the names in a question the way a
 command's argument is resolved, and `peruse` reads back
 `if mortar_and_pestle is empty`. That is the same lesson the echo teaches at the
 prompt, applied to the one line that was exempt from it. The word itself is

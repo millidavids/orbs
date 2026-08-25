@@ -137,7 +137,36 @@ fn answering(sim: &Sim, line: &str) -> bool {
 /// build learned that two Enters in one frame must not discard a pending
 /// `SaveAndClose`, and the terminal build — written later, from the same shape —
 /// did not. That correction now lives here, where there is one copy of it.
-pub fn apply_to_editor(key: &Key, editor: &mut Editor) -> Option<EditorOutcome> {
+pub fn apply_to_editor(
+    key: &Key,
+    editor: &mut Editor,
+    sim: &orbs_sim::Sim,
+) -> Option<EditorOutcome> {
+    // A Tab cycle ends on anything that is not another Tab: the next Tab should
+    // start a fresh completion rather than resume one the player has typed past.
+    // The prompt's `apply` has the same rule three functions up, and the reason
+    // it is not shared is that `Offered` is the prompt's alone — the editor's
+    // listing is the guide, which needs no retiring because it is rebuilt every
+    // keystroke anyway.
+    if !matches!(key, Key::Tab) {
+        editor.end_cycle();
+    }
+    let outcome = if matches!(key, Key::Tab) {
+        editor.tab(sim);
+        None
+    } else {
+        apply_key(key, editor)
+    };
+    // **The keystroke beat, and the only place the guide is worked out.** It
+    // reaches `scene_at` — every recipe, topic and node — so a painter doing it
+    // would run that at 60 Hz. Here it runs when something it depends on has
+    // actually changed, which is what `offering` and `editing` each learned once.
+    editor.refresh(sim);
+    outcome
+}
+
+/// One key, applied. See [`apply_to_editor`], which is this plus the refresh.
+fn apply_key(key: &Key, editor: &mut Editor) -> Option<EditorOutcome> {
     match key {
         // **`or`, not `=`.** Two Enters in one delivery — key repeat, a frame
         // hitch, a practiced `wq<Enter>` — had the second overwrite the first:
@@ -182,6 +211,8 @@ pub fn apply_to_editor(key: &Key, editor: &mut Editor) -> Option<EditorOutcome> 
             editor.type_text(text);
             None
         }
+        // Taken by `apply_to_editor`, which is the only caller — completion
+        // needs the `Sim` this table deliberately does not have.
         Key::Tab => None,
     }
 }

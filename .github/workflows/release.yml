@@ -148,10 +148,16 @@ jobs:
         # Bevy's linux backends. Needed for `cargo build -p orbs` to *link*,
         # which is the step CLAUDE.md singles out as the one `cargo check` does
         # not replace.
+        #
+        # **`mold` with them**, because `.cargo/config.toml` names it as this
+        # target's linker and a machine without it fails at the link step rather
+        # than falling back — which is the right way round on a desk and simply
+        # a broken job here.
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev pkg-config
+            libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev pkg-config \
+            mold
 
       - name: Format
         run: cargo fmt --all --check

@@ -109,6 +109,31 @@ pub enum Kind {
         /// What to do for each of them.
         body: Block,
     },
+    /// A named run of lines — `part gathering()`.
+    ///
+    /// **A definition, so reaching it executes nothing.** The runner steps past
+    /// this exactly as a reader's eye does; the body runs only where a
+    /// [`Call`](Self::Call) says so. It stays a step of the tree rather than
+    /// being hoisted into a table beside it, because the tree is what the save,
+    /// `interpret` and the editor's gutter all address by **line** — a
+    /// definition lifted out of the body is a run of lines with no place in the
+    /// file it came from.
+    Part {
+        /// What the part is called, without its parentheses.
+        name: String,
+        /// What it does.
+        body: Block,
+    },
+    /// Do a part — `gathering()`.
+    ///
+    /// Carries the **name** rather than a path to the definition, which is what
+    /// lets a spell be edited while it runs (§8): a definition that moves up the
+    /// file is still the same part, and a path would point at whatever took its
+    /// place.
+    Call {
+        /// Which part.
+        name: String,
+    },
 }
 
 /// A run of steps.
@@ -191,6 +216,9 @@ enum Open {
     },
     Each {
         group: String,
+    },
+    Part {
+        name: String,
     },
 }
 
@@ -426,6 +454,34 @@ pub(super) fn read(lines: &[String]) -> Draft {
                     key: "spell_unreadable_for",
                 }),
             },
+            Some(SpellWord::Part) => match part_name(spell_argument(trimmed)) {
+                Some(name) => open.push(Nesting {
+                    line: at,
+                    kind: Open::Part { name },
+                    body: Vec::new(),
+                    chained: false,
+                }),
+                // **No block is opened**, exactly as an unreadable `for each`
+                // opens none — so the `end` below is a stray one and says so.
+                // Opening an unnamed part instead would swallow the body into
+                // something nothing can ever call.
+                None => complaints.push(Complaint {
+                    line: at,
+                    key: "spell_unreadable_part",
+                }),
+            },
+            // A call is punctuation, so it arrives here rather than through
+            // `spell_word` — there is no ninth control word to match.
+            None if let Some(called) = call_name(trimmed) => match called {
+                Some(name) => push(&mut open, at, Kind::Call { name }),
+                // `gathering(sage)`. A part takes nothing yet, and reading it as
+                // a bare call would drop a word the player wrote — the quiet
+                // reinterpretation this file refuses everywhere.
+                None => complaints.push(Complaint {
+                    line: at,
+                    key: "spell_part_takes_nothing",
+                }),
+            },
             None => push(&mut open, at, Kind::Command(trimmed.to_owned())),
         }
     }
@@ -449,13 +505,80 @@ pub(super) fn read(lines: &[String]) -> Draft {
         close(&mut open, frame);
     }
 
-    Draft {
-        // **No `expect`.** The outermost block cannot be popped by the loops
-        // above — both are guarded on `len() > 1` — but writing that as a panic
-        // would be a claim the compiler cannot check and a crash if it ever
-        // stopped being true. An empty spell is a real thing anyway.
-        body: open.pop().map(|frame| frame.body).unwrap_or_default(),
-        complaints,
+    // **No `expect`.** The outermost block cannot be popped by the loops
+    // above — both are guarded on `len() > 1` — but writing that as a panic
+    // would be a claim the compiler cannot check and a crash if it ever
+    // stopped being true. An empty spell is a real thing anyway.
+    let mut body = open.pop().map(|frame| frame.body).unwrap_or_default();
+    settle_parts(&mut body, &mut complaints);
+
+    Draft { body, complaints }
+}
+
+/// Enforce the two rules a definition has, after the tree is built.
+///
+/// A pass of its own rather than a check inside [`read`], because both rules are
+/// about a definition's **place among the others** and neither can be answered
+/// while the block that holds it is still open.
+///
+/// - **Top-level only.** [`tree`] looks no deeper, so a `part` inside a `repeat`
+///   would be a run of lines nothing could ever call — and silently, since the
+///   runner steps past a definition wherever it finds one. Dropped and said.
+/// - **One name, one part.** Two definitions sharing a name make `tree` answer
+///   with whichever is written first, so the second is a block the player wrote
+///   and the orb will never run. The same call `progression.toml` makes about a
+///   duplicate node id, for the same reason: two entries under one name mean
+///   naming either names both.
+fn settle_parts(body: &mut Block, complaints: &mut Vec<Complaint>) {
+    // Kept in writing order, so the *first* definition of a name is the one that
+    // survives — which is what `tree` would have answered with anyway.
+    let mut named: Vec<String> = Vec::new();
+    body.retain(|step| {
+        let Kind::Part { name, .. } = &step.kind else {
+            return true;
+        };
+        if named.iter().any(|already| already == name) {
+            complaints.push(Complaint {
+                line: step.line,
+                key: "spell_repeated_part",
+            });
+            return false;
+        }
+        named.push(name.clone());
+        true
+    });
+
+    // Anything deeper than the top level, cut out and reported once each.
+    for step in body.iter_mut() {
+        strip_nested(&mut step.kind, complaints);
+    }
+}
+
+/// Remove any definition below the top level, reporting each once.
+fn strip_nested(kind: &mut Kind, said: &mut Vec<Complaint>) {
+    let inner: Vec<&mut Block> = match kind {
+        Kind::Repeat { body, .. } | Kind::Each { body, .. } | Kind::Part { body, .. } => {
+            vec![body]
+        }
+        Kind::If {
+            body, otherwise, ..
+        } => vec![body, otherwise],
+        Kind::Command(_) | Kind::Wait(_) | Kind::Let { .. } | Kind::Call { .. } => Vec::new(),
+    };
+    for block in inner {
+        block.retain(|step| {
+            let is_part = matches!(step.kind, Kind::Part { .. });
+            if is_part {
+                said.push(Complaint {
+                    line: step.line,
+                    key: "spell_nested_part",
+                });
+            }
+            !is_part
+        });
+        for step in block.iter_mut() {
+            strip_nested(&mut step.kind, said);
+        }
     }
 }
 
@@ -514,8 +637,48 @@ pub fn at<'a>(body: &'a Block, pc: &[usize]) -> Option<&'a Step> {
             let (&branch, inner) = rest.split_first()?;
             at(if branch == 0 { body } else { otherwise }, inner)
         }
-        Kind::Command(_) | Kind::Wait(_) | Kind::Let { .. } => None,
+        // **A definition is not descended into from the body it sits in.** It is
+        // reached by name through [`tree`], which is what lets a call find it
+        // after an edit has moved it — so a path that points *into* one is a
+        // path nothing builds, and answering `None` says so.
+        Kind::Command(_)
+        | Kind::Wait(_)
+        | Kind::Let { .. }
+        | Kind::Part { .. }
+        | Kind::Call { .. } => None,
     }
+}
+
+/// The body a frame walks: the spell's own, or a named part's.
+///
+/// **Found by name at every step, never cached.** A part is a run of lines in a
+/// file the player may be editing while it runs (§8), so the answer to *which
+/// lines is `gathering`* has to be asked of the text as it now is. A path or an
+/// index taken at the call would point at whatever moved into its place.
+///
+/// Definitions are **top-level only** — see `spell_nested_part` — so this looks
+/// no deeper, and a part inside a `repeat` is unreachable by design rather than
+/// by oversight.
+#[must_use]
+pub fn tree<'a>(body: &'a Block, part: Option<&str>) -> Option<&'a Block> {
+    let Some(wanted) = part else {
+        return Some(body);
+    };
+    body.iter().find_map(|step| match &step.kind {
+        Kind::Part { name, body } if name == wanted => Some(body),
+        _ => None,
+    })
+}
+
+/// Every part the spell defines, in the order they are written.
+#[must_use]
+pub fn parts(body: &Block) -> Vec<&str> {
+    body.iter()
+        .filter_map(|step| match &step.kind {
+            Kind::Part { name, .. } => Some(name.as_str()),
+            _ => None,
+        })
+        .collect()
 }
 
 /// Move `pc` past the step it points at, closing and repeating blocks as needed.
@@ -652,7 +815,13 @@ fn gather(body: &Block, names: &mut Vec<String>) {
                 gather(body, names);
                 gather(otherwise, names);
             }
-            Kind::Command(_) | Kind::Wait(_) => {}
+            // **A part's `let`s are gathered too**, because a part shares the
+            // caller's store rather than opening one of its own — see
+            // [`Running::vars`](super::Running::vars). A name bound inside a part
+            // is a name the lines after the call can say, so `compile` has to
+            // know it or it would report a variable as a place the room lacks.
+            Kind::Part { body, .. } => gather(body, names),
+            Kind::Command(_) | Kind::Wait(_) | Kind::Call { .. } => {}
         }
     }
 }
@@ -719,9 +888,60 @@ fn close(open: &mut [Nesting], frame: Nesting) {
             group,
             body: frame.body,
         },
+        Open::Part { name } => Kind::Part {
+            name,
+            body: frame.body,
+        },
         Open::Spell => return,
     };
     push(open, line, kind);
+}
+
+/// `gathering()` → `gathering`, and `gathering` → `gathering` too.
+///
+/// **The parentheses are optional on a definition and required on a call.** A
+/// heading is already unambiguous — `part` says what the line is — so demanding
+/// them there would be ceremony; at a call site they are the entire notation,
+/// and the line means something else without them. Written back with them either
+/// way, so a player who omits them at the top still sees the form they have to
+/// type below.
+///
+/// `None` for a name that is empty, carries an argument, or is more than one
+/// word. A part takes nothing yet, and `part gather the sage` is a sentence
+/// rather than a name.
+fn part_name(argument: &str) -> Option<String> {
+    let bare = argument
+        .trim()
+        .strip_suffix("()")
+        .unwrap_or(argument)
+        .trim();
+    let mut words = bare.split_whitespace();
+    let name = words.next()?;
+    if words.next().is_some() || name.contains('(') || name.contains(')') {
+        return None;
+    }
+    Some(name.to_lowercase())
+}
+
+/// `gathering()` → the part it calls, if the line is a call at all.
+///
+/// Three answers, not two: `None` for a line that is not a call, `Some(None)`
+/// for one that is a call and is malformed, and `Some(Some(name))` for a good
+/// one. Collapsing the middle into "not a call" would send `gathering(sage)` to
+/// the command resolver, which would report that the tower has no `gathering(sage)`
+/// — true, unhelpful, and about the wrong thing.
+pub(super) fn call_name(line: &str) -> Option<Option<String>> {
+    let trimmed = line.trim();
+    let (head, rest) = trimmed.split_once('(')?;
+    let inside = rest.strip_suffix(')')?;
+    let name = head.trim();
+    if name.is_empty() || name.split_whitespace().count() != 1 {
+        return Some(None);
+    }
+    if !inside.trim().is_empty() {
+        return Some(None);
+    }
+    Some(Some(name.to_lowercase()))
 }
 
 /// `best be north` → the name and what it stands for.
@@ -1130,6 +1350,21 @@ mod tests {
                     }
                     continue;
                 }
+                // **Stepped past, exactly as the runner does.** A definition is
+                // not run where it stands, and this walker has to agree about
+                // that or the path arithmetic it exists to test would be
+                // measured against a different program.
+                Some(Kind::Part { .. }) => {
+                    if !step_past(&program.body, &mut pc, &mut loops, a_set_of_two) {
+                        break;
+                    }
+                    continue;
+                }
+                // A leaf here, because this walker has **no frame stack** — what
+                // a call does is the runner's, and `tests.rs` drives that
+                // through a real `Sim`. Emitting the name keeps a call visible
+                // in the shape tests without pretending it was entered.
+                Some(Kind::Call { name }) => out.push(format!("{name}()")),
                 Some(Kind::Command(line)) => out.push(line.clone()),
                 Some(Kind::Wait(what)) => out.push(format!("wait {what}")),
                 Some(Kind::Let { name, value }) => out.push(format!("set {name} {value}")),

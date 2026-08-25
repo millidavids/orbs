@@ -574,8 +574,7 @@ mod tests {
         );
     }
 
-    /// Type without submitting, for tests that want to inspect the buffer.
-    /// Type `line` without submitting it.
+    /// Type `line` without submitting it, for tests that inspect the buffer.
     fn type_only(app: &mut App, line: &str) {
         for glyph in line.chars() {
             // Exactly what winit delivers: the spacebar arrives as `Key::Space`

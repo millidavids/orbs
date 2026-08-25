@@ -34,7 +34,35 @@ fi
 # for it. A leftover server from an interrupted run is the one thing that can
 # make a green suite go red, so it goes first.
 tmux -L orbs-play kill-server 2>/dev/null || true
-trap 'tmux -L orbs-play kill-server 2>/dev/null || true' EXIT
+# **And the scratch directories a killed run left behind.** `Game::drop` removes
+# its own, so an ordinary run leaves none; this sweeps what a hard kill could
+# not. One per game and ~100 per run, so it accumulates quickly enough to matter.
+#
+# **`${TMPDIR:-/tmp}`, because the harness uses `std::env::temp_dir()`** — with
+# `TMPDIR` set, which is ordinary in CI containers and the default on macOS, a
+# hardcoded `/tmp` swept nothing and the leak this exists for persisted.
+#
+# **And only what is more than an hour old.** The glob is not scoped to this
+# process, so an unconditional sweep deletes a *concurrent* run's live scratch
+# out from under it — start `play.sh lens::` while `play.sh archive::` is
+# running and the second one's `write_file` fails on a path that vanished.
+find "${TMPDIR:-/tmp}" -maxdepth 1 -name 'play-*' -type d -mmin +60 \
+  -exec rm -rf {} + 2>/dev/null || true
+# INT and TERM as well as EXIT: an interrupted run should tear its server down
+# rather than leave one for the next run to trip over.
+trap 'tmux -L orbs-play kill-server 2>/dev/null || true' EXIT INT TERM
+
+# **A trap cannot survive `SIGKILL`, and neither can `Game`'s `Drop`.** Kill this
+# script hard — a harness timeout, a CI step cancelled — and the tmux sessions
+# outlive it. That is not hypothetical: 573 orphaned `orbs-tui` processes once
+# took a 32-core machine to a load average of 581 with swap exhausted, leaked by
+# exactly this over six killed runs.
+#
+# **The backstop is in the game, not here**, and it has to be: nothing a parent
+# writes can run after it is killed. `orbs-tui` exits when its terminal goes away
+# — see `watch_for_hangup` in `orbs-tui/src/drive.rs` — so a leaked process ends
+# itself instead of spinning on a dead pty for ever. What is left after a hard
+# kill is a stale socket, which the line above clears on the next run.
 
 filter=""
 if [ $# -gt 0 ] && [ "${1}" != "--" ]; then

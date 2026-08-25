@@ -12,7 +12,7 @@
 //! the log a player will `peruse`.
 
 use orbs_render::{
-    DisplayMode, Frame, Pos, RecordView, Rect, ScreenLayout, ScreenRequest, Span, Style,
+    DisplayMode, Frame, Painter, Pos, RecordView, Rect, ScreenLayout, ScreenRequest, Span, Style,
     UtteranceKind,
 };
 use orbs_sim::Sim;
@@ -564,6 +564,70 @@ const fn focus(screen: &Screen) -> &'static str {
     screen.mode.word()
 }
 
+/// Re-draw the visible line one lexical run at a time, silently.
+///
+/// # The whole line is lexed and only a window is drawn
+///
+/// `parser::lex` classifies partly by **position**: a line opening with `#` is
+/// one comment run, one opening with a control word is a control line, and
+/// otherwise the first word is the verb. Lexing the visible slice of a scrolled
+/// line would apply all three to a mid-line fragment. [`Line::window_starts`]
+/// exists so it does not.
+///
+/// The case where that reaches a cell is a **scrolled comment** — dim throughout
+/// when lexed whole, and coming apart into ordinary words when lexed from the
+/// window. The tidier example, a window starting on a word that names a verb,
+/// draws identically either way, because `Verb` and `Name` both weigh `Normal`.
+/// Worth knowing before assuming a change here is visible.
+///
+/// # Silent, because the row has already been spoken
+///
+/// The `Input` span above draws *and* announces the visible text. These runs
+/// re-draw the same glyphs at their own weight with `glyphs`, which draws and
+/// says nothing — so §14's stream carries one utterance for the line rather than
+/// one per word. A half-typed command recited a word at a time is the `0.3.23`
+/// defect, and it is rebuilt every frame.
+fn highlight(painter: &mut Painter<'_>, at: Pos, line: &Line, room: u16) {
+    let text = line.text();
+    let (visible, _) = line.viewport(room);
+    let from = line.window_starts(room);
+    let upto = from.saturating_add(visible.len());
+
+    for run in orbs_sim::parser::lex(text) {
+        // Clip to the window rather than skipping: a run can straddle the edge
+        // of a scrolled line, and dropping it would leave one word unhued for
+        // no reason a player could see.
+        let start = run.start.max(from);
+        let end = run.end.min(upto);
+        if start >= end {
+            continue;
+        }
+        let Some(word) = text.get(start..end) else {
+            continue;
+        };
+        let Some(before) = text.get(from..start) else {
+            continue;
+        };
+        let Ok(offset) = u16::try_from(before.chars().count()) else {
+            continue;
+        };
+        // **The prompt's arbitration, not the editor's.** `repeat` and
+        // `gathering()` are words a spell runs and the prompt does not, so
+        // drawing them as scaffolding would say the orb knew a word it will
+        // refuse. The same goes for the question grammar: `is` and `idle` are
+        // words a *spell* line turns on, and a prompt cannot ask a question.
+        // See `lexing::at_prompt`.
+        let honest = crate::lexing::at_prompt(run.kind);
+        let col = at.col.saturating_add(offset);
+        let drawn = painter.glyphs(
+            Pos::new(col, at.row),
+            word,
+            crate::lexing::lit(Style::default(), honest),
+        );
+        painter.lit(Rect::new(col, at.row, drawn, 1), honest);
+    }
+}
+
 /// Draw the prompt and what is being typed into it.
 fn input_line(frame: &mut Frame, area: Rect, line: &Line, prompt: &str, ghost: &str) {
     if area.is_empty() {
@@ -585,21 +649,34 @@ fn input_line(frame: &mut Frame, area: Rect, line: &Line, prompt: &str, ghost: &
     let mut painter = frame.painter(Rect::new(area.col, row, width, 1));
     let prompt = painter.glyphs(Pos::new(area.col, row), prompt, Style::DIM);
 
-    let (visible, caret) = line.viewport(width.saturating_sub(prompt));
+    let room = width.saturating_sub(prompt);
+    let (visible, caret) = line.viewport(room);
+    let at = area.col.saturating_add(prompt);
     // One span for the whole line rather than a glyph run: the linear stream
     // should carry what is being typed, tagged `Input` so a reader can filter
     // the partial line out. It is re-spoken every frame — which is correct raw
     // material and wrong to recite verbatim, hence the tag.
+    //
+    // **Exactly one, and the highlighting below must not add a second.** §14's
+    // stream is rebuilt every frame, so a run-per-word would recite a half-typed
+    // command one word at a time — the `0.3.23` defect, which is why the runs
+    // go on with the silent `glyphs` over the top of what this already drew.
     painter.span(
-        Pos::new(area.col.saturating_add(prompt), row),
+        Pos::new(at, row),
         &Span::new(visible).with_kind(UtteranceKind::Input),
     );
+    highlight(&mut painter, Pos::new(at, row), line, room);
 
     // The suggestion, after the caret and dim. **Spoken**, with its own kind so
     // a reader can filter it: the half-typed line above is spoken, and §19's
     // Frame-boundary rule is that *"truncation is visual only — a narrow pane is
     // a visual constraint and must not become an informational one."* A ghost
     // drawn and never announced is exactly that asymmetry.
+    // **After the runs**, so nothing over-draws it. A ghost is only offered with
+    // the caret at the end of the line, so it sits past the last run — but
+    // "sits past" is an invariant of `Line::ghost`, and depending on someone
+    // else's invariant for a drawing order that costs nothing to get right is
+    // how the next change breaks it.
     if !ghost.is_empty() {
         let at = area.col.saturating_add(prompt).saturating_add(caret);
         let room = width.saturating_sub(at.saturating_sub(area.col));
@@ -640,4 +717,137 @@ pub fn paint_too_small(frame: &mut Frame, sim: &Sim) {
     let mut painter = frame.painter(area);
     painter.paragraph(area, &Span::new(&line).with_style(Style::DANGER));
     frame.set_cursor(None);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use orbs_render::{GridSize, Intensity};
+
+    /// The prompt row, drawn on its own — everything the highlighting needs and
+    /// nothing that needs a `Sim`.
+    fn typed(text: &str, width: u16) -> Frame {
+        let mut frame = Frame::new(GridSize::new(width, 3));
+        let area = Rect::new(0, 1, width, 1);
+        input_line(&mut frame, area, &Line::typed(text), "> ", "");
+        frame
+    }
+
+    /// The weight of the cell `word` starts at, given where the row starts.
+    fn weight_of(frame: &Frame, at: u16) -> Intensity {
+        frame
+            .cell(Pos::new(at, 1))
+            .expect("a painted cell")
+            .style
+            .intensity
+    }
+
+    /// The prompt hues what is typed into it, on the editor's three weights.
+    #[test]
+    fn what_is_typed_carries_the_same_weights_a_spell_does() {
+        // `> ` is two cells, so the line starts at 2.
+        let frame = typed("move the sage to laboratory", 60);
+        assert_eq!(weight_of(&frame, 2), Intensity::Normal, "the verb");
+        assert_eq!(weight_of(&frame, 2 + 5), Intensity::Dim, "`the` is filler");
+        assert_eq!(weight_of(&frame, 2 + 9), Intensity::Normal, "`sage`");
+    }
+
+    /// A word only a spell can run is **not** drawn as scaffolding here.
+    ///
+    /// `lex` is lexical, so it reads `repeat` as a control word wherever it
+    /// finds one. The prompt cannot run it, and drawing it bright would say the
+    /// orb knew a word it is about to refuse.
+    #[test]
+    fn the_prompt_does_not_hue_a_word_it_cannot_run() {
+        let frame = typed("repeat 3", 60);
+        assert_eq!(
+            weight_of(&frame, 2),
+            Intensity::Normal,
+            "`repeat` drew as scaffolding at a prompt that cannot run it",
+        );
+        // The count is still a count — that much is true in both places.
+        assert_eq!(weight_of(&frame, 2 + 7), Intensity::Normal);
+    }
+
+    /// The **whole** line is lexed, not the visible slice of it.
+    ///
+    /// `lex` classifies partly by position — a line opening with `#` is one
+    /// comment run, a line opening with a control word is a control line — so a
+    /// scrolled line lexed from its window would classify a mid-line fragment as
+    /// a line start.
+    ///
+    /// **A comment is the case where that reaches a cell**, and it is the only
+    /// one: `Verb` and `Name` both weigh `Normal`, so a window that re-read its
+    /// first word as the verb would draw identically. A scrolled comment does
+    /// not — whole-line it is dim throughout, window-only it comes apart into
+    /// ordinary words. Written against that rather than against the tidier
+    /// example, because the tidier example passes either way and proves nothing.
+    #[test]
+    fn a_scrolled_line_is_lexed_from_its_real_beginning() {
+        let text = "# a note long enough that the prompt has to scroll it sideways";
+        let width = 20;
+        let frame = typed(text, width);
+
+        let line = Line::typed(text);
+        let (visible, _) = line.viewport(width - 2);
+        assert!(
+            !visible.starts_with('#'),
+            "the line did not scroll, so this test proves nothing: {visible:?}",
+        );
+
+        // Every visible cell belongs to the comment run, so every one is dim.
+        // Lexed from the window instead, `it` would be filler and the words
+        // either side of it ordinary names.
+        for offset in 0..u16::try_from(visible.chars().count()).expect("a short window") {
+            assert_eq!(
+                weight_of(&frame, 2 + offset),
+                Intensity::Dim,
+                "cell {offset} of a scrolled comment was re-read as a fresh line",
+            );
+        }
+    }
+
+    /// The line is spoken **once**, however many runs it is drawn in.
+    ///
+    /// §14's stream is rebuilt every frame, so a run-per-word would recite a
+    /// half-typed command one word at a time — the `0.3.23` defect, at the one
+    /// surface a player types at constantly.
+    #[test]
+    fn the_line_is_one_utterance_however_many_runs_it_takes() {
+        let frame = typed("repeat until the stacks is idle", 60);
+        let spoken: Vec<&str> = frame
+            .speech()
+            .utterances()
+            .filter(|utterance| utterance.kind == UtteranceKind::Input)
+            .map(|utterance| utterance.text)
+            .collect();
+        assert_eq!(
+            spoken,
+            ["repeat until the stacks is idle"],
+            "the highlighting added an utterance per run",
+        );
+    }
+
+    /// ...and the ghost survives the runs, because it is drawn after them.
+    #[test]
+    fn the_ghost_is_not_painted_over_by_the_highlighting() {
+        let mut frame = Frame::new(GridSize::new(60, 3));
+        input_line(
+            &mut frame,
+            Rect::new(0, 1, 60, 1),
+            &Line::typed("grind"),
+            "> ",
+            " sage",
+        );
+        let hint = frame
+            .speech()
+            .utterances()
+            .find(|utterance| utterance.kind == UtteranceKind::Hint);
+        assert!(hint.is_some(), "the ghost went missing");
+        assert_eq!(
+            weight_of(&frame, 2 + 6),
+            Intensity::Dim,
+            "the ghost lost its weight to a run drawn over it",
+        );
+    }
 }

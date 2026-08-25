@@ -224,6 +224,78 @@ pub fn offered(world: &World) -> Vec<Verb> {
         .collect()
 }
 
+/// The verbs a spell written for `domain` may actually use.
+///
+/// # Two filters, and both are the spell's rather than the player's
+///
+/// [`offered`] answers *what can be typed here*, reading the scene of whichever
+/// room the player is standing in. A spell is written **for** a domain and runs
+/// there however far away it is being edited from, so the scene is built for
+/// that domain instead — `grind` belongs to a laboratory spell read from the
+/// archive.
+///
+/// The second filter is `may_issue`, and without it the guide would teach a line
+/// that cannot work: `attend`, `meditate`, `scribe`, `undo`, `bind`, `unfurl`,
+/// `weave`, `wander` and `quit` are refused inside a spell, so a listing offering
+/// them is worse than one that is short.
+///
+/// An unknown domain answers with the verbs that need no fixture, which is the
+/// honest floor: those work anywhere, and inventing a room's vocabulary for a
+/// name the tower does not have would be a guide making things up.
+#[must_use]
+pub fn spell_vocabulary(world: &World, domain: &str) -> Vec<Verb> {
+    let scene = super::navigate::find_domain(world, domain)
+        .map(|at| crate::tower::scene_at(world, at))
+        .unwrap_or_default();
+    Verb::ALL
+        .into_iter()
+        .filter(|verb| is_live(*verb) && crate::tower::spell::may_issue(*verb))
+        .filter(|verb| scene.offers(*verb))
+        .collect()
+}
+
+/// What may come next in a line of a spell written for `domain`.
+///
+/// [`expect`](crate::parser::expect) against the scene of the domain the **file**
+/// belongs to, which is not always the room the player is standing in — the same
+/// call [`spell_vocabulary`] makes, and for the same reason: a laboratory spell
+/// offers `grind` however far away it is being edited from.
+///
+/// The scene is built here rather than handed out, because `scene_at` rebuilds
+/// every recipe, topic and node and is not something a painter should be able to
+/// reach for. An unknown domain answers against an empty scene, which offers the
+/// language's own words and no verbs — the honest floor, and the same one
+/// [`spell_vocabulary`] takes.
+#[must_use]
+pub fn spell_expect(
+    world: &World,
+    domain: &str,
+    line: &str,
+    caret: usize,
+    open: &[crate::parser::SpellWord],
+) -> crate::parser::Expectation {
+    let at = super::navigate::find_domain(world, domain);
+    let scene = at
+        .map(|node| crate::tower::scene_at(world, node))
+        .unwrap_or_default();
+    // **The same `groups_at` `recall scripting` prints**, so the guide and the
+    // manual name the same sets. Deriving them from the scene instead would
+    // offer the room's contents, which is a different question with no right
+    // answer in it.
+    let sets = at.map(|node| crate::tower::groups_at(world, node));
+    crate::parser::expect(
+        line,
+        caret,
+        &crate::parser::Situation {
+            scene: &scene,
+            spell: true,
+            prompt_open: false,
+            open,
+            sets: sets.as_deref().unwrap_or_default(),
+        },
+    )
+}
+
 /// Whether `verb` works but is not available *yet*.
 ///
 /// The companion to [`is_live`], and the difference between *"nobody built

@@ -43,6 +43,16 @@ crossterm = "0.29"
 # through its ordinary return and `term::leave` runs on the way out. Already in
 # the tree under `crossterm`, so it costs no build time.
 signal-hook = "0.3"
+# **To ask one question crossterm cannot answer: has the terminal gone away?**
+# A destroyed pty reports `POLLHUP`, and `crossterm::event::read` responds to
+# that by looping inside itself for ever rather than returning — so the check has
+# to happen before the read, against the file descriptor directly. See
+# `hung_up` and `watch_for_hangup` in `drive.rs` for what it costs when nobody asks.
+#
+# `rustix` rather than `libc` because `unsafe_code` is denied workspace-wide and
+# this is one `poll` — a safe wrapper is the whole reason to prefer it. Already
+# in the tree via crossterm; declared here because this crate calls it.
+rustix = { version = "1.1", features = ["event", "stdio", "pipe"] }
 
 # For the one thing this build can fail at mid-session and cannot put on screen:
 # `F6`'s trace export. There is no subscriber installed (see `main.rs` — one

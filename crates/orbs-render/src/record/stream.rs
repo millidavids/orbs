@@ -508,9 +508,19 @@ impl<'a> Record<'a> {
     /// Facts stay on the record either way — this narrows what is *drawn and
     /// spoken*, never what is stored or searched. `sift` matches a field's own
     /// value and never comes through here (see [`sift`](super::sift)).
+    ///
+    /// **[`FieldName::Line`] is prose's one exception**, and it is a listing's
+    /// gutter. Prose keeps only what a person would read aloud, which is the
+    /// right default for a sentence and wrong for a numbered file: the number is
+    /// how a player names the line they mean. Every other field a prose record
+    /// might carry classifies it rather than saying anything.
     fn presented(&self, prose: bool) -> impl Iterator<Item = (FieldName, Value<'a>)> + Clone {
         self.content().filter(move |(name, _)| {
-            !prose || matches!(name, FieldName::Message | FieldName::Detail)
+            !prose
+                || matches!(
+                    name,
+                    FieldName::Line | FieldName::Message | FieldName::Detail
+                )
         })
     }
 

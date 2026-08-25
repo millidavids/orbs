@@ -163,6 +163,7 @@ const fn kind_label(kind: UtteranceKind) -> &'static str {
         UtteranceKind::Echo => "echo",
         UtteranceKind::Input => "in  ",
         UtteranceKind::Hint => "hint",
+        UtteranceKind::Guide => "aide",
         UtteranceKind::Completion => "done",
     }
 }

@@ -186,7 +186,7 @@ const COMPARATIVES: &[(&[&str], Bound, &str)] = &[
 /// `as` join a comparison to its second half, so a span that ate them would give
 /// `more marks than east` a thing called *"marks than east"* — the same silent
 /// swallow, one grammar wider. Nothing in the tower is named any of the four.
-const STOPPERS: &[&str] = &["is", "has", "than", "as"];
+pub(super) const STOPPERS: &[&str] = &["is", "has", "than", "as"];
 
 /// A question a spell can ask about the tower.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -363,6 +363,22 @@ impl State {
             Self::Empty => "empty",
         }
     }
+
+    /// Every spelling [`read`](Self::read) accepts, canonical first within each
+    /// state.
+    ///
+    /// For completion, which must be able to *offer* the vocabulary and not only
+    /// recognise it. All eight rather than the canonical three: §6's claim is
+    /// that a register is not second class, and a player who writes `busy`
+    /// should get the same help as one who writes `working`.
+    ///
+    /// Held beside [`read`](Self::read) rather than derived from it, because a
+    /// `match` cannot be enumerated — and
+    /// `every_state_word_the_list_offers_is_one_the_language_reads` is what
+    /// stops the two drifting.
+    pub const WORDS: [&'static str; 8] = [
+        "idle", "free", "still", "working", "busy", "running", "empty", "bare",
+    ];
 
     /// The state `word` names, if it names one.
     ///
@@ -1064,6 +1080,39 @@ mod tests {
     /// The question `text` asks, written back out — the shape the tables use.
     fn read(text: &str) -> Option<String> {
         condition(text).as_ref().map(write_condition)
+    }
+
+    /// Every state word the completer offers is one the language reads.
+    ///
+    /// [`State::WORDS`] is held beside [`State::read`] because a `match` cannot
+    /// be enumerated, and two lists of the same vocabulary is the shape §19
+    /// records going wrong three times over. This is what stops them drifting —
+    /// in both directions, since a word added to the `match` and not the list is
+    /// a spelling the editor silently refuses to help with.
+    #[test]
+    fn every_state_word_the_list_offers_is_one_the_language_reads() {
+        for word in State::WORDS {
+            assert!(
+                State::read(word).is_some(),
+                "`{word}` is offered and the language does not read it",
+            );
+        }
+
+        // The canonical three lead their own runs, which is what makes the
+        // offered list read as three answers rather than eight.
+        for state in [State::Idle, State::Working, State::Empty] {
+            assert!(
+                State::WORDS.contains(&state.canonical()),
+                "{state:?}'s canonical spelling is not offered at all",
+            );
+        }
+
+        // And nothing is offered twice.
+        let mut sorted = State::WORDS.to_vec();
+        sorted.sort_unstable();
+        let mut unique = sorted.clone();
+        unique.dedup();
+        assert_eq!(sorted, unique, "a state word is offered twice");
     }
 
     #[test]

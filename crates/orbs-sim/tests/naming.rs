@@ -114,7 +114,7 @@ fn a_phrase_that_leads_with_another_verbs_word_is_pinned() {
     // reason: it refuses `leave` and `exit` because an ambiguity prompt must
     // never offer ending the session beside a verb people type constantly, and
     // "picking wrong there cannot be typed back".
-    let owned: Vec<(&str, Verb)> = single_words();
+    let owned: Vec<(&str, Verb)> = single_words().collect();
     let mut leading = Vec::new();
     for entry in SYNONYMS.iter().filter(|entry| entry.words.len() > 1) {
         let first = entry.words[0];
@@ -409,7 +409,6 @@ fn ambiguous_synonym_prefixes_are_known() {
         }
         let prefix = &word[..3];
         let verbs: std::collections::BTreeSet<&str> = single_words()
-            .into_iter()
             .filter(|(other, _)| other.starts_with(prefix))
             .map(|(_, verb)| verb.canonical())
             .collect();
@@ -835,4 +834,157 @@ fn no_two_readings_fuzzy_match_each_other() {
         collisions.is_empty(),
         "two readings are in each other's way: {collisions:?}",
     );
+}
+
+/// Every plain-English synonym that is genuinely more than one word.
+///
+/// # Why this is pinned rather than derived
+///
+/// `Synonym::words` is **one phrase, pre-split**, so `&["spy", "peek", "try"]`
+/// declares the phrase `spy peek try` — not three synonyms. That is exactly what
+/// the lens shipped with: `spy` at the prompt echoed `! spy` and reached nothing,
+/// and so did `peek` and `try`, leaving §6's plain register with no way into the
+/// domain at all.
+///
+/// **Two tests watched that happen.** `every_verb_is_reachable_from_plain_english`
+/// asks whether a `Plain` entry *exists*, and one did.
+/// `every_phrase_reaches_the_verb_that_claims_it` drives the declared phrase, and
+/// `spy peek try` reaches `probe` perfectly well. Both were asking about the
+/// shape rather than about what a person would type.
+///
+/// So the multi-word ones are listed. A real phrase — `go to`, `get rid of` — is
+/// something a player says as a unit and belongs here; three words that were
+/// meant to be three entries do not, and adding one fails this test with the
+/// phrase printed, which is the question being asked out loud.
+#[test]
+fn multi_word_plain_synonyms_are_pinned() {
+    let mut found: Vec<String> = SYNONYMS
+        .iter()
+        .filter(|entry| entry.register == Register::Plain && entry.words.len() > 1)
+        .map(|entry| entry.words.join(" "))
+        .collect();
+    found.sort_unstable();
+
+    let mut expected = [
+        "get rid of",
+        "go to",
+        "how are things",
+        "how do i",
+        "look for",
+        "page back",
+        "page up",
+        "put it down",
+        "stop playing",
+        "take it back",
+        "what's here",
+    ];
+    expected.sort_unstable();
+
+    assert_eq!(
+        found, expected,
+        "a plain synonym is more than one word. if it is a phrase a player says \
+         as a unit, pin it here; if it is several synonyms, `syn` them separately \
+         — `words` is one phrase, not a list of them",
+    );
+}
+
+/// §6.1's command table says what the code must do, so the two are checked
+/// against each other.
+///
+/// # A design table is a second list, and second lists drift
+///
+/// This one had. `meditate` appeared **twice** — one row saying *"not `wait`"*
+/// and one listing `wait` as a synonym — while the code has neither; `wield`
+/// claimed `kindle`, which became a verb of its own; `stop` claimed `damp` where
+/// the code says `quench`; `decoct` still listed `mix` and `distil`, both now
+/// verbs; and `sift`, `recall`, `research` and `scribe` had each gained a word
+/// the table never heard about. Six rows wrong in the document DESIGN.md's own
+/// header calls authoritative.
+///
+/// §19 records the same shape three times over — the rail's state words against
+/// `State::label`, the wide-terminal substitution table against its own test
+/// list, `is_live` against `execute`'s match. Every one was found by a person
+/// reading two things side by side, which is the job this now does.
+///
+/// # What it checks, and what it deliberately does not
+///
+/// **Only the rows that are there.** §6.1 is the *slice* vocabulary and the
+/// domains coined fourteen verbs after it; requiring a row each would make this
+/// a demand that the section grow rather than a check that it is true.
+///
+/// The **plain** register is not compared either. It is prose — `"how do I"`,
+/// `explain` — and the table writes it as English with quotes and capitals,
+/// which is what makes it readable and unparseable. What is held is the pair a
+/// player has to be able to trust: the **canonical name** and its **shell**
+/// synonyms, which are exact words in both places.
+#[test]
+fn the_slice_table_in_this_document_matches_the_vocabulary() {
+    let design = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../docs/DESIGN.md")
+        .canonicalize()
+        .expect("DESIGN.md is beside the crates");
+    let text = std::fs::read_to_string(&design).expect("DESIGN.md is readable");
+
+    let mut rows: Vec<(String, Vec<String>)> = Vec::new();
+    let mut seen: Vec<String> = Vec::new();
+    for line in text.lines() {
+        // A vocabulary row opens with a backticked canonical name and has four
+        // cells. Any other table in the document has neither.
+        if !line.starts_with("| `") {
+            continue;
+        }
+        let cells: Vec<&str> = line.trim_matches('|').split('|').map(str::trim).collect();
+        if cells.len() != 4 {
+            continue;
+        }
+        let Some(name) = cells[0].trim_matches('`').split_whitespace().next() else {
+            continue;
+        };
+        let Some(verb) = Verb::ALL.into_iter().find(|verb| verb.canonical() == name) else {
+            // `decoct` and anything else retired. The table says so in its own
+            // words and there is no verb left to compare against.
+            continue;
+        };
+        assert!(
+            !seen.contains(&name.to_owned()),
+            "`{name}` has two rows in the table. one of them is stale, and the \
+             two said opposite things about `wait` for a whole phase",
+        );
+        seen.push(name.to_owned());
+
+        let shell: Vec<String> = if cells[2] == "—" {
+            Vec::new()
+        } else {
+            cells[2]
+                .split(',')
+                .map(|word| word.trim().trim_matches('`').to_owned())
+                .collect()
+        };
+        rows.push((verb.canonical().to_owned(), shell));
+    }
+    assert!(
+        rows.len() >= 15,
+        "only {} vocabulary rows found; the table moved and this stopped \
+         reading it",
+        rows.len(),
+    );
+
+    for (name, documented) in rows {
+        let verb = Verb::ALL
+            .into_iter()
+            .find(|verb| verb.canonical() == name)
+            .expect("matched above");
+        let mut live: Vec<String> = SYNONYMS
+            .iter()
+            .filter(|entry| entry.verb == verb && entry.register == Register::Shell)
+            .map(|entry| entry.words.join(" "))
+            .collect();
+        let mut documented = documented;
+        live.sort_unstable();
+        documented.sort_unstable();
+        assert_eq!(
+            documented, live,
+            "DESIGN.md §6.1 and `SYNONYMS` disagree about `{name}`'s shell words",
+        );
+    }
 }

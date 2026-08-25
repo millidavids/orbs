@@ -547,6 +547,119 @@ impl Depiction {
     }
 }
 
+/// What part of speech a cell belongs to, when it is a line of a spell.
+///
+/// # Enrichment, and §14 is the reason it may exist at all
+///
+/// A spell is a file a player reads, and colouring its parts is a legibility aid
+/// — never information. §14 requires the file to read correctly with none of it:
+/// the words say what they say, `interpret` reports what the orb heard, and a
+/// screen reader hears one sentence per line. Take every colour away and nothing
+/// is lost but comfort, which is the test a treatment has to pass to be allowed
+/// on screen.
+///
+/// **It obeys the rule a [`Wash`] and a [`Depiction`] already obey: it declines
+/// on an accent.** A line `interpret` could not read is drawn in `Role::Danger`,
+/// and the fault is the thing the eye must go to; syntax over the top of it
+/// would be decoration winning over meaning, which §4 forbids in one sentence.
+///
+/// **Unlike those two it is not a field on [`Style`]**, and the reason is
+/// measured rather than stylistic: `Cell` is pinned at eight bytes because a
+/// `Frame` holds 7,040 of them and resets every frame, and a fifth byte on
+/// `Style` cost +28 KiB and ~1.2 µs a frame on *every* screen.
+/// `a_cell_stays_eight_bytes` is what said so, by failing.
+///
+/// It reaches a frontend two ways instead, and neither costs a cell anything.
+/// The [`Intensity`] is resolved as the run is painted, so weight is already in
+/// the `Style`. The **hue** rides `Frame`'s syntax side-table — one
+/// `(Rect, Lexeme)` per run, the same shape [`Wash`] uses for an instrument bar
+/// and for the same reason: *"a payload is affordable here and would not be on a
+/// `Cell`"*. See [`Frame::lit`](crate::Frame::lit).
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Lexeme {
+    /// Not part of a spell, or a part with nothing to say about it.
+    #[default]
+    None,
+    /// One of the language's own words — `repeat`, `if`, `end`, `part`.
+    ///
+    /// The scaffolding: where a block opens, where it closes, what bounds a loop.
+    Control,
+    /// A verb the tower answers to — `grind`, `follow`, `probe`.
+    Verb,
+    /// Something the tower has — a reagent, an instrument, a place, a reading.
+    Name,
+    /// A count: `repeat 3`, `has 4 fragment`.
+    Number,
+    /// A `#` line, which the orb never reads.
+    Comment,
+    /// A call to one of this spell's own parts — `gathering()`.
+    ///
+    /// Distinct from a verb because it is a name *this file* defines rather than
+    /// one the tower offers, and reading a spell means knowing which is which.
+    Call,
+    /// A word §6 strips before matching — `the`, `a`, `to`.
+    ///
+    /// Drawn recessively rather than not at all: the player typed it and the file
+    /// is theirs (§19), so it stays on screen and gets out of the way.
+    Filler,
+    /// A word the question grammar fixes in place — `is`, `has`, `be`, `each`.
+    ///
+    /// **Not [`Filler`](Self::Filler), and telling them apart is why this
+    /// exists.** Both are small words the player types between the interesting
+    /// ones, and they are opposites: filler is what the orb *strips*, and this is
+    /// what it reads to know which question is being asked. Drawn dim, `is` and
+    /// `has` looked exactly like the `the` beside them.
+    Grammar,
+    /// One of the three states a place reports, or a spelling of one.
+    ///
+    /// `idle`, `free`, `still`, `working`, `busy`, `running`, `empty`, `bare` —
+    /// a closed vocabulary that only ever appears as the answer half of an `is`.
+    /// A [`Name`](Self::Name) is something the tower *has*; this is something it
+    /// is doing, and a question reads better when the two do not look alike.
+    State,
+}
+
+impl Lexeme {
+    /// How strongly this part of a spell is drawn.
+    ///
+    /// # Weight is the first axis and still carries the reading on its own
+    ///
+    /// A spell had this and nothing else for four versions, and §19 records why
+    /// hue was added beside it rather than instead of it: **a dump has no
+    /// colour**, `ORBS_DUMP` is the project's primary instrument, and a greyscale
+    /// tube is a §14 accessibility case. So weight keeps the split it always had,
+    /// and the hue is a second, finer cut over the top:
+    ///
+    /// | | |
+    /// |---|---|
+    /// | **Bright** | the scaffolding — where a block opens, closes, or calls |
+    /// | Normal | the content: what it does, to what, and what it is doing |
+    /// | Dim | the noise: filler the orb strips, and comments it never reads |
+    ///
+    /// [`Grammar`](Self::Grammar) sits at **Normal**, which is the whole of what
+    /// it was added for. It reads like filler and is its opposite — filler is
+    /// what §6 strips, `is` and `has` are what the question turns on — and drawn
+    /// dim beside a `the` there was nothing to tell them apart by.
+    ///
+    /// # One rule, not one per frontend
+    ///
+    /// Both builds resolve this the same way and neither gets an opinion, which
+    /// is [`Depiction::declines_tint`]'s argument applied again: that one was
+    /// three `if`s in `orbs-tui` mirroring an exhaustive `match` in the Bevy
+    /// build, under a comment saying the two had to agree, with nothing making
+    /// them.
+    #[must_use]
+    pub const fn weight(self) -> Intensity {
+        match self {
+            Self::Control | Self::Call => Intensity::Bright,
+            Self::Verb | Self::Name | Self::Number | Self::Grammar | Self::State | Self::None => {
+                Intensity::Normal
+            }
+            Self::Comment | Self::Filler => Intensity::Dim,
+        }
+    }
+}
+
 /// The complete semantic style of a cell.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Style {

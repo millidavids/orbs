@@ -1056,3 +1056,295 @@ fn a_spell_running_through_a_meditate_lands_where_it_would_have_watched() {
         "a spell watched tick by tick did not match one run through a meditate",
     );
 }
+
+// ---------------------------------------------------------------------------
+// Parts — a named run of lines, and the frame stack that runs one
+// ---------------------------------------------------------------------------
+
+#[test]
+fn a_part_runs_where_it_is_called_and_not_where_it_is_written() {
+    // The whole of what a definition is. Reaching `part gathering()` in the
+    // ordinary top-to-bottom read must do **nothing** — a spell is read down the
+    // file and its parts are written among its lines — and the body runs only
+    // where `gathering()` says so.
+    //
+    // **The same file twice, with and without the call**, which is the whole
+    // claim and needs no ordering to read: the body is identical, so anything
+    // the uncalled one does is the definition running where it stands.
+    let load = |lines: &[&str]| {
+        let mut sim = with_spell("check", lines);
+        sim.submit("invoke check");
+        sim.step_n(20);
+        said(&sim)
+            .iter()
+            .filter(|line| line.contains("dispensary to mortar"))
+            .count()
+    };
+
+    let uncalled = load(&["part gathering()", "grind sage", "end"]);
+    assert_eq!(uncalled, 0, "the definition ran where it was written");
+
+    let called = load(&["part gathering()", "grind sage", "end", "gathering()"]);
+    assert_eq!(called, 1, "the call did not run the part");
+}
+
+#[test]
+fn one_part_called_twice_runs_twice() {
+    // What a part is *for*, and the thing a definition executed in place could
+    // never do. Two calls, one body, two grinds.
+    let mut sim = with_spell(
+        "check",
+        &[
+            "part gathering()",
+            "grind sage",
+            "empty mortar_and_pestle",
+            "end",
+            "repeat 2",
+            "gathering()",
+            "end",
+        ],
+    );
+    sim.submit("invoke check");
+    sim.step_n(60);
+
+    let loads = said(&sim)
+        .iter()
+        .filter(|line| line.contains("dispensary to mortar"))
+        .count();
+    assert_eq!(loads, 2, "a part called twice ran {loads} times");
+}
+
+#[test]
+fn a_part_returns_to_the_line_after_the_call() {
+    // The half of a call that a jump would get wrong. The caller's `pc` is kept
+    // whole while the callee walks its own tree, and stepping past the call
+    // happens on the way *back* — so the line below it runs, exactly once.
+    let mut sim = with_spell(
+        "check",
+        &[
+            "part gathering()",
+            "grind sage",
+            "end",
+            "gathering()",
+            "empty mortar_and_pestle",
+        ],
+    );
+    sim.submit("invoke check");
+    sim.step_n(40);
+
+    let emptied = said(&sim)
+        .iter()
+        .filter(|line| line.contains("turn the mortar_and_pestle out"))
+        .count();
+    assert_eq!(
+        emptied,
+        1,
+        "the line after the call ran {emptied} times: {:?}",
+        said(&sim),
+    );
+}
+
+#[test]
+fn a_call_inside_a_loop_keeps_the_loop_the_caller_was_in() {
+    // A path addresses one tree, and a part is a different tree — so the
+    // caller's open blocks have to survive the callee walking its own. Without a
+    // stack the `repeat`'s turn count is whatever the part left behind.
+    let mut sim = with_spell(
+        "check",
+        &[
+            "part one()",
+            "grind sage",
+            "empty mortar_and_pestle",
+            "end",
+            "repeat 3",
+            "one()",
+            "end",
+        ],
+    );
+    sim.submit("invoke check");
+    sim.step_n(90);
+
+    let loads = said(&sim)
+        .iter()
+        .filter(|line| line.contains("dispensary to mortar"))
+        .count();
+    assert_eq!(loads, 3, "the loop ran {loads} laps instead of three");
+}
+
+#[test]
+fn a_part_that_calls_itself_stops_and_says_so() {
+    // §8's taxonomy is titled *"scripts always log and never halt"*, so runaway
+    // recursion may not stop the spell **and** may not be silent. It is bounded
+    // at `MAX_PARTS`, reported by name, and the spell carries on past the call.
+    let mut sim = with_spell("check", &["part spiral()", "spiral()", "end", "spiral()"]);
+    sim.submit("invoke check");
+    sim.step_n(40);
+
+    assert!(
+        mentioned(&sim, "too deep to follow"),
+        "runaway recursion was silent: {:?}",
+        said(&sim),
+    );
+    assert!(
+        mentioned(&sim, "is finished"),
+        "the spell halted rather than carrying on: {:?}",
+        said(&sim),
+    );
+}
+
+#[test]
+fn a_call_to_a_part_nobody_wrote_is_said_at_cast() {
+    // At cast rather than when the line is reached, which for a call inside a
+    // branch may be never. `check_calls` asks the file, so the answer does not
+    // depend on the tower at all.
+    let mut sim = with_spell("check", &["missing()"]);
+    sim.submit("invoke check");
+    sim.step_n(4);
+    assert!(
+        mentioned(&sim, "no part of this spell is called that"),
+        "a call to nothing was accepted: {:?}",
+        said(&sim),
+    );
+}
+
+#[test]
+fn the_budget_is_the_floor_until_the_weave_says_otherwise() {
+    // The wiring half of this item. Nothing is takeable, so `Taken` is empty and
+    // the answer is `SCRIPT_BUDGET` — what has to hold is that the number is
+    // *read* rather than compiled in, and that an untrained orb still gets one.
+    let sim = Sim::new(1);
+    assert_eq!(super::budget(sim.world()), super::SCRIPT_BUDGET);
+    assert_eq!(
+        super::SCRIPT_BUDGET,
+        1,
+        "the floor moved without a decision"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// What a spell may issue, and when it is told
+// ---------------------------------------------------------------------------
+
+#[test]
+fn a_forbidden_verb_is_refused_when_the_spell_is_cast() {
+    // **`may_issue` is a security boundary and it was answered too late.**
+    // `run_line` asks when the line is *reached* — which for a line inside a
+    // branch may be never, and for a bound spell may be hours after it was
+    // written. A scripted `meditate 3600` runs an hour of world time inside one
+    // `step()`, which its own doc calls a hazard; sitting in an untaken branch it
+    // said nothing at all.
+    //
+    // The guard the spell never takes is the point: `quartz` is not a laboratory
+    // reagent, so the body below never runs.
+    let mut sim = with_spell(
+        "risky",
+        &[
+            "if the dispensary has quartz",
+            "meditate 3600",
+            "end",
+            "survey",
+        ],
+    );
+    sim.submit("invoke risky");
+    sim.step_n(4);
+
+    assert!(
+        mentioned(&sim, "will not take from a spell"),
+        "a forbidden verb in an untaken branch was never mentioned: {:?}",
+        said(&sim),
+    );
+}
+
+#[test]
+fn the_cast_check_does_not_fire_on_a_line_that_makes_its_own_input() {
+    // **The reason a whole `Intent` cannot be frozen at cast.** A spell makes its
+    // own inputs, so `digest ground-sage` is written above the line that produces
+    // any — at cast the room has none and `analyse` drops the argument, which
+    // `interpret` shows by reading the line back as bare `digest`.
+    //
+    // The *verb* survives, because a verb is offered by the fixture standing in
+    // the room rather than by what is on the shelf. So the cast check may look at
+    // the verb and must say nothing about the arguments, and this is the test
+    // that keeps it that way: every pipeline spell in the game runs through here.
+    let mut sim = with_spell(
+        "brewing",
+        &[
+            "kindle charcoal",
+            "grind sage",
+            "empty mortar_and_pestle",
+            "digest ground-sage",
+        ],
+    );
+    sim.submit("invoke brewing");
+    sim.step_n(4);
+
+    assert!(
+        !mentioned(&sim, "will not take from a spell"),
+        "a pipeline line was refused at cast: {:?}",
+        said(&sim),
+    );
+    // ...and it really does reach the world, rather than being quietly dropped.
+    sim.step_n(40);
+    assert!(
+        mentioned(&sim, "dispensary to mortar"),
+        "the spell never ran: {:?}",
+        said(&sim),
+    );
+}
+
+#[test]
+fn a_spell_that_should_wait_still_waits_rather_than_being_refused() {
+    // **The regression this whole pass is scoped around.** `would_block` reads
+    // `Intent`'s arguments and filters them on `NounKind::Place`; anything that
+    // flattens an argument list loses the kind, `touches()` returns empty,
+    // `would_block` answers `None`, and every spell that used to wait starts
+    // being *refused* instead — with `waiting_since` never set, `PATIENCE` never
+    // tripped, and most of this file still green.
+    //
+    // So the shape is asserted from the outside: a spell whose second line wants
+    // the instrument its first line just started must **wait**, and must never
+    // see the refusal a player would get for typing the same thing.
+    let mut sim = with_spell("brewing", &["grind sage", "empty mortar_and_pestle"]);
+    sim.submit("invoke brewing");
+    sim.step_n(4);
+
+    assert!(
+        mentioned(&sim, "waits"),
+        "the spell did not wait for the mortar: {:?}",
+        said(&sim),
+    );
+    for refusal in ["still at work", "is working. wait", "already scouring"] {
+        assert!(
+            !mentioned(&sim, refusal),
+            "the spell was refused with {refusal:?} instead of waiting: {:?}",
+            said(&sim),
+        );
+    }
+}
+
+#[test]
+fn a_part_is_not_reachable_from_another_spell() {
+    // **A spell is contained to a single `.spell` file** (§19). Cross-file part
+    // sharing was a planned item and is struck, so this holds the rule rather
+    // than leaving it as a property of how `program::tree` happens to be
+    // written — the failure it guards against is a spell silently running lines
+    // out of a file its own text does not contain.
+    let mut sim = with_spell("lender", &["part gathering()", "grind sage", "end"]);
+    let borrower: Vec<String> = ["gathering()".to_owned()].into();
+    sim.write_spell("borrower", &borrower);
+    sim.step();
+
+    sim.submit("invoke borrower");
+    sim.step_n(20);
+
+    assert!(
+        mentioned(&sim, "no part of this spell is called that"),
+        "a spell reached a part defined in another file: {:?}",
+        said(&sim),
+    );
+    assert!(
+        !mentioned(&sim, "dispensary to mortar"),
+        "the borrowed part actually ran: {:?}",
+        said(&sim),
+    );
+}

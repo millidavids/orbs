@@ -227,6 +227,47 @@ fn a_sabotage_tell_survives_on_the_surface_you_inspect() {
     );
 }
 
+#[test]
+fn a_script_line_speaks_as_itself_and_keeps_its_gutter() {
+    // §14, and the reason `ScriptLine` is a kind of its own rather than a log
+    // line by another name. A log row is fielded and speaks `label: value`; a
+    // script line is a sentence the *player* wrote, so a reader hearing "row,
+    // tick eleven, message follow north" is being read three lies about one
+    // line of their own file.
+    //
+    // The number stays, drawn and spoken both, because it is how they say which
+    // line they mean. It is the one non-message field prose keeps.
+    let mut records = Records::new();
+    records
+        .push(RecordKind::ScriptLine)
+        .count(FieldName::Line, 11)
+        .text(FieldName::Message, "follow north")
+        .finish();
+
+    let record = records.get(0).expect("record");
+    assert_eq!(record.to_line(), "11 follow north");
+
+    let mut spoken = String::new();
+    record.speak(&mut spoken);
+    assert_eq!(spoken, "11, follow north");
+}
+
+#[test]
+fn a_log_line_still_speaks_its_labels() {
+    // The other half: narrowing prose must not reach the fielded kinds, or
+    // §14's "a reader must never reconstruct columns from spacing" goes with it.
+    let mut records = Records::new();
+    records
+        .push(RecordKind::LogLine)
+        .count(FieldName::Line, 11)
+        .text(FieldName::Message, "follow north")
+        .finish();
+
+    let mut spoken = String::new();
+    records.get(0).expect("record").speak(&mut spoken);
+    assert_eq!(spoken, "line: 11, message: follow north");
+}
+
 // ---------------------------------------------------------------------------
 // §7 — pipes operate on records, never on rendered text
 // ---------------------------------------------------------------------------

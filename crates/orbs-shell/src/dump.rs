@@ -356,6 +356,15 @@ pub fn run_script(seed: u64, wizard: Option<String>, engine: &str, request: &str
             weaving = weaving.or_else(|| woven(&mut sim));
             walking |= walked(&mut sim);
         }
+        // **And a maze can close from under the walker.** `walked` only ever
+        // latches *on*; both frontends give the keyboard back when the maze goes
+        // — `Surfaces::tick`'s `if self.walking && sim.stacks().is_none()` — so
+        // without this a dump whose spell solved the maze draws `wander` still
+        // owning the whole pane, where the game has handed it back to the
+        // prompt. Same divergence as the guide above, one surface over.
+        if walking && sim.stacks().is_none() {
+            walking = false;
+        }
         // The world may have moved while the screen was up — `ORBS_THEN` steps.
         // In the game `weaving::refresh` runs every frame for exactly this.
         if let Some(screen) = weaving.as_mut() {
@@ -369,9 +378,20 @@ pub fn run_script(seed: u64, wizard: Option<String>, engine: &str, request: &str
         // **The reading especially.** Without it `interpret` draws an empty page
         // and the marks never appear, which is a See-it line that looks like it
         // works and proves nothing — worse than no picture at all.
+        //
+        // **And the guide**, which is the same argument one accessor along.
+        // `Editor::new` seeds an empty `Guide` for the first `refresh` a
+        // frontend does to replace — Bevy in `editing::open_requested` and on
+        // every key, `orbs-tui` in `Surfaces::refresh` — and a dump does
+        // neither, so every dumped editor drew an empty box that still took
+        // thirty columns off the buffer. `scripts/dumps.sh` captures several of
+        // those, and this is the project's primary See-it instrument: a pane
+        // that is present, sized, and blank is exactly the dump-versus-game
+        // divergence `opened` exists to prevent.
         if let Some(editor) = editing.as_mut() {
             editor.set_running_line(sim.running_line(editor.name()));
             editor.set_reading(sim.read_spell(editor.domain(), editor.lines()));
+            editor.refresh(&sim);
         }
         // A dump builds no `App`, so the two cached resources have nobody to
         // fill them: they are computed here from the same functions the systems
@@ -467,6 +487,45 @@ fn print(frame: &Frame) {
                 area.row,
             );
         }
+    }
+
+    // **And the spell's parts of speech, for exactly the tints' reason.** A hue
+    // changes no glyph, so a lexeme the sim classified whose colour never
+    // reaches a cell draws in the base and looks precisely like a word nobody
+    // has coloured yet. `ink` can see this in the terminal build and nothing can
+    // see it in the Bevy one, which makes this the only text gate there is.
+    //
+    // Printed as *runs in reading order*, not as a tally: the interesting
+    // failure is a word classified wrongly, and that is visible only beside the
+    // words either side of it.
+    if !frame.syntax().is_empty() {
+        println!("-- lit runs (DESIGN.md §19) --");
+        for (area, kind) in frame.syntax() {
+            let word: String = (area.col..area.right())
+                .filter_map(|col| frame.cell(orbs_render::Pos::new(col, area.row)))
+                .map(|cell| cell.glyph)
+                .collect();
+            println!("  {:<8} {word:?} at {},{}", part(*kind), area.col, area.row);
+        }
+    }
+}
+
+/// A part of speech, as the dump names it.
+///
+/// Spelled out rather than `{:?}`'d so the column reads as prose and so a
+/// rename of the enum does not silently rewrite every captured baseline.
+const fn part(kind: orbs_render::Lexeme) -> &'static str {
+    match kind {
+        orbs_render::Lexeme::Control => "control",
+        orbs_render::Lexeme::Verb => "verb",
+        orbs_render::Lexeme::Name => "name",
+        orbs_render::Lexeme::Number => "number",
+        orbs_render::Lexeme::Comment => "comment",
+        orbs_render::Lexeme::Call => "call",
+        orbs_render::Lexeme::Filler => "filler",
+        orbs_render::Lexeme::Grammar => "grammar",
+        orbs_render::Lexeme::State => "state",
+        orbs_render::Lexeme::None => "none",
     }
 }
 

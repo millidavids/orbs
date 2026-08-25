@@ -38,7 +38,7 @@
 
 use bevy_ecs::prelude::*;
 
-use super::node::{Keep, Name, Nameable, children_of, root};
+use super::node::{Keep, Nameable, children_of, root};
 use crate::parser::NounKind;
 
 /// The arsenal's name, for the one place `build` needs to spell it.
@@ -76,10 +76,11 @@ pub fn keeping(world: &World) -> Vec<Entity> {
 /// What the arsenal holds under `named`, if anything.
 #[must_use]
 pub fn kept(world: &World, named: &str) -> Option<Entity> {
-    let leaf = crate::parser::leaf(named);
-    keeping(world)
-        .into_iter()
-        .find(|node| world.get::<Name>(*node).is_some_and(|name| name.0 == leaf))
+    // By leaf: an argument may arrive as a path (§7) and a node carries only its
+    // last segment. See `tower::reach` for the axis this is one setting of.
+    super::reach::look(world)
+        .scope(super::reach::Scope::Arsenal)
+        .find(crate::parser::leaf(named))
 }
 
 /// Whether the arsenal will take `node`.
