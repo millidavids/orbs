@@ -80,62 +80,62 @@
 domain = "archive"
 lines = [
     "repeat until the stacks is idle",
-    "if north has spoil",
-    "follow north",
-    "else if east has spoil",
-    "follow east",
-    "else if south has spoil",
-    "follow south",
-    "else if west has spoil",
-    "follow west",
-    "else if north has exit",
-    "follow north",
-    "else if east has exit",
-    "follow east",
-    "else if south has exit",
-    "follow south",
-    "else if west has exit",
-    "follow west",
-    "else if north has passage",
-    "follow north",
-    "else if east has passage",
-    "follow east",
-    "else if south has passage",
-    "follow south",
-    "else if west has passage",
-    "follow west",
+    "    if north has spoil",
+    "        follow north",
+    "    else if east has spoil",
+    "        follow east",
+    "    else if south has spoil",
+    "        follow south",
+    "    else if west has spoil",
+    "        follow west",
+    "    else if north has exit",
+    "        follow north",
+    "    else if east has exit",
+    "        follow east",
+    "    else if south has exit",
+    "        follow south",
+    "    else if west has exit",
+    "        follow west",
+    "    else if north has passage",
+    "        follow north",
+    "    else if east has passage",
+    "        follow east",
+    "    else if south has passage",
+    "        follow south",
+    "    else if west has passage",
+    "        follow west",
     # **These two tiers are what a real minimum would replace, and cannot yet.**
     # `north has no more marks than east` is expressible now — but a *walled*
     # east reads as nought marks, so a comparison against every other way is
     # false unless this one is unwalked too, and every rung dies. Selecting the
     # least-marked way among the ones that are *open* is a filter over a list,
     # which is the next step's job, not a comparison's. §19 records it.
-    "else if north has 1 or fewer marks and not north has back and not north has wall",
-    "follow north",
-    "else if east has 1 or fewer marks and not east has back and not east has wall",
-    "follow east",
-    "else if south has 1 or fewer marks and not south has back and not south has wall",
-    "follow south",
-    "else if west has 1 or fewer marks and not west has back and not west has wall",
-    "follow west",
-    "else if north has 2 or more marks and not north has back",
-    "follow north",
-    "else if east has 2 or more marks and not east has back",
-    "follow east",
-    "else if south has 2 or more marks and not south has back",
-    "follow south",
-    "else if west has 2 or more marks and not west has back",
-    "follow west",
-    "else if north has back",
-    "follow north",
-    "else if east has back",
-    "follow east",
-    "else if south has back",
-    "follow south",
-    "else if west has back",
-    "follow west",
-    "else",
-    "end",
+    "    else if north has 1 or fewer marks and not north has back and not north has wall",
+    "        follow north",
+    "    else if east has 1 or fewer marks and not east has back and not east has wall",
+    "        follow east",
+    "    else if south has 1 or fewer marks and not south has back and not south has wall",
+    "        follow south",
+    "    else if west has 1 or fewer marks and not west has back and not west has wall",
+    "        follow west",
+    "    else if north has 2 or more marks and not north has back",
+    "        follow north",
+    "    else if east has 2 or more marks and not east has back",
+    "        follow east",
+    "    else if south has 2 or more marks and not south has back",
+    "        follow south",
+    "    else if west has 2 or more marks and not west has back",
+    "        follow west",
+    "    else if north has back",
+    "        follow north",
+    "    else if east has back",
+    "        follow east",
+    "    else if south has back",
+    "        follow south",
+    "    else if west has back",
+    "        follow west",
+    "    else",
+    "    end",
     "end",
 ]
 
@@ -226,59 +226,59 @@ lines = [
     "probe",
 
     "if the prism is working",
-    "dial first",
-    "probe",
-    "if the prism has further",
-    "dial first nitre",
-    "probe",
-    "else",
-    "repeat until not the prism has level",
-    "dial first",
-    "probe",
-    "end",
-    "end",
-    "end",
-
-    "if the prism is working",
-    "dial second",
-    "probe",
-    "if the prism has further",
-    "dial second alum",
-    "probe",
-    "else",
-    "repeat until not the prism has level",
-    "dial second",
-    "probe",
-    "end",
-    "end",
+    "    dial first",
+    "    probe",
+    "    if the prism has further",
+    "        dial first nitre",
+    "        probe",
+    "    else",
+    "        repeat until not the prism has level",
+    "            dial first",
+    "            probe",
+    "        end",
+    "    end",
     "end",
 
     "if the prism is working",
-    "dial third",
-    "probe",
-    "if the prism has further",
-    "dial third borax",
-    "probe",
-    "else",
-    "repeat until not the prism has level",
-    "dial third",
-    "probe",
-    "end",
-    "end",
+    "    dial second",
+    "    probe",
+    "    if the prism has further",
+    "        dial second alum",
+    "        probe",
+    "    else",
+    "        repeat until not the prism has level",
+    "            dial second",
+    "            probe",
+    "        end",
+    "    end",
     "end",
 
     "if the prism is working",
-    "dial fourth",
-    "probe",
-    "if the prism has further",
-    "dial fourth quartz",
-    "probe",
-    "else",
-    "repeat until not the prism has level",
-    "dial fourth",
-    "probe",
+    "    dial third",
+    "    probe",
+    "    if the prism has further",
+    "        dial third borax",
+    "        probe",
+    "    else",
+    "        repeat until not the prism has level",
+    "            dial third",
+    "            probe",
+    "        end",
+    "    end",
     "end",
-    "end",
+
+    "if the prism is working",
+    "    dial fourth",
+    "    probe",
+    "    if the prism has further",
+    "        dial fourth quartz",
+    "        probe",
+    "    else",
+    "        repeat until not the prism has level",
+    "            dial fourth",
+    "            probe",
+    "        end",
+    "    end",
     "end",
 ]
 
@@ -286,12 +286,12 @@ lines = [
 domain = "archive"
 lines = [
     "repeat 200",
-    "if the cabinet has 4 fragment",
-    "repeat 4",
-    "move fragment to lectern",
-    "end",
-    "wield lectern",
-    "end",
+    "    if the cabinet has 4 fragment",
+    "        repeat 4",
+    "            move fragment to lectern",
+    "        end",
+    "        wield lectern",
+    "    end",
     "end",
 ]
 
@@ -328,22 +328,102 @@ lines = [
 domain = "archive"
 lines = [
     "repeat until the stacks is idle",
-    "let best be north",
-    "for each way",
-    "if way has no wall",
-    "let best be way",
+    "    let best be north",
+    "    for each way",
+    "        if way has no wall",
+    "            let best be way",
+    "        end",
+    "    end",
+    "    for each way",
+    "        if way has no wall and no back",
+    "            let best be way",
+    "        end",
+    "    end",
+    "    for each way",
+    "        if way has no wall and no back and fewer marks than best",
+    "            let best be way",
+    "        end",
+    "    end",
+    "    follow best",
     "end",
+]
+
+# The sanctum, solved by the cyclic Tower of Hanoi (§10, `tower::pylon`).
+#
+# **This is the spell the domain was designed around**, and it is the first one
+# in the game that genuinely needs `part` *and* `let` together. It is worth
+# reading beside `breaking`: both automate a puzzle whose difficulty is
+# bookkeeping, and both work by holding a **rule** rather than a memory.
+#
+# # The algorithm
+#
+# Between any two stations exactly one haul is legal, unless both are empty. So
+# the whole solution is a rotation: keep taking the legal haul between the three
+# pairs of stations in order, and the course assembles itself at the barrier in
+# `2^n - 1` hauls, which is optimal.
+#
+# **Which rotation depends on the parity, and that is the whole decision.** For
+# an even course the least ward travels wellspring -> conduit -> barrier; for an
+# odd one it goes the other way round. Get it backwards and the course still
+# finishes — in the **conduit**, with the barrier no better than it was.
+# `the_parity_is_what_decides_the_cycle_and_getting_it_wrong_is_visible` is that
+# failure pinned as a test.
+#
+# That is why `odd` is published at all, and why `height_for` jitters the height:
+# without the jitter a player learns their tower's number and hard-codes the
+# cycle, and the one thing this puzzle asks anybody to read stops being read.
+#
+# # Four traps, all of them found by running it
+#
+# **`is empty` works only because an empty station publishes nothing.**
+# `spell::watch` answers `empty` by asking whether a node has children, so the
+# two emptiness rungs below depend on `execute::muster::publish` raising
+# `potency` *only* while a station holds a ward. It is the lens's `is empty` trap
+# in reverse.
+#
+# **The emptiness rungs come first, and must.** A station with no `potency`
+# counts as nought, so `has fewer potency than` puts an empty station below
+# everything — a ladder that compared first would haul onto an empty station from
+# a full one and call it the lesser. Verbatim the maze's *"a walled way publishes
+# no marks"*.
+#
+# **The guard is inside `between()`, not around the loop.** `repeat until` is
+# asked at the end of a pass, so the last pass issues up to two more calls after
+# the course is already assembled. Guarding the part guards all three calls for
+# two lines — the lens's *"wrap each phase in `if the prism is working`"* again.
+#
+# **`muster` is the first line.** Without it the pylon is idle, `repeat until` is
+# satisfied before the first pass, the loop runs zero times and the spell ends
+# having done nothing — and a *bound* one does that for ever. It is also what
+# makes this a faucet: `bind::stand` recasts every lap, so a held `holding` draws
+# a fresh course each time and the barrier never fails.
+[holding]
+domain = "sanctum"
+lines = [
+    "muster",
+    "part between(here, there)",
+    "    if the pylon is working",
+    "        if here is empty",
+    "            haul there here",
+    "        else if there is empty",
+    "            haul here there",
+    "        else if here has fewer potency than there",
+    "            haul here there",
+    "        else",
+    "            haul there here",
+    "        end",
+    "    end",
     "end",
-    "for each way",
-    "if way has no wall and no back",
-    "let best be way",
+    "if the pylon has odd",
+    "    let near be barrier",
+    "    let far be conduit",
+    "else",
+    "    let near be conduit",
+    "    let far be barrier",
     "end",
-    "end",
-    "for each way",
-    "if way has no wall and no back and fewer marks than best",
-    "let best be way",
-    "end",
-    "end",
-    "follow best",
+    "repeat until the pylon is idle",
+    "    between(wellspring, near)",
+    "    between(wellspring, far)",
+    "    between(near, far)",
     "end",
 ]

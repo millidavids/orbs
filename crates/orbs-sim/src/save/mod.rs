@@ -58,8 +58,8 @@ mod restore;
 pub use document::{Away, FORMAT, MarkSave, ProgressSave, RecordSave, RngSave, Save, WorldSave};
 pub use error::SaveError;
 pub use node::{
-    DescentSave, HistorySave, MazeSave, NodeSave, RunningSave, SpanSave, SubstitutedSave, WardSave,
-    WorkingSave,
+    CourseSave, DescentSave, HistorySave, MazeSave, NodeSave, RunningSave, SpanSave,
+    SubstitutedSave, WardSave, WorkingSave,
 };
 
 pub(crate) use capture::capture;

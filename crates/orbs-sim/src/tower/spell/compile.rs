@@ -119,9 +119,9 @@ pub fn compile(world: &World, from: Entity, lines: &[String]) -> Program {
     // question about the file and not about the tower — and asking it here means
     // `interpret` and the cast agree, which §19 records two expressions of one
     // rule failing to do twice.
-    let defined: Vec<String> = super::program::parts(&draft.body)
+    let defined: Vec<(String, usize)> = super::program::parts(&draft.body)
         .into_iter()
-        .map(str::to_owned)
+        .map(|(name, takes)| (name.to_owned(), takes))
         .collect();
     check_calls(&draft.body, &defined, &mut complaints);
     check_commands(&draft.body, &scene, &bound, &mut complaints);
@@ -141,15 +141,29 @@ pub fn compile(world: &World, from: Entity, lines: &[String]) -> Program {
 /// runs (§8), but by then it is a report about an edit rather than about a typo.
 ///
 /// Recursive, because a call can be anywhere a command can.
-fn check_calls(body: &Block, defined: &[String], complaints: &mut Vec<Complaint>) {
+fn check_calls(body: &Block, defined: &[(String, usize)], complaints: &mut Vec<Complaint>) {
     for Step { line, kind } in body {
         match kind {
-            Kind::Call { name } => {
-                if !defined.iter().any(|part| part == name) {
-                    complaints.push(Complaint {
+            Kind::Call { name, args } => {
+                match defined.iter().find(|(part, _)| part == name) {
+                    None => complaints.push(Complaint {
                         line: *line,
                         key: "spell_no_such_part",
-                    });
+                    }),
+                    // **Wrong count is its own complaint, not a missing part.**
+                    // A part takes names positionally and there is no default
+                    // and no overload, so `between(wellspring)` has nothing to
+                    // put in `there` — and binding it to nothing would leave the
+                    // body asking about a name that stands for itself, which
+                    // resolves against the room and does the wrong thing
+                    // quietly. The one shape this language refuses everywhere.
+                    Some((_, wanted)) if *wanted != args.len() => {
+                        complaints.push(Complaint {
+                            line: *line,
+                            key: "spell_call_arity",
+                        });
+                    }
+                    Some(_) => {}
                 }
             }
             Kind::Repeat { body, .. } | Kind::Each { body, .. } | Kind::Part { body, .. } => {
@@ -611,9 +625,9 @@ pub fn interpret(world: &World, domain: &str, lines: &[String]) -> Vec<Reading> 
     // runner disagreeing about a line is §19's recurring defect in this file;
     // a call to a part nobody defined is exactly the kind of fault this surface
     // exists to show before it runs.
-    let defined: Vec<String> = super::program::parts(&draft.body)
+    let defined: Vec<(String, usize)> = super::program::parts(&draft.body)
         .into_iter()
-        .map(str::to_owned)
+        .map(|(name, takes)| (name.to_owned(), takes))
         .collect();
     check_calls(&draft.body, &defined, &mut structural);
     // **The whole file's bindings, for every line of it.** A `set` on line 9 is
@@ -685,12 +699,16 @@ fn one(line: &str, scene: &Scene, known: &[&str], bound: &[String]) -> Reading {
     // spell compiled and ran while the surface built to catch bad lines lied
     // about it.
     if crate::parser::spell_word(trimmed).is_none()
-        && let Some(called) = super::program::call_name(trimmed)
+        && let Some(called) = super::program::call_of(trimmed)
     {
         return match called {
-            Some(name) => verbatim_as(&format!("{name}()"), None),
+            // **The arguments are written back as names, never resolved.** What
+            // the orb hears is *"do `between` with whatever `near` is"*, and it
+            // cannot know that until the line runs — the same answer, and the
+            // same reason, as the bound-name branch further down.
+            Some((name, args)) => verbatim_as(&format!("{name}({})", args.join(", ")), None),
             None => verbatim(Some(Fault {
-                key: "spell_part_takes_nothing",
+                key: "spell_unreadable_call",
                 detail: None,
             })),
         };

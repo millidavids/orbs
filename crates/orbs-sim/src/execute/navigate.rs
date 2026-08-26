@@ -122,6 +122,34 @@ pub(super) fn survey(intent: &Intent, world: &mut World) {
     // that re-ordered would be carrying an ordering the record stream does not.
     here.sort_by(|left, right| left.1.cmp(right.1).then_with(|| left.0.cmp(&right.0)));
 
+    // **An empty place still answers.** Every record below is pushed *inside*
+    // the loop, so a place with no children said nothing at all — the orb
+    // meeting a typed command with total silence, which §6 does not allow
+    // anywhere. It went unnoticed for four phases because the rooms that were
+    // built are never empty; the sanctum made it the common case, since a
+    // station publishes `potency` only while it holds a ward and two of the
+    // three are bare for most of a solve. `survey barrier` is close to the
+    // first thing anybody types in that room.
+    //
+    // Said here rather than per-domain because the hole is `survey`'s: the
+    // lens's untouched socket and a scoured instrument are the same shape.
+    if here.is_empty() {
+        let name = world
+            .get::<tower::Name>(at)
+            .map_or_else(String::new, |name| name.0.clone());
+        let message = world
+            .resource::<crate::content::Prose>()
+            .line("survey_bare", &[("name", &name)]);
+        world
+            .resource_mut::<Scrollback>()
+            .records_mut()
+            .push(RecordKind::Completion)
+            .text(FieldName::Name, Verb::Survey.canonical())
+            .text(FieldName::Message, &message)
+            .finish();
+        return;
+    }
+
     let mut scrollback = world.resource_mut::<Scrollback>();
     let records = scrollback.records_mut();
     // **A heading per kind, and the kind off every row.** `sage reagent` said

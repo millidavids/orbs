@@ -198,6 +198,13 @@ fn progress(world: &mut World, save: &Save) {
     world
         .resource_mut::<tower::Experience>()
         .restore(progress.experience);
+    // **Absent means whole, not nothing.** A save written before the
+    // sanctum existed says nothing about integrity, and defaulting a missing
+    // field to nought would hand every returning player a tower worn to the
+    // ground — see `ProgressSave::integrity`.
+    world
+        .resource_mut::<tower::Integrity>()
+        .restore(progress.integrity.unwrap_or(tower::STANDING));
     world
         .resource_mut::<tower::Taken>()
         .restore(progress.taken.clone());

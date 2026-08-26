@@ -908,9 +908,9 @@ mod tests {
         // `Prose::has` and an unauthored room simply prints the old word list.
         //
         // Driven from `Sim::briefs()` rather than a list written out here, so the
-        // rooms come from the world. `built` is what makes it honest: `forge`,
-        // `menagerie` and `battlements` are dark, need nothing yet, and start
-        // needing it on the day `build.rs` raises them.
+        // rooms come from the world. `built` is what makes it honest: `forge`
+        // and `menagerie` are dark, need nothing yet, and start needing it on
+        // the day `build.rs` raises them.
         let sim = Sim::new(1);
         let prose = sim.world().resource::<Prose>();
 
@@ -1109,7 +1109,7 @@ mod tests {
                 line.starts_with(verb.canonical()),
                 "{key} does not open with the word it documents: {line:?}",
             );
-            // **Two verbs are exempt, and the exemption is a recorded debt.**
+            // **Three verbs are exempt, and the exemption is a recorded debt.**
             // Both take `Place` slots because the place half of a spell's
             // condition resolves against exactly that kind — which is why the
             // archive's four ways and the lens's sockets and sigils are places
@@ -1125,6 +1125,12 @@ mod tests {
             if let Some(instead) = match verb {
                 Verb::Follow => Some(&["way"][..]),
                 Verb::Dial => Some(&["socket", "sigil"][..]),
+                // ...and the sanctum's stations, for the same reason. The
+                // synopsis is `haul <station> to <station>` rather than
+                // `<from> <to>`: the direction is the thing a player must get
+                // right, and `to` is §6 filler so the line is also a command
+                // that works.
+                Verb::Haul => Some(&["station"][..]),
                 _ => None,
             } {
                 for wanted in instead {

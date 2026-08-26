@@ -445,6 +445,15 @@ pub(super) fn session(
     }
     body = sheet.rest;
 
+    // The sanctum's board, third and last on exactly the same terms. Three
+    // pictures, three rooms, one player — so the columns are claimed once
+    // whichever domain is open, and never twice.
+    let course = super::pylon::split(body, panel.pylon.as_ref());
+    if let Some(standing) = panel.pylon.as_ref() {
+        super::pylon::paint(&mut painter, course.area, standing, sim.prose());
+    }
+    body = course.rest;
+
     // The tower-wide production meter stays: it is the *pool*, not an
     // instrument, and it is what says the slot is spent wherever it was spent.
     // Skipped in the laboratory, where the panel already draws that instrument's

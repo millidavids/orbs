@@ -12,17 +12,23 @@ enemy attacks the automation.
 Artless by design. No sprites, no characters, no illustrations. A single curved
 CRT glowing in the dark.
 
-**Status: Phases 0, 0.5, 1 and 2 closed. Phase 3 (Spellcraft) next.** The
-determinism spine, the Frame boundary, the parser, the cell renderer, brewing,
-the archive, the lens, the tower rail, the balance harness, the spell engine and
-its scripting language are built and the game plays.
+**Status: Phases 0, 0.5, 1, 2 and 4 closed; Phase 3 met on its exit with three
+boxes deliberately left. Phase 5 (Summoning) next.** The determinism spine, the
+Frame boundary, the parser, the cell renderer, brewing, the archive, the lens,
+the sanctum, the tower rail, the balance harness, the spell engine and its
+scripting language are built and the game plays.
 See [docs/ROADMAP.md](docs/ROADMAP.md) for what remains.
 
-**Phases 2–7 are §10's five remaining domains** — scrying, spellcraft,
-enchanting, summoning, defense — and the phase that makes them one machine. The
-siege moved from Phase 2 to **Phase 8**, because a series of puzzles has to exist
+**Phases 2–7 are §10's five remaining domains** — scrying, spellcraft, defense,
+summoning, enchanting — and the phase that makes them one machine. The siege
+moved from Phase 2 to **Phase 8**, because a series of puzzles has to exist
 before the thing that consumes them. Phase numbers in older notes are six lower
 from Phase 2 down; DESIGN.md §19 records the shift.
+
+**Defense and Enchanting swapped, 6 ↔ 4** (§19). Nothing in defense depended on
+either derived domain, and the version is `0.<phase>.<step>` and drawn on the
+POST card — so building Phase 6 first would have made a tester's version number
+go backwards when Phase 4 landed.
 
 **The design is authoritative and lives in [docs/DESIGN.md](docs/DESIGN.md)** —
 ~2,000 lines, eight drafts, four independent staff-level reviews. Read it before
@@ -541,17 +547,17 @@ offer an undiscovered potion as an inexhaustible herb.
 ```
 probe
 if the prism is working              ← ...and the same for second, third, fourth
-dial first
-probe
-if the prism has further             ← it was already right
-dial first nitre                     ← restore, and re-press to re-sync
-probe
-else
-repeat until not the prism has level
-dial first
-probe
-end
-end
+    dial first
+    probe
+    if the prism has further         ← it was already right
+        dial first nitre             ← restore, and re-press to re-sync
+        probe
+    else
+        repeat until not the prism has level
+            dial first
+            probe
+        end
+    end
 end
 ```
 
@@ -623,6 +629,179 @@ cargo run -p orbs-render --example screens   # the sheet, no sim and no GPU
 cargo run -p orbs-balance -- run scrying --ticks 7200 --why
 scripts/play.sh lens::                    # ten scenarios, through a real tmux game
 ```
+
+**The lens's board is titled `seal` now, not `ward`** (§19). §10 reserves "ward"
+for defense and the lens had borrowed it; the prose keys keep their spelling
+because `tower::Ward` is not player-facing.
+
+### The sanctum — Hanoi, and there is no clock in it
+
+**Three stations, three to seven wards, and a greater one never rests upon a
+lesser.** Raw arcane energy wells up in the `wellspring`; `muster` draws a course
+out of it, and it belongs assembled at the `barrier` with the `conduit` between.
+`haul <from> <to>` carries the topmost ward. Both verbs are **instant and take no
+production slot**, so a bound solver runs beside a full brewing loop — the lens's
+decision, not the archive's.
+
+**The room was `battlements/` and the names were masonry** — a `rampart`, a
+`barbican`, a `bastion`, a `redoubt` (§19, `0.4.1`). *"Haul a ward from the
+barbican to the redoubt"* is not a thing a wizard does, and §7's tree and §10's
+table are both superseded by the rename. The mechanics did not move.
+
+**This is §10's reflex-avoidance mechanism and it dissolves the problem rather
+than answering it.** ROADMAP would not start the phase without one: *"command
+pressure at 1 Hz is a reflex mechanic unless something makes it a decision."*
+Hanoi has no clock at all — a course waits for ever, every ward is on screen, and
+the only thing that can go wrong is picking the wrong pair of stations.
+
+**Between any two stations exactly one haul is legal**, unless both are empty.
+That one fact is what the whole domain is built on: a player choosing a *pair*
+has already chosen a move, and a spell needs only to work out which way round it
+runs. `a_haul_between_two_stations_is_unique` is the proof.
+
+```bash
+ORBS_BOOT=0 ORBS_DUMP="attend sanctum; muster; survey pylon; survey wellspring" cargo run -p orbs
+```
+```text
+integrity = 100     ← on the pylon, and published from tick 0
+potency = 1         ← on the wellspring: the ward on top. the least
+```
+
+**A station publishes `potency` only while it holds a ward, and that is
+load-bearing.** `spell::watch` answers `is empty` by asking whether a node has
+children, so a station that always carried a `potency` could never be empty and
+the first two rungs of every solver would be dead. It is the maze's *"a walled
+way publishes no `marks`"* arrived at backwards — and it is why the emptiness
+rungs must come **before** the comparison: an absent reading counts as
+**nought**, which makes an empty station the least thing on the board.
+
+**Integrity is the first drain in the game.** Everything else the tower has only
+rises. A point every 30 ticks, whether or not anybody is playing; a finished
+course puts back 8 a ward. **A worn tower musters a taller course**, which is the
+whole of what erosion does today — the siege coupling is Phase 8's (§19).
+
+```bash
+# An hour unattended, and the consequence. `MAX_MEDITATE` is 3600, so one command.
+ORBS_BOOT=0 ORBS_DUMP="attend sanctum; survey pylon; meditate 3600; \
+  survey pylon; muster; survey pylon" cargo run -p orbs
+```
+```text
+integrity = 100  →  integrity = 0
+7 wards well up in the wellspring   ← a kept tower gets three
+integrity = 0  odd                  ← and `odd` is why that matters
+```
+
+**`odd` exists because the cycle direction depends on the parity.** An even
+course sends the least ward wellspring → conduit → barrier and an odd one the
+other way; get it backwards and the course finishes **in the conduit** with the
+barrier no better than it was. The height is jittered precisely so a player
+cannot learn their tower's number and stop reading.
+
+**The one refusal that is the puzzle rather than a dead end:**
+
+```bash
+ORBS_BOOT=0 ORBS_DUMP="attend sanctum; muster; haul wellspring barrier; \
+  haul wellspring barrier; haul wellspring wellspring; haul conduit barrier" cargo run -p orbs
+```
+```text
+the greater ward will not rest upon the lesser   ← the rule, and it costs nothing
+the wellspring is where it already is
+nothing is resting at the conduit
+```
+
+**`debug_course` leaves the drawn course one haul from done** — the completion
+is the interesting half and 127 hauls is not a See-it line. It is `debug_ward`
+one room over, and it republishes where `debug_ward` does not: a course's
+readings are rewritten by the *next haul*, so a stale board would be dialled at.
+
+```bash
+ORBS_BOOT=0 ORBS_DUMP="attend sanctum; muster; debug_course; \
+  haul conduit barrier; survey pylon; status" cargo run -p orbs
+```
+
+**`holding` is the solver, and it is the first spell that needs `part` and `let`
+together.** One part, three `let` pairs, and a parity read off the world — the
+cyclic rotation in twelve lines. It solves in exactly `2^n − 1` hauls, which is
+optimal, and that number is the test: a wrong cycle still *finishes*, just at the
+wrong station.
+
+```bash
+ORBS_BOOT=0 ORBS_DUMP="attend sanctum; invoke holding; meditate 400" \
+  ORBS_THEN="peruse sanctum.log" cargo run -p orbs   # 15 hauls for four wards
+```
+
+**`muster` is the spell's first line and it has to be.** Without it the pylon
+is idle, `repeat until` is satisfied before the first pass, the loop runs zero
+times and the spell ends having done nothing — and bound, it does that for ever.
+With it, `bind::stand` musters afresh every lap, which is the faucet.
+
+**The board draws whenever a course is drawn**, not when a word is typed — the
+map's rule and the sheet's. Columns never rows, and it splits *after* the
+instrument panel. **It is the one picture that still fits the 80×22 floor**,
+where the maze pans and the sheet yields: 35 by 12 with its border.
+
+```text
+┌ pylon ──────────────────────────┐
+│wellspring   conduit    barrier  │   ← the words `haul` takes
+│                                 │
+│    ███         █                │   ← a ward `n` wide is ward `n`
+│   ████        ██                │
+│────────── ────────── ────────── │   ← the floor. the stack is a staircase
+│        4 wards, 3 hauled        │
+└─────────────────────────────────┘
+```
+
+**Magnitude is width, never colour** (§14). The puzzle's one rule is about
+*relative magnitude*, so a hue would make it invisible in greyscale and invisible
+in a dump; the tint is one violet for every ward and is pure enrichment.
+
+**The rail carries `py 100%`, and it is the only meter in the tower that counts
+up.** Every other rail detail is work *remaining*, so `detail_of` prints the
+remainder and falls silent at nought — which would have taken the sanctum's only
+glance away exactly when the barrier was whole. `Unit::Standing` is answered
+ahead of that gate, and the `%` is the `t` suffix's job: without it a standing
+`py 62` and a remainder `py 4` are the same shape.
+
+**It says the barrier and never the course**, drawn course or no — and it said
+the course first, which was §19's rail defect for the third time. A meter of
+wards-still-to-haul counts *down* as a solver wins, so the sanctum read `py 4`
+and, after `py 100`, that reads as a barrier about to fail. Worse than the
+archive's `st 350t` and the lens's `pr 4t`, because the number **vanished** into
+course progress exactly while a bound solver was working — the one time you are
+in another room and glancing. The board two columns away says where the wards
+are; the rail says whether the tower is safe.
+
+**Two ordering defects, both found by looking rather than by testing** (§19), and
+both are the same shape — a number written to two surfaces in the wrong order:
+
+- `erode` had to become an **exclusive** system. It wore the resource down and
+  left the *reading* alone, so `survey pylon` and every `if the pylon has
+  fewer than n integrity` reported a whole barrier while the rail counted down.
+- `finish` **mends before it publishes**. The other way round, a finished course
+  said `integrity = 0` on the transcript and `ra 56` on the rail, on one tick.
+
+**And one worse than either: the reading did not exist until tick 30.** It was
+published only when the number moved, and `watch::many_at` answers an absent
+child with **nought** — so `if the pylon has fewer than 60 integrity` was true of
+a barrier in perfect repair for the first half-minute of every session.
+`Sim::bare` publishes once after the tower is raised. **A guard that fires hardest when
+nothing is wrong is the worst shape a guard can have**, and no test that mustered
+first could have seen it.
+
+```bash
+cargo test -p orbs-sim --test warding      # the game: verbs, readings, the solver
+cargo test -p orbs-sim --lib tower::pylon  # the model, and the optimality proof
+cargo test -p orbs-sim --lib tower::erosion  # the curve and its two clamps
+cargo run -p orbs-render --example screens   # the board, no sim and no GPU
+cargo run -p orbs-balance -- run warding --ticks 7200 --why
+scripts/play.sh sanctum::              # seven scenarios, through a real tmux game
+```
+
+**`warding` reads 0.1249 on every seed** — the flattest column in the table, and
+arithmetic rather than luck: a course of `n` costs `2^n` ticks and pays `n − 2`,
+so three and four both come out at an eighth. It is **under** clarity's 0.140
+where scrying's 0.268 is over, because a finished course also puts the barrier
+back and a domain paying twice should not also pay the best rate in the tower.
 
 ### The tower rail — every domain at a glance, and no telemetry pane
 
@@ -1594,10 +1773,13 @@ ORBS_SEED=3 ORBS_BOOT=0 ORBS_GRID=160x45 \
 **The language has nine control words**: `wait`, `repeat`, `if`, `else`, `end`,
 `until`, `let`, `for`, `part`.
 
-**`part gathering()` names a run of lines and `gathering()` runs it.** A
-definition is stepped *past* where it stands — a spell is read top to bottom and
-its parts are written among its lines — and a call is a stack of **descents**,
-because a `pc` addresses one tree and a part is a different tree.
+**`part between(here, there)` names a run of lines and `between(a, b)` runs it.**
+A definition is stepped *past* where it stands — a spell is read top to bottom
+and its parts are written among its lines — and a call is a stack of
+**descents**, because a `pc` addresses one tree and a part is a different tree.
+The brackets may be empty (`part gathering()`) and may be dropped entirely on a
+definition that takes nothing; at a call site they are the notation and are
+always required.
 
 **A spell is contained to a single `.spell` file, and that is a decision** (§19).
 Two spells cannot share a part; `program::tree` looks only inside the running
@@ -1608,14 +1790,13 @@ draw. A spell reaching another spell is `invoke`, which is a second `Running`
 with its own budget rather than a descent.
 
 ```
-part gathering()
-    grind sage
+part load(what)
+    grind what
     empty mortar_and_pestle
 end
 
-repeat 2
-    gathering()          ← two grinds, from one body
-end
+load(sage)               ← one body, two reagents, and no `let` between them
+load(rock-salt)
 ```
 
 **The call is punctuation, and it is the one place a symbol is canonical.**
@@ -1624,27 +1805,82 @@ to write back to; here none does, so `()` *is* the notation. It also means the
 language spends no word on calling — `part` is the only word this cost.
 
 **A definition belongs at the top level and a name means one part.** Both are cut
-out and said rather than silently ignored; five complaint keys in all, each
+out and said rather than silently ignored; **six** complaint keys now, each
 naming its line. Recursion is bounded at `MAX_PARTS` (8), separate from
 `invoke`'s `MAX_DEPTH` — at one step a tick a runaway does not hang the game, it
 grows the **save** by a descent a second.
 
-**Variables are shared, not per-descent** — a deliberate deviation from the
-roadmap's `(spell, pc, loops, vars)` shape (§19). A part takes no arguments, so a
-private store would leave it with no way to be told anything at all. The cost:
-`for each way` inside a part rebinds the caller's `way`.
+**A part's brackets are the whole of what it can see** (§19, `0.4.2`). This
+reversed *"variables are shared, not per-descent"* by removing its premise rather
+than by overruling it: that decision rested on *"a part takes no arguments, so a
+private store would leave it with no way to be told anything at all"*, and a part
+takes arguments now. So `vars` rides the `Descent`, the roadmap's original
+`(spell, pc, loops, vars)` shape is what shipped, and `for each way` inside a part
+no longer rebinds the caller's `way`.
+
+- **An argument is resolved one level, in the caller's store.**
+  `between(wellspring, near)` hands over whatever `near` stands for; a literal
+  stands for itself. `substituted`'s rule, at a call site.
+- **A wrong count is a refusal, never a name bound to nothing.** There is no
+  default and no overload — an unfilled parameter would leave the body asking
+  about a name that stands for itself, which resolves against the room and does
+  something quietly. Checked at cast *and* in `called`, because §8 hot-reloads a
+  definition under a running spell.
+- **A parameter may not repeat; an argument may.** `part between(here, here)`
+  shadows and is refused; `between(here, here)` is two slots given one name.
+- **`bindings` is still file-wide and that is not an inconsistency.** It feeds
+  one lint — do not resolve a line naming a variable against the room — where a
+  name too many is harmless and a name too few paints a working line red.
 
 **`SCRIPT_BUDGET` is the floor and `spell::budget(world)` is the number.** It
 reads `Taken`; `steps_1` and `steps_2` are authored in `progression.toml` and
 ship as markers like every other node, so it answers 1 today and what was built
-is the wiring. **Parts ship unused by decision** — with every line costing a tick,
-factoring into a part is slower than not, and no dev spell was rewritten.
+is the wiring. **`holding` is the one dev spell that uses a part** — the
+tick-per-line arithmetic still says factoring is slower, and what changed is that
+a call now says what it hands over: the sanctum's loop body went nine lines to
+three.
 
 ```bash
+# A part told what to work on. `ground-sage`, then `ground-salt`.
 ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="attend laboratory; scribe tending" \
-ORBS_EDIT="edit\npart gathering()\ngrind sage\nempty mortar_and_pestle\nend\nrepeat 2\ngathering()\nend\n<esc>\nquit" \
+ORBS_EDIT="edit\npart load(what)\ngrind what\nempty mortar_and_pestle\nend\nload(sage)\nload(rock-salt)\n<esc>\nquit" \
 ORBS_THEN="invoke tending; meditate 40; peruse laboratory.log" cargo run -p orbs
+
+# The scope. The part binds its **own** `herb` and grinds rock-salt; the
+# caller's `herb` is untouched, so the line after the call still grinds sage.
+# Under the shared store this ground rock-salt twice.
+ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="attend laboratory; scribe scoped" \
+ORBS_EDIT="edit\npart load()\nlet herb be rock-salt\ngrind herb\nempty mortar_and_pestle\nend\nlet herb be sage\nload()\ngrind herb\n<esc>\nquit" \
+ORBS_THEN="invoke scoped; meditate 40; peruse laboratory.log" cargo run -p orbs
+#   rock-salt: dispensary to mortar_and_pestle
+#   sage: dispensary to mortar_and_pestle
+
+# All six refusals. Line 15 is a **stray `end`** and that is the refused
+# heading above it working — an unreadable heading opens no block.
+ORBS_BOOT=0 ORBS_GRID=110x40 ORBS_DUMP="attend laboratory; scribe broken" \
+ORBS_EDIT="edit\nmissing()\npart gathering()\ngrind sage\nend\npart gathering()\nsurvey\nend\nrepeat 2\npart inner()\nsurvey\nend\nend\ngathering(sage)\npart twice(a, a)\nend\nhauling(a b)\n<esc>\nquit" \
+ORBS_THEN="invoke broken; meditate 3" cargo run -p orbs
 ```
+
+**A call is cut by bracket and comma, never by space, and the lexer is where
+that bites.** `between(wellspring, near)` is *two* whitespace-separated words, so
+the word loop asked `is_call` of `between(wellspring,` and of `near)`, got no for
+both, and drew the line as two ordinary names — the feature absent on screen with
+the parser working perfectly. Same shape as §19's `▪`. The name and its brackets
+are the call; the arguments draw as **names**, so a call of two places reads as
+one. `ink` is the only instrument that can see either half.
+
+```bash
+scripts/tui.sh start
+scripts/tui.sh type 'attend sanctum' 'scribe hues' 'edit' \
+  'part between(here, there)' 'haul here there' 'end' 'between(wellspring, conduit)'
+scripts/tui.sh ink 5 34    # `p`,`b`,`(`,`)`:magenta/bold — `here`,`there`:default
+scripts/tui.sh stop
+```
+
+**Close the part before reading the colours.** An unclosed `part` faults its line
+to `Role::Danger` and an accent outranks a hue, so a half-typed heading reads
+entirely red and looks exactly like the highlighting never arrived.
 
 ### A spell is highlighted, and `ink` is the only thing that can see it
 
@@ -1868,17 +2104,17 @@ then a minimum**, which is what `let` and `for each` are for and what `roaming`
 does:
 
 ```
-let best be north            ← the seed. it may be walled; the next pass fixes it
+let best be north                ← the seed. it may be walled; the next pass fixes it
 for each way
-if way has no wall           ← any open way — the dead-end fallback
-let best be way
-end
+    if way has no wall           ← any open way — the dead-end fallback
+        let best be way
+    end
 end
 for each way
-if way has no wall and no back        ← prefer one that is not where we came from
+    if way has no wall and no back        ← prefer one that is not where we came from
 ...
 for each way
-if way has no wall and no back and fewer marks than best     ← the true minimum
+    if way has no wall and no back and fewer marks than best   ← the true minimum
 ```
 
 **Later loops override earlier ones, so priority reads bottom-up.** The `passage`
@@ -2176,7 +2412,7 @@ ORBS_WIZARD=wizard ORBS_BOOT=0 sh -c '
 `ORBS_*` switch works against `orbs-tui` too, so a See-it line written for one
 frontend runs against the other unchanged.
 
-**`scripts/dumps.sh <dir>` captures every surface the game can draw** — 58
+**`scripts/dumps.sh <dir>` captures every surface the game can draw** — 65
 screens — and is the instrument for a refactor whose gate is that nothing
 changes. Run it before and after, then `diff -r`. It pins `ORBS_WIZARD`, because
 a baseline that varies with who ran it is not a baseline.

@@ -295,6 +295,25 @@ pub fn scene_at(world: &World, at: Entity) -> Scene {
         scene = scene.with(NounKind::Sense, reading);
     }
 
+    // **And the sanctum's, for the third time and the same reason.** A course is
+    // drawn and finished inside one solve, so at cast there is never one
+    // standing — `potency` and `odd` would resolve against nothing and
+    // `spell::compile` would null the whole condition, which is the silent
+    // failure this chain exists to prevent.
+    //
+    // **`integrity` is here too, though it is always published.** It reads like
+    // the exception and is not: a spell is compiled in `Sim::bare`'s world as
+    // readily as in a played one, and a vocabulary that depended on a system
+    // having run would make a spell compile differently on the first tick than
+    // on the second.
+    //
+    // **Last, and after the other two**, which is the registration-order rule:
+    // §6 resolves a tie to whichever noun came first, so appending leaves every
+    // word a maze or ward solver names in exactly the order it has always had.
+    for reading in super::pylon::readings() {
+        scene = scene.with(NounKind::Sense, reading);
+    }
+
     // Every place, wherever the player is. Depth-first from the root, children
     // in spawn order.
     for node in walk(world, super::filesystem_root(world, cwd.0)) {

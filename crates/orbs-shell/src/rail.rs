@@ -355,8 +355,8 @@ mod tests {
 
     #[test]
     fn a_name_that_does_not_fit_is_cut_rather_than_wrapped() {
-        assert_eq!(truncate("battlements", 14), "battlements");
-        assert_eq!(truncate("battlements", 5), "battl");
+        assert_eq!(truncate("laboratory", 14), "laboratory");
+        assert_eq!(truncate("laboratory", 5), "labor");
         assert_eq!(truncate("", 5), "");
     }
 

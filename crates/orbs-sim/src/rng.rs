@@ -37,11 +37,24 @@ pub enum RngStream {
     Archive,
     /// The lens: a ward's code, and what a broken seal spills (§10, `tower::ward`).
     Lens,
+    /// The sanctum: how tall a course is (§10, `tower::erosion::height_for`).
+    ///
+    /// **The variant keeps the name the room had**, which is deliberate: a
+    /// stream's identity is its *index* and a rename here changes nothing, so
+    /// the cheap thing is to leave it and the expensive thing is to have it
+    /// look like a renumber. The index table below is where that is enforced.
+    Battlements,
 }
 
 impl RngStream {
     /// Number of distinct streams. Must equal the variant count.
-    pub const COUNT: usize = 8;
+    ///
+    /// **Changing this is a save-format change**, which is not obvious from
+    /// here: `save::Save::from_toml` refuses a document whose `[rng].positions`
+    /// is not this long, so a world written with eight streams cannot be read by
+    /// a build with nine. `save::FORMAT` went to 3 with the ninth so the refusal
+    /// reads as *behind* rather than as *malformed*.
+    pub const COUNT: usize = 9;
 
     /// Fixed index into [`Rngs::streams`].
     ///
@@ -61,6 +74,7 @@ impl RngStream {
             // stream and invalidate every existing replay.
             Self::Archive => 6,
             Self::Lens => 7,
+            Self::Battlements => 8,
         }
     }
 }
@@ -164,6 +178,7 @@ mod tests {
         RngStream::Trace,
         RngStream::Archive,
         RngStream::Lens,
+        RngStream::Battlements,
     ];
 
     #[test]

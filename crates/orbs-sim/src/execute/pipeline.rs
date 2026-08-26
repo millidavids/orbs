@@ -690,6 +690,30 @@ pub(super) fn stop(intent: &Intent, world: &mut World) {
                     return;
                 }
             }
+            // **A course is abandoned the same way, and `muster_already` promises
+            // it.** *"a course is already drawn. haul it across, or stop the
+            // pylon"* is a refusal naming a way forward, which §6 requires — and
+            // without this arm the way forward answered *"the pylon is not
+            // working"*, because a `Course` inserts no `Working` any more than a
+            // `Maze` does. The refusal and the verb it named disagreed.
+            if world.get::<tower::Course>(at).is_some() {
+                world.entity_mut(at).remove::<tower::Course>();
+                super::muster::refresh(world);
+                let message = world
+                    .resource::<crate::content::Prose>()
+                    .line("muster_abandoned", &[]);
+                world
+                    .resource_mut::<Scrollback>()
+                    .records_mut()
+                    .push(RecordKind::Completion)
+                    .text(FieldName::Name, Verb::Stop.canonical())
+                    .text(FieldName::Message, &message)
+                    .role(Role::Cost)
+                    .finish();
+                if world.get::<tower::Working>(at).is_none() {
+                    return;
+                }
+            }
             tower::stop(world, at);
         }
         None => missing(Verb::Stop, &name, world),

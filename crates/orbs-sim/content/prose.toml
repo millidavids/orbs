@@ -55,6 +55,13 @@ purge_protected = "the orb will not unmake the {path}"
 # But "I do not know that word" would be a lie about a word the game taught in
 # the room next door, so the refusal names the verb and says where it is not.
 verb_elsewhere = "there is nothing here to {name} with"
+
+# A place with nothing in it. Every other record `survey` emits is pushed inside
+# the loop over what is there, so without this an empty place answered a typed
+# command with **silence** - which §6 does not allow anywhere. The sanctum is
+# what made it the common case: a station publishes `potency` only while it
+# holds a ward, so two of the three are bare for most of a solve.
+survey_bare = "the {name} holds nothing"
 # The same refusal, when the content can say *which* thing is missing. §6 forbids
 # a bare error and the line above is only half an answer: a player told the name
 # of the fixture has been told where to go. `tower::fixture_of` finds it.
@@ -479,8 +486,10 @@ spell_unreadable_for = "{name} line {count}: for wants each, then a set. nothing
 # because a complaint is given `name` and `count` and no `detail`.
 spell_forbidden_line = "{name} line {count}: that is a word the orb will not take from a spell"
 
-spell_unreadable_part = "{name} line {count}: part wants one name. nothing is set aside"
-spell_part_takes_nothing = "{name} line {count}: a part takes nothing between its brackets"
+spell_unreadable_part = "{name} line {count}: part wants a name. nothing is set aside"
+spell_unreadable_call = "{name} line {count}: a call wants a name in each slot"
+spell_call_arity = "{name} line {count}: that part wants a different number of names"
+spell_call_arity_now = "{name} calls {detail} with the wrong number. that line is skipped"
 spell_no_such_part = "{name} line {count}: no part of this spell is called that"
 spell_repeated_part = "{name} line {count}: that part is named above. this one is set aside"
 spell_nested_part = "{name} line {count}: a part belongs outside every block, not in one"
@@ -555,7 +564,11 @@ spell_unattended = "{name} needed you there. it stops"
 # off `is_gated` — a word that can only say no is worse than a word that is not
 # offered, and none of these can only say no.
 verify_substituted = "something here is not what it says: {detail}"
-ward_title = "ward"
+# **`seal`, not `ward` — the word moved rooms** (§19). §10 reserves "ward" for
+# defense (*"ward placement"*, *"wards, made and consumed"*), and the lens had
+# borrowed it. `seal` is a word this domain already uses two lines down, and the
+# keys keep their spelling because `tower::Ward` is not player-facing.
+ward_title = "seal"
 ward_spoken = "{quantity} pressed, last {name} aligned {detail} astray"
 scry_opens = "a far orb swims up. four sigils hold it shut"
 scry_nowhere = "there is no lens here to look through"
@@ -568,10 +581,51 @@ dial_not_a_sigil = "{detail} is not a sigil. survey the lens to see the six"
 # no-repeats rule that forced it (§19). Nothing holds a socket shut any more.
 dial_held = "the {name} already holds that"
 dial_done = "the {name} socket turns to {detail}"
-probe_answered = "{quantity} aligned, {detail} astray. the ward is {state}"
+probe_answered = "{quantity} aligned, {detail} astray. the seal is {state}"
 probe_broken = "the seal gives. the far orb spills its working, in {quantity}"
 probe_found = "and a way to make {name}. the orb writes it down"
 spill_step = "{name} {detail}"
+
+# ---------------------------------------------------------------------------
+# The sanctum (§10). Same contract as the lens above: every refusal names the
+# way forward, which is what keeps both verbs off `is_gated`.
+#
+# **The fiction, because these lines are where it lives.** Raw arcane energy
+# wells up in the wellspring; the wizard draws it through the conduit a ward at a
+# time and assembles it into the barrier. The tower's walls are stone and the
+# wards are not — what he is shoring up is a magical defence, which is why not
+# one line here says "wall".
+#
+# **`haul_greater` is the one refusal that is the puzzle rather than a dead
+# end.** A player who hits it has learned the rule, which is the only rule there
+# is — so it says what happened and nothing about what to do instead.
+pylon_title = "pylon"
+# **`hauled`, not `hauls`.** `debug_course` can finish a course in one, and so
+# can a very short one, and "1 hauls" is the kind of line a player notices. The
+# past participle reads at every count without the game having to know about
+# plurals — the same dodge `{quantity} aligned` uses one room over.
+pylon_spoken = "{quantity} wards, {name} hauled, the barrier at {detail}"
+# **Two lines, not one, and the board's is the short one.** These were the same
+# key until the drawn version came out truncated — the board is 33 cells and the
+# sentence is longer, so `centred` cut it. A reader has no such budget and wants
+# the whole thing; the foot of the picture has the rail two columns away saying
+# how the barrier stands.
+pylon_tally = "{quantity} wards, {name} hauled"
+muster_opens = "{quantity} wards well up in the wellspring, greatest beneath"
+muster_already = "a course is already drawn. haul it across, or stop the pylon"
+muster_nowhere = "there is no pylon here to draw upon"
+muster_done = "the last ward seats. {quantity} hauled, the barrier gains {detail}"
+muster_abandoned = "the course sinks back into the wellspring"
+# `debug_course` with nothing to shorten. A tester's word, and it reports like
+# every other one rather than going quiet.
+muster_nothing_to_give = "no course is drawn here to hurry along"
+haul_unopened = "there is nothing drawn to move. muster first"
+haul_incomplete = "haul from which station to which? name two of the three"
+haul_not_a_station = "{name} is not a station. the three are wellspring, conduit and barrier"
+haul_same_station = "the {name} is where it already is"
+haul_bare = "nothing is resting at the {name}"
+haul_greater = "the greater ward will not rest upon the lesser"
+haul_moved = "ward {quantity} is drawn from the {name} into the {detail}"
 
 research_opens = "the page opens into shelves that do not end. a way out is in them"
 research_already = "a reading is already open. follow it, or stop the stacks"
@@ -782,6 +836,22 @@ using_unchanged = "if the prism has unchanged, so nothing moved in or out"
 
 recall_poorer = "the figure is made of fewer of the right sigils than before"
 using_poorer = "if the prism has poorer, to put back what you took out"
+
+# The three words the sanctum answers to. Two are about the course in hand and
+# one is about the tower, which is why `integrity` sits on the pylon rather than
+# on a station: a spell asks it to decide whether to muster at all.
+recall_potency = "how great the ward at the top of a station is"
+using_potency = "if the wellspring has fewer potency than the conduit, haul so"
+
+# **The reading the whole domain turns on.** A course cycles one way round the
+# three stations when it is odd and the other way when it is even, and a solver
+# that cannot ask assembles the barrier at the wrong station.
+recall_odd = "whether the drawn course has an odd number of wards"
+using_odd = "if the pylon has odd, the least ward travels the other way"
+
+recall_integrity = "how the tower's barrier stands. it wears down on its own"
+using_integrity = "if the pylon has fewer than 60 integrity, muster"
+
 man_scripting_words = "words"
 man_scripting_asking = "questions"
 man_scripting_here = "nameable here"
@@ -817,11 +887,12 @@ recall_for = "do the block once for each of a set, in the order they stand"
 using_for = "for each way, the lines, then end. way is the one you are on"
 
 recall_part = "name a run of lines, so the rest of the spell can ask for it"
-using_part = "part gathering(), the lines, then end. say gathering() to do it"
+using_part = "part haul(from, to), the lines, end. call it as haul(a, b)"
 
 # What the archive is for, and what its verb does - the two manual entries the
 # domain has never had.
 recall_archive = "research opens the stacks, follow threads them. four make a scroll"
+recall_sanctum = "muster draws a course of wards, haul carries them to the barrier"
 attend_reading = "that is a way the reading can go, not a room you can stand in"
 research_abandoned = "you let the stacks close"
 
@@ -903,6 +974,10 @@ man_solve_archive = "reach the way out for a fragment. four in the lectern, wiel
 man_here_lens = "another wizard's orb, sealed with four sigils of six"
 man_start_lens = "dial a socket to a sigil. probe presses them. both are free"
 man_solve_lens = "aligned counts sigils in the right socket, astray the misplaced"
+
+man_here_sanctum = "where you ward the tower. the barrier fades while you work"
+man_start_sanctum = "muster draws a course of wards up out of the wellspring"
+man_solve_sanctum = "haul them all to the barrier, never a ward onto a lesser"
 
 # **Not `scribe a name to write one`, which was the first draft and was wrong
 # twice.** `scribe` is *offered* here and refuses - "a spell is written for a
@@ -1145,14 +1220,35 @@ man_dial_eg2 = "dial first, which a spell uses: it can name no sigil"
 man_dial_also = "probe, survey, stop"
 
 man_probe_use = "probe"
-man_probe_gloss = "press a figure against a far orb's ward"
+man_probe_gloss = "press a figure against a far orb's seal"
 man_probe_1 = "opens a reading if none is open. four sigils of six"
 man_probe_2 = "hold it shut, and one may sit in two sockets. aligned"
 man_probe_3 = "is right sigil right socket; astray is right sigil"
-man_probe_4 = "wrong socket. that is all a ward will ever say, and"
+man_probe_4 = "wrong socket. that is all a seal will ever say, and"
 man_probe_5 = "a press stands: what you sent is what is there"
 man_probe_eg1 = "probe, then dial what you deduce and probe again"
 man_probe_also = "dial, survey, stop, recall lens"
+
+man_muster_use = "muster"
+man_muster_gloss = "draw a fresh course of wards up out of the wellspring"
+man_muster_1 = "they well up greatest first, and belong assembled"
+man_muster_2 = "at the barrier. mustering is free and instant"
+# **The one thing erosion does that a player can see**, and the reason the word
+# is worth typing twice. A kept tower gets three wards; a neglected one gets
+# seven, which is sixteen times the hauling.
+man_muster_3 = "a barrier left to itself fades, and a faded one"
+man_muster_4 = "musters more wards. finishing a course puts it right"
+man_muster_eg1 = "muster, then haul them across one at a time"
+man_muster_also = "haul, survey, recall sanctum"
+
+man_haul_use = "haul <station> to <station>"
+man_haul_gloss = "carry the topmost ward from one station to another"
+man_haul_1 = "the stations are the wellspring, the conduit and"
+man_haul_2 = "the barrier. a ward will not rest upon a lesser,"
+man_haul_3 = "so between any two exactly one haul is allowed"
+man_haul_4 = "potency is how great the ward on top of one is"
+man_haul_eg1 = "haul wellspring conduit, if the conduit will take it"
+man_haul_also = "muster, survey, recall sanctum"
 
 man_research_use = "research"
 man_research_gloss = "open a way into the stacks"

@@ -269,6 +269,7 @@ fn readings_of(set: &str) -> Vec<&'static str> {
     match set {
         "way" => super::maze::readings(),
         "socket" | "sigil" => super::ward::readings(),
+        "station" => super::pylon::readings(),
         _ => Vec::new(),
     }
 }

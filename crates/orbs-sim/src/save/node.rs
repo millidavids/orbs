@@ -133,6 +133,9 @@ pub struct NodeSave {
     /// The lens's ward.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ward: Option<WardSave>,
+    /// The sanctum's course.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub course: Option<CourseSave>,
     /// A spell part-way through running.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub running: Option<RunningSave>,
@@ -274,6 +277,28 @@ pub struct HistorySave {
     pub astray: u32,
 }
 
+/// A course of wards, mid-solve.
+///
+/// **Three lists of numbers and nothing else**, which is why `save/naming.rs`
+/// gains no table for this domain: a station is an index rather than a named enum,
+/// so there is no word to spell one way here and another way in the world. The
+/// maze's `way` and `errand` needed that treatment; this does not.
+///
+/// The height travels even though it is derivable from the three lists, because
+/// a course is *raised* at a height and everything about how it reads — the
+/// parity, what the meter is against — is a fact about the raising rather than
+/// about how many wards happen to be standing. `Course::from_save` recomputes
+/// and clamps it anyway, so a hand-edited file cannot make the two disagree.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CourseSave {
+    /// Each station's wards, bottom first, as magnitudes. Always three lists.
+    pub stations: Vec<Vec<usize>>,
+    /// How many wards the course was raised with.
+    pub height: usize,
+    /// Hauls spent.
+    pub hauls: u32,
+}
+
 /// A spell part-way through, which §8 requires a save to carry.
 ///
 /// The compiled `Program` is **not** here: it is a derived view rebuilt from the
@@ -355,4 +380,13 @@ pub struct DescentSave {
     /// Its open blocks, coded as [`RunningSave::loops`] codes them.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub loops: Vec<i64>,
+    /// Its bindings, which the part it called cannot see.
+    ///
+    /// Defaulted rather than required, exactly as `stack` is: absent from a save
+    /// written before a part took arguments, and from every frame that had
+    /// bound nothing when it called. An empty store is the ordinary case, and
+    /// an old save reading as one is correct — before parameters there was a
+    /// single shared store, and it is [`RunningSave::vars`] that carries it.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub vars: BTreeMap<String, String>,
 }

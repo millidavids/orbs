@@ -62,6 +62,20 @@ pub enum Unit {
     Cells,
     /// Sigils in the right socket.
     Sigils,
+    /// How the tower's defences stand, out of [`STANDING`](super::STANDING).
+    ///
+    /// **The one unit that counts *up*.** Every other meter here measures work
+    /// left to do, so the rail prints what remains; this one measures a thing
+    /// that is good to have more of, and printing `py 60` for a tower standing
+    /// at 40 would be exactly backwards. `brief::detail_of` is where that is
+    /// answered for, and it prints a `%` so the two can never be read as one
+    /// another — the same job the `t` suffix does one line up.
+    ///
+    /// **There was a `Wards` beside this and it was a defect.** The pylon's
+    /// meter used to be wards-still-to-haul while a course stood, so the rail's
+    /// *remainder* counted down as a solver won and the barrier reading vanished
+    /// for the duration. See `panel::read`'s pylon arm.
+    Standing,
 }
 
 /// What an instrument *does* — the action, not the noun.
@@ -96,6 +110,8 @@ pub enum Craft {
     /// it is pressed at — because a craft names *what a room does*, and both of
     /// those are scrying. What tells them apart on the panel is their state.
     Scrying,
+    /// Carrying wards between three stations (§10, `tower::pylon`).
+    Warding,
     /// Fragments into a scroll. The archive's lectern.
     ///
     /// **The one craft not named by an [`Operation`](super::Operation)**, because
@@ -392,6 +408,7 @@ fn craft_of(world: &World, node: Entity) -> Craft {
         Some(crate::parser::Verb::Distil) => Craft::Distilling,
         Some(crate::parser::Verb::Research) => Craft::Reading,
         Some(crate::parser::Verb::Probe) => Craft::Scrying,
+        Some(crate::parser::Verb::Muster) => Craft::Warding,
         // `Kindle` is the heat source's, and it answered above. Anything else has
         // no operation — which is the dispensary and the cabinet, and is *also*
         // the lectern, whose verb went to the stacks when the maze did.
@@ -488,6 +505,54 @@ fn read(world: &World, node: Entity, name: &str, now: Tick) -> (State, Option<Me
                 done,
                 total,
                 unit: Unit::Ticks,
+            }),
+        );
+    }
+
+    // **The pylon's meter is always the barrier, drawn course or no**, which
+    // makes it the one fixture in the tower whose *idle* state still carries
+    // one — and the one whose meter is not a measure of its own run.
+    //
+    // **It measured the course first, and that was the rail's own recorded
+    // defect for the third time.** `brief::detail_of` prints a meter's
+    // *remainder*, so wards-still-to-haul counted **down** as a solver won: the
+    // sanctum read `py 4` and, to a player who had last seen `py 100`, that is a
+    // barrier about to fail. §19 records exactly this shape twice already —
+    // *"the archive read `st 350t` … the lens `pr 4t` … two of the three built
+    // domains were glanceably wrong"*. Worse here, because the number vanished
+    // into course progress precisely while a bound solver was working, which is
+    // the one time the player is in another room and glancing.
+    //
+    // So the *board* says where the wards are — it is two columns away and shows
+    // the whole position — and this says whether the tower is safe. The state
+    // word above it still says `working`, so nothing is lost.
+    //
+    // **Below `Triaging`, and it shipped above it.** A scoured pylon reported
+    // `Empty` here while `tower::busy` reported `Scouring`, so the rail read
+    // `idle`, `if the pylon is idle` answered **yes** mid-scour — which is
+    // `holding`'s own loop guard — and `would_block`, which reads `busy`
+    // directly, disagreed with all of them. The `Maze` and `Ward` arms sit above
+    // `Triaging` too and are not reachable that way; this one is, because
+    // `purge pylon` is an ordinary thing to type.
+    if world
+        .get::<super::Operation>(node)
+        .is_some_and(|operation| operation.0 == crate::parser::Verb::Muster)
+    {
+        // A drawn course is `Working`, on exactly the ward's reasoning above: a
+        // solver's loop is `repeat until the pylon is idle`, and `is empty`
+        // cannot do that job because the pylon always carries its `integrity`
+        // reading and so always has children.
+        let state = if world.get::<super::Course>(node).is_some() {
+            State::Working
+        } else {
+            State::Empty
+        };
+        return (
+            state,
+            Some(Meter {
+                done: u64::from(world.resource::<super::Integrity>().get()),
+                total: u64::from(super::STANDING),
+                unit: Unit::Standing,
             }),
         );
     }

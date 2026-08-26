@@ -89,6 +89,7 @@ fn progress(world: &World) -> ProgressSave {
     ProgressSave {
         wizard: world.resource::<Wizard>().name().to_owned(),
         experience: world.resource::<tower::Experience>().get(),
+        integrity: Some(world.resource::<tower::Integrity>().get()),
         taken: world.resource::<tower::Taken>().ids().to_vec(),
         learned: learned.known().map(str::to_owned).collect(),
         fruitless: learned.since(),
@@ -198,6 +199,7 @@ fn node(world: &World, entity: Entity) -> NodeSave {
 
         maze: at.get::<Maze>().map(Maze::to_save),
         ward: at.get::<Ward>().map(Ward::to_save),
+        course: at.get::<tower::Course>().map(tower::Course::to_save),
         running: at
             .get::<tower::spell::Running>()
             .map(|run| running(world, run)),
@@ -225,6 +227,7 @@ fn running(world: &World, run: &tower::spell::Running) -> RunningSave {
                 part: frame.part.clone(),
                 pc: frame.pc.clone(),
                 loops: frame.loops.iter().map(super::adopt::loop_code).collect(),
+                vars: frame.vars.clone(),
             })
             .collect(),
         // The text the program was compiled from, so a restore can tell whether

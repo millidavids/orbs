@@ -39,6 +39,12 @@ pub struct Panel {
     /// description of a world that moves at 1 Hz, so rebuilding it per frame
     /// would allocate sixty times for one change.
     pub ward: Option<orbs_render::Board>,
+    /// The course the player is standing over, if one is up.
+    ///
+    /// Beside the other two and on the same clock. Only one of the three can
+    /// ever be present, because they belong to three different rooms and the
+    /// player stands in one.
+    pub pylon: Option<orbs_render::Pylon>,
     /// Every domain at a glance, for §9's rail.
     ///
     /// **Here rather than asked from the painter, and it is the most expensive of
@@ -62,6 +68,7 @@ impl Panel {
         self.domain = orbs_sim::parser::leaf(&sim.location()).to_owned();
         self.stacks = sim.stacks();
         self.ward = sim.ward();
+        self.pylon = sim.pylon();
         self.briefs = sim.briefs();
     }
 }

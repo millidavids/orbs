@@ -41,7 +41,7 @@ pub enum FieldName {
     Line,
     /// Ticks left on a duration action.
     Remaining,
-    /// Which subsystem produced this. `laboratory`, `battlements`, `lens`.
+    /// Which subsystem produced this. `laboratory`, `sanctum`, `lens`.
     ///
     /// **A domain, not a place.** `read_file` filters a domain's log by this, so
     /// putting a *room* in it silently drops the record from the log of the

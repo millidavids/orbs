@@ -353,6 +353,10 @@ mod tests {
                     // refuses keys that name nothing, so an absent name is not
                     // an error.
                     "prism",
+                    // The sanctum's one. Its three stations are unpriced for the
+                    // same reason the oculus is: a haul is not work, a finished
+                    // course is.
+                    "pylon",
                 ])
                 .is_ok(),
             "the real instruments were rejected",
@@ -448,6 +452,10 @@ mod tests {
                     // refuses keys that name nothing, so an absent name is not
                     // an error.
                     "prism",
+                    // The sanctum's one. Its three stations are unpriced for the
+                    // same reason the oculus is: a haul is not work, a finished
+                    // course is.
+                    "pylon",
                 ])
                 .is_ok(),
             "the shipped curve does not ascend",

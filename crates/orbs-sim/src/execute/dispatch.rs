@@ -85,6 +85,8 @@ fn execute(intent: &Intent, world: &mut World) {
         Verb::Wander => super::wander::wander(world),
         Verb::Probe => super::scry::probe(world),
         Verb::Dial => super::scry::dial(intent, world),
+        Verb::Muster => super::muster::muster(world),
+        Verb::Haul => super::muster::haul(intent, world),
         Verb::Move => pipeline::carry(intent, world),
         Verb::Wield => pipeline::wield(intent, world),
         // §10.1's per-instrument verbs. One arm, because the instrument is found
@@ -195,6 +197,12 @@ pub const fn is_live(verb: Verb) -> bool {
             // list applies rather than "does it always succeed".
             | Verb::Probe
             | Verb::Dial
+            // The sanctum's two, on the same reading as the lens's. `muster`
+            // refuses where there is no pylon and where a course is already
+            // drawn; `haul` refuses three ways, and the interesting one — a
+            // greater ward onto a lesser — *is* the puzzle rather than a dead end.
+            | Verb::Muster
+            | Verb::Haul
     )
 }
 

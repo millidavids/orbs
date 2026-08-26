@@ -109,6 +109,32 @@ const BRANCHES: &[Branch] = &[
         operation: None,
         group: None,
     },
+    // **Defense (§10), and the fourth domain the game opens.** Raw arcane energy
+    // wells up in the wellspring; the wizard draws it through the conduit a ward
+    // at a time and assembles it into the barrier, and a greater ward will not
+    // rest upon a lesser. See `tower::pylon` for the puzzle and `tower::erosion`
+    // for the decay that decides how tall a course is.
+    //
+    // **The room is `sanctum` and §10's table says `battlements/`** — §19 records
+    // the supersession. The fortification names committed the domain to a
+    // metaphor its own verbs never fitted: *hauling a ward from the barbican to
+    // the redoubt* is not a thing a wizard does. The tower's walls are stone and
+    // what he shores them up with is not.
+    //
+    // Like the lens it holds no materials, and for the same reason: what a
+    // finished course yields is integrity and experience, neither of which is a
+    // thing on a shelf. **Deliberately no endless base reagent, ever** —
+    // `sabotage::substitution` picks its target with `% piles.len()`, so a third
+    // endless pile would move every rate `orbs-balance` has pinned. That file
+    // records the same change dropping clarity from 0.140 to 0.074.
+    Branch {
+        name: "sanctum",
+        holds: &[Holding::new(NounKind::File, &["sanctum.log"])],
+        places: SANCTUM,
+        role: None,
+        operation: None,
+        group: None,
+    },
     // **The one room you can reach from any other**, and it starts empty: what
     // is in it is what the player has finished. See [`Role::Keep`] and
     // `tower::keep` for why the exemption is narrow and why this is not a second
@@ -360,6 +386,61 @@ const LENS: &[Branch] = &[
         role: Some(Role::Reading),
         operation: None,
         group: Some("sigil"),
+    },
+];
+
+/// The sanctum: one engine and the three stations a ward passes between.
+///
+/// **The pylon spends its one `Operation` on `muster`, and each station carries
+/// `haul`** — which is the lens's arrangement rather than the archive's, and the
+/// difference is a debt `tests/naming.rs` already prices. `research`, `follow`
+/// and `wander` are all tower-wide words because the stacks is one fixture with
+/// one `Operation` to spend; the lens has five fixtures and so scoped both of
+/// its verbs for nothing. This room has four, and does the same.
+///
+/// The stations are `Role::Reading` for the reason the archive's compass
+/// bearings and the lens's sockets are: a spell's question resolves its place
+/// half against `NounKind::Place`, so `if the wellspring is empty` needs
+/// `wellspring` to be one — and the role is what stops it also being somewhere
+/// you can `attend`.
+///
+/// **The order is the course's order**, source first, and it is what a player
+/// reads off the board left to right. A course is drawn up at the `wellspring`
+/// and belongs at the `barrier`; the `conduit` is what it passes through.
+/// Nothing in the code depends on that — `pylon::Course` addresses them by index
+/// — but the names were chosen so the fiction and the puzzle agree.
+const SANCTUM: &[Branch] = &[
+    Branch {
+        name: "pylon",
+        holds: &[],
+        places: &[],
+        role: None,
+        operation: Some(Verb::Muster),
+        group: None,
+    },
+    Branch {
+        name: "wellspring",
+        holds: &[],
+        places: &[],
+        role: Some(Role::Reading),
+        operation: Some(Verb::Haul),
+        group: Some("station"),
+    },
+    Branch {
+        name: "conduit",
+        holds: &[],
+        places: &[],
+        role: Some(Role::Reading),
+        operation: Some(Verb::Haul),
+        group: Some("station"),
+    },
+    Branch {
+        name: "barrier",
+        holds: &[],
+        places: &[],
+        role: Some(Role::Reading),
+        operation: Some(Verb::Haul),
+        group: Some("station"),
     },
 ];
 
@@ -1025,8 +1106,15 @@ mod tests {
             // The lens is **third, before the arsenal**, which is the rule this
             // assertion exists for: a domain goes on the end of `BRANCHES` and
             // the arsenal is not a domain, so scrying slots in ahead of it and
-            // the two that came before do not move.
-            ["laboratory", "archive", "lens", super::super::ARSENAL],
+            // the two that came before do not move. The sanctum slots in behind
+            // the lens on the same rule, and moves nothing either.
+            [
+                "laboratory",
+                "archive",
+                "lens",
+                "sanctum",
+                super::super::ARSENAL,
+            ],
         );
     }
 

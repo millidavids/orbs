@@ -300,7 +300,7 @@ mod tests {
     fn tower() -> Scene {
         Scene::new()
             .with(NounKind::Place, "/tower/laboratory")
-            .with(NounKind::Place, "/tower/battlements")
+            .with(NounKind::Place, "/tower/sanctum")
             .with(NounKind::Place, "/tower/archive")
             .with(NounKind::File, "feed.log")
             .with(NounKind::File, "purge_cycle.log")
@@ -421,9 +421,9 @@ mod tests {
     #[test]
     fn a_full_path_still_matches() {
         let found = tower()
-            .best_match(NounKind::Place, &["/tower/battlements"])
-            .expect("battlements exists");
-        assert_eq!(found.name, "/tower/battlements");
+            .best_match(NounKind::Place, &["/tower/sanctum"])
+            .expect("the sanctum exists");
+        assert_eq!(found.name, "/tower/sanctum");
     }
 
     #[test]

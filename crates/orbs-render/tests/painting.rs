@@ -315,7 +315,7 @@ fn a_full_screen_linearises_in_paint_order() {
 
     let mut frame = Frame::new(grid);
 
-    for (pane, title) in layout.main().iter().zip(["laboratory", "battlements"]) {
+    for (pane, title) in layout.main().iter().zip(["laboratory", "sanctum"]) {
         let mut painter = frame.painter(*pane);
         painter.border(*pane, Some(title), Style::DIM);
         painter.paragraph(
@@ -348,7 +348,7 @@ fn a_full_screen_linearises_in_paint_order() {
         [
             "laboratory",
             "the laboratory seethes and will not settle",
-            "battlements",
+            "sanctum",
             "the laboratory seethes and will not settle",
             "archive",
             "menagerie",

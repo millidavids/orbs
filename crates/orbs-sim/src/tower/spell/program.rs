@@ -109,7 +109,7 @@ pub enum Kind {
         /// What to do for each of them.
         body: Block,
     },
-    /// A named run of lines — `part gathering()`.
+    /// A named run of lines — `part gathering()`, `part between(here, there)`.
     ///
     /// **A definition, so reaching it executes nothing.** The runner steps past
     /// this exactly as a reader's eye does; the body runs only where a
@@ -121,10 +121,17 @@ pub enum Kind {
     Part {
         /// What the part is called, without its parentheses.
         name: String,
+        /// The names its arguments arrive under, in order.
+        ///
+        /// **These are the part's whole store**, not additions to the caller's:
+        /// [`Descent`](super::Descent) keeps the caller's bindings and the part
+        /// opens with only these. Empty for `part gathering()`, which is the
+        /// shape every spell shipped before parameters existed.
+        params: Vec<String>,
         /// What it does.
         body: Block,
     },
-    /// Do a part — `gathering()`.
+    /// Do a part — `gathering()`, `between(wellspring, near)`.
     ///
     /// Carries the **name** rather than a path to the definition, which is what
     /// lets a spell be edited while it runs (§8): a definition that moves up the
@@ -133,6 +140,13 @@ pub enum Kind {
     Call {
         /// Which part.
         name: String,
+        /// The names handed to it, in order, exactly as written.
+        ///
+        /// **Resolved against the caller's store where the call runs**, not
+        /// here — `between(wellspring, near)` passes whatever `near` stands for
+        /// at that moment, and a literal stands for itself. One level, which is
+        /// the rule a bound name follows everywhere else in the language.
+        args: Vec<String>,
     },
 }
 
@@ -219,6 +233,7 @@ enum Open {
     },
     Part {
         name: String,
+        params: Vec<String>,
     },
 }
 
@@ -454,10 +469,10 @@ pub(super) fn read(lines: &[String]) -> Draft {
                     key: "spell_unreadable_for",
                 }),
             },
-            Some(SpellWord::Part) => match part_name(spell_argument(trimmed)) {
-                Some(name) => open.push(Nesting {
+            Some(SpellWord::Part) => match part_signature(spell_argument(trimmed)) {
+                Some((name, params)) => open.push(Nesting {
                     line: at,
-                    kind: Open::Part { name },
+                    kind: Open::Part { name, params },
                     body: Vec::new(),
                     chained: false,
                 }),
@@ -472,14 +487,14 @@ pub(super) fn read(lines: &[String]) -> Draft {
             },
             // A call is punctuation, so it arrives here rather than through
             // `spell_word` — there is no ninth control word to match.
-            None if let Some(called) = call_name(trimmed) => match called {
-                Some(name) => push(&mut open, at, Kind::Call { name }),
-                // `gathering(sage)`. A part takes nothing yet, and reading it as
-                // a bare call would drop a word the player wrote — the quiet
+            None if let Some(called) = call_of(trimmed) => match called {
+                Some((name, args)) => push(&mut open, at, Kind::Call { name, args }),
+                // `between(a b)`, or a bracket nothing closed. Reading it as a
+                // bare call would drop a word the player wrote — the quiet
                 // reinterpretation this file refuses everywhere.
                 None => complaints.push(Complaint {
                     line: at,
-                    key: "spell_part_takes_nothing",
+                    key: "spell_unreadable_call",
                 }),
             },
             None => push(&mut open, at, Kind::Command(trimmed.to_owned())),
@@ -665,17 +680,37 @@ pub fn tree<'a>(body: &'a Block, part: Option<&str>) -> Option<&'a Block> {
         return Some(body);
     };
     body.iter().find_map(|step| match &step.kind {
-        Kind::Part { name, body } if name == wanted => Some(body),
+        Kind::Part { name, body, .. } if name == wanted => Some(body),
         _ => None,
     })
 }
 
-/// Every part the spell defines, in the order they are written.
+/// The names one part takes its arguments under, if it is defined at all.
+///
+/// **`None` and an empty list are different answers**, which is why this is not
+/// folded into [`parts`]: no such part is a missing name the orb says once, and
+/// a part taking nothing is `gathering()` working normally. Found by name at
+/// every call for the reason [`tree`] is — a definition that moves while the
+/// spell runs is still the same part.
 #[must_use]
-pub fn parts(body: &Block) -> Vec<&str> {
+pub fn signature(body: &Block, part: &str) -> Option<Vec<String>> {
+    body.iter().find_map(|step| match &step.kind {
+        Kind::Part { name, params, .. } if name == part => Some(params.clone()),
+        _ => None,
+    })
+}
+
+/// Every part the spell defines and how many names it takes, in writing order.
+///
+/// The count travels with the name because the only two questions anyone asks
+/// of this list are *is there such a part* and *does this call fit it*, and
+/// answering the second from a second walk of the tree is how two expressions of
+/// one rule come to disagree.
+#[must_use]
+pub fn parts(body: &Block) -> Vec<(&str, usize)> {
     body.iter()
         .filter_map(|step| match &step.kind {
-            Kind::Part { name, .. } => Some(name.as_str()),
+            Kind::Part { name, params, .. } => Some((name.as_str(), params.len())),
             _ => None,
         })
         .collect()
@@ -815,12 +850,25 @@ fn gather(body: &Block, names: &mut Vec<String>) {
                 gather(body, names);
                 gather(otherwise, names);
             }
-            // **A part's `let`s are gathered too**, because a part shares the
-            // caller's store rather than opening one of its own — see
-            // [`Running::vars`](super::Running::vars). A name bound inside a part
-            // is a name the lines after the call can say, so `compile` has to
-            // know it or it would report a variable as a place the room lacks.
-            Kind::Part { body, .. } => gather(body, names),
+            // **A part's parameters and its `let`s are gathered too, even
+            // though they are scoped to it.** This list has exactly one job —
+            // stopping `check_commands` and `interpret` resolving a line that
+            // names a variable against the room — and for that a name too many
+            // is harmless where a name too few is a working line painted red.
+            //
+            // So it is deliberately the *file's* names rather than any one
+            // frame's: a part's `here` reaches this list, and the only cost is
+            // that a caller writing `follow here` outside the part is quoted
+            // rather than resolved. The runner is the thing that scopes (see
+            // [`Descent::vars`](super::Descent)); this is a lint's input.
+            Kind::Part { params, body, .. } => {
+                for param in params {
+                    if !names.iter().any(|already| already == param) {
+                        names.push(param.clone());
+                    }
+                }
+                gather(body, names);
+            }
             Kind::Command(_) | Kind::Wait(_) | Kind::Call { .. } => {}
         }
     }
@@ -888,8 +936,9 @@ fn close(open: &mut [Nesting], frame: Nesting) {
             group,
             body: frame.body,
         },
-        Open::Part { name } => Kind::Part {
+        Open::Part { name, params } => Kind::Part {
             name,
+            params,
             body: frame.body,
         },
         Open::Spell => return,
@@ -897,40 +946,95 @@ fn close(open: &mut [Nesting], frame: Nesting) {
     push(open, line, kind);
 }
 
-/// `gathering()` → `gathering`, and `gathering` → `gathering` too.
+/// `between(here, there)` → the name and the names its arguments arrive under.
 ///
-/// **The parentheses are optional on a definition and required on a call.** A
-/// heading is already unambiguous — `part` says what the line is — so demanding
-/// them there would be ceremony; at a call site they are the entire notation,
-/// and the line means something else without them. Written back with them either
-/// way, so a player who omits them at the top still sees the form they have to
-/// type below.
+/// **The parentheses are optional on a definition only while it takes nothing.**
+/// A heading is already unambiguous — `part` says what the line is — so
+/// demanding them for `part gathering` would be ceremony; the moment there is a
+/// parameter list there is nowhere else to put it. At a call site they are the
+/// entire notation and are always required.
 ///
-/// `None` for a name that is empty, carries an argument, or is more than one
-/// word. A part takes nothing yet, and `part gather the sage` is a sentence
-/// rather than a name.
-fn part_name(argument: &str) -> Option<String> {
-    let bare = argument
-        .trim()
-        .strip_suffix("()")
-        .unwrap_or(argument)
-        .trim();
-    let mut words = bare.split_whitespace();
-    let name = words.next()?;
-    if words.next().is_some() || name.contains('(') || name.contains(')') {
+/// `None` for a name that is empty, is more than one word, or has a parameter
+/// list the orb cannot read — an unclosed bracket, an empty slot from a trailing
+/// comma, a parameter that is a phrase rather than a name. `part gather the
+/// sage` is a sentence rather than a heading, and reading it as one would set
+/// aside a body under a name nothing can call.
+///
+/// **A repeated parameter is refused here rather than shadowed.** `part
+/// between(here, here)` would bind the second over the first and leave the
+/// caller's first argument unreachable, which is the quiet reinterpretation this
+/// file refuses everywhere.
+fn part_signature(argument: &str) -> Option<(String, Vec<String>)> {
+    let trimmed = argument.trim();
+    let Some((head, rest)) = trimmed.split_once('(') else {
+        // No brackets at all: the whole heading is the name, and it must be one
+        // word. This is the `part gathering` shape.
+        let mut words = trimmed.split_whitespace();
+        let name = words.next()?;
+        if words.next().is_some() || name.contains(')') {
+            return None;
+        }
+        return Some((name.to_lowercase(), Vec::new()));
+    };
+    let inside = rest.strip_suffix(')')?;
+    let name = head.trim();
+    if name.is_empty() || name.split_whitespace().count() != 1 || name.contains(')') {
         return None;
     }
-    Some(name.to_lowercase())
+    let params = parameters(inside)?;
+    Some((name.to_lowercase(), params))
 }
 
-/// `gathering()` → the part it calls, if the line is a call at all.
+/// `here, there` → the names, lowercased. `None` if any slot is not one name.
+///
+/// Empty text is no parameters, which is what `()` means. Everything else must
+/// be comma-separated single words: a trailing comma leaves an empty slot and is
+/// refused rather than dropped, because a player who wrote one meant to type
+/// another name.
+fn parameters(inside: &str) -> Option<Vec<String>> {
+    if inside.trim().is_empty() {
+        return Some(Vec::new());
+    }
+    let mut names = Vec::new();
+    for slot in inside.split(',') {
+        let mut words = slot.split_whitespace();
+        let name = words.next()?;
+        if words.next().is_some() || name.contains('(') || name.contains(')') {
+            return None;
+        }
+        let name = name.to_lowercase();
+        if names.contains(&name) {
+            return None;
+        }
+        names.push(name);
+    }
+    Some(names)
+}
+
+/// A part's name and the names handed to it — what [`call_of`] answers with.
+type Call = (String, Vec<String>);
+
+/// `between(wellspring, near)` → the part it calls and what it hands over.
 ///
 /// Three answers, not two: `None` for a line that is not a call, `Some(None)`
-/// for one that is a call and is malformed, and `Some(Some(name))` for a good
-/// one. Collapsing the middle into "not a call" would send `gathering(sage)` to
-/// the command resolver, which would report that the tower has no `gathering(sage)`
-/// — true, unhelpful, and about the wrong thing.
-pub(super) fn call_name(line: &str) -> Option<Option<String>> {
+/// for one that is a call and is malformed, and `Some(Some((name, args)))` for a
+/// good one. Collapsing the middle into "not a call" would send `between(a b)`
+/// to the command resolver, which would report that the tower has no
+/// `between(a b)` — true, unhelpful, and about the wrong thing.
+///
+/// **The line must *end* with the bracket**, which is what `strip_suffix` says
+/// and is the rule `lexeme::call_runs` has to match: `gathering() # note` is a
+/// command, not a call with something after it.
+///
+/// **Whether the count is right is not asked here**, and deliberately: that
+/// needs the definition, which is a fact about the file rather than about the
+/// line. `compile::check_calls` answers it beside *is there such a part at all*,
+/// so both arrive as one report about the spell.
+///
+/// **An argument may repeat where a parameter may not.** `between(here, here)`
+/// as a *call* is two slots given the same name, which is ordinary; as a
+/// heading it would be one name shadowing another, which is not.
+pub(super) fn call_of(line: &str) -> Option<Option<Call>> {
     let trimmed = line.trim();
     let (head, rest) = trimmed.split_once('(')?;
     let inside = rest.strip_suffix(')')?;
@@ -938,10 +1042,30 @@ pub(super) fn call_name(line: &str) -> Option<Option<String>> {
     if name.is_empty() || name.split_whitespace().count() != 1 {
         return Some(None);
     }
-    if !inside.trim().is_empty() {
+    let Some(args) = arguments(inside) else {
         return Some(None);
+    };
+    Some(Some((name.to_lowercase(), args)))
+}
+
+/// `wellspring, near` → the names handed over, lowercased.
+///
+/// [`parameters`]'s rule minus the distinctness one — see [`call_of`].
+fn arguments(inside: &str) -> Option<Vec<String>> {
+    if inside.trim().is_empty() {
+        return Some(Vec::new());
     }
-    Some(Some(name.to_lowercase()))
+    inside
+        .split(',')
+        .map(|slot| {
+            let mut words = slot.split_whitespace();
+            let name = words.next()?;
+            if words.next().is_some() || name.contains('(') || name.contains(')') {
+                return None;
+            }
+            Some(name.to_lowercase())
+        })
+        .collect()
 }
 
 /// `best be north` → the name and what it stands for.
@@ -1364,7 +1488,9 @@ mod tests {
                 // a call does is the runner's, and `tests.rs` drives that
                 // through a real `Sim`. Emitting the name keeps a call visible
                 // in the shape tests without pretending it was entered.
-                Some(Kind::Call { name }) => out.push(format!("{name}()")),
+                Some(Kind::Call { name, args }) => {
+                    out.push(format!("{name}({})", args.join(", ")));
+                }
                 Some(Kind::Command(line)) => out.push(line.clone()),
                 Some(Kind::Wait(what)) => out.push(format!("wait {what}")),
                 Some(Kind::Let { name, value }) => out.push(format!("set {name} {value}")),

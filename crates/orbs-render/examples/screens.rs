@@ -52,6 +52,10 @@ fn main() {
     show("Ward — the lens's sheet, part broken (§10)", &sheet);
     speak(&sheet);
 
+    let course = pylon(GRID);
+    show("Pylon — a course of wards, part hauled (§10)", &course);
+    speak(&course);
+
     let records = brewing_log();
     let views = records_screen(GridSize::new(80, 22), &records);
     show("Records — one stream, three views (§7)", &views);
@@ -983,10 +987,10 @@ fn boot_report(grid: GridSize) -> Frame {
         ("grimoire index", "2841", Role::Normal, None),
         ("laboratory", "ok", Role::Success, None),
         (
-            "battlements",
+            "sanctum",
             "DEGRADED",
             Role::Danger,
-            Some("east_wall integrity 34%"),
+            Some("barrier integrity 34%"),
         ),
         ("menagerie", "not found", Role::Normal, None),
         ("archive", "ok", Role::Success, None),
@@ -1054,7 +1058,7 @@ fn siege(grid: GridSize, mode: DisplayMode) -> Frame {
     let mut frame = Frame::new(grid);
     let panes: [(&str, fn(&mut Painter<'_>, Rect)); 4] = [
         ("laboratory", laboratory),
-        ("battlements", battlements),
+        ("sanctum", sanctum),
         ("archive", archive),
         ("scrying", scrying),
     ];
@@ -1415,17 +1419,17 @@ fn laboratory(painter: &mut Painter<'_>, area: Rect) {
 }
 
 /// A breach. The accent triad's whole reason to exist.
-fn battlements(painter: &mut Painter<'_>, area: Rect) {
+fn sanctum(painter: &mut Painter<'_>, area: Rect) {
     painter.span(
         area.origin(),
-        &Span::new("east_wall").with_style(Style::NORMAL),
+        &Span::new("barrier").with_style(Style::NORMAL),
     );
     painter.progress(
         Rect::new(area.col, area.row + 1, area.cols.min(20), 1),
         34,
         100,
         Style::DANGER,
-        "east wall integrity 34 percent",
+        "barrier integrity 34 percent",
     );
     painter.span(
         Pos::new(area.col, area.row + 2),
@@ -1536,6 +1540,72 @@ fn ward(grid: GridSize) -> Frame {
     frame
 }
 
+/// A course of wards, part-drawn (§10, `tower::pylon`).
+///
+/// **The one surface where a Hanoi position can actually be judged.** Every
+/// other check on this board is an assertion about widths; only a rendered frame
+/// shows whether three centred stacks of blocks read as three stacks or as a
+/// smear, and whether the staircase makes the rule — *a greater ward will not
+/// rest upon a lesser* — visible without a word of explanation.
+///
+/// The position is a real one and is **checked rather than invented**: it is
+/// where `cycle(4)` actually stands after seven hauls, with the greatest ward
+/// alone in the wellspring and the other three stacked in the conduit. The first
+/// version drew `[4,3] / [2,1] / []`, a legal position the solver never passes
+/// through — and since this screen is the one place a Hanoi position is judged by
+/// eye, a wrong literal here reads as a solver bug.
+fn pylon(grid: GridSize) -> Frame {
+    let course = orbs_render::Pylon {
+        stations: [vec![4], vec![3, 2, 1], Vec::new()],
+        // `tower::pylon`'s own words. The sim hands these through
+        // `Course::view`; an example has no sim, so it repeats them — and this
+        // is the surface where a header wider than its column shows up as a
+        // picture rather than as a passing assertion.
+        names: ["wellspring", "conduit", "barrier"],
+        height: 4,
+        hauls: 7,
+        integrity: 62,
+        // What `prose.toml`'s `pylon_tally` renders to. An example has no prose,
+        // so it repeats the line — the same dodge the sockets and sigils above
+        // take, and the same reason: this is where a line too wide for its box
+        // shows up as a picture rather than as an assertion.
+        tally: "4 wards, 7 hauled".to_owned(),
+    };
+
+    let layout = ScreenLayout::compute(&ScreenRequest::single(grid));
+    let mut frame = Frame::new(grid);
+    let pane = layout.main()[0];
+    let mut painter = frame.painter(pane);
+    painter.border(pane, Some("sanctum"), Style::DIM);
+
+    let (cols, rows) = orbs_render::Pylon::size();
+    let at = Rect::new(pane.col + 2, pane.row + 2, cols + 2, rows + 2);
+    painter.border(at, Some("pylon"), Style::DIM);
+    let inside = at.inset(1);
+    for row in 0..inside.rows {
+        let Some(cells) = course.row(usize::from(row)) else {
+            break;
+        };
+        for (col, (glyph, style, tint)) in cells.into_iter().enumerate() {
+            let Ok(col) = u16::try_from(col) else { break };
+            let cell = Pos::new(inside.col + col, inside.row + row);
+            painter.glyphs(cell, &glyph.to_string(), style);
+            if let Some(tint) = tint {
+                painter.tint(
+                    Rect::new(cell.col, cell.row, 1, 1),
+                    orbs_render::Wash::plain(tint),
+                );
+            }
+        }
+    }
+    painter.announce(
+        UtteranceKind::Progress,
+        Role::Normal,
+        "4 wards, 7 hauled, the walls at 62",
+    );
+    frame
+}
+
 /// `label ....... [ status ]` — one utterance, three visual styles.
 fn status_row(painter: &mut Painter<'_>, at: Pos, label: &str, status: &str, role: Role) {
     const BRACKET_COL: u16 = 30;
@@ -1577,7 +1647,7 @@ fn lint_prose() {
         "O.R.B.S. v0.9.3  —  cold start",
         "the wizard's laboratory — untouched",
         "O.R.B.S. v0.9.3  --  cold start",
-        "east_wall integrity 34% [ DEGRADED ]",
+        "barrier integrity 34% [ DEGRADED ]",
     ];
     for line in samples {
         match orbs_render::cp437::first_unrenderable(line) {

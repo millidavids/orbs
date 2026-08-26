@@ -68,6 +68,19 @@ impl Sim {
         // The tower is raised before the first tick, so tick 0 already has a
         // world to name.
         tower::raise(&mut world);
+        // **The walls have to say how they stand from tick 0.** `integrity` is a
+        // reading on the pylon, published by `erode` when the number moves — and
+        // the number does not move for thirty ticks, so a tower nobody had
+        // touched had no reading at all. `survey pylon` printed nothing, and
+        // worse: `many_at` answers an absent child with **nought**, so a spell
+        // asking `if the pylon has fewer than 60 integrity` fired on a whole
+        // barrier for the first half-minute of every session.
+        //
+        // Raising it here rather than in `tower::build` because `build` names
+        // things and knows no resources, and this is a number.
+        if let Some(pylon) = tower::pylon::fixture(&world) {
+            crate::execute::publish_pylon(&mut world, pylon);
+        }
         tower::rebuild(&mut world);
         tower::report(&mut world);
 
@@ -170,6 +183,8 @@ impl Sim {
         }
         world.insert_resource(curve);
         world.init_resource::<tower::Experience>();
+        // Whole, by `Default`. A tower is not built already crumbling.
+        world.init_resource::<tower::Integrity>();
         world.init_resource::<tower::Taken>();
         world.init_resource::<crate::execute::Opening>();
         world.init_resource::<crate::execute::Reloaded>();
@@ -232,6 +247,12 @@ impl Sim {
                 // clock reading, so it cannot perturb `RngStream::Threat` — which
                 // is what lets it be appended here without touching a replay.
                 tower::settling,
+                // **The same licence, for the same reason.** A barrier wearing
+                // down is a comparison of two ticks; the sanctum's one draw is
+                // in `height_for`, on `RngStream::Battlements`, and happens
+                // inside `muster` rather than in a system. So this is appended
+                // here without shifting a single existing replay.
+                tower::erode,
                 tower::spell::stand,
             )
                 .chain(),
@@ -494,6 +515,12 @@ impl Sim {
         }
 
         #[cfg(debug_assertions)]
+        if crate::execute::shortcut(line) {
+            self.debug_course(line);
+            return;
+        }
+
+        #[cfg(debug_assertions)]
         if crate::execute::swapping(line) {
             self.debug_swap(line);
             return;
@@ -609,6 +636,15 @@ impl Sim {
         self.world.resource::<tower::Experience>().get()
     }
 
+    /// How the tower's defences stand, out of [`tower::STANDING`].
+    ///
+    /// Falls on its own (`tower::erode`) and is put back by finishing a course
+    /// in the sanctum. **The only resource in the game that goes down.**
+    #[must_use]
+    pub fn integrity(&self) -> u32 {
+        self.world.resource::<tower::Integrity>().get()
+    }
+
     /// How many spells the orb can hold at once.
     ///
     /// **Derived from [`experience`](Self::experience)**, so this is a reading
@@ -631,6 +667,66 @@ impl Sim {
             .into_iter()
             .find_map(|node| self.world.get::<tower::Ward>(node))
             .map(tower::Ward::view)
+    }
+
+    /// The course itself, for a caller that needs to ask it questions.
+    ///
+    /// **`orbs-balance` is the caller**, and the reason it is not
+    /// [`pylon`](Self::pylon) is that a *view* is what a painter needs and a
+    /// *course* is what a solver needs. The harness rotates through
+    /// `pylon::cycle` and asks `Course::between` which way each haul runs, which
+    /// keeps one copy of the algorithm in the game rather than two — see
+    /// `drive::haul_one`.
+    #[must_use]
+    pub fn course(&self) -> Option<&tower::Course> {
+        self.world
+            .get::<tower::Course>(self.here_with::<tower::Course>()?)
+    }
+
+    /// The child of where the player stands that carries `C`, if any.
+    ///
+    /// **One walk, because this was three.** `course`, `pylon` and
+    /// `debug_course` each wrote out the same `children_of(cwd).find(...)`, in
+    /// one file, differing only in the component — which is the shape
+    /// [`tower::reach`] was extracted to stop for *names*. The same argument
+    /// applies to components: a room-scoped lookup is a rule about where a
+    /// player is standing, and three copies of it are three chances to disagree
+    /// about that.
+    ///
+    /// Room-scoped on purpose. `tower::pylon::fixture` is the tower-wide
+    /// question and is deliberately separate — a bound solver's readings must
+    /// keep up while the player is in another room, and a picture must not.
+    fn here_with<C: bevy_ecs::component::Component>(&self) -> Option<bevy_ecs::entity::Entity> {
+        let cwd = self.world.resource::<tower::Cwd>().0;
+        tower::children_of(&self.world, cwd)
+            .into_iter()
+            .find(|node| self.world.get::<C>(*node).is_some())
+    }
+
+    /// The course drawn up in the sanctum, if the player is looking at it.
+    ///
+    /// Reads `Cwd` for the reason [`ward`](Self::ward) does: the picture cannot
+    /// outrun the readings by following the player out of the room.
+    #[must_use]
+    pub fn pylon(&self) -> Option<orbs_render::Pylon> {
+        let standing = self.world.resource::<tower::Integrity>().get();
+        // **Through `course`, not a second walk of `Cwd`.** These were the same
+        // three lines twice in one file — and `debug_course` made it three —
+        // which is the shape `tower::reach` was extracted to stop one layer
+        // down. A view is a course plus a sentence; only the sentence is here.
+        let course = self.course()?;
+        // **The board's own line, written here.** `orbs-render` holds no
+        // authored English (rule 6), so the sentence under the floor rule is
+        // composed from the same prose key the reader hears — one spelling, one
+        // place, and hot-reloadable like every other line in the game.
+        let tally = self.prose().line(
+            "pylon_tally",
+            &[
+                ("quantity", &course.height().to_string()),
+                ("name", &course.hauls().to_string()),
+            ],
+        );
+        Some(course.view(standing, tally))
     }
 
     /// Every domain at a glance — what §9's rail draws.
@@ -943,9 +1039,26 @@ impl Sim {
         }
     }
 
-    /// Hand the open ward's answer to the aperture, so the next press breaks it.
+    /// Echo a debug word, record it for replay, and find what it acts on.
+    ///
+    /// **One prologue, because there were two and they were byte-identical.**
+    /// `debug_ward` and `debug_course` each wrote out the same four steps —
+    /// read the tick, echo the line, push a `Submission` so replay stays honest,
+    /// walk `Cwd`'s children for a component — differing only in the type. A
+    /// change to the protocol had to be made twice, and a fix applied to one was
+    /// invisible in the other.
+    ///
+    /// The `Submission` is the load-bearing step: a debug word reaches the world
+    /// without going through `submit`'s parser, so a replay that did not see it
+    /// would diverge from the session that recorded it.
+    ///
+    /// Returns the node carrying `C`, or `None` — what each word does with it,
+    /// and what it says when there is nothing, is the word's own business.
     #[cfg(debug_assertions)]
-    fn debug_ward(&mut self, line: &str) {
+    fn debug_shortcut<C: bevy_ecs::component::Component>(
+        &mut self,
+        line: &str,
+    ) -> Option<bevy_ecs::entity::Entity> {
         let tick = *self.world.resource::<Tick>();
         self.world
             .resource_mut::<Scrollback>()
@@ -954,16 +1067,54 @@ impl Sim {
             .text(orbs_render::FieldName::Message, line)
             .finish();
         self.world.resource_mut::<Submissions>().push(tick, line);
+        self.here_with::<C>()
+    }
 
-        let cwd = self.world.resource::<tower::Cwd>().0;
-        let found = tower::children_of(&self.world, cwd)
-            .into_iter()
-            .find(|node| self.world.get::<tower::Ward>(*node).is_some());
-        if let Some(node) = found
+    /// Hand the open ward's answer to the aperture, so the next press breaks it.
+    #[cfg(debug_assertions)]
+    fn debug_ward(&mut self, line: &str) {
+        if let Some(node) = self.debug_shortcut::<tower::Ward>(line)
             && let Some(mut ward) = self.world.get_mut::<tower::Ward>(node)
         {
             ward.give_away();
         }
+    }
+
+    /// Stack the standing course but its smallest ward, one haul from finished.
+    #[cfg(debug_assertions)]
+    fn debug_course(&mut self, line: &str) {
+        if let Some(node) = self.debug_shortcut::<tower::Course>(line)
+            && let Some(mut course) = self.world.get_mut::<tower::Course>(node)
+        {
+            course.give_away();
+            // **Republished, unlike `debug_ward`.** A ward's readings are
+            // rewritten by the press that follows it; a course's are rewritten
+            // by the *haul* that follows, and the two `potency` readings this
+            // just moved are what a solver reads to decide which haul that is.
+            // Left stale, the next line of a dump would be hauling at a board
+            // that no longer exists.
+            crate::execute::refresh_pylon(&mut self.world);
+            return;
+        }
+
+        // **A shortcut that finds nothing says so.** It was silent, so typing it
+        // before `muster` — or outside the sanctum, since the pylon is found
+        // through `Cwd` — echoed the word, did nothing, and left the *next* line
+        // to report the trouble: `haul` answering "there is nothing drawn to
+        // move" reads as the haul being wrong rather than the shortcut. Every
+        // other debug word in `submit` reports what it did or refused.
+        let message = self
+            .world
+            .resource::<crate::content::Prose>()
+            .line("muster_nothing_to_give", &[]);
+        self.world
+            .resource_mut::<Scrollback>()
+            .records_mut()
+            .push(RecordKind::Completion)
+            .text(orbs_render::FieldName::Name, crate::execute::COURSE)
+            .text(orbs_render::FieldName::Message, &message)
+            .role(orbs_render::Role::Cost)
+            .finish();
     }
 
     /// Learn a secret the lens would otherwise have to find.

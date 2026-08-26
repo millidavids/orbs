@@ -16,7 +16,7 @@ fn tower() -> Scene {
     Scene::new()
         .with(NounKind::Place, "/tower/laboratory")
         .with(NounKind::Place, "/tower/archive")
-        .with(NounKind::Place, "/tower/battlements")
+        .with(NounKind::Place, "/tower/sanctum")
         .with(NounKind::File, "feed.log")
         .with(NounKind::File, "purge_cycle.log")
         .with(NounKind::Essence, "clarity")
@@ -395,7 +395,7 @@ fn resolution_is_comfortably_sub_millisecond() {
     let inputs = [
         "make a potion of clarity",
         "grep march feed.log",
-        "go to the battlements",
+        "go to the sanctum",
         "xyzzy plugh",
     ];
 

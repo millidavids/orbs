@@ -90,6 +90,24 @@ pub fn giveaway(line: &str) -> bool {
     line.trim() == WARD
 }
 
+/// `debug_course` — leave the standing course one haul from finished.
+///
+/// A course is `2^n - 1` hauls and the tallest is 127 of them, so a See-it line
+/// for the *completion* — the walls going back up, the experience, the record —
+/// would otherwise open with a hundred commands. Everything downstream runs as
+/// it would have: the last haul is a real haul through the real verb, and what
+/// it triggers is the real `finish`.
+///
+/// It skips the puzzle, which is not what a See-it line for the completion is
+/// looking at. `debug_ward` is the same word one room over.
+pub const COURSE: &str = "debug_course";
+
+/// Whether this line is a `debug_course`.
+#[must_use]
+pub fn shortcut(line: &str) -> bool {
+    line.trim() == COURSE
+}
+
 /// `debug_swap` — substitute a reagent where the player is standing.
 ///
 /// §8.1's world surface arrives on a 1200-tick roll, which is twenty minutes of

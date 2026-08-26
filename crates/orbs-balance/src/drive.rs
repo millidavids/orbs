@@ -145,6 +145,7 @@ pub fn run(policy: Policy, seed: u64, ticks: u64, every: u64) -> Run {
                 }
                 Body::Stacks => walk_one(&mut sim),
                 Body::Scrying => press_one(&mut sim, &mut sweep),
+                Body::Warding => haul_one(&mut sim, &mut cycle),
                 Body::Bound {
                     earning,
                     name,
@@ -492,6 +493,57 @@ fn press_one(sim: &mut Sim, sweep: &mut Sweep) {
     } else if now.aligned > before.aligned {
         sweep.socket += 1;
     }
+}
+
+/// The three stations, spelled out rather than imported.
+///
+/// A policy is a thing a *player* types, so a rename that broke the player's
+/// vocabulary would still compile against `tower::pylon::STATIONS` — the same
+/// reason `SOCKETS` above is written out.
+const STATIONS: [&str; 3] = ["wellspring", "conduit", "barrier"];
+
+/// One turn of the cyclic solution, or a fresh course when none is drawn.
+///
+/// **The whole algorithm is three pairs in rotation.** Between any two stations
+/// exactly one haul is legal, so the policy never has to search — it picks the
+/// pair whose turn it is and asks the course which way round the haul runs. That
+/// is exactly what `dev_spells.toml`'s `holding` does with `let` and a part, and
+/// no more: the parity comes off the course's own height, and the direction off
+/// two `potency`s.
+///
+/// **The rotation and the direction are the sim's, not a copy of them.**
+/// `tower::pylon::cycle` and `Course::between` are both `pub`, and `between`'s
+/// own doc says it is kept *"even though nothing in the game calls it"* — this is
+/// the caller it was waiting for. Transcribing either here would leave the
+/// harness able to drift into measuring a slower, wrong-station solve while
+/// `tower::pylon`'s optimality tests stayed green, and the code itself records
+/// that the failure is invisible: *"getting this backwards still finishes — in
+/// the conduit"*. `STATIONS` above stays written out for the opposite reason,
+/// which its own doc gives: it is a thing a **player** types.
+fn haul_one(sim: &mut Sim, cycle: &mut usize) {
+    // No course drawn — either the first lap, or the last one finished.
+    // `muster` draws the next, which is how a bound spell laps.
+    let Some(course) = sim.course() else {
+        *cycle = 0;
+        issue(sim, "muster");
+        return;
+    };
+
+    let pairs = orbs_sim::tower::pylon::cycle(course.height());
+    let (a, b) = pairs[*cycle % pairs.len()];
+    *cycle += 1;
+
+    // **`None` starts the rotation over rather than returning.** Both stations
+    // empty is unreachable while the rotation is in phase with the board — but
+    // `run` only advances the clock inside `issue`, so a bare `return` here is a
+    // spin with no tick, and `while sim.tick() < ticks` would never end. That is
+    // the hang `press_one` guards against in as many words one function up.
+    let Some((from, to)) = course.between(a, b) else {
+        *cycle = 0;
+        issue(sim, "muster");
+        return;
+    };
+    issue(sim, &format!("haul {} {}", STATIONS[from], STATIONS[to]));
 }
 
 #[cfg(test)]

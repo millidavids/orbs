@@ -562,7 +562,7 @@ impl<'a> Painter<'a> {
     /// Draw text whose meaning a neighbouring span already carries. Structural:
     /// writes no speech.
     ///
-    /// For a row drawn in several styles — `battlements ....... [ DEGRADED ]`,
+    /// For a row drawn in several styles — `sanctum ........... [ DEGRADED ]`,
     /// where the label is base hue, the leader is dim, and only the bracket takes
     /// the danger accent. One [`Painter::span`] announces the row as a whole;
     /// the remaining runs are drawn with this so the reader hears one sentence

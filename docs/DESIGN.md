@@ -25,7 +25,7 @@ computer terminal.
 
 O.R.B.S. is a text-only game played entirely through a fantasy command line. You
 tend a wizard's tower by navigating a filesystem that *is* your duties — brewing
-in `/laboratory`, warding in `/battlements`, spying in `/lens` — and you progress by
+in `/laboratory`, warding in `/sanctum`, spying in `/lens` — and you progress by
 writing scripts that let the orb perform your work without you. When you are
 ready, you descend into a siege, where an intelligent enemy attacks the
 automation you built and you must diagnose and repair it under pressure.
@@ -219,7 +219,7 @@ scrying lens ................ [ ok ]
 ley-line uplink ............. [ ok ]
 grimoire index .............. [ 2841 ]
 laboratory ..................... [ ok ]
-battlements ................. [ DEGRADED ]
+sanctum ..................... [ DEGRADED ]
   east_wall integrity 34%
 menagerie ................... [ not found ]
 archive ..................... [ ok ]
@@ -494,10 +494,10 @@ syntax by osmosis and graduate to typing it directly. An optional
 "arcane/strict" mode requires precision.
 
 ```
-orbs:~$ go to the castle gates
-  → cd /tower/battlements/gates
+orbs:~$ go to the warding chamber
+  → cd /tower/sanctum
 
-orbs:/tower/battlements/gates$ start potion
+orbs:/tower/sanctum$ start potion
   → brew --recipe=?
   ambiguous. did you mean:
     1) brew --recipe=clarity
@@ -697,7 +697,7 @@ The directory tree *is* the tower. Navigation is diegetic; paths are places.
 
 ```
 /tower
-├── battlements/     defense — walls, gates, wards
+├── sanctum/         defense — the pylon, and the wards it draws (§19: was `battlements/`)
 ├── laboratory/         brewing — reagents, recipes, potions
 ├── lens/            scrying — feeds, logs, intelligence, observed/
 ├── grimoire/        spellcraft — spell composition
@@ -1133,12 +1133,12 @@ itself is a first-class effect — atmospheric, never nauseating, and disableabl
 per §14.
 
 **Commands route by domain name within the focused set.** `wield alembic` reaches
-the laboratory pane, `ward north` reaches the battlements pane, with no switching
+the laboratory pane, `haul wellspring conduit` reaches the sanctum pane, with no switching
 between them — because commands are discrete, one input line serves any number of
 focused panes.
 
 **This is what multiplexing actually buys.** At capacity 1, a disaster in the
-alchemy lab while you are commanding the battlements forces a choice: swap the
+alchemy lab while you are working the sanctum forces a choice: swap the
 laboratory into the main window (losing direct command of the defence) or let it
 burn. Higher capacity lets you hold both and command both. Splitting your mind
 converts an either/or into an and.
@@ -1178,7 +1178,7 @@ and unlocked, raising capacity. Thematically, the wizard splits his mind.
 
 Beyond command access, co-present panes grant **standing synergies**. An open
 brewing pane feeds potions to the siege automatically; an open scrying pane
-annotates threats in the combat pane; forge beside battlements auto-repairs wards.
+annotates threats in the combat pane; forge beside the sanctum auto-repairs wards.
 
 **Synergies require both panes to be in the main window**, not merely unlocked.
 Sidebar panes grant awareness only. This is what keeps the multiplexing unlock
@@ -1243,7 +1243,7 @@ Seven at launch, with tiered depth to survive solo scale.
 
 | Domain | Path | Minigame form | Depth |
 |---|---|---|---|
-| **Defense** | `battlements/` | Command pressure at 1 Hz, ward placement | Bespoke |
+| **Defense** | `sanctum/` | ~~Command pressure at 1 Hz, ward placement~~ → **Tower of Hanoi** (§19) | Bespoke |
 | **Scrying** | `lens/` | Deduction — parse noisy logs to find truth | Bespoke |
 | **Spellcraft** | `grimoire/` | Composition — build spells from components | Bespoke |
 | **Brewing** | `laboratory/` | Sequence/recipe puzzle with timing — **see §10.1** | Bespoke |
@@ -2200,7 +2200,7 @@ in the suite would have caught it, and none was ever written that could have.
 | **3. Spellcraft** | The `grimoire/` domain: a spell factors into named parts, **within one `.spell` file** (§19 — cross-file sharing struck). **The language overhaul that composition needs** — values, variables, lists, `for each`, in-file parts, builtins over the domains. **Naming pass (~35 verbs)**, hidden-directory authoring | ~7k | 5 mo | A spell factors into named parts and still reads as one file |
 | **4. Enchanting** | The `forge/` domain (derived): sequence + cost → a decaying buff on an instrument. **Shared-engine extraction**, pulled forward from 9a | ~4k | 2 mo | A buffed instrument is visibly faster and the buff runs out |
 | **5. Summoning** | The `menagerie/` domain (derived): allocation → a unit with a standing rule | ~4k | 2 mo | A summoned thing acts without being told to that tick |
-| **6. Defense** | The `battlements/` domain: wards under 1 Hz pressure. **Reflex-avoidance mechanism decided first**; **accessible mode decided here, not at 11** | ~5k | 3 mo | A pressure survived by choosing, not by reacting |
+| **4. Defense** ✅ | The `sanctum/` domain: a course of wards, drawn and assembled. **Reflex-avoidance mechanism decided first** — it is the Tower of Hanoi, which has no clock in it, so the accessible-mode item moved to Phase 8 (§19) | ~5k | 3 mo | A pressure survived by choosing, not by reacting |
 | **7. One machine** | Reagents cross domains, **Focus-slot reservation**, pane addressing, the authored edges between domains | ~3k | 2 mo | The tower runs itself across rooms |
 | **8. Siege** | Autobattler, trait composition, adversarial aberrations, escrow economy, **unattended-siege backlog + dispersal**, pane addressing, one siege type, drift stub, synergy template | ~15k | 4 mo | Sieges are tense and scripts visibly matter |
 | **9a. Breadth** | Discovery/research, full drift, **offline progression + its unlock**. *(The five domains and the shared-engine extraction moved to Phases 2–7.)* | ~4k | 2 mo | Discovery closed |
@@ -2405,6 +2405,166 @@ they are re-pointed at the phases that now need them rather than quietly dropped
    price-shop — Exapunks is $19.99.
 
 ## 19. Decisions log
+
+### What a review of the sanctum found (Phase 4, `0.4.2`)
+
+Thirteen defects in a domain that shipped with a green gate, 113 tmux scenarios
+and every balance pin held. **Every one of them was invisible to the suite that
+was meant to catch it**, and the pattern is worth more than the list: each test
+was written in the state the bug is absent from.
+
+**`muster` and `haul` queued behind the laboratory, which is the one thing the
+domain promises they never do.** Both went into `Verb::is_operation` — the
+*scope* question, and what keeps them out of the tower-wide vocabulary — and
+`spell::block::begins_work` reads that same predicate to ask the *slot* question.
+The `Dial` exemption beside them exists for precisely this and they were left out
+of it. A bound `holding` beside a brew answered *"holding.spell waits: the
+alembic is distilling"*, never mustered, and gave up at `PATIENCE` with a fault
+latched on the rail. **The plan said to make the exemption and the work did
+not**; every test ran in an idle tower.
+
+| Also found | Why nothing saw it |
+|---|---|
+| At a deficit of 100 the course was always seven wards, always odd | The jitter test sampled deficit **0**, the one end where the clamp is absent — so the reading `odd` exists to protect became hard-codable exactly where a course is 127 hauls long |
+| A scoured pylon reported `idle` to the rail, the panel and `spell::watch` — which is `holding`'s own loop guard — while `would_block` disagreed | The new arm sat above `Triaging`. The `Maze` and `Ward` arms sit above it too and are unreachable that way; `purge pylon` is an ordinary thing to type |
+| `stop pylon` did nothing, while `muster_already` told the player to type it | A refusal naming a way forward that did not exist — §6's contract, broken by the verb the refusal named |
+| `CourseSave::height` was written and never read, and the recompute clamped *up* | A save missing a ward came back as an unfinishable course that jammed `muster` for the session. The field is a **checksum** now — every ward stays in a course for its whole life, so a disagreement can only mean a bad file |
+| Two integration tests asserted nothing | One matched `survey` output against `said()`, which reads only `Message`; the other asserted a monotone length and a refusal string `survey` cannot emit |
+| The harness could spin with no tick advance | `run` advances the clock only inside `issue`, so a bare `return` in a policy is a hang. `press_one` guards this in as many words one function up |
+
+**The rail said the course, not the barrier — and that is this section's own
+lesson for the third time.** `detail_of` prints a meter's *remainder*, so
+wards-still-to-haul counted **down** as a solver won: `py 4`, after `py 100`,
+reads as a barrier about to fail. The archive's `st 350t` and the lens's `pr 4t`
+are the same defect, recorded below as *"two of the three built domains were
+glanceably wrong"*. This one was worse: the number **vanished** into course
+progress exactly while a bound solver worked, which is the one time the player is
+in another room and glancing.
+
+**So the pylon's meter is always the barrier**, drawn course or no, and the rail
+prints it with a `%` — the job the `t` suffix already does. The board two columns
+away says where the wards are. `Unit::Wards` is gone with the defect.
+
+**Two duplications went with them**, both of rules that already existed: five
+lookup helpers copied between `execute/scry.rs` and `execute/muster.rs` are now
+`execute/readings.rs`, and `orbs-balance`'s solver called `pylon::cycle` and
+`Course::between` rather than transcribing them — which is the caller `between`'s
+doc had been waiting for, having said it was kept *"even though nothing in the
+game calls it"*.
+
+**Nothing measured moved.** All six `orbs-balance` pins read identically after
+all of it, `warding` included at 0.1249 on every seed.
+
+### The defense domain is arcane, not masonry — supersedes §7's tree and §10's path (Phase 4, `0.4.1`)
+
+The mechanics shipped and the *fiction* did not survive being played. The room
+was `battlements/`, its fixture a `rampart`, and its three Hanoi posts a
+`barbican`, a `bastion` and a `redoubt` — so the sentence a player typed most was
+**"haul a ward from the barbican to the redoubt"**, which is not a thing a wizard
+does and not a thing that means anything. Fortification names committed the whole
+domain to a metaphor its own verbs never fitted.
+
+**The fiction now**: raw arcane energy wells up in the `wellspring`; the wizard
+draws it through the `conduit` a ward at a time and assembles it into the
+`barrier`. The tower's walls are stone and the wards are not — the room is where
+he *does* the warding, and what he defends the tower with is the barrier.
+
+| Was | Is | Why |
+|---|---|---|
+| `battlements/` | `sanctum/` | **This supersedes §7's tree and §10's table.** The room is a warding chamber rather than a wall walk. The rename is what the rest of it hangs off, and it is the one part that overrules an authoritative table rather than filling one in |
+| `rampart` | `pylon` | An engine, not a wall. A pylon is also a temple gateway, which is the older sense and the better one here |
+| `barbican` / `bastion` / `redoubt` | `wellspring` / `conduit` / `barrier` | Source, passage, destination — the flow is legible from the names, which the fortification triple never was |
+| `post` | `station` | A peg is physical; a station is a place in a process |
+| `heft` | `potency` | `heft` weighs the ward. Pure arcane energy has magnitude and no mass |
+
+**Two names the brief asked for could not be used, and measurement is why.**
+`hollow` — the first choice for the source — scores **834 against `follow`**, a
+verb the player types constantly in the archive, against a floor of 600. And
+`barbican` could not have survived beside `barrier` even if the theme had: they
+share the `bar` prefix and score 906 and 914, eight apart inside a 60-point tie
+window, so `bar` would have raised a numbered prompt for ever.
+
+**`muster` and `haul` stayed**, and that is a decision rather than an oversight.
+"Muster your defences" survives the reskin, and `haul` is the concrete physical
+word that makes the stacking legible. What changed under them is every line of
+prose: not one sentence in the domain says *wall* any more.
+
+**`RngStream::Battlements` keeps its name.** A stream's identity is its index —
+renaming the variant changes nothing and renumbering would invalidate every
+replay — so the cheap thing is to leave it and the expensive thing is to have it
+look like a renumber. The comment says so where a reader will hit it.
+
+**Nothing mechanical moved.** `orbs-balance` reads `warding` at 0.1249 on every
+seed, exactly as before, and the other five pins are untouched: this was a rename
+and a rewrite of prose, and the arithmetic never saw it.
+
+### Defense is the Tower of Hanoi, and that is the reflex-avoidance mechanism (Phase 4, `0.4.0`)
+
+§10 names this domain as *"the one that can still fail the rule"* and ROADMAP
+made the answer head-of-phase work: *"command pressure at 1 Hz is a reflex
+mechanic unless something makes it a decision."* §5.1's shape for aberrations —
+*"identifying any aberration costs exactly one command, never a sequence"* — has
+no ward-placement analogue, and inventing one was the open question.
+
+**It is the Tower of Hanoi, and it dissolves the question rather than answering
+it.** There is no clock in the puzzle at all: a course waits for ever, every ward
+is on screen, and the only thing that can go wrong is choosing the wrong pair of
+stations. §10.1's *"outcome follows what the player chooses given readable state,
+never how fast or precisely they act"* is then true by construction, which is a
+better position than a real-time mechanic with a reflex escape hatch bolted on.
+
+| Question | Decision |
+|---|---|
+| What the pressure is, if not a clock | **Integrity, which decays** — a point every 30 ticks, whether or not anybody is playing. The first *drain* in the game; everything else the tower has only rises. The pressure is measured in hours rather than in seconds, which is what makes it a calm-layer mechanic |
+| What low integrity does | **Musters a taller course, and today nothing else.** Three wards is seven hauls and seven wards is 127, so neglect is expensive and — because the height is capped — never ruinous (§11.5). The coupling to nuisance rates that the siege model eventually wants is **deferred to Phase 8**, because raising `drift`'s odds from integrity would move every rate `orbs-balance` has pinned in exchange for a consequence no siege exists to spend |
+| §10's *"wards, made and consumed"* | **Re-read as integrity.** The wards are the puzzle's pieces rather than stock: nothing mints one and nothing spends one. What the domain mints and loses is the barrier. The precedent for withdrawing a §10 scarcity row is scrying's own *"a read is not a brew"*, withdrawn below |
+| Whether the verbs take the production slot | **Neither does**, which is the lens's decision and not the archive's. A course is up to 127 hauls; one holding the tower's single slot would starve every other spell into `spell_gave_up`. So a bound `holding` runs *beside* a brew — additive, exactly as scrying is — and §5.0's slot stays uncontested until Phase 7 |
+| Why the height is jittered | **So the parity has to be read.** A course cycles one way round the three stations when it is odd and the other when it is even, and getting it backwards finishes in the *conduit*. Without a jitter a player learns their tower's number and hard-codes the cycle, and the one thing this puzzle asks anybody to read stops being read |
+| The accessible mode | **Moved to Phase 8, not struck.** §14 requires a *real-time* surface to have one and this domain has none. The shape DESIGN.md fixes — *"screen-reader mode advances **siege** ticks on player input"* — is about the siege, which is where the item now sits |
+
+**The word `ward` moved rooms.** §10 reserves it for defense — *"ward
+placement"*, *"wards, made and consumed"* — and the lens had borrowed it for the
+seal on a far wizard's orb. The lens's board title is `seal` now, which is a word
+it already used (`probe_broken = "the seal gives"`); `tower::Ward` and
+`tests/ward.rs` keep their names, because they are not player-facing and renaming
+them is churn with no gate. It is still a three-way word — the lens's type, the
+`warding` potion, and these — and only the last is player-facing. **A ward is
+never a noun the player types**: it measures 935 against `warding` and 750
+against `word`, so `haul` names stations instead.
+
+**Defense and Enchanting swapped phase numbers**, 6 ↔ 4. Nothing in Defense
+depends on either derived domain, and the workspace version is `0.<phase>.<step>`
+and drawn on the POST card — so building Phase 6 while Phase 4 was unbuilt would
+have made a tester's version number go backwards when Enchanting landed. The
+siege moving 2 → 8 is the precedent for renumbering rather than skipping.
+
+**Three things that were only visible by running it**, and each is a note in the
+code rather than a lesson relearned:
+
+- **An empty station must publish nothing.** `spell::watch` answers `is empty` by
+  asking whether a node has children, so a station that always carried a
+  `potency` could never be empty and the first two rungs of every solver would be
+  dead. It is the maze's *"a walled way publishes no `marks`"* arrived at
+  backwards, and it is also why the comparison rungs must come *after* the
+  emptiness ones: an absent reading counts as nought, which makes an empty
+  station the least thing on the board.
+- **`erode` had to become an exclusive system.** Wearing a resource down is two
+  arguments; the pylon carries a *reading* of it, and the first version left that
+  node alone — so `survey pylon` and every `if the pylon has fewer than n
+  integrity` reported a whole barrier for ever while the rail counted down beside
+  them. Two surfaces, one number, and only the one a **spell** reads was wrong.
+- **`finish` mends before it publishes.** The same defect one function along: the
+  completion published the old integrity and then raised it, so a finished course
+  said `integrity = 0` on the transcript and `ra 56` on the rail, on the same
+  tick.
+
+**`orbs-balance` reads `warding` at 0.1249 on every seed**, which is the flattest
+column in the table and is arithmetic rather than luck: a course of `n` costs
+`2^n` ticks and pays `n − 2`, so three and four both come out at an eighth. The
+first pricing paid double and measured 0.2497 — scrying's tier — and was halved,
+because scrying earns that by being a deduction with nothing else to show for it
+where a finished course *also* puts the barrier back. **A domain paying twice
+should not also pay the best rate in the tower.**
 
 ### The spell language grows up — and the two things that decides (Phase 3, planned)
 
@@ -3081,22 +3241,92 @@ It inverts §19's comparison-spelling rule, deliberately: **symbols are accepted
 and never written back** there because a word exists to write back *to*, and here
 none does. The parentheses are the notation rather than a shorthand for it.
 
-#### Variables are shared, and the roadmap said otherwise
+#### An empty place answered with silence, and had since Phase 1
 
-That box specified a frame of `(spell, pc, loops, vars)`. `vars` is **not** in a
-descent, and the reason is that a part takes no arguments: a private store leaves
-it with no way to be told anything at all, and `let` is the language's only way to
-pass a name. One store, which the caller fills and the part reads.
+`survey` pushes every record it emits *inside* the loop over what is there, so a
+place with no children produced an echo and then nothing. §6 allows that
+nowhere — the orb answers, or refuses, and never simply declines to speak.
 
-The cost is real and worth stating: `for each way` inside a part rebinds the
-caller's `way`. That is dynamic scope, and it is the same call `bindings` already
-makes about a `let` inside a branch — *"scoping would be a rule to teach and a
-rule to get wrong, for a program that fits on a screen."*
+**It survived four phases because nothing built was ever empty.** The
+laboratory's instruments hold byproducts, the archive's cabinet accumulates, a
+lens socket fills on the first press. The sanctum is what made it the common
+case: a station publishes `potency` only while it holds a ward, deliberately —
+that is what lets `is empty` work — so two of the three are bare for most of a
+solve, and `survey barrier` before the first `muster` is close to the first
+thing anybody types in the room.
 
-`spell` is absent for a plainer reason: every descent belongs to one spell, and
-**the fingerprint covers all of them**. That was written here as a thing that
-would weaken once parts were shared between files; sharing is not happening — see
-*A spell is one file* below — so it does not weaken, and the field stays absent.
+**Said in `survey` rather than in the sanctum**, because the hole is the verb's.
+A scoured mortar and an untouched socket are the same shape and always were;
+fixing it where it was noticed would have left the other two silent and put a
+third copy of the same sentence in a domain file.
+
+The general lesson is the one §15 keeps arriving at from new directions: *a room
+that is never empty cannot show you what happens when it is.* The gate is
+`surveying_an_empty_place_still_answers`, asserted on an **instrument** rather
+than a station so it goes on holding if the sanctum changes shape.
+
+#### Variables are shared, and the roadmap said otherwise — **superseded at `0.4.2`**
+
+*The original entry, kept because the reversal turns on its reasoning:*
+
+> That box specified a frame of `(spell, pc, loops, vars)`. `vars` is **not** in
+> a descent, and the reason is that a part takes no arguments: a private store
+> leaves it with no way to be told anything at all, and `let` is the language's
+> only way to pass a name. One store, which the caller fills and the part reads.
+>
+> The cost is real and worth stating: `for each way` inside a part rebinds the
+> caller's `way`. That is dynamic scope, and it is the same call `bindings`
+> already makes about a `let` inside a branch — *"scoping would be a rule to
+> teach and a rule to get wrong, for a program that fits on a screen."*
+
+**A part takes arguments now, so the premise is gone rather than overruled.**
+`part between(here, there)` and `between(wellspring, near)`; the roadmap's
+`(spell, pc, loops, vars)` shape is what shipped after all.
+
+This is the distinction worth keeping: the entry above was not wrong about
+scoping being a rule to teach. It was correct *given a part that could not be
+told anything*, and the whole of its argument was that a private store with no
+way to fill it is strictly worse than a shared one. Add the way to fill it and
+the comparison reverses — which is why this reads as a superseded premise rather
+than a reversed judgement.
+
+| | shared store | per-descent, with parameters |
+|---|---|---|
+| Telling a part what to work on | three `let`s above each call | the call says it: `between(wellspring, near)` |
+| `for each way` inside a part | rebinds the caller's `way` | cannot reach it |
+| Reading a part | must scan the whole file for what fills its names | its brackets are the list |
+| What a part may touch | everything | what it was handed, and its own `let`s |
+| The rule to teach | *names are shared* | *what goes in the brackets is what it can see* |
+
+`holding` is the measurement rather than the argument: its loop body went from
+nine lines to three, and the spell from 32 to 26.
+
+**Three things this deliberately does not do.** A part takes no default and has
+no overload, so a wrong count is a refusal (`spell_call_arity`) rather than a
+name bound to nothing — the language has no null and inventing one here would
+make the body ask about a name standing for itself, which resolves against the
+room and does something quietly. An argument is resolved **one level** in the
+caller's store, which is `substituted`'s rule everywhere else. And a *parameter*
+may not repeat where an *argument* may: `between(here, here)` as a heading would
+shadow, as a call is two slots given one name.
+
+**`bindings` stays file-wide, and that is not an inconsistency.** It feeds one
+lint — *do not resolve a line that names a variable against the room* — where a
+name too many is harmless and a name too few paints a working line red. The
+runner is what scopes; that list is a lint's input.
+
+`spell` is still absent, for the plainer reason: every descent belongs to one
+spell, and **the fingerprint covers all of them**. That was written as a thing
+that would weaken once parts were shared between files; sharing is not happening
+— see *A spell is one file* below — so it does not weaken, and the field stays
+absent.
+
+**The lexer needed the change the parser did not advertise.** `lex` split on
+whitespace, and `between(wellspring, near)` is *two* whitespace-separated words,
+so every piece failed `is_call` and the line drew as two ordinary names — the
+feature absent on screen with the parser working perfectly. A call is cut by
+bracket and comma now. The name and its brackets are the call; the arguments
+draw as names, because they are words the player chose.
 
 #### Two rules, and both would have been silent
 
@@ -4202,7 +4432,7 @@ other axis.
 
 | | |
 |---|---|
-| Columns | **16.** Inset one leaves 14, against `battlements` at 11 plus a mark, `►tending` at 8, `al 22t` at 6 |
+| Columns | **16.** Inset one leaves 14, against `laboratory` at 10 plus a mark, `►tending` at 8, `al 22t` at 6 |
 | Boxes | **Seven, always.** An unbuilt room is a dim dotted row with no name |
 | Below the floor | **Dropped whole**, never narrowed — at 80×22 there is no rail and the session pane is intact |
 
@@ -10146,7 +10376,7 @@ name back would be furniture with a translation cost.
 `every_room_a_player_can_stand_in_explains_itself` drives `Sim::briefs()` and
 requires all three keys for every **built** domain, plus `arsenal` and `tower` by
 name — those are standable and are not rail domains, so `briefs()` cannot see them.
-`built` is what makes it honest: `forge`, `menagerie` and `battlements` are dark,
+`built` is what makes it honest: `forge` and `menagerie` are dark,
 need nothing yet, and start needing it the day `build.rs` raises them. §10 has five
 more rooms coming and each will be built by someone not thinking about the manual,
 where the failure is silent — `primer` is guarded on `Prose::has`, so an unauthored

@@ -1193,6 +1193,243 @@ fn a_part_that_calls_itself_stops_and_says_so() {
 }
 
 #[test]
+fn a_part_does_what_the_names_in_its_brackets_say() {
+    // The whole feature in one file. `load(sage)` and `load(rock-salt)` are one
+    // body doing two different things, which before parameters took a `let`
+    // above each call and a shared store between them.
+    let mut sim = with_spell(
+        "check",
+        &[
+            "part load(what)",
+            "grind what",
+            "empty mortar_and_pestle",
+            "end",
+            "load(sage)",
+            "load(rock-salt)",
+        ],
+    );
+    sim.submit("invoke check");
+    sim.step_n(60);
+
+    let lines = said(&sim);
+    assert!(
+        lines.iter().any(|line| line.contains("sage")),
+        "the first argument never reached the body: {lines:?}",
+    );
+    assert!(
+        lines.iter().any(|line| line.contains("rock-salt")),
+        "the second call ran with the first call's name: {lines:?}",
+    );
+}
+
+#[test]
+fn an_argument_is_what_the_caller_s_name_stands_for() {
+    // One level of resolution, at the call, in the **caller's** store — which is
+    // `substituted`'s rule everywhere else in the language. `holding` rests
+    // entirely on this: `between(wellspring, near)` hands over whatever `near`
+    // was bound to, and a literal stands for itself.
+    let mut sim = with_spell(
+        "check",
+        &[
+            "part load(what)",
+            "grind what",
+            "end",
+            "let herb be sage",
+            "load(herb)",
+        ],
+    );
+    sim.submit("invoke check");
+    sim.step_n(30);
+
+    assert!(
+        said(&sim).iter().any(|line| line.contains("sage")),
+        "a bound name was passed as the word rather than its value: {:?}",
+        said(&sim),
+    );
+}
+
+#[test]
+fn a_part_cannot_see_a_name_it_was_not_given() {
+    // **The scoping rule, from the side that proves it.** `herb` is bound in the
+    // caller and never passed, so inside the part it is not a variable at all —
+    // it resolves against the room, finds nothing called `herb`, and the line is
+    // reported missing rather than quietly grinding sage.
+    //
+    // Before parameters this test could not exist: one shared store meant the
+    // part read the caller's `herb` and this file worked.
+    let mut sim = with_spell(
+        "check",
+        &[
+            "part load()",
+            "grind herb",
+            "end",
+            "let herb be sage",
+            "load()",
+        ],
+    );
+    sim.submit("invoke check");
+    sim.step_n(30);
+
+    assert!(
+        !said(&sim).iter().any(|line| line.contains("dispensary")),
+        "the part read a binding it was never handed: {:?}",
+        said(&sim),
+    );
+}
+
+#[test]
+fn what_a_part_binds_does_not_outlive_it() {
+    // The other half of the same rule, and the one that makes an accumulator
+    // safe. The caller binds `herb` to sage, calls a part that binds its **own**
+    // `herb` to rock-salt, and grinds after the call — which must still be sage.
+    let mut sim = with_spell(
+        "check",
+        &[
+            "part load()",
+            "let herb be rock-salt",
+            "end",
+            "let herb be sage",
+            "load()",
+            "grind herb",
+        ],
+    );
+    sim.submit("invoke check");
+    sim.step_n(30);
+
+    let lines = said(&sim);
+    assert!(
+        lines.iter().any(|line| line.contains("sage")),
+        "a part's binding leaked out and took the caller's with it: {lines:?}",
+    );
+    assert!(
+        !lines.iter().any(|line| line.contains("rock-salt")),
+        "the caller ground what the part had bound: {lines:?}",
+    );
+}
+
+#[test]
+fn a_for_each_inside_a_part_leaves_the_caller_s_cursor_alone() {
+    // **The stated cost of the shared store, now gone.** [`Descent`]'s own
+    // comment used to name this: *"`for each way` inside a part rebinds the
+    // caller's `way` if it had one"*. The caller walks a set, calls a part that
+    // walks the same set, and must come back to the member it was on.
+    //
+    // **In the lens rather than the archive**, deliberately: a `dial` always
+    // lands and names its socket, where `follow` is refused by a wall and says
+    // nothing about the way it did not take — so a maze would make the
+    // observation depend on the seed's geometry rather than on the scoping.
+    let mut sim = Sim::new(1);
+    sim.submit("attend lens");
+    sim.step();
+    sim.submit("probe");
+    sim.step();
+    let lines: Vec<String> = [
+        "part inner()",
+        "for each socket",
+        "end",
+        "end",
+        "for each socket",
+        "inner()",
+        "dial socket",
+        "end",
+    ]
+    .iter()
+    .map(|line| (*line).to_owned())
+    .collect();
+    sim.write_spell("check", &lines);
+    sim.step();
+    sim.submit("invoke check");
+    sim.step_n(80);
+
+    // Four sockets, so four dials — one of each. A clobbered cursor leaves every
+    // lap dialling whatever the inner loop finished on, which is `fourth`.
+    let dialled: Vec<&str> = ["first", "second", "third", "fourth"]
+        .into_iter()
+        .filter(|socket| mentioned(&sim, &format!("{socket} socket")))
+        .collect();
+    assert_eq!(
+        dialled,
+        ["first", "second", "third", "fourth"],
+        "the caller's cursor did not survive the call: {:?}",
+        said(&sim),
+    );
+}
+
+#[test]
+fn a_call_that_hands_over_the_wrong_number_is_said_at_cast() {
+    // Beside `spell_no_such_part`, and for the same reason: it is a question
+    // about the file, so it is answered once when the spell is cast rather than
+    // on whichever tick the line is reached — possibly never.
+    let mut sim = with_spell(
+        "check",
+        &["part between(here, there)", "end", "between(wellspring)"],
+    );
+    sim.submit("invoke check");
+    sim.step_n(6);
+    assert!(
+        mentioned(&sim, "different number of names"),
+        "a short call was accepted: {:?}",
+        said(&sim),
+    );
+}
+
+#[test]
+fn a_heading_that_names_one_thing_twice_sets_nothing_aside() {
+    // `part between(here, here)` would bind the second over the first and leave
+    // the caller's first argument unreachable — the quiet reinterpretation the
+    // parser refuses everywhere. Refused as an unreadable heading, so the body
+    // is not set aside under a name nothing can call.
+    let mut sim = with_spell(
+        "check",
+        &["part between(here, here)", "end", "between(a, b)"],
+    );
+    sim.submit("invoke check");
+    sim.step_n(6);
+    assert!(
+        mentioned(&sim, "part wants a name"),
+        "a repeated parameter was accepted: {:?}",
+        said(&sim),
+    );
+}
+
+#[test]
+fn the_painter_and_the_parser_agree_about_what_a_call_is() {
+    // **Two expressions of one rule, pinned against each other.** `lexeme` and
+    // `program` each decide independently whether a line is a call, and they
+    // disagreed: the painter claimed any one-word head with a bracket pair
+    // anywhere, so `move (sage) to mortar` drew magenta while the parser read it
+    // as an ordinary command. Nothing compared them, and the symptom was masked
+    // because a claimable line usually also faults — and a faulted line declines
+    // highlighting.
+    //
+    // Here rather than in `lexeme` because `call_of` is `pub(super)`: the rule
+    // is the language's, so the comparison belongs on this side of the wall.
+    for line in [
+        "gathering()",
+        "between(wellspring, near)",
+        "gathering() # note",
+        "move (sage) to mortar",
+        "grind sage",
+        "if the mortar_and_pestle is idle",
+        "part between(here, there)",
+    ] {
+        let painted = crate::parser::lex(line)
+            .iter()
+            .any(|run| run.kind == orbs_render::Lexeme::Call);
+        // A `part` heading carries a call-shaped tail and is not itself a call,
+        // which is the one place the two are allowed to differ — so it is asked
+        // of the *argument*, exactly as `read` asks it.
+        let text =
+            crate::parser::spell_word(line).map_or(line, |_| crate::parser::spell_argument(line));
+        let parsed = super::program::call_of(text).is_some();
+        assert_eq!(
+            painted, parsed,
+            "{line:?}: the painter says call={painted}, the parser says call={parsed}",
+        );
+    }
+}
+
+#[test]
 fn a_call_to_a_part_nobody_wrote_is_said_at_cast() {
     // At cast rather than when the line is reached, which for a call inside a
     // branch may be never. `check_calls` asks the file, so the answer does not

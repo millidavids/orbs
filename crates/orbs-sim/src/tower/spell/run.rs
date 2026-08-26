@@ -253,25 +253,37 @@ pub struct Running {
 /// parser's stack entry already pays this toll; this is the second, and a call
 /// stack really is a stack of descents.
 ///
-/// # `vars` is not here, and that is the decision
+/// # `vars` is here, and that is the decision — reversed once
 ///
-/// The roadmap's shape for this was `(spell, pc, loops, vars)`. Variables are
-/// **shared** instead: a part takes no arguments, so a private store would leave
-/// it with no way to be told anything at all, and `let` is the language's only
-/// way to pass a name. One store, which the caller fills and the part reads.
+/// The roadmap's shape for this was `(spell, pc, loops, vars)`, and it was built
+/// **without** the `vars`: variables were shared, on the argument that *"a part
+/// takes no arguments, so a private store would leave it with no way to be told
+/// anything at all"* (§19). A part takes arguments now, which removes that
+/// premise rather than overruling it — so the store is per-frame, and the
+/// parameters are what fills it.
 ///
-/// The cost is real and worth stating: `for each way` inside a part rebinds the
-/// caller's `way` if it had one. That is dynamic scope, it is the simple
-/// reading, and `bindings` already refuses to scope a `let` for the same reason
-/// — *"scoping would be a rule to teach and a rule to get wrong, for a program
-/// that fits on a screen."*
+/// What this bought, in the order it matters:
 ///
-/// `spell` is not here either, and that one is **settled rather than pending**:
-/// a spell is contained to a single `.spell` file, so every descent belongs to
-/// the spell that opened it and there is nothing for the field to say (§19).
-/// A spell reaching into another spell's text is what `invoke` is for, and an
-/// `invoke` is a second [`Running`] with its own budget rather than a descent —
-/// which is the distinction that keeps this struct one spell wide.
+/// - **A call says what it hands over, at the call.** `between(wellspring,
+///   near)` reads as a sentence. The three `let` pairs it replaced were four
+///   lines of ceremony per call and named nothing at the point of use.
+/// - **`for each way` inside a part no longer rebinds the caller's `way`.**
+///   That was the stated cost of sharing and it is simply gone.
+/// - **A part cannot reach a name it was not given**, so reading one is a local
+///   act: its parameters and its own `let`s are all there is.
+///
+/// The cost, stated as plainly as the old one was: a part has **no** access to
+/// the caller's bindings, so anything it needs must be passed. For a language
+/// whose programs fit on a screen that is the cheaper rule to teach — *what
+/// goes in the brackets is what it can see* — and it is the one a reader can
+/// check by looking at one line.
+///
+/// `spell` is not here, and that one is **settled**: a spell is contained to a
+/// single `.spell` file, so every descent belongs to the spell that opened it
+/// and there is nothing for the field to say (§19). A spell reaching into
+/// another spell's text is what `invoke` is for, and an `invoke` is a second
+/// [`Running`] with its own budget rather than a descent — which is the
+/// distinction that keeps this struct one spell wide.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Descent {
     /// The body this frame was walking — `None` for the spell's own.
@@ -280,6 +292,12 @@ pub struct Descent {
     pub pc: Vec<usize>,
     /// Its open blocks, which the callee must not disturb.
     pub loops: Vec<super::Loop>,
+    /// Its bindings, which the callee neither sees nor may disturb.
+    ///
+    /// Taken from the caller on the way in and put back on the way out, so a
+    /// part's `let` cannot outlive it and the caller's accumulator survives a
+    /// call that happens to use the same name.
+    pub vars: std::collections::BTreeMap<String, String>,
 }
 
 /// Work every running spell forward.
@@ -428,8 +446,8 @@ fn step_one(world: &mut World, entity: Entity) {
         }
 
         // A **call** suspends this frame and opens one on the part.
-        if let super::Kind::Call { name } = &step.kind {
-            called(world, entity, &state, step.line, name);
+        if let super::Kind::Call { name, args } = &step.kind {
+            called(world, entity, &state, step.line, name, args);
             continue;
         }
 
@@ -992,6 +1010,10 @@ fn returned(world: &mut World, entity: Entity) -> bool {
         running.part = descent.part;
         running.pc = descent.pc;
         running.loops = descent.loops;
+        // The part's own store goes with it. A `let` inside a part is the
+        // part's, and an argument bound on the way in must not be readable by
+        // the line after the call.
+        running.vars = descent.vars;
         true
     };
     if resumed {
@@ -1000,22 +1022,45 @@ fn returned(world: &mut World, entity: Entity) -> bool {
     resumed
 }
 
-/// Suspend this frame and open one on `name`.
+/// Suspend this frame and open one on `name`, with `args` as its whole store.
 ///
-/// **Two refusals, both loud.** A part the spell does not define is a name the
+/// **Three refusals, all loud.** A part the spell does not define is a name the
 /// orb cannot place, and it is said once per line per cast like every other
-/// missing name (`Running::said`). A stack past [`MAX_PARTS`] is runaway
-/// recursion, and §8 will not have that stop silently.
+/// missing name (`Running::said`). A call that hands over the wrong number of
+/// names cannot be made at all. A stack past [`MAX_PARTS`] is runaway recursion,
+/// and §8 will not have that stop silently.
 ///
-/// Either way the call is **stepped past**, not halted: §8's taxonomy is titled
+/// Any of the three **steps past**, never halts: §8's taxonomy is titled
 /// *"scripts always log and never halt"*, so a call that cannot be made is a
 /// line that did nothing and a spell that carries on.
-fn called(world: &mut World, entity: Entity, state: &Running, line: usize, name: &str) {
-    if super::program::tree(state.program.body(), Some(name)).is_none() {
+///
+/// # The arity check is here as well as in `compile`, and that is not belt and
+/// braces
+///
+/// §8 hot-reloads a spell's text under it. A player who adds a parameter to a
+/// definition while the spell runs leaves every call in the file one short, and
+/// the compiled tree the runner is walking is the *old* one until the reload
+/// lands. Binding what arrived and leaving the rest empty would let the body ask
+/// about a name standing for itself, which resolves against the room and does
+/// something — quietly, and not what anyone wrote.
+fn called(
+    world: &mut World,
+    entity: Entity,
+    state: &Running,
+    line: usize,
+    name: &str,
+    args: &[String],
+) {
+    let Some(params) = super::program::signature(state.program.body(), name) else {
         // Compilation already complains about this, so reaching it means the
         // definition went away *while the spell ran* — §8's hot-reload, arriving
         // at the one line that cannot survive it.
         say_missing(world, entity, state, line, &[name.to_owned()]);
+        advance_pc(world, entity);
+        return;
+    };
+    if params.len() != args.len() {
+        say_failure(world, state, "spell_call_arity_now", name, Role::Danger);
         advance_pc(world, entity);
         return;
     }
@@ -1024,15 +1069,37 @@ fn called(world: &mut World, entity: Entity, state: &Running, line: usize, name:
         advance_pc(world, entity);
         return;
     }
+    // **Resolved in the caller's store, before that store is put away.** An
+    // argument is a name; if the caller has bound it, what travels is what it
+    // stands for. One level, which is `substituted`'s rule — a value that stood
+    // for another value would be a chain nobody wrote.
+    // `program::arguments` lowercases every slot as it parses, so an argument is
+    // already normalised and a `to_lowercase` here would allocate for nothing —
+    // and, worse, tell the next reader that a `Kind::Call` might hold mixed case.
+    let handed: Vec<String> = args
+        .iter()
+        .map(|arg| {
+            state
+                .vars
+                .get(arg.as_str())
+                .cloned()
+                .unwrap_or_else(|| arg.clone())
+        })
+        .collect();
     if let Some(mut running) = world.get_mut::<Running>(entity) {
         let descent = Descent {
             part: running.part.clone(),
             pc: running.pc.clone(),
             loops: std::mem::take(&mut running.loops),
+            // **Taken, not cloned.** The callee opens with a store of its own,
+            // so leaving the caller's behind would be the old shared shape with
+            // a copy on the stack that nothing reads.
+            vars: std::mem::take(&mut running.vars),
         };
         running.stack.push(descent);
         running.part = Some(name.to_owned());
         running.pc = vec![0];
+        running.vars = params.into_iter().zip(handed).collect();
     }
 }
 

@@ -15,6 +15,86 @@
   at 1.0 (DESIGN.md §19).
 -->
 
+## [v0.4.2] - 2026-08-26
+
+### Description
+In development — a dev log, not patch notes. Spells can now hand a named run of
+lines what to work on, which took the sanctum's solver from nine lines a lap to
+three. Plus a review of that room, and the documents a player needs.
+
+### Added
+- **A part takes arguments.** `part between(here, there)`, called as
+  `between(wellspring, conduit)`. Before this a part could only read names the
+  rest of the spell had set, so telling one what to do meant three `let` lines
+  above every call — and every part in a spell was reaching into the same pot of
+  names. The sanctum's solver was nine lines of that per lap; it is three calls
+  now.
+- **What a part can see is what is in its brackets.** Names it was not handed are
+  not visible to it, and names it sets are its own — so a loop inside a part can
+  no longer quietly overwrite the one the caller was walking. Reading a part is
+  a local act: its brackets are the list.
+- **The documents a player actually needs.** How to play, health and safety, a
+  privacy policy, and full credits for everything the game is built from. The
+  health notice is worth reading if flashing imagery affects you: nothing in
+  this game flashes, and the one effect that could cause discomfort — the curved
+  CRT — turns off with a single key.
+
+### Fixed
+- **Looking at something empty now answers.** `survey` on a place with nothing
+  in it said *nothing at all* — the orb meeting a typed command with silence,
+  which it does nowhere else. It had been that way for four phases without being
+  noticed, because the rooms that existed are never empty; the sanctum made it
+  the common case, since two of its three stations are bare for most of a solve
+  and looking at one is close to the first thing you type in there.
+- **A spell warding the tower no longer waits for the laboratory.** It was
+  queuing behind whatever was brewing and eventually giving up — which is the
+  opposite of the point, since the whole reason to bind one is so the barrier
+  holds while you do something else.
+- **The rail now always tells you how the barrier stands.** It used to switch to
+  counting wards left to haul while a spell was working, so the number fell as
+  the spell *won* — and it fell out of sight exactly when you were in another
+  room and wanted it most.
+- **A neglected tower no longer always draws the same course.** At its very worst
+  it drew seven wards every time, which made the one thing the puzzle asks you to
+  read a foregone conclusion.
+- **`stop pylon` works.** The refusal told you to type it and it did nothing.
+- **A pylon being cleared no longer reports itself idle** to the sidebar, the
+  panel and your spells while it is plainly busy.
+- **A save that has lost a ward no longer jams the room.** It came back as a
+  course that could never be finished and could never be replaced; now it simply
+  is not there, and you can draw a fresh one.
+
+## [v0.4.1] - 2026-08-25
+
+### Description
+In development — a dev log, not patch notes. The tower can defend itself now: a
+fourth room, a puzzle with no clock in it, and the first number in the game that
+goes the wrong way on its own.
+
+### Added
+- **The sanctum, where the wizard wards his tower.** Raw arcane energy wells up
+  in a wellspring; you draw it through a conduit one ward at a time and assemble
+  it into a barrier. A greater ward will not rest upon a lesser. That is the
+  whole of the rule, and everything about the puzzle follows from it.
+- **`muster` draws a course of wards up; `haul` carries one between stations.**
+  Both answer on the tick you type them and neither occupies the tower, so you
+  can work the barrier while something is brewing downstairs.
+- **Integrity — the first thing the tower can lose.** Every other number here
+  only climbs. The barrier fades on its own, a little every half-minute, whether
+  or not you are playing; finishing a course puts it back. The rail says how it
+  stands from any room.
+- **A tower you have neglected is more work to put right.** A barrier at its
+  worst musters seven wards where a whole one musters three, which is sixteen
+  times the hauling — expensive, and never impossible.
+- **A spell can hold the barrier for you.** `holding` reads how tall the course
+  is, works out which way round to rotate it, and does it — and bound, it draws a
+  fresh course every time it finishes. It is the first spell that needs both a
+  named part and remembered names to say what it means.
+
+### Changed
+- The lens's board is titled `seal` rather than `ward`. The word belongs to the
+  defences, and the lens already called the thing a seal everywhere else.
+
 ## [v0.3.35] - 2026-08-24
 
 ### Description

@@ -54,10 +54,15 @@ const _: () = assert!(SIDEBAR_CAP as usize == MAX_PANES);
 ///
 /// **Sixteen, and the arithmetic is checked rather than eyeballed.** Inset one
 /// each side leaves 14 for content, against the longest domain name
-/// (`battlements`, 11) plus room for a mark, `►tending` at 8, and
+/// (`laboratory`, 10) plus room for a mark, `►tending` at 8, and
 /// `alembic 22t` at 11. The main window keeps 104 of the fixed 120, so a single
 /// pane's body is 102 columns — against the 58 it had when the second pane was
 /// telemetry.
+///
+/// **The longest name was `battlements` at 11 and is now `laboratory` at 10**
+/// (§19, the sanctum's rename). The number does not move with it: sixteen is set
+/// by `alembic 22t` and by the two remaining unbuilt domains, and narrowing the
+/// rail would reflow every screen in `scripts/dumps.sh` for one spare column.
 pub const RAIL_COLS: u16 = 16;
 
 /// Rows the rail keeps at its foot for the readings that are not per-domain.

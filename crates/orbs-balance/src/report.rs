@@ -34,7 +34,7 @@ use crate::drive::Run;
 /// DESIGN.md keeps its idealisation with a §19 note saying what the loop costs on
 /// top. That makes this a regression pin: a number moving here means the *game*
 /// changed, which is exactly the alarm §16 wants.
-const EXPECTED: [(&str, f64); 5] = [
+const EXPECTED: [(&str, f64); 6] = [
     // 0.170 idealised (§19, "16, and why the anchor moved") against 0.140 looped.
     ("clarity", 0.140),
     // §10.1's claimed better play, measured **behind** the careless one — see
@@ -66,6 +66,18 @@ const EXPECTED: [(&str, f64); 5] = [
     // ceiling, exactly as `stacks` is — §19's *"the harness has no player"* puts
     // execution outside what a policy models.
     ("scrying", 0.268),
+    // **The flattest column in the table, and the flatness is arithmetic rather
+    // than luck.** A course of `n` wards costs `2^n` ticks and pays `n - 2`, so
+    // three and four both come out at an eighth — and a policy keeping the walls
+    // up only ever musters those two. All four seeds read 0.1249 to the digit,
+    // where `stacks` swings 0.0067 to 0.0144 on the same four.
+    //
+    // Additive, like `scrying` and for the same reason: neither `muster` nor
+    // `haul` takes the production slot, so this runs beside a brew rather than
+    // instead of one. What is different is that this domain **pays twice** — a
+    // finished course puts integrity back as well as earning — which is why the
+    // rate sits under the flagship's 0.140 where scrying's sits over it.
+    ("warding", 0.125),
 ];
 
 /// How far a measurement may sit from its expectation before it is called out.

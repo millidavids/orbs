@@ -28,9 +28,11 @@ mod debug;
 mod debug_spell;
 mod dispatch;
 mod files;
+mod muster;
 mod navigate;
 mod pipeline;
 mod quit;
+mod readings;
 mod recall;
 mod research;
 mod scribe;
@@ -45,7 +47,8 @@ mod tests;
 
 #[cfg(debug_assertions)]
 pub use debug::{
-    LEARN, Order as SpawnOrder, SPAWN, SWAP, WARD, giveaway, lesson, order as spawn_order, swapping,
+    COURSE, LEARN, Order as SpawnOrder, SPAWN, SWAP, WARD, giveaway, lesson, order as spawn_order,
+    shortcut, swapping,
 };
 #[cfg(debug_assertions)]
 pub use debug_spell::{
@@ -58,6 +61,12 @@ pub use dispatch::{
 // Crate-internal: `Sim::stacks` needs it and `divine` is a private module, so
 // the re-export is what makes it nameable rather than what makes it public.
 pub use navigate::find_domain;
+// The sanctum's republish, for the two paths that change what the pylon has to
+// say without going through `haul`. `refresh_pylon` reads `Cwd` and is
+// `debug_course`'s; `publish_pylon` takes the node and is `tower::erode`'s,
+// which runs on a tick when the player may be standing anywhere.
+pub(crate) use muster::publish as publish_pylon;
+pub(crate) use muster::refresh as refresh_pylon;
 pub(crate) use research::{stacks, tread};
 pub(crate) use scribe::Reloaded;
 pub use scribe::{Opening, Request, write};

@@ -48,7 +48,15 @@ use super::node::NodeSave;
 /// whose recorded answers were scored by an exchange-and-ratchet codemaker,
 /// resumed against one that neither exchanges nor ratchets. `WardSave`'s own doc
 /// said the two shapes *"count as different formats"* and nothing enforced it.
-pub const FORMAT: u32 = 2;
+///
+/// **3 since the sanctum**, and this one is a *stream count* rather than a
+/// field. `RngStream::COUNT` went 8 → 9 and [`Save::from_toml`] validates
+/// `[rng].positions` against it, so a format-2 save is already unreadable — the
+/// bump is what makes it say *behind* instead of *malformed*, which is the
+/// difference between "this save is from an older build" and "this file is
+/// corrupt". `CourseSave` and `progress.integrity` are ordinary additions and
+/// would not have needed one.
+pub const FORMAT: u32 = 3;
 
 /// One tower, at one tick.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -145,6 +153,14 @@ pub struct ProgressSave {
     /// is deliberately not here.
     #[serde(default)]
     pub experience: u64,
+    /// How the tower's walls stand (§11.5's Integrity).
+    ///
+    /// **`Option`, not a bare `u32`**, and the difference is the whole tower: a
+    /// missing field would default to nought, so a save written before this
+    /// existed would come back as a tower worn to nothing rather than as one
+    /// nobody had measured. `None` restores to whole.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub integrity: Option<u32>,
     /// Mastery nodes taken, by id.
     #[serde(default)]
     pub taken: Vec<String>,

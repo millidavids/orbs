@@ -186,7 +186,11 @@ impl SpellWord {
             Self::Wait => "<thing>",
             Self::Let => "<name> be <place>",
             Self::For => "each <set>",
-            Self::Part => "<name>()",
+            // **`(...)` rather than `()` or `(<name>, <name>)`.** A part takes
+            // any number of names including none, and a shape that showed two
+            // would read as a rule; one that showed none is what this said
+            // before parameters existed, and it taught the wrong form.
+            Self::Part => "<name>(...)",
             Self::Else | Self::End => "",
         }
     }

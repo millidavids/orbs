@@ -57,6 +57,13 @@ pub enum Body {
     /// the player does: only which way `aligned` moved on the last press, which
     /// is all `dev_spells.toml`'s `breaking` can ask for either.
     Scrying,
+    /// Rotate a course of wards onto the last post, then muster another.
+    ///
+    /// The third policy that must read the world, and — like the second — it
+    /// reads only what a spell can: the parity of the course it was handed, and
+    /// which of two stations carries the lesser ward. Both come out of
+    /// `Sim::pylon`, which is the same view the board draws from.
+    Warding,
     /// Earn a slot by hand, bind a spell, and then do nothing at all.
     ///
     /// **The only policy that measures the script engine**, which is the point
@@ -81,13 +88,14 @@ pub enum Body {
 
 impl Policy {
     /// Every policy the harness knows, in the order `list` prints them.
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 8] = [
         Self::CLARITY,
         Self::DAMPED,
         Self::HASTE,
         Self::GRIND,
         Self::STACKS,
         Self::SCRYING,
+        Self::WARDING,
         Self::BOUND,
     ];
 
@@ -268,6 +276,27 @@ impl Policy {
         gloss: "the lens, swept one socket at a time as a bound spell sweeps it",
         setup: &["attend lens"],
         body: Body::Scrying,
+    };
+
+    /// The sanctum, solved by the cyclic rotation `holding` writes.
+    ///
+    /// **The one policy whose rate is not a constant**, and the reason is the
+    /// domain: a course's height comes from how far the walls have slipped, and
+    /// its cost is `2^n - 1`. So a tower this policy is keeping up with musters
+    /// short courses and earns steadily, and one it is falling behind on musters
+    /// tall ones and earns less per tick while it catches up. The column
+    /// therefore measures *the loop against the drain*, which is the only
+    /// question this domain has.
+    ///
+    /// It issues its own commands, like [`STACKS`](Self::STACKS) and
+    /// [`SCRYING`](Self::SCRYING) and unlike [`BOUND`](Self::BOUND), so it does
+    /// not pay §8's per-step tick. A real bound `holding` spends six or seven
+    /// steps a haul against this one's one, and the gap is the interpreter.
+    const WARDING: Self = Self {
+        name: "warding",
+        gloss: "the sanctum, rotated as the cyclic solver rotates it",
+        setup: &["attend sanctum"],
+        body: Body::Warding,
     };
 
     /// [`GRIND`](Self::GRIND)'s loop again, run by a spell instead of by hand.

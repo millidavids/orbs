@@ -298,6 +298,18 @@ const fn bar_of(craft: Craft, state: State, heat: bool) -> Bar {
         // gauge with no meter behind it draws nothing at all. `Empty` here means
         // *no reading open*, and the board is what says so.
         Craft::Scrying => Bar::Plain,
+        // **The pylon, and it is the prism's case with the states swapped.**
+        // Its interesting state is not progress either — it is where three
+        // stacks of wards are resting, which is the **board** beside the
+        // transcript — so the panel row is a gauge and nothing more.
+        //
+        // What is different is that the gauge is never blank. Between courses
+        // the pylon reports `Unit::Standing` against a whole barrier rather than
+        // no meter at all, so this is the one instrument in the tower whose
+        // *idle* row still has a bar in it: an empty column here would say the
+        // barrier was nothing, which is the opposite of what an untouched tower
+        // is. See `tower::panel::read`'s pylon arm.
+        Craft::Warding => Bar::Plain,
         // **A plain gauge, and it is an improvement on what it replaced.** The
         // lectern used to be `Craft::Reading` because it carried the maze's verb,
         // so a *scroll coming together* drew the stacks' explored-cells gauge

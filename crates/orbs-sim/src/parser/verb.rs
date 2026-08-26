@@ -461,6 +461,23 @@ const SOCKET_AND_SIGIL: &[Slot] = &[
     Slot::required(NounKind::Place),
     Slot::optional(NounKind::Place),
 ];
+
+/// `haul <from> <to>` — which station the ward leaves, and which it arrives at.
+///
+/// **Both required, and both `Place`**, on `SOCKET_AND_SIGIL`'s reasoning: the
+/// sanctum's three stations are `Role::Reading` fixtures exactly as the lens's
+/// sockets are, so they need no kind of their own.
+///
+/// **Neither is optional, and that is the difference from `dial`.** A bare
+/// `dial first` exists because a variable-free script cannot name a sigil it has
+/// not tried; a haul has no such gap — a spell that knows which two stations it
+/// means knows both of them, and between any two stations there is exactly one
+/// legal move. What a spell must work out is the *direction*, which is what
+/// `potency` is published for.
+const STATION_AND_STATION: &[Slot] = &[
+    Slot::required(NounKind::Place),
+    Slot::required(NounKind::Place),
+];
 const SCRIPT: &[Slot] = &[Slot::required(NounKind::Script)];
 // `scribe` coins a name rather than naming something that exists — see
 // `NounKind::Name`. `bind` and `invoke` keep `SCRIPT`, because a spell they name
@@ -641,11 +658,44 @@ pub enum Verb {
     /// `sea` reaches `sift`'s plain synonym `search`. `dial` is free, and it is
     /// the better word anyway — a ward is a lock, and this is what a lock has.
     Dial,
+    /// `muster` — draw a fresh course of wards up out of the wellspring
+    /// (§10, `sanctum/`).
+    ///
+    /// Free and instant, exactly as [`Probe`](Self::Probe) is: drawing a course
+    /// is not work, and what costs the tower is the hauling. §19 records the
+    /// pricing this follows and why a domain that takes no production slot is
+    /// *additive* rather than competing.
+    ///
+    /// **How tall a course is, is the whole of what erosion does.** A tower left
+    /// alone musters more wards, so the same word is a minute's work on a kept
+    /// tower and a quarter of an hour on a neglected one — see `tower::erosion`.
+    ///
+    /// The near misses: `fortify` is 914 against `for`, `restore` 935 against
+    /// `rest`, `mend` 935 against `mending`, `rally` 600 against `wall` and
+    /// `raise` 600 against `cause`. `muster` is clean and `mus` is a free
+    /// three-character prefix.
+    Muster,
+    /// `haul <from> <to>` — carry the topmost ward from one station to another.
+    ///
+    /// **Directional, and it refuses.** Between any two stations exactly one
+    /// move is legal, so a symmetric word would have been unambiguous — and it
+    /// was declined, because it would leave a spell with nothing to *read*. The
+    /// refusal is what makes `potency` worth publishing and the comparison worth
+    /// writing (§19).
+    ///
+    /// A refusal here is an ordinary one, never a fault: a spell that hauls the
+    /// wrong way is told so and carries on, which is `say_failure`'s line
+    /// between a refused command and `Role::Danger`.
+    ///
+    /// `shift` was the first name and is 800 against `sift`. `heave` is 800
+    /// against `weave`, `drag` 935 against `dragged`, `bring` 600 against
+    /// `grind`. `haul` is clean at 500 against `wall`.
+    Haul,
 }
 
 impl Verb {
     /// Every verb in the Phase 0 vocabulary, and what the phases since have added.
-    pub const ALL: [Self; 30] = [
+    pub const ALL: [Self; 32] = [
         Self::Attend,
         Self::Survey,
         Self::Peruse,
@@ -679,6 +729,8 @@ impl Verb {
         Self::Wander,
         Self::Probe,
         Self::Dial,
+        Self::Muster,
+        Self::Haul,
     ];
 
     /// The longest a canonical verb may be.
@@ -733,7 +785,11 @@ impl Verb {
             // a player looking for what to *do* in this room wants them
             // together, not sorted by which of them happens to cost a tick.
             | Self::Probe
-            | Self::Dial => Group::Work,
+            | Self::Dial
+            // ...and the sanctum's two, on the same reading. Drawing a course up
+            // and hauling a ward are the whole of what this room does.
+            | Self::Muster
+            | Self::Haul => Group::Work,
             Self::Scribe | Self::Bind | Self::Invoke => Group::Spells,
             Self::Status
             | Self::Recall
@@ -795,6 +851,8 @@ impl Verb {
             Self::Wander => "wander",
             Self::Probe => "probe",
             Self::Dial => "dial",
+            Self::Muster => "muster",
+            Self::Haul => "haul",
         }
     }
 
@@ -815,6 +873,14 @@ impl Verb {
     /// **It is not the same question as "does this take the production slot"**,
     /// and the lens is where the two came apart: `dial` is a scoped operation
     /// that schedules nothing. See `spell::block::begins_work`.
+    ///
+    /// **The sanctum's two follow the lens and deliberately not the archive.**
+    /// `research`, `follow` and `wander` are absent from this list, which puts
+    /// all three into `the_tolerated_collision_set_is_pinned`'s tower-wide count
+    /// — a count that test calls *"a number to defend, not a budget to spend"*,
+    /// and which names `follow` as the debt. A sixth domain copying that shape
+    /// would have doubled it. `muster` and `haul` are scoped instead, by the
+    /// pylon and by the three stations, and take no slot.
     #[must_use]
     pub const fn is_operation(self) -> bool {
         matches!(
@@ -826,6 +892,8 @@ impl Verb {
                 | Self::Kindle
                 | Self::Probe
                 | Self::Dial
+                | Self::Muster
+                | Self::Haul
         )
     }
 
@@ -868,6 +936,11 @@ impl Verb {
             | Self::Kindle
             | Self::Probe
             | Self::Dial
+            // The pylon declares `muster`; each of the three stations declares
+            // `haul`, which is the sockets' shape — a station is a place the
+            // player names anyway, so scoping the verb to it costs nothing.
+            | Self::Muster
+            | Self::Haul
             | Self::Research => Some(self),
             // The maze's other two words, anchored to the stacks.
             Self::Follow | Self::Wander => Some(Self::Research),
@@ -947,6 +1020,8 @@ impl Verb {
             Self::Wander => "wandering",
             Self::Probe => "probing",
             Self::Dial => "dialling",
+            Self::Muster => "mustering",
+            Self::Haul => "hauling",
         }
     }
 
@@ -974,9 +1049,14 @@ impl Verb {
             // is one prism to press, so naming it would be naming the only
             // thing there is. What changes between presses is the *aperture*,
             // and `dial` is what changes it.
-            | Self::Probe => NOTHING,
+            | Self::Probe
+            // **`muster` takes nothing**, for the reason `probe` does: there is
+            // one pylon, and naming it would be naming the only thing there is.
+            | Self::Muster => NOTHING,
             // A socket and a sigil, both `Role::Reading` places.
             Self::Dial => SOCKET_AND_SIGIL,
+            // Two stations, likewise.
+            Self::Haul => STATION_AND_STATION,
             // A way, which is a place — see `Role::Reading`.
             Self::Follow => WAY,
             Self::Recall => TOPIC_OPTIONAL,
@@ -1168,10 +1248,15 @@ mod tests {
         assert_eq!(tower_wide.count(), 23);
 
         // One per instrument that has a word of its own: the laboratory's
-        // `grind`, `digest`, `mix`, `distil` and `kindle`, and the lens's
-        // `probe` and `dial`.
+        // `grind`, `digest`, `mix`, `distil` and `kindle`, the lens's `probe`
+        // and `dial`, and the sanctum's `muster` and `haul`.
+        //
+        // **This is the number a new domain is meant to move**, and the one
+        // above is not. A domain that scopes its verbs pays here and leaves the
+        // vocabulary of every *other* room exactly as it was, which is what the
+        // paragraph above means by what must stay bounded.
         let scoped = Verb::ALL.iter().filter(|verb| verb.is_operation());
-        assert_eq!(scoped.count(), 7);
+        assert_eq!(scoped.count(), 9);
 
         assert!(
             !Verb::ALL.iter().any(|verb| verb.canonical() == "decoct"),

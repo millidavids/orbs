@@ -8,7 +8,7 @@ If the two disagree, DESIGN.md wins and this file is wrong.
 > game. An item without a See it line is not started; an item whose line does not
 > work is not finished, however green its tests are. DESIGN.md §15, §19.
 
-Last updated: 2026-08-24 · **Phases 0, 0.5, 1 and 2 closed. Phase 3 (Spellcraft) in progress at `0.3.20`** — the save format is closed and the **language overhaul** is four boxes of seven: `else if`, a bound-spell balance policy, comparison-against-a-place, and variables-and-sets. Next is **functions**. The overhaul took the phase from 3 months to 5 and §15's total from 41 to 43. The §15 numeric gate is deferred, not passed, and Phase 1's second exit clause moved to Phase 10 with the item that carries it. **Phases 2–7 are the tower's five remaining domains and the phase that makes them one machine; what was Phase 2 (Siege) is now Phase 8.** Two of §8.1's four sabotage surfaces now ship — logs and world state; script text and trigger clocks stay in Phase 8, where their producer is.
+Last updated: 2026-08-25 · **Phases 0, 0.5, 1, 2 and 4 closed. Phase 3 (Spellcraft) is met on its exit criterion with three boxes deliberately left.** The language overhaul closed at `0.3.26` and the editor work at `0.3.35`; what remains there is the terse register, a typed action at execution, and the hidden-directory authoring plan. **Phase 4 is Defense, at `0.4.2`** — the sanctum, a course of wards drawn from a wellspring and assembled at a barrier, integrity as the game's first *drain*, and `holding` to hold it. The domain shipped with fortification names and was reskinned at `0.4.1` (§19): §7's tree and §10's table said `battlements/` and both are superseded. **Defense and Enchanting swapped places** (§19): nothing in Defense depended on the two derived domains, and the version is player-visible, so building a later phase first would have made the number go backwards. **Phases 2–7 are the tower's five remaining domains and the phase that makes them one machine; what was Phase 2 (Siege) is now Phase 8.** Two of §8.1's four sabotage surfaces now ship — logs and world state; script text and trigger clocks stay in Phase 8, where their producer is.
 
 ---
 
@@ -29,10 +29,10 @@ were a single line inside a breadth phase two phases away, and the siege that
 | 0.5. Interlude | — | — | ✅ **Closed, every box ticked** · settings moved to 11 |
 | 1. Core loop | 5 | ~15k | ✅ **Closed** · testers clause moved to 10 |
 | **2. Scrying** `lens/` | 3 | ~6k | ✅ **Closed, every box ticked** |
-| **3. Spellcraft** `grimoire/` | 3 | ~6k | ⬜ |
-| **4. Enchanting** `forge/` | 2 | ~4k | ⬜ · derived |
+| **3. Spellcraft** `grimoire/` | 3 | ~6k | ⬜ · exit met, three boxes left |
+| **4. Defense** `sanctum/` | 3 | ~5k | ✅ **Closed** · swapped with 6 (§19) |
 | **5. Summoning** `menagerie/` | 2 | ~4k | ⬜ · derived |
-| **6. Defense** `battlements/` | 3 | ~5k | ⬜ |
+| **6. Enchanting** `forge/` | 2 | ~4k | ⬜ · derived |
 | **7. The tower as one machine** | 2 | ~3k | ⬜ |
 | 8. Siege | 4 | ~15k | ⬜ |
 | 9a. Breadth | 2 | ~4k | ⬜ · five domains moved out of it |
@@ -2779,13 +2779,36 @@ escape valve, and that the lens's automation pin is deleted.
         `steps_1` and `steps_2` are authored in `progression.toml` and **ship as
         markers** like every other node, so it answers 1 and the wiring is what
         was built. Additive across tiers, deliberately not a maximum
-      - **Variables are shared, not per-descent** — a deviation from this box's
-        original `(spell, pc, loops, vars)` shape, recorded in §19: a part takes
-        no arguments, so a private store leaves it with no way to be told
-        anything at all
-      - **Parts ship unused, by decision.** No dev spell was rewritten to use
-        one: with every line still costing a tick, factoring into a part is
-        slower than not, and the weave nodes are the answer
+      - ~~**Variables are shared, not per-descent**~~ — **superseded at
+        `0.4.2`**, and by removing its premise rather than by overruling it. The
+        reason given was *"a part takes no arguments, so a private store leaves
+        it with no way to be told anything at all"*; a part takes arguments now,
+        so the store is per-descent and the parameters fill it. This box's
+        original `(spell, pc, loops, vars)` shape is what shipped after all
+      - ~~**Parts ship unused, by decision**~~ — **superseded at `0.4.2`**:
+        `holding` uses one, and the arguments are why. The tick-per-line
+        arithmetic that made factoring not worth it has not changed; what
+        changed is that a call now *says what it hands over*, which took the
+        sanctum's loop body from nine lines to three
+      **See it** — a part told what to work on, which is the whole of what
+      parameters bought. One body, two reagents, no `let` between them:
+      ```bash
+      ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="attend laboratory; scribe tending" \
+      ORBS_EDIT="edit\npart load(what)\ngrind what\nempty mortar_and_pestle\nend\nload(sage)\nload(rock-salt)\n<esc>\nquit" \
+      ORBS_THEN="invoke tending; meditate 40; peruse laboratory.log" cargo run -p orbs
+      #   ground-sage, then ground-salt, from one run of lines
+      ```
+      ...and the scope, which is the rule to teach. The part binds its **own**
+      `herb` and grinds rock-salt; the caller's is untouched, so the line after
+      the call still grinds sage. Under the shared store this ground rock-salt
+      twice:
+      ```bash
+      ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="attend laboratory; scribe scoped" \
+      ORBS_EDIT="edit\npart load()\nlet herb be rock-salt\ngrind herb\nempty mortar_and_pestle\nend\nlet herb be sage\nload()\ngrind herb\n<esc>\nquit" \
+      ORBS_THEN="invoke scoped; meditate 40; peruse laboratory.log" cargo run -p orbs
+      #   rock-salt: dispensary to mortar_and_pestle
+      #   sage: dispensary to mortar_and_pestle
+      ```
       **See it** — a definition and its call, read back by `interpret`:
       ```bash
       ORBS_BOOT=0 ORBS_GRID=100x30 ORBS_DUMP="attend laboratory; scribe tending" \
@@ -2798,12 +2821,20 @@ escape valve, and that the lens's automation pin is deleted.
       ORBS_EDIT="edit\npart gathering()\ngrind sage\nempty mortar_and_pestle\nend\nrepeat 2\ngathering()\nend\n<esc>\nquit" \
       ORBS_THEN="invoke tending; meditate 40; peruse laboratory.log" cargo run -p orbs
       ```
-      ...the five refusals, each on its own line:
+      ...the refusals, each on its own line. **Six now, not five** — `gathering(sage)`
+      used to be *"a part takes nothing between its brackets"* and is a count
+      mismatch instead, and a heading naming one thing twice is its own case:
       ```bash
       ORBS_BOOT=0 ORBS_GRID=110x40 ORBS_DUMP="attend laboratory; scribe broken" \
-      ORBS_EDIT="edit\nmissing()\npart gathering()\ngrind sage\nend\npart gathering()\nsurvey\nend\nrepeat 2\npart inner()\nsurvey\nend\nend\ngathering(sage)\n<esc>\nquit" \
+      ORBS_EDIT="edit\nmissing()\npart gathering()\ngrind sage\nend\npart gathering()\nsurvey\nend\nrepeat 2\npart inner()\nsurvey\nend\nend\ngathering(sage)\npart twice(a, a)\nend\nhauling(a b)\n<esc>\nquit" \
       ORBS_THEN="invoke broken; meditate 3" cargo run -p orbs
+      #   1 no such part / 5 named above / 9 outside every block /
+      #   13 wrong number / 14 wants a name / 16 a name in each slot
       ```
+      Line 15 is a **stray `end`**, and it is the refused heading above it
+      working: a heading the orb cannot read opens no block, so the `end` under
+      it belongs to nothing. Opening an unnamed part instead would swallow the
+      body silently.
       ...runaway recursion, bounded and loud rather than silent:
       ```bash
       ORBS_BOOT=0 ORBS_DUMP="attend laboratory; scribe deep" \
@@ -3284,7 +3315,77 @@ composed spell that holds parts competes with everything else the orb holds, so
 
 ---
 
-## Phase 4 — Enchanting
+## Phase 4 — Defense ✅
+
+**Exit:** wards placed against a pressure the player survives by *choosing*, and
+then a spell that survives it. **Met** — a course of wards hauled between three
+stations by hand, and `holding` bound in the sanctum while the player brews.
+
+> **This was Phase 6, and Enchanting was Phase 4.** They swapped (§19). Nothing
+> about the order was load-bearing — Defense depends on the spell language,
+> which closed in Phase 3, and on nothing Enchanting or Summoning make — and the
+> version is `0.<phase>.<step>` and player-visible on the POST card, so building
+> a later phase first would have made the number go backwards when the earlier
+> one landed. Phase 7's authored edge *"menagerie → sanctum"* survives the swap
+> unchanged.
+
+> **The room is `sanctum/`, and §7's tree and §10's table both said
+> `battlements/`.** Both are superseded (§19). The domain shipped at `0.4.0` with
+> fortification names — a `rampart`, a `barbican`, a `bastion`, a `redoubt` — and
+> the sentence a player typed most was *"haul a ward from the barbican to the
+> redoubt"*, which is not a thing a wizard does. The mechanics did not move; the
+> fiction did.
+
+§10: *"Command pressure at 1 Hz, ward placement."* **The form in that table is
+not what shipped, and the table says it should not be** — it is *"a table, not a
+design"*, and this domain is the one §10 singles out as still able to fail
+§10.1's rule.
+
+- [x] ✅ **The reflex-avoidance mechanism, decided and recorded in §19 *before*
+      anything was built.** It is the **Tower of Hanoi**, and it dissolves the
+      problem rather than working around it: there is no clock in the puzzle at
+      all, every ward is on screen, and the only thing that can go wrong is
+      choosing the wrong pair of stations. *Outcome follows what the player
+      chooses given readable state* is then true by construction rather than by
+      restraint.
+      **See it:** `ORBS_BOOT=0 ORBS_DUMP="attend sanctum; muster; haul wellspring barrier; haul wellspring barrier" cargo run -p orbs`
+      — the second haul is refused in voice, and nothing anywhere is timed
+- [x] ✅ **The `sanctum/` domain, its stations, and its wards.** A `pylon` that
+      draws a course up, three stations — `wellspring`, `conduit`, `barrier` —
+      and two verbs. Each station publishes `potency` **only while it holds a
+      ward**, so an empty one answers `is empty`; the pylon publishes `odd` and
+      `integrity`.
+      **See it:** `ORBS_BOOT=0 ORBS_DUMP="attend sanctum; muster; survey pylon; survey wellspring" cargo run -p orbs`
+- [x] ✅ **Integrity, which wears down on its own — the first drain in the
+      game.** Everything else the tower has is a faucet. A point every 30 ticks,
+      and a finished course puts it back; a worn tower musters a *taller* course,
+      so neglect is expensive and never ruinous (§11.5).
+      **See it:** `ORBS_BOOT=0 ORBS_DUMP="attend sanctum; survey pylon; meditate 3600; survey pylon; muster; survey pylon" cargo run -p orbs`
+      — 100 → 0, then a course of six or seven where a kept tower gets three
+- [x] ✅ **A re-warding spell, which is what hands off to Phase 8.** `holding`
+      is the cyclic Hanoi rotation: one `part`, three `let` pairs, and a parity
+      read off the world. It solves in exactly `2^n − 1` hauls — optimal — and
+      bound it musters afresh every lap.
+      **See it:** `ORBS_BOOT=0 ORBS_DUMP="attend sanctum; invoke holding; meditate 400" ORBS_THEN="peruse sanctum.log" cargo run -p orbs`
+- [ ] ⚠ **The accessible mode — moved to Phase 8, not struck.** §14 requires a
+      *real-time* surface to have one, and this domain has none: a course waits
+      for ever. DESIGN.md fixes the shape of the answer as *"screen-reader mode
+      advances **siege** ticks on player input"*, which is Phase 8's surface and
+      not this one. Recorded in §19 rather than quietly dropped.
+
+**Scarcity: integrity, which decays.** §10's row says *"wards, made and
+consumed"*; §19 argues the re-reading, against the precedent of scrying's
+withdrawn *"a read is not a brew"*. The wards themselves are not stock — they are
+the puzzle's pieces — and what the domain actually mints and loses is the barrier.
+
+**Neither verb takes the production slot**, which is the lens's decision and not
+the archive's, so a bound `holding` runs *beside* a brew rather than instead of
+one. `orbs-balance`'s `warding` policy reads **0.1249 on every seed** — the
+flattest column in the table, and just under clarity's 0.140.
+
+---
+
+## Phase 6 — Enchanting
 
 **Exit:** a buffed instrument visibly works faster, the panel says so, and the
 buff decays.
@@ -3337,40 +3438,6 @@ supply.
 
 ---
 
-## Phase 6 — Defense
-
-**Exit:** wards placed against a pressure the player survives by *choosing*, and
-then a spell that survives it.
-
-§10: *"Command pressure at 1 Hz, ward placement."*
-
-**This is the domain most likely to break §10.1's rule, and it does not start
-until it has a mechanism that stops it.** *Outcome follows what the player
-chooses given readable state, never how fast or precisely they act* — and "place
-wards under 1 Hz pressure" is a reflex mechanic unless something makes it a
-decision. §5.1 has the shape of the answer for aberrations: *"identifying any
-aberration costs exactly **one command**, never a sequence."* Ward placement has
-no analogue yet. **Finding one is the head-of-phase work**, as brewing's own
-minigame was at the head of Phase 1.
-
-- [ ] The reflex-avoidance mechanism, decided and recorded in §19 **before**
-      anything is built
-      **See it:** a pressure a player survives by choosing correctly once, not by
-      acting quickly
-- [ ] The `battlements/` domain, approaches, and wards
-      **See it:** `survey` an approach and read what is coming
-- [ ] **The accessible mode, decided here rather than at Phase 11.** §14 requires
-      a real-time surface to have one — *"screen-reader mode advances siege ticks
-      on player input"* — and this is the first real-time pressure in the game,
-      five phases before §15 currently schedules that work
-      **See it:** the same pressure survived with ticks advancing on input
-- [ ] A re-warding spell, which is what hands off to Phase 8
-      **See it:** a bound spell holds the wall while the player brews
-
-**Scarcity: wards, which are made and consumed.**
-
----
-
 ## Phase 7 — The tower as one machine
 
 **Exit:** the player leaves, comes back, and the tower ran itself — *across*
@@ -3392,7 +3459,7 @@ be stranded there** by a mechanical renumber.
 - [ ] Pane addressing — acting on a domain you are not standing in
       **See it:** start a grind from the archive
 - [ ] **The edges between domains, authored deliberately** — laboratory → lens,
-      archive → grimoire, forge → laboratory, menagerie → battlements
+      archive → grimoire, forge → laboratory, menagerie → sanctum
       **See it:** `recall` a domain and read what feeds it and what it feeds
 - [ ] One spell that runs the whole tower
       **See it:** bind it, walk away for an hour, come back to work done in four

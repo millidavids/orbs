@@ -123,6 +123,13 @@ pub(super) fn apply(world: &mut World, entity: Entity, node: &NodeSave) {
     if let Some(ward) = node.ward.as_ref() {
         at.insert(Ward::from_save(ward));
     }
+    // **`None` raises no course at all**, which is the graceful end of a
+    // malformed one: the player walks into a sanctum they can `muster` in
+    // rather than one jammed on a course that can never finish. See
+    // `Course::from_save` for the four ways it says no.
+    if let Some(course) = node.course.as_ref().and_then(tower::Course::from_save) {
+        at.insert(course);
+    }
     // `Running` is deliberately not here: it needs the whole tree in place to
     // resolve the two paths it carries, and it needs the record stream in place
     // to complain if it cannot. See `spells`.
@@ -249,6 +256,7 @@ fn spell(world: &mut World, entity: Entity, node: &NodeSave) {
                     part: frame.part.clone(),
                     pc: frame.pc.clone(),
                     loops: frame.loops.iter().copied().map(loop_from).collect(),
+                    vars: frame.vars.clone(),
                 })
                 .collect(),
         });

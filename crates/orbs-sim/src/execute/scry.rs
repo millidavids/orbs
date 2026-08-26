@@ -20,12 +20,13 @@
 use bevy_ecs::prelude::*;
 use orbs_render::{FieldName, RecordKind, Role};
 
+use super::readings::{clear, fixture, reading, room_of};
 use crate::content::Prose;
 use crate::parser::{Intent, Verb};
 use crate::rng::{RngStream, Rngs};
 use crate::session::Scrollback;
 use crate::tower::{
-    self, Cwd,
+    self,
     ward::{self, Ward},
 };
 
@@ -519,51 +520,6 @@ pub(crate) fn publish(world: &mut World, prism: Entity) {
             tower::raise_reading(world, node, sigil);
         }
     }
-}
-
-fn clear(world: &mut World, node: Entity) {
-    for held in tower::children_of(world, node) {
-        world.entity_mut(held).despawn();
-    }
-}
-
-/// A lens fixture, by the operation it carries.
-///
-/// **Where the player is standing**, like `research::stacks`: the readings and
-/// the picture both follow the room, so neither can outrun the other by
-/// following the player out of it.
-fn fixture(world: &World, verb: Verb) -> Option<Entity> {
-    let cwd = world.resource::<Cwd>().0;
-    beside_node(world, cwd, verb)
-}
-
-fn beside_node(world: &World, parent: Entity, verb: Verb) -> Option<Entity> {
-    tower::children_of(world, parent).into_iter().find(|node| {
-        world
-            .get::<tower::Operation>(*node)
-            .is_some_and(|operation| operation.0 == verb)
-    })
-}
-
-/// One of the sockets or sigils, by name, among `room`'s own fixtures.
-///
-/// **Takes the room rather than reading `Cwd`**, for the reason [`publish`]
-/// gives: a press lands in the tick schedule, where the player may be standing
-/// anywhere.
-fn reading(world: &World, room: Entity, wanted: &str) -> Option<Entity> {
-    tower::children_of(world, room).into_iter().find(|node| {
-        world.get::<tower::Reading>(*node).is_some()
-            && world
-                .get::<tower::Name>(*node)
-                .is_some_and(|name| name.0 == wanted)
-    })
-}
-
-/// The room a fixture stands in.
-fn room_of(world: &World, node: Entity) -> Option<Entity> {
-    world
-        .get::<bevy_ecs::hierarchy::ChildOf>(node)
-        .map(bevy_ecs::hierarchy::ChildOf::parent)
 }
 
 /// One authored line about the lens.

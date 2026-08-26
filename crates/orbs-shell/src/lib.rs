@@ -47,6 +47,7 @@ pub mod panel;
 mod post;
 mod prompt;
 mod prose;
+mod pylon;
 mod rail;
 mod reveal;
 mod save;

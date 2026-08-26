@@ -70,6 +70,32 @@ lectern = 4
 # answer with no line to maintain.
 prism = 8
 
+# The sanctum (§10). **1 for a finished course, multiplied by how tall the
+# course was** — see `execute::muster::finish`.
+#
+# It is the only entry in this table that scales, and it has to: a course is
+# `2^n - 1` hauls, so a seven-ward one is sixteen times the work of a three-ward
+# one and a flat number would pay the same for both. The lens has the precedent
+# in `yield_of`, which scales its award against presses spent; this scales
+# against the size of the job instead, because the size is not the player's
+# fault — a tall course is what a neglected tower musters.
+#
+# **The rate this gives is flat at 0.125 and then falls**, which is a property of
+# the arithmetic rather than a coincidence: a course of `n` costs `2^n` ticks and
+# pays `n - 2`, so three wards and four wards both come out at an eighth, and
+# every taller course pays less. `orbs-balance` reads **0.1249 on every seed** —
+# the flattest column in the table.
+#
+# **Just under clarity's 0.140, and deliberately.** It was 2 and measured 0.2497,
+# which is scrying's tier — and scrying earns that by being a deduction with
+# nothing else to show for it, where a finished course *also* puts the walls
+# back. A domain paying twice should not also pay the best rate in the tower, and
+# neither half is worth much if the other is free.
+#
+# A *bound* solver is much lower again, because §8's interpreter spends a tick on
+# every line rather than only on the hauls.
+pylon = 1
+
 # ---------------------------------------------------------------------------
 # THE LEY LINE - the straight path.
 #

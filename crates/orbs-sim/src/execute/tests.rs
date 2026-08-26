@@ -179,6 +179,11 @@ fn sample(verb: Verb) -> (&'static str, &'static str) {
         // first"*, which is the world answering and is what this table asks for.
         Verb::Probe => ("lens", "probe"),
         Verb::Dial => ("lens", "dial first alum"),
+        // The sanctum (§10). `muster` draws a course up and needs no setup;
+        // `haul` before one is drawn refuses with *"muster first"*, which is
+        // the world answering and is what this table asks for.
+        Verb::Muster => ("sanctum", "muster"),
+        Verb::Haul => ("sanctum", "haul wellspring barrier"),
     }
 }
 
@@ -529,6 +534,37 @@ fn survey_with_no_place_still_lists_where_you_are() {
         .collect();
     assert!(listed.iter().any(|name| name == "retort"), "{listed:?}");
     assert!(listed.iter().any(|name| name == "alembic"), "{listed:?}");
+}
+
+#[test]
+fn surveying_an_empty_place_still_answers() {
+    // **The orb met a typed command with total silence.** Every record `survey`
+    // emits is pushed inside the loop over what is there, so a place with no
+    // children produced an echo and then nothing — for four phases, because the
+    // rooms that existed are never empty.
+    //
+    // The sanctum made it the common case: a station publishes `potency` only
+    // while it holds a ward, so `survey barrier` before a `muster` is close to
+    // the first thing anybody types in that room. **Asserted on an instrument
+    // rather than a station**, because the hole is `survey`'s and not the
+    // sanctum's — a scoured mortar is the same shape and always has been.
+    let mut sim = Sim::new(1);
+    run(&mut sim, "attend laboratory");
+    let before = sim.scrollback().records().len();
+    run(&mut sim, "survey mortar_and_pestle");
+
+    let answered: Vec<String> = sim
+        .scrollback()
+        .records()
+        .iter()
+        .skip(before)
+        .filter_map(|record| record.field(FieldName::Message))
+        .map(|value| value.with_str(str::to_owned))
+        .collect();
+    assert!(
+        answered.iter().any(|line| line.contains("holds nothing")),
+        "an empty place answered with silence: {answered:?}",
+    );
 }
 
 #[test]

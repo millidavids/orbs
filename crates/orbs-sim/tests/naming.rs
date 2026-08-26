@@ -677,6 +677,7 @@ fn a_spell_cannot_name_a_verb_as_a_thing() {
 fn readings() -> Vec<&'static str> {
     let mut out = orbs_sim::tower::maze::readings();
     out.extend(orbs_sim::tower::ward::readings());
+    out.extend(orbs_sim::tower::pylon::readings());
     out
 }
 

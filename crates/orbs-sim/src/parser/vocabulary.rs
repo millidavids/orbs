@@ -412,6 +412,31 @@ pub const SYNONYMS: &[Synonym] = &[
     syn(Verb::Dial, Register::Arcane, &["dial"]),
     syn(Verb::Dial, Register::Plain, &["put"]),
     syn(Verb::Dial, Register::Shell, &["set"]),
+    // The sanctum (§10). Both are domain-scoped, so a near miss here can only
+    // be a near miss inside the sanctum — the lens's affordance again.
+    //
+    // **One word per `syn`**, per the paragraph above `probe`'s plain register:
+    // `words` is one phrase pre-split, and the three-in-an-array form is the bug
+    // that left the lens with no plain English at all.
+    //
+    // Swept, and the obvious words all lost. `fortify` is 914 against `for`,
+    // `restore` 935 against `rest`, `mend` 935 against `mending`, `rally` 600
+    // against `wall`, `raise` 600 against `cause`. `muster` and `marshal` score
+    // nothing; `repair` and `renew` are clean and are what a plain-English
+    // player reaches for when a wall is down.
+    syn(Verb::Muster, Register::Arcane, &["muster"]),
+    syn(Verb::Muster, Register::Arcane, &["marshal"]),
+    syn(Verb::Muster, Register::Plain, &["repair"]),
+    syn(Verb::Muster, Register::Plain, &["renew"]),
+    // **No shell register for either**, as `probe` has none: the words a shell
+    // user would reach for are taken. `mv` is `move`'s and `cp` is nothing here.
+    //
+    // `heave` is 800 against `weave`, `drag` 935 against `dragged`, `bring` 600
+    // against `grind`, `fetch` 600 against `each` — a grammar word. `haul`,
+    // `carry` and `bear` are clean.
+    syn(Verb::Haul, Register::Arcane, &["haul"]),
+    syn(Verb::Haul, Register::Plain, &["carry"]),
+    syn(Verb::Haul, Register::Plain, &["bear"]),
 ];
 
 impl Register {

@@ -114,6 +114,14 @@ fn commands() -> Vec<&'static str> {
         "probe",
         "dial second borax",
         "probe",
+        // The sanctum: a course drawn, part hauled across, and the barrier
+        // some way down from whole. Both halves matter — `CourseSave` is a node
+        // and `integrity` is a resource, so a save that carried one and not the
+        // other would round-trip perfectly and come back a different game.
+        "attend sanctum",
+        "muster",
+        "haul wellspring barrier",
+        "haul wellspring conduit",
         // The archive: a maze open and part-walked.
         "attend archive",
         "research",
@@ -436,6 +444,39 @@ fn the_test_world_actually_holds_everything_it_is_meant_to() {
         has("open maze", save.nodes.iter().any(|n| n.maze.is_some()));
         has("open ward", save.nodes.iter().any(|n| n.ward.is_some()));
         has(
+            "standing course",
+            save.nodes.iter().any(|n| n.course.is_some()),
+        );
+        // ...and one that has been *hauled*, not merely drawn. A fresh course is
+        // the whole stack at one station, which the format would carry correctly
+        // by accident; two wards moved is three lists that all have to come back
+        // where they were.
+        let course = save
+            .nodes
+            .iter()
+            .find_map(|n| n.course.as_ref())
+            .expect("a course");
+        has("hauled course", course.hauls > 0);
+        has(
+            "course spread over its stations",
+            course
+                .stations
+                .iter()
+                .filter(|station| !station.is_empty())
+                .count()
+                > 1,
+        );
+        // **The barrier, down from whole.** `integrity` is a resource rather
+        // than a node, so nothing above can see it — and a save carrying every
+        // node and not this one would pass every other test in this file and
+        // hand the player back a tower in better repair than they left.
+        has(
+            "worn barrier",
+            save.progress
+                .integrity
+                .is_some_and(|standing| standing < orbs_sim::tower::STANDING),
+        );
+        has(
             "work in flight",
             save.nodes.iter().any(|n| n.working.is_some()),
         );
@@ -574,6 +615,7 @@ fn every_component_the_world_holds_is_one_the_save_knows_about() {
         (TypeId::of::<orbs_sim::tower::Log>(), "Log"),
         (TypeId::of::<orbs_sim::tower::Maze>(), "Maze"),
         (TypeId::of::<orbs_sim::tower::Ward>(), "Ward"),
+        (TypeId::of::<orbs_sim::tower::Course>(), "Course"),
         (TypeId::of::<orbs_sim::tower::spell::Running>(), "Running"),
         (TypeId::of::<orbs_sim::tower::spell::Bound>(), "Bound"),
     ];
@@ -679,13 +721,14 @@ fn show_a_save() {
 #[test]
 fn every_resource_the_world_holds_is_one_the_save_knows_about() {
     // In the document.
-    const CARRIED: [&str; 9] = [
+    const CARRIED: [&str; 10] = [
         "orbs_sim::tick::Tick",
         "orbs_sim::rng::Rngs",
         "orbs_sim::tower::node::NodeIds",
         "orbs_sim::tower::node::Cwd",
         "orbs_sim::session::Wizard",
         "orbs_sim::tower::experience::Experience",
+        "orbs_sim::tower::erosion::Integrity",
         "orbs_sim::tower::mastery::Taken",
         "orbs_sim::tower::learned::Learned",
         "orbs_sim::session::Choices",
@@ -1117,8 +1160,8 @@ fn the_stream_positions_are_not_interchangeable() {
     let save = sim.snapshot();
     assert_eq!(
         save.rng.positions.len(),
-        8,
-        "a world has eight streams and the save carries that many",
+        orbs_sim::RngStream::COUNT,
+        "a world's streams and the save's positions have come apart",
     );
 
     // Two positions swapped is a different world. If the save were order-blind —
@@ -1304,5 +1347,65 @@ fn a_spell_inside_a_part_comes_back_inside_it() {
         &loaded,
         &lived,
         "a reload inside a part ran on into a different world",
+    );
+}
+
+#[test]
+fn a_suspended_caller_brings_its_own_bindings_back() {
+    // **The field a scoped store added to the save.** A part opens with only
+    // its parameters, so the caller's bindings ride on the [`Descent`] — and a
+    // save taken mid-call that dropped them would restore a spell whose caller
+    // resumes having forgotten everything it had bound. §8 requires in-flight
+    // state to be serialisable at *every* tick boundary, and a call is one.
+    let mut lived = Sim::new(11);
+    lived.submit("attend laboratory");
+    lived.step();
+    lived.write_spell(
+        "tending",
+        &[
+            "part gathering(what)".to_owned(),
+            "grind what".to_owned(),
+            "empty mortar_and_pestle".to_owned(),
+            "end".to_owned(),
+            "let herb be sage".to_owned(),
+            "gathering(rock-salt)".to_owned(),
+            "grind herb".to_owned(),
+        ],
+    );
+    lived.step();
+    lived.submit("invoke tending");
+    lived.step_n(4);
+
+    let save = lived.snapshot();
+    let inside = save
+        .nodes
+        .iter()
+        .find_map(|node| node.running.as_ref())
+        .expect("a spell is running");
+    assert_eq!(
+        inside.part.as_deref(),
+        Some("gathering"),
+        "the spell is not inside the part yet, so this proves nothing",
+    );
+    assert_eq!(
+        inside.vars.get("what").map(String::as_str),
+        Some("rock-salt"),
+        "the part's own store did not reach the save",
+    );
+    let caller = inside.stack.first().expect("a suspended caller");
+    assert_eq!(
+        caller.vars.get("herb").map(String::as_str),
+        Some("sage"),
+        "the caller's bindings were dropped on the way into the part",
+    );
+
+    let text = save.to_toml().expect("a save renders");
+    let mut loaded = Sim::restored(&Save::from_toml(&text).expect("a save reads back"));
+    lived.step_n(40);
+    loaded.step_n(40);
+    same(
+        &loaded,
+        &lived,
+        "a reload mid-call ran on into a different world",
     );
 }

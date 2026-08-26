@@ -101,7 +101,7 @@ run editor_count ORBS_BOOT=0 ORBS_GRID=100x30 ORBS_DUMP="attend archive; scribe 
   ORBS_EDIT=$'edit\nif the cabinet has 4 fragment\nwield lectern\nend\n<esc>\ninterpret'
 
 # --- the manual, in every room --------------------------------------------
-for room in laboratory archive lens grimoire arsenal tower; do
+for room in laboratory archive lens sanctum grimoire arsenal tower; do
   run "help_$room" ORBS_BOOT=0 ORBS_DUMP="attend $room; help"
 done
 run help_floor    ORBS_BOOT=0 ORBS_GRID=80x22 ORBS_DUMP="attend lens; help"
@@ -126,7 +126,15 @@ run arsenal_door ORBS_BOOT=0 ORBS_DUMP="attend laboratory; move sage to arsenal"
 run scroll_quick   ORBS_BOOT=0 ORBS_DUMP="attend laboratory; debug_spawn quickening-scroll; wield quickening-scroll; grind sage; meditate 4"
 run scroll_verdant ORBS_BOOT=0 ORBS_DUMP="attend laboratory; debug_spawn verdant-scroll 4; wield verdant-scroll; wield verdant-scroll; wield verdant-scroll; wield verdant-scroll; survey dispensary"
 
+# --- the sanctum -----------------------------------------------------------
+run pylon_board  ORBS_BOOT=0 ORBS_DUMP="attend sanctum; muster; haul wellspring barrier; haul wellspring conduit; haul barrier conduit"
+run pylon_refuse ORBS_BOOT=0 ORBS_DUMP="attend sanctum; muster; haul wellspring barrier; haul wellspring barrier; haul wellspring wellspring; haul conduit barrier"
+run pylon_worn   ORBS_BOOT=0 ORBS_DUMP="attend sanctum; survey pylon; meditate 3600; survey pylon; muster; survey pylon"
+run pylon_done   ORBS_BOOT=0 ORBS_DUMP="attend sanctum; muster; debug_course; haul conduit barrier; survey pylon; status"
+run recall_script_sanctum ORBS_BOOT=0 ORBS_GRID=100x40 ORBS_DUMP="attend sanctum; recall scripting"
+
 # --- bindings --------------------------------------------------------------
 run bind_invoke ORBS_BOOT=0 ORBS_DUMP="attend laboratory; invoke first_light; attend archive; meditate 6"
+run bind_holding ORBS_BOOT=0 ORBS_DUMP="attend sanctum; invoke holding; meditate 400" ORBS_THEN="peruse sanctum.log"
 
 echo "captured $(ls -1 "$out"/*.txt | wc -l) screens into $out"

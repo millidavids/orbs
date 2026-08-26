@@ -60,7 +60,7 @@
 //! });
 //!
 //! let mut frame = Frame::new(grid);
-//! for (pane, title) in layout.main().iter().zip(["laboratory", "battlements"]) {
+//! for (pane, title) in layout.main().iter().zip(["laboratory", "sanctum"]) {
 //!     let mut painter = frame.painter(*pane);
 //!     painter.border(*pane, Some(title), Style::DIM);
 //!     painter.span(
@@ -103,6 +103,7 @@ mod maze;
 mod mix;
 mod paint;
 mod pulse;
+mod pylon;
 mod span;
 mod style;
 mod tiling;
@@ -132,6 +133,13 @@ pub use maze::{Square, Stacks};
 pub use mix::{Band, Stir};
 pub use paint::Painter;
 pub use pulse::{CYCLE_SECS, FLIP_HZ};
+// `TALLEST` alongside the type for the reason `SIGILS` travels with `Board`: the
+// board reserves that many rows and the sim raises that many wards, and a caller
+// that can reach one and not the other cannot check they agree.
+// `tower::pylon::MOST` is that caller, and `GROUND`/`WARD` had no equivalent —
+// they were exported beside it out of symmetry and reached by nothing, where a
+// glyph is `row`'s business and a frontend is handed cells rather than chars.
+pub use pylon::{Pylon, TALLEST};
 pub use record::{
     FieldName, Outcome, Record, RecordBuilder, RecordKind, RecordView, Records, Sift, Value,
     contains_ignoring_case,

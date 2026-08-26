@@ -144,7 +144,19 @@ fn begins_work(intent: &Intent) -> bool {
     // Left alone, a spell's `dial first nitre` would have queued behind a brew
     // in the laboratory and burned `PATIENCE` doing nothing, which is exactly
     // the defect the scroll case above records one paragraph up.
-    if intent.verb == Verb::Dial {
+    // **The sanctum's two are the same case, and shipping without them here is
+    // the defect that paragraph predicted.** `muster` and `haul` went into
+    // `is_operation` to keep them out of the tower-wide vocabulary — the ceiling
+    // `the_tolerated_collision_set_is_pinned` defends — and neither schedules
+    // anything: `muster` inserts a `Course` and `haul` moves one ward, both
+    // instantly, and neither ever inserts `Working`.
+    //
+    // Left alone, a bound `holding` beside a brewing loop answered
+    // *"holding.spell waits: the alembic is distilling"* and never mustered at
+    // all — then gave up at `PATIENCE` and latched a fault on the sanctum's rail
+    // box. That contradicts `execute::muster`'s own module doc, ROADMAP's Phase 4
+    // note and §19, all three of which say this domain runs *beside* a brew.
+    if matches!(intent.verb, Verb::Dial | Verb::Muster | Verb::Haul) {
         return false;
     }
     intent.verb.is_operation() || matches!(intent.verb, Verb::Wield | Verb::Research | Verb::Purge)

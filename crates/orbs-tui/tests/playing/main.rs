@@ -42,5 +42,6 @@ mod lens;
 mod play;
 mod presentation;
 mod routing;
+mod sanctum;
 mod session;
 mod spells;

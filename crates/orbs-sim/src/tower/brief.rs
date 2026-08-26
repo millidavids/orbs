@@ -45,7 +45,10 @@ pub const DOMAINS: [&str; 7] = [
     "grimoire",
     "forge",
     "menagerie",
-    "battlements",
+    // **`sanctum`, where §10's table says `battlements/`** — §19 records the
+    // supersession. The room is the wizard's warding chamber rather than a wall
+    // walk, because what he defends the tower with is arcane and not masonry.
+    "sanctum",
 ];
 
 /// Something a domain wants noticed, latched until the player goes and looks.
@@ -211,6 +214,21 @@ fn busiest(instruments: &[Instrument]) -> Option<&Instrument> {
 fn detail_of(instrument: &Instrument) -> Option<String> {
     let meter = instrument.meter?;
     let left = meter.total.saturating_sub(meter.done);
+    // **The one unit that counts up, and it is answered before the gate below.**
+    // Every other meter here measures work left to do, so the rail prints the
+    // remainder and says nothing once there is none. Integrity is a thing you
+    // want *more* of: printing its remainder would read `py 60` for a tower
+    // standing at 40, and falling silent at full would take the sanctum's only
+    // glance away exactly when the barrier is whole.
+    //
+    // **The `%` is what stops it being read as a remainder**, and it is the `t`
+    // suffix's job one arm down. Integrity is out of a hundred, so a percentage
+    // is what the number already is rather than a decoration — and without it
+    // `py 62` here and a remainder `py 4` below are the same shape, which is how
+    // the sanctum came to say two unrelated things under one prefix.
+    if meter.unit == super::panel::Unit::Standing {
+        return Some(format!("{} {}%", instrument.short, meter.done));
+    }
     // **`t` only when it is a duration.** This suffixed everything, so the
     // archive read `st 350t` for 350 unwalked squares and the lens `pr 4t` for
     // four sigils still astray — which counts *down* as the player wins and so

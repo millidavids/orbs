@@ -405,6 +405,7 @@ pub fn run_script(seed: u64, wizard: Option<String>, engine: &str, request: &str
             domain: orbs_sim::parser::leaf(&sim.location()).to_owned(),
             stacks: sim.stacks(),
             ward: sim.ward(),
+            pylon: sim.pylon(),
             briefs: sim.briefs(),
         };
         super::prompt::paint(

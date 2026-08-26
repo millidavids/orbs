@@ -68,6 +68,9 @@ pub fn lex(line: &str) -> Vec<Lexed> {
     // one opening with `name()` is a call, and anything else is a command whose
     // first word is its verb.
     let opens_control = spell_word(trimmed).is_some();
+    if let Some(runs) = call_runs(line, opens_control) {
+        return runs;
+    }
     let mut runs = Vec::new();
     for (index, (at, word)) in words(line).enumerate() {
         let kind = classify(word, index, opens_control);
@@ -80,15 +83,110 @@ pub fn lex(line: &str) -> Vec<Lexed> {
     runs
 }
 
+/// The runs of a line that is a call, or of a `part` heading — `None` otherwise.
+///
+/// # Why a call cannot go through the word loop
+///
+/// [`words`] splits on whitespace, and `between(wellspring, near)` is **two**
+/// whitespace-separated words: `between(wellspring,` and `near)`. Neither ends
+/// with `()`, which is all the word loop ever knew how to ask — so the whole
+/// line lexed as two names and the feature was invisible, the shape §19 records
+/// for `▪` arriving through a different door. A call is one construct with names
+/// inside it, so it is cut by bracket and comma rather than by space.
+///
+/// **The name and the brackets are the call; the arguments are not.** A
+/// parameter is a word the player chose, so it draws as a name — which is what
+/// makes `between(wellspring, near)` read as a call *of* two places rather than
+/// as one long magenta smear. The commas are left uncovered and take the base
+/// style, which costs nothing: runs need not tile the line.
+fn call_runs(line: &str, opens_control: bool) -> Option<Vec<Lexed>> {
+    let open = line.find('(')?;
+    let close = line.rfind(')')?;
+    // **The bracket must close the line**, which is `call_of`'s `strip_suffix`
+    // said the other way round — and without it this claimed lines that are not
+    // calls at all. `move (sage) to mortar` has a one-word head and a bracket
+    // pair, so it drew wholly as a call; `gathering() # note` swallowed the
+    // comment into the run and left the tail with no run, breaking `lex`'s
+    // "covering every non-space byte". Both are the parser and the painter
+    // disagreeing about what a call is, which is the defect `tower::reach` was
+    // extracted to stop one layer down.
+    if close < open || !line[close + 1..].trim_end().is_empty() {
+        return None;
+    }
+    let mut runs = Vec::new();
+    // `part between(here, there)` — the heading word first, then the same shape.
+    let mut head = line[..open].trim_end();
+    if opens_control {
+        let (at, word) = words(line).next()?;
+        if spell_word(word) != Some(super::SpellWord::Part) {
+            return None;
+        }
+        runs.push(Lexed {
+            start: at,
+            end: at + word.len(),
+            kind: Lexeme::Control,
+        });
+        head = line[at + word.len()..open].trim_end();
+    }
+    // One word before the bracket, or this is not a call at all — `if way has
+    // (something)` must fall through to the word loop.
+    let name = head.trim();
+    if name.is_empty() || name.split_whitespace().count() != 1 {
+        return None;
+    }
+    let start = offset_of(line, name);
+    runs.push(Lexed {
+        start,
+        end: open + 1,
+        kind: Lexeme::Call,
+    });
+    let mut at = open + 1;
+    for slot in line[open + 1..close].split(',') {
+        let trimmed = slot.trim();
+        if !trimmed.is_empty() {
+            let start = at + (slot.len() - slot.trim_start().len());
+            runs.push(Lexed {
+                start,
+                end: start + trimmed.len(),
+                kind: classify(trimmed, 1, false),
+            });
+        }
+        at += slot.len() + 1;
+    }
+    runs.push(Lexed {
+        start: close,
+        end: close + 1,
+        kind: Lexeme::Call,
+    });
+    // **`gathering()` is one run, not two.** With no arguments the opening and
+    // closing brackets touch, and a painter given two abutting runs of one kind
+    // draws exactly what it draws for one — so the split would be invisible on
+    // screen and visible only to a test, which is the kind of difference that
+    // rots. Merging here keeps the zero-argument shape byte-identical to what it
+    // was before parameters existed.
+    let mut merged: Vec<Lexed> = Vec::with_capacity(runs.len());
+    for run in runs {
+        match merged.last_mut() {
+            Some(last) if last.kind == run.kind && last.end == run.start => last.end = run.end,
+            _ => merged.push(run),
+        }
+    }
+    Some(merged)
+}
+
 /// What one word of a line is.
 ///
 /// `first` is whether the *line* opened with a control word, which is what makes
 /// `end` in `repeat until the stacks is idle` read as part of the question rather
 /// than as a block close — the same lookahead-free rule `read` uses.
 fn classify(word: &str, index: usize, opens_control: bool) -> Lexeme {
-    if is_call(word) {
-        return Lexeme::Call;
-    }
+    // **No call arm here, and that is the point.** Whether a line is a call is a
+    // question about the *line* — one word before the bracket, and the bracket
+    // closing the line — so [`call_runs`] answers it before this loop runs and
+    // returns without reaching here. A word-level `ends_with("()")` could
+    // therefore only ever fire on a line `call_runs` had already declined, which
+    // is to say on something that is not a call: `gathering() # note` is a
+    // command, and drawing its first word magenta said otherwise.
     if spell_word(word).is_some() {
         return Lexeme::Control;
     }
@@ -147,11 +245,6 @@ fn is_grammar(lower: &str) -> bool {
             // `let m be mortar`, and `for each way`.
             | "be" | "each"
         )
-}
-
-/// Whether `word` is written as a call — `gathering()`.
-fn is_call(word: &str) -> bool {
-    word.ends_with("()") && word.len() > 2
 }
 
 /// Whether any verb answers to this word.
@@ -309,6 +402,76 @@ mod tests {
         // command and is a name this file defines.
         assert_eq!(kinds("part gathering()"), [Lexeme::Control, Lexeme::Call]);
         assert_eq!(kinds("gathering()"), [Lexeme::Call]);
+    }
+
+    #[test]
+    fn a_call_with_arguments_is_cut_by_bracket_and_not_by_space() {
+        // **The defect this exists to stop is invisible on screen.**
+        // `between(wellspring, near)` is *two* whitespace-separated words, so the
+        // word loop asked whether `between(wellspring,` ended with `()`, and
+        // whether `near)` did, got no for both, and drew the line as two
+        // ordinary names — the feature absent, and nothing anywhere saying so.
+        // §19 records `▪` arriving the same way.
+        //
+        // The name and its brackets are the call; the arguments are names,
+        // because they are words the player chose and a call of two places
+        // should read as one.
+        assert_eq!(
+            kinds("between(wellspring, near)"),
+            [Lexeme::Call, Lexeme::Name, Lexeme::Name, Lexeme::Call],
+        );
+        assert_eq!(
+            kinds("part between(here, there)"),
+            [
+                Lexeme::Control,
+                Lexeme::Call,
+                Lexeme::Name,
+                Lexeme::Name,
+                Lexeme::Call
+            ],
+        );
+
+        // The runs must land on the real bytes, or the painter tints the wrong
+        // cells — the one thing `kinds` alone cannot see.
+        let line = "between(wellspring, near)";
+        let runs = lex(line);
+        assert_eq!(&line[runs[0].start..runs[0].end], "between(");
+        assert_eq!(&line[runs[1].start..runs[1].end], "wellspring");
+        assert_eq!(&line[runs[2].start..runs[2].end], "near");
+        assert_eq!(&line[runs[3].start..runs[3].end], ")");
+    }
+
+    #[test]
+    fn a_bracket_in_an_ordinary_line_is_not_a_call() {
+        // `call_runs` runs before the word loop, so anything it claims wrongly
+        // is a line that stops being highlighted at all. A question is the case
+        // that would hurt: two words before the bracket, so it falls through.
+        let found = kinds("if the mortar_and_pestle is idle");
+        assert!(
+            !found.contains(&Lexeme::Call),
+            "an ordinary question read as a call: {found:?}",
+        );
+    }
+
+    #[test]
+    fn a_call_must_close_the_line_it_is_on() {
+        // **`call_runs` claimed any line with a one-word head and a bracket
+        // pair *anywhere*.** So `move (sage) to mortar` drew wholly as a call,
+        // and `gathering() # note` swallowed the comment into the run and left
+        // the tail with no run — against this module's own covering contract.
+        // The parser said "not a call" to both and nothing compared them; the
+        // comparison itself is in `tower::spell::tests`, where `call_of` is
+        // reachable.
+        for line in ["gathering() # note", "move (sage) to mortar"] {
+            let found = kinds(line);
+            assert!(
+                !found.contains(&Lexeme::Call),
+                "{line:?} read as a call: {found:?}",
+            );
+            let covered: usize = lex(line).iter().map(|run| run.end - run.start).sum();
+            let want: usize = line.split_whitespace().map(str::len).sum();
+            assert_eq!(covered, want, "{line:?} left bytes with no run");
+        }
     }
 
     #[test]
