@@ -7224,6 +7224,237 @@ read off a glyph boundary rather than a colour, and `Depiction` reaches no
 utterance. The tints are allowed to collapse under a filter; `danger`, `cost` and
 `success` are not.
 
+#### The listing stopped reading as a config file
+
+`[reagent]` over ragged columns is what a `.toml` looks like, and that was the
+report. Three changes, all in the view — the records are untouched, so the sim,
+the save, `sift` and §14's stream keep working by construction.
+
+**A heading is ruled off, beside the words rather than under them.** The brackets
+are gone; a rule runs from the heading to a fixed column. Drawn on the heading's
+own row, so the hierarchy costs **no row** on a page that already fills the floor
+exactly — measured at nineteen rows against §19's own claim of *"the floor's
+nineteen transcript rows exactly"*.
+
+**The rule stops at a fixed column and not at the pane edge, and that was
+measured rather than picked.** Drawn to the edge, the rules were the strongest
+marks on screen and the content went to mush — the squint test's classic failure,
+and the CRT shader is already the blur that performs it. A common stop makes the
+headings read as a *set*. Never more than half the pane, so a narrow transcript
+does not end up mostly rule.
+
+**A slot is drawn `<like this>`, and it is doing work rather than decorating.**
+Tiled bare, a two-word entry runs into its neighbour — `distil reagent  kindle
+reagent` — because the gap *between* entries is the same two spaces as the gap
+*inside* one. `>` terminates the cell. It is also the spelling `recall scripting`
+already teaches for `repeat <count>`, so it cost no new convention. Composed in
+the view, exactly as `[…]` was, so `sift attend` still finds the bare word.
+
+##### Described where it is local, indexed where it is global
+
+Tiling suits a set of single words and fails for phrases, so a run whose records
+carry a description takes **one row each with a second column**, and a run
+without one still tiles. `survey` is unchanged.
+
+Which verbs earn a description is decided by `Verb::anchor` — *which fixture must
+stand here* — so a new domain describes its own words with no list to maintain.
+The tower-wide verbs stay an index: `grind` and `distil` are opaque and met for
+the first time in the room that offers them, while `status` and `quit` are
+neither and appear under the same heading in every room in the game.
+
+**The saving is the point rather than a side effect.** Described throughout, the
+page is ~35 rows; described locally it is 24, against a floor that fits 19.
+`recall <verb>` still has the full page for anything.
+
+**It cost no new prose.** `man_<verb>_gloss` was already authored for all 32
+verbs, already lowercase and terse.
+
+##### A leader bridges to a right-aligned column, and to nothing else
+
+The first draft put dotted leaders between the verb and its description, and
+mocking it killed the idea. A leader spans a gap that is *genuinely variable*,
+which is true when the far column is **right**-aligned — the boot card's
+`blackhearth games ....... ok` works because `ok` is flush right. A left-aligned
+description column makes the run length a function of the *near* column's
+raggedness instead: `status` took eleven dots and `digest <reagent>` none at all,
+so the rows read as two different kinds of row and the eye landed on the dots.
+
+So leaders are kept for `status`, whose values are right-aligned, and the verb
+list takes a plain gap. Two spaces and no glyph: the second column is a *sentence
+about* the first, not a value bound to it, and an `=` would say `attend = go
+somewhere` — the same category error §19 already records for `stop = place`.
+
+##### Three things this got wrong first, all found by looking
+
+- **The section, not the verb, decides.** Describing only the anchored verbs left
+  *the work* half described, because `move` and `wield` sit under it and are
+  tower-wide. A half-described run can draw as neither shape: it fell back to
+  stacking with the sentence jammed on unpadded, which is worse than what it
+  replaced. §3 is the deeper reason — a run where some rows have a second column
+  and some do not is ragged, and raggedness is the vocabulary sabotage owns.
+- **`bound` had to stay false.** It is what overdraws a dim ` = ` at the name
+  column, and setting it stamped one over the first character of every
+  description: `grind <reagent> = rush a reagent in the mortar`.
+- **The measure and the draw had to change together.** The tiled path measures
+  through `signature_of` now because it draws through it; measuring the bare form
+  would set the stride two cells short and overlap the tiles — §19's
+  `attend plasurvey plaperuse filsift` defect arriving by a different door.
+
+##### A section opens with a blank row, and the exact fit was already gone
+
+A blank row is the cheapest separator a fixed grid has — stronger than an indent,
+cheaper than a rule, and the first thing to reach for before either. `Input` has
+had one since the transcript existed. `Section` earns the same one level down: a
+ruled heading says *a new thing starts here*, and a heading pressed against the
+last row of the previous listing says it while looking like part of it. The rule
+names the boundary; the gap gives the eye somewhere to land.
+
+**This was refused once, on a measurement that had since expired.** A review
+blocked it for costing five rows on a page that *"fits the floor's nineteen
+transcript rows exactly"*, which this document claimed and which was true when it
+was written. It stopped being true the moment the listing gained descriptions:
+measured at the floor, the page's top row is now mid-listing, so it already
+scrolls. The blank rows make a scrolling page longer rather than breaking a fit.
+**Both halves of that are worth keeping — the objection was right to raise and
+right to retire, and only re-measuring could tell the two apart.**
+
+The cost, stated: eight sections on the laboratory's page, so seven more rows.
+
+**Asked in `height` *and* `draw_lines`, through one predicate.** A blank row
+changes the row count, which is the one thing the two must never disagree about —
+`opens_with_a_gap` is a single `const fn` for exactly that reason, and `Input`'s
+own blank row was moved onto it rather than left as a second copy of the same
+question.
+
+##### Prose takes a measure; everything else takes the pane
+
+A line past about seventy characters stops being scanned and starts being
+searched — the eye loses its place on the return sweep, which is why typography
+has put the comfortable measure at 45–75 characters since long before anyone had
+a terminal. The transcript is 86 cells in the laboratory and 102 in the grimoire,
+so the widest room was setting prose 40% past the top of that range. It is 68 now,
+and the surplus becomes margin.
+
+**Scoped to `Message`, and the exclusions are the point.** The three
+`is_diagnostic` surfaces carry their meaning in their *fidelity*: a `.spell` line
+re-wrapped at 68 inside an 86-cell pane is a line the game has reformatted, on
+the one surface where what is on screen must be what is in the file. Listings are
+columns rather than sentences. And it is applied at `wrap_width`, which
+`wrapped_rows` and `draw_lines` both call, so the measure and the draw cannot
+diverge — putting it in `Wrap` would have reached `paint::paragraph`, the loom
+and the weave screen as a side effect.
+
+At the 80×22 floor the body is 62 cells, so this never binds there: it narrows
+the wide rooms and leaves the tight one exactly as it was. **The honest cost:**
+recipe steps are `Message` too, so they now wrap where they did not. They read
+acceptably — the continuation is indented and they wrapped at the floor
+already — but it is a cost rather than a free win.
+
+##### A run of readings gets a column, and the guard is a shape test
+
+§19 asked for this outright — *"a status row wants its value column aligned with
+the one above it"*. `tick 4` over `concentration 0` is two numbers in two places,
+and the reason to print six together is to read down them.
+
+**Leaders here and nowhere else in the transcript.** This is the one listing
+whose far column is *right*-aligned, which is the only shape a leader suits;
+`181` and `2` now end in the same column, so magnitude is a visual quantity.
+
+**`RecordKind::Status` has five emit sites and only one is the `status`
+command.** The cold-start report is a contiguous run of seven drawn at every
+launch — `orb` carries a tick and a state, each domain carries a state, `bound`
+carries neither — and `verify` carries a source and a state and no quantity at
+all. So the guard is a **shape test**: two or more records, each carrying exactly
+a name and a numeric quantity. The boot report is mixed and fails on its first
+row; a `verify` is a run of one. Both draw exactly as they did.
+
+**Done in the draw alone, which is what makes it cheap.** A reading is one row
+before and after, and the padded form is refused outright if it would not fit on
+one — so `wrapped_rows` measuring the unpadded string still gets the right answer
+and the height/draw agreement is untouched. It is *not* a widening of
+`tiles()`: a reading is a sequence, that predicate is the unordered question, and
+`only_unordered_rows_tile` pins it.
+
+##### The played suite broke, and the fix was in the driver
+
+Seven scenarios failed on `experience 0` the moment leaders landed. A review had
+predicted the suite was safe because `play::flatten` normalises whitespace — true,
+and it does not cover dots. Every one of the seven was asserting *what the reading
+was*, not how the gap to it was filled, so `flatten` now collapses a **run** of
+dots as well. A run, never a single `.`, or `orbs-save.toml` and `laboratory.log`
+stop matching — and those are needles scenarios really do write.
+
+#### The correction filters are **not** shipped, and the measurement is why
+
+The entry above sends the accessibility guarantee to *"colour-vision filters"* —
+three daltonisation passes, protanopia, deuteranopia and tritanopia, adapted from
+`court_wizard`'s `colorblind_correction.wgsl`. **They were measured against this
+palette before any of them was written, and they make the game worse.**
+
+| channel | unfiltered | daltonised |
+|---|---|---|
+| accent triad (luminance separation) | 1.05–2.10 | 1.00–1.39 |
+| material tints (hue distance) | 6–16 | 4–29 |
+| spell syntax (hue distance) | 43–53 | 37–44 |
+
+Worse in **eleven of twelve** theme × deficiency combinations. Worst case: muted
+violet under protanopia, danger against cost, **1.41 → 1.00** — the same
+brightness.
+
+**The reason is structural, not a tuning failure, and it is worth stating
+plainly: daltonisation is the right tool for a game whose information is carried
+by hue, and this is deliberately not one.** §4 gives ordinary text one hue at
+three weights; §14 forbids colour being the sole carrier of anything; the accent
+triad is *solved* so danger, cost and success separate in **luminance**; and every
+screen duplicates a colour with a glyph or a word. Daltonisation redistributes
+hue into the channels a deficient eye still reads, which necessarily moves
+luminance about — so it degrades the one axis this design leans on, in exchange
+for improving the two axes §19 has already said may collapse.
+
+**What ships instead is the other half of the same roadmap item: a true greyscale
+mode**, plus the contrast options §14 has always listed. Greyscale is trivially
+correct where the filters are not, and it does something the filters cannot — it
+*proves the claim*. If the game is fully playable with every hue gone, then hue
+was carrying nothing essential, which is the thing §14 asserts and nothing until
+now has tested.
+
+**The simulation is kept and turned on the tests.** `render::deficiency` is
+`#[cfg(test)]`, ships in no release build, and exists so
+`the_accent_triad_survives_every_deficiency` can measure the real claim rather
+than greyscale's proxy for it. That is this project's own rule — build the
+instrument before the thing it measures — and it found something on its first
+run, which is the next entry.
+
+#### Monochrome failed the deficiency test, and there was no scalar fix
+
+Greyscale is a proxy. A real deficiency removes one axis and leaves the others,
+which is a different picture and can fail where greyscale passes. It did, at
+exactly one pair of one theme:
+
+    monochrome / deuteranopia / danger vs cost   1.06:1   (floor 1.25)
+
+Eleven of the twelve combinations passed at 1.28–2.57, and greyscale passed
+everywhere. **`cost` moved from `rgb(0.30, 0.62, 1.00)` to `rgb(0.30, 0.70, 1.00)`
+— green only; `danger`, red and blue are untouched.**
+
+Two things about the solve are the reason this is written down:
+
+- **It is squeezed from both sides.** That theme's `cost` sits between a ≥4.5:1
+  floor against the background below it and a ≥1.2:1 floor against body text
+  above it, and the deficiency floor pushes *up* into the second. The shipped
+  value clears deuteranopia at 1.27:1 and body text at 1.23:1; buying another
+  0.06 of the first spends the second down to 1.20 exactly. **The best any value
+  of `cost` can reach is about 1.36.** This is the *"very little luminance
+  headroom"* the theme's own doc comment warns of, met for the second time —
+  `success` was re-solved for it once already.
+- **Solve it in the space the code uses.** The first solve was run on a 0–255
+  integer grid and produced `rgb(0.34, 0.71, 1.00)`, which passed the deficiency
+  test and then failed `accents_are_distinguishable_from_body_text` at **1.191**
+  against a floor of 1.2. `0.71 × 255` rounds to 181 where the search had
+  evaluated 180, and this margin is smaller than one rounding step. §19 already
+  says *compute the constant*; the amendment is that the arithmetic has to match
+  the target's, not merely resemble it.
+
 ### Versioning — `0.<phase>.<step>` until release
 
 The workspace version tracks [ROADMAP.md](ROADMAP.md) rather than a public API,
@@ -10358,8 +10589,12 @@ to finish one. What-it-is before how-it-works is the order a *thing*'s
 right.** `every_authored_line_fits_the_worst_case_width` gives 70 cells against
 §4's 80×22 floor and the first draft ran to 112 in one sentence. Splitting start
 from solve is not a workaround for the budget: they are two instructions, followed
-at different times. The whole screen — primer and full listing — fits the floor's
-nineteen transcript rows exactly.
+at different times. ~~The whole screen — primer and full listing — fits the
+floor's nineteen transcript rows exactly.~~ **No longer true**, and the output
+pass below records what spent it: the listing gained a description column and
+each section gained a blank row above it, so the laboratory's page scrolls at the
+floor. A page is a record like any other and `PgUp` reaches it, which is the same
+answer §19 already gives for the two rooms whose primers never fitted.
 
 **`man_`, not `recall_`.** `Prose::topics` strips `recall_` to decide what is
 *nameable*, so `recall_here_lens` would register `here_lens` as a subject nobody
@@ -11128,8 +11363,51 @@ moved under them, and half a dozen constants existed only to manage that motion.
 | A resize constraint | **Considered and dropped.** `WindowResizeConstraints` is logical pixels while `WindowResolution::new` is physical, so on a 2× display a floor expressed in it would exceed the initial window and the game could not open at its stated size. `paint_too_small` is the guard, and it is physical-unit correct |
 | The debt this owes | §4 justified reflow with *"fixed scaling without reflow would make large accessibility font scales unreadable"*, and that objection is correct. The game now has **one text size per window size and no way to ask for another**. The replacement is a font-scale setting choosing between authored grids on the 8:3 line — 80×30 is the large-text one — which is a Phase 11 settings item, not a tier |
 
-`INITIAL_WINDOW` stays 1280×720: it is ×1.0 exactly, so the game opens at native
-cell size *and* with visible bars, exercising the letterbox on every run.
+~~`INITIAL_WINDOW` stays 1280×720: it is ×1.0 exactly, so the game opens at
+native cell size *and* with visible bars, exercising the letterbox on every
+run.~~ — **superseded: it is 1920×1080.**
+
+The reasoning above is still true and was not enough. ×1.0 is the sharpest the
+game is ever going to be, and a 1280×720 window on a 1080p display occupies a
+third of the screen — so the first thing a new player sees is a small window
+they have to drag, and the sharpness argument is made to somebody who has
+already decided the game looks unfinished.
+
+**What the change costs, exactly.** 1920×1080 is ×1.5, and `mag: Nearest` means
+the glyph is not re-rasterised — nearest-neighbour duplicates some source
+columns and not others. That is the *"regular 2,1,2,1 alternation, masked by the
+CRT bloom"* the continuous-scaling entry above already accepted; this decision
+does not introduce it, it makes it the default rather than a thing that happens
+when somebody maximises.
+
+**What makes it safe** is that the cell is even on both axes: 8×16 → 12×24, so
+every cell boundary is still a whole pixel and no rule lands on a half. A window
+whose scale did not divide the cell would moiré against the RGB mask, which §4
+names as the top legibility hazard. **This is the property to check before
+changing the number again** — not whether the scale is an integer, but whether
+`8s` and `16s` are.
+
+**The letterbox argument survives intact**, which is why this is a smaller
+change than it looks: 1440×1080 inside 1920×1080 still leaves 240 pixels of bar
+a side, so the 4:3 fit is exercised on every run exactly as it was.
+
+**`WindowResolution::new` is named for physical pixels and does not behave that
+way on a scaled desktop.** Measured on Wayland at a 1.5× compositor scale, this
+constant produces a **2880×1620** buffer — the request is honoured in *logical*
+points, and the compositor multiplies. That is the right outcome (the window
+occupies 1920×1080 of the user's screen, which is what the number is for), but
+it means the picture scale is **2.25×** there rather than 1.5×, and a reader
+checking the arithmetic against a log line will not find the number this entry
+predicts. The scale the game reports is always derived from the *buffer*.
+
+The corollary is the case to watch: on an unscaled 1080p display this asks for a
+window exactly the size of the screen, which with decorations does not fit. The
+settings screen is where a remembered window size belongs; until it exists this
+is a known rough edge rather than a solved problem.
+
+The honest summary is that the two halves of the original decision were not
+equally load-bearing. The bars were the part that had to be preserved; native
+cell size was a nice property that cost a first impression.
 
 ### Fidelity tiers — added draft 8 (superseded above)
 

@@ -15,20 +15,36 @@ mod boot;
 mod crt;
 mod render;
 mod shell;
+mod sight;
 mod sim;
 
 use bevy::prelude::*;
 use bevy::window::WindowResolution;
 use orbs_shell::{seed, wizard};
 
-/// 1280×720 puts the 960×720 picture at **exactly** native cell size — scale
-/// 1.0, an 8×16 glyph — with 160 pixels of bar down each side.
+/// 1920×1080 puts the 960×720 picture at scale **1.5** — a 12×24 glyph — with
+/// 240 pixels of bar down each side.
 ///
-/// Both halves are deliberate (DESIGN.md §4, §19). Native size is the sharpest
-/// the game ever is, so it is what a first look should get; and the bars mean
-/// the 4:3 letterbox is exercised on every run rather than only when someone
-/// thinks to drag the window.
-const INITIAL_WINDOW: (u32, u32) = (1280, 720);
+/// **A half step rather than a whole one, and §19 already priced it.** The
+/// atlas sampler is `mag: Nearest`, so the glyph is not re-rasterised at 1.5 —
+/// nearest-neighbour duplicates some source columns and not others, which §19
+/// describes as *"a regular 2,1,2,1 alternation, masked by the CRT bloom."*
+/// That regularity is what makes it survivable: the cell is even on both axes,
+/// so 8×16 lands on 12×24 and every cell boundary is still a whole pixel. A
+/// scale that did not divide the cell would put the grid's rules on half-pixels
+/// and moiré against the RGB mask, which §4 names as the top legibility hazard.
+///
+/// It was 1280×720, which is ×1.0 — the sharpest the game ever is, the pixels
+/// the font designer actually drew. That is a real loss and worth naming rather
+/// than glossing. It is traded for the thing a first look wants: a window that
+/// fills a modern display instead of occupying a third of it. §19's *"integer
+/// steps or continuous fit?"* entry made the same trade one level down and for
+/// the same reason — *"crisp everywhere but fills the window nowhere."*
+///
+/// **The bars survive the change, and they matter.** 1440×1080 inside 1920×1080
+/// still leaves 240 a side, so the 4:3 letterbox is exercised on every run
+/// rather than only when someone thinks to drag the window.
+const INITIAL_WINDOW: (u32, u32) = (1920, 1080);
 
 fn main() -> AppExit {
     let seed = seed();
@@ -68,6 +84,9 @@ fn main() -> AppExit {
             },
             render::RenderPlugin,
             crt::CrtPlugin,
+            // After the tube in this list only for readability — what actually
+            // orders the two passes is the explicit edge in `SightPlugin`.
+            sight::SightPlugin,
             shell::ShellPlugin,
             boot::BootPlugin,
         ))

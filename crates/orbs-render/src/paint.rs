@@ -588,6 +588,33 @@ impl<'a> Painter<'a> {
         }
     }
 
+    /// Draw a horizontal rule of `cells`, starting at `at`. Structural: silent.
+    ///
+    /// **Extracted rather than invented.** Eight call sites hand-rolled
+    /// `glyphs(at, &"─".repeat(n), style)` — the rail's box separators and its
+    /// foot, the weave's two tracks, and five in the `screens` example — and a
+    /// repeated three-line idiom is how two of them come to disagree about which
+    /// glyph a rule is drawn from. `cp437::box_drawing::HORIZONTAL` is now named
+    /// in exactly one place.
+    ///
+    /// **Silent, like every other structural method**, and for the reason the
+    /// rail's own comment already gives: *"a reader hearing six horizontal lines
+    /// read out between seven domains gets box-drawing noise where a sighted
+    /// player gets separation for free."* A caller that needs the separation
+    /// spoken owes the listener an [`announce`](Self::announce).
+    ///
+    /// Returns the cells drawn, which is `0` past the painter's edge.
+    pub fn rule(&mut self, at: Pos, cells: u16, style: Style) -> u16 {
+        let run = usize::from(cells);
+        self.glyphs(
+            at,
+            &crate::cp437::box_drawing::HORIZONTAL
+                .to_string()
+                .repeat(run),
+            style,
+        )
+    }
+
     /// Blank the painter's whole region.
     pub fn clear(&mut self) {
         self.fill(self.area, ' ', Style::NORMAL);

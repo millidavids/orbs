@@ -1,10 +1,10 @@
-# Credits
+# credits
 
-## Game Development
+## game development
 
 O.R.B.S. was created by David Yurek, under Blackhearth Studios.
 
-## Built With
+## built with
 
 ### Rust
 O.R.B.S. is written in [Rust](https://www.rust-lang.org/), a language empowering
@@ -13,7 +13,7 @@ everyone to build reliable and efficient software.
 - **License**: MIT OR Apache-2.0
 - **Website**: https://www.rust-lang.org/
 
-### Bevy Game Engine
+### Bevy
 The desktop build is built on [Bevy](https://bevyengine.org/), a refreshingly
 simple data-driven game engine built in Rust.
 
@@ -22,10 +22,10 @@ simple data-driven game engine built in Rust.
 - **Repository**: https://github.com/bevyengine/bevy
 
 O.R.B.S. uses Bevy without `bevy_text` and without `bevy_ui`. Every screen in the
-game — including the boot sequence, the editor, and the menus — is terminal
+game - including the boot sequence, the editor, and the menus - is terminal
 content drawn by the project's own cell-grid renderer.
 
-## Third-Party Libraries
+## third-party libraries
 
 Beyond Bevy and the Rust standard library, O.R.B.S. depends on:
 
@@ -43,11 +43,11 @@ Beyond Bevy and the Rust standard library, O.R.B.S. depends on:
 For complete license information covering every transitive dependency, see the
 `Cargo.lock` file, which lists all dependencies and their versions.
 
-## Fonts
+## fonts
 
 O.R.B.S. renders every glyph from bitmap fonts rasterised into a texture atlas.
-Full provenance — upstream URLs, versions, retrieval dates, and SHA-256 checksums
-for every file taken — is recorded in `assets/fonts/*/PROVENANCE.md`.
+Full provenance - upstream URLs, versions, retrieval dates, and SHA-256 checksums
+for every file taken - is recorded in `assets/fonts/*/PROVENANCE.md`.
 
 ### Spleen
 
@@ -56,7 +56,7 @@ The primary typeface, used for all ordinary text.
 - **Author**: Frederic Cambus
 - **Version**: 2.2.0
 - **Source**: https://github.com/fcambus/spleen
-- **License**: **BSD-2-Clause** — full text in `assets/fonts/spleen/LICENSE`
+- **License**: **BSD-2-Clause** - full text in `assets/fonts/spleen/LICENSE`
 
 > **Binary redistribution notice.** The BSD 2-Clause license requires that the
 > copyright notice, conditions, and disclaimer be reproduced *"in the
@@ -73,8 +73,8 @@ Used for the game's two alternate tonal registers, which change the shape of the
 letters without changing their position.
 
 - **Author**: Viznut (Ville-Matias Heikkilä)
-- **Source**: https://github.com/viznut/unscii — https://viznut.fi/unscii/
-- **License**: **Public domain (CC0)** — dedication quoted in full in
+- **Source**: https://github.com/viznut/unscii - https://viznut.fi/unscii/
+- **License**: **Public domain (CC0)** - dedication quoted in full in
   `assets/fonts/unscii/LICENSE.md`
 
 Three faces are used: `unscii-16`, `unscii-8-fantasy`, and `unscii-8-mcr`. All
@@ -82,7 +82,7 @@ three are assembled from unscii's own sources and contain no GNU Unifont
 material; `unscii-16-full`, which does and is therefore GPL, is deliberately not
 used.
 
-## Art, Music and Sound
+## art, music and sound
 
 **There is none, and that is the design.** O.R.B.S. is artless by intent: no
 sprites, no characters, no illustrations. Everything on screen is a character
@@ -91,7 +91,7 @@ cell drawn from one of the bitmap fonts above.
 The game currently ships without music or sound effects. If audio is added, it
 will be credited here.
 
-## Special Thanks
+## special thanks
 
 - The Bevy community for their documentation, examples, and willingness to
   answer questions about a version that changes every release

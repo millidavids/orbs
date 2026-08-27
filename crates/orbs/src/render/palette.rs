@@ -193,7 +193,25 @@ pub(crate) const MONOCHROME: Phosphor = Phosphor {
         rgb(1.00, 1.00, 1.00),
     ],
     danger: rgb(0.95, 0.25, 0.24),
-    cost: rgb(0.30, 0.62, 1.00),
+    // **Lifted in green, and only in green** — `0.62` was `1.06:1` from `danger`
+    // under deuteranopia, which is the same brightness to the player this theme
+    // is most for. `danger` is untouched and so are red and blue here: the solve
+    // moved the one channel that could move.
+    //
+    // **Squeezed from both sides, which is the thing to know before touching
+    // it.** `cost` here is pinned between the ≥4.5:1 floor against the
+    // background below and the ≥1.2:1 floor against body text above, and the
+    // deficiency floor pushes *up* into the second of those. This value clears
+    // deuteranopia at 1.27:1 and body text at 1.23:1 — both with room, and
+    // there is not much more to be had: buying another 0.06 of deficiency
+    // margin spends body text down to 1.20 exactly.
+    //
+    // That is the *"very little luminance headroom"* this theme's own doc
+    // comment warns about, met a second time; `success` was re-solved for the
+    // same reason once already. **Solve it, do not pick it** — and solve it in
+    // floats, because a value chosen on a 0–255 grid lands a rounding step away
+    // and this margin is smaller than one step.
+    cost: rgb(0.30, 0.70, 1.00),
     success: rgb(0.62, 1.00, 0.60),
     // **The one theme that declines**, and the reason it is worth having: a
     // theme named for one colour cannot sprout five, and a player who reads hue
@@ -487,24 +505,69 @@ mod tests {
     #[test]
     fn the_accent_triad_is_separable_without_hue() {
         for theme in ALL {
-            let accents = [
-                ("danger", theme.danger),
-                ("cost", theme.cost),
-                ("success", theme.success),
-            ];
-            for (a_name, a) in accents {
-                for (b_name, b) in accents {
-                    if a_name >= b_name {
-                        continue;
-                    }
-                    let ratio = contrast(a, b);
-                    assert!(
-                        ratio >= 1.25,
-                        "{}: {a_name} and {b_name} differ by {ratio:.2}:1 — \
-                         indistinguishable in greyscale",
-                        theme.name
-                    );
+            // The proxy: all the hue gone at once. A real deficiency takes one
+            // axis and leaves the others, which is a different picture — see
+            // `the_accent_triad_survives_every_deficiency`, which is the
+            // measurement this approximates and which found what it missed.
+            triad_separates(theme, "greyscale", |colour| colour);
+        }
+    }
+
+    /// §14's claim, measured instead of approximated.
+    ///
+    /// [`the_accent_triad_is_separable_without_hue`] takes *all* the hue away,
+    /// which is the cheap proxy — a real deficiency takes away one axis and
+    /// leaves the others, so it is a different picture and it can fail where
+    /// greyscale passes. This is the honest version, and it is the reason
+    /// [`deficiency`](super::super::deficiency) exists.
+    ///
+    /// **It failed on its first run**, at exactly one pair: monochrome's danger
+    /// and cost sat 1.05:1 apart under deuteranopia. §19 records the re-solve,
+    /// and the shape of it is the lesson — there was no scalar fix, because that
+    /// theme's `cost` is pinned between the ≥4.5:1 background floor below and
+    /// the ≥1.2:1 body-text floor above. The margin only ever reaches ~1.36
+    /// however far the colour is moved, which is the *"very little luminance
+    /// headroom"* its own doc comment warned about.
+    #[test]
+    fn the_accent_triad_survives_every_deficiency() {
+        use super::super::deficiency::{Deficiency, simulated};
+
+        for theme in ALL {
+            for deficiency in Deficiency::ALL {
+                triad_separates(theme, deficiency.name(), |colour| {
+                    simulated(deficiency, colour)
+                });
+            }
+        }
+    }
+
+    /// The triad, pairwise, through whatever `seen` does to it.
+    ///
+    /// **One walk, because there were two.** The greyscale proxy and the
+    /// deficiency measurement built the same three-tuple, deduped pairs with the
+    /// same `a_name >= b_name`, and used the same 1.25 floor — forty lines
+    /// duplicated for one call. The floor is the thing most likely to be
+    /// revisited, and two copies of it silently disagreeing is exactly how the
+    /// proxy and the measurement would stop meaning the same thing.
+    fn triad_separates(theme: Phosphor, through: &str, seen: impl Fn(Srgba) -> Srgba) {
+        let accents = [
+            ("danger", seen(theme.danger)),
+            ("cost", seen(theme.cost)),
+            ("success", seen(theme.success)),
+        ];
+        for (a_name, a) in accents {
+            for (b_name, b) in accents {
+                if a_name >= b_name {
+                    continue;
                 }
+                let ratio = contrast(a, b);
+                assert!(
+                    ratio >= 1.25,
+                    "{}: through {through}, {a_name} and {b_name} differ by \
+                     {ratio:.2}:1 — the same brightness to a player who cannot \
+                     separate them by hue either",
+                    theme.name,
+                );
             }
         }
     }

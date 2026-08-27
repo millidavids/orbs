@@ -746,11 +746,7 @@ fn weave_screen(grid: GridSize) -> Frame {
         Pos::new(1, 3),
         &Span::new("ley line").with_style(Style::DIM),
     );
-    painter.glyphs(
-        Pos::new(1, 4),
-        &"\u{2500}".repeat(usize::from(width)),
-        Style::DIM,
-    );
+    painter.rule(Pos::new(1, 4), width, Style::DIM);
     let at = 2 + u16::try_from(16 * u32::from(width.saturating_sub(3)) / 100).unwrap_or(0);
     painter.glyphs(Pos::new(at - 1, 4), "[", Style::DIM);
     painter.glyphs(Pos::new(at, 4), "\u{2022}", Style::default());
@@ -769,17 +765,13 @@ fn weave_screen(grid: GridSize) -> Frame {
     // greyscale, the brightness is what the eye finds first.
     painter.span(Pos::new(1, 7), &Span::new("mastery").with_style(Style::DIM));
     let along = |cost: u32| 2 + u16::try_from(cost * u32::from(width - 3) / 100).unwrap_or(0);
-    painter.glyphs(
-        Pos::new(1, 8),
-        &"\u{2500}".repeat(usize::from(along(24) - 3)),
-        Style::DIM,
-    );
+    painter.rule(Pos::new(1, 8), along(24) - 3, Style::DIM);
     painter.glyphs(Pos::new(along(24) - 2, 8), "\u{252c}", Style::DIM);
     painter.glyphs(Pos::new(along(24) - 2, 9), "\u{2514}", Style::DIM);
     for row in [8u16, 9] {
-        painter.glyphs(
+        painter.rule(
             Pos::new(along(24) + 2, row),
-            &"\u{2500}".repeat(usize::from(along(40) - along(24) - 3)),
+            along(40) - along(24) - 3,
             Style::DIM,
         );
     }
@@ -1113,11 +1105,7 @@ fn siege(grid: GridSize, mode: DisplayMode) -> Frame {
             );
         }
         let foot = layout.rail_foot();
-        painter.glyphs(
-            foot.origin(),
-            &"─".repeat(usize::from(foot.cols)),
-            Style::DIM,
-        );
+        painter.rule(foot.origin(), foot.cols, Style::DIM);
         painter.span(
             Pos::new(foot.col, foot.row.saturating_add(1)),
             &Span::new("tick  4210").with_style(Style::DIM),

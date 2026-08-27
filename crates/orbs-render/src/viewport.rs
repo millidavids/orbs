@@ -107,11 +107,16 @@ pub const INPUT_ROWS: u16 = 1;
 /// ```
 /// use orbs_render::{PICTURE, scale_for};
 ///
-/// // The default window: native cell size, with bars down the sides.
+/// // Native cell size: an 8x16 glyph, drawn as the pixels it was designed as.
 /// assert_eq!(scale_for((1280, 720)), 1.0);
 /// // 720 divides the common display heights, so they land on whole steps.
 /// assert_eq!(scale_for((2560, 1440)), 2.0);
 /// assert_eq!(scale_for((3840, 2160)), 3.0);
+///
+/// // **The default window.** A half step rather than a whole one, and it is
+/// // only safe because the cell is even on both axes: 8x16 becomes 12x24, so
+/// // every cell boundary is still a whole pixel.
+/// assert_eq!(scale_for((1920, 1080)), 1.5);
 ///
 /// // ...and the picture never exceeds the window on either axis.
 /// let scale = scale_for((1920, 1080));
@@ -204,10 +209,39 @@ mod tests {
     }
 
     #[test]
-    fn the_default_window_is_exactly_native() {
-        // `main.rs` opens at 1280×720 deliberately: it is scale 1, so the game
-        // starts at the font's own size *and* with visible bars, which exercises
-        // the letterbox on every run.
+    fn native_size_is_where_the_font_is_its_own_pixels() {
+        // 1280×720 is scale 1 — the sharpest the game ever is. It **was** the
+        // default window and is not; `main.rs` opens at 1920×1080 now, which is
+        // scale 1.5. This test is about `scale_for`, and its name used to claim
+        // it was about the default, which stopped being true without it failing.
         assert_eq!(scale_for((1280, 720)), MIN_SCALE);
+    }
+
+    /// The default window, and the property that makes 1.5 safe.
+    ///
+    /// A half step rather than a whole one is only survivable because the cell
+    /// is even on both axes: 8×16 becomes 12×24, so every cell boundary is still
+    /// a whole pixel. **That is the thing to check if the default moves again**
+    /// — not whether the scale is an integer, but whether `8s` and `16s` are.
+    #[test]
+    fn the_default_window_lands_the_cell_on_whole_pixels() {
+        let scale = scale_for((1920, 1080));
+        assert!(
+            (scale - 1.5).abs() < f32::EPSILON,
+            "the default is not 1.5x"
+        );
+        for cell in [8.0_f32, 16.0] {
+            let scaled = cell * scale;
+            assert!(
+                (scaled - scaled.round()).abs() < f32::EPSILON,
+                "a cell edge of {cell} lands on {scaled}, which is half a pixel",
+            );
+        }
+        // ...and the bars survive, which is the half of the original rationale
+        // that had to be preserved.
+        assert!(
+            f32::from(PICTURE.0) * scale < 1920.0,
+            "the letterbox is gone, so nothing exercises the 4:3 fit"
+        );
     }
 }

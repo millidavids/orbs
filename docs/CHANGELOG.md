@@ -15,6 +15,45 @@
   at 1.0 (DESIGN.md §19).
 -->
 
+## [v0.4.3] - 2026-08-27
+
+### Description
+In development — a dev log, not patch notes. This one is all readability: every
+listing the game prints got ruled headings, described commands and room to
+breathe, and there is now a greyscale mode that takes all the colour out.
+
+### Added
+- **A greyscale mode.** It removes every colour from the picture — including
+  from the curved tube, which puts hue back into pixels later in the pass than
+  you would expect. Nothing is only ever a colour in this game, so nothing is
+  lost by switching it off. `F8` cycles it.
+- **The window opens at 1920×1080.** It was 1280×720, which occupied a third of
+  a modern display. The text is drawn at one and a half times its old size; the
+  4:3 picture and its bars are unchanged.
+
+### Changed
+- **Every listing in the game was re-set.** Headings are ruled off beside their
+  words instead of wearing `[square brackets]`, a command that takes something
+  shows it as `grind <reagent>`, and each section now opens on a blank row. It
+  used to read like a configuration file.
+- **`help` describes the room you are standing in.** The words a room owns —
+  `grind`, `digest`, `distil` — get a line each saying what they do, because
+  they are the ones you have not met. The words every room shares stay a compact
+  index. Asking about any single one still gives you its full page.
+- **`status` lines its numbers up.** Dotted leaders, and the values in one
+  column, so `2` and `181` end in the same place.
+- **Prose wraps at a comfortable measure** rather than running the full width of
+  the pane, which in the laboratory was about 40% too long a line. Logs and
+  spells are exempt: those are shown to you exactly as they are.
+- **The website wears the same clothes.** Its headings are ruled to a fixed
+  column like the game's, and its sections open on the same gap.
+
+### Fixed
+- **One theme's accent colours were too close under colour blindness.** The
+  monochrome theme's "cost" and "danger" marks sat almost on top of each other
+  for a deuteranopic reader. Solved and pinned, along with the other three
+  themes, against all three kinds of colour blindness.
+
 ## [v0.4.2] - 2026-08-26
 
 ### Description

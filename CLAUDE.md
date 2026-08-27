@@ -2245,8 +2245,10 @@ removed (§19), so a player sits through the whole sequence every time.
 
 **`ORBS_DUMP` is a still photograph and this is the running game.** A dump builds
 no `App`, advances no clock and presses no keys, so every animated thing, every
-*edge* and every interactive surface needs an environment variable of its own —
-there are **eighteen** of them now. `orbs-tui` needs none: it is the same `Frame`
+*edge* and every interactive surface needs an environment variable of its own.
+**Count them rather than quoting a number** — `grep -rhoE '"ORBS_[A-Z_]+"'
+crates/ | sort -u` — this sentence has said eighteen through two versions in
+which the answer was twenty-one and then twenty-three. `orbs-tui` needs none: it is the same `Frame`
 through the same painters, with a real clock and a real keyboard, under `tmux`.
 
 ```bash
@@ -2409,8 +2411,14 @@ ORBS_WIZARD=wizard ORBS_BOOT=0 sh -c '
 ```
 
 ...prints nothing, or the shell has grown a frontend-shaped hole in it. Every
-`ORBS_*` switch works against `orbs-tui` too, so a See-it line written for one
-frontend runs against the other unchanged.
+`ORBS_*` switch that reaches the *shell* works against `orbs-tui` too, so a
+See-it line written for one frontend runs against the other unchanged.
+
+**Two do not, and they are the only two: `ORBS_SIGHT` and `ORBS_CRT`.** Both name
+render passes, and a terminal has none — they are read in `crates/orbs` and are
+silently inert in the other build. A See-it line using either does not move
+across frontends, and this sentence exists because the paragraph above used to
+say *every* without qualification.
 
 **`scripts/dumps.sh <dir>` captures every surface the game can draw** — 65
 screens — and is the instrument for a refactor whose gate is that nothing
@@ -2510,6 +2518,169 @@ terminal set to `ambiguous = wide` gives them two columns, which shifts the row
 **and** invalidates the per-cell diff. `orbs-tui` measures rather than assumes:
 it prints one at a known column and reads the cursor back, then swaps in ASCII if
 the answer is two. `cargo test -p orbs-tui` holds the table.
+
+### The output style — a heading is ruled, a slot is `<bracketed>`
+
+**Three rules, all in `record/view.rs`, and all of them the *view's*** — records
+carry bare words so `sift reagent` still finds one (rule 4).
+
+1. **A heading is ruled off beside the words**, not under them, so hierarchy
+   costs no row. The rule stops at a fixed column — never more than half the
+   pane — because drawn to the pane edge the rules become the strongest marks on
+   screen and the content goes to mush.
+2. **A slot draws `<like this>`.** Not decoration: tiled bare, `distil reagent`
+   and `kindle reagent` run together because the gap *between* entries is the
+   same two spaces as the gap *inside* one. `>` terminates the cell.
+3. **Described where local, indexed where global.** A run whose records carry
+   `FieldName::Detail` takes one row each with a second column; a run without one
+   tiles. `Verb::anchor` decides, so a new domain describes its own words with no
+   list to maintain.
+
+4. **A section opens with a blank row**, which `Input` has always had and which
+   `opens_with_a_gap` now answers for both. A rule names the boundary and the gap
+   gives the eye somewhere to land; pressed against the previous listing, a ruled
+   heading looks like part of it.
+
+```bash
+ORBS_BOOT=0 ORBS_SAVE=off ORBS_DUMP="attend laboratory; help" cargo run -p orbs
+ORBS_BOOT=0 ORBS_SAVE=off ORBS_GRID=80x22 ORBS_DUMP="attend laboratory; help" cargo run -p orbs
+```
+```text
+the work ─────────────────────────
+  grind <reagent>   crush a reagent in the mortar     ← this room's own
+  distil <reagent>  draw a potion off in the alembic
+                                                      ← the gap, not the rule,
+finding your way ─────────────────                       is what separates them
+  attend <place>  survey <place>  peruse <file>       ← every room's, indexed
+```
+
+**`opens_with_a_gap` is asked in `height` *and* in `draw_lines`**, and it is one
+`const fn` for that reason — a blank row changes the row count, which is the one
+thing those two may never disagree about. DESIGN.md §19 records that this was
+refused once on a measurement that had expired: the help page stopped fitting the
+80×22 floor exactly when the listing gained descriptions, so the blank rows make
+a scrolling page longer rather than breaking a fit. **Re-measure before honouring
+an objection of that shape** — nothing but running it can tell a live one from a
+stale one.
+
+**A leader bridges to a *right-aligned* column and to nothing else.** The boot
+card's `name ....... ok` works because `ok` is flush right. Against a
+left-aligned column the run length is set by the *near* column's raggedness —
+`status` took eleven dots and `digest <reagent>` none — so the eye lands on the
+dots. `status` keeps leaders; listings take a plain gap.
+
+```text
+tick ...........   2      ← the one right-aligned column in the transcript,
+seed ........... 181        so 181 and 2 end in the same place
+```
+
+**`RecordKind::Status` has five emit sites and only one is `status`.** The
+cold-start report is a contiguous run of seven and `verify` is another — so the
+reading column is guarded by a **shape test** (two or more records, each exactly
+a name and a numeric quantity), never by the kind alone. Boot is mixed and fails
+on its first row. Check `ORBS_BOOT=0 ORBS_DUMP="verify laboratory"` after
+touching it: the report must be untouched.
+
+**Prose wraps to a measure of 68, not to the pane** — 86 cells in the laboratory
+is 40% past the comfortable line length. Scoped to `Message`: a log or a `.spell`
+listing re-wrapped would be a line the game had reformatted, on the surfaces
+whose whole job is fidelity. It never binds at the 80×22 floor, whose body is 62.
+
+**`play::flatten` collapses leader runs as well as whitespace.** Seven scenarios
+asserting `experience 0` broke the day `status` gained dots; all seven were about
+the reading rather than its padding. A **run** of dots only — a single `.` is
+kept, or `orbs-save.toml` stops matching.
+
+**The measure and the draw must change together.** `Tiling::plan` measures
+through `signature_of` because `draw_tiled` draws through it. Measuring the bare
+form sets the stride two cells short and overlaps the tiles, which is §19's
+`attend plasurvey plaperuse filsift` defect.
+
+**The squint test, and the CRT shader is already the blur:**
+
+```bash
+timeout 60 env ORBS_BOOT=0 ORBS_SAVE=off ORBS_CAPTURE=1 ./target/debug/orbs
+python3 -c "from PIL import Image, ImageFilter; \
+  Image.open('orbs-screenshot.png').filter(ImageFilter.GaussianBlur(4)).save('/tmp/squint.png')"
+```
+
+If the rules are the strongest shapes, there are too many. **~50 of the 65
+captured dumps move when a heading changes** — headings are in nearly every
+screen with a listing — so byte-identity is a gate for a pure extraction only.
+
+### Greyscale — §14's accommodation, and the switch nothing else can flip
+
+**`ORBS_SIGHT=greyscale` takes every hue out of the picture**, and it is a
+separate render pass that runs *after* the tube. Both halves are decisions.
+
+**Last, not "before the barrel".** §19 originally placed the filter *"after the
+phosphor and before the barrel"*, and there is no such place: `crt.wgsl` applies
+the barrel **first** — it computes the sampling coordinate — and three later
+terms put hue back into a pixel that had none (the aperture grille attenuates
+R/G/B per column, the aberration is a coloured fringe, the flash is additive).
+A pass upstream of those would be undone by them.
+
+**A separate pass, because `crt.wgsl` early-returns when the tube is off.** A
+filter below that guard would switch off with `F3` — §19's *"a switch inferred
+from the absence of something is not a switch"*. `SightUniform::new` takes a
+`Sight` and nothing else, so there is no path from the tube to the accommodation.
+
+**`ORBS_CAPTURE` writes its screenshot at frame 30 and then keeps running** —
+nothing sends `AppExit`. So every capture line needs a `timeout`, and one
+without it hangs the shell rather than failing. This is the whole reason the
+loop below reads the way it does; the first draft of it omitted the timeout and
+blocked on its first iteration.
+
+```bash
+# The four-way matrix. Greyscale must be grey in **both** tube states.
+for s in plain greyscale; do for t in default off; do
+  timeout 60 env ORBS_BOOT=0 ORBS_SAVE=off ORBS_SIGHT=$s ORBS_CRT=$t \
+    ORBS_CAPTURE=1 ./target/debug/orbs >/dev/null 2>&1
+  python3 -c "
+from PIL import Image
+im=Image.open('orbs-screenshot.png').convert('RGB')
+print('$s/$t', sum(1 for p in im.getdata() if p[0]!=p[1] or p[1]!=p[2]))"
+done; done
+```
+```text
+plain/default      3180776     ← the control. without it the check is vacuous
+plain/off          4665600
+greyscale/default        0
+greyscale/off            0     ← the property the whole design turns on
+```
+
+**`ORBS_CAPTURE`, not `ORBS_DUMP`, and they cannot be combined** — `orbs_shell::dump`
+returns before the `App` is built, so a dump has no render passes at all. This is
+one of the few things only pixels can show.
+
+**`ORBS_CRT` takes `default`, `peak` or `off`** and seeds what `F3` cycles. It
+exists so the tube-off case is reachable without a keypress, which is the case
+§14 most needs checked automatically.
+
+**These two are the first `ORBS_*` switches that are Bevy-only.** Every other one
+works against `orbs-tui` as well, and the boundary claim further up this file
+says so — but a terminal has no render passes and no phosphor, so `ORBS_SIGHT`
+and `ORBS_CRT` are silently inert there. A See-it line using either does not move
+across frontends. Greyscale in the terminal build is the user's own colour
+scheme, which is §19's standing answer for that frontend.
+
+**The three correction filters are deliberately not built** (§19). Daltonisation
+was measured against this palette and degrades the accent triad in **eleven of
+twelve** theme × deficiency combinations, because the triad is solved in
+*luminance* and daltonisation redistributes *hue*. `render::deficiency` keeps the
+simulation half, `#[cfg(test)]`, and points it at
+`the_accent_triad_survives_every_deficiency` — which found monochrome's danger
+and cost sitting 1.06:1 apart under deuteranopia and is why that theme's `cost`
+moved.
+
+```bash
+cargo test -p orbs --bins render::palette   # the floors, including the deficiency one
+```
+
+**Solve a palette constant in floats, not on a 0–255 grid.** The first fix for
+monochrome was solved as integers, landed a rounding step away, and failed
+`accents_are_distinguishable_from_body_text` at 1.191 against a floor of 1.2.
+These margins are smaller than one step of 1/255.
 
 ### Read the log, not only the screen
 

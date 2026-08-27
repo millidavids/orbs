@@ -11,6 +11,15 @@ use bevy::render::{Extract, ExtractSchedule, Render, RenderApp, RenderStartup, R
 use super::pass::{CrtUniformBuffer, ExtractedCrt, crt_pass, init_pipeline, prepare};
 use super::settings::{CrtSettings, CrtUniform};
 
+/// The tube's own pass, so another can be ordered after it.
+///
+/// A set rather than the system, because `crt_pass` takes two private types and
+/// widening it to be nameable elsewhere would widen them too. `sight` is the
+/// caller: §14's accommodation has to be the *last* thing to touch a pixel, and
+/// three terms in this shader put hue back into one that had none.
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub(crate) struct CrtPass;
+
 /// The curved phosphor screen (DESIGN.md §4).
 pub struct CrtPlugin;
 
@@ -50,6 +59,7 @@ impl Plugin for CrtPlugin {
                 Core2d,
                 crt_pass
                     .in_set(Core2dSystems::PostProcess)
+                    .in_set(CrtPass)
                     .after(tonemapping),
             );
     }
@@ -83,6 +93,50 @@ fn after(current: CrtSettings) -> (CrtSettings, &'static str) {
     } else {
         (CrtSettings::DEFAULT, "default")
     }
+}
+
+/// The three states `F3` reaches, by the names `ORBS_CRT` takes.
+///
+/// One table, so a name and the state it selects cannot drift apart.
+const STATES: [(&str, CrtSettings); 3] = [
+    ("default", CrtSettings::DEFAULT),
+    ("peak", CrtSettings::PEAK_THREAT),
+    ("off", CrtSettings::OFF),
+];
+
+/// Which tube state to open with, from `ORBS_CRT`.
+///
+/// **This exists for a See-it line rather than for players.** `ORBS_CAPTURE`
+/// presses no keys, so the state that matters most to §14 — the tube off — was
+/// reachable only by a person at a keyboard, and *"turning the tube off does not
+/// turn the accommodation off"* is exactly the property worth checking without
+/// one. Phase 11's settings screen makes this ordinary.
+pub(crate) fn seeded() -> CrtSettings {
+    chosen(std::env::var("ORBS_CRT").ok().as_deref())
+}
+
+/// The rule [`seeded`] applies, without the environment.
+///
+/// Split out so it can be *tested*: a test that set `ORBS_CRT` would set it for
+/// every other test in the binary. `save::chosen` is the precedent and the
+/// reason, and `sight::chosen` is the sibling — the two must agree about case
+/// and about blanks, or one accommodation switch behaves unlike the other.
+fn chosen(value: Option<&str>) -> CrtSettings {
+    // An exported-but-empty variable is *unset*, not a typo. `ORBS_CRT= orbs`
+    // is the shell idiom for neutralising one, and a loop variable that came out
+    // empty is the same thing arriving by accident; warning on either is noise
+    // on every launch. `save::chosen` filters blanks for exactly this reason.
+    let Some(value) = value.map(str::trim).filter(|value| !value.is_empty()) else {
+        return CrtSettings::default();
+    };
+    let Some((_, state)) = STATES
+        .iter()
+        .find(|(name, _)| name.eq_ignore_ascii_case(value))
+    else {
+        warn!("ORBS_CRT: no such tube state {value:?} — using the default");
+        return CrtSettings::default();
+    };
+    *state
 }
 
 /// Copy the settings across to the render world once per frame.
@@ -173,5 +227,34 @@ mod tests {
             ..CrtSettings::DEFAULT
         };
         assert_eq!(after(odd).0, CrtSettings::DEFAULT);
+    }
+
+    /// `ORBS_CRT` and `ORBS_SIGHT` must agree about case and about blanks.
+    ///
+    /// They did not: this took `off` and refused `OFF`, where `Sight::parse`
+    /// has always been case-insensitive. Two accommodation switches behaving
+    /// differently is the kind of difference nobody reads a doc comment to
+    /// discover.
+    #[test]
+    fn a_tube_state_is_named_the_way_a_sight_is() {
+        for (name, state) in STATES {
+            assert_eq!(chosen(Some(name)), state);
+            assert_eq!(chosen(Some(&name.to_uppercase())), state);
+            assert_eq!(chosen(Some(&format!("  {name}  "))), state);
+        }
+    }
+
+    /// An exported-but-empty variable is unset, and must not warn.
+    #[test]
+    fn a_blank_reads_as_unset_rather_than_as_a_typo() {
+        assert_eq!(chosen(None), CrtSettings::default());
+        assert_eq!(chosen(Some("")), CrtSettings::default());
+        assert_eq!(chosen(Some("   ")), CrtSettings::default());
+    }
+
+    #[test]
+    fn a_typo_falls_back_to_the_default_tube() {
+        assert_eq!(chosen(Some("of")), CrtSettings::default());
+        assert_eq!(chosen(Some("peak threat")), CrtSettings::default());
     }
 }

@@ -107,11 +107,7 @@ fn domain(painter: &mut orbs_render::Painter<'_>, brief: &Brief, at: Rect, ruled
     // sighted player gets separation for free.
     let floor = if ruled && at.rows > 1 {
         let row = at.bottom().saturating_sub(1);
-        painter.glyphs(
-            Pos::new(at.col, row),
-            &"─".repeat(usize::from(at.cols)),
-            Style::DIM,
-        );
+        painter.rule(Pos::new(at.col, row), at.cols, Style::DIM);
         row
     } else {
         at.bottom()
@@ -232,11 +228,7 @@ fn readings(painter: &mut orbs_render::Painter<'_>, sim: &Sim, screen: &Screen, 
     // A rule between the domains and the readings, so the eye knows the numbers
     // below it are about the orb rather than about the seventh domain. Silent,
     // for the reason a border is: structure writes cells and no speech.
-    painter.glyphs(
-        Pos::new(at.col, row),
-        &"─".repeat(usize::from(at.cols)),
-        Style::DIM,
-    );
+    painter.rule(Pos::new(at.col, row), at.cols, Style::DIM);
     row = row.saturating_add(1);
 
     for text in rows.iter().filter(|text| !text.is_empty()) {

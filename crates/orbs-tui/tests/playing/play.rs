@@ -743,7 +743,36 @@ fn block(screen: &str) -> String {
 /// which also keeps the resize scenarios from needing different needles from
 /// everything else.
 fn flatten(text: &str) -> String {
-    text.split_whitespace().collect::<Vec<_>>().join(" ")
+    // **Leader runs collapse too, and that is the same argument one step on.**
+    // `status` draws its readings as `experience ..... 0` so the values share a
+    // column, and seven scenarios asserting `experience 0` broke the day it did
+    // — every one of them about *what the reading was*, none about how the gap
+    // to it was filled. Whitespace was already normalised here for exactly that
+    // reason; a run of dots is the same kind of nothing.
+    //
+    // A **run**, never a single `.`, so a sentence keeps its full stops and a
+    // file keeps its extension: `orbs-save.toml` and `laboratory.log` are needles
+    // scenarios really do write.
+    let mut out = String::with_capacity(text.len());
+    let mut dots = 0usize;
+    for ch in text.chars() {
+        if ch == '.' {
+            dots += 1;
+            continue;
+        }
+        if dots > 0 {
+            // Two or more is a leader; one is punctuation and is kept.
+            out.push_str(if dots == 1 { "." } else { " " });
+            dots = 0;
+        }
+        out.push(ch);
+    }
+    if dots == 1 {
+        out.push('.');
+    } else if dots > 1 {
+        out.push(' ');
+    }
+    out.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 /// The world's clock, wherever this grid happens to draw it.

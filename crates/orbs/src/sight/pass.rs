@@ -1,11 +1,10 @@
-//! The full-screen pass.
+//! The full-screen accommodation pass.
 //!
-//! **This is not a port.** `court_wizard`'s version is a `ViewNode` wired into a
-//! render graph, and Bevy 0.19 does not have one: `bevy_render::render_graph` is
-//! gone and post-process passes are ordinary systems in the `Core2d` schedule.
-//! §4 flagged the render-graph Rust as "Bevy's most volatile surface" and it was
-//! right — the shader ported almost unchanged, the surrounding Rust did not
-//! survive at all. It is much smaller this way.
+//! Mirrors `crt::pass` closely and deliberately — same pipeline-per-format
+//! shape, same ping-pong, same "absent only while the pipeline compiles" guards.
+//! It is a second pass rather than more of the tube for the reasons in
+//! `sight.wgsl`'s header: the tube early-returns when it is off, and this may
+//! not.
 
 use bevy::asset::{AssetServer, load_embedded_asset};
 use bevy::core_pipeline::FullscreenShader;
@@ -22,15 +21,22 @@ use bevy::render::renderer::{RenderContext, RenderDevice, RenderQueue, ViewQuery
 use bevy::render::view::ViewTarget;
 use bevy::shader::Shader;
 
-use super::settings::CrtUniform;
+use bevy::render::Extract;
+
+use super::settings::{SightUniform, Vision};
+
+/// Hand the setting to the render world.
+///
+/// **Reads [`Vision`] and nothing else.** There is no path from here to
+/// `CrtSettings`, which is what makes "the tube cannot switch the accommodation
+/// off" a property of the wiring rather than a promise in a comment.
+pub(super) fn extract(vision: Extract<Res<Vision>>, mut commands: Commands) {
+    commands.insert_resource(ExtractedSight(SightUniform::new(vision.0)));
+}
 
 /// Layout, sampler, and the pipelines built for each target format.
-///
-/// Keyed on format rather than assuming one: Bevy 0.19 deprecated the notion of
-/// a default texture format precisely because a view can be HDR or not, and
-/// guessing wrong is a validation error at draw time rather than a compile one.
 #[derive(Resource)]
-pub(super) struct CrtPipeline {
+pub(super) struct SightPipeline {
     layout: BindGroupLayoutDescriptor,
     sampler: Sampler,
     shader: Handle<Shader>,
@@ -38,7 +44,7 @@ pub(super) struct CrtPipeline {
     by_format: HashMap<TextureFormat, CachedRenderPipelineId>,
 }
 
-impl CrtPipeline {
+impl SightPipeline {
     /// The pipeline for `format`, queued on first sight.
     fn for_format(
         &mut self,
@@ -47,7 +53,7 @@ impl CrtPipeline {
     ) -> CachedRenderPipelineId {
         *self.by_format.entry(format).or_insert_with(|| {
             pipeline_cache.queue_render_pipeline(RenderPipelineDescriptor {
-                label: Some("orbs_crt".into()),
+                label: Some("orbs_sight".into()),
                 layout: vec![self.layout.clone()],
                 vertex: self.fullscreen.to_vertex_state(),
                 fragment: Some(FragmentState {
@@ -67,14 +73,14 @@ impl CrtPipeline {
 
 /// This frame's uniform, and where in the buffer it landed.
 #[derive(Resource, Default)]
-pub(super) struct CrtUniformBuffer {
-    buffer: DynamicUniformBuffer<CrtUniform>,
+pub(super) struct SightUniformBuffer {
+    buffer: DynamicUniformBuffer<SightUniform>,
     offset: u32,
 }
 
 /// The uniform, extracted from the main world each frame.
 #[derive(Resource, Debug, Clone, Copy)]
-pub(super) struct ExtractedCrt(pub(super) CrtUniform);
+pub(super) struct ExtractedSight(pub(super) SightUniform);
 
 pub(super) fn init_pipeline(
     mut commands: Commands,
@@ -83,61 +89,76 @@ pub(super) fn init_pipeline(
     asset_server: Res<AssetServer>,
 ) {
     let layout = BindGroupLayoutDescriptor::new(
-        "orbs_crt_layout",
+        "orbs_sight_layout",
         &BindGroupLayoutEntries::sequential(
             ShaderStages::FRAGMENT,
             (
                 texture_2d(TextureSampleType::Float { filterable: true }),
                 sampler(SamplerBindingType::Filtering),
-                uniform_buffer::<CrtUniform>(true),
+                uniform_buffer::<SightUniform>(true),
             ),
         ),
     );
 
-    // Linear, unlike the glyph atlas: this samples an already-rasterised image,
-    // and the barrel warp lands between texels by definition.
+    // Nearest would do — this samples one texel per fragment and warps nothing —
+    // but the default matches the tube's and costs the same.
     let sampler = render_device.create_sampler(&SamplerDescriptor {
-        label: Some("orbs_crt_sampler"),
+        label: Some("orbs_sight_sampler"),
         ..default()
     });
 
-    commands.insert_resource(CrtPipeline {
+    commands.insert_resource(SightPipeline {
         layout,
         sampler,
-        shader: load_embedded_asset!(asset_server.as_ref(), "crt.wgsl"),
+        shader: load_embedded_asset!(asset_server.as_ref(), "sight.wgsl"),
         fullscreen: fullscreen_shader.clone(),
         by_format: HashMap::new(),
     });
 }
 
-/// Upload this frame's settings.
+/// Upload this frame's setting.
 pub(super) fn prepare(
-    extracted: Option<Res<ExtractedCrt>>,
-    mut uniform: ResMut<CrtUniformBuffer>,
+    extracted: Option<Res<ExtractedSight>>,
+    mut uniform: ResMut<SightUniformBuffer>,
     render_device: Res<RenderDevice>,
     render_queue: Res<RenderQueue>,
 ) {
     let Some(extracted) = extracted else {
         return;
     };
+    // **Skipped for the same reason the pass is.** `sight_pass` early-returns
+    // when the setting changes nothing, so uploading in that case buys a buffer
+    // write per frame for a value nothing reads — sixty a second, for every
+    // player who has not asked for an accommodation. The pass's own guard is
+    // what keeps the picture right; this is what keeps the ordinary case free.
+    if !extracted.0.wanted() {
+        return;
+    }
     uniform.buffer.clear();
     uniform.offset = uniform.buffer.push(&extracted.0);
     uniform.buffer.write_buffer(&render_device, &render_queue);
 }
 
-/// Draw the curved screen.
-///
-/// Ordered against from outside this module through [`CrtPass`](super::CrtPass)
-/// rather than by name: this takes `CrtPipeline` and `CrtUniformBuffer`, both
-/// private, so widening the function would drag the tube's internals across the
-/// crate to buy one ordering edge.
-pub(super) fn crt_pass(
+/// Take the hue out.
+pub(super) fn sight_pass(
     view: ViewQuery<&ViewTarget>,
+    extracted: Option<Res<ExtractedSight>>,
     pipeline_cache: Res<PipelineCache>,
-    mut pipeline: ResMut<CrtPipeline>,
-    uniform: Res<CrtUniformBuffer>,
+    mut pipeline: ResMut<SightPipeline>,
+    uniform: Res<SightUniformBuffer>,
     mut ctx: RenderContext,
 ) {
+    // **Skipped when it would change nothing.** A pass that always ran would
+    // cost a fullscreen ping-pong on every frame for every player, to multiply
+    // by an identity. This is the one place the accommodation is allowed to be
+    // conditional, because the condition is its own setting and nothing else's.
+    let Some(extracted) = extracted else {
+        return;
+    };
+    if !extracted.0.wanted() {
+        return;
+    }
+
     let view_target = view.into_inner();
 
     let id = pipeline.for_format(view_target.main_texture_format(), &pipeline_cache);
@@ -149,17 +170,17 @@ pub(super) fn crt_pass(
         return;
     };
 
-    // Ping-pong: read the frame the cell grid drew, write the curved one.
+    // Ping-pong: read the frame the tube drew, write the one without hue.
     let post_process = view_target.post_process_write();
 
     let bind_group = ctx.render_device().create_bind_group(
-        Some("orbs_crt_bind_group"),
+        Some("orbs_sight_bind_group"),
         &pipeline_cache.get_bind_group_layout(&pipeline.layout),
         &BindGroupEntries::sequential((post_process.source, &pipeline.sampler, binding)),
     );
 
     let mut pass = ctx.begin_tracked_render_pass(RenderPassDescriptor {
-        label: Some("orbs_crt"),
+        label: Some("orbs_sight"),
         color_attachments: &[Some(RenderPassColorAttachment {
             view: post_process.destination,
             depth_slice: None,

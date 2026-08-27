@@ -66,7 +66,14 @@ pub(crate) fn spawn_camera(mut commands: Commands) {
             ..OrthographicProjection::default_2d()
         }),
         Msaa::Off,
-        crate::crt::CrtSettings::default(),
+        // **Seeded from the environment**, so the tube's state is reachable
+        // without a keypress. `F3` still cycles it; this is what lets a See-it
+        // line capture the one property §14's accommodation turns on — that
+        // turning the tube *off* does not turn the accommodation off with it.
+        // `ORBS_CAPTURE` presses no keys, so without this that property could
+        // only ever be checked by a person, and it is the property most worth
+        // checking automatically. Phase 11's settings screen replaces it.
+        crate::crt::seeded(),
     ));
 }
 

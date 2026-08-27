@@ -232,13 +232,13 @@ fn scripting(world: &mut World) {
     // next word added to the language would have updated one and left this page
     // printing a stale shape. That is the exact failure the extraction was for.
     for word in crate::parser::SpellWord::ALL {
-        entry(world, word.canonical(), word.shape());
+        entry(world, word.canonical(), word.shape(), None);
     }
 
     section(world, "man_scripting_asking");
     for key in SHAPES {
         let line = world.resource::<Prose>().line(key, &[]);
-        entry(world, &line, "");
+        entry(world, &line, "", None);
     }
 
     // **The sets, before the names**, because `for each <set>` is unusable
@@ -252,16 +252,16 @@ fn scripting(world: &mut World) {
     if !sets.is_empty() {
         section(world, "man_scripting_sets");
         for set in sets {
-            entry(world, &set, "");
+            entry(world, &set, "", None);
         }
     }
 
     section(world, "man_scripting_here");
     for place in places {
-        entry(world, &place, "");
+        entry(world, &place, "", None);
     }
     for word in readings {
-        entry(world, word, "");
+        entry(world, word, "", None);
     }
 }
 
@@ -279,17 +279,24 @@ const SHAPES: [&str; 5] = [
 ];
 
 /// One row under a section: a name, and what follows it.
-fn entry(world: &mut World, name: &str, shape: &str) {
+fn entry(world: &mut World, name: &str, shape: &str, describing: Option<&str>) {
     let mut records = world.resource_mut::<Scrollback>();
     let records = records.records_mut();
-    let row = records.push(RecordKind::Entry).text(FieldName::Name, name);
+    let mut row = records.push(RecordKind::Entry).text(FieldName::Name, name);
     // An empty field is not an absent one — it draws as trailing blanks and
     // speaks as a labelled silence, which is why `overview` guards the same way.
-    if shape.is_empty() {
-        row.finish();
-    } else {
-        row.text(FieldName::Kind, shape).finish();
+    if !shape.is_empty() {
+        row = row.text(FieldName::Kind, shape);
     }
+    // **What it does, when the row has earned one.** Carried as a field rather
+    // than composed into the name: the view decides whether a run draws as a
+    // described column or an index, `sift` matches the sentence, and a reader
+    // hears it labelled. Absent on a tower-wide verb, which is what keeps that
+    // run tiling.
+    if let Some(gloss) = describing {
+        row = row.text(FieldName::Detail, gloss);
+    }
+    row.finish();
 }
 
 /// The three halves of a room's primer, in the order they are printed.
@@ -420,8 +427,44 @@ fn overview(world: &mut World) {
         // `status` and `undo` take no argument, and an empty `Kind` draws as
         // trailing blanks and speaks as a labelled silence. It was written out
         // here *and* in `entry`, which is two homes for one rule.
+        // **This room's own words are described; the tower-wide ones are
+        // indexed.** `grind`, `digest` and `distil` are opaque and a player
+        // meets them for the first time in the room that offers them;
+        // `status` and `quit` are neither, and they appear under the same
+        // heading in every room in the game. So the local ones earn a
+        // sentence and the global ones earn a column.
+        //
+        // The saving is the point rather than a side effect: described
+        // throughout, this page is ~35 rows against a floor that fits 19.
+        // `recall <verb>` still has the full page for anything here.
+        //
+        // `anchor` is the existing question *which fixture must stand here* —
+        // the same one `Scene::offers` asks to decide what a room offers at
+        // all — so a new domain's verbs describe themselves with no list to
+        // maintain.
+        // **Decided per section, not per verb**, and that is the fix for a real
+        // defect rather than a preference. `move` and `wield` sit under *the
+        // work* and are tower-wide, so describing only the anchored verbs left
+        // the section half described — and a half-described run cannot draw as
+        // either shape. It fell back to stacking with the sentence jammed on
+        // unpadded, which is worse than what it replaced.
+        //
+        // A section is the unit a reader sees, so a section is the unit that
+        // decides. §3 is the deeper reason: a run where some rows have a second
+        // column and some do not is ragged, and raggedness is the vocabulary
+        // sabotage owns.
+        let describes = members.iter().any(|verb| verb.anchor().is_some());
         for verb in members {
-            entry(world, verb.canonical(), verb.signature_label());
+            let gloss = describes.then(|| {
+                let key = format!("man_{}_gloss", verb.canonical());
+                world.resource::<Prose>().line(&key, &[])
+            });
+            entry(
+                world,
+                verb.canonical(),
+                verb.signature_label(),
+                gloss.as_deref(),
+            );
         }
     }
 

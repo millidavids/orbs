@@ -1,24 +1,24 @@
-# How to Play
+# how to play
 
 O.R.B.S. teaches itself from inside. **Type `help` at any prompt** and the orb
 explains the room you are standing in and lists every word it will answer to
 there. This document is the orientation you read once; `help` is the reference
 you use forever.
 
-## Objective
+## objective
 
 You are a wizard. You have found a computer terminal inside your scrying orb,
 and through it you can reach every part of your tower.
 
 Your job is to keep the tower running: brew potions, assemble scrolls, break the
 seals a rival has placed on your instruments, and hold the barrier that protects
-you. All of it is work you can do by hand — and all of it is work the orb can be
+you. All of it is work you can do by hand - and all of it is work the orb can be
 taught to do for you.
 
 **Teaching the orb is the game.** Doing a task by hand once is how you learn it;
 writing a spell that does it while you are elsewhere is how you progress.
 
-## Controls
+## controls
 
 **You play by typing.** There is no mouse input.
 
@@ -43,7 +43,7 @@ Typing `quit` also leaves, and is the discoverable version of `F10`.
 command you type is queued to the next tick. Racing the clock earns you nothing
 anywhere in the game.
 
-## Talking to the Orb
+## talking to the orb
 
 The orb reads plain English, within reason. It strips filler, so all of these
 are the same command:
@@ -60,22 +60,22 @@ than what you intended.
 
 If a word is ambiguous, the orb asks rather than guessing.
 
-## Getting Around
+## getting around
 
 Your tower is a filesystem, and the rooms are directories.
 
-- **`attend <room>`** — go and stand somewhere. `attend laboratory`
-- **`survey`** — look at where you are. `survey <place>` looks at something
+- **`attend <room>`** - go and stand somewhere. `attend laboratory`
+- **`survey`** - look at where you are. `survey <place>` looks at something
   without walking to it
-- **`status`** — everything in flight at once
-- **`recall <thing>`** — the manual page for anything: a verb, a potion, a word
+- **`status`** - everything in flight at once
+- **`recall <thing>`** - the manual page for anything: a verb, a potion, a word
   of the spell language. `recall clarity` walks you through a whole brew
 
 **Each room has words of its own**, and they only work there. `grind` is the
 laboratory's; `haul` is the sanctum's. `help` in a room lists that room's words
 and nothing else.
 
-## The Rooms
+## the rooms
 
 | Room | What happens there |
 |---|---|
@@ -86,7 +86,7 @@ and nothing else.
 | **grimoire** | Where your spells are kept |
 | **arsenal** | Where finished work goes. The one room reachable from every other |
 
-## Your First Ten Minutes
+## your first ten minutes
 
 ```
 attend laboratory        stand in the room where brewing happens
@@ -102,15 +102,15 @@ recall clarity           the whole recipe, start to finish
 `recall clarity` is the single most useful thing to type early. It names every
 stage of the game's flagship potion, in order, with how long each takes.
 
-## Waiting
+## waiting
 
-Work takes time — a grind is eight seconds, a distillation is a minute. You can
+Work takes time - a grind is eight seconds, a distillation is a minute. You can
 sit and watch, or type **`meditate <n>`** to let `n` ticks pass at once.
 
 `meditate` is a convenience for playing alone. It is not a resource and there is
 no cost to it.
 
-## Writing Spells
+## writing spells
 
 This is what the game is for.
 
@@ -121,17 +121,17 @@ scribe morning           open the editor on a new spell called morning
 Inside the editor, type **`edit`** to start writing, **Escape** to stop, and
 **`quit`** to save and close. Two other words are worth knowing:
 
-- **`guide`** — toggles a pane down the right that explains whatever your cursor
+- **`guide`** - toggles a pane down the right that explains whatever your cursor
   is touching, and lists what may legally come next
-- **`interpret`** — shows how the orb reads each of your lines *before* you run
+- **`interpret`** - shows how the orb reads each of your lines *before* you run
   them. The place to catch a line that says something other than you meant
 
 A spell is written for the room you scribed it in, so it needs no `attend`.
 
 Then, back at the prompt:
 
-- **`invoke <name>`** — run it once. It stops if you leave the room
-- **`bind <name>`** — leave it running. It keeps working while you are elsewhere,
+- **`invoke <name>`** - run it once. It stops if you leave the room
+- **`bind <name>`** - leave it running. It keeps working while you are elsewhere,
   and re-casts itself when it reaches the end
 
 `bind` has to be earned. Do enough work by hand and the orb learns to hold a
@@ -153,7 +153,7 @@ load(sage)
 load(rock-salt)
 ```
 
-## Things That Will Go Wrong
+## things that will go wrong
 
 - **An instrument refuses a second load** until you `empty` it. The byproduct of
   the last run is still in it.
@@ -163,19 +163,19 @@ load(rock-salt)
 - **A log has been poisoned.** Same rival, different surface. `sift` and
   `verify` are how you tell.
 - **A spell has faulted.** The tower rail down the right marks the room with
-  `‼`. Go and look — going to look is what clears it.
+  `‼`. Go and look - going to look is what clears it.
 
-## Reading the Screen
+## reading the screen
 
 The **tower rail** down the right shows every room at a glance: whether it is
 working, what it is working on, whether a spell is bound there, and whether
 anything has gone wrong. It is how you know the laboratory needs you while you
 are standing in the archive.
 
-A room with a picture — the archive's maze, the lens's seal, the sanctum's board
-— draws it beside the transcript whenever there is something to draw.
+A room with a picture - the archive's maze, the lens's seal, the sanctum's board
+- draws it beside the transcript whenever there is something to draw.
 
-## Accessibility
+## accessibility
 
 - **`F5`** reads the whole screen as a linear stream of sentences rather than a
   grid. This is the route for screen readers.

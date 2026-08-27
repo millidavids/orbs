@@ -232,6 +232,24 @@ that names its phase gets revisited when the phase arrives; one that says
       **See it:** ✅ every line on screen is a record. `sift <pattern> orb.log`
       filters them. `F7` cycles the tonal register through all three typefaces,
       and `peruse orb.log` under it shows §3's exemption holding
+
+      ✅ **The output pass** (`0.4.3`) — a correction folded into this item, so
+      it **advances no step**. The model was right and the *view* read as a
+      config file:
+      `[bracketed]` headings over ragged columns, and `distil reagent  kindle
+      reagent` running together because the gap between two entries was the same
+      two spaces as the gap inside one. Four rules, all in `record/view.rs` and
+      all the view's — a heading ruled off beside its words to a fixed stop, a
+      slot drawn `<bracketed>`, a run described where its verbs are local to the
+      room and tiled where they are the whole tower's, and a blank row opening
+      each section. Prose takes a measure of 68 rather than the pane, and
+      `status` keeps dotted leaders because its column is the one right-aligned
+      thing in the transcript. Details, and the three things it got wrong first,
+      in DESIGN.md §19
+      **See it:** ✅ `ORBS_BOOT=0 ORBS_DUMP="attend laboratory; help" cargo run
+      -p orbs`, and again with `ORBS_GRID=80x22`. **The page no longer fits the
+      floor** and that is recorded rather than fixed — it is a record like any
+      other and `PgUp` reaches it
 > **Everything below is ordered by playability, not by layer** — DESIGN.md §15.
 > The first six items were built in layer order and left ~10,000 lines the binary
 > called under 40% of. **No item below is done until the "see it" line works.**
@@ -3576,17 +3594,32 @@ by *"the economy and the focus system are the same system"*.
       had to give up the accommodation to get it. A **filter** is orthogonal to
       the theme, which is what an accommodation should be.
 
-      Three filters (protanopia, deuteranopia, tritanopia) plus a true greyscale
-      mode, applied as a post-pass over the composited frame in the CRT shader —
-      *after* the phosphor and before the barrel, so it catches the fire, the
-      tints and the accent triad in one place rather than needing every palette
-      to be solved four more times.
+      ~~Three filters (protanopia, deuteranopia, tritanopia) plus a true
+      greyscale mode, applied as a post-pass over the composited frame in the CRT
+      shader — *after* the phosphor and before the barrel.~~ **Both halves of
+      that are superseded, and the greyscale half is built.**
 
-      **The accent triad must stay separable under every filter**, which is the
-      property `palette::the_accent_triad_is_separable_without_hue` already
-      asserts without hue at all; extend it per filter. The material tints are
-      allowed to collapse — they are a convenience over `survey`, never the
-      only carrier — but `danger`/`cost`/`success` are not.
+      **The three correction filters are not being built**, on measurement rather
+      than on schedule. Daltonisation degrades this palette's accent separation
+      in eleven of twelve theme × deficiency combinations, because the triad is
+      solved in *luminance* and the correction works in *hue*; DESIGN.md §19
+      carries the numbers. What was kept is the **simulation**, as
+      `render::deficiency` under `#[cfg(test)]`, pointed at
+      `palette::the_accent_triad_survives_every_deficiency` — which failed on its
+      first run and is why monochrome's `cost` moved.
+
+      **"Before the barrel" is not a place that exists.** `crt.wgsl` applies the
+      barrel *first* — it computes the sampling coordinate — and the grille, the
+      aberration and the flash all put hue back into a pixel that had none. The
+      pass is **last**, and it is a separate pass rather than part of the tube
+      because `crt.wgsl` early-returns when the tube is off and an accommodation
+      F3 could switch off is §19's own anti-pattern.
+
+      Still owed: the material tints are allowed to collapse under greyscale —
+      they are a convenience over `survey`, never the only carrier — but a
+      settings screen to reach any of this without an environment variable is
+      Phase 11's, and until it lands there is **no in-game control** for the
+      accommodation.
 
       **See it:** set each filter in turn with the laboratory on screen and a
       breach in the transcript; the athanor still reads as fire, the accent
