@@ -120,6 +120,9 @@ impl Sim {
         world.init_resource::<Pending>();
         world.init_resource::<Submissions>();
         world.init_resource::<Skip>();
+        world.init_resource::<crate::execute::Answered>();
+        world.init_resource::<crate::execute::Chorusing>();
+        world.init_resource::<crate::execute::Patient>();
         world.init_resource::<ParseLog>();
         world.init_resource::<Wizard>();
         world.init_resource::<Choices>();
@@ -253,6 +256,17 @@ impl Sim {
                 // inside `muster` rather than in a system. So this is appended
                 // here without shifting a single existing replay.
                 tower::erode,
+                // **The same licence again, and this one is the clearest case
+                // of it.** A syllable landing unanswered is a clock reading and
+                // nothing else: the menagerie's one draw is `Chant::draw`, on
+                // `RngStream::Menagerie`, and it happens inside `summon` rather
+                // than in a system. So this is appended here without shifting a
+                // single existing replay.
+                //
+                // **After `erode`**, so a chant that collapses on the same tick
+                // the barrier wears sees the barrier the tick left it, not the
+                // one it started with.
+                crate::execute::lapse_chant,
                 tower::spell::stand,
             )
                 .chain(),
@@ -532,6 +546,12 @@ impl Sim {
             return;
         }
 
+        #[cfg(debug_assertions)]
+        if let Some(id) = crate::execute::taking(line) {
+            self.debug_take(line, id.as_deref());
+            return;
+        }
+
         // `analyse` rather than `resolve`: it keeps every scored reading, which
         // is what §6's *"the parser must explain itself"* means in practice and
         // what the Phase 0 gate needs to cluster failures by cause rather than
@@ -611,6 +631,29 @@ impl Sim {
             .write(filename, lines.to_vec());
     }
 
+    /// Take a mastery node, on the next tick.
+    ///
+    /// [`write_spell`](Self::write_spell)'s shape, one screen along: the choice
+    /// is recorded as a [`Submission`](crate::session::Submission) and queued as
+    /// an effect, so it lands on a tick boundary like everything else a player
+    /// decides. **The id, not the keystrokes** — aiming the cursor changes no
+    /// state the world can see.
+    ///
+    /// The world re-checks every rule before granting; see `execute::weave`.
+    pub fn take(&mut self, id: &str) {
+        let tick = *self.world.resource::<Tick>();
+        self.world.resource_mut::<Submissions>().took(tick, id);
+        self.world
+            .resource_mut::<Pending>()
+            .take_node(id.to_owned());
+    }
+
+    /// Which mastery nodes the orb has taken, in the order it took them.
+    #[must_use]
+    pub fn taken(&self) -> &[String] {
+        self.world.resource::<tower::Taken>().ids()
+    }
+
     /// What a spell holds, if the tower has one by that name.
     ///
     /// The extension is optional — `morning` and `morning.spell` are the same
@@ -643,6 +686,40 @@ impl Sim {
     #[must_use]
     pub fn integrity(&self) -> u32 {
         self.world.resource::<tower::Integrity>().get()
+    }
+
+    /// Whether the node `named` in `room` is carrying `reading`.
+    ///
+    /// **The question a spell's `if` asks, asked directly.** Every other route
+    /// to a published reading goes through `survey`, which costs a tick — and
+    /// the menagerie's aperture moves on every tick, so a test that surveyed
+    /// four syllables in turn would be looking at four different moments and
+    /// could miss the aperture entirely. It did: `next` shipped unpublished and
+    /// four surveys in a row all said *"holds nothing"*, which reads exactly
+    /// like the feature being absent and exactly like the feature working.
+    ///
+    /// Walked from the root rather than from `Cwd`, so it answers about a room
+    /// nobody is standing in — which is the case a bound solver is always in.
+    #[must_use]
+    pub fn holds_reading(&self, room: &str, named: &str, reading: &str) -> bool {
+        let world = &self.world;
+        let name_of = |node| {
+            world
+                .get::<tower::Name>(node)
+                .map(|name| name.0.as_str())
+                .unwrap_or_default()
+        };
+        let under = |node| tower::children_of(world, node);
+        let Some(tower) = under(tower::root(world)).into_iter().next() else {
+            return false;
+        };
+        under(tower)
+            .into_iter()
+            .filter(|node| name_of(*node) == room)
+            .flat_map(under)
+            .filter(|node| name_of(*node) == named)
+            .flat_map(under)
+            .any(|held| name_of(held) == reading)
     }
 
     /// How many spells the orb can hold at once.
@@ -727,6 +804,65 @@ impl Sim {
             ],
         );
         Some(course.view(standing, tally))
+    }
+
+    /// The figure being sung in the menagerie, if the player is looking at it.
+    ///
+    /// Reads `Cwd` for the reason [`pylon`](Self::pylon) does: the picture cannot
+    /// outrun the readings by following the player out of the room.
+    ///
+    /// **The lane names and glyphs travel with it**, which is what stops the
+    /// painter from having to know what a syllable is called — `orbs-render` may
+    /// never depend on `orbs-sim`, and §19 records the lens's sheet shipping
+    /// unlabelled because that was got the other way round.
+    #[must_use]
+    pub fn figure(&self) -> Option<orbs_render::Figure> {
+        let circle = crate::execute::circle_at(&self.world)?;
+        let chant = self.world.get::<tower::Chant>(circle)?;
+        let lanes = tower::Syllable::ALL
+            .into_iter()
+            .map(|one| (one.glyph(), one.word()))
+            .collect::<Vec<_>>();
+        let lane_of = |wanted: tower::Syllable| {
+            tower::Syllable::ALL
+                .into_iter()
+                .position(|one| one == wanted)
+                .unwrap_or_default()
+        };
+        let coming = chant
+            .chart()
+            .iter()
+            .skip(chant.at())
+            .take(orbs_render::AHEAD)
+            .map(|one| lane_of(*one))
+            .collect();
+        let missed = chant.tally().1;
+        // **The board's own line, written here.** `orbs-render` holds no
+        // authored English (rule 6), so the sentence under the rule is composed
+        // from a prose key — one spelling, one place, hot-reloadable.
+        let tally = self.prose().line(
+            "chant_tally",
+            &[
+                ("quantity", &chant.remaining().to_string()),
+                ("name", &missed.to_string()),
+            ],
+        );
+        // Oldest first, so the pegs read left to right as the figure was sung —
+        // and taken from the sequence rather than rebuilt from counts, which
+        // would draw a run that never happened.
+        let sung = chant.sung().to_vec();
+        Some(orbs_render::Figure {
+            coming,
+            lanes,
+            sung,
+            // The same number the `until` reading publishes, so a hand player
+            // and a solver are reading one fact about one moment.
+            until: chant.until(),
+            // **The same number the tally above is written from**, so the board
+            // and the spoken line cannot disagree — which they did.
+            remaining: chant.remaining(),
+            tally,
+        })
     }
 
     /// Every domain at a glance — what §9's rail draws.
@@ -949,12 +1085,79 @@ impl Sim {
         match submission {
             Submission::Typed(line) => self.submit(&line),
             Submission::Wrote { name, lines } => self.write_spell(&name, &lines),
+            Submission::Took(id) => self.take(&id),
+            Submission::Sang(word) => {
+                if let Some(syllable) = tower::Syllable::from_word(&word) {
+                    self.sing(syllable);
+                }
+            }
             Submission::Walked(word) => {
                 if let Some(way) = tower::Way::ALL.into_iter().find(|way| way.word() == word) {
                     self.walk(way);
                 }
             }
         }
+    }
+
+    /// Answer the syllable at the aperture by hand.
+    ///
+    /// **The fourth entry point**, and [`walk`](Self::walk)'s twin: it reaches
+    /// the world without waiting for a tick boundary, because a chant is played
+    /// on a key and a key that queued would arrive after the beat it was
+    /// answering. Going through `submit` was tried for the maze three times and
+    /// §19 records every version being some flavour of too slow; here it would
+    /// not merely be slow, it would be *always wrong*.
+    ///
+    /// **No sub-tick phase, and none is wanted.** The sim grades on the tick a
+    /// press arrives in — [`tower::chant::WINDOW`] is two ticks wide — so the
+    /// only thing that crosses this boundary is *which syllable*. That is what
+    /// keeps `orbs-sim` clockless (rules 1 and 3) and what makes the recorded
+    /// [`Submission::Sang`](crate::session::Submission::Sang) exact rather than
+    /// a float somebody has to argue about.
+    ///
+    /// Returns whether there was a chant to answer at all.
+    pub fn sing(&mut self, syllable: tower::Syllable) -> bool {
+        let Some(circle) = crate::execute::circle_at(&self.world) else {
+            return false;
+        };
+        if self.world.get::<tower::Chant>(circle).is_none() {
+            return false;
+        }
+        let tick = *self.world.resource::<Tick>();
+        self.world
+            .resource_mut::<Submissions>()
+            .sang(tick, syllable.word());
+        // **The same body the typed path runs**, which is `Sim::walk`'s rule: a
+        // hand-sung chant and a scripted one cannot disagree about what a strike
+        // is worth.
+        crate::execute::strike_syllable(&mut self.world, circle, syllable);
+        true
+    }
+
+    /// Whether a chant waits for the singer rather than for the clock (§14).
+    #[must_use]
+    pub fn is_patient(&self) -> bool {
+        self.world.resource::<crate::execute::Patient>().is_set()
+    }
+
+    /// Flip that, and say what it became.
+    pub fn set_patient(&mut self) -> bool {
+        self.world
+            .resource_mut::<crate::execute::Patient>()
+            .toggle()
+    }
+
+    /// Whether `chorus` has asked for the arrow keys.
+    #[must_use]
+    pub fn has_chorusing(&self) -> bool {
+        self.world.resource::<crate::execute::Chorusing>().pending()
+    }
+
+    /// Take `chorus`'s pending request, if there is one.
+    pub fn chorusing(&mut self) -> bool {
+        self.world
+            .resource_mut::<crate::execute::Chorusing>()
+            .take()
     }
 
     /// Whether `wander` has asked for the arrow keys (§10, §19).
@@ -1068,6 +1271,53 @@ impl Sim {
             .finish();
         self.world.resource_mut::<Submissions>().push(tick, line);
         self.here_with::<C>()
+    }
+
+    /// Hold a mastery node without earning the experience for it.
+    ///
+    /// **Straight into `Taken`, skipping `weave::grant`'s `Standing::Open`
+    /// check** — which is the whole point, since that check is the threshold.
+    /// Everything downstream is the real thing: `spell::budget` sums it,
+    /// `is_gated` reads it, and `compile::check_learned` sees exactly what a
+    /// played tower would.
+    ///
+    /// **A marker is refused**, because a tower holding one is a state the game
+    /// cannot reach and so not one worth testing from — `debug_learn`'s rule
+    /// about a name that is not a secret, applied here.
+    #[cfg(debug_assertions)]
+    fn debug_take(&mut self, line: &str, id: Option<&str>) {
+        let tick = *self.world.resource::<Tick>();
+        self.world
+            .resource_mut::<Scrollback>()
+            .records_mut()
+            .push(RecordKind::Input)
+            .text(orbs_render::FieldName::Message, line)
+            .finish();
+        self.world.resource_mut::<Submissions>().push(tick, line);
+
+        let real: Vec<String> = self
+            .world
+            .resource::<crate::content::Progression>()
+            .mastery()
+            .iter()
+            .flat_map(|tier| &tier.nodes)
+            .filter(|node| tower::mastery::is_real(node))
+            .cloned()
+            .collect();
+        let said = match id {
+            Some(id) if real.iter().any(|node| node == id) => {
+                self.world.resource_mut::<tower::Taken>().hold(id);
+                format!("the orb holds {id}")
+            }
+            Some(id) => format!("{id} grants nothing. one of: {}", real.join(", ")),
+            None => format!("nodes: {}", real.join(", ")),
+        };
+        self.world
+            .resource_mut::<Scrollback>()
+            .records_mut()
+            .push(RecordKind::Completion)
+            .text(orbs_render::FieldName::Message, &said)
+            .finish();
     }
 
     /// Hand the open ward's answer to the aperture, so the next press breaks it.

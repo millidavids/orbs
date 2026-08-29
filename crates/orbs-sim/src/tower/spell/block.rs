@@ -156,7 +156,16 @@ fn begins_work(intent: &Intent) -> bool {
     // all — then gave up at `PATIENCE` and latched a fault on the sanctum's rail
     // box. That contradicts `execute::muster`'s own module doc, ROADMAP's Phase 4
     // note and §19, all three of which say this domain runs *beside* a brew.
-    if matches!(intent.verb, Verb::Dial | Verb::Muster | Verb::Haul) {
+    // **The menagerie's two join them, and here rather than later.** A chant
+    // runs against the tick — a `sing` that queued behind a brew would arrive
+    // after the syllable it was answering had already landed, which is not a
+    // wait but a guaranteed miss. §19 records this exemption being *forgotten*
+    // for the sanctum and what it cost; adding a domain to the list is the whole
+    // of the fix, so it goes in with the verb.
+    if matches!(
+        intent.verb,
+        Verb::Dial | Verb::Muster | Verb::Haul | Verb::Summon | Verb::Sing
+    ) {
         return false;
     }
     intent.verb.is_operation() || matches!(intent.verb, Verb::Wield | Verb::Research | Verb::Purge)

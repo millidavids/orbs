@@ -153,6 +153,87 @@ const BRANCHES: &[Branch] = &[
         operation: None,
         group: None,
     },
+    // **On the end, after the arsenal, and that is the rule above rather than an
+    // oversight.** *"A new domain goes on the end"* means the end of this list:
+    // inserting before the arsenal would shift its spawn index, and spawn order
+    // is §6's tie-resolution order. Appending leaves every existing reading
+    // exactly where it was.
+    //
+    // The menagerie is where a chant is sung (§10, `tower::chant`). Like the
+    // lens and the sanctum it holds no materials of its own — what a chant
+    // yields is troops, and they keep themselves in the arsenal because they are
+    // finished work.
+    //
+    // **Deliberately no endless base reagent**, for the reason the sanctum
+    // records: `sabotage::substitution` picks its target with `% piles.len()`,
+    // so a third endless pile would move every rate `orbs-balance` has pinned.
+    Branch {
+        name: "menagerie",
+        holds: &[Holding::new(NounKind::File, &["menagerie.log"])],
+        places: MENAGERIE,
+        role: None,
+        operation: None,
+        group: None,
+    },
+];
+
+/// The menagerie: the circle a chant is sung at, and the four syllables.
+///
+/// **The circle spends its one `Operation` on `summon`**, which is the pylon's
+/// arrangement — one fixture, one word that opens the puzzle. `sing` is anchored
+/// to it rather than to each syllable, which is the *archive's* shape rather
+/// than the sanctum's: a syllable is a thing you name in an argument, not a
+/// place you stand, and there is one circle to sing at.
+///
+/// The syllables are `Role::Reading` for the reason the compass bearings and the
+/// sockets are: a spell's question resolves its place half against
+/// `NounKind::Place`, so `if the circle has skyward` needs the word to be one —
+/// and the role is what stops it also being somewhere you can `attend`.
+///
+/// **`group: Some("syllable")` is on these and never on the domain Branch**, so
+/// `for each syllable` walks the four. `groups_at` reads the *children* of where
+/// you stand.
+const MENAGERIE: &[Branch] = &[
+    Branch {
+        name: "circle",
+        holds: &[],
+        places: &[],
+        role: None,
+        operation: Some(Verb::Summon),
+        group: None,
+    },
+    Branch {
+        name: "skyward",
+        holds: &[],
+        places: &[],
+        role: Some(Role::Reading),
+        operation: None,
+        group: Some("syllable"),
+    },
+    Branch {
+        name: "earthward",
+        holds: &[],
+        places: &[],
+        role: Some(Role::Reading),
+        operation: None,
+        group: Some("syllable"),
+    },
+    Branch {
+        name: "leftward",
+        holds: &[],
+        places: &[],
+        role: Some(Role::Reading),
+        operation: None,
+        group: Some("syllable"),
+    },
+    Branch {
+        name: "rightward",
+        holds: &[],
+        places: &[],
+        role: Some(Role::Reading),
+        operation: None,
+        group: Some("syllable"),
+    },
 ];
 
 /// The archive's one instrument, and the four ways its reading can go.
@@ -701,12 +782,57 @@ pub fn raise(world: &mut World) {
         raise_branch(world, tower, branch, true);
     }
 
+    // **After every branch, never inside one.** A satchel is a fixture like any
+    // other and belongs in a `places` list — but §6 resolves an ambiguous phrase
+    // to whichever noun was registered *first*, so a fixture inserted into the
+    // laboratory's list would push every noun in the five rooms after it one
+    // place down. Raising them all here, in one pass over the same slice, adds
+    // six nouns to the end of the registration order and moves none.
+    for branch in BRANCHES {
+        // **Not the arsenal.** It is the Keep — finished work, reachable from
+        // every room — and no spell is written *for* it, so a queue there would
+        // be a fixture nothing could ever read. It also puts a node among the
+        // things `keeping` walks, which is what `arsenal.rs` noticed first.
+        if matches!(branch.role, Some(Role::Keep)) {
+            continue;
+        }
+        raise_satchel(world, tower, branch.name);
+    }
+
     raise_grimoire(world, filesystem);
 
     // The player starts in the tower, not at the root. `Cwd` is where you
     // stand; `tower::root` is where the tree begins, and the two stopped being
     // the same node here.
     world.insert_resource(Cwd(tower));
+}
+
+/// Hang a satchel in one domain — §8's channel between two spells.
+///
+/// **Every domain a spell can be written for, which is every one but the
+/// arsenal.** That is the whole of the rule, and it is short on purpose: a
+/// per-room list of which have queues is a list to keep in step with §10's
+/// remaining domains. A spell is written *for* a domain, so the satchel it means
+/// is always the one where it stands, and the name is the same everywhere for
+/// that reason — `<room>.log` is the same decision from the other side, where
+/// the name changes and the meaning does not, because a log is read from another
+/// room and a satchel never is.
+///
+/// **`Protected`, on the dispensary's argument.** `purge satchel` would scour a
+/// queue a running pipeline is reading, which is §7's *"a thing the loop depends
+/// on is safe by refusing, not by being emptied."* Emptying it is what `pull`
+/// does, one name at a time, and what a chant ending does to the rest.
+fn raise_satchel(world: &mut World, tower: Entity, room: &str) {
+    let Some(at) = super::children_of(world, tower)
+        .into_iter()
+        .find(|node| world.get::<Name>(*node).is_some_and(|name| name.0 == room))
+    else {
+        return;
+    };
+    let node = spawn(world, Some(at), super::SATCHEL, NounKind::Place);
+    world
+        .entity_mut(node)
+        .insert((Fixture, super::Satchel::default(), Protected));
 }
 
 /// Hang `/grimoire` off the filesystem root and fill it with the shipped spells.
@@ -1028,12 +1154,36 @@ mod tests {
         let world = sim.world();
         let root = crate::tower::root(world);
 
+        // **The satchel is exempt, and it is the only thing that is.** There is
+        // one in every domain and they are all called `satchel`, which is the
+        // collision this test forbids — so the exemption has to earn itself
+        // rather than be granted.
+        //
+        // The rule the test protects is *an echo must say which place it means*.
+        // A satchel is the one fixture where the leaf is **already** the whole
+        // answer: a spell is written for a domain and a player stands in one, so
+        // the satchel either of them can reach is always the one here, and
+        // `watch::find` and `Scene::offers` both scope to `Cwd` without being
+        // asked to. `move sage to satchel` in the laboratory can mean nothing
+        // else.
+        //
+        // The alternative was one tower-wide satchel, and it is worse in the way
+        // that keeps costing this project: it would be nameable everywhere and
+        // findable nowhere until three separate lookups were taught about it —
+        // §19's *"naming is only half"*, which `tower::keep` records paying
+        // twice. A per-room fixture needs no lookup to change at all.
+        //
+        // `<room>.log` took the other road and varied the name, correctly: a log
+        // is *read* by name from another room (`sift x menagerie.log`), so its
+        // leaf really does have to say which. A satchel never is.
         let mut leaves: Vec<String> = Vec::new();
         let mut stack = vec![root];
         while let Some(node) = stack.pop() {
             for child in children_of(world, node) {
                 if world.get::<Nameable>(child).map(|kind| kind.0) == Some(NounKind::Place) {
-                    if let Some(name) = world.get::<Name>(child) {
+                    if let Some(name) = world.get::<Name>(child)
+                        && world.get::<crate::tower::Satchel>(child).is_none()
+                    {
                         leaves.push(name.0.clone());
                     }
                     stack.push(child);
@@ -1108,12 +1258,20 @@ mod tests {
             // the arsenal is not a domain, so scrying slots in ahead of it and
             // the two that came before do not move. The sanctum slots in behind
             // the lens on the same rule, and moves nothing either.
+            //
+            // **The menagerie is behind the *arsenal*, and that is the rule
+            // working rather than an exception to it.** By Phase 5 the arsenal
+            // is no longer last, so "on the end" means the end of the list:
+            // putting a domain ahead of it would shift the arsenal's spawn
+            // index, and spawn order is §6's tie-resolution order. Appending
+            // leaves every one of the five before it exactly where it was.
             [
                 "laboratory",
                 "archive",
                 "lens",
                 "sanctum",
                 super::super::ARSENAL,
+                "menagerie",
             ],
         );
     }

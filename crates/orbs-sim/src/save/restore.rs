@@ -25,7 +25,7 @@
 //!
 //! # Where the rest of it is
 //!
-//! This owns the world's **shape** — the clock, the eight stream positions, the
+//! This owns the world's **shape** — the clock, every stream position, the
 //! tree, and the resources. What is true of each *node* is [`super::adopt`], and
 //! the seam between them is real rather than a line count: everything there
 //! needs the tree to already exist.

@@ -109,10 +109,16 @@ fn word(typed: &str) -> Option<Word> {
 }
 
 /// What the screen would like the shell to do.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Outcome {
     /// Close it.
     Close,
+    /// Take this node — the shell hands the id to `Sim::take`.
+    ///
+    /// **An id, not an index.** The screen's rows are a view over
+    /// `tower::mastery` and could be reordered by content; the id is what the
+    /// world stores and what `progression.toml` calls *"a decision, not prose"*.
+    Take(String),
 }
 
 /// Something the screen would not do.
@@ -333,10 +339,7 @@ impl Tapestry {
     pub fn enter(&mut self) -> Option<Outcome> {
         match self.mode {
             Mode::Command => self.run_command(),
-            Mode::Browsing => {
-                self.take();
-                None
-            }
+            Mode::Browsing => self.take(),
         }
     }
 
@@ -435,10 +438,7 @@ impl Tapestry {
                 self.look(Track::Mastery);
                 None
             }
-            Some(Word::Take) => {
-                self.take();
-                None
-            }
+            Some(Word::Take) => self.take(),
             Some(Word::Quit) => Some(Outcome::Close),
             None => {
                 self.complaint = Some(Complaint::Unknown(typed));
@@ -447,17 +447,25 @@ impl Tapestry {
         }
     }
 
-    /// Take what the cursor is on — which today is always a refusal.
+    /// Take what the cursor is on.
     ///
-    /// **Every branch is authored**, including the one that cannot be reached
-    /// yet: §6 forbids a bare error, and a screen whose central verb answered
-    /// with silence would be worse than one that had no verb. The first real
-    /// node replaces `NothingBehind` with a grant and leaves the rest standing.
-    fn take(&mut self) {
+    /// **Every branch is authored**: §6 forbids a bare error, and a screen whose
+    /// central verb answered with silence would be worse than one that had no
+    /// verb. `NothingBehind` is now the *marker* branch rather than every
+    /// branch — a node with a grant behind it returns [`Outcome::Take`] and the
+    /// shell hands the id to the sim, which re-checks every rule before granting.
+    fn take(&mut self) -> Option<Outcome> {
         let Some(node) = self.aimed() else {
             self.complaint = Some(Complaint::Nothing);
-            return;
+            return None;
         };
+        // **Asked before the standing**, so a marker in an open tier is refused
+        // as a marker rather than granted as nothing. The two are different
+        // sentences and a player deserves the right one.
+        if node.standing == Standing::Open && orbs_sim::tower::mastery::is_real(&node.id) {
+            self.complaint = None;
+            return Some(Outcome::Take(node.id));
+        }
         self.complaint = Some(match node.standing {
             // **Held already, which is not the same as empty.** A Ley Line step
             // is taken by being passed, so this is the one branch that is about
@@ -471,6 +479,7 @@ impl Tapestry {
             Standing::Locked if node.unlocked => Complaint::Spent(node.id),
             Standing::Locked => Complaint::Locked(node.id, node.at),
         });
+        None
     }
 }
 

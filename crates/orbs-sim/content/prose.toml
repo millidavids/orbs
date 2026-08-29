@@ -334,6 +334,9 @@ weave_too_small = "the pane is too small for the weave. quit, or press F4"
 # 48-column pane. Longer is silently cut mid-word - the first draft of the line
 # below ended "...nothing is" and stopped, which reads as a bug in the orb.
 weave_nothing_behind = "{name} is a marker. nothing behind it yet"
+# **Said by the world, not by the screen**, so it survives the screen closing and
+# `sift` can find the decision in the log.
+weave_took = "the orb takes {name}. it thinks a little faster now"
 # **Says "opens at", not "its tier opens at".** A ley line step has no tier, and
 # this line answers for both tracks - the first wording told a player about a
 # tier that does not exist wherever the step they aimed at was on the line.
@@ -365,6 +368,8 @@ weave_node_tbi_d = "another, equally so"
 # is a tick, so what a player gets is a spell that keeps up.
 weave_node_steps_1 = "one more step a second"
 weave_node_steps_2 = "two more steps a second"
+weave_node_satchel_1 = "a satchel in every room, to queue and pull from"
+weave_node_cursors_1 = "alongside: two places in one spell at once"
 # What the Ley Line's one step gives, said as a capability rather than a number.
 weave_node_concentration = "hold a spell while away"
 
@@ -478,6 +483,7 @@ spell_unreadable_until = "{name} line {count}: that question means nothing. the 
 # down a line the player did not.
 spell_unreadable_let = "{name} line {count}: let wants a name, then be, then a place"
 spell_unreadable_for = "{name} line {count}: for wants each, then a set. nothing is walked"
+spell_unreadable_pull = "{name} line {count}: pull wants a name, then a satchel"
 
 # The five ways a part can be written wrong. Each names the line and says what
 # the orb did instead, because §8 forbids halting: the spell runs either way.
@@ -494,6 +500,13 @@ spell_no_such_part = "{name} line {count}: no part of this spell is called that"
 spell_repeated_part = "{name} line {count}: that part is named above. this one is set aside"
 spell_nested_part = "{name} line {count}: a part belongs outside every block, not in one"
 spell_parts_too_deep = "{name} calls {detail} too deep to follow. it stops there and goes on"
+
+# `alongside` — the fork. **Its own unreadable line**, because the mistake it
+# catches is a *missing* pair of brackets rather than a malformed one: a bare
+# `alongside gathering` reads as a name, and a name is the one thing a call may
+# not be. `spell_unreadable_call` above covers `alongside between(a b)`.
+spell_unreadable_alongside = "{name} line {count}: alongside wants a part and its brackets"
+spell_strands_too_many = "{name} sets {detail} going with too many already running. it goes on"
 
 # A question about somewhere the tower does not have. §8's *Referent missing*,
 # and **not the same as the answer being no** - which is exactly the bug this
@@ -627,6 +640,56 @@ haul_bare = "nothing is resting at the {name}"
 haul_greater = "the greater ward will not rest upon the lesser"
 haul_moved = "ward {quantity} is drawn from the {name} into the {detail}"
 
+# The menagerie (§10). **A missed syllable is not a refusal** - it is the chant
+# going badly, which is the puzzle rather than a dead end, so it reads as a cost
+# and never as a fault on the rail.
+chant_title = "figure"
+# **`next` first, and that is the whole of what makes the room playable by ear.**
+# A sighted player reads the row resting on the rule; a reader has no rows, so a
+# spoken line that led with a tally would leave them nothing to act on.
+chant_spoken = "{name} next, {quantity} to come, {detail} missed"
+chant_tally = "{quantity} to come, {name} missed"
+
+# **`{name} line {count}`**, which is every sibling's shape — `invoke` binds
+# `name` to the spell and `count` to the line. This read `line {name}:` and so
+# printed the *filename* where the line number goes and no line number at all,
+# which makes two malformed bides in one spell indistinguishable.
+spell_unreadable_bide = "{name} line {count}: bide wants a number of ticks"
+
+summon_opens = "a figure of {quantity} syllables gathers at the circle"
+summon_already = "a figure is already gathered. sing it, or stop the circle"
+summon_nowhere = "there is no circle here to summon at"
+sing_unopened = "there is no figure to answer. summon first"
+sing_incomplete = "sing which syllable? name one of the four"
+sing_not_a_syllable = "{name} is not a syllable of any chant"
+chorus_begins = "the figure is yours. the arrows answer it, escape gives them back"
+sing_struck = "{name} rings true"
+sing_missed = "{name} falls wide"
+sing_early = "{name}, but too soon. it had not landed"
+sing_collapsed = "the figure comes apart. the barrier loses {quantity}"
+sing_finished = "the figure closes. {count} true, and {quantity} troops answer"
+
+# ---------------------------------------------------------------------------
+# The satchel: §8's channel between two spells, and the one queue in the tower.
+#
+# **`waiting` rather than `holds`**, because a satchel is a queue and the word
+# has to carry that a name is on its way somewhere. `survey satchel` shows the
+# order; this line only says how many.
+queue_put = "{name} goes in the satchel. {quantity} waiting"
+queue_nowhere = "there is no satchel here to queue in"
+# **Names the loom, not the satchel.** A gate reporting an absent thing sends the
+# player looking round the room for it; this says where the answer is.
+queue_unlearned = "the orb has not learned to carry a satchel. weave for one"
+pull_unlearned = "{name} line {count}: the orb cannot pull yet. weave for a satchel"
+alongside_unlearned = "{name} line {count}: the orb cannot be in two places yet. weave for it"
+queue_incomplete = "queue what? name something the room knows"
+# **Names the depth, and says which end refused.** A queue that dropped its
+# front to make room would hand the consumer a name out of order — see
+# `Satchel::put` — so the refusal has to read as *the consumer is behind*, which
+# is what a full pipeline actually means.
+queue_full = "the satchel is full at {quantity}. something has to pull first"
+pull_nowhere = "there is no satchel here to pull from"
+
 research_opens = "the page opens into shelves that do not end. a way out is in them"
 research_already = "a reading is already open. follow it, or stop the stacks"
 research_nowhere = "there are no stacks here to read"
@@ -728,6 +791,12 @@ recall_quiet-draught = "valerian cut with salt. it distils into stillness"
 # page that described a drinking that does not exist would be worse than one that
 # is honest about the wait.
 # ---------------------------------------------------------------------------
+# **The same honesty the potions carry**, and it has to be: a siege is what will
+# spend these, and Phase 8 owes two sinks now rather than one. Saying so is what
+# stops a player hoarding for a use that does not exist yet.
+recall_troop = "something the chant called up. it waits in the arsenal"
+using_troop = "nothing musters a troop yet. a siege will be what spends them"
+
 recall_clarity = "a potion of clear sight, and the laboratory's flagship work"
 recall_warding = "a potion that turns harm aside"
 recall_haste = "a potion of quickness. the cheapest chain in the tower"
@@ -789,7 +858,96 @@ using_verdant-scroll = "wield it anywhere. there are three herbs to remember"
 # and the only one whose last section changes with the room. The grammar is the
 # same everywhere; what a question can *name* is not, and a player standing in
 # the laboratory has no way to guess the archive's vocabulary.
-recall_scripting = "what a spell is made of, and what this room answers"
+# **The reference. `recall apprentice` is the lesson**, and the two are named in
+# each other's opening line — this page is the wrong thing to hand somebody who
+# has never written one, because no listing of words teaches an order.
+recall_scripting = "what a spell is made of. recall apprentice to make one"
+
+# ---------------------------------------------------------------------------
+# THE PRIMER - how to make a spell, start to finish (§12's in-world grimoire).
+#
+# **A tutorial, where `recall scripting` is the reference.** That page answers
+# *what may I write*; this one answers *how do I make one at all*, which nothing
+# did. A player who has never written a spell needs the order — scribe, edit,
+# type, escape, save, invoke, read the log — and no listing of words teaches an
+# order.
+#
+# **The worked example comes from the room**, which is `recall scripting`'s third
+# section arriving at the same conclusion: the shape of a spell is the same
+# everywhere and the lines in one are not, and a guide showing `grind sage` to
+# somebody standing in the lens is teaching them a room they are not in.
+#
+# Two lines and one question per scriptable domain, below. A room with no work to
+# script falls back to the laboratory's and says so — which is honest, and is
+# what the grimoire's own primer already tells you to do.
+# ---------------------------------------------------------------------------
+recall_apprentice = "how to teach the orb to do your work, from nothing"
+
+craft_what_1 = "a spell is a file of the same lines you would type. the orb"
+craft_what_2 = "reads it one line a tick and does what it says, whether or not"
+craft_what_3 = "you are watching. nothing in one is a word you do not already"
+craft_what_4 = "know - which is the whole idea: you are writing down a morning"
+craft_what_5 = "you have already had"
+
+man_craft_write = "1. write it"
+man_craft_cast = "2. cast it"
+man_craft_again = "3. do it again"
+man_craft_ask = "4. ask before you act"
+man_craft_keep = "5. and walk away"
+man_craft_next = "where to read more"
+
+craft_scribe = "a new spell, for the room you are standing in"
+craft_edit = "drop into the page. now you are typing lines, not commands"
+craft_first = "the first line - exactly what you would have typed"
+craft_second = "and the second. that is a whole working spell"
+craft_escape = "back out of the page when the lines are done"
+craft_quit = "save it and close. there is no save: quit is the save"
+craft_invoke = "the orb takes it up and starts running it"
+craft_log = "what it did. a spell's records go here, never to the pane"
+craft_repeat = "the lines under it, four times over"
+craft_end = "every block is closed by one of these"
+craft_until = "or go round until the tower says stop"
+# **These three are cut to the laboratory's question**, which is the longest of
+# the five at 34 columns — the described listing sizes its first column to the
+# widest name in the run, so a sentence written against `if north has passage`
+# is clipped in the one room a player is most likely to be standing in.
+craft_if = "only when the tower says yes"
+craft_else = "the other half. one end closes both"
+craft_interpret = "in the page: what the orb hears, before it runs"
+craft_bind = "the orb holds it and keeps it running"
+craft_bind_why = "an invocation needs you in the room. a binding does not"
+craft_more_words = "every word, the question shapes, and what this room can name"
+craft_more_one = "any single word on its own, control word or verb"
+craft_more_guide = "in the page, the same listing beside what you are typing"
+
+# **Named because the example is not this room's.** The arsenal, the grimoire and
+# the tower floor have no work to script, so the guide shows the laboratory's
+# lines rather than nothing — and says which room they belong to, or it is
+# teaching a spell that cannot be written where it is being read.
+craft_elsewhere = "no work happens here, so these lines are the laboratory's"
+
+# The worked example, per domain. **First line, second line, and a question** -
+# and every one of them has to be a line that room can actually run, which
+# `the_primer_only_shows_lines_the_room_can_run` is what holds.
+craft_line_laboratory = "grind sage"
+craft_then_laboratory = "empty mortar_and_pestle"
+craft_ask_laboratory = "if the mortar_and_pestle is idle"
+
+craft_line_archive = "research"
+craft_then_archive = "follow north"
+craft_ask_archive = "if north has passage"
+
+craft_line_lens = "probe"
+craft_then_lens = "dial first alum"
+craft_ask_lens = "if the prism has closer"
+
+craft_line_sanctum = "muster"
+craft_then_sanctum = "haul wellspring barrier"
+craft_ask_sanctum = "if the wellspring is empty"
+
+craft_line_menagerie = "summon"
+craft_then_menagerie = "sing skyward"
+craft_ask_menagerie = "if the skyward has next"
 
 # The seven words a way can answer to. `recall marks` used to say "other rooms
 # have words of their own", which is a dead end *and* a wrong reason - it is not
@@ -852,6 +1010,23 @@ using_odd = "if the pylon has odd, the least ward travels the other way"
 recall_integrity = "how the tower's barrier stands. it wears down on its own"
 using_integrity = "if the pylon has fewer than 60 integrity, muster"
 
+# The three words the menagerie answers to. **These shipped with no pages at
+# all** — `recall next` fell through to the room overview for a whole phase,
+# while §19 recorded that every reading has one. Two are on the syllables and
+# one is on the circle, which is the split the sanctum already makes: a reading
+# about the thing in hand sits on the thing, and a reading about the room sits
+# on the fixture.
+recall_next = "the syllable at the rule, and the one a sing must answer"
+using_next = "if the skyward has next, then sing skyward"
+
+# **The whole of why a satchel is worth having in this room.** Only the aperture
+# publishes `next`, so without this a producer has nothing to run ahead on.
+recall_onward = "the syllable behind the one at the rule. one deep, no further"
+using_onward = "if the skyward has onward, queue skyward for the other spell"
+
+recall_remaining = "how many syllables of the figure are still to come"
+using_remaining = "repeat until the circle is empty, and read this to see how far"
+
 man_scripting_words = "words"
 man_scripting_asking = "questions"
 man_scripting_here = "nameable here"
@@ -888,6 +1063,18 @@ using_for = "for each way, the lines, then end. way is the one you are on"
 
 recall_part = "name a run of lines, so the rest of the spell can ask for it"
 using_part = "part haul(from, to), the lines, end. call it as haul(a, b)"
+
+# **Not `wait`, and the difference is the whole reason it exists.** A wait ends
+# when the world says so; a bide ends when the spell's own arithmetic says so,
+# which is what a room with a clock in it needs.
+recall_bide = "do nothing for a number of ticks, then carry on"
+using_bide = "bide 2, to let a syllable travel before you answer it"
+
+recall_pull = "take the oldest name out of a satchel and give it a name"
+using_pull = "pull note from satchel, then sing note. it waits if none is there"
+
+recall_alongside = "set a part running on its own and carry on down the page"
+using_alongside = "alongside filling(). it keeps its own place and its own names"
 
 # What the archive is for, and what its verb does - the two manual entries the
 # domain has never had.
@@ -935,6 +1122,12 @@ man_group_careful = "careful"
 # The pointer out of the room. Without it the listing reads as *this is the
 # vocabulary* rather than *this is the vocabulary here*.
 man_elsewhere = "other rooms have words of their own. attend one and ask again"
+# **The way in to the whole second half of the game.** Everything above this line
+# is a word to type now, and nothing on the page said the orb could be taught to
+# type them for you — so a player could read `help` in every room and never learn
+# there are spells. §12 puts the in-world grimoire in the "always" column, and a
+# reference nobody can find their way into is not one.
+man_teachable = "the orb can be taught to do all of it. recall apprentice"
 
 # ---------------------------------------------------------------------------
 # The room primer - what `help` says BEFORE the word list.
@@ -978,6 +1171,13 @@ man_solve_lens = "aligned counts sigils in the right socket, astray the misplace
 man_here_sanctum = "where you ward the tower. the barrier fades while you work"
 man_start_sanctum = "muster draws a course of wards up out of the wellspring"
 man_solve_sanctum = "haul them all to the barrier, never a ward onto a lesser"
+
+# **The one room with a clock in it**, and the primer says so in the first line
+# rather than letting a player find out by failing one. Every other domain waits
+# for ever; a chant does not.
+man_here_menagerie = "where troops are called up. a figure sung against the tick"
+man_start_menagerie = "summon draws a figure. it costs nothing to try"
+man_solve_menagerie = "sing each syllable as it lands. miss four and it collapses"
 
 # **Not `scribe a name to write one`, which was the first draft and was wrong
 # twice.** `scribe` is *offered* here and refuses - "a spell is written for a
@@ -1250,6 +1450,42 @@ man_haul_4 = "potency is how great the ward on top of one is"
 man_haul_eg1 = "haul wellspring conduit, if the conduit will take it"
 man_haul_also = "muster, survey, recall sanctum"
 
+man_summon_use = "summon"
+man_summon_gloss = "draw a figure up at the circle, to be sung"
+man_summon_1 = "twelve syllables, one landing on each tick. it costs"
+man_summon_2 = "nothing to summon and nothing to abandon"
+man_summon_3 = "what it risks is the barrier: a collapsed chant"
+man_summon_4 = "wears it, which is the whole price of this room"
+man_summon_eg1 = "summon, then sing each syllable as it comes"
+man_summon_also = "sing, survey, recall menagerie"
+
+man_sing_use = "sing <syllable>"
+man_sing_gloss = "answer the syllable at the aperture"
+man_sing_1 = "the four are skyward, earthward, leftward and"
+man_sing_2 = "rightward. next is the one about to land"
+man_sing_3 = "the right one strikes, anything else misses, and"
+man_sing_4 = "four misses collapse the figure. three is survivable"
+man_sing_eg1 = "sing skyward, on the tick it lands"
+man_sing_also = "summon, survey, recall menagerie"
+
+man_chorus_use = "chorus"
+man_chorus_gloss = "answer a figure on the arrow keys"
+man_chorus_1 = "the same chant, played rather than typed. the arrows"
+man_chorus_2 = "are the four syllables and escape gives them back"
+man_chorus_3 = "a spell cannot chorus. singing is what a spell does,"
+man_chorus_4 = "and it works the timing out instead of feeling it"
+man_chorus_eg1 = "summon, then chorus, and answer what reaches the rule"
+man_chorus_also = "summon, sing, recall menagerie"
+
+man_queue_use = "queue <name>"
+man_queue_gloss = "put a name in the satchel, for another spell to take"
+man_queue_1 = "every room has a satchel, and it is the one thing two"
+man_queue_2 = "spells can both reach. one puts names in, the other takes"
+man_queue_3 = "them out, oldest first. pull is that other half, and it"
+man_queue_4 = "is a spell word: only a spell can bind what it takes"
+man_queue_eg1 = "queue skyward, then survey satchel to see it waiting"
+man_queue_also = "survey, recall scripting"
+
 man_research_use = "research"
 man_research_gloss = "open a way into the stacks"
 man_research_1 = "the archive's work. shelves resolve out of a page,"
@@ -1272,7 +1508,11 @@ man_scribe_1 = "opens a page for the room you are standing in"
 man_scribe_2 = "edit types into it, esc comes out, quit saves"
 man_scribe_3 = "interpret shows how the orb reads what you wrote"
 man_scribe_eg1 = "scribe morning, then edit, then a line at a time"
-man_scribe_also = "invoke, bind, peruse"
+# **The lesson first**, because somebody reading `recall scribe` is usually
+# about to write their first spell. A topic is written `recall <topic>` here and
+# a bare `apprentice` fails `a_page_never_claims_a_word_that_is_not_there`, which
+# reads the first word of each entry and wants a verb.
+man_scribe_also = "recall apprentice, invoke, bind, peruse"
 
 man_bind_use = "bind <script>"
 man_bind_gloss = "have the orb hold a spell"

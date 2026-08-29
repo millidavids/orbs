@@ -56,6 +56,10 @@ fn main() {
     show("Pylon — a course of wards, part hauled (§10)", &course);
     speak(&course);
 
+    let figure = chant(GRID);
+    show("Figure — a chant, two ticks from the rule (§10)", &figure);
+    speak(&figure);
+
     let records = brewing_log();
     let views = records_screen(GridSize::new(80, 22), &records);
     show("Records — one stream, three views (§7)", &views);
@@ -1590,6 +1594,76 @@ fn pylon(grid: GridSize) -> Frame {
         UtteranceKind::Progress,
         Role::Normal,
         "4 wards, 7 hauled, the walls at 62",
+    );
+    frame
+}
+
+/// A figure part-sung, two ticks from the rule (§10, `tower::chant`).
+///
+/// **The one surface where the timing can actually be judged.** Every other
+/// check on this board asserts a width; only a rendered frame shows whether the
+/// gap between the rule and the nearest syllable reads as *approach* — and that
+/// gap is the whole mechanic, because a press counts on the last two ticks of it
+/// and nowhere else.
+///
+/// `until` is **2**, deliberately: at nought the nearest syllable sits on the
+/// rule and the board looks static again, which is exactly what it looked like
+/// for a whole approach when `Figure` carried no `until` at all. A screen drawn
+/// at the one value that hides the bug would be worse than no screen.
+fn chant(grid: GridSize) -> Frame {
+    let figure = orbs_render::Figure {
+        // Lane indices into `lanes` below, nearest first.
+        coming: vec![1, 3, 0, 2],
+        // `tower::chant`'s own words and glyphs. The sim hands these through
+        // `Sim::figure`; an example has no sim, so it repeats them — and this is
+        // the surface where a header wider than its column shows up as a picture
+        // rather than as a passing assertion.
+        lanes: vec![
+            ('\u{25C4}', "leftward"),
+            ('\u{25B2}', "skyward"),
+            ('\u{25BC}', "earthward"),
+            ('\u{25BA}', "rightward"),
+        ],
+        sung: vec![true, true, false, true],
+        until: 2,
+        remaining: 4,
+        // What `prose.toml`'s `chant_tally` renders to.
+        tally: "4 to come, 1 missed".to_owned(),
+    };
+
+    let layout = ScreenLayout::compute(&ScreenRequest::single(grid));
+    let mut frame = Frame::new(grid);
+    let pane = layout.main()[0];
+    let mut painter = frame.painter(pane);
+    painter.border(pane, Some("menagerie"), Style::DIM);
+
+    let (cols, rows) = orbs_render::Figure::size();
+    let at = Rect::new(pane.col + 2, pane.row + 2, cols + 2, rows + 2);
+    painter.border(at, Some("figure"), Style::DIM);
+    let inside = at.inset(1);
+    for row in 0..inside.rows {
+        let Some(cells) = figure.row(usize::from(row)) else {
+            break;
+        };
+        for (col, (glyph, style, tint)) in cells.into_iter().enumerate() {
+            let Ok(col) = u16::try_from(col) else { break };
+            let cell = Pos::new(inside.col + col, inside.row + row);
+            painter.glyphs(cell, &glyph.to_string(), style);
+            if let Some(tint) = tint {
+                painter.tint(
+                    Rect::new(cell.col, cell.row, 1, 1),
+                    orbs_render::Wash::plain(tint),
+                );
+            }
+        }
+    }
+    // **`next` first**, which is what makes the room playable by ear: a reader
+    // has no rows, so a line leading with a tally would leave them nothing to
+    // act on.
+    painter.announce(
+        UtteranceKind::Progress,
+        Role::Normal,
+        "skyward next, 4 to come, 1 missed",
     );
     frame
 }

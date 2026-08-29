@@ -20,11 +20,19 @@
 //! event, so `(seed, submissions)` replays identically whether or not anybody
 //! opened the screen.
 //!
-//! **And nothing here takes a node**, because nothing is takeable yet: every
-//! authored node is a marker. When the first real one lands it needs a mutator,
-//! a `Submission` variant and a queued effect on a tick boundary — the shape
-//! `Sim::write_spell` already has — and none of that is worth building against
-//! markers.
+//! # Taking a node
+//!
+//! This comment used to say nothing here takes one, because every authored node
+//! was a marker — and it named exactly what the first real one would need: *"a
+//! mutator, a `Submission` variant and a queued effect on a tick boundary, the
+//! shape `Sim::write_spell` already has."* [`grant`] is that, and `steps_1` is
+//! the node that earned it: the menagerie cannot be automated at one instruction
+//! a tick, so a second step is the first thing in the game worth buying.
+//!
+//! **Markers still refuse in voice.** `tower::mastery::is_real` is what separates
+//! them, derived from the grant so a node cannot be takeable and worthless at
+//! once — and the screen asks it *before* sending, so a marker never reaches a
+//! tick boundary at all.
 
 use bevy_ecs::prelude::*;
 use orbs_render::{FieldName, RecordKind, Role};
@@ -66,6 +74,42 @@ impl Weaving {
         self.0 = false;
         asked
     }
+}
+
+/// Take a mastery node, on the tick after the screen asked for it.
+///
+/// **Every guard is re-asked here.** The screen refuses a locked node, a marker
+/// and a spent tier before it sends — and a queued effect that trusted the
+/// screen's arithmetic would be a second opinion about the rules, which is
+/// exactly how a screen and a world come to disagree. §19 records that shape
+/// going wrong repeatedly; it is cheap to ask twice and the world is the answer.
+///
+/// Silent when it refuses, because the screen already said so in voice. What it
+/// says on success is a record, so `sift` and the log see the decision.
+pub(super) fn grant(world: &mut World, id: &str) {
+    if !tower::mastery::is_real(id) {
+        return;
+    }
+    let open = tower::mastery(world)
+        .into_iter()
+        .flatten()
+        .any(|node| node.id == id && node.standing == tower::Standing::Open);
+    if !open {
+        return;
+    }
+    world.resource_mut::<tower::Taken>().hold(id);
+
+    let message = world
+        .resource::<Prose>()
+        .line("weave_took", &[("name", id)]);
+    world
+        .resource_mut::<Scrollback>()
+        .records_mut()
+        .push(RecordKind::Completion)
+        .text(FieldName::Name, Verb::Weave.canonical())
+        .text(FieldName::Message, &message)
+        .role(Role::Success)
+        .finish();
 }
 
 /// Open the weave screen.

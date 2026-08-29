@@ -44,6 +44,8 @@ pub enum RngStream {
     /// the cheap thing is to leave it and the expensive thing is to have it
     /// look like a renumber. The index table below is where that is enforced.
     Battlements,
+    /// The menagerie: the figure a chant is drawn to (§10, `tower::chant`).
+    Menagerie,
 }
 
 impl RngStream {
@@ -53,8 +55,9 @@ impl RngStream {
     /// here: `save::Save::from_toml` refuses a document whose `[rng].positions`
     /// is not this long, so a world written with eight streams cannot be read by
     /// a build with nine. `save::FORMAT` went to 3 with the ninth so the refusal
-    /// reads as *behind* rather than as *malformed*.
-    pub const COUNT: usize = 9;
+    /// reads as *behind* rather than as *malformed*, and to **4** with the tenth
+    /// for the same reason.
+    pub const COUNT: usize = 10;
 
     /// Fixed index into [`Rngs::streams`].
     ///
@@ -75,6 +78,7 @@ impl RngStream {
             Self::Archive => 6,
             Self::Lens => 7,
             Self::Battlements => 8,
+            Self::Menagerie => 9,
         }
     }
 }
@@ -179,6 +183,7 @@ mod tests {
         RngStream::Archive,
         RngStream::Lens,
         RngStream::Battlements,
+        RngStream::Menagerie,
     ];
 
     #[test]

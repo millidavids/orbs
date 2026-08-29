@@ -236,6 +236,18 @@ tint = "gold"
 [verdant-scroll]
 tint = "gold"
 
+# **Violet, which is arcane** - the sanctum's wards draw in it too, and for the
+# same reason: a troop is a thing the tower called up rather than a thing it
+# brewed. Not gold, which this file keeps for what a *recipe* finishes: a scroll
+# and a potion are the laboratory's work, and a chant is not the laboratory's.
+#
+# **The one material here that no recipe names.** A troop comes out of a chant,
+# so `Recipes::vocabulary` cannot see it - `substances` names it explicitly, and
+# `kind_of` and `tower::home` each say so in their own words. Author the fourth
+# thing the tower makes outside a recipe and all four will want the same line.
+[troop]
+tint = "violet"
+
 # **`dust` was here and is gone.** It was the lectern's byproduct, coloured grey
 # for the archive's old paper rather than brown for the laboratory's spent
 # stalks - and it existed only because `leaves` used to be compulsory. Byproducts

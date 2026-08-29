@@ -36,7 +36,7 @@ use bevy::input::keyboard::{Key, KeyCode, KeyboardInput};
 use bevy::prelude::*;
 use bevy::window::WindowFocused;
 
-use orbs_shell::{Ghost, Line, Offered, Panel, Scroll};
+use orbs_shell::{Focus, Ghost, Line, Offered, Open, Panel, Scroll};
 
 use crate::sim::Tower;
 
@@ -86,19 +86,17 @@ impl HeldOver {
 /// to see is exactly the one it cannot: the frame Escape arrives, the surface has
 /// already let go, and there is no previous frame on record saying it ever held on.
 ///
-/// This is also the **one** place the four-surface predicate lives now.
-/// `type_into_line`'s own comment predicted the shape's ceiling was five terms and
-/// that a single owner was worth building before the fifth arrived; this is not
-/// that refactor, but it is one copy of the predicate rather than two.
+/// It asks [`Surfaces::focus`], which is now the only thing that decides who owns
+/// a keystroke — `type_into_line`'s comment predicted the four-term shape's
+/// ceiling was five and that a single owner was worth building before the fifth
+/// arrived, and `orbs_shell::Focus` is that owner. This function keeps its own
+/// reason for existing, which is the *edge* rather than the state.
 pub(crate) fn watch_focus(
-    editing: Res<super::editing::Editing>,
-    loom: Res<super::Loom>,
-    walk: Res<super::Walk>,
-    scroll: Res<Scroll>,
+    surfaces: Surfaces,
     held: Res<ButtonInput<KeyCode>>,
     mut over: ResMut<HeldOver>,
 ) {
-    if owned_elsewhere(&editing, &loom, &walk, &scroll) {
+    if surfaces.focus().is_elsewhere() {
         over.owned = true;
         return;
     }
@@ -113,14 +111,57 @@ pub(crate) fn watch_focus(
     over.keys.retain(|key| held.pressed(*key));
 }
 
-/// Whether a surface other than the prompt owns the keyboard.
-const fn owned_elsewhere(
+/// The five surfaces that can hold the keyboard, as one parameter.
+///
+/// **A `SystemParam` rather than five more parameters**, which is
+/// `render::plugin`'s precedent one crate over — and here it is not tidiness:
+/// the fifth surface took `type_into_line` to thirteen arguments and clippy
+/// refuses at twelve. That limit is the same pressure `orbs_shell::focus`
+/// answered one level down, arriving at the call site instead, so the fix is the
+/// same shape: the *set* of surfaces is one thing, and it should be named once.
+#[derive(bevy::ecs::system::SystemParam)]
+pub(crate) struct Surfaces<'w> {
+    editing: Res<'w, super::editing::Editing>,
+    loom: Res<'w, super::Loom>,
+    walk: Res<'w, super::Walk>,
+    chorus: Res<'w, super::Chorus>,
+    scroll: Res<'w, Scroll>,
+}
+
+impl Surfaces<'_> {
+    /// Who the next keystroke belongs to.
+    pub(crate) fn focus(&self) -> Focus {
+        Focus::of(opened(
+            &self.editing,
+            &self.loom,
+            &self.walk,
+            &self.chorus,
+            &self.scroll,
+        ))
+    }
+}
+
+/// What is open, gathered for [`orbs_shell::Focus`].
+///
+/// **The questions are asked here and answered there.** This build's copy of the
+/// ordering is gone: `orbs-tui` had already reduced it to one enum, and keeping a
+/// second expression of the same rule is how the two frontends come to disagree
+/// about who owns a keystroke — which is `orbs_shell::shortcuts`'s argument,
+/// restated one module along.
+const fn opened(
     editing: &super::editing::Editing,
     loom: &super::Loom,
     walk: &super::Walk,
+    chorus: &super::Chorus,
     scroll: &Scroll,
-) -> bool {
-    editing.is_open() || loom.is_open() || walk.is_open() || scroll.is_reading()
+) -> Open {
+    Open {
+        editing: editing.is_open(),
+        weaving: loom.is_open(),
+        walking: walk.is_open(),
+        chorusing: chorus.is_open(),
+        reading: scroll.is_reading(),
+    }
 }
 
 /// Recompute the suggestion.
@@ -268,10 +309,7 @@ pub(crate) fn type_into_line(
     tower: Res<Tower>,
     mut offered: ResMut<Offered>,
     mut submitted: MessageWriter<SubmittedMessage>,
-    editing: Res<super::editing::Editing>,
-    loom: Res<super::Loom>,
-    walk: Res<super::Walk>,
-    scroll: Res<Scroll>,
+    surfaces: Surfaces,
     quiet: Res<Quiet>,
     over: Res<HeldOver>,
 ) {
@@ -286,17 +324,13 @@ pub(crate) fn type_into_line(
     // and the test that found it had been written to check something else.
     // Clearing the cursor is what actually throws a keystroke away.
     //
-    // **Four terms, and the prediction this comment used to make has come
-    // true.** It said the shape's ceiling was five and that the fix — a single
-    // `Focus` owner rather than a predicate per surface — was worth doing before
-    // the fifth arrived. `wander` is the fourth and it is the last one that goes
-    // in here: a fifth surface refactors this first.
-    //
-    // The reason it is worth naming rather than living with is that each term is
-    // a place to *forget*. A surface added without its term does not fail
-    // loudly; it types into an invisible prompt while the player looks at
-    // something else, and the characters arrive later.
-    if owned_elsewhere(&editing, &loom, &walk, &scroll) {
+    // **The refactor this comment used to promise has happened.** It said the
+    // four-term shape's ceiling was five and that the fix — a single `Focus`
+    // owner rather than a predicate per surface — was worth doing before the
+    // fifth arrived. The ordering now lives once, in `orbs_shell::focus`, and
+    // both frontends read it; what stays here is the *discarding*, which
+    // genuinely differs between them and is explained above.
+    if surfaces.focus().is_elsewhere() {
         keys.clear();
         return;
     }

@@ -125,11 +125,62 @@ pub fn compile(world: &World, from: Entity, lines: &[String]) -> Program {
         .collect();
     check_calls(&draft.body, &defined, &mut complaints);
     check_commands(&draft.body, &scene, &bound, &mut complaints);
+    check_learned(world, &draft.body, &mut complaints);
     let body = resolved(draft.body, &scene, &known, &bound, &mut complaints);
     // In line order, so what the orb says about a spell reads down the file
     // however the faults were found.
     complaints.sort_by_key(|complaint| complaint.line);
     Program::new(body, complaints)
+}
+
+/// Say so about every word the loom has not granted yet.
+///
+/// # At cast, and as a complaint rather than a refusal
+///
+/// `queue` is a verb and refuses in voice where it is typed; `pull` and
+/// `alongside` are control words with nobody to answer, so the report has to
+/// come from here. That puts them where every other unreadable line already is
+/// — the editor's `interpret`, and the status row's count — so a player writing
+/// a spell against a word they have not bought sees it before they cast it
+/// rather than on whichever tick the line is reached.
+///
+/// **A complaint, so the rest of the spell still runs.** §8 forbids refusing at
+/// save and halting at cast; an ungranted line is skipped exactly as an
+/// unreadable one is, which for a `pull` means the loop above it goes round
+/// doing the half it can.
+fn check_learned(world: &World, body: &Block, complaints: &mut Vec<Complaint>) {
+    use crate::tower::mastery::{Grant, holds};
+    let satchel = holds(world, Grant::Satchel);
+    let cursors = holds(world, Grant::Cursors);
+    if satchel && cursors {
+        return;
+    }
+    walk_learned(body, satchel, cursors, complaints);
+}
+
+fn walk_learned(body: &Block, satchel: bool, cursors: bool, complaints: &mut Vec<Complaint>) {
+    for Step { line, kind } in body {
+        match kind {
+            Kind::Pull { .. } if !satchel => complaints.push(Complaint {
+                line: *line,
+                key: "pull_unlearned",
+            }),
+            Kind::Alongside { .. } if !cursors => complaints.push(Complaint {
+                line: *line,
+                key: "alongside_unlearned",
+            }),
+            Kind::Repeat { body, .. } | Kind::Each { body, .. } | Kind::Part { body, .. } => {
+                walk_learned(body, satchel, cursors, complaints);
+            }
+            Kind::If {
+                body, otherwise, ..
+            } => {
+                walk_learned(body, satchel, cursors, complaints);
+                walk_learned(otherwise, satchel, cursors, complaints);
+            }
+            _ => {}
+        }
+    }
 }
 
 /// Say so about every call naming a part the spell does not define.
@@ -144,7 +195,12 @@ pub fn compile(world: &World, from: Entity, lines: &[String]) -> Program {
 fn check_calls(body: &Block, defined: &[(String, usize)], complaints: &mut Vec<Complaint>) {
     for Step { line, kind } in body {
         match kind {
-            Kind::Call { name, args } => {
+            // **A fork is checked exactly as a call is**, and it has to be:
+            // `alongside missing()` and `missing()` are the same mistake, and a
+            // fork whose part does not exist would otherwise start a cursor on
+            // nothing and be discovered by the spell quietly doing half its
+            // work. Same two complaints, same names.
+            Kind::Call { name, args } | Kind::Alongside { name, args } => {
                 match defined.iter().find(|(part, _)| part == name) {
                     None => complaints.push(Complaint {
                         line: *line,
@@ -175,7 +231,11 @@ fn check_calls(body: &Block, defined: &[(String, usize)], complaints: &mut Vec<C
                 check_calls(body, defined, complaints);
                 check_calls(otherwise, defined, complaints);
             }
-            Kind::Command(_) | Kind::Wait(_) | Kind::Let { .. } => {}
+            Kind::Command(_)
+            | Kind::Wait(_)
+            | Kind::Bide(_)
+            | Kind::Let { .. }
+            | Kind::Pull { .. } => {}
         }
     }
 }
@@ -244,7 +304,23 @@ fn check_commands(body: &Block, scene: &Scene, bound: &[String], complaints: &mu
                 check_commands(body, scene, bound, complaints);
                 check_commands(otherwise, scene, bound, complaints);
             }
-            Kind::Wait(_) | Kind::Let { .. } | Kind::Call { .. } => {}
+            // **`bide` is checked at parse and never here.** `check_commands`
+            // asks whether a *verb* is one this room offers; a bide has no verb
+            // and its only failure — a number the orb cannot read — is already a
+            // complaint from `program`.
+            // **`pull` is not here either**, and for a sharper reason than
+            // `bide`'s: it names a *place*, and a place a spell names is
+            // resolved by `run::pull` in the room the spell stands in. Checking
+            // it against `scene` — which is built from where the **player** is —
+            // would fault a perfectly good line whenever a bound solver was
+            // working while the player was somewhere else. That is §19's
+            // Cwd-versus-spell-room defect, and it has now shipped three times.
+            Kind::Wait(_)
+            | Kind::Bide(_)
+            | Kind::Let { .. }
+            | Kind::Pull { .. }
+            | Kind::Call { .. }
+            | Kind::Alongside { .. } => {}
         }
     }
 }

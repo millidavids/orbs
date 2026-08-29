@@ -57,6 +57,16 @@ impl Tower {
         self.0.submit(line);
     }
 
+    /// Take a mastery node the weave screen chose.
+    ///
+    /// **A third verb-shaped method, and not `sim_mut`** — the comment below
+    /// says why, and a screen wanting to change the world is exactly the caller
+    /// it is guarding against. Like `submit`, this queues: the choice lands on
+    /// the next tick, so nothing reaches the world off a tick boundary.
+    pub(crate) fn take(&mut self, id: &str) {
+        self.0.take(id);
+    }
+
     /// The world, for painting.
     pub(crate) const fn sim(&self) -> &Sim {
         &self.0
@@ -146,6 +156,25 @@ impl Tower {
         self.0.walk(way)
     }
 
+    /// Whether `chorus` has asked for the arrow keys.
+    pub(crate) fn has_chorusing(&self) -> bool {
+        self.0.has_chorusing()
+    }
+
+    /// Take that request, if there is one.
+    pub(crate) fn chorusing(&mut self) -> bool {
+        self.0.chorusing()
+    }
+
+    /// Answer the syllable at the aperture, now. See [`orbs_sim::Sim::sing`].
+    ///
+    /// **Now, like `walk`.** A key that queued for the next tick would arrive
+    /// after the beat it was answering, so it would not merely be slow — it
+    /// would be wrong every time.
+    pub(crate) fn sing(&mut self, syllable: orbs_sim::tower::Syllable) -> bool {
+        self.0.sing(syllable)
+    }
+
     /// Save a spell out of the editor.
     ///
     /// The editor's whole contribution to the world. Keystrokes never reach the
@@ -190,6 +219,14 @@ impl Tower {
         // both frontends bind a key to it and two copies would eventually
         // disagree about where `Tampered` sits in the cycle.
         orbs_shell::cycle_register(&mut self.0)
+    }
+
+    /// §14's accommodation for the menagerie: a chant that waits.
+    ///
+    /// Through `orbs-shell` for `cycle_register`'s reason — both frontends bind
+    /// a key to it, and two copies would eventually disagree.
+    pub(crate) fn toggle_patient(&mut self) -> bool {
+        orbs_shell::toggle_patient(&mut self.0)
     }
 }
 

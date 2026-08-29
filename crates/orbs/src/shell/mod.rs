@@ -1,3 +1,4 @@
+mod chorusing;
 mod commanding;
 mod editing;
 mod input;
@@ -19,6 +20,7 @@ pub(crate) use orbs_shell::{
     Screen, Scroll, Tapestry, View, WeaveOutcome, paint, paint_booting, paint_too_small,
 };
 
+pub(crate) use chorusing::Chorus;
 pub(crate) use editing::Editing;
 pub use plugin::ShellPlugin;
 pub(crate) use plugin::ShellSystems;

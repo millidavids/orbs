@@ -61,6 +61,16 @@ pub(super) fn cycle_register(mut tower: ResMut<Tower>) {
     info!("register: {:?}", tower.cycle_register());
 }
 
+/// `F9` — a chant that waits for the singer rather than for the clock (§14).
+///
+/// **The one accommodation the menagerie needs**, because it is the one domain
+/// whose puzzle is timed. It reaches the same ceiling: a patient chant and a
+/// played one both yield what was sung correctly, so what the key removes is
+/// the dimension reflex and speech cannot serve and nothing else.
+pub(super) fn toggle_patient(mut tower: ResMut<Tower>) {
+    info!("patient chant: {}", tower.toggle_patient());
+}
+
 /// Leave the orb, because `F10` was pressed.
 pub(super) fn quit(mut exit: MessageWriter<AppExit>) {
     exit.write(AppExit::Success);

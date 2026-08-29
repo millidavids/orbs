@@ -56,7 +56,27 @@ use super::node::NodeSave;
 /// difference between "this save is from an older build" and "this file is
 /// corrupt". `CourseSave` and `progress.integrity` are ordinary additions and
 /// would not have needed one.
-pub const FORMAT: u32 = 3;
+///
+/// **4 since the menagerie**, for exactly the same reason: `RngStream::COUNT`
+/// went 9 → 10 with `Menagerie`. `ChantSave` beside it is an ordinary addition
+/// and would not have needed one. That two of the last two bumps were both
+/// stream counts is worth noticing — **a new domain almost always brings a
+/// stream, and a stream is always a format change**, so the bump belongs in the
+/// same commit as the variant rather than being discovered by the first player
+/// whose tower would not open.
+///
+/// **5 since `bide until` was withdrawn**, and this one is neither a stream nor
+/// a field — it is the *language*. A spell is stored as the player's own text
+/// and recompiled at cast, so a saved `bide until` does not fail to load: it
+/// loads perfectly and compiles to a line the orb cannot read, and a tower whose
+/// bound solver quietly started faulting is the format-2 failure again in a
+/// different costume. `RunningSave::biding` beside it is an ordinary additive
+/// field and would not have needed one.
+///
+/// **So the rule is wider than "a new stream or a changed struct".** Anything
+/// that changes what stored *content* means belongs here too — and content is
+/// most of what this game saves.
+pub const FORMAT: u32 = 5;
 
 /// One tower, at one tick.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -129,7 +149,10 @@ pub struct Away {
     pub unix: u64,
 }
 
-/// Where each of the eight streams stood.
+/// Where each of the streams stood.
+///
+/// **Deliberately not "the eight"**, which is what this said while there were
+/// nine. `RngStream::COUNT` is the number and it moves once a domain.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RngSave {
     /// One word position per stream, in `RngStream::index` order.

@@ -131,22 +131,38 @@ grants = "concentration"
 # experience can stay unspendable: the tier opening is the grant, and which node
 # you take is the decision.
 #
-# **Every node here is a marker.** `tbi` is authored, drawn and refused - there
-# is nothing behind any of them yet, and the first real one is its own item.
-# They are here so the shape is visible from inside the game: a player who
-# reaches 24 sees a tier open and sees that a choice is coming.
+# **Three real nodes now, and the `tbi` ones are still markers.** `tbi` is
+# authored, drawn and refused - there is nothing behind it. `steps_<n>`,
+# `satchel_1` and `cursors_1` all grant something, and `mastery::granted` is the
+# one parser that says which.
+#
+# **Each tier holds one grant of speed and one of §8's channel**, which is the
+# choice the tree exists to make: a second instruction a tick makes everything
+# you already write faster, and the satchel makes a shape you could not write at
+# all. Putting both halves of the channel on one tier would have made them
+# mutually exclusive - a tier gives exactly one node - so the queue opens at 24
+# and the second cursor at 40.
+#
+# **`cursors_1` sells ergonomics, not capability, and that is said out loud.**
+# Two spells already run at once: `invoke` from inside a spell inserts a second
+# `Running` and the caller does not block, ungated, at concentration 0. What
+# `alongside` adds is both halves of a pipeline in one file. It is a real thing
+# to want and it is not a new power, and a tree that implied otherwise would be
+# selling something the player already has.
 #
 # Ids are decisions, not prose - they are what a taken node is stored as, and
 # what its sentence in `prose.toml` is keyed by. `check` refuses a duplicate,
-# because two entries with one id make taking either take both.
+# because two entries with one id make taking either take both - and it now also
+# refuses an id that *reads* as a grant and does not parse as one, because a
+# `satchel1` would be a marker wearing a real node's name.
 # ---------------------------------------------------------------------------
 [[mastery]]
 at = 24
-nodes = ["steps_1", "tbi_b"]
+nodes = ["steps_1", "satchel_1", "tbi_b"]
 
 [[mastery]]
 at = 40
-nodes = ["steps_2", "tbi_d"]
+nodes = ["steps_2", "cursors_1", "tbi_d"]
 
 # ---------------------------------------------------------------------------
 # `steps_<n>` is a contract, not a label.

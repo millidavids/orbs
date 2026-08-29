@@ -64,6 +64,8 @@ pub enum Body {
     /// which of two stations carries the lesser ward. Both come out of
     /// `Sim::pylon`, which is the same view the board draws from.
     Warding,
+    /// The menagerie, sung correctly and in time.
+    Chanting,
     /// Earn a slot by hand, bind a spell, and then do nothing at all.
     ///
     /// **The only policy that measures the script engine**, which is the point
@@ -88,7 +90,7 @@ pub enum Body {
 
 impl Policy {
     /// Every policy the harness knows, in the order `list` prints them.
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 9] = [
         Self::CLARITY,
         Self::DAMPED,
         Self::HASTE,
@@ -96,6 +98,7 @@ impl Policy {
         Self::STACKS,
         Self::SCRYING,
         Self::WARDING,
+        Self::CHANTING,
         Self::BOUND,
     ];
 
@@ -297,6 +300,34 @@ impl Policy {
         gloss: "the sanctum, rotated as the cyclic solver rotates it",
         setup: &["attend sanctum"],
         body: Body::Warding,
+    };
+
+    /// The menagerie, sung correctly and on the beat.
+    ///
+    /// **It measures the ceiling, not a player.** The driver reads the aperture
+    /// and waits for `until` to run out **off the model**, not off a reading —
+    /// the circle publishes no `until` to the language any more — so every
+    /// syllable is struck, which is what a policy is for. A person misses some
+    /// and a solver misses none once concentration is bought, and the number
+    /// here is the roof both are under.
+    ///
+    /// **The one policy that can make the tower *worse*.** Every other loop only
+    /// earns; a chant sung badly wears the barrier, so a regression that broke
+    /// the timing would show up here as a falling rate *and* as integrity
+    /// draining, which is the pair worth watching. ROADMAP's Phase 5 scarcity
+    /// note asks for exactly that: *"a sweep is part of the gate rather than an
+    /// afterthought"*.
+    ///
+    /// It issues its own commands, like [`WARDING`](Self::WARDING) and unlike
+    /// [`BOUND`](Self::BOUND), so it does not pay §8's per-step tick — and here
+    /// that gap is not a detail: a real bound `chanting` cannot keep up at all
+    /// until the weave grants a second step, which is the domain's whole
+    /// progression hook (§19).
+    const CHANTING: Self = Self {
+        name: "chanting",
+        gloss: "the menagerie, every syllable answered on the beat",
+        setup: &["attend menagerie"],
+        body: Body::Chanting,
     };
 
     /// [`GRIND`](Self::GRIND)'s loop again, run by a spell instead of by hand.

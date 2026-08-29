@@ -454,6 +454,15 @@ pub(super) fn session(
     }
     body = course.rest;
 
+    // The menagerie's board, fourth and last, on exactly the same terms. Four
+    // pictures, four rooms, one player — so the columns are claimed once
+    // whichever domain is open, and never twice.
+    let figure = super::chant::split(body, panel.figure.as_ref());
+    if let Some(running) = panel.figure.as_ref() {
+        super::chant::paint(&mut painter, figure.area, running, sim.prose());
+    }
+    body = figure.rest;
+
     // The tower-wide production meter stays: it is the *pool*, not an
     // instrument, and it is what says the slot is spent wherever it was spent.
     // Skipped in the laboratory, where the panel already draws that instrument's

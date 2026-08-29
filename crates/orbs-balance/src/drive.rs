@@ -146,6 +146,7 @@ pub fn run(policy: Policy, seed: u64, ticks: u64, every: u64) -> Run {
                 Body::Stacks => walk_one(&mut sim),
                 Body::Scrying => press_one(&mut sim, &mut sweep),
                 Body::Warding => haul_one(&mut sim, &mut cycle),
+                Body::Chanting => sing_one(&mut sim),
                 Body::Bound {
                     earning,
                     name,
@@ -520,6 +521,52 @@ const STATIONS: [&str; 3] = ["wellspring", "conduit", "barrier"];
 /// that the failure is invisible: *"getting this backwards still finishes — in
 /// the conduit"*. `STATIONS` above stays written out for the opposite reason,
 /// which its own doc gives: it is a thing a **player** types.
+/// Answer one syllable, correctly and on the beat.
+///
+/// **The ceiling, which is what a policy measures.** It reads the aperture off
+/// the world exactly as a spell's `if` does, waits out the approach, and then
+/// sings — so nothing here is a second opinion about the rules.
+///
+/// **It reads `until` where a spell now cannot**, and that is the ceiling being
+/// a ceiling rather than a cheat. The circle stopped publishing that reading
+/// when `bide until` was withdrawn, because a spell able to read the clock does
+/// not have to count it — but this takes it from `Sim::figure`, off the model,
+/// which is what a player's eyes do. A policy is a roof, not a solver, and the
+/// number it prints is what perfect timing is worth rather than what the
+/// language can reach.
+///
+/// **It waits with `survey`, and `meditate 1` was wrong.** `run` advances the
+/// clock only inside `issue`, so a driver that returned without issuing anything
+/// would spin with no tick and `while sim.tick() < ticks` would never end — the
+/// hang `haul_one` and `press_one` both guard against. But `meditate` writes
+/// `Skip`, which `Sim::step` drains in a while-loop, so `meditate 1` costs
+/// **two** ticks: `until` went 3 → 1 → landed, the beat was stepped straight
+/// over, and every figure in a 7200-tick run collapsed for a rate of 0.0000.
+///
+/// `survey` costs exactly one tick and changes nothing, which is what a wait
+/// wants here.
+fn sing_one(sim: &mut Sim) {
+    let Some(figure) = sim.figure() else {
+        issue(sim, "summon");
+        return;
+    };
+    // Still travelling: spend the tick rather than the syllable.
+    if figure.until > 0 {
+        issue(sim, "survey circle");
+        return;
+    }
+    let Some(word) = figure
+        .coming
+        .first()
+        .and_then(|lane| figure.lanes.get(*lane))
+        .map(|(_, name)| *name)
+    else {
+        issue(sim, "summon");
+        return;
+    };
+    issue(sim, &format!("sing {word}"));
+}
+
 fn haul_one(sim: &mut Sim, cycle: &mut usize) {
     // No course drawn — either the first lap, or the last one finished.
     // `muster` draws the next, which is how a bound spell laps.

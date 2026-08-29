@@ -64,15 +64,7 @@ pub fn budget(world: &World) -> usize {
     SCRIPT_BUDGET.saturating_add(extra)
 }
 
-/// What one Mastery node adds to the budget, if that is what it is for.
-///
-/// **The id is the contract**, exactly as `progression.toml` says: *"ids are
-/// decisions, not prose — they are what a taken node is stored as."* So the
-/// grant is derived from the id rather than from a second table that could
-/// disagree with the one the screen draws.
-fn steps_granted(id: &str) -> Option<usize> {
-    id.strip_prefix("steps_")?.parse().ok()
-}
+use tower::mastery::steps_granted;
 
 /// How long a blocked instruction waits before it is called a failure.
 ///
@@ -86,6 +78,23 @@ fn steps_granted(id: &str) -> Option<usize> {
 /// Generous on purpose: longer than any single §10.1 stage, so a legitimate wait
 /// never trips it.
 pub const PATIENCE: u64 = 120;
+
+/// The longest a single `bide` will hold, however long it was told to.
+///
+/// **A clamp rather than a refusal.** It was load-bearing when the number could
+/// be read off the world — `bide until` resolved a reading, and `watch::many_at`
+/// answers an *endless* pile with `u32::MAX`, so `bide sage` in the laboratory
+/// bought four billion ticks of silence on a step that never reaches
+/// [`PATIENCE`]. That form is a complaint now, so the only way here is an author
+/// writing a very large number; the clamp stays because the failure it produces
+/// is the same one either way — a spell stopped dead and looking finished.
+///
+/// An hour, matching `MAX_MEDITATE`: the longest wait anything else in the game
+/// will sit through, so a bide that hits this is visibly a mistake rather than
+/// mysteriously slow. It is deliberately **not** `PATIENCE` — a bide is not
+/// blocked on anything and a long one is legal, so the clamp is a ceiling on
+/// nonsense rather than a limit on patience.
+pub const LONGEST_BIDE: u32 = 3600;
 
 /// How deep a part may call a part.
 ///
@@ -103,6 +112,22 @@ pub const PATIENCE: u64 = 120;
 /// a shape nobody has a use for yet, and the number only has to be past what a
 /// person would write on purpose.
 pub const MAX_PARTS: usize = 8;
+
+/// How many cursors one spell may have running at once.
+///
+/// **[`MAX_PARTS`]'s argument, and a strand is the more expensive thing.**
+/// `alongside` inside a `repeat` forks one a lap, unbounded, and each carries
+/// its own `pc`, `loops`, `vars` and stack of descents — so a runaway does not
+/// hang the game at one step a tick, it grows the *save* until nothing can read
+/// it. Same guard, same reason, one level out.
+///
+/// **Four rather than eight.** A strand also multiplies what the spell *does*
+/// per tick, because each spends its own budget — so where a runaway recursion
+/// only bloats a file, a runaway fork issues commands. Two is the shape the
+/// language was built for (a producer and a consumer); four leaves room for a
+/// pipeline of three and stops well short of anything a person writes on
+/// purpose.
+pub const MAX_STRANDS: usize = 4;
 
 /// How deep `invoke` may nest.
 ///
@@ -196,6 +221,15 @@ pub struct Running {
     pub at: NodeId,
     /// When the current instruction first found itself blocked.
     pub waiting_since: Option<Tick>,
+    /// How many ticks the running `bide` was told to spend.
+    ///
+    /// **`Some` is what says the bide has started**, which is the whole of what
+    /// it carries now. It was also *"held rather than re-read"*, because `bide
+    /// until` resolved a reading that was itself counting down; the count is a
+    /// literal again, so re-reading would be harmless and the flag is the point.
+    /// Cleared with `waiting_since`, which is the other half of the same
+    /// instruction's state — and saved with it, for the same reason.
+    pub biding: Option<u32>,
     /// Lines this casting has already complained about a missing name on.
     ///
     /// **Once per line per cast.** A question inside a `repeat` is asked every
@@ -241,6 +275,96 @@ pub struct Running {
     /// `gathering` needs the caller's path *and* its open blocks kept whole
     /// while the callee walks its own.
     pub stack: Vec<Descent>,
+    /// Every cursor this spell has, including the one currently swapped into the
+    /// fields above.
+    ///
+    /// **Never empty while the spell runs.** A cast builds one; `alongside`
+    /// appends; a cursor that runs off the end is removed, and the spell ends
+    /// when the last one goes. `step_one` is where the order they step in is
+    /// decided, and `swap_in` is why the active one lives in `Running`'s own
+    /// fields rather than being indexed at every site.
+    pub strands: Vec<Strand>,
+    /// Whether the cursor now swapped in has run off the end of its outermost
+    /// frame.
+    ///
+    /// **A flag rather than `finish` being called from inside the step loop**,
+    /// because running out is now a fact about a *cursor* and ending is a fact
+    /// about the *spell*. The loop reads this, drops the strand, and finishes
+    /// only when none is left — so a producer that returns while its consumer is
+    /// still pulling no longer takes the consumer down with it.
+    pub spent: bool,
+}
+
+/// One cursor: where a spell is, and everything private to being there.
+///
+/// # What is here and what is not
+///
+/// The split is *per-position* against *per-spell*, and one field moved after a
+/// review put it on the wrong side. `seen` is here — it is the record-stream
+/// mark a `wait` reads and `wait_for` writes, so two cursors sharing one would
+/// have cursor A satisfying a wait move cursor B past events B never saw,
+/// silently, and only for spells that use `wait`.
+///
+/// What stays on [`Running`] is what a spell has one of however many places it
+/// is in at once: which spell it is, its compiled `program`, how deep an
+/// `invoke` chain it sits in, whether it survives the player leaving, the room
+/// it runs in, and `said` — the once-per-line-per-cast rationing, which is about
+/// not repeating a complaint to a *reader* and so belongs to the cast.
+///
+/// # `Strand`, not `Cursor`
+///
+/// `bind_cursors` in this file already means the counters a `for each` walks
+/// with, and one word for two things in one module is how the next reader merges
+/// them. [`Descent`] is a third neighbour and is genuinely different again: a
+/// descent is a suspended frame *inside* a strand, and a strand has a stack of
+/// them.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Strand {
+    /// Where this cursor is — see [`Running::pc`].
+    pub pc: Vec<usize>,
+    /// Its open blocks — see [`Running::loops`].
+    pub loops: Vec<super::Loop>,
+    /// How far it has read the record stream — see [`Running::seen`].
+    pub seen: u64,
+    /// When its current instruction first blocked — see
+    /// [`Running::waiting_since`].
+    pub waiting_since: Option<Tick>,
+    /// How long its running `bide` is for — see [`Running::biding`].
+    pub biding: Option<u32>,
+    /// What it has bound — see [`Running::vars`].
+    pub vars: std::collections::BTreeMap<String, String>,
+    /// Which part's body it walks — see [`Running::part`].
+    pub part: Option<String>,
+    /// Its suspended callers — see [`Running::stack`].
+    pub stack: Vec<Descent>,
+}
+
+impl Running {
+    /// Make `strand` the cursor the runner walks.
+    fn take_up(&mut self, strand: &Strand) {
+        self.pc.clone_from(&strand.pc);
+        self.loops.clone_from(&strand.loops);
+        self.seen = strand.seen;
+        self.waiting_since = strand.waiting_since;
+        self.biding = strand.biding;
+        self.vars.clone_from(&strand.vars);
+        self.part.clone_from(&strand.part);
+        self.stack.clone_from(&strand.stack);
+    }
+
+    /// The cursor the runner has been walking, to park.
+    fn lay_down(&self) -> Strand {
+        Strand {
+            pc: self.pc.clone(),
+            loops: self.loops.clone(),
+            seen: self.seen,
+            waiting_since: self.waiting_since,
+            biding: self.biding,
+            vars: self.vars.clone(),
+            part: self.part.clone(),
+            stack: self.stack.clone(),
+        }
+    }
 }
 
 /// One caller, waiting for the part it called to finish.
@@ -406,13 +530,121 @@ fn set_attribution(world: &mut World, spell: Option<&str>) {
         .attribute(spell);
 }
 
-/// Run up to [`budget`] instructions of the spell on `entity`.
+/// Step every cursor this spell has, each with its own budget.
+///
+/// # One spell, several places in it
+///
+/// `alongside` forks a second cursor (§8, [`Strand`]). They are stepped in
+/// **`strands` order, each spending its whole budget before the next begins** —
+/// batch rather than round-robin, and the choice is a determinism rule rather
+/// than a preference:
+///
+/// - It is the rule [`advance`] already uses one level up, where every `Running`
+///   spends its whole budget in `NodeId` order. Two spells and two cursors of
+///   one spell then interleave by the same law, and there is one thing to know.
+/// - The two are **identical at budget 1** and diverge the moment `steps_1` is
+///   taken, so a test written today would pass against either and pin neither.
+///   §19 records that shape going wrong; the pin is
+///   `two_cursors_interleave_the_same_way_at_two_steps_a_tick`.
+///
+/// A cursor that runs off the end is removed and the rest carry on; the spell
+/// ends when the last one does. A cursor that blocks yields **only itself** —
+/// see [`step_strand`], which is the whole of what made a producer and a
+/// consumer in one file possible.
+fn step_one(world: &mut World, entity: Entity) {
+    let mut index = 0;
+    loop {
+        // **Re-read every lap, because stepping can change the count.** A strand
+        // that ran off the end is removed here and `alongside` appends one, so a
+        // length taken before the loop would step a strand that had gone or miss
+        // one that had arrived.
+        let Some(count) = world
+            .get::<Running>(entity)
+            .map(|state| state.strands.len())
+        else {
+            return;
+        };
+        if index >= count {
+            return;
+        }
+        swap_in(world, entity, index);
+        step_strand(world, entity);
+        // `finish` removes the component, so there may be nothing left to put
+        // back. Checked before the swap rather than inside it, because "the
+        // spell ended" and "this strand ended" are different answers.
+        if world.get::<Running>(entity).is_none() {
+            return;
+        }
+        if swap_out(world, entity, index) {
+            // **The strand went, so the next one is at this index.** Removed
+            // with `remove`, never `swap_remove`: reordering live cursors would
+            // change how they interleave and break replay for any spell that
+            // outlives a fork.
+            continue;
+        }
+        index += 1;
+    }
+}
+
+/// Move `strands[index]` into the fields the runner walks.
+///
+/// # Why a swap rather than an index everywhere
+///
+/// Every one of the ~110 places that touch `pc`, `loops`, `vars`, `part`,
+/// `stack`, `seen`, `waiting_since` and `biding` would otherwise have to name a
+/// cursor — in the runner, in `capture`, in `adopt` and in `invoke`. That is a
+/// mechanical change with no player-visible effect and one silent failure mode
+/// per site, and §19 has enough of those.
+///
+/// So the active cursor lives in `Running`'s own fields exactly as it always
+/// has, and the others are parked beside it. This is `Cwd`'s idiom one level
+/// down — `asked_where_the_spell_is` installs the spell's room around a read for
+/// the same reason — and the swap is confined to these two functions.
+///
+/// **The cost, stated plainly:** `Running`'s cursor fields mean *the cursor
+/// currently stepping*, which is only unambiguous inside [`step_one`]. Anything
+/// reading them from outside — `Sim::running_line`, the editor's gutter marker —
+/// gets whichever strand was put back last. That is honest for one cursor and
+/// arbitrary for two, and it is [`line_of`]'s problem rather than this one's.
+fn swap_in(world: &mut World, entity: Entity, index: usize) {
+    let Some(mut running) = world.get_mut::<Running>(entity) else {
+        return;
+    };
+    let Some(strand) = running.strands.get(index).cloned() else {
+        return;
+    };
+    running.take_up(&strand);
+}
+
+/// Put the active cursor back into `strands[index]`, or drop it if it is spent.
+///
+/// Returns whether the strand ended, which is what tells [`step_one`] not to
+/// advance its index.
+fn swap_out(world: &mut World, entity: Entity, index: usize) -> bool {
+    let Some(mut running) = world.get_mut::<Running>(entity) else {
+        return false;
+    };
+    if running.spent {
+        running.spent = false;
+        if index < running.strands.len() {
+            running.strands.remove(index);
+        }
+        return true;
+    }
+    let strand = running.lay_down();
+    if let Some(slot) = running.strands.get_mut(index) {
+        *slot = strand;
+    }
+    false
+}
+
+/// Run up to [`budget`] instructions of the cursor that is currently swapped in.
 ///
 /// **Read once, before the first step.** A node cannot be taken mid-tick, so
 /// re-reading it per step would be a resource lookup for an answer that cannot
 /// change — and if it ever could, a budget that grew while it was being spent is
 /// the shape a loop guard must never have.
-fn step_one(world: &mut World, entity: Entity) {
+fn step_strand(world: &mut World, entity: Entity) {
     let allowance = budget(world);
     for _ in 0..allowance {
         // **Before the state is read, so every step sees its cursors.** Entry
@@ -432,7 +664,15 @@ fn step_one(world: &mut World, entity: Entity) {
             if returned(world, entity) {
                 continue;
             }
-            finish(world, entity, &state);
+            // **This *cursor* is done, which is not the same as the spell.** It
+            // used to finish here, and with `alongside` that would have a
+            // producer running out and taking its consumer down mid-pull. The
+            // flag is read by `swap_out`, which drops the strand; `finish` is
+            // called by [`ended`] when the last one has gone.
+            if let Some(mut running) = world.get_mut::<Running>(entity) {
+                running.spent = true;
+            }
+            ended(world, entity, &state);
             return;
         };
 
@@ -448,6 +688,12 @@ fn step_one(world: &mut World, entity: Entity) {
         // A **call** suspends this frame and opens one on the part.
         if let super::Kind::Call { name, args } = &step.kind {
             called(world, entity, &state, step.line, name, args);
+            continue;
+        }
+
+        // A **fork** starts the part as a cursor of its own and steps past.
+        if let super::Kind::Alongside { name, args } = &step.kind {
+            forked(world, entity, &state, step.line, name, args);
             continue;
         }
 
@@ -604,11 +850,39 @@ fn step_one(world: &mut World, entity: Entity) {
             continue;
         }
 
+        // A `pull` is a `let` whose value comes out of the world, so it costs a
+        // step for the same reason and yields instead of binding when the
+        // satchel is bare.
+        if let super::Kind::Pull { name, from } = &step.kind {
+            let from = substituted(&state.vars, from);
+            if pull(world, entity, &state, name, &from) == Progress::Blocked {
+                return;
+            }
+            continue;
+        }
+
         // A `wait` reads the world rather than acting on it, so it costs no
         // position swap and no dispatch.
         if let super::Kind::Wait(wanted) = &step.kind {
             let wanted = substituted(&state.vars, wanted);
             if wait_for(world, entity, &state, &wanted) == Progress::Blocked {
+                return;
+            }
+            continue;
+        }
+
+        // **A `bide` spends the rest of the tick and nothing else.** It reads no
+        // world and issues no command, so it cannot fail and cannot be refused —
+        // and it deliberately does *not* consult `PATIENCE`, because a bide is
+        // not blocked on anything. A spell waiting for ever is a fault; a spell
+        // counting to three is doing what it was written to do.
+        //
+        // The step's own count is left alone and the *runner* holds how far
+        // through it is, exactly as a `repeat`'s laps are held: a program is
+        // compiled once and cast many times, so a countdown written into the
+        // step would leave the second cast biding zero.
+        if let super::Kind::Bide(delay) = &step.kind {
+            if bide(world, entity, &state, *delay) == Progress::Blocked {
                 return;
             }
             continue;
@@ -882,6 +1156,67 @@ fn run_line(world: &mut World, entity: Entity, state: &Running, line: &str) -> P
     Progress::Done
 }
 
+/// Spend `ticks` doing nothing, then move on.
+///
+/// **`waiting_since` carries the countdown, and it is reused rather than
+/// duplicated.** A bide is exactly *"this instruction started waiting at tick
+/// T"*, which is the field's own definition; a second counter beside it would be
+/// a second answer to when-did-this-step-begin, and §19 records that shape going
+/// wrong more often than any other. It also means a bide survives a save for
+/// free, which §8 requires of in-flight state.
+///
+/// **It never reaches `PATIENCE`, deliberately.** A spell that waits for ever is
+/// a fault; a spell counting to three is doing what it was written to do, so
+/// this does not route through [`wait`] and says nothing on the transcript.
+/// `bide 4000` is therefore legal and slow, which is the honest reading — the
+/// player wrote a number and the orb is counting it.
+fn bide(world: &mut World, entity: Entity, state: &Running, delay: u32) -> Progress {
+    let now = *world.resource::<Tick>();
+    // **Stamped once, on the tick the bide begins, and then held.** The count is
+    // a literal now, so this no longer resolves anything — but the pair still
+    // has to be latched together, because `waiting_since` alone cannot say
+    // whether the bide has started.
+    let (since, ticks) = match (state.waiting_since, state.biding) {
+        (Some(since), Some(ticks)) => (since, ticks),
+        _ => {
+            let ticks = delay.min(LONGEST_BIDE);
+            if let Some(mut running) = world.get_mut::<Running>(entity) {
+                running.waiting_since = Some(now);
+                running.biding = Some(ticks);
+            }
+            (now, ticks)
+        }
+    };
+    // `>=`, so `bide 1` spends one whole tick and `bide 0` spends none — the
+    // count is ticks *elapsed*, which is what a player writing a delay means.
+    // **`ticks - 1`, because completing spends a tick of its own.** `step_one`
+    // runs `allowance` steps and every `continue` costs one, so a bide that
+    // finished on the tick its count ran out put the *next* instruction a tick
+    // later than the author asked for. `bide n` means "the next line runs n ticks
+    // from here", which is what somebody timing a chant is counting.
+    //
+    // A consequence worth stating: `bide 0` and `bide 1` are the same line. The
+    // next instruction can never run in the same tick at one step a tick, so
+    // nought is not reachable and saying so is more honest than refusing it.
+    //
+    // **And a bide is still bounded, though the reason has shrunk.** It was
+    // load-bearing while `bide <reading>` compiled: `bide sage` answered
+    // `Endless` through `watch::many_at` and bided `u32::MAX`, four billion
+    // ticks of silence on a step that deliberately never reaches `PATIENCE`.
+    // That form is a complaint now, so the only way here is an author typing a
+    // very large number — which `LONGEST` still clamps, because the failure it
+    // produces is indistinguishable from a spell that finished either way.
+    if now.get().saturating_sub(since.get()) >= u64::from(ticks.saturating_sub(1)) {
+        if let Some(mut running) = world.get_mut::<Running>(entity) {
+            running.waiting_since = None;
+            running.biding = None;
+        }
+        advance_pc(world, entity);
+        return Progress::Done;
+    }
+    Progress::Blocked
+}
+
 /// Hold the spell where it is, saying so **once**.
 fn wait(world: &mut World, entity: Entity, state: &Running, blocked: &Blocked) -> Progress {
     let now = *world.resource::<Tick>();
@@ -954,6 +1289,20 @@ pub const fn may_issue(verb: Verb) -> bool {
             // **`follow` is deliberately *not* here.** Walking the maze is the
             // whole point of automating the archive; what a spell may not do is
             // decide who is holding the keyboard.
+            //
+            // **`summon` and `sing` are not here either, and for the same
+            // reason** — the split matters more in the menagerie than anywhere,
+            // so it is worth stating. `summon` is `research`'s shape: it opens
+            // the puzzle and draws a board, and it takes no keys. `sing` is
+            // `follow`'s: it is the act, and automating it is the entire point
+            // of the domain, because a spell has no dexterity and must solve the
+            // figure by arithmetic instead.
+            //
+            // **`chorus` is the word that hands the arrows over, and it is on
+            // this list.** That is `wander`'s objection exactly: the prompt goes
+            // dead, Escape is the only way out, and a spell retaking the keys
+            // every lap would race the player for it.
+            | Verb::Chorus
             | Verb::Wander
             // **And it may not end the session.** `quit` was added to the
             // vocabulary, to `Verb::ALL`, to `dispatch::execute` and to the
@@ -1103,6 +1452,90 @@ fn called(
     }
 }
 
+/// Start `name` as a second cursor and step past — `alongside gathering()`.
+///
+/// # A fork against a call, in the three places they differ
+///
+/// [`called`] is the sibling and most of this is its body. What is different:
+///
+/// - **The caller is not suspended.** No [`Descent`] is pushed and its `pc`,
+///   `loops` and `vars` stay exactly where they are; the line after the fork
+///   runs on the caller's next step.
+/// - **The new cursor has an empty stack**, because nothing is waiting for it.
+///   Running off the end ends the strand and no more — [`ended`] finishes the
+///   spell only when the last one goes.
+/// - **It is bounded by [`MAX_STRANDS`] rather than [`MAX_PARTS`]**, and those
+///   count different things: depth of one cursor's descents against how many
+///   cursors there are.
+///
+/// # It runs next tick, not this one
+///
+/// The strand is appended, and [`step_one`] re-reads the count each lap — so a
+/// fork made part-way through this tick *is* stepped on this tick, once, before
+/// the loop moves on. That matches `invoke`'s door: `advance` snapshots the
+/// running list, so a spell cast this tick starts on the next. Both are *"the
+/// new thing gets its budget from the point it exists"*, and pinning it is
+/// `a_forked_cursor_starts_where_the_fork_left_it`.
+fn forked(
+    world: &mut World,
+    entity: Entity,
+    state: &Running,
+    line: usize,
+    name: &str,
+    args: &[String],
+) {
+    // `pull`'s gate, for `pull`'s reason — the complaint at cast is the report
+    // and this is what stops the line.
+    if !tower::mastery::holds(world, tower::mastery::Grant::Cursors) {
+        advance_pc(world, entity);
+        return;
+    }
+    let Some(params) = super::program::signature(state.program.body(), name) else {
+        say_missing(world, entity, state, line, &[name.to_owned()]);
+        advance_pc(world, entity);
+        return;
+    };
+    if params.len() != args.len() {
+        say_failure(world, state, "spell_call_arity_now", name, Role::Danger);
+        advance_pc(world, entity);
+        return;
+    }
+    if state.strands.len() >= MAX_STRANDS {
+        say_failure(world, state, "spell_strands_too_many", name, Role::Danger);
+        advance_pc(world, entity);
+        return;
+    }
+    // **Resolved in the forking cursor's store, at the moment of the fork.**
+    // `called`'s rule and it has to be: a part's brackets are the whole of what
+    // it can see (§19), and the caller goes on running — so a name resolved
+    // later would be read against a store that had moved underneath it.
+    let handed: Vec<String> = args
+        .iter()
+        .map(|arg| {
+            state
+                .vars
+                .get(arg.as_str())
+                .cloned()
+                .unwrap_or_else(|| arg.clone())
+        })
+        .collect();
+    if let Some(mut running) = world.get_mut::<Running>(entity) {
+        // **`seen` is carried over, not started at nought.** It is how far the
+        // cursor has read the record stream, and a strand opening at zero would
+        // have its first `wait` satisfied by something that happened before it
+        // existed — every event of the run so far, all at once.
+        let seen = running.seen;
+        running.strands.push(super::Strand {
+            pc: vec![0],
+            part: Some(name.to_owned()),
+            vars: params.into_iter().zip(handed).collect(),
+            seen,
+            ..Default::default()
+        });
+    }
+    advance_pc(world, entity);
+}
+
 /// The block the current frame is walking.
 ///
 /// **Empty when the part it names has gone**, which is a real state rather than
@@ -1227,6 +1660,83 @@ fn asked_where_the_spell_is(
     let asked = super::watch::holds(world, condition);
     world.insert_resource(Cwd(player));
     asked
+}
+
+/// Take the oldest name out of a satchel and bind it, or yield until there is
+/// one.
+///
+/// # Where it looks, and why that is the whole of the care here
+///
+/// **In the room the *spell* stands in, never the player's.** A satchel is the
+/// one fixture that exists in every domain under one name, so a lookup against
+/// `Cwd` would find whichever room the player happens to be in — and a bound
+/// producer in the menagerie feeding a consumer while the player brews would be
+/// filling one queue and draining another, in silence, with both spells looking
+/// healthy. §19 records this exact confusion three times now (`erode`,
+/// `bide until`, `wear_by`); `state.at` is the answer every time.
+///
+/// # Yielding is not waiting
+///
+/// An empty satchel returns [`Progress::Blocked`] **without touching
+/// `waiting_since`**, so it never reaches [`PATIENCE`] and never latches `‼` on
+/// the rail. A consumer that has caught up with its producer is the ordinary
+/// state of a working pipeline, and marking the domain broken for it would make
+/// the fault light useless in the one room most likely to show it. `bide`'s
+/// rule: *"a spell waiting for ever is a fault; a spell counting to three is
+/// doing what it was written to do."*
+///
+/// What bounds it is the work running out. The producer stops, the consumer's
+/// loop guard goes true, and the spell ends — and if the author wrote a loop
+/// with no guard, that is a spell that idles rather than one that hangs.
+///
+/// # A satchel that is not there is a fault, and is said once
+///
+/// The other half: `pull note from mortar_and_pestle` names something real that
+/// holds no queue, and `pull note from satchel` in the arsenal names nothing at
+/// all. Both are §8's *Referent missing* rather than a wait, so they say so and
+/// step past — [`say_missing`]'s once-per-line-per-cast rule, because this line
+/// is inside a loop by construction.
+fn pull(world: &mut World, entity: Entity, state: &Running, name: &str, from: &str) -> Progress {
+    let line = super::program::at(walking(state), &state.pc).map_or(0, |step| step.line);
+    // **Asked here as well as at cast**, which is `may_issue`'s rule and its
+    // reason: *"a boundary with one guard is a boundary that a future caster can
+    // walk around."* `compile::check_learned` is what a player *reads*; this is
+    // what stops the line. Silent, because the complaint has already said it —
+    // and once per cast, where this would be once per lap.
+    if !tower::mastery::holds(world, tower::mastery::Grant::Satchel) {
+        advance_pc(world, entity);
+        return Progress::Done;
+    }
+    let at = node_of(world, state.at).and_then(|room| {
+        tower::children_of(world, room)
+            .into_iter()
+            .find(|node| {
+                world
+                    .get::<tower::Name>(*node)
+                    .is_some_and(|it| it.0 == crate::parser::leaf(from))
+            })
+            .filter(|node| world.get::<tower::Satchel>(*node).is_some())
+    });
+    let Some(at) = at else {
+        say_missing(world, entity, state, line, &[from.to_owned()]);
+        advance_pc(world, entity);
+        return Progress::Done;
+    };
+
+    let Some(mut satchel) = world.get_mut::<tower::Satchel>(at) else {
+        say_missing(world, entity, state, line, &[from.to_owned()]);
+        advance_pc(world, entity);
+        return Progress::Done;
+    };
+    let Some(taken) = satchel.take() else {
+        return Progress::Blocked;
+    };
+
+    if let Some(mut running) = world.get_mut::<Running>(entity) {
+        running.vars.insert(name.to_owned(), taken);
+    }
+    advance_pc(world, entity);
+    Progress::Done
 }
 
 /// Name what a guard could not place, once per line per cast.
@@ -1355,7 +1865,10 @@ fn guard_answers(
                 | super::Kind::Call { .. }
                 | super::Kind::Command(_)
                 | super::Kind::Wait(_)
-                | super::Kind::Let { .. } => {}
+                | super::Kind::Bide(_)
+                | super::Kind::Let { .. }
+                | super::Kind::Pull { .. }
+                | super::Kind::Alongside { .. } => {}
             }
             path.pop();
         }
@@ -1384,6 +1897,22 @@ fn guard_answers(
 /// and with the recast itself already silent, a finish with no beginning reads
 /// like the orb letting go. A binding ends when the player says `stop`, which
 /// says so in those words.
+/// One cursor has run out; end the spell if it was the last.
+///
+/// **The spell ends when every cursor has**, which is the termination rule
+/// `alongside` needs and the one thing about forking that a player has to hold
+/// in their head. A `repeat` with no guard in a forked part therefore keeps the
+/// whole spell alive — the same bargain an unbounded `repeat` already makes, one
+/// cursor over.
+fn ended(world: &mut World, entity: Entity, state: &Running) {
+    let last = world
+        .get::<Running>(entity)
+        .is_none_or(|running| running.strands.len() <= 1);
+    if last {
+        finish(world, entity, state);
+    }
+}
+
 fn finish(world: &mut World, entity: Entity, state: &Running) {
     let name = spell_name(world, state);
     if let Some(mut bound) = world.get_mut::<super::Bound>(entity) {

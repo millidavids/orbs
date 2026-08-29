@@ -136,11 +136,112 @@ pub enum SpellWord {
     /// merely accepted: §19's comparison spellings write back as words because a
     /// word exists to write back to, and here none does.
     Part,
+    /// Do nothing for a number of ticks.
+    ///
+    /// **The tenth word, and the menagerie is what earned it.** Nothing in the
+    /// language counted ticks: [`Wait`](Self::Wait) takes a *thing* and blocks by
+    /// scanning the record stream, which is the right shape for *"hold until the
+    /// mortar is free"* and the wrong one for a chant. A blocking wait would let
+    /// the world decide when to sing, and deciding when is the entire puzzle
+    /// (§19) — so the delay has to be a number the spell works out and writes
+    /// down.
+    ///
+    /// # `rest` was the first name, and it is a `meditate` synonym
+    ///
+    /// A spell word is matched **before** the fuzzy matcher, so claiming `rest`
+    /// would have stopped `rest 20` reaching `meditate` at the prompt — the
+    /// collision §19 records `set` causing against `dial`, which is why that
+    /// entry says to sweep a proposed word against the *whole* vocabulary rather
+    /// than against the other spell words.
+    ///
+    /// Four alternatives were then asserted clean without being swept and two of
+    /// them were not: `tarry` scores **800** against `carry`, a live `move`
+    /// synonym, and `pause` **667** against `peruse`. `bide` is clean, is one
+    /// syllable, and sits in the register of `muster` and `kindle`.
+    Bide,
+    /// Take the oldest name out of a satchel and bind it —
+    /// `pull note from satchel`.
+    ///
+    /// # Why this is a control word and `queue` is a verb
+    ///
+    /// **Because it binds a name, and only the language can do that.**
+    /// [`Let`](Self::Let) is the other one, and the two are the whole of what
+    /// puts a word in `vars`. A verb runs through `execute::dispatch`, which
+    /// hands back records and touches nothing a spell is holding — so a `pull`
+    /// verb could empty the satchel and would have nowhere to put what it took.
+    ///
+    /// The asymmetry is worth stating plainly rather than apologising for: the
+    /// push half changes the world, which is a verb's job and lets a player load
+    /// a satchel by hand; the pull half changes the *spell*, which is a control
+    /// word's.
+    ///
+    /// # It yields while empty, and never reaches `PATIENCE`
+    ///
+    /// A consumer that has caught up with its producer is the ordinary state of
+    /// a working pipeline, not a fault. `wait` gives up after
+    /// [`PATIENCE`](crate::tower::spell::PATIENCE) ticks and latches `‼` on the
+    /// rail; this takes `bide`'s road instead — *"a spell waiting for ever is a
+    /// fault; a spell counting to three is doing what it was written to do"* —
+    /// and says nothing on the transcript. What bounds it is the work running
+    /// out: a chant ends, the loop's guard goes true, and the spell finishes.
+    ///
+    /// # The word
+    ///
+    /// Swept on both axes against every verb, synonym, control word and reading.
+    /// `pull` is clean on similarity and `pul` is a free prefix.
+    ///
+    /// **`draw` was the first choice and is wrong in the prose**, not in the
+    /// parser: the game already spends that word on producing a *new* random
+    /// thing three times over — `Chant::draw`, `muster` *"draws a course"*,
+    /// `summon` *"draw a fresh figure"*. A queue hands back something that was
+    /// already there, which is the opposite. `take` is `weave`'s, `lift` scores
+    /// 750 against both `sift` and `list`, and `pop` is clean and reads as
+    /// jargon in a game whose other words are `muster` and `kindle`.
+    Pull,
+    /// Set a part running as a second cursor and carry on —
+    /// `alongside gathering()`.
+    ///
+    /// # What it is, against what already existed
+    ///
+    /// **Two spells already run at once.** `invoke` from inside a spell inserts
+    /// a second `Running` and the caller does not block; `run::advance` steps
+    /// every one of them each tick with its own budget. So this does not add
+    /// concurrency — it adds concurrency *within one file*, which is the
+    /// difference between a pipeline you can read on one screen and a pipeline
+    /// split across two.
+    ///
+    /// Stating that plainly is deliberate. It would be easy to sell this as new
+    /// capability and it is not: what it sells is that the producer and the
+    /// consumer of a satchel sit next to each other, share a name, and are
+    /// edited together.
+    ///
+    /// # A fork is not a call
+    ///
+    /// `gathering()` suspends the caller until the part returns;
+    /// `alongside gathering()` leaves the caller where it is and starts a
+    /// **[`Strand`](crate::tower::spell::Strand)** on the part. The forked
+    /// cursor has its own position, its own bindings and its own budget, and
+    /// when it runs off the end it simply stops — nothing is waiting for it.
+    /// The spell ends when every cursor has.
+    ///
+    /// Arguments work exactly as a call's, and for the same reason: a part's
+    /// brackets are the whole of what it can see (§19), so a fork that could
+    /// read the caller's store would be the shared-variables shape that decision
+    /// removed.
+    ///
+    /// # The word
+    ///
+    /// Swept on both axes. `alongside` is clean on similarity and `alo` is a
+    /// free prefix; `meanwhile` is equally clean and was the other candidate.
+    /// `fork` scores **962** against `for`, which is a control word already, and
+    /// `split` 600 against `spoil`; `beside` scores 667 against `bide`, which is
+    /// the word most likely to sit on the line above it.
+    Alongside,
 }
 
 impl SpellWord {
     /// Every one, for the naming pass and for the prompt's answer.
-    pub const ALL: [Self; 9] = [
+    pub const ALL: [Self; 12] = [
         Self::Wait,
         Self::Repeat,
         Self::If,
@@ -150,6 +251,9 @@ impl SpellWord {
         Self::Let,
         Self::For,
         Self::Part,
+        Self::Bide,
+        Self::Pull,
+        Self::Alongside,
     ];
 
     /// The word as it is written in a spell.
@@ -165,6 +269,9 @@ impl SpellWord {
             Self::Let => "let",
             Self::For => "for",
             Self::Part => "part",
+            Self::Bide => "bide",
+            Self::Pull => "pull",
+            Self::Alongside => "alongside",
         }
     }
 
@@ -191,6 +298,21 @@ impl SpellWord {
             // would read as a rule; one that showed none is what this said
             // before parameters existed, and it taught the wrong form.
             Self::Part => "<name>(...)",
+            // `<count>`, the same word `repeat` uses, because it is the same
+            // thing being counted from the player's side: a number of times
+            // round against a number of ticks through.
+            Self::Bide => "<count>",
+            // **`from` is on §6's filler list and is written anyway**, exactly
+            // as `let`'s `be` is not. The difference: `be` is load-bearing —
+            // `wait for the mortar to be idle` is the trap it exists to stop —
+            // where this is decoration a reader wants and the parser never sees.
+            // `pull note satchel` is the same line.
+            Self::Pull => "<name> from <place>",
+            // **`<name>(...)`, the same shape `part` shows**, because what
+            // follows is a call and the brackets are the notation rather than a
+            // slot. A shape reading `<part>` would teach a bare name, which is
+            // the one thing a call may not be.
+            Self::Alongside => "<name>(...)",
             Self::Else | Self::End => "",
         }
     }

@@ -675,15 +675,38 @@ fn drawn_form(record: &Record<'_>) -> String {
 /// because the gap between entries is the same two spaces as the gap *inside*
 /// one. `>` terminates the cell, so the eye finds the boundary. It is also the
 /// spelling `recall scripting` already teaches for `repeat <count>`.
+/// **A shape that brackets its own slots is not bracketed again.** A verb's
+/// record carries one bare slot name (`attend` + `place`), so this supplies the
+/// pair; a *control word* carries a whole shape from `SpellWord::shape`, and
+/// those spell their own — `<name> be <place>`, `each <set>`, `<name>(...)`.
+/// Wrapping them drew `let <<name> be <place>>` and `wait <<thing>>`, the one
+/// double bracket in the game, three rows above `queue <name>` on the same page
+/// for the comparison.
+///
+/// **The test is "does it contain a `<`", not "is it wrapped in one".** Two of
+/// the shapes are neither — `each <set>` opens with a word and `<name>(...)`
+/// closes with a paren — so anything narrower leaves half of them doubled, which
+/// is how the first attempt at this went.
+///
+/// The rule above is preserved rather than excepted: a cell has to end in
+/// something the eye can find, or a tiled run reads as one entry. `>` does it,
+/// and so does `)`.
 fn signature_of(record: &Record<'_>) -> String {
     let mut out = String::new();
     if let Some(name) = record.field(FieldName::Name) {
         name.write(&mut out);
     }
     if let Some(slot) = record.field(FieldName::Kind) {
-        out.push_str(" <");
-        slot.write(&mut out);
-        out.push('>');
+        let mut drawn = String::new();
+        slot.write(&mut drawn);
+        out.push(' ');
+        if drawn.contains('<') {
+            out.push_str(&drawn);
+        } else {
+            out.push('<');
+            out.push_str(&drawn);
+            out.push('>');
+        }
     }
     out
 }

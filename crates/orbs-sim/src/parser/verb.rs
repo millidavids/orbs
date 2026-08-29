@@ -478,6 +478,8 @@ const STATION_AND_STATION: &[Slot] = &[
     Slot::required(NounKind::Place),
     Slot::required(NounKind::Place),
 ];
+/// `sing` takes one syllable, and there is no bare form.
+const SYLLABLE: &[Slot] = &[Slot::required(NounKind::Place)];
 const SCRIPT: &[Slot] = &[Slot::required(NounKind::Script)];
 // `scribe` coins a name rather than naming something that exists — see
 // `NounKind::Name`. `bind` and `invoke` keep `SCRIPT`, because a spell they name
@@ -691,11 +693,102 @@ pub enum Verb {
     /// against `weave`, `drag` 935 against `dragged`, `bring` 600 against
     /// `grind`. `haul` is clean at 500 against `wall`.
     Haul,
+    /// `summon` — draw up a chant at the circle (§10, `menagerie/`).
+    ///
+    /// Free and instant, as [`Muster`](Self::Muster) and [`Probe`](Self::Probe)
+    /// are: opening the figure is not the work, singing it is. **It costs
+    /// nothing to attempt**, which is what makes the risk — a collapsed chant
+    /// wearing the barrier — the price rather than a resource.
+    ///
+    /// **Takes nothing**, for the reason `muster` and `probe` do: there is one
+    /// circle, and naming it would be naming the only thing there is.
+    ///
+    /// `summon` is clean. `call` is 750 against `wall`, `invoke` is taken, and
+    /// `conjure` was not tried because `summon` came back free on the first
+    /// sweep — which is the opposite of what happened to `chant`, and §19 says
+    /// so.
+    Summon,
+    /// `sing <syllable>` — answer the syllable at the aperture.
+    ///
+    /// **The one verb in the game whose value depends on *when* it runs.** A
+    /// syllable lands on a tick; singing the right one on that tick strikes it
+    /// and anything else misses. That is a reversal of §10.1 and it is argued in
+    /// §19 rather than assumed here.
+    ///
+    /// It is the same word typed and scripted, deliberately: the player asked
+    /// for the typed form to *"inform how the scripting is going to work"*, and
+    /// the exact way to do that is for them to be the same act. A batch form —
+    /// `sing skyward earthward` — was considered and dropped, because a syllable
+    /// lands on a tick, so a batch is only N commands on N ticks with a
+    /// different spelling, and it would have made the two forms diverge for
+    /// nothing.
+    ///
+    /// `sing` is clean. `chant` scores **600** three ways — against `cast`,
+    /// `halt` and `cat` — so the noun keeps the name and the verb does not: you
+    /// sing a chant.
+    Sing,
+    /// `chorus` — hand the arrow keys to a running chant (§10, `menagerie/`).
+    ///
+    /// `wander`'s shape exactly: `summon` opens the figure and draws the board,
+    /// and this decides *who holds the keyboard*. The two are separate for the
+    /// archive's reason — watching a bound spell sing one and singing it
+    /// yourself are different activities, and only the second wants the keys.
+    ///
+    /// **Barred from a spell** (`may_issue`), unlike `sing`. A spell singing is
+    /// the whole point of the domain; a spell seizing the keyboard on the orb's
+    /// clock is `repeat 100 / chorus` racing the player for the one key that
+    /// ends it.
+    ///
+    /// # It was `perform`, and `per` reaches `peruse`
+    ///
+    /// A similarity sweep cleared `perform` — it scores nothing against anything
+    /// — and `three_character_canonical_prefixes_name_at_most_one_verb` caught
+    /// it anyway: **an abbreviation collision is invisible to a score**, and
+    /// `peruse` is a word players type all day. Its synonym `conduct` went the
+    /// same way against `summon`'s `conjure`.
+    ///
+    /// That is the second time this phase a prefix caught what similarity could
+    /// not (`reply` against `repair` was the first). Sweep both, always.
+    ///
+    /// `chorus` is clean, `cho` is a free prefix, and joining a chorus is what
+    /// the word already means.
+    Chorus,
+    /// `queue <name>` — put a name in the satchel (§8, `tower::satchel`).
+    ///
+    /// **The push half of the channel between two spells.** The pull half is
+    /// `pull`, and it is a [`SpellWord`](super::SpellWord) rather than a verb —
+    /// an asymmetry that is not arbitrary: pulling *binds a name*, and `let` is
+    /// the only shape in the language that does. A verb cannot bind.
+    ///
+    /// This one is a verb because it does what verbs do — it changes a node —
+    /// and because a player who cannot load a satchel by hand cannot watch a
+    /// consumer drain one. `queue skyward` at the prompt is the See-it line for
+    /// the whole mechanic.
+    ///
+    /// **Unanchored, like `move` and `wield`.** Every domain has a satchel, so
+    /// there is no fixture to scope it to and no room where it is meaningless
+    /// except the arsenal, which refuses in voice.
+    ///
+    /// # `que` reaches `quench`, and that is accepted rather than missed
+    ///
+    /// A sweep of both axes clears `queue` on similarity and catches it on the
+    /// three-character prefix: `quench` is a live `stop` synonym, so exactly
+    /// `que` offers both. The full word is exact and unambiguous, and `quench`
+    /// is not a word anybody types often — which is what separates this from
+    /// §19's `leave`/`exit` refusal, where the ambiguity would have put *ending
+    /// the session* beside a verb people type constantly.
+    ///
+    /// The alternatives are worse on the same axes: `stow` shares `sto` with
+    /// `stop` **and** scores 750 against it, and `stash` shares `sta` with
+    /// `status`. `draw` is clean in the parser and wrong in the prose — the game
+    /// already uses it for producing a new random thing (`Chant::draw`, `muster`
+    /// *"draws a course"*, `summon` *"draw a fresh figure"*).
+    Queue,
 }
 
 impl Verb {
     /// Every verb in the Phase 0 vocabulary, and what the phases since have added.
-    pub const ALL: [Self; 32] = [
+    pub const ALL: [Self; 36] = [
         Self::Attend,
         Self::Survey,
         Self::Peruse,
@@ -731,6 +824,10 @@ impl Verb {
         Self::Dial,
         Self::Muster,
         Self::Haul,
+        Self::Summon,
+        Self::Sing,
+        Self::Chorus,
+        Self::Queue,
     ];
 
     /// The longest a canonical verb may be.
@@ -789,7 +886,16 @@ impl Verb {
             // ...and the sanctum's two, on the same reading. Drawing a course up
             // and hauling a ward are the whole of what this room does.
             | Self::Muster
-            | Self::Haul => Group::Work,
+            | Self::Haul
+            // ...and the menagerie's two, on the same reading. Opening a chant
+            // and singing it are the whole of what this room does.
+            | Self::Summon
+            | Self::Sing
+            | Self::Chorus
+            // ...and the satchel's push. It is §8's channel rather than any one
+            // room's puzzle, but it stands in every domain and it changes the
+            // world, which is what `Group::Work` collects.
+            | Self::Queue => Group::Work,
             Self::Scribe | Self::Bind | Self::Invoke => Group::Spells,
             Self::Status
             | Self::Recall
@@ -853,6 +959,10 @@ impl Verb {
             Self::Dial => "dial",
             Self::Muster => "muster",
             Self::Haul => "haul",
+            Self::Summon => "summon",
+            Self::Sing => "sing",
+            Self::Chorus => "chorus",
+            Self::Queue => "queue",
         }
     }
 
@@ -894,6 +1004,8 @@ impl Verb {
                 | Self::Dial
                 | Self::Muster
                 | Self::Haul
+                | Self::Summon
+                | Self::Sing
         )
     }
 
@@ -941,9 +1053,16 @@ impl Verb {
             // player names anyway, so scoping the verb to it costs nothing.
             | Self::Muster
             | Self::Haul
+            // The circle declares `summon`.
+            | Self::Summon
             | Self::Research => Some(self),
             // The maze's other two words, anchored to the stacks.
             Self::Follow | Self::Wander => Some(Self::Research),
+            // **`sing` is anchored to the circle, not to a syllable** — the
+            // archive's shape rather than the sanctum's. A syllable is something
+            // you name in an argument, not somewhere you stand, and there is one
+            // circle to sing at.
+            Self::Sing | Self::Chorus => Some(Self::Summon),
             // **`wield` is deliberately not anchored**, and neither is `empty`,
             // `stop` or `move`: they name their target explicitly and work
             // wherever one stands, which is what a script writes when the
@@ -1022,6 +1141,10 @@ impl Verb {
             Self::Dial => "dialling",
             Self::Muster => "mustering",
             Self::Haul => "hauling",
+            Self::Summon => "summoning",
+            Self::Sing => "singing",
+            Self::Chorus => "chorusing",
+            Self::Queue => "queueing",
         }
     }
 
@@ -1052,7 +1175,26 @@ impl Verb {
             | Self::Probe
             // **`muster` takes nothing**, for the reason `probe` does: there is
             // one pylon, and naming it would be naming the only thing there is.
+            // **`summon` takes nothing**, for the reason `muster` does: there is
+            // one circle, and naming it would be naming the only thing there is.
+            // **`chorus` takes nothing either**, for `wander`'s reason: it names
+            // no argument because what it does is hand over the keyboard.
+            | Self::Chorus
+            | Self::Summon
             | Self::Muster => NOTHING,
+            // One syllable, a `Role::Reading` place — the socket's shape rather
+            // than the station's, and **required**: there is no bare `sing`,
+            // because unlike `dial` there is nothing for the world to step
+            // round. A spell that knows it is singing knows what.
+            Self::Sing => SYLLABLE,
+            // **Anything the room can name**, which is `verify`'s slot and is
+            // chosen for what it *refuses*: `NounKind::Name` would take free
+            // text, so `queue asdfgh` would store a word nothing can resolve and
+            // the consumer's `sing note` would fail one tick later, a room away
+            // from the mistake. Resolving here also canonicalises an
+            // abbreviation, so what comes out of the satchel is a word the game
+            // knows however it went in.
+            Self::Queue => ANYTHING,
             // A socket and a sigil, both `Role::Reading` places.
             Self::Dial => SOCKET_AND_SIGIL,
             // Two stations, likewise.
@@ -1174,7 +1316,17 @@ mod tests {
         // What must stay bounded is the vocabulary a *single place* offers.
         // ...plus `empty`, which turns an instrument out into the store rather
         // than destroying what is in it (§10.1's byproduct rule).
-        let tower_wide = Verb::ALL.iter().filter(|verb| !verb.is_operation());
+        // **`anchor`, not `is_operation`, and that is a correction.** §19 records
+        // the two questions separating: `anchor` is *which fixture must stand
+        // here* — the scope question, and the one `Scene::offers` asks — where
+        // `is_operation` is *does this spend the production slot*. This metric
+        // kept asking the slot question and calling the answer "tower-wide", so
+        // `follow` and `wander` counted against a ceiling they are not near:
+        // both are scoped to the stacks and neither appears in another room.
+        //
+        // The ceiling is about **vocabulary a player meets everywhere**, which
+        // is what `anchor` answers.
+        let tower_wide = Verb::ALL.iter().filter(|verb| verb.anchor().is_none());
         // 19 until `siphon` retired (§19), then 18, and 19 again for `unfurl`.
         // The per-instrument verbs reach into idle instruments, so drawing a
         // stage's output onto the bench had stopped doing anything — and with it
@@ -1245,18 +1397,37 @@ mod tests {
         //
         // The ceiling still stands for the case it was drawn for. A domain verb
         // arriving here is still the argument for building the mechanism.
-        assert_eq!(tower_wide.count(), 23);
+        //
+        // **20, and the drop is the metric being fixed rather than words being
+        // removed.** `follow`, `wander` and `chorus` are scoped to a fixture and
+        // were counting here because the filter above asked the *slot* question,
+        // which they answer no to. Nothing a player meets in every room has
+        // gone; three things they meet in exactly one room have stopped being
+        // counted as if they did, which is why a phase that added three verbs
+        // lowered this number.
+        //
+        // **`sing` was named here and never counted**, which is the opposite
+        // mistake: it is in `is_operation`, so the old filter excluded it too.
+        // The three above are the ones the old filter got wrong.
+        //
+        // **21 with `queue`**, and it belongs in this number rather than the one
+        // below: every domain has a satchel, so it is anchored to no fixture and
+        // a player meets it in every room. That is exactly what this metric
+        // counts, and the paragraph below says why a *domain's* verb must not
+        // move it.
+        assert_eq!(tower_wide.count(), 21);
 
         // One per instrument that has a word of its own: the laboratory's
         // `grind`, `digest`, `mix`, `distil` and `kindle`, the lens's `probe`
-        // and `dial`, and the sanctum's `muster` and `haul`.
+        // and `dial`, the sanctum's `muster` and `haul`, and the menagerie's
+        // `summon` and `sing`.
         //
         // **This is the number a new domain is meant to move**, and the one
         // above is not. A domain that scopes its verbs pays here and leaves the
         // vocabulary of every *other* room exactly as it was, which is what the
         // paragraph above means by what must stay bounded.
         let scoped = Verb::ALL.iter().filter(|verb| verb.is_operation());
-        assert_eq!(scoped.count(), 9);
+        assert_eq!(scoped.count(), 11);
 
         assert!(
             !Verb::ALL.iter().any(|verb| verb.canonical() == "decoct"),

@@ -296,6 +296,11 @@ pub fn instruments_in(world: &World, place: Entity) -> Vec<Instrument> {
         // reading `empty` for ever would teach the eye to skip the panel, which
         // is the same argument that keeps the dispensary off it.
         .filter(|node| world.get::<super::Reading>(*node).is_none())
+        // **And not a satchel**, on the dispensary's argument exactly: it is a
+        // shelf that does nothing, has no meter, and stands in every room from
+        // the first tick to the last. Six rows reading `empty` for ever teach
+        // the eye to skip the panel. `survey satchel` is how you read a queue.
+        .filter(|node| world.get::<super::Satchel>(*node).is_none())
         .collect();
 
     let mut panel = Vec::with_capacity(fixtures.len());

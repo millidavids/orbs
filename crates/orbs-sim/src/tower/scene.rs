@@ -314,10 +314,46 @@ pub fn scene_at(world: &World, at: Entity) -> Scene {
         scene = scene.with(NounKind::Sense, reading);
     }
 
+    // **And the menagerie's, for the fourth time and the same reason.** A chant
+    // is drawn and finished inside one solve, so at cast there is never one
+    // running — `next` and `remaining` would resolve against nothing and
+    // `spell::compile` would null the whole condition.
+    //
+    // **Appended after the sanctum's**, which is the registration-order rule
+    // again: §6 resolves a tie to whichever noun came first, so every word an
+    // existing solver names keeps exactly the order it has always had.
+    for reading in super::chant::readings() {
+        scene = scene.with(NounKind::Sense, reading);
+    }
+
     // Every place, wherever the player is. Depth-first from the root, children
     // in spawn order.
     for node in walk(world, super::filesystem_root(world, cwd.0)) {
         if world.get::<Nameable>(node).map(|n| n.0) == Some(NounKind::Place) {
+            // **A satchel from another room is not offered at all**, and it is
+            // the one place this walk is not exhaustive. Every domain has one
+            // and they are all called `satchel`, so registering the lot would
+            // put six paths in the scene sharing a last segment — and §6's
+            // matcher accepts the last segment, which is what makes `attend
+            // laboratory` reach `/tower/laboratory`. The word would then resolve
+            // to whichever was registered first, from every room in the tower:
+            // `queue` put three names in the menagerie's and `survey satchel`
+            // read the *laboratory's* and reported it empty, one line apart, on
+            // the first line anybody ran.
+            //
+            // Scoping it here rather than renaming the node keeps the meaning
+            // the mechanic wants — *the satchel is the one where you stand* — and
+            // it is what makes `build`'s exemption from
+            // `every_place_leaf_is_unique` true rather than merely argued: the
+            // leaves collide in the tree and never in the scene.
+            //
+            // It costs naming another room's satchel by its full path, which §7
+            // forbids acting on anyway.
+            if world.get::<super::Satchel>(node).is_some()
+                && !children_of(world, cwd.0).contains(&node)
+            {
+                continue;
+            }
             // A place answers to its full path; §6's matcher also accepts the
             // last segment, which is what makes `attend laboratory` reach
             // `/tower/laboratory` (§7: players say the place, not the path).

@@ -198,7 +198,19 @@ fn ask(world: &World, condition: &Condition, missing: &mut Vec<String>) -> Optio
             Some(match state {
                 SpellState::Idle => !tower::state_at(world, at).is_busy(),
                 SpellState::Working => tower::state_at(world, at).is_busy(),
-                SpellState::Empty => tower::children_of(world, at).is_empty(),
+                // **A satchel answers from its queue, not from its children.**
+                // It has none either way — the names ride a `VecDeque` on the
+                // node, because a queue is an ordered multiset and `Stock`
+                // collapses duplicates and has no order — so without this arm
+                // `if the satchel is empty` is *true of a full satchel*, for
+                // ever and silently. That is the shape §19 records twice already
+                // (`is idle` in the menagerie, `is empty` in the lens): a guard
+                // that answers before the loop can run, and a spell that does
+                // nothing without saying so.
+                SpellState::Empty => world.get::<tower::Satchel>(at).map_or_else(
+                    || tower::children_of(world, at).is_empty(),
+                    tower::Satchel::is_empty,
+                ),
             })
         }
     }

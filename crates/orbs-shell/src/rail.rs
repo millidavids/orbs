@@ -186,13 +186,34 @@ fn domain(painter: &mut orbs_render::Painter<'_>, brief: &Brief, at: Rect, ruled
         }
         painter.span(
             Pos::new(at.col, row),
-            &Span::new(&format!(
-                "  {RUNNING}{}",
-                truncate(spell, width.saturating_sub(3))
-            ))
-            .with_style(Style::COST),
+            &Span::new(&casting(spell, brief.running, width)).with_style(Style::COST),
         );
     }
+}
+
+/// The spell row: what is running here, and how much more of it there is.
+///
+/// **`+n` says there is more running here than this line can name.** A box holds
+/// one spell row and a room can hold several spells — and, since `alongside`,
+/// several cursors of one spell. [`Brief::running`] counts *cursors* for that
+/// reason: from here the two are the same fact, and one number true of both
+/// beats two suffixes a player has to tell apart at a glance. `status` lists
+/// them by name, which is the standing split between the glance and the answer.
+///
+/// **The name is truncated and the suffix never is.** Cutting the whole string
+/// to width would drop `+2` off exactly the rooms busy enough to have earned it
+/// — a marker that vanishes when it matters, which is §19's sanctum rail defect
+/// in a third costume. So the count is measured out of the budget first and the
+/// name gets what is left.
+fn casting(spell: &str, running: usize, width: usize) -> String {
+    let more = running.saturating_sub(1);
+    let extra = if more > 0 {
+        format!(" +{more}")
+    } else {
+        String::new()
+    };
+    let room = width.saturating_sub(3).saturating_sub(extra.len());
+    format!("  {RUNNING}{}{extra}", truncate(spell, room))
 }
 
 /// The readings the telemetry pane used to carry.
@@ -314,6 +335,40 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// **The count survives the cut, and the name gives way to it.**
+    ///
+    /// The rail said `►tending` whether one spell ran in a room or three — a
+    /// second `invoke` was invisible, and after `alongside` so was a fork. The
+    /// suffix is what fixed that, and it would have fixed nothing if truncation
+    /// could eat it: the rooms that earn a `+2` are the ones with the longest
+    /// names running in them.
+    #[test]
+    fn the_count_of_what_else_is_running_survives_the_width() {
+        let width = usize::from(RAIL_COLS) - 2;
+
+        // One cursor is the shape it has always had, with no suffix at all.
+        assert_eq!(casting("tending", 1, width), format!("  {RUNNING}tending"));
+        assert_eq!(casting("tending", 0, width), format!("  {RUNNING}tending"));
+
+        // ...and more than one says so, whether that is two spells in the room
+        // or one spell forked. The rail cannot tell them apart and does not try.
+        assert_eq!(
+            casting("tending", 3, width),
+            format!("  {RUNNING}tending +2"),
+        );
+
+        // A name long enough to fill the box loses letters and keeps the count.
+        let long = casting("threadingly", 3, width);
+        assert!(
+            long.ends_with("+2"),
+            "the count was truncated away: {long:?}",
+        );
+        assert!(
+            long.chars().count() <= width,
+            "the row overflows its box: {long:?}",
+        );
     }
 
     #[test]

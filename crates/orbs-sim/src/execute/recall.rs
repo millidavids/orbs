@@ -191,6 +191,148 @@ fn say(world: &mut World, canonical: &str, key: &str) {
 /// material's page does.
 const SCRIPTING: &str = "scripting";
 
+/// The subject that answers *how do I make one at all*.
+///
+/// **Not `primer`**, which was the first choice and is already taken *in this
+/// module* — [`primer`] is the room's three-line introduction, printed by
+/// `help`. One word for two pages in one file is how the next reader merges
+/// them, which is the argument `Strand` records against `Cursor`.
+///
+/// `apprentice` is §12's own word for this — *"diegetic apprenticeship: the orb
+/// teaches as a mentor"* — and it reads as the request a player is making rather
+/// than as a label. Swept on both axes: clean on similarity, and `app` is a free
+/// prefix. `spellcraft` scores 925 against `spell` and shares `spe` with it;
+/// `crafting` and `writing` both score 667 against `scripting`, which is the one
+/// page it must not be confused with.
+const APPRENTICE: &str = "apprentice";
+
+/// The name the primer's worked example gives its spell.
+///
+/// A word rather than a room's, because the example is followed by typing it: a
+/// player who copies the page ends up with `morning.spell`, and a name that
+/// changed with the room would make the `invoke` line below wrong the moment
+/// they walked next door.
+const EXAMPLE: &str = "morning";
+
+/// The room the example falls back to where there is no work to script.
+const FALLBACK: &str = "laboratory";
+
+/// How to make a spell, from nothing, in the order it happens.
+///
+/// # A tutorial, where [`scripting`] is the reference
+///
+/// That page answers *what may I write* — the words, the question shapes, what
+/// this room can name. It is the right page to have open while writing and it
+/// teaches nobody how to start, because **no listing of words teaches an
+/// order**. `scribe`, `edit`, the lines, `<escape>`, `quit`, `invoke`, and then
+/// the log rather than the pane: seven steps, one of which (`quit` being the
+/// save) is a thing a player will otherwise discover by losing work.
+///
+/// §12 calls this the *in-world grimoire* and puts it in the "always" column,
+/// beside the apprenticeship that Phase 10 owns. This is the reference half of
+/// that, which is why it is a `recall` page and not a scripted sequence.
+///
+/// # The worked example comes from the room
+///
+/// [`scripting`]'s third section arriving at the same conclusion: the shape of a
+/// spell is the same everywhere and the lines in one are not. Showing `grind
+/// sage` to somebody standing in the lens teaches them a room they are not in,
+/// and the fix is the one this file already uses twice — build the moving part
+/// from where the player is.
+///
+/// A room with no work to script says whose lines it is borrowing. That is
+/// better than silence and better than nothing: the grimoire's own primer
+/// already tells you to go where the work is, and this agrees with it.
+fn apprentice(world: &mut World) {
+    let cwd = world.resource::<tower::Cwd>().0;
+    let here = tower::where_at(world, cwd);
+    let borrowed = !world.resource::<Prose>().has(&format!("craft_line_{here}"));
+    let room = if borrowed { FALLBACK.to_owned() } else { here };
+    let example = |world: &World, key: &str| world.resource::<Prose>().line(key, &[]);
+
+    say(world, APPRENTICE, "recall_apprentice");
+    for key in [
+        "craft_what_1",
+        "craft_what_2",
+        "craft_what_3",
+        "craft_what_4",
+        "craft_what_5",
+    ] {
+        let text = example(world, key);
+        line(world, APPRENTICE, &text);
+    }
+
+    section(world, "man_craft_write");
+    if borrowed {
+        let note = example(world, "craft_elsewhere");
+        line(world, APPRENTICE, &note);
+    }
+    let (first, second) = (
+        example(world, &format!("craft_line_{room}")),
+        example(world, &format!("craft_then_{room}")),
+    );
+    for (name, key) in [
+        (format!("scribe {EXAMPLE}"), "craft_scribe"),
+        ("edit".to_owned(), "craft_edit"),
+        (first, "craft_first"),
+        (second, "craft_second"),
+        ("<escape>".to_owned(), "craft_escape"),
+        ("quit".to_owned(), "craft_quit"),
+    ] {
+        let gloss = example(world, key);
+        entry(world, &name, "", Some(&gloss));
+    }
+
+    section(world, "man_craft_cast");
+    for (name, key) in [
+        (format!("invoke {EXAMPLE}"), "craft_invoke"),
+        (format!("peruse {room}.log"), "craft_log"),
+    ] {
+        let gloss = example(world, key);
+        entry(world, &name, "", Some(&gloss));
+    }
+
+    section(world, "man_craft_again");
+    for (name, key) in [
+        ("repeat 4", "craft_repeat"),
+        ("end", "craft_end"),
+        ("repeat until <question>", "craft_until"),
+    ] {
+        let gloss = example(world, key);
+        entry(world, name, "", Some(&gloss));
+    }
+
+    section(world, "man_craft_ask");
+    let asking = example(world, &format!("craft_ask_{room}"));
+    for (name, key) in [
+        (asking, "craft_if"),
+        ("else".to_owned(), "craft_else"),
+        ("interpret".to_owned(), "craft_interpret"),
+    ] {
+        let gloss = example(world, key);
+        entry(world, &name, "", Some(&gloss));
+    }
+
+    section(world, "man_craft_keep");
+    for (name, key) in [
+        (format!("bind {EXAMPLE}"), "craft_bind"),
+        (String::new(), "craft_bind_why"),
+    ] {
+        let gloss = example(world, key);
+        entry(world, &name, "", Some(&gloss));
+    }
+
+    section(world, "man_craft_next");
+    for (name, key) in [
+        ("recall scripting", "craft_more_words"),
+        ("recall repeat", "craft_more_one"),
+        ("guide", "craft_more_guide"),
+    ] {
+        let gloss = example(world, key);
+        entry(world, name, "", Some(&gloss));
+    }
+}
+
 /// What a spell is made of, and what this room lets one ask about.
 ///
 /// # Three sections, and only the last one moves
@@ -468,17 +610,26 @@ fn overview(world: &mut World) {
         }
     }
 
-    // The pointer out. Without it the overview reads as *this is the vocabulary*
-    // rather than *this is the vocabulary here*, and a player standing in the
-    // archive would never learn the laboratory has words of its own.
-    let message = world.resource::<Prose>().line("man_elsewhere", &[]);
-    world
-        .resource_mut::<Scrollback>()
-        .records_mut()
-        .push(RecordKind::Message)
-        .text(FieldName::Name, Verb::Recall.canonical())
-        .text(FieldName::Message, &message)
-        .finish();
+    // The two pointers out, and they answer different questions. **The first is
+    // the one a lost player needs**: everything above is a word to type *now*,
+    // and nothing on the page says the orb can be taught to type them for you —
+    // so a player could read `help` in every room and never learn the game has
+    // spells in it. §12 puts the in-world grimoire in the "always" column, and a
+    // reference nobody can find their way into is not one.
+    //
+    // The second says *this is the vocabulary here* rather than *this is the
+    // vocabulary*, without which somebody standing in the archive would never
+    // learn the laboratory has words of its own.
+    for key in ["man_teachable", "man_elsewhere"] {
+        let message = world.resource::<Prose>().line(key, &[]);
+        world
+            .resource_mut::<Scrollback>()
+            .records_mut()
+            .push(RecordKind::Message)
+            .text(FieldName::Name, Verb::Recall.canonical())
+            .text(FieldName::Message, &message)
+            .finish();
+    }
 }
 
 /// Show how a thing is made, and every way there is to make it.
@@ -521,6 +672,14 @@ pub(super) fn recall(intent: &Intent, world: &mut World) {
     // `if` could ask.
     if topic == SCRIPTING {
         scripting(world);
+        return;
+    }
+
+    // **The tutorial beside the reference**, and the split is the whole reason
+    // it is a second page: `scripting` answers *what may I write* and cannot
+    // answer *how do I start*, because no listing of words teaches an order.
+    if topic == APPRENTICE {
+        apprentice(world);
         return;
     }
 
@@ -1030,6 +1189,65 @@ mod tests {
         }
     }
 
+    /// **The apprentice's worked example must be lines the room can run.**
+    ///
+    /// A tutorial is the worst place in the game to print a dead end — the
+    /// player did the right thing by asking, and they are about to *type* what
+    /// they are shown. `a_primer_only_names_words_that_room_actually_offers`
+    /// makes the same argument about a sentence that mentions a verb; this is
+    /// the stronger version, because these are not sentences mentioning verbs.
+    /// They are commands.
+    ///
+    /// **Two questions, because resolving is not enough.** `grind sage` typed in
+    /// the lens *resolves* — `grind` is a word the game knows and `sage` is
+    /// nameable everywhere — and is then refused by `Verb::anchor` with *"there
+    /// is no `mortar_and_pestle` here to grind with"*. A lint that only parsed
+    /// would have passed the laboratory's whole example printed in the lens,
+    /// which is exactly the failure it exists to stop.
+    ///
+    /// So: the line must **resolve** through the real parser in the real room —
+    /// which catches a renamed argument, and renaming is what `tests/naming.rs`
+    /// exists because it happens — *and* its verb must be one that room
+    /// **offers**, which is `a_primer_only_names_words_that_room_actually_offers`'
+    /// bar and the same filter the listing under `help` uses.
+    ///
+    /// Availability rather than success, for the primer lint's reason: whether a
+    /// line then *works* is a question about the tower's state at that moment,
+    /// and a manual cannot promise that.
+    #[test]
+    fn the_apprentice_only_shows_lines_the_room_can_run() {
+        use crate::parser::{Mode, Resolution, analyse};
+
+        let mut sim = Sim::new(1);
+        for room in ["laboratory", "archive", "lens", "sanctum", "menagerie"] {
+            run(&mut sim, &format!("attend {room}"));
+            let cwd = sim.world().resource::<tower::Cwd>().0;
+            let scene = crate::tower::scene_at(sim.world(), cwd);
+            let here = super::super::offered(sim.world());
+            for part in ["line", "then"] {
+                let key = format!("craft_{part}_{room}");
+                let prose = sim.world().resource::<Prose>();
+                assert!(
+                    prose.has(&key),
+                    "the {room} has no `{key}`, so the apprentice borrows another \
+                     room's lines in a room that has its own",
+                );
+                let said = prose.line(&key, &[]);
+                let Resolution::Resolved { intent, .. } =
+                    analyse(&said, &scene, Mode::Calm).resolution
+                else {
+                    panic!("`{key}` shows `{said}`, which the {room} cannot read");
+                };
+                assert!(
+                    here.contains(&intent.verb),
+                    "`{key}` shows `{said}`, and the {room} does not offer \
+                     `{}`",
+                    intent.verb.canonical(),
+                );
+            }
+        }
+    }
+
     #[test]
     fn the_overview_lists_what_resolves_here_and_nothing_else() {
         // Both directions, in two rooms. The listing is `execute::offered`, which
@@ -1174,6 +1392,10 @@ mod tests {
                 // right, and `to` is §6 filler so the line is also a command
                 // that works.
                 Verb::Haul => Some(&["station"][..]),
+                // ...and the menagerie's syllables, third time. `sing <place>`
+                // would be true of the type and useless to a player: what they
+                // are choosing is one of four sounds, not somewhere to stand.
+                Verb::Sing => Some(&["syllable"][..]),
                 _ => None,
             } {
                 for wanted in instead {
@@ -1213,7 +1435,24 @@ mod tests {
                 word.canonical(),
             );
         }
-        for reading in crate::tower::maze::readings() {
+        // **Every domain's readings, not just the archive's.** This asked
+        // `maze::readings()` alone, and the three other rooms that publish
+        // readings were simply not covered — so the menagerie shipped a whole
+        // phase in which `recall next` fell through to the room overview, while
+        // the comment above claimed the hole was closed. A lint naming one
+        // domain is a lint that stops working the day a second one arrives, and
+        // §10 has five more.
+        //
+        // Listed rather than derived, deliberately: a domain's readings are
+        // `Vec<&str>` on its own module and there is no registry of those, so
+        // the honest options are a list here or a registry nothing else wants.
+        // A new domain adds a line, and this fails by name until it does.
+        let readings = crate::tower::maze::readings()
+            .into_iter()
+            .chain(crate::tower::chant::readings())
+            .chain(crate::tower::ward::readings())
+            .chain(crate::tower::pylon::readings());
+        for reading in readings {
             assert!(
                 prose.has(&format!("recall_{reading}")),
                 "`{reading}` is a word a solver's `if` names and the manual \

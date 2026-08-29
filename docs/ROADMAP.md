@@ -3433,26 +3433,257 @@ forbids. The table and those five lines change with this phase, deliberately.
 
 ---
 
-## Phase 5 — Summoning
+## Phase 5 — Summoning ✅
 
-**Exit:** a summoned thing acts on its own, and the player did not tell it what
-to do that tick.
+**Exit:** a chant performed by hand or by a spell yields troops, and a botched
+one leaves the tower worse. **Met** at `0.5.6`: a figure is summoned, sung on the
+arrows or by a spell, yields troops into the arsenal, and wears the barrier when
+it collapses.
 
-**Derived**. Consumes what Phases 3 and 4 make.
+> **The exit and the boxes were rewritten at `0.5.0`, and DESIGN.md §19 says
+> why.** They read *"a summoned thing acts on its own, and the player did not
+> tell it what to do that tick"*, with a **standing rule** box and an automation
+> currency to decide. **None of that is built here.** The chant is the activity
+> and troops are the product; they are inert until a siege spends them, so
+> autonomy moves to **Phase 8** with the thing that gives it something to do.
+> §10's *"allocation"* scarcity row and its **Derived** classification are both
+> withdrawn — a chant spends nothing, and a real-time surface is not cut from
+> brewing's pipeline.
 
-- [ ] The `menagerie/` domain, and allocation as the act
-      **See it:** two units from the same stock, and the stock is visibly gone
-- [ ] A unit's **standing rule**, chosen at summoning
-      **See it:** a unit does something the player did not command this tick
-- [ ] **Decide the automation currency and record it.** If a unit's rule draws a
-      Concentration slot it competes with the player's one bound spell; if it
-      does not, it is a second automation currency §11.5 does not have. This is
-      head-of-phase work, not an implementation detail
-      **See it:** the sidebar accounts for a unit the same way it accounts for a
-      bound spell — or says why not
+**Bespoke.** The one domain solved by *doing* rather than by choosing, which is a
+reversal of §19's `0.4.0` and is argued there rather than assumed.
 
-**Scarcity: allocation.** A summoned unit is spent stock, and the tower has one
-supply.
+- [x] ✅ **Head of phase: the §10 reversal, and the keyboard's one owner**
+      (`0.5.0`). §10.1's *"never a reflex"* struck with a pointer, the exit and
+      the scarcity rewritten above, and the `Focus` refactor `shell/input.rs` had
+      been pre-committed to since `wander` — *"a fifth surface refactors this
+      first."* One enum in `orbs-shell`, ported from `orbs-tui`, read by both
+      frontends. **The obvious gate was vacuous** — a dump builds no `App`, so
+      `dumps.sh` never executes the file — and §19 records that as the more
+      useful half
+      **See it:** `scripts/play.sh` (113 scenarios, a live keyboard), and
+      `cargo test -p orbs --bins no_surface_lets_a_keystroke_reach_the_prompt`,
+      which opens each of the four surfaces in a real `App` and proves the prompt
+      stays empty
+- [x] ✅ **The `menagerie/` domain, the chart, and `sing` typed** (`0.5.1`). A
+      figure of twelve syllables, one landing per tick; `summon` draws one and
+      `sing <syllable>` answers the aperture. Four misses collapse it and the
+      barrier pays five, which is the domain's only cost and the reason an
+      attempt is free. Neither verb takes the production slot — a `sing` that
+      queued behind a brew would arrive *after* the syllable it answered, which
+      is a guaranteed miss rather than a wait. **`up`/`down`/`left`/`right` were
+      swept out**: `left` scores 750 against the spell language's `let` and
+      `right` 800 against `light`
+      **See it:** `ORBS_BOOT=0 ORBS_DUMP="attend menagerie; summon; sing skyward;
+      sing skyward; sing skyward; sing skyward" cargo run -p orbs` — four blind
+      misses, and the figure comes apart. **Singing well is not possible yet and
+      that is not a defect**: nothing draws the chart, so a hand player is blind
+      until the next box. `cargo test -p orbs-sim --test chanting` is the loop
+      proved through the real verbs
+- [x] ✅ **The board, and the pace that makes the room playable** (`0.5.2`).
+      Syllables rise to a rule at the top, eight ahead, lanes named so a player
+      can type what they see. **`PACE` was one and is four** — a syllable a tick
+      left no room to read, so a spell could not strike one syllable of a figure
+      and a person could not either. Singing early is not a strike, which is what
+      makes a delay worth computing. `bide <n>` is the language's tenth word;
+      `rest` was the first name and is a `meditate` synonym (§19)
+      **See it:** `ORBS_BOOT=0 ORBS_DUMP="attend menagerie; summon; meditate 2"`
+      against the same line without the `meditate` — the figure has risen two
+      rows, which is the timing being visible. It fits the 80×22 floor.
+      **A `sing` on the tick after `summon` answers *"too soon"*, not a strike**:
+      the syllable is three ticks out, and a dump has no clock to wait with. This
+      line claimed a strike and said six for the pace, both wrong — a See-it line
+      that describes a different game is worse than none
+- [x] ✅ **A spell that times its own answer** (`0.5.3`). A two-tick landing
+      window and a `bide n` that costs exactly n ticks. **The solver strikes
+      twelve of twelve at two instructions a tick and collapses at one**, which
+      makes the menagerie the domain that rewards concentration: unautomatable
+      until the weave grants a second step. That reverses `0.5.1`'s lookahead
+      bound deliberately (§19)
+      **See it:** `ORBS_BOOT=0 ORBS_DUMP="attend menagerie; peruse
+      chanting.spell" cargo run -p orbs` — and note it is *meant* to fail at the
+      shipped budget. `cargo test -p orbs-sim --lib tower::chant` holds the pace
+      and window arithmetic
+      > **`bide until` shipped in this box and was withdrawn at `0.5.8`**, along
+      > with the `until` reading it read. A spell that reads its delay off the
+      > world computes nothing. The claim above survives the removal and is
+      > *asserted* now rather than measured once — see the box below
+- [x] ✅ **`steps_1` is takeable — the first real node in the tree** (`0.5.4`).
+      The screen returns an id, the shell hands it to `Sim::take`, and it lands
+      on the next tick as a recorded `Submission::Took`. **Both sides check every
+      rule**: the screen refuses a marker, a locked node and a spent tier, and
+      the world re-asks all three rather than trusting a screen's arithmetic.
+      The menagerie is what gave it a reason to exist
+      **See it:** three distillations to 24, then
+      `ORBS_WEAVE="mastery\ntake\nquit"` — *"the orb takes steps_1. it thinks a
+      little faster now"*. Then `invoke chanting`: **24 of 24 struck** where at
+      one step a tick it collapsed. `cargo test -p orbs-sim --test progression`
+      holds the take, the refusals and the replay
+- [x] ✅ **The interactive surface, and the accommodation** (`0.5.5`). `chorus`
+      hands the arrows to a running figure — the fifth surface, and the one the
+      `Focus` refactor was built for. **It does not take the pane**: a figure
+      draws beside the transcript, so a player answering syllables still reads
+      what the orb says about them. `F9` makes a chant *patient* — the syllable
+      waits for the singer rather than the clock — and it reaches the **same
+      ceiling**, which is what makes it an accommodation and not a difficulty
+      setting (§14). Both keys are bound in both frontends
+      **See it:** `ORBS_BOOT=0 ORBS_DUMP="attend menagerie; summon; chorus"
+      ORBS_CHANT="<up>\n<left>" cargo run -p orbs` — the presses land and read
+      *too soon*, because a dump has no clock. Add `ORBS_PATIENT=1` and the same
+      presses land cleanly, which is the whole of what the mode does.
+      `cargo test -p orbs-sim --test chanting` pins the parity, with the played
+      chant as its control
+- [x] ✅ **The troop is a material the game knows about** (`0.5.6`). A page, a
+      tint, and a name `debug_spawn` can make. **None of `tower::home`'s three
+      lints could see it**, and that is the finding: they walk *authored*
+      materials, and a material no file declares is a material no lint iterates
+      — so a thing the game produced every time somebody sang was unreachable to
+      a tester and answered `recall` with the bare overview. `substances` names
+      it beside the fuels, which is the same seam and the same reason
+      **See it:** `ORBS_BOOT=0 ORBS_DUMP="recall troop; debug_spawn troop 3;
+      survey arsenal" cargo run -p orbs`. And check the verdant trap while you
+      are there: four `wield verdant-scroll` must not shelve troops on the
+      dispensary as an inexhaustible herb
+
+- [x] ✅ **Reviewed, and four blockers fixed** (`0.5.7`). Fifteen findings on a
+      phase that shipped green — and **three of the four blockers were in code
+      whose own comment cited the rule it was breaking**: `wear_by` republished
+      through the `Cwd`-scoped lookup it names §19 for avoiding, `bide until`
+      skipped the room swap a helper exists to make, and the board that calls
+      itself *"the one picture that moves"* drew four identical frames per
+      approach. Key repeat ate the figure, `ChantSave` existed only in a comment,
+      and the domain had **none** of the four See-it instruments wired
+      **See it:** `cargo run -p orbs-render --example screens` has a figure now;
+      `scripts/dumps.sh` captures seven menagerie screens; `scripts/play.sh
+      menagerie::` plays five scenarios on a real keyboard; and
+      `cargo run -p orbs-balance -- run chanting --ticks 7200` reads **0.243**.
+      The bound solver yields **20 troops from another room**, where before the
+      fix it yielded none
+
+- [x] ✅ **`bide until` withdrawn — the delay is the player's arithmetic again**
+      (`0.5.8`). The shipped solver read its delay off the circle, so it computed
+      nothing: the blocking wait this phase rejected by name, rebuilt under
+      another name inside the domain built to refuse it. **The `until` reading
+      goes too** — with it answerable, `repeat until the circle has 1 until` is
+      the same cheat as a one-tick spin. `Delay` is gone as a type, so
+      `Kind::Bide` holds a literal and `bide sage` is a complaint rather than
+      four billion ticks of silence.
+      The solver is a **constant-length** `for each` that binds with `let` and
+      sings *outside* the loop — measured at two steps a tick, the old ladder
+      strikes **0 of 12**, singing inside the loop strikes **6**, and this
+      strikes **12** with no `bide` at all. Two things it exposed are worse than
+      the defect: **nothing anywhere tested `bide`**, so the shipped `.spell`
+      stopped compiling with the gate green; and `RunningSave` dropped `biding`,
+      so a save four ticks into `bide 3600` reloaded into another whole hour.
+      `FORMAT` 4 → 5, because a stored spell that still *loads* and no longer
+      *reads* is the format-2 failure in a different costume (§19)
+      **See it:** `cargo test -p orbs-sim --test chanting the_shipped_solver` —
+      the hook as an assertion rather than a claim, collapse at one step and
+      close at two, which is deliberately the pair. `cargo test -p orbs-sim --lib
+      tower::spell::program::tests::bide_takes_a_count` holds the refusal, and
+      `cargo run -p orbs-balance -- run chanting --ticks 7200` still reads
+      **0.243** — the harness reads `until` off the model, where the language
+      cannot
+
+- [x] ✅ **A satchel, and one spell can hand another a name** (`0.5.9`). §8's
+      spells could not tell each other anything — though **two of them already
+      ran at once**, ungated: `invoke` from inside a spell inserts a second
+      `Running` and the caller does not block. What was missing was the channel.
+      A `satchel` in every domain but the arsenal, `queue <name>` as a verb and
+      `pull <name> from satchel` as a control word — asymmetric because *pulling
+      binds a name*, and a verb cannot. It **yields while empty and never reaches
+      `PATIENCE`**: a consumer caught up with its producer is a working pipeline,
+      not a fault worth latching `‼` for.
+      A **component, not children** — a queue is an ordered multiset and `Stock`
+      collapses duplicates — so `spell::watch` gained an arm, without which `if
+      the satchel is empty` is true of a full one. And `scene_at` offers only the
+      local satchel, which is what makes `build`'s leaf-uniqueness exemption true
+      rather than argued: all six shared a leaf, so `queue` filled the
+      menagerie's and `survey satchel` read the **laboratory's**, one line apart.
+      **`onward`** is one syllable of lookahead, a widening of §19's earlier
+      bound. **The menagerie is not this feature's use case and that is
+      measured** — identifying one of four lanes costs more than `PACE`, so a
+      producer queues 4 of 12 at one step a tick and 6 at two, and no depth fixes
+      it (§19)
+      **See it:** `ORBS_BOOT=0 ORBS_DUMP="attend menagerie; debug_take satchel_1;
+      queue skyward; queue earthward; queue skyward; survey satchel" cargo run -p
+      orbs` — a name twice, in order. `cargo test -p orbs-sim --test satchel`
+      holds ten claims, one per way this could have been half-built
+
+- [x] ✅ **`alongside` — two cursors in one spell, and the unlocks** (`0.5.10`).
+      The per-position half of `Running` became a `Strand` and the spell holds a
+      `Vec` of them. **`Progress::Blocked` had to stop ending the entity's
+      tick**: a consumer on an empty `pull` would otherwise end the tick before
+      the producer was reached, every tick — the deadlock was by construction.
+      `seen` moved to the strand (two cursors sharing a record-stream mark makes
+      one satisfy the other's `wait`), strands step **batch in `Vec` order** to
+      match `advance`'s law, a finished one is `remove`d rather than
+      `swap_remove`d, and `MAX_STRANDS` is 4.
+      Done as a **swap** rather than an index at ~110 sites — `Cwd`'s idiom one
+      level down — so the runner, `capture`, `adopt` and `invoke` are untouched
+      and the whole balance table is unchanged to four decimal places, which is
+      the refactor's real proof.
+      `satchel_1` at 24 and `cursors_1` at 40, one grant of speed and one of the
+      channel per tier; `steps_granted` became `granted() -> Option<Grant>`, and
+      `Progression::check` refuses an id that *reads* as a grant and does not
+      parse as one. **`cursors_1` sells ergonomics and says so** — two spells were
+      always free; what this buys is both halves in one file
+      **See it:** `scripts/play.sh satchel::` plays five scenarios on a real
+      keyboard, including the fork feeding itself. `cargo test -p orbs-sim --test
+      strands` is nine, and `two_cursors_interleave_the_same_way_at_two_steps_a_tick`
+      is deliberately written at budget 2 — batch and round-robin are identical
+      at one step a tick, so a pin written there pins nothing.
+      `debug_take <id>` is why these lines are short: `debug_spawn`'s argument,
+      applied to two hundred ticks of laboratory
+
+- [x] ✅ **Worked examples of both forms, and a rail that can count** (`0.5.11`).
+      Three dev spells: `ordering` + `milling` are the **two-spell** channel, and
+      `coursing` is the **two-cursor** one — `holding` split down the middle,
+      solving in `2^n − 1` hauls, which is the same optimum the unsplit solver
+      reaches and is what the test asserts. Both are *cast* in tests, which is
+      `chanting`'s lesson: a dev spell nobody casts is prose.
+      **The rail named one spell per room however many ran there**, and a fork
+      was invisible for the same reason one level down. The suffix counts
+      *cursors* — from the rail a second `invoke` and an `alongside` are one
+      fact — and the name truncates where the count never does, because the rooms
+      that earn a `+2` have the longest names in them. **`status` gained a
+      `casting` section**, without which the count pointed at nothing; both read
+      one walk so they cannot disagree (§19)
+      **See it:** `ORBS_BOOT=0 ORBS_DUMP="attend sanctum; debug_take satchel_1;
+      debug_take cursors_1" ORBS_THEN="invoke coursing; meditate 6; status" cargo
+      run -p orbs` — the rail reads `►coursing +1` and `status` says
+      `coursing  sanctum, on 2 cursors`. `cargo test -p orbs-shell --lib rail`
+      holds the truncation, and
+      `the_rail_counts_every_cursor_and_status_names_them` holds the pair
+
+- [x] ✅ **`recall apprentice` — the lesson, where `recall scripting` is the
+      reference** (`0.5.12`). **Nothing taught a player to make a spell.** That
+      page lists the words and teaches nobody how to start, because no listing of
+      words teaches an *order* — `scribe`, `edit`, the lines, `<escape>`, `quit`,
+      `invoke`, then the log rather than the pane, one of which (*quit is the
+      save*) is otherwise learned by losing work.
+      §12's in-world grimoire is an **always** item and Phase 10 owns the
+      interactive apprenticeship, so this is the reference half and treads on
+      neither. The worked example is **built from the room** — `grind sage` in
+      the laboratory, `probe` in the lens — and a room with no work to script
+      borrows the laboratory's and says whose they are.
+      **The way in is `help`**, and that is the load-bearing half: everything on
+      the overview is a word to type now, so a player could read it in every room
+      and never learn the game has spells in it (§19)
+      **See it:** `for room in laboratory archive lens sanctum menagerie
+      grimoire; do ORBS_BOOT=0 ORBS_DUMP="attend $room; recall apprentice" cargo
+      run -q -p orbs; done` — six rooms, six examples.
+      `scripts/play.sh the_apprentice` **follows the page** from `help` to a
+      spell that earns, on a real keyboard, which is the gate that matters: a
+      tutorial's lines are typed rather than read past.
+      `the_apprentice_only_shows_lines_the_room_can_run` asks both questions —
+      resolves *and* offered — because `grind sage` in the lens resolves and is
+      then refused
+
+**Scarcity: integrity.** A chant costs nothing to attempt; enough mistakes fail
+it and wear the pylon. The cost is time, never progress (§11.5) — and it makes
+the sanctum the second domain that writes integrity, which is why a sweep is part
+of the gate rather than an afterthought.
 
 ---
 

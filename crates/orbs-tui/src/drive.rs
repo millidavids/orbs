@@ -583,6 +583,13 @@ impl Session {
             KeyCode::F(7) => {
                 orbs_shell::cycle_register(&mut self.sim);
             }
+            // §14's accommodation for the menagerie, and **not inert here**: it
+            // changes what a strike is worth, which is world state, so a chant
+            // sung patiently in a terminal reaches the same troops as one sung
+            // patiently under Bevy. Rule 2 is satisfied by more than usual.
+            KeyCode::F(9) => {
+                orbs_shell::toggle_patient(&mut self.sim);
+            }
             _ => return false,
         }
         true

@@ -136,6 +136,18 @@ pub struct NodeSave {
     /// The sanctum's course.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub course: Option<CourseSave>,
+    /// The menagerie's figure.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chant: Option<ChantSave>,
+    /// What is waiting in this room's satchel, oldest first.
+    ///
+    /// **A list rather than a table, because it is a queue.** Every other
+    /// counted thing here is children plus `Stock`, which collapses duplicates
+    /// and has no order; a satchel holding `skyward` twice with one of them
+    /// first is the whole point of it. Empty is `None`, so a tower nobody has
+    /// queued into writes no rows.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub satchel: Option<Vec<String>>,
     /// A spell part-way through running.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub running: Option<RunningSave>,
@@ -299,6 +311,39 @@ pub struct CourseSave {
     pub hauls: u32,
 }
 
+/// A figure part-way through being sung.
+///
+/// **This was documented before it existed.** `save::document`'s `FORMAT` 3 → 4
+/// entry called `ChantSave` *"an ordinary addition"* and two fields of
+/// `tower::Chant` justify their representation by a save they never reached —
+/// `travelled` is held rather than derived from a start tick because *"a chant
+/// can be saved mid-approach"*, and `sung` is a sequence partly because *"it is
+/// what the save needs"*. Neither was true until now: reloading mid-figure
+/// dropped the component and the circle came back empty.
+///
+/// **The whole chart travels**, unlike the sanctum's course, which stores only
+/// where the wards are standing. A figure is drawn once from
+/// `RngStream::Menagerie` and cannot be re-rolled on load without moving that
+/// stream — `Chant::restored` exists precisely so a restore reads the figure
+/// rather than drawing one, which is the ward's rule.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChantSave {
+    /// The figure, in the order it lands, by syllable word.
+    ///
+    /// **Words, not indices.** A save is a file §15 invites a person to edit,
+    /// and `skyward` says what `0` does not — the same call `WardSave` makes for
+    /// its sigils. An unreadable word is dropped by `Chant::restored`'s caller
+    /// rather than panicking, which is that section's rule for a hand-edited
+    /// file.
+    pub chart: Vec<String>,
+    /// Which syllable is at the aperture.
+    pub at: usize,
+    /// How each answered syllable went, oldest first: `true` struck.
+    pub sung: Vec<bool>,
+    /// How far the syllable at the aperture has travelled, out of `PACE`.
+    pub travelled: u32,
+}
+
 /// A spell part-way through, which §8 requires a save to carry.
 ///
 /// The compiled `Program` is **not** here: it is a derived view rebuilt from the
@@ -336,6 +381,20 @@ pub struct RunningSave {
     /// When the current instruction first blocked, if it has.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub waiting_since: Option<u64>,
+    /// How many ticks the running `bide` was told to spend, if one is running.
+    ///
+    /// **The pair with `waiting_since`, and it was left out.** A `bide` is the
+    /// two together — when it started and how long it is for — so carrying one
+    /// and dropping the other made `run::bide` fall to its start arm and stamp a
+    /// *fresh* `waiting_since`, restarting the count. `bide 3600` reloaded into
+    /// another whole hour.
+    ///
+    /// It was defensible while `bide until` existed: the delay came off the
+    /// world, so re-reading it was *more* correct than restoring a stale number,
+    /// and the field was *"always re-derivable"*. The reading form is gone, a
+    /// count is a literal, and there is nothing left to re-derive it from.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub biding: Option<u32>,
     /// Lines whose bad name has already been complained about.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub said: Vec<usize>,
@@ -367,6 +426,52 @@ pub struct RunningSave {
     /// An `invoke`d spell is a second `Running` with a fingerprint of its own,
     /// which is the same rule seen from the other side.
     pub fingerprint: u64,
+    /// Every cursor after the first, for a spell that has forked (§8,
+    /// `alongside`).
+    ///
+    /// **Written only when there is more than one**, and the fields above are
+    /// always the first. So a save of an ordinary spell is byte-for-byte what it
+    /// was before forking existed — which matters because *every* spell is
+    /// ordinary and a format that spent a table on the empty case would put
+    /// `[[node.running.strands]]` in every tower anybody ever saves.
+    ///
+    /// The flat fields are not a duplicate of `strands[0]`: they *are* it, and
+    /// `capture` writes them from it so the two cannot drift.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub strands: Vec<StrandSave>,
+}
+
+/// One forked cursor of a spell, as a save writes it.
+///
+/// [`RunningSave`]'s per-position half, and nothing else: which spell it is, how
+/// deep it sits and where it runs are facts about the *cast* and stay up there.
+/// `seen` is here rather than there, and a review is what moved it — two cursors
+/// sharing one record-stream mark makes one satisfy the other's `wait`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StrandSave {
+    /// Where this cursor is — see [`RunningSave::pc`].
+    pub pc: Vec<usize>,
+    /// Its open blocks, coded as [`RunningSave::loops`] codes them.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub loops: Vec<i64>,
+    /// How far it has read the record stream.
+    #[serde(default)]
+    pub seen: u64,
+    /// When its current instruction first blocked, if it has.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub waiting_since: Option<u64>,
+    /// How long its running `bide` is for.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub biding: Option<u32>,
+    /// What it has bound.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub vars: BTreeMap<String, String>,
+    /// Which part it is inside, if it is inside one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub part: Option<String>,
+    /// The callers waiting on it, outermost first.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub stack: Vec<DescentSave>,
 }
 
 /// One suspended caller of a part.

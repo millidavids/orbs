@@ -45,6 +45,16 @@ const FILE: &str = "progression.toml";
 /// half way up.
 pub const GRANTS: [&str; 1] = [CONCENTRATION];
 
+/// The stems a **mastery** id uses when it means to grant something.
+///
+/// [`GRANTS`] above is the ley line's closed set, where every step grants; this
+/// is the opposite shape, because most of the mastery tree is markers on purpose
+/// and an unrecognised id is the ordinary case. So `check` cannot refuse what it
+/// does not know — it refuses a *near miss*: an id that reads as a grant and
+/// does not parse as one, which is how `satchel1` would ship as a marker wearing
+/// a real node's name.
+const GRANTING: &[&str] = &["steps", "satchel", "cursors"];
+
 /// The only thing the Ley Line grants today.
 pub const CONCENTRATION: &str = "concentration";
 
@@ -168,6 +178,33 @@ impl Progression {
                 ));
             }
             seen.push(node);
+        }
+
+        // **A node whose id nearly names a grant is caught here.** The tree is
+        // mostly markers on purpose — authored ahead of what they do — so an id
+        // the parser does not recognise is the *ordinary* case and cannot be an
+        // error. What can be is a near miss: `satchel1` and `steps_two` are
+        // plainly meant to grant something and silently grant nothing, which is
+        // the same failure the ley-line check above exists for and is worse
+        // here, because a marker refuses in voice and looks deliberate.
+        //
+        // So the test is *does it share a prefix with a grant and fail to
+        // parse*, which leaves a marker like `tbi_b` alone and stops the typo.
+        for node in self.mastery.iter().flat_map(|tier| &tier.nodes) {
+            let stem = node.split(['_', '-']).next().unwrap_or(node);
+            let near = GRANTING.contains(&stem)
+                || GRANTING
+                    .iter()
+                    .any(|word| node.starts_with(word) && node.as_str() != *word);
+            if near && crate::tower::mastery::granted(node).is_none() {
+                return Err(super::ContentError::new(
+                    FILE,
+                    format!(
+                        "`{node}` reads as a grant and is one the orb cannot parse. \
+                         Grants are steps_<n>, satchel_1, cursors_1"
+                    ),
+                ));
+            }
         }
 
         let Some(unknown) = self
@@ -525,12 +562,28 @@ mod tests {
             crate::tower::Taken::default().ids().is_empty(),
             "a node can be taken now, and this whole tree still ships as markers",
         );
-        // Every id is one of the two kinds the game knows how to read. A third
-        // spelling would be a node that draws, refuses, and means nothing.
+        // **Every id is a marker or a grant, and `granted` is what decides.**
+        // This was a spelling rule — `tbi` or `steps_` — and a spelling rule
+        // stops being the same claim the moment a third kind of grant exists.
+        // Asking the parser instead means a node added with a grant nothing
+        // reads fails here rather than drawing, refusing, and meaning nothing.
         for node in curve.mastery().iter().flat_map(|tier| &tier.nodes) {
             assert!(
-                node.starts_with("tbi") || node.starts_with("steps_"),
+                node.starts_with("tbi") || crate::tower::mastery::granted(node).is_some(),
                 "{node} is neither a marker nor a grant anything reads",
+            );
+        }
+
+        // **Two grants a tier, and they are not the same kind.** Each tier holds
+        // one of speed and one of §8's channel, which is the choice the tree
+        // exists to make — putting both halves of the channel on one tier would
+        // make them mutually exclusive, since a tier gives exactly one node.
+        for (tier, wanted) in curve.mastery().iter().zip(["satchel_1", "cursors_1"]) {
+            assert!(
+                tier.nodes.iter().any(|node| node == wanted),
+                "the tier at {} lost {wanted}: {:?}",
+                tier.at,
+                tier.nodes,
             );
         }
     }

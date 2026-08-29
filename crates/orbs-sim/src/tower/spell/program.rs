@@ -52,6 +52,20 @@ pub enum Kind {
     /// that gives a non-programmer conditional behaviour without a condition
     /// vocabulary: it needs no comparison, no truthiness, only a noun.
     Wait(String),
+    /// Spend a number of ticks doing nothing.
+    ///
+    /// **A count, where [`Wait`](Self::Wait) is a noun**, and the two are not
+    /// versions of each other: a wait ends when the world says so and a bide
+    /// ends when the spell's own arithmetic says so. The menagerie is what
+    /// needs the second, because *when* is the puzzle there and a blocking wait
+    /// would hand that decision back to the world (§19).
+    ///
+    /// **A literal, and only ever a literal.** It was `Delay::Ticks(u32) |
+    /// Delay::Reading(String)`, and `bide until` — the reading form — was the
+    /// whole of why the menagerie's solver was trivial: a spell that reads its
+    /// delay off the world computes nothing. Every count in the language is a
+    /// literal again, as `repeat 5` and `has 4 fragment` always were.
+    Bide(u32),
     /// Do the enclosed steps, `times` of them, or for ever if `None`.
     Repeat {
         /// How many times, or `None` for an unbounded loop.
@@ -97,6 +111,24 @@ pub enum Kind {
         /// What it stands for — a name, resolved against the room at cast like
         /// every other, unless it is itself a name the spell binds.
         value: String,
+    },
+    /// Take the oldest name out of a satchel and bind it —
+    /// `pull note from satchel`.
+    ///
+    /// **[`Let`](Self::Let)'s shape with the value coming from the world**, and
+    /// the two are the whole of what writes to `vars`. It is a control word
+    /// rather than a verb for exactly that reason: dispatch hands back records,
+    /// so a `pull` verb could empty the satchel and would have nowhere to put
+    /// what it took.
+    ///
+    /// **It yields while the satchel is empty** and never reaches `PATIENCE` —
+    /// a consumer caught up with its producer is a working pipeline, not a
+    /// fault. `bide`'s road, and `run::pull` says the rest.
+    Pull {
+        /// The word the spell will use for whatever comes out.
+        name: String,
+        /// Which satchel — a place, resolved against the room at cast.
+        from: String,
     },
     /// Do the enclosed steps once for each member of a set — `for each way`.
     ///
@@ -146,6 +178,27 @@ pub enum Kind {
         /// here — `between(wellspring, near)` passes whatever `near` stands for
         /// at that moment, and a literal stands for itself. One level, which is
         /// the rule a bound name follows everywhere else in the language.
+        args: Vec<String>,
+    },
+    /// Set a part running as a second cursor and carry on —
+    /// `alongside gathering()`.
+    ///
+    /// **[`Call`](Self::Call)'s fields and none of its waiting.** A call
+    /// suspends the caller onto a [`Descent`](super::Descent) and resumes it
+    /// when the part returns; this starts a
+    /// [`Strand`](super::Strand) on the part and leaves the caller exactly where
+    /// it stands. The forked cursor has an empty stack because nothing is
+    /// waiting for it: running off the end ends the strand and no more.
+    ///
+    /// Arguments resolve in the caller's store at the moment of the fork, which
+    /// is a call's rule and has to be — a part's brackets are the whole of what
+    /// it can see (§19), and a cursor that could read the caller's bindings
+    /// *while the caller kept changing them* would be worse than the shared
+    /// store that decision removed.
+    Alongside {
+        /// Which part to set running.
+        name: String,
+        /// The names handed to it, in order, exactly as written.
         args: Vec<String>,
     },
 }
@@ -443,6 +496,23 @@ pub(super) fn read(lines: &[String]) -> Draft {
                 let wanted = strip_filler(spell_argument(trimmed));
                 push(&mut open, at, Kind::Wait(wanted));
             }
+            Some(SpellWord::Bide) => {
+                let argument = strip_filler(spell_argument(trimmed));
+                match count_of(&argument) {
+                    Some(ticks) => push(&mut open, at, Kind::Bide(ticks)),
+                    // **A bare word is a complaint again.** It used to compile to
+                    // `Delay::Reading`, so `bide until` read the delay off the
+                    // world and the menagerie's solver had no arithmetic left in
+                    // it. Refusing it here is what puts the counting back, and it
+                    // catches `bide sage` — a typo that answered `Endless` and
+                    // bided `u32::MAX` — as the same complaint rather than as
+                    // four billion ticks of silence.
+                    None => complaints.push(Complaint {
+                        line: at,
+                        key: "spell_unreadable_bide",
+                    }),
+                }
+            }
             Some(SpellWord::Let) => match binding(spell_argument(trimmed)) {
                 Some((name, value)) => push(&mut open, at, Kind::Let { name, value }),
                 // **A complaint, not a guess.** `set best` names nothing to bind
@@ -452,6 +522,27 @@ pub(super) fn read(lines: &[String]) -> Draft {
                 None => complaints.push(Complaint {
                     line: at,
                     key: "spell_unreadable_let",
+                }),
+            },
+            // **`strip_filler` here, and `let` above deliberately without it.**
+            // `spell_argument` does not strip — `bide` calls it separately and
+            // this has to as well, or `pull note from satchel` arrives as three
+            // words and is refused. It cost one See-it line to find, and the
+            // failure is the quiet kind: a complaint on a line that reads
+            // perfectly.
+            //
+            // `let` must *not* strip, because its keyword is ` be ` and
+            // `binding` splits the raw text on it. Stripping first would leave
+            // the value shorn of a `the` the player typed and then match a name
+            // that never appeared in the file.
+            Some(SpellWord::Pull) => match pulled(&strip_filler(spell_argument(trimmed))) {
+                Some((name, from)) => push(&mut open, at, Kind::Pull { name, from }),
+                // `let`'s refusal, for `let`'s reason: `pull note` names no
+                // satchel and `pull satchel` binds nothing, and reading either
+                // as the other is the orb writing a line the player did not.
+                None => complaints.push(Complaint {
+                    line: at,
+                    key: "spell_unreadable_pull",
                 }),
             },
             Some(SpellWord::For) => match walked(spell_argument(trimmed)) {
@@ -483,6 +574,25 @@ pub(super) fn read(lines: &[String]) -> Draft {
                 None => complaints.push(Complaint {
                     line: at,
                     key: "spell_unreadable_part",
+                }),
+            },
+            // **A fork is a call with a word in front of it**, so it reuses the
+            // same parser rather than growing a second one — `alongside
+            // between(a b)` has to be the same complaint as `between(a b)`, or
+            // the two spellings of one mistake read differently.
+            Some(SpellWord::Alongside) => match call_of(spell_argument(trimmed)) {
+                Some(Some((name, args))) => push(&mut open, at, Kind::Alongside { name, args }),
+                Some(None) => complaints.push(Complaint {
+                    line: at,
+                    key: "spell_unreadable_call",
+                }),
+                // **No brackets at all**, which is its own complaint: `alongside
+                // gathering` reads as a bare name, and a bare name is the one
+                // thing a call may not be. Saying so beats reading it as a call
+                // the player did not punctuate.
+                None => complaints.push(Complaint {
+                    line: at,
+                    key: "spell_unreadable_alongside",
                 }),
             },
             // A call is punctuation, so it arrives here rather than through
@@ -578,7 +688,13 @@ fn strip_nested(kind: &mut Kind, said: &mut Vec<Complaint>) {
         Kind::If {
             body, otherwise, ..
         } => vec![body, otherwise],
-        Kind::Command(_) | Kind::Wait(_) | Kind::Let { .. } | Kind::Call { .. } => Vec::new(),
+        Kind::Command(_)
+        | Kind::Wait(_)
+        | Kind::Bide(_)
+        | Kind::Let { .. }
+        | Kind::Pull { .. }
+        | Kind::Call { .. }
+        | Kind::Alongside { .. } => Vec::new(),
     };
     for block in inner {
         block.retain(|step| {
@@ -658,9 +774,12 @@ pub fn at<'a>(body: &'a Block, pc: &[usize]) -> Option<&'a Step> {
         // path nothing builds, and answering `None` says so.
         Kind::Command(_)
         | Kind::Wait(_)
+        | Kind::Bide(_)
         | Kind::Let { .. }
+        | Kind::Pull { .. }
         | Kind::Part { .. }
-        | Kind::Call { .. } => None,
+        | Kind::Call { .. }
+        | Kind::Alongside { .. } => None,
     }
 }
 
@@ -869,7 +988,21 @@ fn gather(body: &Block, names: &mut Vec<String>) {
                 }
                 gather(body, names);
             }
-            Kind::Command(_) | Kind::Wait(_) | Kind::Call { .. } => {}
+            // **A `pull` binds a name and is gathered as one.** It is `let`'s
+            // arm in every way that matters here — the lint's whole job is to
+            // stop a line naming a variable being resolved against the room, and
+            // `sing note` after `pull note from satchel` is exactly that line.
+            // Missing it would paint a working line red.
+            Kind::Pull { name, .. } => {
+                if !names.iter().any(|already| already == name) {
+                    names.push(name.clone());
+                }
+            }
+            Kind::Command(_)
+            | Kind::Wait(_)
+            | Kind::Bide(_)
+            | Kind::Call { .. }
+            | Kind::Alongside { .. } => {}
         }
     }
 }
@@ -1091,6 +1224,28 @@ fn binding(argument: &str) -> Option<(String, String)> {
         return None;
     }
     Some((name.to_lowercase(), value.to_owned()))
+}
+
+/// `note from satchel` → the name to bind, and the satchel to take it from.
+///
+/// **`from` is already gone by here.** It is on §6's filler list, so
+/// `spell_argument` hands over `note satchel` — two words, positional. That is
+/// why this splits on whitespace where [`binding`] splits on a keyword: `let`'s
+/// `be` survives normalisation and carries the grammar, and `from` is decoration
+/// a reader wants. `pull note satchel` is the same line and is accepted.
+///
+/// **Not checked against the world here**, like every other name in a [`Draft`]:
+/// a satchel the room does not have is `compile`'s to catch, in the room.
+fn pulled(argument: &str) -> Option<(String, String)> {
+    let mut words = argument.split_whitespace();
+    let name = words.next()?;
+    let from = words.next()?;
+    // Two words and no more. `pull a b c` is a shape the language does not have
+    // and must not read as one, which is `walked`'s rule one function down.
+    if words.next().is_some() {
+        return None;
+    }
+    Some((name.to_lowercase(), from.to_owned()))
 }
 
 /// `each way` → the set to walk.
@@ -1491,9 +1646,16 @@ mod tests {
                 Some(Kind::Call { name, args }) => {
                     out.push(format!("{name}({})", args.join(", ")));
                 }
+                // A leaf here for the same reason a call is: what a fork does is
+                // the runner's, and this walker has no cursors of its own.
+                Some(Kind::Alongside { name, args }) => {
+                    out.push(format!("alongside {name}({})", args.join(", ")));
+                }
                 Some(Kind::Command(line)) => out.push(line.clone()),
                 Some(Kind::Wait(what)) => out.push(format!("wait {what}")),
+                Some(Kind::Bide(ticks)) => out.push(format!("bide {ticks}")),
                 Some(Kind::Let { name, value }) => out.push(format!("set {name} {value}")),
+                Some(Kind::Pull { name, from }) => out.push(format!("pull {name} from {from}")),
             }
             if !step_past(&program.body, &mut pc, &mut loops, a_set_of_two) {
                 break;
@@ -1576,6 +1738,30 @@ mod tests {
         assert!(condition.is_none());
         assert_eq!(program.complaints[0].key, "spell_unreadable_if");
         assert!(run_with(&program, 20, false).is_empty());
+    }
+
+    /// **`bide` takes a number and nothing else**, and it did not.
+    ///
+    /// A bare word compiled to `Delay::Reading`, which is how `bide until` read
+    /// its delay off the circle — the menagerie's whole puzzle answered by the
+    /// world instead of by the author. Withdrawing the form is what puts the
+    /// arithmetic back, and it closes a second hole with it: `bide sage` in the
+    /// laboratory was a plausible typo that resolved to an *endless* pile and
+    /// bided `u32::MAX`.
+    ///
+    /// **Nothing anywhere tested `bide` before this** — not the word, not the
+    /// count, not the reading form the domain was built on. That is why the
+    /// shipped solver could stop compiling with the whole suite green.
+    #[test]
+    fn bide_takes_a_count_and_a_bare_word_is_refused() {
+        for line in ["bide until", "bide sage", "bide"] {
+            let program = read(&lines(&[line]));
+            let keys: Vec<&str> = program.complaints.iter().map(|c| c.key).collect();
+            assert_eq!(keys, ["spell_unreadable_bide"], "{line:?} was accepted");
+        }
+        let program = read(&lines(&["bide 3"]));
+        assert!(program.complaints.is_empty(), "{:?}", program.complaints);
+        assert_eq!(program.body[0].kind, Kind::Bide(3));
     }
 
     #[test]

@@ -122,6 +122,16 @@ fn commands() -> Vec<&'static str> {
         "muster",
         "haul wellspring barrier",
         "haul wellspring conduit",
+        // The menagerie: a figure drawn, part sung, and part-way through an
+        // approach. **All three halves matter and the last is the subtle one** —
+        // `travelled` is what says how near the syllable is to the rule, and a
+        // save that dropped it would come back a figure that lands on the wrong
+        // tick. `ChantSave` did not exist at all for one commit, so a reload
+        // mid-figure silently emptied the circle.
+        "attend menagerie",
+        "summon",
+        "sing skyward",
+        "meditate 2",
         // The archive: a maze open and part-walked.
         "attend archive",
         "research",
@@ -616,6 +626,8 @@ fn every_component_the_world_holds_is_one_the_save_knows_about() {
         (TypeId::of::<orbs_sim::tower::Maze>(), "Maze"),
         (TypeId::of::<orbs_sim::tower::Ward>(), "Ward"),
         (TypeId::of::<orbs_sim::tower::Course>(), "Course"),
+        (TypeId::of::<orbs_sim::tower::Chant>(), "Chant"),
+        (TypeId::of::<orbs_sim::tower::Satchel>(), "Satchel"),
         (TypeId::of::<orbs_sim::tower::spell::Running>(), "Running"),
         (TypeId::of::<orbs_sim::tower::spell::Bound>(), "Bound"),
     ];

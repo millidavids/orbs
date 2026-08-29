@@ -69,6 +69,12 @@ pub enum Queued {
         /// What the buffer held, before canonicalisation.
         lines: Vec<String>,
     },
+    /// A mastery node the player chose — see [`Sim::take`](crate::Sim::take).
+    ///
+    /// On this queue for [`Write`](Self::Write)'s reason: a choice made on a
+    /// screen and a line typed at the prompt both land on the next tick, and two
+    /// queues would leave an ordering between them that nothing states.
+    Take(String),
     /// A tester asking for reagents — see [`execute::debug`](crate::execute).
     ///
     /// **On the same queue, and that is the point.** A debug tool that mutated
@@ -97,6 +103,11 @@ impl Pending {
     /// Queue a spell to be written on the next tick.
     pub fn write(&mut self, name: String, lines: Vec<String>) {
         self.0.push(Queued::Write { name, lines });
+    }
+
+    /// Queue a mastery node to be taken on the next tick.
+    pub fn take_node(&mut self, id: String) {
+        self.0.push(Queued::Take(id));
     }
 
     /// Queue a tester's spawn for the next tick.
@@ -322,6 +333,29 @@ pub enum Submission {
     /// prompt is dead while the arrows have the maze — so a tick can never
     /// contain both a walk and a typed line.
     Walked(String),
+    /// A mastery node taken on the weave screen.
+    ///
+    /// # Why the id and not the keystrokes
+    ///
+    /// [`Wrote`](Self::Wrote)'s argument, one screen along: aiming the cursor
+    /// with the arrows reaches nothing and changes no state the world can see,
+    /// so recording it would bloat the log and couple replay to the screen's
+    /// internals. **The take is the decision, so the take is the entry** — and
+    /// the id is what the world stores, so nothing is re-derived on the way in.
+    ///
+    /// It executes at the start of the next tick, like a typed line: the screen
+    /// hands the sim a request and the world answers on its own clock.
+    Took(String),
+    /// A syllable sung by hand, on the arrow keys.
+    ///
+    /// [`Walked`](Self::Walked)'s twin: it has **already happened** by the time
+    /// it is recorded, because `Sim::sing` does not wait for a clock. Replay a
+    /// tick, then apply the syllables recorded against it in list order.
+    ///
+    /// **The word, and no timing.** The sim grades on the tick a press arrived
+    /// in, so *when inside the tick* changes no world state — and `Wrote`'s rule
+    /// excludes exactly that.
+    Sang(String),
 }
 
 /// Everything the player did, with the tick it landed on.
@@ -356,6 +390,21 @@ impl Submissions {
     /// it is recorded. See [`Submission::Walked`].
     pub fn walked(&mut self, tick: Tick, way: &str) {
         self.0.push((tick, Submission::Walked(way.to_owned())));
+    }
+
+    /// Note that a syllable was sung by hand during `tick`.
+    ///
+    /// Already done by the time it is recorded, like [`walked`](Self::walked).
+    pub fn sang(&mut self, tick: Tick, syllable: &str) {
+        self.0.push((tick, Submission::Sang(syllable.to_owned())));
+    }
+
+    /// Note that a mastery node was taken during `tick`.
+    ///
+    /// Queued rather than already done, like [`wrote`](Self::wrote) — see
+    /// [`Submission::Took`].
+    pub fn took(&mut self, tick: Tick, id: &str) {
+        self.0.push((tick, Submission::Took(id.to_owned())));
     }
 
     /// Everything, in order.

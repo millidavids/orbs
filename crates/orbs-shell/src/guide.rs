@@ -376,7 +376,23 @@ mod tests {
             panic!("an empty line named a word");
         };
         let words: Vec<&str> = control.iter().map(|one| one.name.as_str()).collect();
-        assert_eq!(words, ["wait", "repeat", "if", "let", "for", "part"]);
+        // `bide` opens a line like `wait` does — a delay is a statement, not a
+        // guard — so it belongs here and the three that cannot open one still do
+        // not. `pull` is a statement too, and `let`'s sibling: it binds a name.
+        assert_eq!(
+            words,
+            [
+                "wait",
+                "repeat",
+                "if",
+                "let",
+                "for",
+                "part",
+                "bide",
+                "pull",
+                "alongside",
+            ]
+        );
         assert!(
             verbs.iter().any(|entry| entry.name == "grind"),
             "the laboratory's own verbs are missing: {verbs:?}",

@@ -13,7 +13,7 @@
 //! # What a save is, in one paragraph
 //!
 //! The tree by path, every component on it, the resources that are player state,
-//! the clock, the eight RNG stream positions, and a bounded tail of the record
+//! the clock, every RNG stream position, and a bounded tail of the record
 //! stream. Not the compiled programs, not the scene, not the parse log — each of
 //! those is derived, and [`Save`] says so field by field.
 //!
@@ -58,8 +58,8 @@ mod restore;
 pub use document::{Away, FORMAT, MarkSave, ProgressSave, RecordSave, RngSave, Save, WorldSave};
 pub use error::SaveError;
 pub use node::{
-    CourseSave, DescentSave, HistorySave, MazeSave, NodeSave, RunningSave, SpanSave,
-    SubstitutedSave, WardSave, WorkingSave,
+    ChantSave, CourseSave, DescentSave, HistorySave, MazeSave, NodeSave, RunningSave, SpanSave,
+    StrandSave, SubstitutedSave, WardSave, WorkingSave,
 };
 
 pub(crate) use capture::capture;

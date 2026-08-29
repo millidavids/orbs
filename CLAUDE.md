@@ -803,6 +803,134 @@ so three and four both come out at an eighth. It is **under** clarity's 0.140
 where scrying's 0.268 is over, because a finished course also puts the barrier
 back and a domain paying twice should not also pay the best rate in the tower.
 
+### The menagerie — a figure sung against the tick, and the one clock in the tower
+
+**Twelve syllables, one landing every four ticks, four lanes.** `summon` draws a
+figure; `sing <syllable>` answers the one at the rule; `chorus` hands the arrows
+over. A chant costs **nothing** to attempt — what it risks is the barrier, which
+loses 5 when a figure collapses, and that risk *is* the price.
+
+**§10.1's *"timing means windows at 1 Hz — never a reflex"* is struck for this
+domain and this domain only** (§19). Five rooms are solved by choosing and this
+one by doing; the accommodation is `F9`, not an easier chant.
+
+```bash
+ORBS_BOOT=0 ORBS_DUMP="attend menagerie; summon" cargo run -p orbs
+```
+```text
+┌ figure ────────────────────────────────┐
+│ leftward  skyward  earthward rightward │   ← the words `sing` takes
+│────────────────────────────────────────│   ← the rule. syllables land here
+│                        ▼               │   ← next, and it is directly under
+│                                  ►     │
+│    ◄                                   │   ← ...and these are further off
+│           12 to come, 0 missed         │
+└────────────────────────────────────────┘
+```
+
+**They rise, and that is the one picture in the game that moves.** A rule at the
+top with notes climbing to it is what every rhythm game does, and the reason is
+that the line stays put while the eye tracks approach. It was drawn downward
+first and looked wrong immediately. **It fits the 80×22 floor**, which the maze
+and the ward sheet do not — and it has to, because the domain is unplayable by
+hand without it: the aperture moves every four ticks and `survey` costs one.
+
+**Singing early is not a strike**, and that is the whole mechanic. A syllable is
+struck only inside a two-tick window at the rule; the right word too soon costs
+it exactly as a wrong word does. Without that a solver would answer the moment it
+identified the lane and `bide` would have nothing to count.
+
+**`PACE` was one and the domain was unsolvable by a spell.** A question costs a
+tick and the figure advanced whenever nothing was sung, so read-then-sing missed
+by exactly one, for ever — twelve figures collapsed with no strike at all. It is
+four now, which is *shorter* than a four-lane ladder, and that is deliberate:
+
+```bash
+# The shipped solver. **It is meant to fail at the shipped budget.**
+ORBS_BOOT=0 ORBS_DUMP="attend menagerie; peruse chanting.spell" cargo run -p orbs
+```
+→ **12 of 12 struck at two instructions a tick, collapses at one.** The
+menagerie is the domain that rewards concentration: unautomatable until the
+weave grants a second step, solved outright once it does.
+
+**`bide until` is gone, and the `until` *reading* went with it** (§19). The
+delay used to be read off the circle, so the solver computed nothing — which is
+the blocking-wait shape the domain was designed to refuse, rebuilt under another
+name. Removing the word alone would not have fixed it: with the reading still
+answerable, `repeat until the circle has 1 until` / `end` is the same cheat
+spelled as a one-tick spin. `Chant::until` still answers for the board and for
+`orbs-balance`; the *language* cannot ask.
+
+**So the spell has to keep its own time, and the shape is the puzzle.** Three
+things, all measured rather than reasoned about:
+
+- **`for each syllable`, never an `else if` ladder.** A ladder short-circuits, so
+  the lane found on the first rung is reached three ticks before the one found on
+  the fourth, and a `sing` arriving at a different offset each lap cannot sit in
+  a two-tick window. At two steps a tick the ladder strikes **nought of twelve**.
+- **`let`, and the `sing` *outside* the loop.** Binding the answer and singing
+  after the loop closes is what puts the strike at a fixed offset. Singing where
+  the lane is found is variable again — 6 of 12.
+- **No `bide` at all.** The pass comes out level with `PACE` on its own; `bide 2`
+  breaks it. The arithmetic is *"what does my loop already cost"*.
+
+**Nothing tested `bide` before `0.5.8` — not the word, not the count, not the
+reading form the whole domain rested on.** That is why the shipped `.spell` could
+stop compiling with the gate green, and why the test is the *pair*: collapse at
+one step, close at two. Either half alone passes against a spell that never works.
+
+```bash
+cargo test -p orbs-sim --test chanting the_shipped_solver   # the hook, asserted
+cargo test -p orbs-sim --lib tower::spell::program::tests::bide_takes_a_count
+```
+
+**`repeat until the circle is empty`, never `is idle`.** A circle is idle whether
+or not a chant runs, so `is idle` is satisfied before the first pass, the loop
+runs zero times and the spell does nothing — silently. That cost four
+experiments. A running chant publishes readings, so `is empty` is the question
+that separates them.
+
+**Two diagnostics that cost more than the bugs**, both worth knowing:
+
+- **`survey` emits `TableRow`s, not `Message`s**, so `peruse <log>` cannot see
+  its answer. Three experiments concluded `for each` was broken while it worked
+  perfectly. Prove a loop with a verb that *speaks*.
+- **`invoke d6` is ambiguous** against the shelved dev spells, so a spell that
+  never ran looks exactly like one that ran and did nothing. Name a scratch spell
+  distinctly.
+
+```bash
+# The arrows. `chorus` takes only the keys — the board already draws beside the
+# transcript, so unlike `wander` this surface does not take the pane.
+ORBS_BOOT=0 ORBS_DUMP="attend menagerie; summon; chorus" \
+  ORBS_CHANT="<up>\n<left>" cargo run -p orbs        # ...both read `too soon`
+
+# §14's accommodation, and the only way to see it as text. A dump has no clock,
+# so without this every press lands on one tick and reads `too soon` — which is
+# the played mode working and the patient one being invisible.
+ORBS_BOOT=0 ORBS_PATIENT=1 ORBS_DUMP="attend menagerie; summon; chorus" \
+  ORBS_CHANT="<up>\n<left>" cargo run -p orbs        # ...they land
+```
+
+**`F9` is the key and it reaches the same ceiling.** A patient chant and a played
+one yield exactly what was sung correctly, so the setting removes the dimension
+reflex cannot serve and nothing else — never a difficulty. Bound in **both**
+frontends, and not inert in the terminal: it changes what a strike is worth,
+which is world state.
+
+**`chorus`, because `per` reaches `peruse`.** `perform` scores nothing against
+anything and an abbreviation collision is invisible to a score; its synonym
+`conduct` fell to `conjure` the same way. **`left` and `right` are not syllables**
+either — 750 against the spell language's `let` and 800 against `light` — which
+is why the four are `-ward`. Three of the words this domain wanted were taken by
+something a similarity sweep could not see. **Sweep similarity *and* prefixes.**
+
+```bash
+cargo test -p orbs-sim --test chanting     # the game: verbs, readings, parity
+cargo test -p orbs-sim --lib tower::chant  # the model: the pace and window arithmetic
+cargo test -p orbs-sim --test progression  # `steps_1`, its refusals, and the replay
+```
+
 ### The tower rail — every domain at a glance, and no telemetry pane
 
 **There is one main pane now.** The rail takes 16 columns down the right and
@@ -1360,6 +1488,62 @@ time it runs off the end, so `first_light` bound would foul the mortar on its
 second pass and complain about it for ever — `grind sage` then `empty
 mortar_and_pestle` is the shortest loop that can actually lap.
 
+### `recall apprentice` — the lesson, where `recall scripting` is the reference
+
+**Nothing taught a player how to make a spell.** `recall scripting` lists the
+words, the question shapes and what the room can name — the right page to have
+open *while* writing, and it teaches nobody how to start, because **no listing of
+words teaches an order**. `scribe`, `edit`, the lines, `<escape>`, `quit`,
+`invoke`, then the log rather than the pane: seven steps, one of which — *quit is
+the save* — a player otherwise learns by losing work.
+
+§12 puts the in-world grimoire in the *"always"* column; Phase 10 owns the
+interactive apprenticeship. This is the reference half, which is why it is a
+`recall` page and not a scripted sequence.
+
+**The worked example comes from the room.** `recall scripting`'s third section
+arriving at the same conclusion: the shape of a spell is the same everywhere and
+the lines in one are not, and showing `grind sage` to somebody standing in the
+lens teaches them a room they are not in. A room with no work to script borrows
+the laboratory's and **says whose they are**.
+
+```bash
+for room in laboratory archive lens sanctum menagerie grimoire; do
+  ORBS_BOOT=0 ORBS_DUMP="attend $room; recall apprentice" cargo run -q -p orbs; done
+```
+```text
+  grind sage               the first line - exactly what you would have typed
+  probe                    ...in the lens, and `research` in the archive
+  no work happens here, so these lines are the laboratory's   ← the grimoire
+```
+
+**`apprentice`, not `primer`** — `primer` is already this module's word for the
+room's three-line intro, and one word for two pages in one file is how the next
+reader merges them. It is §12's own term (*"diegetic apprenticeship"*) and reads
+as the request a player is making. `spellcraft` scores 925 against `spell` and
+shares its prefix; `crafting` and `writing` both score 667 against `scripting`,
+which is the one page it must not be confused with.
+
+**The way in is `help`.** Everything on that page is a word to type *now*, and
+nothing on it said the orb could be taught to type them for you — so a player
+could read `help` in every room and never learn the game has spells in it. A
+reference nobody can find their way into is not one.
+
+```bash
+ORBS_BOOT=0 ORBS_DUMP="attend laboratory; help" cargo run -p orbs | grep taught
+#   the orb can be taught to do all of it. recall apprentice
+```
+
+**Two gates, and the second is the one that matters.**
+`the_apprentice_only_shows_lines_the_room_can_run` asks two questions of every
+example — does it *resolve* in that room, and is its verb one that room *offers*
+— because `grind sage` typed in the lens resolves and is then refused, so a lint
+that only parsed would pass the laboratory's whole example printed anywhere.
+And `scripts/play.sh the_apprentice` **follows the page**: finds it from `help`,
+reads it, and types what it shows, at a real keyboard, ending in a spell that
+earns. A tutorial is the one page whose lines a player will type rather than read
+past, so the failure mode is a dead end reached by doing exactly the right thing.
+
 **`recall` bare is the manual's overview, and `help`/`man`/`?` all reach it.**
 **It opens with a primer for the room and lists the vocabulary second** — a player
 who types `help` in the lens is asking what a ward is, not for twenty-five verbs.
@@ -1466,9 +1650,20 @@ ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="weave" \
   ORBS_WEAVE="<down>\n<right>" cargo run -p orbs
 ```
 
-**Nothing is takeable yet and that is deliberate** — every Mastery node is
-authored as a marker, so `take` always refuses in voice. A dump looking for a
-node to change state is looking for the next item.
+**Four nodes are real and two are still markers.** `steps_1` and `steps_2` grant
+spell steps; `satchel_1` and `cursors_1` grant §8's channel and its second
+cursor. The `tbi_` pair are authored as markers and `take` refuses them in voice,
+which is the state this block used to describe for the whole tree.
+
+**`mastery::granted` is the one parser**, returning a `Grant` rather than a
+`usize` — a boolean squeezed into the step-count parser is a `satchel_1` that
+quietly hands out an instruction a tick. `Progression::check` refuses an id that
+*reads* as a grant and does not parse as one, so `satchel1` fails the build
+rather than shipping as a marker wearing a real node's name.
+
+**`debug_take <id>` skips the earning and nothing else**, which is `debug_spawn`'s
+argument: 24 experience is two hundred ticks of the laboratory before a See-it
+line about a gated word can start. Bare, it lists what there is to take.
 
 **The archive draws a map, and `wander` gives it the arrow keys.** The map is
 *not* gated on the word — it draws whenever a maze is open, which is what makes a
@@ -1770,8 +1965,152 @@ ORBS_SEED=3 ORBS_BOOT=0 ORBS_GRID=160x45 \
 # -> back    marks = 1
 ```
 
-**The language has nine control words**: `wait`, `repeat`, `if`, `else`, `end`,
-`until`, `let`, `for`, `part`.
+**The language has twelve control words**: `wait`, `repeat`, `if`, `else`, `end`,
+`until`, `let`, `for`, `part`, `bide`, `pull`, `alongside`. **Count them from
+`SpellWord::ALL`, never from this sentence** — it said nine while the answer was
+eleven.
+
+### The satchel — one spell hands another a name, and `alongside` forks a cursor
+
+**Two spells already ran at once, and that is where to start.** `invoke` from
+inside a spell inserts a second `Running` and the caller does not block;
+`run::advance` steps every one each tick with its own budget — ungated, at
+concentration 0. So §8 never lacked concurrency. It lacked a **channel**, and the
+satchel is it.
+
+```bash
+# A queue loaded by hand and read back. A name twice, in the order it went in.
+ORBS_BOOT=0 ORBS_DUMP="attend menagerie; debug_take satchel_1; queue skyward; \
+  queue earthward; queue skyward; survey satchel" cargo run -p orbs
+```
+```text
+queued ───────────────────────────
+  skyward    earthward  skyward     ← a count would say `skyward 2` and lose the order
+```
+
+**`queue` is a verb and `pull` is a control word, and the asymmetry is load-
+bearing.** Pulling *binds a name* and `let` is the only other thing that does; a
+verb runs through `execute::dispatch`, which hands back records and touches
+nothing a spell holds — so a `pull` verb could empty the satchel and have nowhere
+to put what it took. `queue` is a verb because it changes a node, and because a
+player who cannot load one by hand cannot watch a consumer drain it.
+
+**A component, not children**, because a queue is an ordered multiset and `Stock`
+collapses duplicates. That means `spell::watch` needs its own arm — **without it
+`if the satchel is empty` is true of a full satchel**, for ever and silently,
+which is the third time §19 records that shape.
+
+**One per domain, all called `satchel`, and `scene_at` offers only the local
+one.** That last clause is what makes `build`'s exemption from
+`every_place_leaf_is_unique` true rather than argued: every place is registered
+by path and §6's matcher takes a last segment, so six satchels meant the word
+resolved to whichever was registered *first* — `queue` filled the menagerie's and
+`survey satchel` read the **laboratory's** and called it empty, one line apart, on
+the first See-it line run. **Check both rooms after touching `scene_at`.**
+
+**`pull` yields while empty and never reaches `PATIENCE`.** A consumer caught up
+with its producer is a working pipeline; latching `‼` for it would make the fault
+light useless in the room most likely to show it.
+
+```bash
+# `alongside` — both halves in one file. The consumer is cursor 0 and blocks on
+# an empty satchel until the forked producer fills it.
+ORBS_BOOT=0 ORBS_GRID=110x40 \
+  ORBS_DUMP="attend menagerie; debug_take satchel_1; debug_take cursors_1; scribe both" \
+  ORBS_EDIT=$'edit\npart filling()\nqueue skyward\nqueue earthward\nend\nalongside filling()\nrepeat 2\npull note from satchel\nsurvey note\nend\n<esc>\nquit' \
+  ORBS_THEN="invoke both; meditate 12; peruse menagerie.log" cargo run -p orbs
+```
+
+**`Progress::Blocked` yields the *cursor*, not the entity, and that is the whole
+refactor.** `step_one` used to `return` on a block, ending the spell's tick — so
+the consumer above would have ended it before the producer was ever reached, on
+every tick. **The deadlock was by construction.**
+
+Five rules that came with it, none of which is the obvious default:
+
+- **`seen` is per-cursor.** It is the record-stream mark a `wait` reads, so two
+  cursors sharing one makes A satisfy B's wait — silently, and only for spells
+  using `wait`.
+- **Batch, not round-robin**: each strand spends its whole budget before the
+  next, in `Vec` order, matching `advance` one level up. **The two are identical
+  at budget 1**, so a determinism pin written at the shipped budget pins nothing —
+  `two_cursors_interleave_the_same_way_at_two_steps_a_tick` earns its second step.
+- **`remove`, never `swap_remove`.** Reordering live cursors breaks replay for
+  any spell that outlives a fork.
+- **The spell ends when every cursor has**, which is what `ended` is for.
+- **`MAX_STRANDS` is 4** — `MAX_PARTS`'s argument, and a strand is heavier
+  because each spends its own budget.
+
+**The active cursor lives in `Running`'s own fields and the rest are parked.**
+`swap_in`/`swap_out` are the only two functions that know, which is `Cwd`'s idiom
+one level down and is what kept ~110 call sites untouched. The cost: those fields
+mean *the cursor currently stepping*, so `Sim::running_line` and the editor's
+gutter get whichever was put back last.
+
+**The menagerie is not this feature's use case, and it was measured.**
+Identifying one of four lanes costs six to ten steps against a `PACE` of four, so
+a producer queues **4 of 12 at one step a tick and 6 at two**, with duplicates. No
+queue depth fixes it — the cost is *identifying*, not seeing far enough — and
+that is `the_pace_is_shorter_than_a_four_lane_ladder` working. A version letting
+`queue` take a **reading** solved it at budget 1 and is withdrawn as `bide until`
+in a new hat (§19).
+
+**Three dev spells are the worked examples, and both forms are shipped.**
+`ordering` + `milling` are the *two-spell* channel; `coursing` is the
+*two-cursor* one. All three are on the grimoire's shelf in a debug build, so
+`invoke` reaches them with no `debug_spell` first.
+
+```bash
+# Two spells, one channel. `ordering` queues three reagents and stops; `milling`
+# invokes it and grinds what it left behind. Three loads, `+1` each.
+ORBS_BOOT=0 ORBS_DUMP="attend laboratory; debug_take satchel_1" \
+  ORBS_THEN="invoke milling; meditate 80; peruse laboratory.log" cargo run -p orbs
+
+# One spell, two cursors: `holding` split down the middle. A planner queues the
+# station pairs, a mover pulls two and hauls. **15 hauls for four wards** — the
+# same 2^n-1 optimum `holding` reaches, which is the point of the test.
+ORBS_BOOT=0 ORBS_DUMP="attend sanctum; debug_take satchel_1; debug_take cursors_1" \
+  ORBS_THEN="invoke coursing; meditate 400; peruse sanctum.log" cargo run -p orbs
+```
+
+**`milling`'s `bide 2` is load-bearing and reads like superstition.** `advance`
+snapshots the running list, so `invoke ordering` starts the producer on the
+*next* tick — and the guard is `repeat until the satchel is empty`, true of an
+empty one. Without the pause the loop runs zero times and the spell ends having
+done nothing, silently. That is `repeat until the circle is idle` (§19) through a
+different door, and it is the trap a first pipeline falls into.
+
+**`coursing`'s `if the satchel is empty` is backpressure, written by the
+player.** The planner is six queues a lap against a mover spending nine steps on
+one haul, so ungoverned it fills to `DEPTH` and then refuses once a lap for the
+rest of the course. Refilling only when drained is what keeps the log readable.
+
+**The rail counts cursors, not spells** — `►coursing +1` for one forked spell and
+`►both +2` for a fork plus a second `invoke`. From the rail they are one fact:
+*more is running here than this line can name*. `status` gained a `casting`
+section that says which, and both read one walk (`tower::running_spells`) so they
+cannot disagree. The name truncates and the count never does.
+
+```bash
+ORBS_BOOT=0 ORBS_DUMP="attend sanctum; debug_take satchel_1; debug_take cursors_1" \
+  ORBS_THEN="invoke coursing; meditate 6; status" cargo run -p orbs
+#   rail: ►coursing +1        status: coursing  sanctum, on 2 cursors
+```
+
+**`debug_take <id>` is why these lines are short.** `satchel_1` opens at 24 and
+`cursors_1` at 40 — two hundred ticks of laboratory before a line about `queue`
+could begin. It grants the real node and refuses a marker. Bare, it lists.
+
+```bash
+ORBS_BOOT=0 ORBS_DUMP="attend menagerie; queue skyward; debug_take; \
+  debug_take satchel_1; queue skyward" cargo run -p orbs
+cargo test -p orbs-sim --test satchel --test strands   # nineteen claims
+scripts/play.sh satchel::                              # five, on a real keyboard
+```
+
+**`cursors_1` sells ergonomics and the tree says so.** Two spells were always
+free; what it buys is both halves in one file. A node implying otherwise would be
+selling something the player already has.
 
 **`part between(here, there)` names a run of lines and `between(a, b)` runs it.**
 A definition is stepped *past* where it stands — a spell is read top to bottom
@@ -2248,7 +2587,8 @@ no `App`, advances no clock and presses no keys, so every animated thing, every
 *edge* and every interactive surface needs an environment variable of its own.
 **Count them rather than quoting a number** — `grep -rhoE '"ORBS_[A-Z_]+"'
 crates/ | sort -u` — this sentence has said eighteen through two versions in
-which the answer was twenty-one and then twenty-three. `orbs-tui` needs none: it is the same `Frame`
+which the answer was twenty-one, then twenty-three, and is now twenty-five.
+`orbs-tui` needs none: it is the same `Frame`
 through the same painters, with a real clock and a real keyboard, under `tmux`.
 
 ```bash
@@ -2361,6 +2701,7 @@ live in `orbs_shell::shortcuts` where a second copy cannot go missing.
 | `F5` | §14's linear stream | the pane describes itself instead of drawing — the accessibility route, and this is the build §14 calls the cheapest one |
 | `F6` | writes `orbs-parse.tsv` | silent on success in both builds; the file appearing is the confirmation |
 | `F7` | cycles the tonal register | **visibly inert** — `Presentation` picks a glyph-atlas *face* and a terminal has the user's. The world still moves, and `F6`'s `register` column shows it |
+| `F9` | §14's patient chant | **not inert**, unlike `F7` and `F8`: it changes what a strike is worth, which is world state, so a chant sung patiently in a terminal reaches the same troops as one under Bevy |
 | `F10` | leaves | as it does under Bevy. `Ctrl-C` and `Ctrl-D` also do, because raw mode makes them ours to answer |
 
 **`F5` is inert over the editor, the loom and the maze, and that is a known
@@ -2420,18 +2761,21 @@ silently inert in the other build. A See-it line using either does not move
 across frontends, and this sentence exists because the paragraph above used to
 say *every* without qualification.
 
-**`scripts/dumps.sh <dir>` captures every surface the game can draw** — 65
+**`scripts/dumps.sh <dir>` captures every surface the game can draw** — 89
 screens — and is the instrument for a refactor whose gate is that nothing
 changes. Run it before and after, then `diff -r`. It pins `ORBS_WIZARD`, because
 a baseline that varies with who ran it is not a baseline.
 
 **Count it, do not quote it.** This line said 56 for two versions and the number
-was 58; a plan written against it said 52. `ls <dir> | wc -l` takes a second and
-the figure is only ever used to notice a screen that stopped being captured.
+was 58; a plan written against it said 52; it then said 65 while the answer was
+73. `ls <dir> | wc -l` takes a second and the figure is only ever used to notice
+a screen that stopped being captured.
 
 ### `scripts/play.sh` — the game, played, as a test suite
 
-**92 scenarios that type at a real terminal and read the screen back.** This is
+**124 scenarios that type at a real terminal and read the screen back** — and
+count them with `scripts/play.sh 2>&1 | tail -1` rather than trusting this
+number, which has been stale twice. This is
 the third layer: `orbs-sim`'s tests prove the rules and `orbs-render`'s prove the
 picture, and neither presses a key. Run it **after anything touching the sim, the
 shell, or the loop** — `orbs-balance`'s standing, for the same reason.

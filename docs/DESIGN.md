@@ -1248,7 +1248,7 @@ Seven at launch, with tiered depth to survive solo scale.
 | **Spellcraft** | `grimoire/` | Composition — build spells from components | Bespoke |
 | **Brewing** | `laboratory/` | Sequence/recipe puzzle with timing — **see §10.1** | Bespoke |
 | **Archive** | `archive/` | Decipherment; powers all discovery | Bespoke |
-| **Summoning** | `menagerie/` | Resource allocation → autonomous siege units | Derived |
+| **Summoning** | `menagerie/` | ~~Resource allocation → autonomous siege units~~ → **a chant, performed or scripted** (§19) | ~~Derived~~ **Bespoke** |
 | **Enchanting** | `forge/` | Sequence + resource cost → persistent buffs | Derived |
 
 **These forms are a table, not a design.** Phase 0 built brewing and archive as
@@ -1288,7 +1288,7 @@ got it wrong twice: **brewing's scarcity is lit *time*, not fuel stock** — fue
 | **Scrying** | the production slot — a read is not a brew | which source to read first |
 | **Spellcraft** | Concentration, §11.5's shared pool | what is worth factoring out |
 | **Enchanting** | the buff's own lifetime, and the slot | which instrument, and when to re-buff |
-| **Summoning** | allocation — a unit is spent stock | what to spend it on, and the unit's standing rule |
+| **Summoning** | ~~allocation — a unit is spent stock~~ **withdrawn** (§19) — a chant spends nothing; what it risks is integrity | how cleanly the chant is performed, or how well it is timed in a spell |
 | **Defense** | wards, made and consumed | where, given readable approach state |
 
 **Two things are ruled out and both were tried on paper.** A resource cost on
@@ -1363,8 +1363,14 @@ That was not designed. It fell out of the durations and was found when the fire
 died in the middle of the end-to-end test. It is the best argument yet that
 `stop athanor` is a real move rather than an end-of-script tidy, and it is
 exactly the shape of decision ROADMAP asked for in *"timing means windows at
-1 Hz — when to advance a stage against everything else wanting the slot, never a
-reflex."*
+1 Hz — when to advance a stage against everything else wanting the slot, ~~never
+a reflex~~."*
+
+**That last clause is struck as of Phase 5** (§19). It held for five domains and
+summoning is the sixth: a chant is a real-time dexterity surface, with a paused
+mode that reaches the same ceiling for anyone who does not want one. The rest of
+the sentence stands — brewing's timing is still a window and still not a reflex,
+and no *other* domain may become one without the same argument being made again.
 
 **A charcoal outlasts a brew by a wide margin, deliberately.** The first pass
 made one barely cover a single brew, which turned that move from an optimisation
@@ -2405,6 +2411,683 @@ they are re-pointed at the phases that now need them rather than quietly dropped
    price-shop — Exapunks is $19.99.
 
 ## 19. Decisions log
+
+### Summoning is a rhythm game, and §10.1's "never a reflex" is amended (Phase 5, `0.5.0`)
+
+**This reverses the decision two phases above it**, and it is written as a
+reversal rather than as a compatible reading, because the first draft tried the
+second and it did not survive review.
+
+§10.1 says *"timing means windows at 1 Hz — when to advance a stage against
+everything else wanting the slot, **never a reflex**"*, and `0.4.0` below chose
+the Tower of Hanoi precisely to dissolve the question, calling that *"a better
+position than a real-time mechanic with a reflex escape hatch bolted on."*
+Summoning is that mechanic. The sentence in §10.1 is struck with a pointer here;
+it is not read around.
+
+**The argument that failed, recorded because it is seductive.** The draft held
+that the dexterity layer is the *manual affordance* and the domain's real puzzle
+is the *scripted* one — read the chart, wait the right number of ticks, fire — so
+§10's rule was untouched. Three things break it:
+
+- §10.1 already names the excluded case in the same breath as the included one.
+  A rhythm game is the excluded one, by definition rather than by degree.
+- **The maze precedent cuts the other way.** `wander` passes §10 *because*
+  `Sim::walk` is clockless: a player may take an hour over one move. A chant's
+  manual surface cannot, so citing the maze argues the opposite conclusion.
+- §10's rule explicitly governs *"what a minigame here may be"* — the very table
+  cell the change rewrites. It reaches the new form by construction.
+
+So the honest form is a reversal, and here is what it buys and costs.
+
+| Question | Decision |
+|---|---|
+| Why allow it at all | The calm layer has five domains solved by choosing; the sixth being solved by *doing* is variety the tower can afford once, and §14's accommodation makes it optional rather than a wall |
+| §14's real-time requirement | **Answered in the domain, not deferred.** A paused mode halts on each syllable and takes typed keys and Enter — *ticks advance on player input*, which is the shape §14 already fixes for the siege. It reaches the **same ceiling**, or it is a difficulty penalty wearing an accommodation's name |
+| What a chant costs | **Nothing to attempt.** Enough mistakes fail it and wear the pylon, so the cost is integrity — time — and never progress (§11.5) |
+| §10's *"allocation — a unit is spent stock"* | **Withdrawn.** A chant spends nothing, so the scarcity row goes, as scrying's *"a read is not a brew"* went |
+| §10's **Derived** classification | **Withdrawn.** A real-time surface is not cut from brewing's pipeline; this domain is bespoke |
+| Phase 5's exit | **Rewritten.** *"A summoned thing acts on its own"* is not built: the chant is the activity and troops are the product, inert until a siege spends them. Autonomy moves to Phase 8 with the thing that gives it something to do |
+| The automation currency | **Not touched**, and the question is withdrawn with the autonomy it was about. Nothing summoned acts, so nothing holds a Concentration slot |
+
+**Two premises in the first draft were wrong, and the second is the instructive
+one.** It bounded a spell's lookahead to a single tick, to stop the weave's
+`steps_1`/`steps_2` — which take a spell from one instruction a tick to four —
+reading and pressing in one. That **dissolves the puzzle it was protecting**:
+with one tick of sight there is no arithmetic to do, the new `bide` word has
+nothing to count, and the draft's own example spell lands a tick late. The
+premise was the error. A larger budget collapses a *reading* puzzle and cannot
+collapse a *timing* one, because no budget lets a spell press before a syllable
+arrives — so the chart is visible ahead, as any rhythm game's is.
+
+**The catch-up clock is the sharpest practical problem and nearly shipped
+unnoticed.** `MAX_CATCH_UP` is five seconds and `Time::<Virtual>::from_max_delta`
+runs several `step()`s in one frame after a stall — during a chant, several
+syllables passed unpressed, an instant fail and real integrity damage, caused by
+a window drag. **A rhythm game cannot live on a catch-up clock.** The chant
+suspends on `WindowFocused(false)` and catch-up clamps to one step while one is
+open. No test can see this; it is a fact about the clock and belongs written
+down.
+
+**And a word about words.** `rest` was chosen for the delay and is a `meditate`
+synonym; a spell word is matched before the fuzzy matcher, so it would have
+stopped `rest 20` reaching `meditate`, which is exactly the collision `set`
+caused against `dial`. Four proposed alternatives were then asserted clean
+without being swept — `tarry` scores **800** against `carry` and `pause` **667**
+against `peruse` — and `chant` itself, the word the whole domain is named for,
+scores **600** three ways, against `cast`, `halt` and `cat`. The verb is `sing`
+and the noun stays `chant`: you sing a chant. `bide`, `troop`, `summon` and
+`syllable` are clean. **Sweep every new word against `fuzzy::similarity` before
+believing it**, including the one that seems obviously free.
+
+### A channel between two spells, and a second cursor in one (Phase 5, `0.5.9`–`0.5.10`)
+
+§8's spells could not tell each other anything. **Two of them already ran at
+once** — `invoke` from inside a spell inserts a second `Running` and the caller
+does not block, ungated, at concentration 0 — so what was missing was never
+concurrency. It was a channel, and something to say on it.
+
+**The satchel is a node, and that is the decision.** A queue held inside a spell
+would be reachable by one spell, invisible to `survey`, and absent from every
+instrument this project uses to look at itself. A node is reachable by two
+spells *and* two cursors, saves through the path every node saves through, and
+`survey satchel` shows what is waiting — which is more than can be said for any
+other part of a running spell.
+
+- **A component, not children.** A queue is an ordered multiset: `skyward` twice
+  with one of them first is the whole point, and `Stock` collapses duplicates and
+  has no order. So the names ride a `VecDeque` and `spell::watch` answers `is
+  empty` from there — **without that arm `if the satchel is empty` is true of a
+  full satchel**, for ever and silently, which is the third time §19 has recorded
+  that exact shape.
+- **One per domain, and the leaf collides on purpose.** They are all called
+  `satchel`, which `every_place_leaf_is_unique` forbids — and the exemption had
+  to earn itself. It does: a spell is written for a domain and a player stands in
+  one, so *the* satchel is always the one here. The alternative was a single
+  tower-wide satchel, nameable everywhere and **findable nowhere** until three
+  separate lookups were taught about it (§19's *"naming is only half"*, which
+  `tower::keep` records paying twice). A per-room fixture needs no lookup to
+  change at all.
+- **`scene_at` offers only the local one**, and that is what makes the exemption
+  true rather than merely argued. Every place in the tower is registered by path
+  and §6's matcher accepts a last segment, so six satchels meant `satchel`
+  resolved to whichever was registered *first* — `queue` filled the menagerie's
+  and `survey satchel` read the **laboratory's** and reported it empty, one line
+  apart, on the first See-it line anybody ran.
+
+**`queue` is a verb and `pull` is a control word, and the asymmetry is not
+arbitrary.** Pulling *binds a name*, and `let` is the only other thing in the
+language that does; a verb runs through `execute::dispatch`, which hands back
+records and touches nothing a spell holds — so a `pull` verb could empty the
+satchel and would have nowhere to put what it took. `queue` is a verb because it
+changes a node, and because a player who cannot load a satchel by hand cannot
+watch a consumer drain one.
+
+**`pull` yields while empty and never reaches `PATIENCE`.** A consumer caught up
+with its producer is the ordinary state of a working pipeline, and `wait`'s
+give-up would latch `‼` on the rail for it. `bide`'s rule instead — *"a spell
+waiting for ever is a fault; a spell counting to three is doing what it was
+written to do."*
+
+#### The menagerie is not the satchel's use case, and that was measured
+
+The plan built this expecting a producer/consumer pipeline to solve the
+menagerie. **It cannot, and no queue depth changes that.** A producer has to turn
+*which lane is coming* into a name; written out that is a four-way test costing
+six to ten steps a pass against a `PACE` of four. Measured: **four of twelve
+queued at one step a tick, six at two**, with duplicates. The cost is in
+*identifying*, not in seeing far enough.
+
+**And that is the domain working.** `the_pace_is_shorter_than_a_four_lane_ladder`
+asserts `PACE <= lanes` precisely so a solver cannot keep up at one instruction a
+tick.
+
+A version that let `queue` take a **reading** — `queue onward`, meaning *"put
+whatever is one behind the rule into the satchel"* — was written, worked, and is
+withdrawn. It moved the identification into the world and the pair of spells then
+struck **eleven of twelve at budget 1**, where the shipped solver strikes one.
+That is `bide until` in a new hat, three entries below, and the same refusal
+applies.
+
+`onward` itself stays: it is a **widening** of DESIGN.md's earlier lookahead
+entry rather than a return to it — a spell could see nothing past the aperture
+and can now see one — and it is what a deeper design would build on.
+
+#### `Strand`, and what `Progress::Blocked` had to start meaning
+
+`alongside <part>()` forks a second cursor. The per-position fields — `pc`,
+`loops`, `vars`, `part`, `stack`, `waiting_since`, `biding` **and `seen`** — move
+into a `Strand`; `Running` holds a `Vec` of them and keeps what a spell has one
+of however many places it is in.
+
+- **`seen` is per-cursor, and a review is what moved it.** It is the
+  record-stream mark a `wait` reads and `wait_for` writes, so two cursors sharing
+  one would have cursor A satisfying a wait move cursor B past events B never
+  saw — silently, and only for spells that use `wait`.
+- **A block yields the cursor, not the entity.** `step_one` used to `return` on
+  `Progress::Blocked`, ending the whole spell's tick. A consumer sitting on an
+  empty `pull` would therefore end the tick *before the producer was reached*, on
+  every tick, for ever: **the deadlock was by construction**, and it is the one
+  failure mode the feature exists to avoid.
+- **A swap, not an index at 110 sites.** The active cursor lives in `Running`'s
+  own fields and the rest are parked; `swap_in`/`swap_out` are the only two
+  functions that know. This is `Cwd`'s idiom one level down —
+  `asked_where_the_spell_is` installs the spell's room around a read for the same
+  reason — and it kept the runner, `capture`, `adopt` and `invoke` untouched. The
+  cost is stated where it lands: `Running`'s cursor fields mean *the cursor
+  currently stepping*, so anything reading them from outside gets whichever was
+  put back last.
+- **Batch, not round-robin**, and it is a determinism rule: each strand spends
+  its whole budget before the next, in `Vec` order, which is `advance`'s law one
+  level up where every `Running` spends its whole budget in `NodeId` order. **The
+  two are identical at budget 1** and diverge the moment `steps_1` is taken, so
+  the pin is written at two steps a tick or it pins nothing.
+- **A finished strand is `remove`d, never `swap_remove`d**, and the spell ends
+  when the last one does. Reordering live cursors would change how they
+  interleave and break replay for any spell that outlives a fork.
+- **`MAX_STRANDS` is 4**, on `MAX_PARTS`'s argument and one level out: a runaway
+  fork does not hang the game at one step a tick, it grows the save — and a
+  strand is heavier than a descent, because each also *spends its own budget*.
+
+#### The unlocks, and what `cursors_1` honestly sells
+
+`satchel_1` at 24 and `cursors_1` at 40, one grant of speed and one of the
+channel per tier. Putting both halves of the channel on one tier would have made
+them mutually exclusive, since a tier gives exactly one node.
+
+**`cursors_1` sells ergonomics, not capability, and the tree says so.** Two
+spells already run at once for nothing; what `alongside` adds is both halves of a
+pipeline in one file. A node implying otherwise would be selling something the
+player already has.
+
+`mastery::steps_granted` became `granted() -> Option<Grant>`, because a boolean
+squeezed into a `usize` parser is a `satchel_1` that reads as a step count and
+quietly hands out a second instruction a tick. `Progression::check` now refuses a
+**near miss** — an id that reads as a grant and does not parse as one — which is
+the ley line's closed-set check adapted to a tree that is mostly markers on
+purpose.
+
+**`debug_take <id>` exists for the same reason `debug_spawn` does.** Three
+distillations is 24 experience, about two hundred ticks of the laboratory, before
+a See-it line about `queue` could begin. It grants the real node through
+`Taken::hold` and skips only the earning, and it refuses a marker — because a
+tower holding one is a state the game cannot reach.
+
+#### The rail counts cursors, and `status` says which
+
+**A room could hold two spells and the rail only ever named one.**
+`running_by_domain` kept the first and dropped the rest, so `►tending` meant one
+spell or three — and after `alongside`, a fork was invisible for the same reason
+one level down.
+
+The suffix counts **cursors**, not spells, and the unit is the decision: from the
+rail a second `invoke` and an `alongside` are the same fact — *more is running
+here than this line can name* — and one number true of both beats two suffixes a
+player has to tell apart at a glance. **The name truncates and the count never
+does**, because the rooms that earn a `+2` are the ones with the longest names
+running in them; a marker that vanishes when it matters is §19's sanctum rail
+defect in a third costume.
+
+**`status` gained a `casting` section, and without it the count pointed at
+nothing.** A player reading `►both +2` had no way to find out what the two were,
+which makes the marker worse than none. It is a *section* rather than more
+`Status` rows because the reading column is guarded by a **shape** test — two or
+more records, each a name and a numeric quantity — so a row carrying a spell's
+room would have taken the whole report out of its aligned column.
+
+Both surfaces read one walk (`tower::running_spells`), which is the standing rule
+about two expressions of one fact: they would have disagreed in exactly the case
+that matters.
+
+#### Three dev spells, because a worked example is the documentation
+
+`ordering` + `milling` are the two-spell channel; `coursing` is the two-cursor
+one — `holding` split down the middle, solving a real course in `2^n − 1` hauls,
+which is the same optimum the unsplit solver reaches and is what the test
+asserts. Splitting a solver is only worth showing if the split costs nothing.
+
+Two lines in them are worth more than the rest:
+
+- **`milling`'s `bide 2`.** `advance` snapshots the running list, so an invoked
+  spell starts next tick — and `repeat until the satchel is empty` is true of an
+  empty satchel. Without the pause the loop runs zero times and the spell ends
+  having done nothing, silently: `repeat until the circle is idle` through a
+  different door, and the trap a first pipeline falls into.
+- **`coursing`'s `if the satchel is empty`.** Backpressure, written by the
+  player. Six queues a lap against a mover spending nine steps on a haul fills
+  the queue to `DEPTH` and then refuses once a lap for the rest of the course.
+
+**Both are cast in tests**, which is the whole lesson of `chanting` shipping
+broken under a green gate: a dev spell nobody casts is prose.
+
+#### `recall apprentice` — a lesson, because a reference is not one
+
+**Nothing in the game taught a player to make a spell.** `recall scripting`
+lists the words, the shapes a question takes and what the room can name; it is
+the right page to have open *while* writing and it teaches nobody how to start,
+because **no listing of words teaches an order**. Seven steps — `scribe`, `edit`,
+the lines, `<escape>`, `quit`, `invoke`, then the *log* rather than the pane —
+one of which, *quit is the save*, a player otherwise learns by losing work.
+
+§12 puts the in-world grimoire in the **always** column and Phase 10 owns the
+interactive apprenticeship. This is the reference half of the first, which is why
+it is a `recall` page rather than a scripted sequence, and it does not tread on
+the second.
+
+**The worked example is built from the room**, which is `recall scripting`'s
+third section reaching the same conclusion from the other side: the shape of a
+spell is the same everywhere and its lines are not. A room with no work to script
+borrows the laboratory's and says whose they are — honest, and what the
+grimoire's own primer already tells you to do.
+
+**`apprentice` rather than `primer`.** That word is already this module's name for
+the room's three-line introduction, and one word for two pages in one file is how
+the next reader merges them — `Strand` against `Cursor`, one crate over. It is
+§12's own term and reads as the request a player is making. `spellcraft` scores
+925 against `spell` and shares its prefix; `crafting` and `writing` both score
+667 against `scripting`, the one page it must not be confused with.
+
+**The way in is `help`**, and that pointer is the load-bearing half. Everything
+on the overview is a word to type *now*, and nothing on it said the orb could be
+taught to type them for you — so a player could read `help` in every room and
+never learn the game has spells in it. A reference nobody can find their way into
+is not one.
+
+**Two gates, because a tutorial is typed rather than read past.** The failure
+mode is not a stale sentence; it is a dead end reached by doing exactly the right
+thing. So `the_apprentice_only_shows_lines_the_room_can_run` asks two questions
+of every example — does it *resolve* in that room, and is its verb one that room
+*offers* — because `grind sage` typed in the lens resolves and is then refused,
+and a lint that only parsed would have passed the laboratory's whole example
+printed anywhere. And a `play.sh` scenario **follows the page**: finds it from
+`help`, then types what it shows, at a real keyboard, ending in a spell that
+earns.
+
+#### Two things fixed on the way, both older than this work
+
+- **`signature_of` double-bracketed every control word.** A verb's record carries
+  one bare slot name and the view supplies `<>`; a control word carries a whole
+  shape from `SpellWord::shape` that brackets its own slots — so the manual drew
+  `let <<name> be <place>>` and `wait <<thing>>`, three rows above `queue
+  <name>` on the same page for the comparison.
+- **The menagerie's readings had no `recall` pages**, for a whole phase, while
+  §19 recorded that every reading has one. `every_word_a_spell_is_written_with_has_a_page`
+  asked `maze::readings()` **alone** — a lint naming one domain is a lint that
+  stops working the day a second arrives, and §10 has five more. It walks all
+  four now.
+
+### `bide until` withdrawn, and the reading with it (Phase 5, `0.5.8`)
+
+**Supersedes the `bide until` bullet under *"A tick was a syllable"* (`0.5.2`),
+which called it *"the first count in the language that comes from a reading
+rather than a literal"*.** It was, and that was the defect. A spell that reads
+its delay off the world computes nothing — which is precisely the blocking-wait
+shape the phase's own plan had rejected in as many words: *"the spell no longer
+CALCULATES the delay — it blocks until told."* It was rebuilt under a different
+name, inside the domain built to refuse it, and shipped.
+
+The argument for it was real and is answered rather than dismissed. *"A chant is
+drawn fresh every time, so `bide 2` is a guess about a figure nobody has
+rolled"* — true of a **variable-length** decision, which is what the `else if`
+ladder was. The answer is not to read the clock; it is to make the decision
+**constant-length**, and the language already had the pieces.
+
+**Removing the word alone would not have worked, and that is the part worth
+keeping.** With the `until` *reading* still answerable, `repeat until the circle
+has 1 until` / `end` is the same cheat spelled as a one-tick spin — it lands the
+strike just as reliably and costs a step a tick, which at two steps a tick is
+affordable. So the reading is gone from `chant::readings` too. `Chant::until`
+still answers, for the board and for `orbs-balance`'s driver: a **harness
+measuring the ceiling is not a player**, and the roof is allowed instruments the
+language is not.
+
+**What the solver is now**, and every line of it was measured rather than
+argued:
+
+- **`for each syllable`, never a ladder.** A ladder short-circuits, so the lane
+  found on the first rung is reached three ticks before the one found on the
+  fourth; a `sing` at a variable offset cannot sit in a two-tick window. Two
+  steps a tick: the ladder strikes **0 of 12**, the loop strikes 12.
+- **`let`, and the `sing` outside the loop.** Singing where the lane is found is
+  variable again — **6 of 12**. Binding it and singing after the loop closes is
+  what makes the offset fixed.
+- **No `bide`.** The pass comes out level with `PACE`; `bide 2` breaks it.
+
+So the arithmetic a player does is *"what does my loop already cost"* rather than
+*"what number goes in the delay"*, and the shape is the answer rather than a
+constant. **The progression hook survives intact and is now asserted rather than
+claimed**: 1 of 12 at one step a tick, 12 of 12 at two, on every seed tried.
+
+**`Delay` is gone as a type**, so `Kind::Bide` holds a `u32`. That closes a
+second hole for free: `bide sage` in the laboratory was a plausible typo that
+`watch::many_at` answered `Endless` — `u32::MAX`, four billion ticks of silence
+on the one step that deliberately never reaches `PATIENCE`. It is a complaint
+now rather than a clamp.
+
+**Three things this exposed, each worse than the defect:**
+
+- **Nothing anywhere tested `bide`.** Not the word, not the count, not the
+  reading form the domain rested on. The shipped `chanting.spell` became a line
+  the orb cannot read and the gate stayed green — because a dev spell is content,
+  and no test cast it. The new test is deliberately the **pair**: collapse at one
+  step *and* close at two. Either half alone passes against a spell that never
+  works.
+- **`RunningSave` carried `waiting_since` and dropped `biding`**, on the argument
+  that a bide *"resumes with its delay re-read from the world"*. True only of the
+  reading form. A literal has nothing to re-derive from, so `run::bide` fell to
+  its start arm and stamped a fresh `waiting_since`: **a save taken four ticks
+  into `bide 3600` reloaded into another whole hour.** Carried now.
+- **`FORMAT` 4 → 5, and the rule behind it is wider than it was written.** Both
+  previous bumps were `RngStream::COUNT`, and the doc had generalised to *"a new
+  domain almost always brings a stream."* This is neither a stream nor a field: a
+  spell is stored as the player's own text and recompiled at cast, so a saved
+  `bide until` **loads perfectly** and compiles to an unreadable line. A tower
+  whose bound solver quietly began faulting is the format-2 failure in a
+  different costume. **Anything that changes what stored content means is a
+  format change** — and content is most of what this game saves.
+
+### What a review of the menagerie found (Phase 5, `0.5.7`)
+
+Fifteen findings on a phase that shipped with a green gate, 113 tmux scenarios,
+every balance pin held and a See-it line on every box. **The pattern is worth
+more than the list, and it is not the sanctum's.** That review's lesson was
+*"each test was written in the state the bug is absent from"*; this one's is
+narrower and sharper:
+
+> **Three of the four blocking defects were in code whose own comment cited the
+> rule it was breaking.** Not forgotten rules — quoted ones, in the same
+> function, sometimes in the same paragraph.
+
+`wear_by`'s doc says *"it republishes, and that is the whole of why it is not two
+lines at the call site"*, cites §19's `erode` defect by name, and then
+republished through the **`Cwd`-scoped** lookup — so a chant, which always
+collapses while the player stands in the menagerie, found no pylon and returned.
+The barrier lost 5, the rail drew `py 95%`, and `survey pylon` went on saying
+`integrity = 100`.
+
+`bide until` is the one world-reading step in `step_one` that omitted the room
+swap every other one performs — `run.rs` even holds a helper extracted after this
+exact bug shipped once for `until`. **A bound solver away from the menagerie read
+nought, bided nothing, sang early and collapsed every figure**: zero troops in
+200 ticks where the same spell strikes twelve of twelve with the player standing
+there. Automation broken in precisely the case automation exists for.
+
+> **The step this describes no longer exists** — `bide until` was withdrawn at
+> `0.5.8` and the helper with it. The finding is kept because the *shape* is the
+> lesson and it outlived its instance: a world-reading step that skips the room
+> swap answers about the room the player is in rather than the one the spell is,
+> and it fails only when automation is doing the thing automation is for. The
+> next one will not be a bide.
+
+And the board's own module doc calls it *"the one picture in the game that
+moves"*. It did not: `Figure` carried no `until`, so four ticks of approach drew
+four identical frames and then the syllable was gone — **the two ticks where a
+press strikes looked exactly like the two where it does not**, on the surface
+built to show the difference.
+
+| Also found | Why nothing saw it |
+|---|---|
+| Key repeat ate the figure — six presses in one frame cost four syllables and a collapse | `Answered` guards `lapse` against double-advance and nothing guarded `strike`. `Sim::sing` is instant by design, so a frontend looping a frame's events struck once per press |
+| `ChantSave` existed only in the comment justifying the `FORMAT` bump | `every_component_the_world_holds_is_one_the_save_knows_about` **was live and silent** — the fixture never opened a chant. Adding four words to `commands()` failed it immediately |
+| A screen reader was told `8 to come` where the board drew `12` | `coming` is capped at `AHEAD` for the picture and was reused as a count. §14's route got the false number |
+| `bide sage` hangs for four billion ticks, silently | An endless pile answers `u32::MAX`, and `bide` deliberately never reaches `PATIENCE`. Clamped to `LONGEST_BIDE` |
+| `no_surface_lets_a_keystroke_reach_the_prompt` omitted the fifth surface | Its own doc says *"a fifth added without its arm is then a missing row in a table"* — written by the person who then added a surface and not a row |
+| No `screens` entry, no `dumps.sh` capture, no `play.sh` scenario, no balance policy | Four instruments, none of them wired, for the only real-time surface in the game |
+| ROADMAP said `PACE` was six, and a See-it line claimed a strike where the game answers *"too soon"* | Both written before the number changed. An item whose See-it line does not work is not finished |
+
+**The `chanting` policy earned nothing on its first run**, and the reason is a
+trap worth keeping: `meditate 1` costs **two** ticks, because `Sim::step` drains
+`Skip` in a while-loop. A driver waiting a single tick has to wait with something
+that takes one — `survey` does.
+
+**What this says about the gate.** Every one of these was reachable by a person
+sitting down and playing the room; none was reachable by the tests as written.
+The four instruments were the gap, and *"there is no `play.sh` scenario yet"* is
+now a thing to notice at the head of a domain rather than at the end of one.
+
+### A material no lint could see (Phase 5, `0.5.6`)
+
+**The troop was produced by the game and unknown to it.** `recall troop`
+answered with the bare overview and `debug_spawn troop` refused — so a tester
+could not reach a state the game reaches every time somebody sings, which is
+precisely what `tower::home`'s three lints exist to guarantee.
+
+**None of them could catch it, and the reason generalises.** All three walk
+*authored* materials — `Materials::builtin().names()`, `Recipes::vocabulary` —
+and a material that no file declares is a material no lint iterates. The gap is
+not in the lints; it is that **completeness checks over authored content cannot
+see content that was never authored.**
+
+`Recipes::substances` is where it belongs, because that function already exists
+to be the union of *"every name a recipe knows"* and *"the fuel it cannot see"*.
+A troop is the second thing the tower makes outside a recipe, and it needed the
+same sentence in three places — `substances`, `kind_of`, and `tower::home`.
+**Author a third and all three will want it again**, which is the point at which
+a `produced_outside_a_recipe` list stops being over-engineering.
+
+It is **violet**, not gold: this file keeps gold for what a *recipe* finishes,
+and a chant is not the laboratory's work.
+
+### The fifth surface, and the accommodation that made it fair (Phase 5, `0.5.5`)
+
+**`chorus` hands the arrow keys to a running figure**, and `F9` makes one wait
+for the singer instead of the clock. Both frontends bind both.
+
+**It was `perform`, and a *prefix* took it.** The word scores nothing against
+anything by similarity — and `per` reaches `peruse`, which players type all day.
+Its synonym `conduct` went the same way against `summon`'s `conjure`. That is the
+second time this phase an abbreviation caught what a score could not (`reply`
+against `repair` was the first), and the lesson is now written twice on purpose:
+**sweep similarity *and* prefixes, always.** `chorus` and `play` are clean and
+`cho`/`pla` are free.
+
+| Question | Decision |
+|---|---|
+| Why a second word at all | `research` opens the maze and `wander` gives it the arrows; `summon` opens the figure and `chorus` gives it the arrows. Watching a bound spell sing one and singing it yourself are different activities, and only the second wants the keyboard |
+| Whether it takes the pane | **No, and it is the first surface that does not.** `wander` hides the transcript because a maze is too big to sit beside one; a figure is 42 columns and already draws beside it, so a player answering syllables can still read what the orb says about them |
+| Who gives the keys back | The world, as well as Escape. **A chant ends on its own** — it runs out or it collapses — so a player left holding the arrows over nothing would have a dead prompt and no way to discover why. The maze never does that, which is why this has no sibling |
+| Barred from a spell | **Yes**, unlike `sing`. A spell singing is the point of the domain; a spell seizing the keyboard on the orb's clock is `wander`'s objection exactly |
+| Where the key mapping lives | `orbs_shell::apply_to_chant`, beside `apply_to_maze`. A build whose Up key meant a different syllable would be two games |
+
+#### The accommodation, and why it is one
+
+**`F9` makes a chant patient**: the syllable waits at the rule until it is
+answered, and the landing window goes with it, because there is no clock left to
+be early against. **The ceiling is unchanged** — a patient chant and a played one
+both yield exactly what was sung correctly, which
+`a_patient_chant_reaches_the_same_troops_as_a_played_one` pins with the *played*
+half as its control. Without that control the test would pass against a patient
+mode that yielded nothing.
+
+That is §14's shape for the siege (*"ticks advance on player input"*) arriving one
+domain early, and it is a **rule rather than a setting** until Phase 11 builds a
+settings screen — which is what `shortcuts.rs` already says about `F3` and `F7`.
+
+#### Two things the fifth surface broke, both structural
+
+**Clippy refuses a system at thirteen arguments and `type_into_line` reached
+it.** That is the same pressure `Focus` answered one level down, arriving at the
+call site instead — so the fix is the same shape: a `SystemParam` naming the set
+of surfaces once, on `render::plugin`'s precedent. The free function it replaced
+went with it rather than being left with no callers.
+
+**And a metric was asking the wrong question.** `the_vocabulary_is_the_tower_wide_verbs...`
+filtered on `is_operation` and called the answer *"tower-wide"* — but §19 records
+those two questions separating, and **scope is `anchor`**. `follow`, `wander` and
+`sing` are all scoped to a fixture and were counting against a ceiling they are
+nowhere near. The number fell 23 → 20 while the phase *added* three verbs, and
+nothing a player meets in every room was removed.
+
+### The weave grants something, four phases after it was drawn (Phase 5, `0.5.4`)
+
+**`steps_1` is takeable, and it is the first node in the game that is.** The
+whole tree was authored as markers — drawn, aimed at, and refused in voice — and
+`execute::weave`'s own comment named exactly what the first real one would need:
+*"a mutator, a `Submission` variant and a queued effect on a tick boundary, the
+shape `Sim::write_spell` already has."* That is what was built, and nothing about
+the shape had to be discovered.
+
+**The menagerie is what earned it.** A room that cannot be automated at one
+instruction a tick is the first thing in the game that makes a second step worth
+buying, and the arc runs end to end: earn 24 by distilling, `weave`, `mastery`,
+`take` — and the chant solver goes from collapsing to **24 of 24 struck across
+two figures**.
+
+| Question | Decision |
+|---|---|
+| Where the choice is made | The screen returns `Outcome::Take(id)`; the shell hands the id to `Sim::take`. **An id, not an index** — the rows are a view over content and could be reordered; `progression.toml` calls an id *"a decision, not prose"* |
+| When it lands | The next tick, queued like a spell save. A screen reaching the world between ticks is what rule 3 and the driver's refusal of a general `sim_mut` both exist to stop, so the frontend got a third **verb-shaped** method instead |
+| What replays | `Submission::Took(id)`. Aiming the cursor reaches nothing and changes no state the world can see, so it is not recorded — `Wrote`'s argument, one screen along |
+| Who checks the rules | **Both, and deliberately.** The screen refuses a marker, a locked node and a spent tier before sending; `execute::weave::grant` re-asks all three. A queued effect trusting the screen's arithmetic would be two answers to one rule, which §19 records drifting apart more often than anything else |
+| What separates a real node from a marker | `mastery::is_real`, derived from the grant, so a node cannot be takeable and worthless at once. `steps_granted` moved out of `spell::run` to get there — it was private and answered only the budget's question, and two functions parsing one id is the shape this log keeps recording |
+
+**Making the module public brought its own docs under `-D warnings`** and turned
+up a redundant intra-doc link that had sat there since Phase 4. A private module
+is documented more loosely than a public one; expect a small tail of those
+whenever one is opened up.
+
+### A tick was a syllable, and the domain had no puzzle in it (Phase 5, `0.5.2`)
+
+**The board, the pace, and a scripted solver that is still not expressible.**
+
+`PACE` was one: a syllable landed on every tick. That made the *scripted* half —
+which the entry above calls the domain's actual minigame — flatly impossible. A
+question costs a tick and the figure advanced on every tick nothing was sung, so
+a read was always followed by an advance and **a read-then-sing missed by exactly
+one, for ever**. A test spell collapsed twelve figures out of twelve without one
+strike.
+
+It is **six** now, one more than the worst ladder: four ticks to test four lanes
+and one to sing. That also makes the room playable by hand, which one arrow a
+second never was.
+
+**Singing early is not a strike, and that is what makes `bide` necessary.** A
+syllable is struck only on the tick it lands; the right word sung too soon costs
+it exactly as a wrong word does. Without that rule a solver would answer the
+moment it had identified the lane and `bide` would have nothing to count.
+
+#### The menagerie is the domain that rewards concentration
+
+**`PACE` is four and a four-lane ladder costs four ticks, so a spell cannot keep
+up at one instruction a tick — and that is the design.** The weave's `steps_1`
+buys a second instruction a tick; measured at two, the shipped `chanting` solver
+strikes **twelve of twelve and the figure closes**, where at one it collapses.
+So this room is unautomatable until the orb can read and answer in the same
+second, and solved outright once it can.
+
+This **reverses** the decision recorded two entries down, which bounded lookahead
+specifically so a larger budget could not collapse the puzzle. The budget is the
+unlock here, not a leak. What that earlier decision was right about is that
+*clairvoyance* would break it — and it does not: a bigger budget buys branching,
+never sight of a syllable that has not been drawn.
+
+**Three changes made it work, and each fixed a measured failure:**
+
+- **A window, not an instant.** A syllable may be answered on the tick it lands
+  or the one before. A spell's decision costs a variable number of ticks — one
+  rung or four — so an instant target needed a different `bide` per branch; and a
+  person cannot hit a single named second, which is a reflex test rather than a
+  reading one.
+- ~~**`bide until`** — the first count in the language that comes from a reading
+  rather than a literal. A chant is drawn fresh every time, so `bide 2` is a
+  guess about a figure nobody has rolled; only *"bide what the circle says"* is
+  right for every chant. Resolved **once**, on the tick the bide begins, because
+  `until` is itself counting down and re-reading it would chase a moving
+  target.~~ **Superseded at `0.5.8`** — a spell that reads its delay off the
+  world computes nothing, which is the blocking wait this phase rejected by
+  name. The premise held only for a *variable-length* decision; the answer was
+  to make the decision constant-length. The reading went with the word.
+- **`bide n` now costs exactly n ticks.** It cost n+1: `step_one` runs
+  `allowance` steps and every `continue` spends one, so a bide that finished when
+  its count ran out put the next line a tick late. Every attempt read `too soon`
+  until this was found. A consequence worth stating: `bide 0` and `bide 1` are
+  the same line, because the next instruction can never run in the same tick at
+  one step a tick.
+
+**And the loop guard was the fourth failure.** `repeat until the circle is idle`
+is satisfied before the first pass — a circle is idle whether or not a chant is
+running — so the loop ran zero times and the spell did nothing at all, silently.
+`is empty` is the question that separates them, because a running chant publishes
+readings. Four experiments went looking for a timing bug that was not there.
+
+**What remains: `steps_1` is a marker and cannot actually be taken.** Every
+Mastery node is authored as one, so `take` refuses — which means the unlock this
+domain now depends on is not reachable in play yet. Making it real is the
+weave's work, and the menagerie is the first thing that gives it a reason.
+
+**And two diagnostics that cost more than the bugs.** `survey` emits `TableRow`s
+and not `Message`s, so `peruse <log>` cannot see its answer — three experiments
+concluded `for each` was broken when it was working perfectly. And `invoke d6`
+was *ambiguous* against the shelved dev spells, so a spell that never ran looked
+like a spell that ran and did nothing. Name a scratch spell distinctly and prove
+a loop with a verb that speaks.
+
+### The menagerie, built — and three things the lints caught (Phase 5, `0.5.1`)
+
+The domain, the figure and both verbs. What is worth recording is not the build
+but what stopped it being wrong, because in every case the instrument that
+noticed already existed.
+
+**`up`, `down`, `left`, `right` were the obvious names and two of them are
+taken.** `left` scores **750** against `let` — the spell language's own binding
+word — and `right` **800** against `light`, a `kindle` synonym. A player typing
+`let` would have got a syllable. The `-ward` set came back clean and prefixes
+usefully: `sing sky` reaches `skyward` and nothing else, so the long words cost
+nothing to type and read properly in a spell.
+
+**`reply` was a plain-register synonym for one commit**, and
+`ambiguous_synonym_prefixes_are_known` took it out: `rep` prefixes both it and
+`repair`, which is `muster`'s. **A prefix collision between two domains' plain
+words is invisible to a similarity score** — the two words score nothing against
+each other — so the sweep that found `left` could never have found this. Both
+tests are needed and they answer different questions.
+
+**Two ordering defects, both the same shape as ones §19 already records.** The
+figure lapsed on the tick it was summoned, because `summon` executes at the start
+of a tick and the lapse system runs later in the same one — a twelve-syllable
+chant read `remaining = 11` before anybody could sing. And `settle` wears the
+barrier *before* it speaks, which is the sanctum's `finish` rule: the other way
+round, a collapsed chant says the barrier is whole on the transcript and shows it
+worn on the rail, on one tick.
+
+**The one that only a test could see.** `next` — the reading a spell's whole
+solver turns on — was published correctly all along, and four `survey`s in a row
+said *"holds nothing"*. The aperture moves every tick and a survey **costs** a
+tick, so four surveys are four different moments and can miss it entirely. That
+reads exactly like the feature being absent. `Sim::holds_reading` asks the world
+without spending a tick, which is what a spell's `if` does, and
+`exactly_one_syllable_is_at_the_aperture` is the gate. **A dump could not have
+found this and neither could looking**, which is the one case where the See-it
+rule genuinely needs a test beside it.
+
+### One owner for the keyboard, and a fifth surface is what forced it (Phase 5, `0.5.0`)
+
+`shell/input.rs` had written down its own ceiling — *"`wander` is the fourth and
+it is the last one that goes in here: a fifth surface refactors this first"* —
+and the menagerie's chant is the fifth. The four-term predicate is gone;
+`orbs_shell::Focus` decides, and both frontends ask it.
+
+**It is a port, not a design.** `orbs-tui` had already reduced this to one enum
+and a `match`, and its module comment points at the Bevy build and says so. The
+enum was right and being right in one frontend was the problem — which is
+`orbs_shell::shortcuts`'s argument, one module along, and the reason `Focus`
+lands in the shell rather than in either frontend.
+
+**What did *not* move is the discarding**, and it genuinely differs. A terminal
+delivers one key at a time to whoever is asking, so declining is enough; Bevy's
+`MessageReader` carries a cursor per reader, so a system that simply does not run
+leaves keystrokes queued and they all arrive at once when it does.
+
+**The gate that suggested itself was vacuous, and that is worth more than the
+refactor.** Byte-identical `scripts/dumps.sh` output is the natural gate for a
+pure extraction — and a dump builds no `App`, so `shell/input.rs` never executes
+under it. All 65 captures would be identical with the file deleted. The real
+gates are `scripts/play.sh`, which drives `orbs-tui` with a live keyboard, and
+`no_surface_lets_a_keystroke_reach_the_prompt`, which opens each of the four in a
+real `App` and proves the prompt stays empty. **That test caught a mistake in
+itself on its first run** — `scribe` from the tower landing opens nothing,
+because a spell is written *for* a domain — which is what its *"asserts nothing"*
+guard is for.
 
 ### What a review of the sanctum found (Phase 4, `0.4.2`)
 

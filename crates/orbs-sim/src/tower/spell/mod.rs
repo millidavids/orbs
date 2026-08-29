@@ -25,7 +25,7 @@ pub use compile::{
 pub use invoke::{invoke, stop_spell};
 pub use program::{Block, Complaint, Draft, Kind, Loop, Program, Step};
 pub use run::{
-    Caller, Casting, Descent, MAX_DEPTH, MAX_PARTS, PATIENCE, Running, SCRIPT_BUDGET, advance,
-    budget, line_of, may_issue,
+    Caller, Casting, Descent, MAX_DEPTH, MAX_PARTS, MAX_STRANDS, PATIENCE, Running, SCRIPT_BUDGET,
+    Strand, advance, budget, line_of, may_issue,
 };
 pub use watch::{Event, holds, watch};

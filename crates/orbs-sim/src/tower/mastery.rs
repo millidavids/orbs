@@ -4,7 +4,7 @@
 //!
 //! The **Ley Line** is a straight path: predefined steps in order, and passing
 //! one *is* the grant. There is no choice in it and nothing to store — what a
-//! player has is a function of [`Experience`](super::Experience) against the
+//! player has is a function of [`Experience`] against the
 //! authored list, the same way `concentration` already was.
 //!
 //! **Mastery** branches. A tier opens when the total passes it and gives exactly
@@ -52,6 +52,104 @@ impl Taken {
     pub fn ids(&self) -> &[String] {
         &self.0
     }
+
+    /// Record one, if it is not held already.
+    ///
+    /// **Idempotent, and the caller does not have to check.** A double `take` is
+    /// a player pressing Enter twice, not a bug worth a second refusal path —
+    /// and a duplicate id here would make `steps_granted` count the same node
+    /// twice and hand out a budget nobody bought.
+    pub(crate) fn hold(&mut self, id: &str) {
+        if !self.0.iter().any(|held| held == id) {
+            self.0.push(id.to_owned());
+        }
+    }
+}
+
+/// What a mastery node grants, in extra spell steps a tick.
+///
+/// **The id is the contract**, exactly as `progression.toml` says: *"ids are
+/// decisions, not prose — they are what a taken node is stored as."* So the
+/// grant is derived from the id rather than from a second table that could
+/// disagree with the one `weave` draws.
+///
+/// **Moved here from `spell::run`**, where it was private and answered only the
+/// budget's question. The screen needs the same answer to know whether a node is
+/// real or a marker, and two functions parsing one id is the shape §19 records
+/// going wrong more than any other.
+#[must_use]
+pub fn steps_granted(id: &str) -> Option<usize> {
+    match granted(id) {
+        Some(Grant::Steps(many)) => Some(many),
+        _ => None,
+    }
+}
+
+/// What a real mastery node actually does.
+///
+/// # Why this is an enum now, and was a `usize`
+///
+/// Every real node granted **speed** — `steps_<n>`, parsed straight out of the
+/// id and summed into `spell::budget` — so one function answered *what does this
+/// grant* and *is this node real* at once. §8's channel added two grants that
+/// are not numbers, and a boolean squeezed into that shape is a silent bug
+/// waiting: a `satchel_1` that parsed as a step count would quietly hand out a
+/// second instruction a tick.
+///
+/// **The id is still the contract**, exactly as `progression.toml` says: *"ids
+/// are decisions, not prose — they are what a taken node is stored as."* What
+/// changed is that the id names a *kind* of grant rather than always a number.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Grant {
+    /// `steps_<n>` — that many more instructions a tick, additive across tiers.
+    Steps(usize),
+    /// `satchel_1` — `queue` and `pull` work at all (§8's channel).
+    Satchel,
+    /// `cursors_1` — `alongside` works: two places in one spell.
+    Cursors,
+}
+
+/// What `id` grants, or `None` for a marker.
+///
+/// **One parser, and `Progression::check` holds it to the authored tree** — a
+/// typo'd `satchel1` is silently a marker otherwise, which is the exact failure
+/// that check's own comment argues against for the ley line.
+#[must_use]
+pub fn granted(id: &str) -> Option<Grant> {
+    match id {
+        "satchel_1" => Some(Grant::Satchel),
+        "cursors_1" => Some(Grant::Cursors),
+        _ => id
+            .strip_prefix("steps_")
+            .and_then(|many| many.parse().ok())
+            .map(Grant::Steps),
+    }
+}
+
+/// Whether the orb has taken a node granting `grant`.
+///
+/// **The one question the three gated words ask**, so they cannot come to
+/// disagree about what "unlocked" means. `spell::budget` sums [`Grant::Steps`]
+/// instead, because speed is a quantity and the other two are a yes.
+#[must_use]
+pub fn holds(world: &World, grant: Grant) -> bool {
+    world
+        .resource::<Taken>()
+        .ids()
+        .iter()
+        .any(|id| granted(id) == Some(grant))
+}
+
+/// Whether anything at all is behind a node.
+///
+/// **A marker is not a defect and must not read like one.** Most of the tree is
+/// authored ahead of what it does, so `take` on one of those is refused in voice
+/// (`NothingBehind`) rather than granting nothing silently. This is the question
+/// that separates the two, and it is derived from the grant so a node cannot be
+/// takeable and worthless at the same time.
+#[must_use]
+pub fn is_real(id: &str) -> bool {
+    granted(id).is_some()
 }
 
 /// What a node or a step is, right now.

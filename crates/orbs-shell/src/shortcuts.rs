@@ -41,6 +41,24 @@ pub fn cycle_register(sim: &mut Sim) -> Presentation {
     next
 }
 
+/// Flip whether a chant waits for the singer rather than for the clock (§14).
+///
+/// **A rule, not a setting**, exactly as [`cycle_register`] above is — and for
+/// the same reason: `shortcuts.rs` says *"Phase 11's settings screen is where a
+/// player-facing version would live"*, and this joins it there. Until then it is
+/// a key, which is how `F3` and `F7` reach the two accommodations that already
+/// exist.
+///
+/// It lives here rather than in a frontend because both builds bind it and a
+/// second copy is how one of them comes to bind nothing — which is the gap that
+/// created this module (§19: *"the first affordance the game showed was one that
+/// did not work"*).
+///
+/// Returns whether the chant now waits, for whatever the caller says.
+pub fn toggle_patient(sim: &mut Sim) -> bool {
+    sim.set_patient()
+}
+
 /// Write the parse trace to [`TRACE_PATH`], and describe what was written.
 ///
 /// # Errors

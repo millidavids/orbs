@@ -18,7 +18,7 @@
 //! So each frontend maps its own events onto [`Key`] and calls [`apply`].
 
 use orbs_sim::Sim;
-use orbs_sim::tower::Way;
+use orbs_sim::tower::{Syllable, Way};
 
 use crate::editor::{Editor, Outcome as EditorOutcome};
 use crate::tapestry::{Outcome as WeaveOutcome, Tapestry};
@@ -266,6 +266,27 @@ pub const fn apply_to_maze(key: &Key) -> Option<Way> {
         Key::Right => Some(Way::East),
         Key::Down => Some(Way::South),
         Key::Left => Some(Way::West),
+        _ => None,
+    }
+}
+
+/// Which syllable an arrow answers, while a chant has the keys.
+///
+/// [`apply_to_maze`]'s sibling, and it lives here for the same reason: **a build
+/// whose Up key meant a different syllable would be two games.** The Bevy
+/// frontend and the terminal both turn their own key type into a [`Key`] and
+/// then ask this, so neither holds an opinion about the mapping.
+///
+/// The four are spatial and the syllables are named for the same directions, so
+/// there is nothing to learn — which is what makes `sing skyward` typed and `↑`
+/// pressed obviously the same act.
+#[must_use]
+pub const fn apply_to_chant(key: &Key) -> Option<Syllable> {
+    match key {
+        Key::Up => Some(Syllable::Skyward),
+        Key::Down => Some(Syllable::Earthward),
+        Key::Left => Some(Syllable::Leftward),
+        Key::Right => Some(Syllable::Rightward),
         _ => None,
     }
 }

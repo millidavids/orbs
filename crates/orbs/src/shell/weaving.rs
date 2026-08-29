@@ -98,6 +98,7 @@ pub(crate) fn type_into_loom(
     held: Res<ButtonInput<KeyCode>>,
     quiet: Res<super::input::Quiet>,
     mut loom: ResMut<Loom>,
+    mut tower: ResMut<crate::sim::Tower>,
 ) {
     // **A held chord is skipped; a *stale* one is not.** `chord_is_stale` says
     // the modifier is a ghost — still latched from an alt-tab the window never
@@ -136,8 +137,14 @@ pub(crate) fn type_into_loom(
             outcome = orbs_shell::apply_to_weave(&key, screen).or(outcome);
         }
     }
-    if outcome == Some(WeaveOutcome::Close) {
-        loom.close();
+    match outcome {
+        Some(WeaveOutcome::Close) => loom.close(),
+        // **Handed to the sim, which decides.** The screen has already refused a
+        // marker, a locked node and a spent tier; the world re-checks all three
+        // before granting, because a screen's arithmetic is a second opinion
+        // about the rules and §19 records what happens when two of those drift.
+        Some(WeaveOutcome::Take(id)) => tower.take(&id),
+        None => {}
     }
 }
 

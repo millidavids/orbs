@@ -15,6 +15,64 @@
   at 1.0 (DESIGN.md §19).
 -->
 
+## [v0.5.12] - 2026-08-29
+
+### Description
+In development — a dev log, not patch notes. A fifth room: the menagerie, where
+you sing a figure against the clock for troops. Spells learned to hand each
+other names and to run in two places at once, and there is a guide to writing
+one.
+
+### Added
+- **A fifth room — the menagerie.** Summon a figure and twelve syllables travel
+  up toward a rule; sing each one as it lands. It is the only room in the tower
+  with a clock in it, and the only picture that moves. Four misses and the figure
+  comes apart, which costs the barrier — that risk is the whole price of the
+  room, because trying costs nothing.
+- **Troops**, which is what a chant is for. A figure sung cleanly calls them up
+  and they keep themselves in the arsenal. Nothing spends them yet; a siege will.
+- **Play it on the arrow keys.** `chorus` hands them to a running figure, and
+  unlike the maze it does not take the screen — the figure draws beside the
+  transcript, so you still read what the orb says about what you sang.
+- **`F9` — a patient chant.** The syllable waits for you instead of for the
+  clock. It reaches exactly the same ceiling as playing it in time, which is what
+  makes it an accommodation rather than an easier setting.
+- **The first thing you can actually buy.** The tree behind `weave` was drawn and
+  refused for four phases; `steps_1` now grants what it says, and the orb thinks
+  a little faster for the rest of the game.
+- **A satchel in every room** — a queue you can look at, and the first thing two
+  spells have ever been able to share. One puts names in, another takes them out
+  in the order they went.
+- **`alongside` — one spell in two places at once.** A part set running on its
+  own cursor while the rest of the spell carries on, with its own place in the
+  file and its own names.
+- **`recall apprentice` — how to make a spell, from nothing.** The seven steps in
+  the order they happen, with the example lines taken from whichever room you ask
+  in. `help` now points at it, because nothing on that page said the orb could be
+  taught to do any of it for you.
+
+### Changed
+- **The sidebar says when more than one thing is running in a room.** It named
+  one spell however many were there. `status` gained a list of what is casting,
+  and where.
+- **A spell has to work out its own timing.** `bide until` read the delay
+  straight off the world, which left nothing to think about; it is gone, and so
+  is the reading behind it. The menagerie's solver now keeps its own time — and
+  still cannot keep up until you have bought that second instruction a second.
+- **Three worked spells shipped for the two new shapes** — two spells sharing a
+  satchel, and one spell running in two places. The second solves a course of
+  wards in as few moves as the single-cursor version does.
+- **Every command in a listing shows its shape once.** `let <name> be <place>`
+  used to draw with a second pair of brackets round the whole thing.
+
+### Fixed
+- **The menagerie's readings had no manual pages**, so asking about the word the
+  room is built on answered with the room's overview instead.
+- **A spell interrupted mid-delay resumed by starting the delay over.** Saving
+  four seconds into an hour-long wait gave you another whole hour.
+- **A collapsing chant wore the barrier without saying so.** The number on the
+  sidebar went down while the room itself kept reporting the tower as whole.
+
 ## [v0.4.3] - 2026-08-27
 
 ### Description

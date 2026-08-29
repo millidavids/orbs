@@ -90,6 +90,7 @@ pub mod record;
 mod bath;
 mod board;
 mod cell;
+mod chant;
 mod fire;
 mod frame;
 mod geometry;
@@ -139,6 +140,7 @@ pub use pulse::{CYCLE_SECS, FLIP_HZ};
 // `tower::pylon::MOST` is that caller, and `GROUND`/`WARD` had no equivalent —
 // they were exported beside it out of symmetry and reached by nothing, where a
 // glyph is `row`'s business and a frontend is handed cells rather than chars.
+pub use chant::{AHEAD, Figure};
 pub use pylon::{Pylon, TALLEST};
 pub use record::{
     FieldName, Outcome, Record, RecordBuilder, RecordKind, RecordView, Records, Sift, Value,

@@ -200,6 +200,14 @@ fn node(world: &World, entity: Entity) -> NodeSave {
         maze: at.get::<Maze>().map(Maze::to_save),
         ward: at.get::<Ward>().map(Ward::to_save),
         course: at.get::<tower::Course>().map(tower::Course::to_save),
+        chant: at.get::<tower::Chant>().map(tower::Chant::to_save),
+        // **`None` for an empty one**, so a tower nobody has queued into writes
+        // no rows at all — six satchels each spending a line on `[]` is six
+        // lines of noise in a file §15 wants hand-readable.
+        satchel: at
+            .get::<tower::Satchel>()
+            .filter(|satchel| !satchel.is_empty())
+            .map(tower::Satchel::to_save),
         running: at
             .get::<tower::spell::Running>()
             .map(|run| running(world, run)),
@@ -207,29 +215,37 @@ fn node(world: &World, entity: Entity) -> NodeSave {
 }
 
 /// A spell part-way through.
+///
+/// **The flat cursor fields are written from `strands[0]`, never from
+/// `Running`'s own.** Those hold whichever cursor `step_one` put back last,
+/// which for one strand is the same thing and for two is arbitrary — so reading
+/// them here would make a forked spell's save depend on where the tick happened
+/// to stop. `strands` is the authority; the flat fields are its first element,
+/// spelled out so an unforked save keeps exactly the shape it has always had.
 fn running(world: &World, run: &tower::spell::Running) -> RunningSave {
+    let first = run.strands.first().cloned().unwrap_or_default();
     RunningSave {
         spell: tower::path_of_id(world, run.spell).unwrap_or_default(),
-        pc: run.pc.clone(),
-        loops: run.loops.iter().map(super::adopt::loop_code).collect(),
-        seen: run.seen,
+        pc: first.pc.clone(),
+        loops: first.loops.iter().map(super::adopt::loop_code).collect(),
+        seen: first.seen,
         depth: run.depth,
         unattended: run.unattended,
         at: tower::path_of_id(world, run.at).unwrap_or_default(),
-        waiting_since: run.waiting_since.map(Tick::get),
+        waiting_since: first.waiting_since.map(Tick::get),
+        biding: first.biding,
         said: run.said.clone(),
-        vars: run.vars.clone(),
-        part: run.part.clone(),
-        stack: run
-            .stack
-            .iter()
-            .map(|frame| super::DescentSave {
-                part: frame.part.clone(),
-                pc: frame.pc.clone(),
-                loops: frame.loops.iter().map(super::adopt::loop_code).collect(),
-                vars: frame.vars.clone(),
-            })
-            .collect(),
+        vars: first.vars.clone(),
+        part: first.part.clone(),
+        stack: descents(&first.stack),
+        // **Only the forked case writes a table.** One strand is every spell
+        // anybody has ever run, and its whole state is already in the fields
+        // above.
+        strands: if run.strands.len() > 1 {
+            run.strands.iter().map(strand).collect()
+        } else {
+            Vec::new()
+        },
         // The text the program was compiled from, so a restore can tell whether
         // re-deriving it would land on the same tree. See `restore::spell`.
         fingerprint: tower::path_of_id(world, run.spell)
@@ -245,6 +261,33 @@ fn running(world: &World, run: &tower::spell::Running) -> RunningSave {
                 |held| super::adopt::fingerprint(&held.0),
             ),
     }
+}
+
+/// One cursor, as a save writes it.
+fn strand(one: &tower::spell::Strand) -> super::StrandSave {
+    super::StrandSave {
+        pc: one.pc.clone(),
+        loops: one.loops.iter().map(super::adopt::loop_code).collect(),
+        seen: one.seen,
+        waiting_since: one.waiting_since.map(Tick::get),
+        biding: one.biding,
+        vars: one.vars.clone(),
+        part: one.part.clone(),
+        stack: descents(&one.stack),
+    }
+}
+
+/// A cursor's suspended callers, outermost first.
+fn descents(stack: &[tower::spell::Descent]) -> Vec<super::DescentSave> {
+    stack
+        .iter()
+        .map(|frame| super::DescentSave {
+            part: frame.part.clone(),
+            pc: frame.pc.clone(),
+            loops: frame.loops.iter().map(super::adopt::loop_code).collect(),
+            vars: frame.vars.clone(),
+        })
+        .collect()
 }
 
 /// The last [`RECORD_TAIL`] records, oldest first.

@@ -5,7 +5,9 @@ use bevy::input::keyboard::KeyboardInput;
 use bevy::prelude::*;
 use bevy::window::WindowResized;
 
-use super::commanding::{cycle_register, export_trace, quit, quit_requested, submit};
+use super::commanding::{
+    cycle_register, export_trace, quit, quit_requested, submit, toggle_patient,
+};
 use super::input::{SubmittedMessage, type_into_line};
 use super::reading::{scroll_back, scroll_forward, start_reading, stop_reading};
 use super::revealing::{drive_panes, drive_reveal, finish_reveal};
@@ -59,6 +61,7 @@ impl Plugin for ShellPlugin {
             .init_resource::<super::Editing>()
             .init_resource::<super::Loom>()
             .init_resource::<super::Walk>()
+            .init_resource::<super::Chorus>()
             .add_message::<SubmittedMessage>()
             .add_systems(Startup, (spawn_camera, track_window).chain())
             // **Not** gated on `booted`, and not in the input set. A focus loss
@@ -127,6 +130,17 @@ impl Plugin for ShellPlugin {
                     // the player, and holding the keyboard over a pane with no
                     // map on it is the worst of the three ways that ends.
                     super::wandering::close_when_gone.run_if(super::wandering::walking),
+                    // The menagerie's, on exactly the same three terms. It owns
+                    // no pane either — the figure draws whether or not anybody
+                    // said `chorus` — and it closes itself for a sharper reason
+                    // than the maze does: a chant ends *on its own*, so a player
+                    // left holding the arrows over nothing would have a dead
+                    // prompt and no way to discover why.
+                    super::chorusing::open_requested.run_if(resource_changed::<crate::sim::Tower>),
+                    super::chorusing::type_into_chant
+                        .run_if(on_message::<KeyboardInput>)
+                        .run_if(super::chorusing::chorusing),
+                    super::chorusing::close_when_gone.run_if(super::chorusing::chorusing),
                     // **Ungated, and after every surface that can let go.** It
                     // watches for the keyboard changing hands, which is an edge
                     // `type_into_line` cannot see for itself — that system is
@@ -180,6 +194,11 @@ impl Plugin for ShellPlugin {
                     export_trace.run_if(input_just_pressed(KeyCode::F6)),
                     // §3's tonal register, until Phase 8 drives it from threat.
                     cycle_register.run_if(input_just_pressed(KeyCode::F7)),
+                    // **`F9`, not `F8`** — `F8` is the greyscale accommodation
+                    // and these two are neighbours in what they are for, which
+                    // is exactly why they must not be neighbours a finger can
+                    // slip between. Both join the settings screen in Phase 11.
+                    toggle_patient.run_if(input_just_pressed(KeyCode::F9)),
                     // F10, not Escape: the moment there is a text field, Escape
                     // is "clear the line" muscle memory, and quitting the game
                     // mid-sentence is not a recoverable surprise.
@@ -1096,5 +1115,74 @@ mod tests {
             "wander",
             "a fresh press of Up no longer recalls history",
         );
+    }
+
+    /// Every surface swallows the keyboard, and the prompt gets nothing.
+    ///
+    /// **The regression test for `orbs_shell::Focus` itself**, and for the defect
+    /// its module comment describes: a surface whose term was forgotten does not
+    /// fail loudly, it *"types into an invisible prompt while the player looks at
+    /// something else, and the characters arrive later."* Nothing asserted that
+    /// before — `leaving_the_maze_leaves_nothing_in_the_prompt` covers one
+    /// surface and only the handoff *out* of it.
+    ///
+    /// It is written as a loop over the four on purpose: a fifth added without
+    /// its arm is then a missing row in a table rather than a test nobody
+    /// remembered to write.
+    #[test]
+    fn no_surface_lets_a_keystroke_reach_the_prompt() {
+        for (surface, opening) in [
+            // **A spell is written *for* a domain**, so `scribe` from the tower
+            // landing opens nothing. Getting that wrong is what the "asserts
+            // nothing" guard below is for, and it caught it on the first run.
+            ("editor", &["attend laboratory", "scribe drill"][..]),
+            ("weave", &["weave"][..]),
+            ("maze", &["attend archive", "research", "wander"][..]),
+            ("reading", &["unfurl"][..]),
+            // **The fifth, which this table's own doc promised would be a row.**
+            // It was added as a surface and not as a row, so the regression this
+            // test exists to prevent went unasserted for the only surface the
+            // phase introduced — which is the failure the doc describes, made by
+            // the person who wrote the doc.
+            ("chant", &["attend menagerie", "summon", "chorus"][..]),
+        ] {
+            let mut app = app();
+            for line in opening {
+                type_line(&mut app, line);
+                app.world_mut().resource_mut::<Tower>().step();
+                app.update();
+            }
+            assert!(
+                focus_of(&app).is_elsewhere(),
+                "{surface} never took the keyboard, so this asserts nothing",
+            );
+
+            type_only(&mut app, "zzz");
+            app.update();
+            assert_eq!(
+                app.world().resource::<Line>().text(),
+                "",
+                "{surface} let typing through to the prompt",
+            );
+        }
+    }
+
+    /// What the app's surfaces answer, as they stand.
+    ///
+    /// **Built from the resources rather than run through the `SystemParam`**,
+    /// because a `SystemParam` needs a system to live in and this is a helper
+    /// inside an assertion. The ordering it asks about is `orbs_shell::Focus`'s
+    /// either way, which is the whole point of that type.
+    fn focus_of(app: &App) -> orbs_shell::Focus {
+        orbs_shell::Focus::of(orbs_shell::Open {
+            editing: app
+                .world()
+                .resource::<crate::shell::editing::Editing>()
+                .is_open(),
+            weaving: app.world().resource::<crate::shell::Loom>().is_open(),
+            walking: app.world().resource::<crate::shell::Walk>().is_open(),
+            chorusing: app.world().resource::<crate::shell::Chorus>().is_open(),
+            reading: app.world().resource::<orbs_shell::Scroll>().is_reading(),
+        })
     }
 }

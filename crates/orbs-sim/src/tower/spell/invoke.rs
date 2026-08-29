@@ -176,6 +176,7 @@ pub(super) fn cast(
         depth: caller.map_or(0, |caller| caller.depth + 1),
         at,
         waiting_since: None,
+        biding: None,
         said: already,
         unattended,
         // **Empty at every cast**, including a binding's re-cast. A spell that
@@ -189,6 +190,16 @@ pub(super) fn cast(
         // a call the new pass never made.
         part: None,
         stack: Vec::new(),
+        // **One cursor at every cast**, and `alongside` is the only thing that
+        // ever adds a second. It mirrors the fields above rather than being
+        // derived from them, because `swap_in` reads this slot before the first
+        // step and a strand list that disagreed with the fields would step a
+        // cursor pointing nowhere.
+        strands: vec![super::Strand {
+            pc: vec![0],
+            ..Default::default()
+        }],
+        spent: false,
     });
     if !announce.is_empty() {
         say(world, announce, wanted, role);

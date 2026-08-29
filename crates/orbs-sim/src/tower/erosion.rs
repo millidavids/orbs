@@ -168,6 +168,47 @@ pub fn mend(world: &mut World, height: usize) -> u32 {
     after.saturating_sub(before)
 }
 
+/// Take a number of points off the barrier, and say how many were actually
+/// taken.
+///
+/// [`mend`]'s mirror, and it returns for the same reason: a chant that collapses
+/// against a barrier already down to two must not be told it cost five. The
+/// caller quotes the number.
+///
+/// # This is the second thing that writes integrity, and the first was ambient
+///
+/// [`erode`] is the tower wearing on its own; this is the player wearing it,
+/// which is why it is admissible where §19 deferred the *nuisance* coupling to
+/// Phase 8. That entry's objection was that raising `drift`'s odds from integrity
+/// would move every rate `orbs-balance` has pinned; a cost the player chooses to
+/// risk moves nothing until somebody chants.
+///
+/// **It republishes**, and that is the whole of why it is not two lines at the
+/// call site. §19 records `erode` having to become an exclusive system for
+/// exactly this — it wore the resource down and left the *reading* alone, so
+/// `survey pylon` and every `if the pylon has fewer than n integrity` reported a
+/// whole barrier while the rail counted down.
+pub fn wear_by(world: &mut World, points: u32) -> u32 {
+    let mut integrity = world.resource_mut::<Integrity>();
+    let before = integrity.get();
+    integrity.0 = integrity.0.saturating_sub(points);
+    let after = integrity.get();
+    // **`pylon::fixture`, never `refresh_pylon`.** The latter reads `Cwd`, and
+    // the caller that matters here is a chant collapsing in the *menagerie* — so
+    // it found no pylon and returned every single time, leaving `survey pylon`
+    // and every `if the pylon has fewer than n integrity` reporting a whole
+    // barrier while the rail counted down. That is the §19 defect this function's
+    // own doc claims to prevent, made three lines below the claim.
+    //
+    // `erode` above takes the same route for the same reason, and its comment
+    // at `pylon::fixture` says **not `Cwd`** in bold. A publisher that runs on
+    // anything but the player's own command must take the entity.
+    if let Some(pylon) = super::pylon::fixture(world) {
+        crate::execute::publish_pylon(world, pylon);
+    }
+    before.saturating_sub(after)
+}
+
 /// How tall a course to raise, given how far the walls have slipped.
 ///
 /// **The jitter is what makes the parity reading load-bearing.** Without it a

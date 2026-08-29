@@ -311,3 +311,57 @@ fn tab_finishes_a_word_in_the_editor() {
     game.press("Escape");
     game.type_raw("quit");
 }
+
+/// **The guide, followed.** A player reads `recall apprentice` and types what it
+/// shows; this is that walk, on a real keyboard.
+///
+/// # Why this is the test the page needs
+///
+/// A tutorial is the one page in the game whose lines a player will *type*
+/// rather than read past, so the failure mode is not a stale sentence — it is a
+/// dead end reached by doing exactly the right thing. `orbs-sim`'s
+/// `the_apprentice_only_shows_lines_the_room_can_run` holds that the example
+/// resolves in its room; nothing but this holds that the *order* works, and the
+/// order is the whole of what a listing of words cannot teach.
+///
+/// The path is the page's own five steps: find it from `help`, read it, scribe,
+/// edit, type the two lines it shows, escape, quit, invoke, and read the log it
+/// tells you to read.
+#[test]
+#[ignore = "plays a real game through tmux; run with scripts/play.sh"]
+fn the_apprentice_guide_can_be_followed_from_help_to_a_working_spell() {
+    if !available() {
+        return;
+    }
+    let game = Game::start();
+    // **Found from `help`, not typed from memory.** A reference nobody can find
+    // their way into is not one (§12), and this is the line that leads there.
+    game.does("attend laboratory", "/tower/laboratory")
+        .does("help", "the orb can be taught to do all of it");
+
+    // The page itself: the two example lines it shows for this room, and the
+    // step a player would otherwise learn by losing work.
+    game.does("recall apprentice", "how to teach the orb")
+        .expect_drawn("grind sage")
+        .expect_drawn("empty mortar_and_pestle")
+        .expect_drawn("quit is the save");
+
+    // ...and then doing what it said, in the order it said it.
+    game.opens("scribe morning", "morning.spell in laboratory");
+    game.type_raw("edit");
+    game.type_raw("grind sage");
+    game.type_raw("empty mortar_and_pestle");
+    game.press("Escape");
+    // **`closes_editor`, not a bare `quit`.** The save is queued for the next
+    // tick like every other effect, so an `invoke` sent straight after the word
+    // reaches a `morning.spell` that does not exist yet — and the name then goes
+    // *ambiguous* against the shelved dev spells rather than failing, which is
+    // §19's `invoke d6` trap arriving through a timing gap.
+    game.closes_editor();
+    game.does("invoke morning", "takes up morning.spell");
+    game.meditates(20);
+    // The log rather than the pane, which is the other thing the page warns
+    // about and the one a player would otherwise read as the spell doing
+    // nothing.
+    game.does("peruse laboratory.log", "yields ground-sage");
+}

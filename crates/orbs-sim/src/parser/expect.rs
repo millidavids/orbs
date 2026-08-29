@@ -407,6 +407,10 @@ fn after(word: SpellWord, leading: &str, partial: &str, at: &Situation<'_>) -> V
             Some(_) => Vec::new(),
         },
         SpellWord::If | SpellWord::Until => question(&rest, scene),
+        // A count and nothing else. There is no guard to offer and no second
+        // form: `bide` is one number, which is the whole of what makes it
+        // readable arithmetic on the page.
+        SpellWord::Bide => Vec::new(),
         // `else if` chains, and a bare `else` takes nothing.
         SpellWord::Else => match rest.split_first() {
             None => vec![Expected::plain("if", Reason::Word)],
@@ -422,6 +426,25 @@ fn after(word: SpellWord, leading: &str, partial: &str, at: &Situation<'_>) -> V
             1 => vec![Expected::plain("be", Reason::Grammar)],
             _ => places(scene),
         },
+        // `pull <name> from <place>` — `let`'s shape, and the name is coined the
+        // same way, so nothing to offer there either.
+        //
+        // **`from` is filler, so it is never counted and never offered.** `rest`
+        // has already dropped it, which means one word in hand puts the caret at
+        // the place — and offering `from` would be offering a word the parser
+        // throws away. `let`'s `be` is the opposite case and is offered, because
+        // `be` survives normalisation and carries the grammar.
+        SpellWord::Pull => match rest.len() {
+            0 => Vec::new(),
+            _ => places(scene),
+        },
+        // **Nothing, like `part`.** What follows is a call, and a call names a
+        // part *this file* defines — which the scene knows nothing about, since
+        // it holds the room rather than the spell. The editor's guide already
+        // shows the shape (`<name>(...)`), and offering the room's nouns here
+        // would be a list with no right answer in it, which is the mistake
+        // `for each` records making with the same reasoning.
+        SpellWord::Alongside => Vec::new(),
         // **The sets the fixture declares, never the room's contents.** A set is
         // `way`, `socket`, `sigil`; the scene's nouns are `stacks`, `cabinet`,
         // `north`. Offering the latter here was a list with no right answer in
@@ -792,7 +815,21 @@ mod tests {
             .collect();
         assert_eq!(
             words,
-            ["wait", "repeat", "if", "let", "for", "part"],
+            // **`pull` last, which is `SpellWord::ALL`'s order.** A word added
+            // anywhere but the end would reorder what the editor's guide and the
+            // prompt's completion both offer, and the two have agreed since the
+            // language had four words.
+            [
+                "wait",
+                "repeat",
+                "if",
+                "let",
+                "for",
+                "part",
+                "bide",
+                "pull",
+                "alongside",
+            ],
             "the language's words reordered or stopped leading",
         );
         assert!(

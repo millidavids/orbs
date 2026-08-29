@@ -47,6 +47,7 @@ pub fn run_pending(world: &mut World) {
             Queued::Write { name, lines } => {
                 scribe::write(world, &name, &lines);
             }
+            Queued::Take(id) => super::weave::grant(world, &id),
             // A tester's door, absent from a release build entirely.
             #[cfg(debug_assertions)]
             Queued::Spawn(order) => super::debug::run(world, &order),
@@ -87,6 +88,10 @@ fn execute(intent: &Intent, world: &mut World) {
         Verb::Dial => super::scry::dial(intent, world),
         Verb::Muster => super::muster::muster(world),
         Verb::Haul => super::muster::haul(intent, world),
+        Verb::Summon => super::sing::summon(world),
+        Verb::Sing => super::sing::sing(intent, world),
+        Verb::Chorus => super::sing::chorus(world),
+        Verb::Queue => super::queue::queue(intent, world),
         Verb::Move => pipeline::carry(intent, world),
         Verb::Wield => pipeline::wield(intent, world),
         // §10.1's per-instrument verbs. One arm, because the instrument is found
@@ -203,6 +208,19 @@ pub const fn is_live(verb: Verb) -> bool {
             // greater ward onto a lesser — *is* the puzzle rather than a dead end.
             | Verb::Muster
             | Verb::Haul
+            // The menagerie's two. `summon` refuses where there is no circle and
+            // where a chant is already running; `sing` refuses where nothing is
+            // running and where the word is not a syllable. **A missed syllable
+            // is not a refusal** — it is the chant going badly, which is the
+            // puzzle rather than a dead end, exactly as a refused haul is.
+            | Verb::Summon
+            | Verb::Sing
+            | Verb::Chorus
+            // The satchel's push. It refuses where there is no satchel and where
+            // one is full — and **full is not a dead end**: it is a producer
+            // that has outrun its consumer, which is the pipeline telling you
+            // something true about itself rather than a way to get stuck.
+            | Verb::Queue
     )
 }
 
@@ -321,6 +339,11 @@ pub fn is_gated(verb: Verb, world: &World) -> bool {
         // §11.5's turn: the tower is worked entirely by hand until the orb has
         // somewhere to put a spell.
         Verb::Bind => tower::concentration(world) == 0,
+        // §8's channel is bought at the loom (`satchel_1`). Off every listing
+        // until it is, exactly as `bind` is — a word the boot report teaches and
+        // the tower then refuses is the affordance-that-does-not-work shape §19
+        // records shipping once.
+        Verb::Queue => !tower::mastery::holds(world, tower::mastery::Grant::Satchel),
         _ => false,
     }
 }
@@ -362,6 +385,11 @@ fn status(world: &mut World) {
     let earned = world.resource::<tower::Experience>().get();
     let held = tower::concentration(world);
 
+    // **Read before the scrollback is borrowed**, and one walk of `Running`
+    // rather than a second — `tower::running_spells` is what the rail folds, so
+    // the two cannot come to disagree about what is running.
+    let casting = tower::running_spells(world);
+
     let mut scrollback = world.resource_mut::<Scrollback>();
     let rows = scrollback.records_mut();
     for (name, value) in [
@@ -377,7 +405,51 @@ fn status(world: &mut World) {
             .count(FieldName::Quantity, value)
             .finish();
     }
+
+    // **The full answer behind the rail's `+n`.** A box has one line for a
+    // spell, so it names the first and counts the rest — and until this existed
+    // that count pointed at nothing: a player reading `►tending +2` had no way
+    // to find out what the two were. The rail is the glance and this is the
+    // answer, which is the standing split.
+    //
+    // **A section, not more `Status` rows.** The reading column above is guarded
+    // by a *shape* test — two or more records, each a name and a numeric
+    // quantity — so a row carrying a spell's room would have taken the whole
+    // report out of its aligned column. §19 records that guard being a shape
+    // rather than a kind for exactly this reason.
+    //
+    // **Absent when nothing runs**, rather than an empty heading: `status` is
+    // read constantly and a section that is usually a bare rule is a rule that
+    // teaches the eye to skip it.
+    if casting.is_empty() {
+        return;
+    }
+    rows.push(RecordKind::Section)
+        .text(FieldName::Kind, CASTING)
+        .finish();
+    for one in casting {
+        // **`Detail`, which is what makes this a described listing** rather than
+        // a tiled one — `record/view.rs` decides on the field's presence. A run
+        // of spell names tiled two to a row would put `tending  threading` side
+        // by side with nothing saying where either is.
+        let where_it_is = if one.cursors > 1 {
+            format!("{}, on {} cursors", one.domain, one.cursors)
+        } else {
+            one.domain.clone()
+        };
+        rows.push(RecordKind::Entry)
+            .text(FieldName::Name, &one.spell)
+            .text(FieldName::Detail, &where_it_is)
+            .finish();
+    }
 }
+
+/// The heading `status` puts over what is running.
+///
+/// A table entry beside `Verb::canonical`, not authored prose — it is the same
+/// class of thing as a noun-kind label, which is what every other section
+/// heading in a listing is.
+const CASTING: &str = "casting";
 
 /// A count as a record value, saturating rather than wrapping.
 fn quantity(count: usize) -> u64 {

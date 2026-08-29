@@ -48,10 +48,28 @@ use crate::parser::NounKind;
 #[must_use]
 pub fn home(world: &World, named: &str) -> Option<Entity> {
     // 1. Finished work keeps itself.
-    if matches!(
-        world.resource::<Recipes>().kind_of(named),
-        NounKind::Essence | NounKind::Scroll
-    ) {
+    //
+    // **A troop is finished work that no recipe makes**, which is the one shape
+    // rules 2 and 3 cannot see: `kind_of` derives a kind from the recipes that
+    // produce a name, and a chant is not a recipe — so a troop reads as a
+    // `Reagent`, nothing makes it, nothing yet consumes it, and the rule would
+    // answer `None` for a material the game produces every time somebody sings.
+    //
+    // It is named here rather than given a recipe, because inventing a recipe
+    // nobody can fire to satisfy a lookup would put a lie in `recall troop`.
+    // When Phase 8's siege consumes them this stays true and stays the reason.
+    //
+    // **This also keeps it out of the verdant unlock.** `execute::scroll` derives
+    // a base reagent as one the vocabulary knows and nothing makes, *whose home
+    // is the laboratory's shelf* — so a troop answering `keep` here is what
+    // stops a scroll shelving troops as an inexhaustible herb. §19 records that
+    // exact defect shipping once, with dregs and ash on the dispensary.
+    if named == crate::execute::TROOP
+        || matches!(
+            world.resource::<Recipes>().kind_of(named),
+            NounKind::Essence | NounKind::Scroll
+        )
+    {
         return super::keep(world);
     }
 

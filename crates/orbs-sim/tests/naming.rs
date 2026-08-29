@@ -443,6 +443,21 @@ fn ambiguous_synonym_prefixes_are_known() {
     // `three_character_canonical_prefixes_name_at_most_one_verb` has no
     // exemptions, and it is why `scry` is not a verb (`scr` reaches `scribe`)
     // and why `seat` became `dial` (`sea` reaches `sift`'s `search`).
+    //
+    // **`que` joined it with the satchel** — `queue` against `quench`, which is
+    // one of `stop`'s plain synonyms — and it is accepted on `pro`'s reasoning
+    // rather than waved through. The full word is exact, so only a deliberate
+    // three-letter abbreviation prompts; the two are as far apart as two words
+    // get, one putting a name in a queue and the other putting a fire out; and
+    // `quench` is not a word anybody types often.
+    //
+    // What separates this from §19's `leave`/`exit` refusal is what sits on the
+    // other side: there it was *ending the session*, beside verbs people type
+    // all day. A prompt is only unfair when one of its answers is expensive.
+    //
+    // The alternatives lose on the axes this test and its sibling measure:
+    // `stow` shares `sto` with `stop` **and** scores 750 against it, and `stash`
+    // shares `sta` with `status`, which is typed constantly.
     assert_eq!(
         ambiguous,
         [
@@ -450,6 +465,7 @@ fn ambiguous_synonym_prefixes_are_known() {
             ("dec", vec!["empty", "recall", "research"]),
             ("ins", vec!["scribe", "verify"]),
             ("pro", vec!["probe", "weave"]),
+            ("que", vec!["queue", "stop"]),
             // **`res` is `research`'s own prefix, and `rest` wins it.** `rest`
             // is `meditate`'s, four letters to `research`'s eight, so the
             // coverage half of the prefix score puts it ahead (962 to 906) and

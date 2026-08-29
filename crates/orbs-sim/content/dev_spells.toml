@@ -427,3 +427,200 @@ lines = [
     "    between(near, far)",
     "end",
 ]
+
+# **The one spell in the game that does not work at one step a tick, and that is
+# the design rather than a defect** (§19).
+#
+# Identifying which of four lanes is next costs a tick per rung, and a syllable
+# is only four ticks from the rule - so at `SCRIPT_BUDGET` the orb can reach the
+# first two lanes in time and not the last two, and the figure collapses.
+# Measured at two steps a tick: **twelve of twelve struck, the figure closes.**
+# So the menagerie is the domain that *rewards concentration* - unautomatable
+# until the weave grants a second step, and solved outright once it does.
+#
+# **The shape is the puzzle, and it took `bide until` going away to become one.**
+# This was an `else if` ladder with a `bide until` in every branch, and it read
+# the delay straight off the circle - so nothing was computed, and §19 records
+# the withdrawal. The reading went with the word: with `until` still answerable,
+# `repeat until the circle has 1 until` / `end` is the same cheat spelled as a
+# one-tick spin.
+#
+# What is left has to keep its own time, and three things follow from that. All
+# three were measured, not reasoned about:
+#
+# - **`for each syllable`, never an `else if` ladder.** A ladder short-circuits,
+#   so the lane it finds on the first rung is reached three ticks before the one
+#   it finds on the fourth - and a `sing` that arrives at a different offset
+#   every lap cannot sit in a two-tick window. The loop always walks all four,
+#   which makes the pass **constant length**. Measured at two steps a tick: the
+#   ladder strikes **nought of twelve**, this strikes twelve.
+# - **`let`, and the `sing` *outside* the loop.** Singing where the lane is found
+#   puts the strike at a variable offset again; binding the answer and singing
+#   after the loop closes puts it at a fixed one. This is what `let` is for and
+#   it is the only shape in the game that needs it this way.
+# - **No `bide` at all.** The pass comes out level with `PACE` on its own, and a
+#   `bide 2` breaks it - measured: two struck, then the figure comes apart. The
+#   arithmetic a player does here is *"what does my loop already cost"*, which is
+#   the honest question, rather than *"what number goes in the delay"*.
+#
+# **Still the one spell that does not work at one step a tick, and still by
+# design** (§19). At `SCRIPT_BUDGET` the pass runs long and the best any
+# arrangement reaches is three of twelve before the figure collapses; at two
+# steps a tick this closes the figure on every seed tried (0, 3, 11, 17, 42) for
+# four troops. The menagerie is the domain that *rewards concentration* -
+# unautomatable until the weave grants a second step, solved outright once it
+# does.
+#
+# **`repeat until the circle is empty`, never `is idle`.** A circle is idle
+# whether or not a chant is running - `is idle` was satisfied before the first
+# pass, the loop ran zero times, and the spell ended having done nothing. A
+# running chant publishes readings, so `is empty` is the question that separates
+# them. That cost four experiments to find.
+[chanting]
+domain = "menagerie"
+lines = [
+    "summon",
+    "repeat until the circle is empty",
+    "    for each syllable",
+    "        if syllable has next",
+    "            let note be syllable",
+    "        end",
+    "    end",
+    "    sing note",
+    "end",
+]
+
+# ===========================================================================
+# §8's channel: one spell handing another a name, and one spell in two places.
+#
+# **Two spells always ran at once.** `invoke` from inside a spell inserts a
+# second `Running` and the caller does not block — ungated, at concentration 0 —
+# so neither of these is a demonstration that concurrency exists. What they show
+# is the thing that was missing: something for two cursors to *say* to each
+# other, which is the satchel.
+#
+# Both need `satchel_1` from the loom, and `coursing` needs `cursors_1` as well.
+# `debug_take satchel_1` is the short road; the long one is 24 experience.
+# ===========================================================================
+
+# The producer half of a work list, and it is deliberately three lines long.
+#
+# **A spell that does nothing but name things.** What it queues is not a plan or
+# a schedule — it is three reagents, in the order somebody wants them ground —
+# and the whole point is that a *second* spell decides what to do about them.
+# Everything a spell could compute before died with the spell that computed it.
+#
+# It runs off the end after three lines and stops, which is the shape to notice:
+# a producer does not have to outlive its consumer, because the satchel holds
+# what it left behind.
+[ordering]
+domain = "laboratory"
+lines = [
+    "queue sage",
+    "queue rock-salt",
+    "queue sage",
+]
+
+# The consumer half — **two spells, one channel** (§8).
+#
+# `invoke ordering` starts the producer and does **not** wait for it: the caller
+# carries straight on to the next line. That is the whole reason for the `bide`.
+#
+# **`bide 2` is load-bearing and looks like superstition.** `advance` snapshots
+# the running list, so a spell cast this tick starts on the *next* — and the
+# guard below is `repeat until the satchel is empty`, which is true of an empty
+# satchel. Without the pause the loop is satisfied before the producer has
+# queued anything, runs zero times, and the spell ends having done nothing,
+# silently. That is `repeat until the circle is idle` (§19) arriving through a
+# different door, and it is the trap a player writing their first pipeline will
+# fall into.
+#
+# **`grind herb` then `empty mortar_and_pestle`** is `tending`'s loop, and the
+# `empty` is what paces this: it blocks while the mortar works, so the consumer
+# runs at the mortar's speed and the queue is what absorbs the difference.
+#
+# Three loads, `+1` each. `peruse laboratory.log` is where a spell's own records
+# go.
+[milling]
+domain = "laboratory"
+lines = [
+    "invoke ordering",
+    "bide 2",
+    "repeat until the satchel is empty",
+    "    pull herb from satchel",
+    "    grind herb",
+    "    empty mortar_and_pestle",
+    "end",
+]
+
+# **One spell in two places at once** — `holding` split down the middle (§8).
+#
+# The sanctum's cyclic solver in two halves: a cursor that works out *which pair
+# of stations comes next* and puts the pair in the satchel, and a cursor that
+# takes two names out and hauls between them. It solves a real course in
+# `2^n - 1` hauls, which is optimal — the same number `holding` reaches — so
+# nothing here is a demonstration standing in for work.
+#
+# **What it is actually for is the shape.** `holding` computes and hauls on one
+# cursor, so its loop body is the plan and the move welded together; this one can
+# be read as two things because it *is* two things.
+#
+# Four things worth knowing before writing another forked spell:
+#
+# - **`alongside planning(...)` rather than `planning(...)`.** A call suspends
+#   the caller until the part returns and a fork does not: the line after it runs
+#   on the caller's very next step. A `planning()` here would never come back,
+#   because its loop only ends when the course does.
+# - **The parity is read once, before the fork, and handed over in the
+#   brackets.** A part's brackets are the whole of what it can see (§19), and
+#   here that is a feature rather than a cost: the planner cannot accidentally
+#   read a `near` the mover has since rebound.
+# - **`if the satchel is empty` is backpressure, and it is the player's to
+#   write.** The planner is six queues a lap against a mover that spends nine
+#   steps on one haul, so without a guard it fills the satchel to `DEPTH` and
+#   then refuses, once a lap, for the rest of the course. Refilling only when the
+#   queue has drained is what keeps the log readable — and it is the first thing
+#   in this language that reads like a real pipeline.
+# - **`pull` twice, then one call.** The satchel holds one name at a time, so a
+#   pair is two names in order — which is why the queue is a queue rather than a
+#   pile, and why `Satchel::put` refuses at the cap instead of dropping its front.
+#   A queue that forgot the oldest name would hand the mover a *station* out of
+#   order, and a wrong haul looks exactly like a wrong algorithm.
+[coursing]
+domain = "sanctum"
+lines = [
+    "part between(here, there)",
+    "    if here is empty",
+    "        haul there here",
+    "    else if there is empty",
+    "        haul here there",
+    "    else if here has fewer potency than there",
+    "        haul here there",
+    "    else",
+    "        haul there here",
+    "    end",
+    "end",
+    "part planning(near, far)",
+    "    repeat until the pylon is idle",
+    "        if the satchel is empty",
+    "            queue wellspring",
+    "            queue near",
+    "            queue wellspring",
+    "            queue far",
+    "            queue near",
+    "            queue far",
+    "        end",
+    "    end",
+    "end",
+    "muster",
+    "if the pylon has odd",
+    "    alongside planning(barrier, conduit)",
+    "else",
+    "    alongside planning(conduit, barrier)",
+    "end",
+    "repeat until the pylon is idle",
+    "    pull here from satchel",
+    "    pull there from satchel",
+    "    between(here, there)",
+    "end",
+]

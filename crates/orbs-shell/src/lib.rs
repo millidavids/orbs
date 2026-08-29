@@ -32,9 +32,11 @@
 
 mod bench;
 mod board;
+mod chant;
 mod dump;
 mod editor;
 mod environment;
+mod focus;
 mod glance;
 mod guide;
 mod keys;
@@ -65,9 +67,10 @@ pub use bench::Bench;
 pub use dump::{requested as dump_requested, run as dump, run_script as dump_script};
 pub use editor::{Editor, Mode as EditorMode, Outcome as EditorOutcome};
 pub use environment::{RUSTC, SEED, seed, wizard};
+pub use focus::{Focus, Open};
 pub use glance::Panel;
 pub use guide::{Entry, Guide, guide};
-pub use keys::{Key, apply, apply_to_editor, apply_to_maze, apply_to_weave};
+pub use keys::{Key, apply, apply_to_chant, apply_to_editor, apply_to_maze, apply_to_weave};
 pub use line::Line;
 pub use linear::{Linear, toggle as toggle_linear};
 pub use offering::{Ghost, Offered};
@@ -80,7 +83,7 @@ pub use save::{
 };
 pub use screen::Screen;
 pub use scrollback::{Scroll, page_step};
-pub use shortcuts::{TRACE_PATH, cycle_register, export_trace};
+pub use shortcuts::{TRACE_PATH, cycle_register, export_trace, toggle_patient};
 pub use stage::{Boot, Stage};
 pub use tapestry::{Outcome as WeaveOutcome, Tapestry};
 pub use transition::PaneTransition;

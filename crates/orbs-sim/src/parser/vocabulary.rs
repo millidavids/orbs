@@ -437,6 +437,57 @@ pub const SYNONYMS: &[Synonym] = &[
     syn(Verb::Haul, Register::Arcane, &["haul"]),
     syn(Verb::Haul, Register::Plain, &["carry"]),
     syn(Verb::Haul, Register::Plain, &["bear"]),
+    // The menagerie (§10). **No shell register for either**, as the sanctum's
+    // and the lens's have none: a shell user has no word for opening a chant.
+    //
+    // `evoke` and `intone` both score 667 against `invoke`, which is the one
+    // collision this domain could least afford — a player reaching for a spell
+    // and getting a chant. `call` is 750 against `wall`. `summon`, `conjure` and
+    // `raise` are clean.
+    syn(Verb::Summon, Register::Arcane, &["summon"]),
+    syn(Verb::Summon, Register::Arcane, &["conjure"]),
+    syn(Verb::Summon, Register::Plain, &["raise"]),
+    // `chant` scores 600 three ways — `cast`, `halt`, `cat` — so it is the
+    // domain's noun and never a word you type; §19 records the sweep. `croon` is
+    // 800 against `cron`, `utter` 667 against `muster`, `recite` 625 against
+    // `relocate`. `sing`, `voice`, `hymn` and `reply` are clean.
+    syn(Verb::Sing, Register::Arcane, &["sing"]),
+    syn(Verb::Sing, Register::Arcane, &["hymn"]),
+    syn(Verb::Sing, Register::Plain, &["voice"]),
+    // `chorus` hands over the arrows. **No shell register**, like the other
+    // surface words: a shell has no verb for *give me the keyboard*.
+    //
+    // **`perform` was the name and `conduct` its synonym, and a *prefix* took
+    // both.** Each scores nothing against anything, and `per` reaches `peruse`
+    // while `con` reaches `conjure` — an abbreviation collision is invisible to
+    // a similarity score, which is the second time this phase (`reply` against
+    // `repair` was the first). `enact` is 600 against `east`, and `render` 667
+    // against `wander`, which is the other verb that hands over the arrows.
+    //
+    // `chorus` and `play` are clean and `cho`/`pla` are free.
+    syn(Verb::Chorus, Register::Arcane, &["chorus"]),
+    syn(Verb::Chorus, Register::Plain, &["play"]),
+    // **`reply` was here and `ambiguous_synonym_prefixes_are_known` took it
+    // out.** It scores nothing against anything, which is what the similarity
+    // sweep asks — and `rep` prefixes both it and `repair`, which is `muster`'s.
+    // A *prefix* collision between two domains' plain words is invisible to a
+    // score and is exactly what that test is for.
+    //
+    // The satchel's push (§8, `tower::satchel`). **`que` reaches `quench`**, a
+    // live `stop` synonym above — accepted, and pinned in
+    // `ambiguous_synonym_prefixes_are_known` rather than left to be rediscovered.
+    // The full word is exact; `quench` is rare; and the alternatives lose on the
+    // same axes (`stow` is `sto`/`stop` *and* 750 against it, `stash` is
+    // `sta`/`status`). `draw` is clean here and wrong in the prose — the game
+    // spends it on drawing a *new* thing, three times over.
+    //
+    // **The canonical word is the arcane entry**, which is
+    // `every_verb_has_a_canonical_arcane_entry`'s rule for all thirty-six: the
+    // echo has to name a form the parser will take back. `queue` reads plainly
+    // enough that it is also the plain word, so the two registers carry the same
+    // spelling — `sift` and `purge` do the same.
+    syn(Verb::Queue, Register::Arcane, &["queue"]),
+    syn(Verb::Queue, Register::Plain, &["queue"]),
 ];
 
 impl Register {

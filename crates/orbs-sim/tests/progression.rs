@@ -324,3 +324,115 @@ fn the_same_work_earns_the_same_on_a_replay() {
     assert_eq!(replayed.experience(), live.experience());
     assert!(live.experience() > 0, "the session earned nothing");
 }
+
+/// Earn the first tier, by distilling.
+///
+/// **Real work, not a granted number.** There is no public way to hand the sim
+/// experience and that is deliberate (§11.5), so the only honest way to reach a
+/// tier in a test is the way a player reaches it.
+#[cfg(debug_assertions)]
+fn at_the_first_tier() -> Sim {
+    let mut sim = laboratory();
+    run(
+        &mut sim,
+        &["kindle charcoal", "debug_spawn clarified-draught 4"],
+    );
+    for _ in 0..3 {
+        run(&mut sim, &["distil clarified-draught"]);
+        sim.step_n(60);
+        run(&mut sim, &["empty alembic"]);
+    }
+    assert!(sim.experience() >= 24, "the tier never opened");
+    sim
+}
+
+/// **The first node in the game that is real**, and the whole path it travels.
+///
+/// `steps_1` was a marker for four phases — authored, drawn, and refused — and
+/// the menagerie is what gave it a reason to work: that room cannot be automated
+/// at one instruction a tick, so a second step is the first thing worth buying.
+#[cfg(debug_assertions)]
+#[test]
+fn a_real_node_can_be_taken_and_changes_what_a_spell_can_do() {
+    let mut sim = at_the_first_tier();
+    let before = orbs_sim::tower::spell::budget(sim.world());
+
+    sim.take("steps_1");
+    sim.step();
+
+    assert!(
+        sim.taken().iter().any(|id| id == "steps_1"),
+        "the node was not held after a tick",
+    );
+    assert_eq!(
+        orbs_sim::tower::spell::budget(sim.world()),
+        before + 1,
+        "taking the step node bought no step",
+    );
+}
+
+/// A marker is refused by the world as well as by the screen.
+///
+/// **The screen already refuses it**, and this is the second opinion agreeing:
+/// a queued effect that trusted the screen's arithmetic would be two answers to
+/// one rule, which §19 records drifting apart more often than anything else.
+#[cfg(debug_assertions)]
+#[test]
+fn a_marker_grants_nothing_even_if_it_reaches_the_world() {
+    let mut sim = at_the_first_tier();
+    let before = orbs_sim::tower::spell::budget(sim.world());
+
+    sim.take("tbi_b");
+    sim.step();
+
+    assert!(sim.taken().is_empty(), "a marker was held");
+    assert_eq!(orbs_sim::tower::spell::budget(sim.world()), before);
+}
+
+/// A node whose tier has not opened is refused, however it arrives.
+#[cfg(debug_assertions)]
+#[test]
+fn a_locked_node_cannot_be_taken() {
+    let mut sim = at_the_first_tier();
+    sim.take("steps_2");
+    sim.step();
+    assert!(sim.taken().is_empty(), "a locked node was held");
+}
+
+/// **A tier grants one of its siblings**, so taking the second is refused.
+#[cfg(debug_assertions)]
+#[test]
+fn a_tier_gives_one_choice_and_not_two() {
+    let mut sim = at_the_first_tier();
+    sim.take("steps_1");
+    sim.step();
+    sim.take("tbi_b");
+    sim.step();
+    assert_eq!(sim.taken(), ["steps_1"], "the tier gave both its nodes");
+}
+
+/// Rule 3: a take is a decision, so it replays.
+#[cfg(debug_assertions)]
+#[test]
+fn taking_a_node_replays_to_the_same_world() {
+    let mut live = at_the_first_tier();
+    live.take("steps_1");
+    live.step();
+
+    let mut replayed = Sim::new(1);
+    for (tick, submission) in live.submissions().all().to_vec() {
+        while replayed.tick() < tick {
+            replayed.step();
+        }
+        replayed.replay(submission);
+    }
+    while replayed.tick() < live.tick() {
+        replayed.step();
+    }
+
+    assert_eq!(replayed.taken(), live.taken());
+    assert_eq!(
+        orbs_sim::tower::spell::budget(replayed.world()),
+        orbs_sim::tower::spell::budget(live.world()),
+    );
+}

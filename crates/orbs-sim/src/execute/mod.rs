@@ -31,6 +31,7 @@ mod files;
 mod muster;
 mod navigate;
 mod pipeline;
+mod queue;
 mod quit;
 mod readings;
 mod recall;
@@ -38,6 +39,7 @@ mod research;
 mod scribe;
 mod scroll;
 mod scry;
+mod sing;
 mod unfurl;
 mod wander;
 mod weave;
@@ -47,8 +49,8 @@ mod tests;
 
 #[cfg(debug_assertions)]
 pub use debug::{
-    COURSE, LEARN, Order as SpawnOrder, SPAWN, SWAP, WARD, giveaway, lesson, order as spawn_order,
-    shortcut, swapping,
+    COURSE, LEARN, Order as SpawnOrder, SPAWN, SWAP, TAKE, WARD, giveaway, lesson,
+    order as spawn_order, shortcut, swapping, taking,
 };
 #[cfg(debug_assertions)]
 pub use debug_spell::{
@@ -74,6 +76,8 @@ pub use scribe::{Opening, Request, write};
 /// authored in `recipes.toml` has anything behind it. Nothing else outside this
 /// module needs it — `wield` reaches the effect through `spend`.
 pub use scroll::Scroll;
+pub(crate) use sing::{Answered, circle_at, lapse as lapse_chant, strike as strike_syllable};
+pub use sing::{Chorusing, Patient, TROOP};
 // Crate-internal, and the reason is the defect it closed: `spell::block` has to
 // ask the same question `wield` asks, or a scripted spend is charged a
 // production slot the typed one is not.

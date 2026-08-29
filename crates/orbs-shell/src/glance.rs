@@ -45,6 +45,12 @@ pub struct Panel {
     /// ever be present, because they belong to three different rooms and the
     /// player stands in one.
     pub pylon: Option<orbs_render::Pylon>,
+    /// The figure being sung, if one is running.
+    ///
+    /// Beside the other three and on the same clock. Only one of the four can
+    /// ever be present, because they belong to four different rooms and the
+    /// player stands in one.
+    pub figure: Option<orbs_render::Figure>,
     /// Every domain at a glance, for §9's rail.
     ///
     /// **Here rather than asked from the painter, and it is the most expensive of
@@ -69,6 +75,7 @@ impl Panel {
         self.stacks = sim.stacks();
         self.ward = sim.ward();
         self.pylon = sim.pylon();
+        self.figure = sim.figure();
         self.briefs = sim.briefs();
     }
 }

@@ -101,7 +101,7 @@ run editor_count ORBS_BOOT=0 ORBS_GRID=100x30 ORBS_DUMP="attend archive; scribe 
   ORBS_EDIT=$'edit\nif the cabinet has 4 fragment\nwield lectern\nend\n<esc>\ninterpret'
 
 # --- the manual, in every room --------------------------------------------
-for room in laboratory archive lens sanctum grimoire arsenal tower; do
+for room in laboratory archive lens sanctum menagerie grimoire arsenal tower; do
   run "help_$room" ORBS_BOOT=0 ORBS_DUMP="attend $room; help"
 done
 run help_floor    ORBS_BOOT=0 ORBS_GRID=80x22 ORBS_DUMP="attend lens; help"
@@ -131,7 +131,55 @@ run pylon_board  ORBS_BOOT=0 ORBS_DUMP="attend sanctum; muster; haul wellspring 
 run pylon_refuse ORBS_BOOT=0 ORBS_DUMP="attend sanctum; muster; haul wellspring barrier; haul wellspring barrier; haul wellspring wellspring; haul conduit barrier"
 run pylon_worn   ORBS_BOOT=0 ORBS_DUMP="attend sanctum; survey pylon; meditate 3600; survey pylon; muster; survey pylon"
 run pylon_done   ORBS_BOOT=0 ORBS_DUMP="attend sanctum; muster; debug_course; haul conduit barrier; survey pylon; status"
+
+# --- the menagerie ---------------------------------------------------------
+# **Three ticks of one approach**, because the board is the only surface in the
+# game that moves between landings and a single capture cannot show that. It
+# drew four identical frames for a whole approach until `Figure` carried `until`.
+run chant_board   ORBS_BOOT=0 ORBS_DUMP="attend menagerie; summon"
+run chant_rising  ORBS_BOOT=0 ORBS_DUMP="attend menagerie; summon; meditate 2"
+run chant_refuse  ORBS_BOOT=0 ORBS_DUMP="attend menagerie; sing skyward; summon; summon; sing nothing"
+run chant_keys    ORBS_BOOT=0 ORBS_DUMP="attend menagerie; summon; chorus" ORBS_CHANT=$'<up>\n<left>'
+run chant_patient ORBS_BOOT=0 ORBS_PATIENT=1 ORBS_DUMP="attend menagerie; summon; chorus" ORBS_CHANT=$'<up>\n<left>'
+run chant_collapse ORBS_BOOT=0 ORBS_DUMP="attend menagerie; summon; meditate 18; survey pylon"
+run chant_troop   ORBS_BOOT=0 ORBS_DUMP="recall troop; debug_spawn troop 3; survey arsenal"
 run recall_script_sanctum ORBS_BOOT=0 ORBS_GRID=100x40 ORBS_DUMP="attend sanctum; recall scripting"
+
+# The apprentice's guide. **One per room**, because the worked example is built
+# from where you are standing — five rooms with lines of their own, and the
+# grimoire borrowing the laboratory's and saying so.
+for room in laboratory archive lens sanctum menagerie grimoire; do
+  run "apprentice_$room" ORBS_BOOT=0 ORBS_DUMP="attend $room; recall apprentice"
+done
+
+# --- the satchel, and the second cursor (§8's channel) ----------------------
+#
+# **`debug_take` on every line but the first.** `satchel_1` opens at 24
+# experience and `cursors_1` at 40, so an honest road to these screens is two
+# hundred ticks of the laboratory before the thing being captured appears — the
+# setup cost `debug_spawn` already exists to skip.
+run satchel_gated  ORBS_BOOT=0 ORBS_DUMP="attend menagerie; queue skyward"
+run satchel_queued ORBS_BOOT=0 ORBS_DUMP="attend menagerie; debug_take satchel_1; \
+  queue skyward; queue earthward; queue skyward; survey satchel"
+run satchel_bare   ORBS_BOOT=0 ORBS_DUMP="attend menagerie; debug_take satchel_1; survey satchel"
+run satchel_take   ORBS_BOOT=0 ORBS_DUMP="debug_take; debug_take tbi_b; debug_take cursors_1"
+run satchel_drain  ORBS_BOOT=0 ORBS_GRID=110x40 \
+  ORBS_DUMP="attend menagerie; debug_take satchel_1; queue skyward; queue earthward; scribe drain" \
+  ORBS_EDIT=$'edit\nrepeat 2\npull note from satchel\nsurvey note\nend\n<esc>\nquit' \
+  ORBS_THEN="invoke drain; meditate 10; survey satchel"
+run satchel_fork   ORBS_BOOT=0 ORBS_GRID=110x40 \
+  ORBS_DUMP="attend menagerie; debug_take satchel_1; debug_take cursors_1; scribe both" \
+  ORBS_EDIT=$'edit\npart filling()\nqueue skyward\nqueue earthward\nend\nalongside filling()\nrepeat 2\npull note from satchel\nsurvey note\nend\n<esc>\nquit' \
+  ORBS_THEN="invoke both; meditate 12; peruse menagerie.log"
+run recall_satchel ORBS_BOOT=0 ORBS_DUMP="recall queue; recall pull; recall alongside"
+
+# The two shipped worked examples, and the rail counting what they run.
+run satchel_two_spells ORBS_BOOT=0 ORBS_DUMP="attend laboratory; debug_take satchel_1" \
+  ORBS_THEN="invoke milling; meditate 80; peruse laboratory.log"
+run satchel_two_cursors ORBS_BOOT=0 ORBS_DUMP="attend sanctum; debug_take satchel_1; debug_take cursors_1" \
+  ORBS_THEN="invoke coursing; meditate 400; peruse sanctum.log"
+run satchel_rail ORBS_BOOT=0 ORBS_DUMP="attend sanctum; debug_take satchel_1; debug_take cursors_1" \
+  ORBS_THEN="invoke coursing; meditate 6; status"
 
 # --- bindings --------------------------------------------------------------
 run bind_invoke ORBS_BOOT=0 ORBS_DUMP="attend laboratory; invoke first_light; attend archive; meditate 6"

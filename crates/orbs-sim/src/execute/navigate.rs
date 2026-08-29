@@ -101,6 +101,35 @@ pub(super) fn survey(intent: &Intent, world: &mut World) {
         None => world.resource::<Cwd>().0,
     };
 
+    // **A satchel answers with its queue, in queue order.** Everything below
+    // sorts by kind and then by name, which is right for a room and wrong for
+    // this: a queue's whole content is *which one is next*, and alphabetising it
+    // would be presenting the one fact it holds in an order that destroys it.
+    // The names are not children either — see `tower::satchel` for why — so the
+    // walk below would find nothing and report an empty shelf.
+    //
+    // **Empty falls through** rather than answering here, so `the satchel holds
+    // nothing` comes from the same `survey_bare` line every other bare place
+    // gets. One sentence, one place.
+    if let Some(satchel) = world.get::<tower::Satchel>(at)
+        && !satchel.is_empty()
+    {
+        let queued: Vec<String> = satchel.names().map(str::to_owned).collect();
+        let mut scrollback = world.resource_mut::<Scrollback>();
+        let records = scrollback.records_mut();
+        records
+            .push(RecordKind::Section)
+            .text(FieldName::Kind, tower::satchel::QUEUED)
+            .finish();
+        for name in queued {
+            records
+                .push(RecordKind::Entry)
+                .text(FieldName::Name, &name)
+                .finish();
+        }
+        return;
+    }
+
     let mut here: Vec<(String, &'static str, Option<String>)> = tower::children_of(world, at)
         .into_iter()
         .filter_map(|node| {

@@ -16,19 +16,15 @@ use orbs_shell::{Editor, EditorOutcome, Scroll, Tapestry};
 use orbs_sim::Sim;
 
 /// The surfaces that can hold the keyboard, in the order they take it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Owner {
-    /// The command line. The default, and where everything returns to.
-    Prompt,
-    /// A spell, opened by `scribe`.
-    Editor,
-    /// The progression screen, opened by `weave`.
-    Weave,
-    /// The archive's stacks, opened by `wander`.
-    Maze,
-    /// The transcript, opened by `unfurl`.
-    Reading,
-}
+///
+/// **This was declared here and is `orbs-shell`'s now.** The enum and its
+/// ordering were right, and being right in one frontend was the problem: the
+/// Bevy build carried its own four-term expression of the same rule until a
+/// fifth surface forced the refactor its own comment had promised. The alias is
+/// kept because `Owner` is what this file's prose calls it, and because a
+/// terminal really does own the *dispatch* below even though it no longer owns
+/// the *ordering*.
+pub(crate) use orbs_shell::Focus as Owner;
 
 /// Everything that can be open at once, which is at most one of them.
 #[derive(Default)]
@@ -39,27 +35,24 @@ pub(crate) struct Surfaces {
     pub(crate) weaving: Option<Tapestry>,
     /// Whether the arrow keys are walking the stacks.
     pub(crate) walking: bool,
+    /// Whether the arrow keys are answering a chant.
+    pub(crate) chorusing: bool,
 }
 
 impl Surfaces {
     /// Who the next keystroke belongs to.
     ///
-    /// **Order matters only because it must be decided.** None of these can be
-    /// open at once — the prompt is dead while any of them holds the keyboard,
-    /// so nothing can open a second — but a silent tie would be the harder bug
-    /// to find, so the newer surface never wins by accident.
+    /// The tie-break and its reasoning live with the enum in `orbs-shell`; this
+    /// only says what *this* frontend has open. Both builds ask the one
+    /// function, so neither can drift into answering it differently.
     pub(crate) const fn owner(&self, scroll: &Scroll) -> Owner {
-        if self.editing.is_some() {
-            Owner::Editor
-        } else if self.weaving.is_some() {
-            Owner::Weave
-        } else if self.walking {
-            Owner::Maze
-        } else if scroll.is_reading() {
-            Owner::Reading
-        } else {
-            Owner::Prompt
-        }
+        Owner::of(orbs_shell::Open {
+            editing: self.editing.is_some(),
+            weaving: self.weaving.is_some(),
+            walking: self.walking,
+            chorusing: self.chorusing,
+            reading: scroll.is_reading(),
+        })
     }
 
     /// Take whatever the world has offered since the last tick.
@@ -85,6 +78,15 @@ impl Surfaces {
         }
         if !self.walking && sim.wandering() {
             self.walking = true;
+        }
+        if !self.chorusing && sim.chorusing() {
+            self.chorusing = true;
+        }
+        // **The figure can end without anybody pressing Escape** — it runs out,
+        // or it collapses — so the keys have to come back on their own. The maze
+        // never does that, which is why this line has no sibling above it.
+        if self.chorusing && sim.figure().is_none() {
+            self.chorusing = false;
         }
         if !scroll.is_reading() && sim.unfurling() {
             scroll.read();
@@ -151,8 +153,9 @@ impl Surfaces {
             // line, neither of which belongs to a surface.
             Owner::Prompt => {}
             Owner::Editor => self.editing_took(code, sim),
-            Owner::Weave => self.weaving_took(code),
+            Owner::Weave => self.weaving_took(code, sim),
             Owner::Maze => self.maze_took(code, sim),
+            Owner::Chant => self.chant_took(code, sim),
             // **No `page` any more.** `PageUp`/`PageDown` are answered above the
             // surface dispatch now, so the only stepping left in here is the
             // arrows, which move one record.
@@ -192,17 +195,41 @@ impl Surfaces {
     /// The weave screen is **read-only against the world** (§19: every Mastery
     /// node is authored as a marker, so `take` always refuses in voice), which
     /// is why this is the one surface that needs no `Sim` at all.
-    fn weaving_took(&mut self, code: KeyCode) {
+    fn weaving_took(&mut self, code: KeyCode, sim: &mut Sim) {
         let Some(screen) = &mut self.weaving else {
             return;
         };
         let Some(key) = crate::drive::as_key(code) else {
             return;
         };
-        let outcome = orbs_shell::apply_to_weave(&key, screen);
-        if outcome == Some(orbs_shell::WeaveOutcome::Close) {
-            self.weaving = None;
+        match orbs_shell::apply_to_weave(&key, screen) {
+            Some(orbs_shell::WeaveOutcome::Close) => self.weaving = None,
+            // The Bevy build's line, and it has to be the same one: rule 2 lets a
+            // frontend decide how a cell is drawn and nothing else, so both hand
+            // the id to the sim and the sim decides.
+            Some(orbs_shell::WeaveOutcome::Take(id)) => sim.take(&id),
+            None => {}
         }
+    }
+
+    /// Answer a syllable on the arrows.
+    ///
+    /// The maze's shape below, and the same two rules: `orbs-shell` owns the
+    /// key-to-syllable table so the two builds cannot disagree, and the press
+    /// reaches the world **now** rather than through `submit` — a key that
+    /// queued would arrive after the beat it was answering.
+    fn chant_took(&mut self, code: KeyCode, sim: &mut Sim) {
+        if code == KeyCode::Esc {
+            self.chorusing = false;
+            return;
+        }
+        let Some(syllable) = crate::drive::as_key(code)
+            .as_ref()
+            .and_then(orbs_shell::apply_to_chant)
+        else {
+            return;
+        };
+        sim.sing(syllable);
     }
 
     fn maze_took(&mut self, code: KeyCode, sim: &mut Sim) {
@@ -272,14 +299,20 @@ mod tests {
     use orbs_shell::{Editor, Scroll, Tapestry};
     use orbs_sim::Sim;
 
-    /// Build the four flags directly, so a state no verb can reach is still
-    /// asked about. The point of the sweep below is the *ties*, and a tie is by
+    /// Build the flags directly, so a state no verb can reach is still asked
+    /// about. The point of the sweep below is the *ties*, and a tie is by
     /// definition a state the game is not supposed to be able to produce.
+    ///
+    /// **`chorusing` is not a parameter**, and that is deliberate: the ordering
+    /// it takes part in is `orbs_shell::focus`'s and is tested there, against
+    /// every combination. What this file tests is the *dispatch* — that a key
+    /// reaches the surface the owner names — which the four below cover.
     fn surfaces(editing: bool, weaving: bool, walking: bool) -> Surfaces {
         Surfaces {
             editing: editing.then(|| Editor::open("t", "laboratory", &[])),
             weaving: weaving.then(Tapestry::default),
             walking,
+            chorusing: false,
         }
     }
 

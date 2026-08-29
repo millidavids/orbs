@@ -34,7 +34,7 @@ use crate::drive::Run;
 /// DESIGN.md keeps its idealisation with a §19 note saying what the loop costs on
 /// top. That makes this a regression pin: a number moving here means the *game*
 /// changed, which is exactly the alarm §16 wants.
-const EXPECTED: [(&str, f64); 6] = [
+const EXPECTED: [(&str, f64); 7] = [
     // 0.170 idealised (§19, "16, and why the anchor moved") against 0.140 looped.
     ("clarity", 0.140),
     // §10.1's claimed better play, measured **behind** the careless one — see
@@ -78,6 +78,24 @@ const EXPECTED: [(&str, f64); 6] = [
     // finished course puts integrity back as well as earning — which is why the
     // rate sits under the flagship's 0.140 where scrying's sits over it.
     ("warding", 0.125),
+    // **A ceiling, not a player**, and the arithmetic is exact: a figure is
+    // twelve syllables four ticks apart, so a chant sung perfectly earns twelve
+    // over forty-nine ticks and reads 0.243 on every seed. The draw is uniform
+    // and the cost is the same whichever lane lands, so — like `warding` and
+    // unlike `stacks` — there is nothing here for a seed to move.
+    //
+    // **It sits above the flagship on purpose**, beside `scrying` and for the
+    // same reason: neither verb takes the production slot, so this is additive
+    // rather than competing. Two things keep it honest that the column cannot
+    // show. A *person* misses syllables and earns less; and a **spell cannot do
+    // this at all** until the weave grants a second step, where every other
+    // domain automates from the first. The policy measures the roof both are
+    // under, which is what a policy is for.
+    //
+    // It is also the one entry that can make the tower **worse**: a regression
+    // in the timing shows up here as a falling rate *and* as integrity draining,
+    // and the pair is what to read.
+    ("chanting", 0.243),
 ];
 
 /// How far a measurement may sit from its expectation before it is called out.

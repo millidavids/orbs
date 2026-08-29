@@ -127,8 +127,21 @@ pub(super) fn apply(world: &mut World, entity: Entity, node: &NodeSave) {
     // malformed one: the player walks into a sanctum they can `muster` in
     // rather than one jammed on a course that can never finish. See
     // `Course::from_save` for the four ways it says no.
+    // The menagerie's, on the same terms: an unreadable figure raises none, and
+    // a circle with no chant is a `summon` away from fine.
+    if let Some(chant) = node.chant.as_ref().and_then(tower::Chant::from_save) {
+        at.insert(chant);
+    }
     if let Some(course) = node.course.as_ref().and_then(tower::Course::from_save) {
         at.insert(course);
+    }
+    // **Inserted only when there is something in it**, which mirrors `capture`
+    // writing `None` for an empty one. `raise` has already put a default
+    // `Satchel` on every one of these nodes, so an absent row means *the queue
+    // was empty*, not *this node has no satchel* — overwriting with an empty one
+    // would be the same answer and one more component insert per load.
+    if let Some(queued) = node.satchel.as_ref() {
+        at.insert(tower::Satchel::from_save(queued));
     }
     // `Running` is deliberately not here: it needs the whole tree in place to
     // resolve the two paths it carries, and it needs the record stream in place
@@ -246,19 +259,38 @@ fn spell(world: &mut World, entity: Entity, node: &NodeSave) {
             unattended: run.unattended,
             at: at_id,
             waiting_since: run.waiting_since.map(Tick::new),
+            // **Carried, and it was not.** This dropped the count on the
+            // argument that a `bide` resumes by re-reading its delay from the
+            // world — true of `bide until`, and that form no longer exists. A
+            // literal has nothing to re-derive it from, so dropping it sent
+            // `run::bide` down its start arm to stamp a fresh `waiting_since`:
+            // a save taken four ticks into `bide 3600` reloaded into another
+            // whole hour.
+            biding: run.biding,
             said: run.said.clone(),
             vars: run.vars.clone(),
             part: run.part.clone(),
-            stack: run
-                .stack
-                .iter()
-                .map(|frame| spell::Descent {
-                    part: frame.part.clone(),
-                    pc: frame.pc.clone(),
-                    loops: frame.loops.iter().copied().map(loop_from).collect(),
-                    vars: frame.vars.clone(),
-                })
-                .collect(),
+            stack: descents(&run.stack),
+            // **The flat fields are the first cursor, and `strands` is the rest
+            // of them.** A save written before forking existed has no `strands`
+            // table at all, and neither does any save of an ordinary spell — so
+            // an absent one means *one cursor*, rebuilt from the fields above,
+            // rather than a spell with nowhere to be.
+            strands: if run.strands.is_empty() {
+                vec![spell::Strand {
+                    pc: run.pc.clone(),
+                    loops: run.loops.iter().copied().map(loop_from).collect(),
+                    seen: run.seen,
+                    waiting_since: run.waiting_since.map(Tick::new),
+                    biding: run.biding,
+                    vars: run.vars.clone(),
+                    part: run.part.clone(),
+                    stack: descents(&run.stack),
+                }]
+            } else {
+                run.strands.iter().map(strand).collect()
+            },
+            spent: false,
         });
     }
 }
@@ -301,6 +333,33 @@ pub(super) fn loop_code(open: &spell::Loop) -> i64 {
         // rather than a single value.
         spell::Loop::Each(index) => -3 - i64::from(*index),
     }
+}
+
+/// One forked cursor, read back.
+fn strand(one: &super::StrandSave) -> spell::Strand {
+    spell::Strand {
+        pc: one.pc.clone(),
+        loops: one.loops.iter().copied().map(loop_from).collect(),
+        seen: one.seen,
+        waiting_since: one.waiting_since.map(Tick::new),
+        biding: one.biding,
+        vars: one.vars.clone(),
+        part: one.part.clone(),
+        stack: descents(&one.stack),
+    }
+}
+
+/// A cursor's suspended callers, read back.
+fn descents(stack: &[super::DescentSave]) -> Vec<spell::Descent> {
+    stack
+        .iter()
+        .map(|frame| spell::Descent {
+            part: frame.part.clone(),
+            pc: frame.pc.clone(),
+            loops: frame.loops.iter().copied().map(loop_from).collect(),
+            vars: frame.vars.clone(),
+        })
+        .collect()
 }
 
 /// ...and back.

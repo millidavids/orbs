@@ -143,6 +143,21 @@ pub struct Brief {
     pub detail: Option<String>,
     /// A spell running here, if one is.
     pub spell: Option<String>,
+    /// How many cursors of automation are running here, in total.
+    ///
+    /// **Cursors, not spells, and the unit is the decision.** Two things can put
+    /// more than one line's worth of automation in a room — a second `invoke`,
+    /// and an `alongside` fork inside one spell — and from the rail's position
+    /// they are the same fact: *more is running than the name below can say*.
+    /// One number that is true of both beats two suffixes a player has to tell
+    /// apart at a glance.
+    ///
+    /// `status` is where the difference lives, which is the standing split: the
+    /// rail is the glance and `status` is the full answer.
+    ///
+    /// Nought when nothing runs, so `spell.is_some()` and `running > 1` are
+    /// separate questions and the painter asks the second only after the first.
+    pub running: usize,
     /// Something latched for the player's attention.
     pub mark: Option<Mark>,
 }
@@ -170,6 +185,7 @@ pub fn briefs(world: &World) -> Vec<Brief> {
                     state: State::Empty,
                     detail: None,
                     spell: None,
+                    running: 0,
                     mark: None,
                 };
             };
@@ -182,8 +198,12 @@ pub fn briefs(world: &World) -> Vec<Brief> {
                 detail: busiest.and_then(detail_of),
                 spell: running
                     .iter()
-                    .find(|(had, _)| had == name)
-                    .map(|(_, spell)| spell.clone()),
+                    .find(|(had, _, _)| had == name)
+                    .map(|(_, spell, _)| spell.clone()),
+                running: running
+                    .iter()
+                    .find(|(had, _, _)| had == name)
+                    .map_or(0, |(_, _, cursors)| *cursors),
                 mark: marks.get(name),
             }
         })
@@ -271,34 +291,85 @@ fn rooms_of(world: &World) -> Vec<(String, Entity)> {
 /// The room most domains hang under (§7). The grimoire is its sibling.
 const TOWER: &str = "tower";
 
-/// Which spell, if any, is running in each domain.
-fn running_by_domain(world: &World) -> Vec<(String, String)> {
+/// Which spell is running in each domain, and how many cursors in total.
+///
+/// **The first spell names the room and the rest are counted**, which is the
+/// rail's shape everywhere: `busiest` picks one instrument out of four for the
+/// same reason. A box has one line for this, so it reports the thing a player
+/// would want to be told and a number saying there is more.
+///
+/// **It counted nothing before, and kept only the first.** A second `invoke` in
+/// one room was simply invisible — the rail said `►tending` whether one spell
+/// ran there or three — and an `alongside` fork was invisible for the same
+/// reason one level down. Both are *"more automation than this line can name"*,
+/// so both are counted here.
+fn running_by_domain(world: &World) -> Vec<(String, String, usize)> {
+    let mut found: Vec<(String, String, usize)> = Vec::new();
+    for one in running_spells(world) {
+        if let Some((_, _, already)) = found.iter_mut().find(|(had, _, _)| *had == one.domain) {
+            *already = already.saturating_add(one.cursors);
+            continue;
+        }
+        found.push((one.domain, one.spell, one.cursors));
+    }
+    found
+}
+
+/// One spell part-way through, as a surface wants to report it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Cast {
+    /// What a player would type to invoke it — no `.spell`.
+    pub spell: String,
+    /// The domain it runs in.
+    pub domain: String,
+    /// How many cursors it is running on. One unless it has forked.
+    pub cursors: usize,
+}
+
+/// Every spell running anywhere, with where and on how many cursors.
+///
+/// **One walk of `Running`, read by two surfaces.** The rail folds this by
+/// domain into a name and a count; `status` lists it whole. Two walks would be
+/// two answers to *what is running*, which is the shape §19 records going wrong
+/// more often than any other — and here they would disagree in exactly the case
+/// that matters, since the rail's `+2` is meaningless unless something can say
+/// what the two are.
+///
+/// **Sorted by spell name**, so a listing does not reorder between two frames of
+/// one tick. `Running` is queried through the ECS and archetype order is not a
+/// promise.
+#[must_use]
+pub fn running_spells(world: &World) -> Vec<Cast> {
     let Some(mut query) = world.try_query::<&super::spell::Running>() else {
         return Vec::new();
     };
-    let mut found: Vec<(String, String)> = Vec::new();
+    let mut found: Vec<Cast> = Vec::new();
     for state in query.iter(world) {
         let (Some(domain), Some(spell)) = (name_of(world, state.at), name_of(world, state.spell))
         else {
             continue;
         };
-        if !found.iter().any(|(had, _)| *had == domain) {
-            // **The invocable name, not the filename.** A spell node is named for
-            // the file it was scribed to, so this reported `tending.spell` — which
-            // is six columns of extension in a fourteen-column rail, and the rail
-            // cut it to `tending.spe`. The word a player would type is `tending`.
-            //
-            // Stripped here rather than in the painter: rule 2 gives a frontend
-            // only *how* a cell is drawn, so `orbs-tui` must not have to know that
-            // spells live in files. `peruse` still wants the full name and still
-            // has it — nothing else reads this.
-            //
-            // `content::without_extension`, not a `strip_suffix` of its own: the
-            // rule for what a spell is called already exists in one place.
-            let bare = crate::content::without_extension(&spell).to_owned();
-            found.push((domain, bare));
-        }
+        // **The invocable name, not the filename.** A spell node is named for
+        // the file it was scribed to, so this reported `tending.spell` — which
+        // is six columns of extension in a fourteen-column rail, and the rail
+        // cut it to `tending.spe`. The word a player would type is `tending`.
+        //
+        // Stripped here rather than in the painter: rule 2 gives a frontend only
+        // *how* a cell is drawn, so `orbs-tui` must not have to know that spells
+        // live in files. `peruse` still wants the full name and still has it.
+        //
+        // `content::without_extension`, not a `strip_suffix` of its own: the
+        // rule for what a spell is called already exists in one place.
+        found.push(Cast {
+            spell: crate::content::without_extension(&spell).to_owned(),
+            domain,
+            // **Cursors, not spells.** A forked spell is one `Running` wearing
+            // several `Strand`s, and `strands.len()` is how many places the orb
+            // is at once inside it.
+            cursors: state.strands.len().max(1),
+        });
     }
+    found.sort_by(|left, right| left.spell.cmp(&right.spell));
     found
 }
 

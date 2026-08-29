@@ -120,6 +120,42 @@ pub fn swapping(line: &str) -> bool {
     line.trim() == SWAP
 }
 
+/// `debug_take <id>` — hold a mastery node without earning it.
+///
+/// **Three distillations is 24 experience**, which is about two hundred ticks of
+/// setup before a See-it line for the *gated* thing can begin — and §8's channel
+/// puts three words behind two of those nodes, so every line about `queue`,
+/// `pull` or `alongside` would have opened with the laboratory. Same argument as
+/// `debug_spawn` and `debug_learn`: the state is worth testing and the road to
+/// it is not what the line is looking at.
+///
+/// **It skips the earning and nothing else.** The grant is the real grant
+/// through `Taken::hold`, so `spell::budget`, `is_gated` and
+/// `compile::check_learned` all see exactly what a played tower would — which is
+/// what makes it a shortcut rather than a second implementation.
+///
+/// What it does *not* skip is whether the node is real: an id nothing grants is
+/// refused, because a tower holding a marker is a state the game cannot reach
+/// and therefore not one worth testing from. That is `debug_learn`'s rule about
+/// secrets, one screen over.
+pub const TAKE: &str = "debug_take";
+
+/// Read a `debug_take` line, if that is what this is.
+///
+/// `None` for anything else; `Some(None)` for a bare `debug_take`, which lists
+/// what there is to take — `debug_spawn`'s shape, and for its reason: a tester
+/// who has to read `progression.toml` to find an id is a tester the tool is
+/// failing.
+#[must_use]
+pub fn taking(line: &str) -> Option<Option<String>> {
+    let rest = line.trim().strip_prefix(TAKE)?;
+    if !rest.is_empty() && !rest.starts_with(char::is_whitespace) {
+        return None;
+    }
+    let id = rest.trim();
+    Some((!id.is_empty()).then(|| id.to_lowercase()))
+}
+
 /// Read a `debug_learn` line, if that is what this is.
 #[must_use]
 pub fn lesson(line: &str) -> Option<Lesson> {
