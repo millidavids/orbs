@@ -63,6 +63,19 @@ pub fn concentration(world: &World) -> usize {
     world.resource::<Progression>().concentration(earned)
 }
 
+/// How deep a siege's quintessence pool is, before the tower's repair scales it.
+///
+/// **[`concentration`]'s twin**, and a function here rather than two resource
+/// lookups at the call site for the reason that one has: which table answers a
+/// progression question is this module's business, and a caller that reached for
+/// `Experience` and `Progression` itself would be a second place that has to
+/// agree about it.
+#[must_use]
+pub fn quintessence_steps(world: &World) -> usize {
+    let earned = world.resource::<Experience>().get();
+    world.resource::<Progression>().quintessence(earned)
+}
+
 /// What one completed run at `named` is worth.
 ///
 /// **Read before the run reports itself, credited after** — see

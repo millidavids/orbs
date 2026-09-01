@@ -76,7 +76,164 @@ use super::node::NodeSave;
 /// **So the rule is wider than "a new stream or a changed struct".** Anything
 /// that changes what stored *content* means belongs here too — and content is
 /// most of what this game saves.
-pub const FORMAT: u32 = 5;
+///
+/// **Still 5 after §8.1's audit**, and that is a decision rather than an
+/// oversight. [`ProgressSave::cooling`] is the same shape as the three additions
+/// this doc has already excused: no stream, no changed meaning, and an absent
+/// table reads honestly as *nothing is cooling*, which is true of every save
+/// written before the rationing existed. The wider rule asks what stored content
+/// **means**, and no stored byte changed meaning — what changed is that a live
+/// `verify` can now answer *wait*, which is behaviour, and behaviour moves with
+/// the build. Note this is **not** the `bide until` case: that one loaded
+/// perfectly and then compiled to a line the orb could not read, where a saved
+/// spell containing `verify` still compiles, still runs, and is merely sometimes
+/// told to wait — at `Role::Cost`, so it latches no fault either.
+///
+/// **6 since the siege**, and it is a *stream count* again — the fourth of the
+/// last five bumps to be one. `RngStream::COUNT` went 10 → 11 with `Siege`, and
+/// [`Save::from_toml`] validates `[rng].positions` against it, so a format-5 save
+/// is already unreadable; the bump is what makes it say *behind* rather than
+/// *malformed*. `NodeSave::siege` and `ProgressSave::cooling` beside it are
+/// ordinary additions and would not have needed one.
+///
+/// (This said `SiegeSave` and `progress.escrow`, and **neither exists**. A siege
+/// is serialised as the component itself — see [`NodeSave::siege`] — and escrow
+/// is computed at settle time and never stored. Two invented names in the one
+/// doc a future bump is guaranteed to be read against.)
+/// **7 since the besieging army was renamed**, and this one is neither a stream
+/// nor a field — it is a **node's path**. `/tower/bailey/host` became
+/// `/tower/bailey/enemy`, and a document addresses every node by path (see
+/// `save::node`), so a format-6 save carries a row naming a place this build
+/// does not have.
+///
+/// **`host` had to go because the game is a computer terminal.** §9b's remote
+/// hosts are a planned content type — *"trees, verbs, infiltration"* — so the
+/// word would have meant *a machine you break into* and *the army at your wall*
+/// in the same vocabulary. §5.1 already calls it **the enemy** seventeen times.
+///
+/// It is migrated rather than refused, and this is the first *content* rename
+/// the migration handles: a path is a string, and rewriting one is exact.
+///
+/// **7 → 8 is a running siege gaining a resource it was fought without.**
+/// `Siege::quintessence` is `#[serde(default)]`, so a format-7 document *loads* —
+/// and opens the fight with nothing to pledge for the rest of its length, which
+/// is this doc's own line above: *"loads wrongly rather than merely
+/// incompletely"*. The migration fills it, so the bump is what turns a silently
+/// crippled siege into a correct one.
+///
+/// **No stream moved.** `RngStream::COUNT` is unchanged — quintessence is
+/// integer arithmetic over integrity and the ley line, and takes no draw. What
+/// *does* change is how many draws a round takes, since a refused pledge is a die
+/// that never rolls; that makes old *replays* diverge and is a property of the
+/// game rather than of the format.
+pub const FORMAT: u32 = 8;
+
+/// Bring an older document up to [`FORMAT`], or say why it cannot be.
+///
+/// # What is expressible and what is not
+///
+/// A save is refused when the new model cannot state what the old one meant.
+/// That is a real category — the ward rework changed what a *scored reading*
+/// means, so a format-1 or -2 document is genuinely unreadable — and it is a
+/// much smaller category than *"the number went up"*:
+///
+/// | Bump | What changed | Migratable |
+/// |---|---|---|
+/// | 1 → 2 | The lens's scoring model | **No.** Old readings mean nothing now |
+/// | 2 → 3 | `RngStream::COUNT` 8 → 9 — **and the `battlements/` → `sanctum/` rename, in the same commit** | **No.** A format-2 save names a room and four fixtures this build does not have, and `adopt` addresses nodes by path |
+/// | 3 → 4 | `RngStream::COUNT` 9 → 10 (`Menagerie`) | Yes — pad |
+/// | 4 → 5 | `bide until` withdrawn from the language | Yes, with a caveat below |
+/// | 5 → 6 | `RngStream::COUNT` 10 → 11 (`Siege`) | Yes — pad |
+/// | 6 → 7 | `/tower/bailey/host` → `/tower/bailey/enemy` — a **node's path**, the first *content* rename | Yes — rewrite the path |
+/// | 7 → 8 | `Siege::quintessence`, a resource a running siege was fought without | Yes — fill the pool |
+///
+/// **The last two rows were missing, and `migrate` performs both.** A table that
+/// stops two bumps short of the function beneath it is worse than no table: it
+/// is the one place a future bump is read for the shape of the thing, and it
+/// described a `migrate` that has not existed since `0.8.13`.
+///
+/// **Padding a stream is exact, not approximate.** `Rngs::restore` derives each
+/// stream from the master seed and then winds it forward by the stored position,
+/// so a stream at nought is precisely what a world that had never drawn from it
+/// would hold. A tower that gains the siege's dice gets the same dice it would
+/// have had if the format had always been 6.
+///
+/// **The language bump is the one with a caveat, and it is survivable.** A saved
+/// spell containing `bide until` loads perfectly and compiles to a line the orb
+/// cannot read — which is a *fault the player can see and fix*, in a file whose
+/// text is theirs and is never rewritten (§19). Refusing the whole tower for one
+/// bad line in one spell is the larger loss, and §8's taxonomy is *"scripts
+/// always log and never halt"* rather than *"a bad line voids the world"*.
+fn migrate(mut save: Save) -> Result<Save, super::SaveError> {
+    /// The oldest format whose meaning survives into the current model.
+    ///
+    /// **3, not 2, and the difference is a whole room.** The 2 → 3 bump landed
+    /// in the same commit as the `battlements/` → `sanctum/` rename (`de29565`,
+    /// v0.4.2), which also renamed every fixture in it —
+    /// `rampart`/`barbican`/`bastion`/`redoubt` became
+    /// `wellspring`/`conduit`/`barrier`. A format-2 document therefore carries
+    /// `/tower/battlements/...` rows, and `adopt::apply` addresses nodes by
+    /// path: accepting one padded the streams, stamped it current, and **dropped
+    /// the entire sanctum without a word** — which is the *"serde drops what it
+    /// no longer knows"* failure the version gate exists to prevent, arriving
+    /// through the thing added to prevent it.
+    ///
+    /// The rename is as string-rewritable as `host` → `enemy` was, so this could
+    /// migrate. It does not, because there is a second, unwritable half: the old
+    /// `rampart` is the *bailey's* fixture name now, so a format-2 path would
+    /// have to be disambiguated by its parent, and a v0.4.1 save is a
+    /// developer's own from before two reworks. Refusing says so; the previous
+    /// behaviour said nothing.
+    const OLDEST: u32 = 3;
+
+    if save.world.format < OLDEST {
+        return Err(super::SaveError::Behind {
+            found: save.world.format,
+            understood: FORMAT,
+        });
+    }
+
+    // **Pad, never truncate.** A document from a build with *more* streams than
+    // this one is `Ahead` and was refused above, so anything reaching here is
+    // short or exact. Extra entries would be a malformed file rather than an old
+    // one, and the length check below still catches them.
+    while save.rng.positions.len() < crate::RngStream::COUNT {
+        save.rng.positions.push("0".to_owned());
+    }
+
+    // **The bailey's second band was `host` until format 7.** A node is
+    // addressed by path, so the rename is a string rewrite and nothing more —
+    // which makes it the first *content* change this function migrates rather
+    // than refuses, and the demonstration that the category is real.
+    if save.world.format < 7 {
+        const WAS: &str = "/tower/bailey/host";
+        const NOW: &str = "/tower/bailey/enemy";
+        for node in &mut save.nodes {
+            if node.path == WAS {
+                node.path = NOW.to_owned();
+            }
+        }
+    }
+
+    // **A siege fought before quintessence existed opens with a full pool.**
+    // `#[serde(default)]` would give it nought, and a fight you cannot pledge in
+    // is not the fight that was saved. Full rather than scaled by the tower's
+    // integrity on purpose: the pool is granted once, at `defend`, from the world
+    // as it stood *then* — and that world is not in the document. Generous is the
+    // honest way to be wrong here, and it lasts one siege.
+    if save.world.format < 8 {
+        for node in &mut save.nodes {
+            if let Some(siege) = node.siege.as_mut()
+                && siege.quintessence == 0
+            {
+                siege.quintessence = crate::tower::siege::QUINTESSENCE_BASE;
+            }
+        }
+    }
+
+    save.world.format = FORMAT;
+    Ok(save)
+}
 
 /// One tower, at one tick.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -184,6 +341,21 @@ pub struct ProgressSave {
     /// nobody had measured. `None` restores to whole.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub integrity: Option<u32>,
+    /// Which `verify` surfaces are cooling, and the tick each frees at.
+    ///
+    /// **It travels, because a cooldown that reset on load is one a player can
+    /// clear by quitting** — the shape §19 calls an exploit that then needs its
+    /// own rule. Absent is *nothing is cooling*, which is the honest reading of
+    /// a document written before §8.1's rationing existed.
+    ///
+    /// **Named pairs rather than a slot per surface**, for two reasons. TOML has
+    /// no null, so the positional `Vec<Option<u64>>` this was first written as
+    /// does not serialise at all — `toml` answers `unsupported None value` — and
+    /// naming each surface means the two Phase 8 surfaces cannot renumber the
+    /// two that ship. It is also the readable file §15 asks for: `["log", 120]`
+    /// says what `[null, 120]` cannot.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub cooling: Vec<(String, u64)>,
     /// Mastery nodes taken, by id.
     #[serde(default)]
     pub taken: Vec<String>,
@@ -299,24 +471,19 @@ impl Save {
                 understood: FORMAT,
             });
         }
-        // **And older, which this did not check.** Refusing only the future is
-        // half a version gate: serde drops fields it no longer knows without a
-        // word, so a format-1 save opened straight into the redesigned ward and
-        // resumed a reading scored under rules that no longer exist. There is no
-        // migration to write — the old answers are not expressible in the new
-        // model — so refusing is the honest answer, and the same one `Ahead`
-        // gives for the same reason.
+        // **Older is migrated where migration is honest, and refused where it is
+        // not.** Refusing only the future is half a version gate — serde drops
+        // fields it no longer knows without a word, so a format-1 save opened
+        // straight into the redesigned ward and resumed a reading scored under
+        // rules that no longer exist.
         //
-        // This is a **pre-1.0 project with no shipped audience**: the cost is a
-        // developer's own save from before the rework, and §15 already invites
-        // deleting one. If that ever stops being true, this arm is where a
-        // migration hangs.
-        if save.world.format < FORMAT {
-            return Err(super::SaveError::Behind {
-                found: save.world.format,
-                understood: FORMAT,
-            });
-        }
+        // This arm used to refuse *every* older format, on the argument that
+        // *"the old answers are not expressible in the new model"* and that
+        // §15 invites deleting a developer's save. That is true of the ward
+        // rework and **false of every bump since**: three of the last four were
+        // pure `RngStream::COUNT` increases, and a stream a save has never heard
+        // of is exactly a stream at position nought. See [`migrate`].
+        let save = migrate(save)?;
         // **Checked here rather than clamped on the way in.** A short or mangled
         // list would leave the missing streams at word zero, which is precisely
         // the silent rewind `Rngs::positions` exists to prevent — and §15 invites

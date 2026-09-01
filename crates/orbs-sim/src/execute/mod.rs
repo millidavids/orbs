@@ -22,10 +22,12 @@
 //! **No prose in any of them.** Rule 6 and §12 put authored text in content
 //! files; these emit facts and let a later layer wrap sentences around them.
 
+mod audit;
 #[cfg(debug_assertions)]
 mod debug;
 #[cfg(debug_assertions)]
 mod debug_spell;
+mod defend;
 mod dispatch;
 mod files;
 mod muster;
@@ -49,8 +51,8 @@ mod tests;
 
 #[cfg(debug_assertions)]
 pub use debug::{
-    COURSE, LEARN, Order as SpawnOrder, SPAWN, SWAP, TAKE, WARD, giveaway, lesson,
-    order as spawn_order, shortcut, swapping, taking,
+    COURSE, LEARN, Order as SpawnOrder, SIEGE, SPAWN, SWAP, TAKE, WARD, beleaguered, giveaway,
+    lesson, order as spawn_order, shortcut, swapping, taking,
 };
 #[cfg(debug_assertions)]
 pub use debug_spell::{
@@ -69,6 +71,14 @@ pub use navigate::find_domain;
 // which runs on a tick when the player may be standing anywhere.
 pub(crate) use muster::publish as publish_pylon;
 pub(crate) use muster::refresh as refresh_pylon;
+// The bailey's republish. Only the `Cwd` form is re-exported — `defend`'s own
+// callers take the node directly, and the sanctum's split exists because
+// `tower::erode` republishes on a *tick*, which the siege has no equivalent of
+// while `hold` is the only thing that moves it.
+pub(crate) use defend::refresh as refresh_rampart;
+// ...and the die prices, which are raised once at construction rather than on a
+// round. `Sim::bare` is the only caller, beside the pylon's for the same reason.
+pub(crate) use defend::publish_dice;
 pub(crate) use research::{stacks, tread};
 pub(crate) use scribe::Reloaded;
 pub use scribe::{Opening, Request, write};
@@ -81,6 +91,7 @@ pub use sing::{Chorusing, Patient, TROOP};
 // Crate-internal, and the reason is the defect it closed: `spell::block` has to
 // ask the same question `wield` asks, or a scripted spend is charged a
 // production slot the typed one is not.
+pub use audit::land_sweep;
 pub use quit::Quitting;
 pub(crate) use scroll::spending;
 pub use scry::land as land_probe;

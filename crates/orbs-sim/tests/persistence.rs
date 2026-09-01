@@ -733,7 +733,7 @@ fn show_a_save() {
 #[test]
 fn every_resource_the_world_holds_is_one_the_save_knows_about() {
     // In the document.
-    const CARRIED: [&str; 10] = [
+    const CARRIED: [&str; 11] = [
         "orbs_sim::tick::Tick",
         "orbs_sim::rng::Rngs",
         "orbs_sim::tower::node::NodeIds",
@@ -744,10 +744,13 @@ fn every_resource_the_world_holds_is_one_the_save_knows_about() {
         "orbs_sim::tower::mastery::Taken",
         "orbs_sim::tower::learned::Learned",
         "orbs_sim::session::Choices",
+        // §8.1's per-surface rationing. It travels because a cooldown a player
+        // can clear by quitting is not a cooldown.
+        "orbs_sim::tower::audit::Cooling",
     ];
 
     // Not in the document. Each line is a decision; none of them is a shrug.
-    const EXCUSED: [(&str, &str); 16] = [
+    const EXCUSED: [(&str, &str); 17] = [
         (
             "orbs_sim::session::Scrollback",
             "a bounded tail travels; the arena does not",
@@ -785,6 +788,10 @@ fn every_resource_the_world_holds_is_one_the_save_knows_about() {
             "content, compiled in",
         ),
         ("orbs_sim::content::spell::Spells", "content, compiled in"),
+        (
+            "orbs_sim::content::siege::Spendables",
+            "content, compiled in",
+        ),
         (
             "orbs_sim::content::progression::Progression",
             "content, compiled in",
@@ -1419,5 +1426,128 @@ fn a_suspended_caller_brings_its_own_bindings_back() {
         &loaded,
         &lived,
         "a reload mid-call ran on into a different world",
+    );
+}
+
+/// The `format = N` line this build writes.
+///
+/// **Derived, never a literal.** These three tests pinned `"format = 6"` and the
+/// siege's rename took the format to 7 — so `replacen` matched nothing, the save
+/// stayed current and valid, and two tests asserting a *refusal* passed by
+/// asserting nothing. A fixture that edits a document has to track the document.
+fn stamped() -> String {
+    format!("format = {}", orbs_sim::save::FORMAT)
+}
+
+/// **An older save is migrated where migration is honest.**
+///
+/// Three of the last four format bumps were pure `RngStream::COUNT` increases,
+/// and a stream a save has never heard of is exactly a stream at position
+/// nought — so refusing those was refusing a tower for a number going up.
+#[test]
+fn a_save_from_an_older_format_still_opens() {
+    let sim = a_busy_tower(3);
+    let text = sim.snapshot().to_toml().expect("a save renders");
+
+    // Wind it back to what the sanctum's build wrote: format 3, and the nine
+    // streams that existed then.
+    let mut lines: Vec<String> = text.lines().map(str::to_owned).collect();
+    let at = lines
+        .iter()
+        .position(|line| line.starts_with("positions = "))
+        .expect("a save records its stream positions");
+    let nine = ["\"0\""; 9].join(", ");
+    lines[at] = format!("positions = [{nine}]");
+    let older = lines.join("\n").replacen(&stamped(), "format = 3", 1);
+
+    let save = Save::from_toml(&older).expect("a format-3 save migrates rather than refusing");
+    assert_eq!(
+        save.rng.positions.len(),
+        orbs_sim::RngStream::COUNT,
+        "migration did not pad the streams the build has gained",
+    );
+    // ...and it actually restores into a playable tower.
+    let mut restored = Sim::restored(&save);
+    restored.submit("attend laboratory");
+    restored.step();
+    assert!(restored.tick().get() > 0, "a migrated save did not run");
+}
+
+/// **A renamed node is migrated by path**, which is the first *content* change
+/// the migration handles rather than refuses.
+///
+/// `/tower/bailey/host` became `/tower/bailey/enemy` at format 7, because §9b's
+/// remote hosts are a planned content type and the word would have meant *a
+/// machine you break into* and *the army at your wall* in one vocabulary. A node
+/// is addressed by path, so the rename is a string rewrite and exact.
+#[test]
+fn a_save_that_names_the_old_besieging_army_still_opens() {
+    let sim = a_busy_tower(3);
+    let text = sim.snapshot().to_toml().expect("a save renders");
+    assert!(
+        text.contains("/tower/bailey/enemy"),
+        "the tower no longer has the node this test is about",
+    );
+
+    let older = text
+        .replace("/tower/bailey/enemy", "/tower/bailey/host")
+        .replacen(&stamped(), "format = 6", 1);
+
+    let save = Save::from_toml(&older).expect("a format-6 save migrates the rename");
+    assert!(
+        save.nodes
+            .iter()
+            .any(|node| node.path == "/tower/bailey/enemy"),
+        "the old path was not rewritten",
+    );
+    assert!(
+        !save
+            .nodes
+            .iter()
+            .any(|node| node.path == "/tower/bailey/host"),
+        "the old path survived the migration",
+    );
+
+    // ...and it restores into a bailey a siege can actually be fought in.
+    let mut restored = Sim::restored(&save);
+    for line in ["attend bailey", "defend", "survey enemy"] {
+        restored.submit(line);
+        restored.step();
+    }
+    assert!(
+        restored.rampart().is_some(),
+        "the migrated bailey has no board"
+    );
+}
+
+/// **A save whose *meaning* moved is still refused**, which is the category that
+/// matters: the ward rework changed what a scored reading is, so a format-1
+/// document cannot be stated in the current model at all.
+#[test]
+fn a_save_older_than_the_lens_rework_is_still_refused() {
+    let sim = a_busy_tower(3);
+    let text =
+        sim.snapshot()
+            .to_toml()
+            .expect("a save renders")
+            .replacen(&stamped(), "format = 1", 1);
+    assert!(
+        Save::from_toml(&text).is_err(),
+        "a format-1 save loaded into a ward model that cannot express it",
+    );
+}
+
+/// A newer save is still refused, which migration must not have loosened.
+#[test]
+fn a_save_from_a_newer_format_is_still_refused() {
+    let sim = a_busy_tower(3);
+    let text =
+        sim.snapshot()
+            .to_toml()
+            .expect("a save renders")
+            .replacen(&stamped(), "format = 99", 1);
+    assert!(
+        Save::from_toml(&text).is_err(),
+        "a save from the future was half-read",
     );
 }

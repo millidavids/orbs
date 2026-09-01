@@ -19,6 +19,7 @@
 use bevy_ecs::prelude::*;
 
 use super::node::{Cwd, Fixture, Name, Nameable, NodeIds, Protected};
+use super::siege;
 use super::stock::Stock;
 use crate::parser::{NounKind, Verb};
 
@@ -174,6 +175,152 @@ const BRANCHES: &[Branch] = &[
         role: None,
         operation: None,
         group: None,
+    },
+    // **On the end again, and for the third time the rule is the reason.** §6
+    // resolves a tie to whichever noun was registered first, so a new domain
+    // goes after every existing one or every reading in the tower shifts.
+    //
+    // The bailey is where a siege is fought (§5.1, `tower::siege`) — the courtyard
+    // inside the wall, which is where a defence actually happens and is the one
+    // fortification word the sanctum's rename left free. It holds no materials:
+    // what a siege *spends* comes from the arsenal and what it yields is
+    // experience and integrity, neither of which sits on a shelf.
+    //
+    // **Deliberately no endless base reagent**, third time — `sabotage::substitution`
+    // picks its target with `% piles.len()`, so a third endless pile would move
+    // every rate `orbs-balance` has pinned.
+    Branch {
+        name: siege::BAILEY,
+        holds: &[Holding::new(NounKind::File, &["bailey.log"])],
+        places: BAILEY,
+        role: None,
+        operation: None,
+        group: None,
+    },
+];
+
+/// The bailey: the rampart you watch from, and the two sides.
+///
+/// **The rampart spends its one `Operation` on `defend`**, which is the circle's
+/// and the pylon's arrangement — one fixture, one word that opens the puzzle.
+/// `deploy`, `quaff` and `hold` anchor to it rather than to the two bands, which
+/// is the archive's shape: a band is a thing you *read*, not somewhere you stand.
+///
+/// The garrison and the enemy are `Role::Reading` for the reason the compass
+/// bearings and the sockets are — a spell's question resolves its place half
+/// against `NounKind::Place`, so `if the enemy has outnumbered` needs the word to
+/// be one, and the role is what stops it also being somewhere you can `attend`.
+///
+/// **`group: Some("band")` is on the two and never on the domain Branch**, so
+/// `for each band` walks them. `groups_at` reads the *children* of where you
+/// stand.
+const BAILEY: &[Branch] = &[
+    Branch {
+        name: siege::RAMPART,
+        holds: &[],
+        places: &[],
+        role: None,
+        operation: Some(Verb::Defend),
+        group: None,
+    },
+    // **The four areas a die is pledged to**, `Role::Reading` places for the
+    // sockets' reason: `pledge d20 buckler` resolves its second slot against
+    // `NounKind::Place`, and the role is what stops one being somewhere you can
+    // `attend`.
+    //
+    // `group: Some("area")` so `for each area` walks the four — which is the
+    // shape a solver wants: *find the one that is empty and put something in it*.
+    Branch {
+        name: "line",
+        holds: &[],
+        places: &[],
+        role: Some(Role::Reading),
+        operation: None,
+        group: Some("area"),
+    },
+    Branch {
+        name: "buckler",
+        holds: &[],
+        places: &[],
+        role: Some(Role::Reading),
+        operation: None,
+        group: Some("area"),
+    },
+    Branch {
+        name: "succour",
+        holds: &[],
+        places: &[],
+        role: Some(Role::Reading),
+        operation: None,
+        group: Some("area"),
+    },
+    Branch {
+        name: "sortie",
+        holds: &[],
+        places: &[],
+        role: Some(Role::Reading),
+        operation: None,
+        group: Some("area"),
+    },
+    // **The coffer, and the dice in it.** The dice are places for the same
+    // reason the lens's sigils are: `pledge d20 buckler` names one in an
+    // argument. They are `group: Some("die")` so `for each die` walks the set a
+    // wizard holds.
+    //
+    // **They exist whether or not they are free**, exactly as a sigil exists
+    // whether or not it is seated — what changes is what the *coffer* publishes.
+    // **`Role::Reading`, like the two bands and not like the rampart.** It is a
+    // *container* of readings rather than a reading itself — but so is the
+    // garrison, and `readings::reading` finds a node by that role. Left as
+    // `None` it was invisible to the publisher and `survey coffer` answered
+    // *"the coffer holds nothing"* with three dice in it.
+    Branch {
+        name: siege::COFFER,
+        holds: &[],
+        places: &[],
+        role: Some(Role::Reading),
+        operation: None,
+        group: None,
+    },
+    Branch {
+        name: "d6",
+        holds: &[],
+        places: &[],
+        role: Some(Role::Reading),
+        operation: None,
+        group: Some("die"),
+    },
+    Branch {
+        name: "d8",
+        holds: &[],
+        places: &[],
+        role: Some(Role::Reading),
+        operation: None,
+        group: Some("die"),
+    },
+    Branch {
+        name: "d20",
+        holds: &[],
+        places: &[],
+        role: Some(Role::Reading),
+        operation: None,
+        group: Some("die"),
+    },
+    Branch {
+        name: siege::GARRISON,
+        holds: &[],
+        places: &[],
+        role: Some(Role::Reading),
+        operation: None,
+        group: Some("band"),
+    },
+    Branch {
+        name: siege::ENEMY,
+        holds: &[],
+        places: &[],
+        role: Some(Role::Reading),
+        operation: None,
+        group: Some("band"),
     },
 ];
 
@@ -1265,6 +1412,11 @@ mod tests {
             // putting a domain ahead of it would shift the arsenal's spawn
             // index, and spawn order is §6's tie-resolution order. Appending
             // leaves every one of the five before it exactly where it was.
+            //
+            // **The bailey is behind the menagerie, on the same rule for the
+            // third time.** It is not one of §10's seven — it is a place you
+            // descend into, the arsenal's shape — but it is still a `Branch`, so
+            // it still has a spawn index and still has to go on the end.
             [
                 "laboratory",
                 "archive",
@@ -1272,6 +1424,7 @@ mod tests {
                 "sanctum",
                 super::super::ARSENAL,
                 "menagerie",
+                siege::BAILEY,
             ],
         );
     }

@@ -572,6 +572,10 @@ impl Game {
     }
 
     /// Let the world run for a number of ticks.
+    /// **Keep the count small — `PATIENCE` is 20 seconds and the world runs at
+    /// 1 Hz**, so anything near twenty has no margin at all and passes only on
+    /// an idle machine. Every scenario here waits 2–4; a siege scenario asked
+    /// for 20 and failed the moment the suite ran six sessions in parallel.
     pub fn wait_ticks(&self, ticks: u64) -> &Self {
         let target = self.tick() + ticks;
         self.until(

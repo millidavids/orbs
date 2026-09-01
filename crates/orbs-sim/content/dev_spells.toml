@@ -624,3 +624,313 @@ lines = [
     "    between(here, there)",
     "end",
 ]
+
+# The decision tree that fights a siege — the bailey's `threading` (§5.1).
+#
+# **This is the shape the whole domain exists for**, and it is the one the design
+# brief named: *"if base troops low -> send out menagerie demons, if troops
+# health low -> apply health potions, if enemy count is twice that of defenders
+# -> wield fireball scroll"*. Every rung is a reading the world publishes,
+# because the language has no arithmetic and is not getting any — the maze's
+# pattern, where `spoil` and `exit` are words rather than sums.
+#
+# **The ladder is ordered by urgency, and `else if` is what makes that mean
+# something.** A ladder short-circuits, so the first rung that fires is the only
+# one that spends anything — which is right here, because every rung spends a
+# thing you have a finite number of. Written as separate `if`s, one bad round
+# would empty the whole arsenal in a single turn.
+#
+#   few          — the line is thin. Bodies first: nothing else matters if
+#                  there is nobody left to roll
+#   hurt         — standing but worn. Fight back into them
+#   outnumbered  — the ratio the language cannot express, published as a word
+#
+# **`hold` is outside the ladder and runs every lap**, which is the menagerie's
+# lesson one room over: a `sing` inside the loop that found it arrives at a
+# different offset each pass. Here the consequence is worse than an offset — a
+# `hold` inside a branch would end the turn only on rounds where something was
+# spent, and a siege where nothing is wrong would never advance at all.
+#
+# **`repeat until the rampart has lifted`, and neither `is empty` nor `the enemy has
+# routed`.** All three were tried and only the last works:
+#
+#   is empty                — a band publishes counts while it stands and
+#                             `routed` when it breaks, so it is never childless
+#   the enemy has routed     — true only when *you win*. A lost siege leaves the
+#                             enemy standing, so the guard stayed false for ever,
+#                             `hold` was refused every lap at `Role::Cost`, and a
+#                             bound spell spun for the rest of the session
+#   the rampart has lifted  — the question about the *siege* rather than about
+#                             one band, which is the one a loop wants
+#
+# That is §19's `repeat until the circle is idle` in a third costume, and the
+# second one shipped: `orbs-balance`'s driver guarded the case and the spell it
+# claims to mirror did not.
+#
+# **`warding`, not `mending`.** `mending` is a `secret = true` recipe, so until
+# the lens spills it the name does not resolve and the rung answers *"name what
+# you want to spend"* every time it fires. `execute/tests.rs` chose `clarity`
+# over `mending` for exactly this reason and the balance policy chose `warding`;
+# the shipped spell named the one word a new player cannot say.
+[besieging]
+domain = "bailey"
+lines = [
+    "defend",
+    "repeat until the rampart has lifted",
+    "    if the garrison has few",
+    "        deploy troop",
+    "    else if the garrison has hurt",
+    "        quaff warding",
+    "    else if the enemy has outnumbered",
+    "        quaff clarity",
+    "    end",
+    "    hold",
+    "end",
+]
+
+# **The telegraph, read.** `besieging` fights well and never looks at what the
+# enemy announced — so this is the spell that shows what telegraphing is *for*,
+# and it is the one lesson the domain's own premise rests on.
+#
+# §5.1 borrows Into the Breach's declared intent so a turn is *prevention* rather
+# than reaction. Three intents, three answers:
+#
+#   volley     — fewer attackers, and the garrison does not strike back at all.
+#                **Spend no *bonus*.** `warding` adds to rolls the garrison will
+#                not make, so it is spent on nothing — the orb refuses it now for
+#                the same reason it refuses a heal at full strength
+#   onslaught  — everyone, and they roll at +2. The round to brace for
+#   advance    — ordinary. Reinforce if the line is thin, otherwise ride it out
+#
+# **Bodies always, a bonus only on a round you swing in** — and the first draft
+# had that wrong. It read *spend nothing on a volley*, which is true of `warding`
+# and false of a troop: **a volley still hits you.** What it takes away is your
+# answer, not their attack. Measured, that draft hoarded six troops and five
+# wardings and **lost a siege the other three solvers won** — 27 escrow against
+# 147. Frugality is not the lesson; knowing *what* is wasted is.
+[answering]
+domain = "bailey"
+lines = [
+    "defend",
+    "repeat until the rampart has lifted",
+    "    if the garrison has few",
+    "        deploy troop",
+    "    else if the rampart has onslaught",
+    "        if the garrison has hurt",
+    "            quaff warding",
+    "        end",
+    "    end",
+    "    hold",
+    "end",
+]
+
+# **The arsenal as a decision, which is what §11.5 wants it to be.**
+#
+# `besieging` spends on `hurt`; this one spends only on `few`, and the pair is
+# the lesson. Neither is right — that is the point. A hoarder finishes a siege
+# with potions in hand and a wall that nearly fell; a spender finishes with the
+# wall intact and nothing left for the next one, which arrives on
+# `siege::CADENCE` whether or not you are ready.
+#
+# Run both against the same seed and read `status` afterwards. The one that
+# looks better depends entirely on what comes next, which is the only honest
+# thing a siege economy can say.
+[sparing]
+domain = "bailey"
+lines = [
+    "defend",
+    "repeat until the rampart has lifted",
+    "    if the garrison has few",
+    "        deploy troop",
+    "        quaff warding",
+    "    end",
+    "    hold",
+    "end",
+]
+
+# **A part, `for each band`, and the one thing this domain has that no other
+# does: time to think.**
+#
+# Every other room charges for looking — a `survey` is a tick, and in the
+# menagerie a tick is a missed syllable. **A siege does not advance until you
+# `hold`**, so a spell can read the whole board, walk both bands and decide at
+# leisure, and it costs exactly nothing. That is §5.0's *"no per-command tick
+# cost"* turned into something a spell can actually spend.
+#
+# So this one looks first and acts second, which would be waste anywhere else.
+# `for each band` walks the garrison and the enemy — the set `build.rs` declares
+# on the two of them and which nothing else uses.
+[bulwark]
+domain = "bailey"
+lines = [
+    "defend",
+    "part look()",
+    "    for each band",
+    "        survey band",
+    "    end",
+    "end",
+    "part answer()",
+    "    if the garrison has few",
+    "        deploy troop",
+    "    else if the garrison has hurt",
+    "        quaff warding",
+    "    end",
+    "end",
+    "repeat until the rampart has lifted",
+    "    look()",
+    "    answer()",
+    "    hold",
+    "end",
+]
+
+# **The allocation, read off the telegraph.** §5.1 announces what the enemy will
+# do a round ahead, and this is the spell that spends that knowledge on the one
+# decision the domain is built around: three dice, four places, one always dark.
+#
+#   onslaught  — everyone, and at +2. Everything behind the buckler
+#   volley     — fewer of them, and you do not swing back. The line is `moot`,
+#                so the dice go into succour instead and come back as mettle
+#   advance    — ordinary. Strike harder and end it sooner
+#
+# **`if the coffer has d20` before every pledge**, and it is not defensive
+# padding: a die pledged twice is refused and the refusal costs an instruction,
+# so a spell that does not ask spends its budget being told no. The coffer is
+# the state the world emits for exactly this question.
+#
+# **The d20 goes where a bad roll costs least.** Behind the buckler a 1 is a
+# wasted round; in succour a 1 is merely a small heal. That is the whole of what
+# having a *set* of dice rather than three of a kind buys, and it is why the
+# spell names dice individually rather than walking `for each die`.
+[steadfast]
+domain = "bailey"
+lines = [
+    "defend",
+    "repeat until the rampart has lifted",
+    "    if the rampart has onslaught",
+    "        if the coffer has d20",
+    "            pledge d20 to buckler",
+    "        end",
+    "        if the coffer has d8",
+    "            pledge d8 to buckler",
+    "        end",
+    "    else if the rampart has volley",
+    "        if the coffer has d20",
+    "            pledge d20 to succour",
+    "        end",
+    "        if the coffer has d8",
+    "            pledge d8 to buckler",
+    "        end",
+    "    else",
+    "        if the coffer has d20",
+    "            pledge d20 to line",
+    "        end",
+    "        if the coffer has d8",
+    "            pledge d8 to buckler",
+    "        end",
+    "    end",
+    "    if the coffer has d6",
+    "        pledge d6 to succour",
+    "    end",
+    "    hold",
+    "end",
+]
+
+# **`for each area`, and the generic allocator.** Where `steadfast` names the
+# areas it wants, this one walks the set the room declares and fills whatever it
+# finds empty — so it keeps working if a fifth area is ever added, and it is the
+# shape to copy when you do not yet know the board.
+#
+# **`if area has no moot` is kept and is *already implied*, which is worth
+# knowing before you copy it.** A moot area publishes a `moot` child, and
+# `spell::watch` answers `is empty` by asking whether a node has children — so
+# `if area is empty` has already excluded it and the inner rung can never be
+# false. Deleting it changes nothing today.
+#
+# It stays because the invariant it leans on is *incidental*: `moot` happens to
+# be a child node, and the day it moves onto the record or becomes a count, the
+# outer guard stops covering it and this walk starts pledging into the one place
+# the intent throws away. Written out, the spell says what it means; relying on
+# the coincidence would be a solver that is correct by accident.
+#
+# **Measured, it ties `steadfast` on every seed tried — seventeen of them** — and
+# the first draft of this comment claimed it was *worse on purpose*, which was an
+# assumption written up as a fact. What the pair actually shows is sharper than
+# the intended lesson:
+#
+#   no allocation at all  — `besieging` loses seed 3 outright
+#   any allocation        — both of these win it, one with 189 against 83
+#
+# **At three dice, allocating *at all* matters far more than allocating well.**
+# That is a tuning signal rather than a conclusion: if *where* is supposed to be
+# the decision, the pool wants to be larger or the areas want to differ more
+# sharply than they currently do. Worth judging by playing before changing.
+[warding_off]
+domain = "bailey"
+lines = [
+    "defend",
+    "repeat until the rampart has lifted",
+    "    for each area",
+    "        if area is empty",
+    "            if area has no moot",
+    "                if the coffer has d20",
+    "                    pledge d20 to area",
+    "                else if the coffer has d8",
+    "                    pledge d8 to area",
+    "                else if the coffer has d6",
+    "                    pledge d6 to area",
+    "                end",
+    "            end",
+    "        end",
+    "    end",
+    "    hold",
+    "end",
+]
+
+# **The thrifty one, and the spell the arithmetic was built for.**
+#
+# `steadfast` and `warding_off` both spend whatever the coffer will let them,
+# which was the only strategy available while pledging was free. Quintessence
+# makes *not* spending a move, and this is the spell that takes it.
+#
+# Three things here exist nowhere else in the shipped set:
+#
+#   for each die                  - walks the three rather than naming them, so
+#                                   a fourth die would need no new line
+#   than the die has quintessence - the far side reads a *different* word over
+#                                   there. `Elsewhere` can only compare one
+#                                   reading in two places, and "what I hold"
+#                                   against "what this costs" is two
+#   than double the garrison      - the ratio the readings used to answer with a
+#                                   published word, now asked directly
+#
+# **The guard is a double negative and it has to be.** `not ... fewer ... than`
+# is the language's own route to *at least as many* (§19), and the affirmative
+# spelling is wrong here rather than merely clumsy: a comparison against another
+# place is **strict**, so `has more quintessence than the die` refuses the die
+# you can exactly afford. The coffer's own affordability filter means this spell
+# could have asked `if the coffer has die` instead - it asks the long way on
+# purpose, because it is the worked example for the arithmetic.
+#
+# **`aim` is what makes it thrifty.** A wall the enemy is unlikely to get over is
+# not worth a d20, so the big die is held back for the rounds that need it. That
+# is the decision the whole resource exists to create, written down.
+[sparingly]
+domain = "bailey"
+lines = [
+    "defend",
+    "repeat until the rampart has lifted",
+    "    if the enemy has more spears than double the garrison",
+    "        deploy troop",
+    "    end",
+    "    for each die",
+    "        if not the coffer has fewer quintessence than die",
+    "            if the enemy has more than 55 aim",
+    "                pledge die to buckler",
+    "            else if the garrison has hurt",
+    "                pledge die to succour",
+    "            end",
+    "        end",
+    "    end",
+    "    hold",
+    "end",
+]

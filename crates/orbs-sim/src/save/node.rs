@@ -15,6 +15,8 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
+use crate::tower;
+
 /// A node, by path, with whatever is true of it.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NodeSave {
@@ -139,6 +141,36 @@ pub struct NodeSave {
     /// The menagerie's figure.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub chant: Option<ChantSave>,
+    /// The bailey's siege.
+    ///
+    /// **The component itself, not a derived shape**, which is where this
+    /// differs from the sanctum's course. A `Course` stores only what it was
+    /// raised at because everything else about it is computed; a `Siege` *is*
+    /// its state — two bands, a telegraphed intent, and what has been staged —
+    /// so a second shape would be a copy of the first with a chance to disagree.
+    ///
+    /// A siege that has ended still travels, deliberately: `settle` leaves the
+    /// board up so the last thing that happened is readable, and a save taken
+    /// afterwards should reopen on the same postmortem.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub siege: Option<tower::Siege>,
+    /// What a rewritten spell actually said (§8.1's script-text surface).
+    ///
+    /// **Without this the corruption travels and the truth does not**, which is
+    /// worse than not saving either: the spell reloads corrupt, still
+    /// `Poisoned`, and `purge` clears the mark, reports `cleansed` and repairs
+    /// nothing — the player's own words gone with no path back. That is exactly
+    /// the defect `triage::purge`'s two repair lines exist to prevent,
+    /// reintroduced through the save.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rewritten: Option<Vec<String>>,
+    /// How much a retimed spell's clock is dragged by.
+    ///
+    /// Same rule as [`rewritten`](Self::rewritten), and the mirror failure: the
+    /// drag would vanish on load while `Poisoned` stayed, leaving `verify`
+    /// reporting a permanent tampering with nothing behind it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub retimed: Option<u64>,
     /// What is waiting in this room's satchel, oldest first.
     ///
     /// **A list rather than a table, because it is a queue.** Every other

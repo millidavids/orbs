@@ -449,6 +449,45 @@ fn every_shape() -> Vec<String> {
         // asserted by name in A7 rather than fed through the round-trip, which
         // would only be able to say they differ.
     }
+    // **The far side, in every shape it can take.** These three properties are
+    // the only thing standing between a new `Quantity` variant and a question
+    // the orb can read and cannot write back — which `interpret` would show as
+    // a *different sentence* than the one that was typed.
+    //
+    // Multi-word places on both sides deliberately: `balneum mariae` is what
+    // proves the far side still stops at a stopper rather than at a space.
+    for near in ["mortar", "balneum mariae"] {
+        for far in ["flask", "balneum mariae"] {
+            for thing in ["sage", "ground-sage"] {
+                for comparative in ["more", "fewer", "as many"] {
+                    let closer = if comparative == "as many" {
+                        "as"
+                    } else {
+                        "than"
+                    };
+                    let head = format!("the {near} has {comparative} {thing} {closer}");
+                    // A bare place — the shape that predates the operators.
+                    out.push(format!("{head} the {far}"));
+                    // ...its own reading over there.
+                    out.push(format!("{head} the {far} has charcoal"));
+                    // ...doubled, and doubled with a different reading.
+                    out.push(format!("{head} double the {far}"));
+                    out.push(format!("{head} double the {far} has charcoal"));
+                    // ...and `plus`, which binds last and so wraps the rest.
+                    out.push(format!("{head} the {far} plus 2"));
+                    out.push(format!("{head} the {far} has charcoal plus 3"));
+                    out.push(format!("{head} double the {far} plus 4"));
+                    out.push(format!("{head} double the {far} has charcoal plus 5"));
+                    // `plus 0` is worth generating on its own: it is the value
+                    // that would be invisible if `strict` were ever derived from
+                    // the variant rather than from the grammar.
+                    out.push(format!("{head} the {far} plus 0"));
+                    // Negated, so the tree survives being wrapped.
+                    out.push(format!("not {head} double the {far} plus 1"));
+                }
+            }
+        }
+    }
     // ...and every join of two of them, both ways round, bracketed and not.
     let leaves: Vec<String> = out.clone();
     for left in leaves.iter().take(8) {
@@ -675,6 +714,60 @@ fn every_spelling_of_a_comparison_reads_and_none_is_swallowed() {
             "cabinet has exactly 2 fragment",
         ),
     ]);
+}
+
+#[test]
+fn the_far_sides_operators_bind_left_to_right_and_only_once() {
+    use orbs_sim::parser::Quantity;
+
+    // **Round-tripping does not prove this.** `double east plus 2` writes back
+    // as itself whichever way it nested, so the property below is invisible to
+    // `every_question_the_orb_can_write_it_can_read_back` — and the two trees
+    // are *different arithmetic*: `2·east + 2` against `2·(east + 2)`.
+    //
+    // Left to right is what the module doc claims and what makes the absence of
+    // brackets honest, so `plus` must be the outer node.
+    let read = |text: &str| match condition(text) {
+        Some(Condition::Has { count, .. }) => count,
+        other => panic!("{text:?} did not read as a comparison: {other:?}"),
+    };
+
+    assert_eq!(
+        read("mortar has more sage than double flask plus 2"),
+        Quantity::Plus {
+            of: Box::new(Quantity::Doubled(Box::new(Quantity::Elsewhere(
+                "flask".to_owned()
+            )))),
+            by: 2,
+        },
+        "`double … plus n` nested the wrong way, so it means 2(x+n) not 2x+n",
+    );
+
+    // ...and with a reading of its own on the far side, the same order holds.
+    assert_eq!(
+        read("mortar has more sage than double flask has charcoal plus 3"),
+        Quantity::Plus {
+            of: Box::new(Quantity::Doubled(Box::new(Quantity::Of {
+                place: "flask".to_owned(),
+                thing: "charcoal".to_owned(),
+            }))),
+            by: 3,
+        },
+    );
+
+    // **One `plus`, and a second is refused rather than silently dropped.**
+    // There is no associativity to learn because there is nothing to chain: a
+    // trailing term the reader cannot consume fails the whole line, which is
+    // `condition`'s all-or-nothing rule doing the work an operator table would
+    // otherwise have to.
+    assert_eq!(
+        condition("mortar has more sage than flask plus 2 plus 3"),
+        None,
+        "a chained `plus` was accepted, which needs a precedence answer",
+    );
+
+    // A bare `plus` with no number is not a far side either.
+    assert_eq!(condition("mortar has more sage than flask plus"), None);
 }
 
 #[test]

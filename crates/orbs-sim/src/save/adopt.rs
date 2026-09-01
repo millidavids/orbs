@@ -135,6 +135,41 @@ pub(super) fn apply(world: &mut World, entity: Entity, node: &NodeSave) {
     if let Some(course) = node.course.as_ref().and_then(tower::Course::from_save) {
         at.insert(course);
     }
+    // **Straight back on**, with no `from_save` to validate through: a `Siege`
+    // saves as itself, so there is no derived shape that could disagree with the
+    // stored one. `serde` has already refused anything malformed.
+    //
+    // **Both directions**, which is this function's own rule and which the first
+    // version of this arm broke: `apply` adopts onto the *live* world, so a save
+    // taken before a siege must *remove* one that is running — otherwise loading
+    // it reopens the bailey mid-fight against a siege the document has never
+    // heard of, with a stale `clear_at` gating `defend`.
+    match node.siege.clone() {
+        Some(siege) => {
+            at.insert(siege);
+        }
+        None => {
+            at.remove::<tower::Siege>();
+        }
+    }
+    // The two adversarial surfaces, on the same both-directions rule: a spell the
+    // player repaired is clean in the save and must not come back corrupt.
+    match node.rewritten.clone() {
+        Some(was) => {
+            at.insert(tower::Rewritten { was });
+        }
+        None => {
+            at.remove::<tower::Rewritten>();
+        }
+    }
+    match node.retimed {
+        Some(drag) => {
+            at.insert(tower::Retimed { drag });
+        }
+        None => {
+            at.remove::<tower::Retimed>();
+        }
+    }
     // **Inserted only when there is something in it**, which mirrors `capture`
     // writing `None` for an empty one. `raise` has already put a default
     // `Satchel` on every one of these nodes, so an absent row means *the queue

@@ -92,6 +92,11 @@ fn execute(intent: &Intent, world: &mut World) {
         Verb::Sing => super::sing::sing(intent, world),
         Verb::Chorus => super::sing::chorus(world),
         Verb::Queue => super::queue::queue(intent, world),
+        Verb::Defend => super::defend::defend(world),
+        Verb::Deploy => super::defend::deploy(intent, world),
+        Verb::Quaff => super::defend::quaff(intent, world),
+        Verb::Hold => super::defend::hold(world),
+        Verb::Pledge => super::defend::pledge(intent, world),
         Verb::Move => pipeline::carry(intent, world),
         Verb::Wield => pipeline::wield(intent, world),
         // §10.1's per-instrument verbs. One arm, because the instrument is found
@@ -216,6 +221,16 @@ pub const fn is_live(verb: Verb) -> bool {
             | Verb::Summon
             | Verb::Sing
             | Verb::Chorus
+            // The bailey's five, on the same reading. `defend` refuses where
+            // there is no rampart and where a siege is already running; the
+            // other four refuse where none is. **A round that goes badly is not
+            // a refusal** — it is the siege going badly, which is the puzzle
+            // rather than a dead end, exactly as a missed syllable is.
+            | Verb::Defend
+            | Verb::Deploy
+            | Verb::Quaff
+            | Verb::Hold
+            | Verb::Pledge
             // The satchel's push. It refuses where there is no satchel and where
             // one is full — and **full is not a dead end**: it is a producer
             // that has outrun its consumer, which is the pipeline telling you

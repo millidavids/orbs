@@ -51,6 +51,12 @@ pub struct Panel {
     /// ever be present, because they belong to four different rooms and the
     /// player stands in one.
     pub figure: Option<orbs_render::Figure>,
+    /// The siege being fought, if one is.
+    ///
+    /// Beside the other four and on the same clock. Only one of the five can
+    /// ever be present, because they belong to five different rooms and the
+    /// player stands in one.
+    pub rampart: Option<orbs_render::Rampart>,
     /// Every domain at a glance, for §9's rail.
     ///
     /// **Here rather than asked from the painter, and it is the most expensive of
@@ -76,6 +82,7 @@ impl Panel {
         self.ward = sim.ward();
         self.pylon = sim.pylon();
         self.figure = sim.figure();
+        self.rampart = sim.rampart();
         self.briefs = sim.briefs();
     }
 }

@@ -463,6 +463,15 @@ pub(super) fn session(
     }
     body = figure.rest;
 
+    // The bailey's board, fifth and last, on exactly the same terms. Five
+    // pictures, five rooms, one player — so the columns are claimed once
+    // whichever domain is open, and never twice.
+    let siege = super::rampart::split(body, panel.rampart.as_ref());
+    if let Some(fighting) = panel.rampart.as_ref() {
+        super::rampart::paint(&mut painter, siege.area, fighting, sim.prose());
+    }
+    body = siege.rest;
+
     // The tower-wide production meter stays: it is the *pool*, not an
     // instrument, and it is what says the slot is spent wherever it was spent.
     // Skipped in the laboratory, where the panel already draws that instrument's

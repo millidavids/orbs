@@ -46,6 +46,14 @@ pub enum RngStream {
     Battlements,
     /// The menagerie: the figure a chant is drawn to (§10, `tower::chant`).
     Menagerie,
+    /// The siege: every die the tower rolls (§10, `tower::dice`).
+    ///
+    /// **Its own stream, and sharing [`Threat`](Self::Threat) was the tempting
+    /// shortcut.** That one is drawn from once a tick by `drift` and again by
+    /// `substitution`, so a combat roll taken from it would shift the ambient
+    /// sabotage schedule — moving the seeds `scripts/play.sh` chose, and
+    /// invalidating every replay that has a siege in it.
+    Siege,
 }
 
 impl RngStream {
@@ -56,8 +64,14 @@ impl RngStream {
     /// is not this long, so a world written with eight streams cannot be read by
     /// a build with nine. `save::FORMAT` went to 3 with the ninth so the refusal
     /// reads as *behind* rather than as *malformed*, and to **4** with the tenth
-    /// for the same reason.
-    pub const COUNT: usize = 10;
+    /// for the same reason, and to **6** with the eleventh when the siege
+    /// brought [`Siege`](RngStream::Siege).
+    ///
+    /// **A new domain almost always brings a stream, and a stream is always a
+    /// format change** — three of the last four bumps were exactly this. The
+    /// bump belongs in the same commit as the variant rather than being
+    /// discovered by the first player whose tower will not open.
+    pub const COUNT: usize = 11;
 
     /// Fixed index into [`Rngs::streams`].
     ///
@@ -79,6 +93,7 @@ impl RngStream {
             Self::Lens => 7,
             Self::Battlements => 8,
             Self::Menagerie => 9,
+            Self::Siege => 10,
         }
     }
 }
@@ -184,6 +199,7 @@ mod tests {
         RngStream::Lens,
         RngStream::Battlements,
         RngStream::Menagerie,
+        RngStream::Siege,
     ];
 
     #[test]

@@ -113,8 +113,42 @@ pub fn read() -> Opened {
                 "save: {} is not a save this build reads ({error})",
                 path.display()
             );
+            // **Set aside, because the next autosave is sixty ticks away.**
+            // `Opened::Unreadable`'s own doc says *"the file is kept … losing a
+            // tower is bad; losing it silently and destroying the evidence is
+            // worse"* — and the code did exactly that: the player got a fresh
+            // tower and the autosave overwrote the old one a minute later.
+            //
+            // Renaming rather than copying, so there is no window in which two
+            // files claim to be the save. If the rename fails the original is
+            // still there and the next autosave will take it, which is no worse
+            // than before and is why this is best-effort rather than fatal.
+            keep_aside(&path);
             Opened::Unreadable
         }
+    }
+}
+
+/// Move a save this build cannot read out of the way of the next autosave.
+///
+/// Named for what it is rather than dated: one unreadable save is the case that
+/// happens, and a directory filling with `orbs-save.toml.1` through `.9` is a
+/// worse answer to a problem the player has once. An existing set-aside file is
+/// left alone for the same reason — the *first* failure holds the tower worth
+/// keeping, and a later one is a fresh tower this build wrote and could not read
+/// back, which is a bug report rather than a loss.
+fn keep_aside(path: &std::path::Path) {
+    let aside = path.with_extension("toml.unreadable");
+    if aside.exists() {
+        tracing::warn!("save: {} is already set aside", aside.display());
+        return;
+    }
+    match std::fs::rename(path, &aside) {
+        Ok(()) => tracing::warn!(
+            "save: kept the old tower at {} — this build could not read it",
+            aside.display()
+        ),
+        Err(error) => tracing::warn!("save: could not set {} aside ({error})", path.display()),
     }
 }
 

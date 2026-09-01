@@ -56,6 +56,15 @@ fn main() {
     show("Pylon — a course of wards, part hauled (§10)", &course);
     speak(&course);
 
+    // **After the pylon's `speak`, not before it.** Inserted between the two,
+    // the rampart's frame printed and then the *pylon's* utterances followed
+    // under the rampart's heading — reading as the siege's speech — and the
+    // rampart's own `announce` was never spoken at all, so the one §14 gate this
+    // example gives the new surface was not exercised.
+    let wall = rampart(GRID);
+    show("Rampart — a siege, part fought (§5.1)", &wall);
+    speak(&wall);
+
     let figure = chant(GRID);
     show("Figure — a chant, two ticks from the rule (§10)", &figure);
     speak(&figure);
@@ -1546,6 +1555,171 @@ fn ward(grid: GridSize) -> Frame {
 /// version drew `[4,3] / [2,1] / []`, a legal position the solver never passes
 /// through — and since this screen is the one place a Hanoi position is judged by
 /// eye, a wrong literal here reads as a solver bug.
+/// A siege, part fought (§5.1, `tower::siege`).
+///
+/// **The one place the board is drawn with no sim at all**, which is what makes
+/// it worth having: a bar wider than its box, a label that runs into its
+/// figures, or a row that does not reach the border all show up here as a
+/// *picture* rather than as a passing assertion.
+fn rampart(grid: GridSize) -> Frame {
+    let siege = orbs_render::Rampart {
+        // `tower::siege`'s own words. The sim hands these through `Siege::view`;
+        // an example has no sim, so it repeats them.
+        garrison: orbs_render::SiegeSide {
+            name: "garrison",
+            troops: 4,
+            vigour: 7,
+            full: 18,
+            chance: 50,
+        },
+        enemy: orbs_render::SiegeSide {
+            name: "enemy",
+            troops: 6,
+            vigour: 16,
+            full: 27,
+            chance: 60,
+        },
+        turns: 5,
+        // The allocation, with one area dark and one about to be thrown away —
+        // which is the state worth drawing with no sim behind it, because both
+        // are things a screen has to make obvious at a glance. `sortie` is the
+        // moot one, and it is the only place in this file that exercises the
+        // painter's one `Style::DIM` branch.
+        areas: vec![
+            orbs_render::Allocation {
+                name: "line",
+                dice: Vec::new(),
+                range: (0, 0),
+                moot: false,
+            },
+            orbs_render::Allocation {
+                name: "buckler",
+                dice: vec!["d20".to_owned(), "d6".to_owned()],
+                range: (2, 26),
+                moot: false,
+            },
+            orbs_render::Allocation {
+                name: "succour",
+                dice: vec!["d8".to_owned()],
+                range: (1, 8),
+                moot: false,
+            },
+            orbs_render::Allocation {
+                name: "sortie",
+                dice: Vec::new(),
+                range: (0, 0),
+                moot: true,
+            },
+        ],
+        // One die still in hand, so the row draws something. An empty coffer
+        // draws `--`, which is a state worth having a picture of too — but not
+        // at the cost of the only row that says what is left to spend.
+        //
+        // **Deliberately unaffordable**: the d12 costs 3 and 2 is left, which is
+        // the state the whole resource exists to create and the one a picture
+        // should be checked against. Nothing dims it — the arithmetic is on the
+        // row, and a player reads 3 against 2.
+        coffer: vec![("d12".to_owned(), 3)],
+        quintessence: 2,
+        intent: "onslaught".to_owned(),
+        // What `prose.toml`'s `siege_tally` renders to.
+        tally: "round 5, 6 still coming".to_owned(),
+    };
+
+    let layout = ScreenLayout::compute(&ScreenRequest::single(grid));
+    let mut frame = Frame::new(grid);
+    let pane = layout.main()[0];
+    let mut painter = frame.painter(pane);
+    painter.border(pane, Some("bailey"), Style::DIM);
+
+    let at = Rect::new(
+        pane.col + 2,
+        pane.row + 2,
+        orbs_render::Rampart::COLS + 2,
+        orbs_render::Rampart::rows() + 2,
+    );
+    painter.border(at, Some("rampart"), Style::DIM);
+    let inside = at.inset(1);
+
+    // **All thirteen rows `Rampart::rows()` promises, in `orbs_shell`'s order.**
+    // This drew seven of them into a fifteen-row box for two versions — no area
+    // rows and no coffer, which is the *entire* dice mechanic missing from the
+    // one screen whose job is to show the board without a sim. It read as a
+    // correct picture of the board the domain had before dice, and the box's own
+    // empty bottom half was the only thing on screen saying otherwise.
+    //
+    // The literals below are the rendered forms of `prose.toml`'s `siege_coming`
+    // and `siege_tally`. An example in `orbs-render` cannot reach `Prose` — that
+    // is rule 1 — so it repeats them, exactly as `pylon` and `boot_report` do.
+    painter.glyphs(
+        Pos::new(inside.col, inside.row),
+        "they mean to onslaught",
+        Style::DIM,
+    );
+    for (offset, area) in siege.areas.iter().enumerate() {
+        let Ok(offset) = u16::try_from(offset) else {
+            break;
+        };
+        painter.glyphs(
+            Pos::new(
+                inside.col,
+                inside.row + orbs_render::Rampart::AREAS_AT + offset,
+            ),
+            &siege.area_row(area),
+            if area.moot { Style::DIM } else { Style::NORMAL },
+        );
+    }
+    let bands = orbs_render::Rampart::AREAS_AT + 5;
+    painter.glyphs(
+        Pos::new(inside.col, inside.row + bands),
+        &siege.row(&siege.enemy),
+        Style::NORMAL,
+    );
+    painter.glyphs(
+        Pos::new(inside.col, inside.row + bands + 1),
+        &orbs_render::rampart::GROUND
+            .to_string()
+            .repeat(usize::from(inside.cols)),
+        Style::DIM,
+    );
+    painter.glyphs(
+        Pos::new(inside.col, inside.row + bands + 2),
+        &siege.row(&siege.garrison),
+        Style::NORMAL,
+    );
+    painter.glyphs(
+        Pos::new(inside.col, inside.row + bands + 4),
+        &siege.coffer_row(),
+        Style::NORMAL,
+    );
+    painter.glyphs(
+        Pos::new(inside.col, inside.row + bands + 5),
+        &siege.tally,
+        Style::DIM,
+    );
+    // Both bars tinted, so a theme that lost one shows up as a picture.
+    for (row, side) in [(bands, &siege.enemy), (bands + 2, &siege.garrison)] {
+        let filled = orbs_render::Rampart::filled(side);
+        if filled > 0 {
+            painter.tint(
+                Rect::new(
+                    inside.col + orbs_render::Rampart::LABEL,
+                    inside.row + row,
+                    filled,
+                    1,
+                ),
+                orbs_render::Wash::plain(siege.tint(side)),
+            );
+        }
+    }
+    painter.announce(
+        UtteranceKind::Progress,
+        Role::Normal,
+        "4 against 6. they onslaught next. you tell 50",
+    );
+    frame
+}
+
 fn pylon(grid: GridSize) -> Frame {
     let course = orbs_render::Pylon {
         stations: [vec![4], vec![3, 2, 1], Vec::new()],

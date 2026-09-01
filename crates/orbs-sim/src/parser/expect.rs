@@ -470,7 +470,78 @@ fn after(word: SpellWord, leading: &str, partial: &str, at: &Situation<'_>) -> V
 ///
 /// The grammar is `<place> is <state>` or `<place> has [no] [<count>] <thing>`,
 /// and [`STOPPERS`](super::question) fixes `is` and `has` as the two hinges.
+/// Where a comparative's far side begins, if the line has reached one.
+///
+/// # The opener is found first, and its closer after it
+///
+/// This was `rposition` over `"than" | "as"` — the *closers* alone — which
+/// matches the **opening** `as` of `as many … as`. So `has as many ` answered
+/// with the far side's own words (`has`, `plus`) from the moment the comparative
+/// was opened until it was closed, and the room's things were unreachable for
+/// that whole window. All three surfaces read this one function, so the guide,
+/// both Tab completions and the ghost were wrong together. The test that shipped
+/// with it only exercised `than`.
+///
+/// **The gap in the middle is the other discriminator**, and it is the same one
+/// `question::eat_comparative` uses: `more than 1 fragment` is the *number* form
+/// — nothing sits between the comparative and its closer — where `more marks
+/// than east` is a comparison against a place.
+fn far_side_begins(asked: &[&str]) -> Option<usize> {
+    let mut at = 0;
+    while at < asked.len() {
+        let (width, closer) = match asked[at] {
+            "more" | "fewer" | "less" => (1, "than"),
+            "as" if asked
+                .get(at + 1)
+                .is_some_and(|word| matches!(*word, "many" | "much")) =>
+            {
+                (2, "as")
+            }
+            _ => {
+                at += 1;
+                continue;
+            }
+        };
+        let after = at + width;
+        let found = asked[after..].iter().position(|word| *word == closer)?;
+        // Nothing between the two is `more than 1 fragment`, which is a count
+        // and not a far side at all.
+        return (found > 0).then_some(after + found + 1);
+    }
+    None
+}
+
 fn question(asked: &[&str], scene: &Scene) -> Vec<Expected> {
+    // **A comparative's far side is its own little question**, and after `than`
+    // the words that follow belong to it rather than to the near side. Without
+    // this the hinge below found the **first** `has` and kept offering the near
+    // side's things through `than the d20 has …` — which is the one position
+    // where the answer is certainly a reading over *there*.
+    if let Some(begins) = far_side_begins(asked) {
+        let far = &asked[begins..];
+        // Straight after the closer: a place, or the one word that scales one.
+        if far.is_empty() {
+            let mut out = vec![Expected::plain("double", Reason::Grammar)];
+            out.extend(places(scene));
+            return out;
+        }
+        // The far side's own `has`, then what it may ask for there.
+        if let Some(at) = far.iter().position(|word| *word == "has") {
+            return if far.len() == at + 1 {
+                let mut out = things(scene);
+                out.extend(readings(scene));
+                out
+            } else {
+                vec![Expected::plain("plus", Reason::Grammar)]
+            };
+        }
+        // A place is named and nothing else yet: the two words that may follow.
+        return vec![
+            Expected::plain("has", Reason::Grammar),
+            Expected::plain("plus", Reason::Grammar),
+        ];
+    }
+
     let hinge = asked.iter().position(|word| matches!(*word, "is" | "has"));
     let Some(at) = hinge else {
         // No hinge yet: either the place has not been named, or it has and the
@@ -910,6 +981,82 @@ mod tests {
         assert!(
             !waiting.iter().any(|word| word == "idle"),
             "`wait` was offered a state it cannot use: {waiting:?}",
+        );
+    }
+
+    /// **The far side is its own little question, and the hinge is the last one.**
+    ///
+    /// `question` found the **first** `is`/`has`, so everything after `than …
+    /// has` was still being answered against the *near* side — offering the
+    /// room's things in the one position where the answer is certainly a reading
+    /// over there. The guide, Tab and the prompt's ghost all read this function,
+    /// so the bug was in three surfaces at once.
+    #[test]
+    fn the_far_side_of_a_comparison_completes_as_its_own_question() {
+        // Straight after the closer: somewhere to compare against, or the word
+        // that doubles one.
+        let far = spelling("if the mortar_and_pestle has fewer sage than ").texts();
+        assert!(far.contains(&"double".to_owned()), "{far:?}");
+        assert!(
+            far.contains(&"mortar_and_pestle".to_owned()),
+            "the far side offered no place: {far:?}",
+        );
+
+        // A place is named — **and the trailing space is the convention**: it is
+        // what turns *explain this word* into *what may come next*, which is the
+        // same rule the guide follows everywhere else.
+        let after =
+            spelling("if the mortar_and_pestle has fewer sage than the laboratory ").texts();
+        assert_eq!(
+            after,
+            vec!["has".to_owned(), "plus".to_owned()],
+            "the far side offered the wrong continuation",
+        );
+
+        // ...and after the far side's own `has`, what may be asked *there*.
+        let reading =
+            spelling("if the mortar_and_pestle has fewer sage than the laboratory has ").texts();
+        assert!(
+            reading.contains(&"clarity".to_owned()),
+            "the far side's `has` did not offer a reading: {reading:?}",
+        );
+
+        // Named, so the only thing left is the operator.
+        let operator =
+            spelling("if the mortar_and_pestle has fewer sage than the laboratory has clarity ")
+                .texts();
+        assert_eq!(operator, vec!["plus".to_owned()]);
+
+        // **`double` does not change any of that**, which is what makes it a
+        // prefix rather than a fourth state to thread through.
+        let doubled =
+            spelling("if the mortar_and_pestle has fewer sage than double the laboratory ").texts();
+        assert_eq!(doubled, vec!["has".to_owned(), "plus".to_owned()]);
+
+        // **`as many … as` opens with the word that closes it**, and the first
+        // version of this found the opener with `rposition` — so from here until
+        // the closing `as` the near side's own things were unreachable, on all
+        // three surfaces at once.
+        let opening = spelling("if the mortar_and_pestle has as many ").texts();
+        assert!(
+            opening.contains(&"sage".to_owned()),
+            "the opening `as` was read as a closer: {opening:?}",
+        );
+        assert!(
+            !opening.contains(&"plus".to_owned()),
+            "the far side answered a line still on the near one: {opening:?}",
+        );
+        // ...and once it really is closed, the far side answers.
+        let closed = spelling("if the mortar_and_pestle has as many sage as ").texts();
+        assert!(closed.contains(&"double".to_owned()), "{closed:?}");
+
+        // **The number form is not a far side.** Nothing sits between the
+        // comparative and its closer in `more than 2 …`, which is the spelling
+        // `BOUNDS` has read since counting arrived.
+        let counted = spelling("if the mortar_and_pestle has more than 2 ").texts();
+        assert!(
+            counted.contains(&"sage".to_owned()),
+            "a count was read as a comparison against a place: {counted:?}",
         );
     }
 

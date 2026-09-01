@@ -108,6 +108,26 @@ pub fn shortcut(line: &str) -> bool {
     line.trim() == COURSE
 }
 
+/// `debug_siege` — leave the standing siege one round from won.
+///
+/// A siege is a dozen rounds and a `hold` is a whole turn of decisions, so a
+/// See-it line for the *ending* — the wall going back up, the escrow, the record
+/// — would otherwise open with a dozen commands and depend on the dice falling a
+/// particular way. Everything downstream runs as it would have: the last round
+/// is a real `hold` through the real verb, with real rolls, and what it triggers
+/// is the real `settle`.
+///
+/// It is `debug_course` one room over, and it **republishes** for the same
+/// reason: a siege's readings are rewritten by the round that follows, so a
+/// stale board would be the thing a decision tree reads.
+pub const SIEGE: &str = "debug_siege";
+
+/// Whether this line is a `debug_siege`.
+#[must_use]
+pub fn beleaguered(line: &str) -> bool {
+    line.trim() == SIEGE
+}
+
 /// `debug_swap` — substitute a reagent where the player is standing.
 ///
 /// §8.1's world surface arrives on a 1200-tick roll, which is twenty minutes of

@@ -43,7 +43,7 @@ const FILE: &str = "progression.toml";
 /// nothing, which reads exactly like a step deliberately authored as a marker —
 /// and the file would be correct on its face while the curve quietly stopped
 /// half way up.
-pub const GRANTS: [&str; 1] = [CONCENTRATION];
+pub const GRANTS: [&str; 2] = [CONCENTRATION, QUINTESSENCE];
 
 /// The stems a **mastery** id uses when it means to grant something.
 ///
@@ -55,8 +55,17 @@ pub const GRANTS: [&str; 1] = [CONCENTRATION];
 /// a real node's name.
 const GRANTING: &[&str] = &["steps", "satchel", "cursors"];
 
-/// The only thing the Ley Line grants today.
+/// What the Ley Line grants first — a spell the orb can hold.
 pub const CONCENTRATION: &str = "concentration";
+
+/// ...and what it grants second: a deeper pool to pledge from in a siege.
+///
+/// **The second step the file has been waiting for.** `progression.toml` says
+/// *"One step, because there is nothing yet for a second to grant"*, and §11.5's
+/// resource table has always named the producers of this one as *"Passive
+/// regeneration, **Ley Line steps**"*. `weave` draws the list, so authoring the
+/// step is the whole of putting it on screen.
+pub const QUINTESSENCE: &str = "quintessence";
 
 /// What work is worth, and what it buys.
 ///
@@ -256,6 +265,20 @@ impl Progression {
     #[must_use]
     pub fn concentration(&self, experience: u64) -> usize {
         self.granting(CONCENTRATION)
+            .take_while(|needed| *needed <= experience)
+            .count()
+    }
+
+    /// How many ley steps granting quintessence have been passed.
+    ///
+    /// **`concentration`'s twin, and deliberately a second method rather than a
+    /// public `granting`.** The ley line's grants are a closed set (`GRANTS`),
+    /// so every reader of it is a named question about a named grant — exposing
+    /// the iterator would invite a caller to ask about a word the set does not
+    /// hold and silently get nought.
+    #[must_use]
+    pub fn quintessence(&self, experience: u64) -> usize {
+        self.granting(QUINTESSENCE)
             .take_while(|needed| *needed <= experience)
             .count()
     }
@@ -554,8 +577,17 @@ mod tests {
         // item. What has to stay true is that nothing can be taken — which is
         // `Taken`'s emptiness, not a spelling rule about ids.
         let curve = Progression::builtin();
-        assert_eq!(curve.ley_line().len(), 1, "the ley line grew a step");
-        assert_eq!(curve.ley_line()[0].at, 16);
+        // **What each step grants, not how many there are.** A count is a canary
+        // that fires on any authoring at all; what actually has to hold is that
+        // every step grants something the game *reads* — which `check` enforces
+        // against `GRANTS` at load, and which this restates against the shipped
+        // file so a step added with a word nobody implements is caught here too.
+        let steps: Vec<(u64, &str)> = curve
+            .ley_line()
+            .iter()
+            .map(|step| (step.at, step.grants.as_str()))
+            .collect();
+        assert_eq!(steps, vec![(16, CONCENTRATION), (56, QUINTESSENCE)]);
         assert_eq!(curve.mastery().len(), 2);
         assert_eq!(curve.mastery()[0].at, 24);
         assert!(

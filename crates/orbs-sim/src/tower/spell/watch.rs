@@ -161,21 +161,20 @@ fn ask(world: &World, condition: &Condition, missing: &mut Vec<String>) -> Optio
             // even when this side already settles the answer — the same rule
             // `every` follows for connectives, and the same reason: §8.1 wants
             // the culprit named, not the first culprit.
-            let want = match count {
-                crate::parser::Quantity::Count(count) => *count,
-                crate::parser::Quantity::Elsewhere(other) => {
-                    let there = find(world, other, missing)?;
-                    many_at(world, there, thing)
-                }
-            };
+            let want = worth(world, count, thing, missing)?;
             let many = many_at(world, at, thing);
-            // **Strict against another place, inclusive against a number**, and
+            // **Strict against a world read, inclusive against a number**, and
             // the asymmetry is English rather than an inconsistency: `has 2 or
             // fewer marks` includes two and `has fewer marks than east` does
-            // not. `Quantity::Elsewhere`'s doc records that the third
-            // comparative — *at least as many* — is deliberately absent, because
-            // `not … fewer … than` already says it.
-            let strict = matches!(count, crate::parser::Quantity::Elsewhere(_));
+            // not. The third comparative — *at least as many* — is deliberately
+            // absent, because `not … fewer … than` already says it.
+            //
+            // **Asked of the grammar, not of the variant.** Written
+            // `matches!(count, Elsewhere(_))` the three expression variants would
+            // all fall to *inclusive*, so `than the d20` and `than the d20 has
+            // quintessence` would disagree at equality and `plus 0` would change
+            // a sentence's meaning. `Quantity::strict` is the one rule.
+            let strict = count.strict();
             Some(match bound {
                 crate::parser::Bound::AtLeast if strict => many > want,
                 crate::parser::Bound::AtMost if strict => many < want,
@@ -212,6 +211,50 @@ fn ask(world: &World, condition: &Condition, missing: &mut Vec<String>) -> Optio
                     tower::Satchel::is_empty,
                 ),
             })
+        }
+    }
+}
+
+/// What the far side of a comparison comes to.
+///
+/// **Recursive, because the far side is a small expression** —
+/// `double the enemy has mettle plus 6` is a tree and each node is one world
+/// read, one doubling or one addition.
+///
+/// **Every name inside is resolved, and unconditionally**, which is the rule the
+/// caller's own comment states: a comparison against a place the tower lacks
+/// must report *that* name even when the near side already settles the answer.
+/// Bailing at the first `None` would name the first culprit and hide the rest,
+/// and §8.1 wants the culprit named.
+///
+/// **Saturating throughout.** `thing` is a count off a node and `by` is a number
+/// the player typed, so `double` and `plus` are both reachable with values that
+/// would overflow in a debug build — and a question that panicked would take the
+/// tower down over a sentence.
+fn worth(
+    world: &World,
+    count: &crate::parser::Quantity,
+    thing: &str,
+    missing: &mut Vec<String>,
+) -> Option<u32> {
+    match count {
+        crate::parser::Quantity::Count(count) => Some(*count),
+        crate::parser::Quantity::Elsewhere(other) => {
+            let there = find(world, other, missing)?;
+            Some(many_at(world, there, thing))
+        }
+        // **The far side's own reading**, which is the whole of what this variant
+        // adds: `has fewer quintessence than the d20 has cost` asks a different
+        // word over there.
+        crate::parser::Quantity::Of { place, thing } => {
+            let there = find(world, place, missing)?;
+            Some(many_at(world, there, thing))
+        }
+        crate::parser::Quantity::Doubled(of) => {
+            Some(worth(world, of, thing, missing)?.saturating_mul(2))
+        }
+        crate::parser::Quantity::Plus { of, by } => {
+            Some(worth(world, of, thing, missing)?.saturating_add(*by))
         }
     }
 }
@@ -459,6 +502,200 @@ mod tests {
             },
         )
         .0
+    }
+
+    /// Whether the tower answers a comparison whose far side is an expression.
+    fn weighing(
+        sim: &Sim,
+        place: &str,
+        thing: &str,
+        bound: crate::parser::Bound,
+        far: crate::parser::Quantity,
+    ) -> Option<bool> {
+        holds(
+            sim.world(),
+            &Condition::Has {
+                place: place.to_owned(),
+                thing: thing.to_owned(),
+                count: far,
+                bound,
+            },
+        )
+        .0
+    }
+
+    /// **The arithmetic, evaluated rather than merely parsed.**
+    ///
+    /// `tests/questions.rs` proves the far side round-trips; nothing there runs
+    /// it. A tree that read back perfectly and computed the wrong number would
+    /// pass every one of those properties — so this is where `double` and `plus`
+    /// are actually worth what they say.
+    #[test]
+    fn the_far_side_of_a_comparison_does_its_arithmetic() {
+        use crate::parser::{Bound, Quantity};
+        let mut sim = Sim::new(1);
+        walked(&mut sim);
+
+        // **Which way round is derived, never assumed.** A walled way publishes
+        // no `marks` and reads as nought, so which of the two the fixture
+        // actually walked more is a fact about the seed's maze — the sibling
+        // test below makes the same move for the same reason.
+        let marks = |way: &str| {
+            super::many_at(
+                sim.world(),
+                find(sim.world(), way, &mut Vec::new()).expect("a way"),
+                "marks",
+            )
+        };
+        let (fewer, more) = if marks("south") < marks("north") {
+            ("south", "north")
+        } else {
+            ("north", "south")
+        };
+        assert_ne!(
+            marks(fewer),
+            marks(more),
+            "the fixture walked both ways alike, so this cannot tell a working \
+             comparison from one that always says no",
+        );
+
+        // `plus` shifts the threshold by exactly what it says: the busier way is
+        // strictly ahead, and stops being so once the other is given the gap.
+        let by = marks(more) - marks(fewer);
+        assert_eq!(
+            weighing(
+                &sim,
+                more,
+                "marks",
+                Bound::AtLeast,
+                Quantity::Plus {
+                    of: Box::new(Quantity::Elsewhere(fewer.to_owned())),
+                    by: by - 1,
+                },
+            ),
+            Some(true),
+            "{more} is not more than {fewer} plus {}",
+            by - 1,
+        );
+        assert_eq!(
+            weighing(
+                &sim,
+                more,
+                "marks",
+                Bound::AtLeast,
+                Quantity::Plus {
+                    of: Box::new(Quantity::Elsewhere(fewer.to_owned())),
+                    by,
+                },
+            ),
+            Some(false),
+            "the comparison is strict, so equal is not more",
+        );
+
+        // `double` multiplies what is inside it, and it is asked *before* `plus`
+        // wraps it — `double north plus 0` and `double north` are one question.
+        assert_eq!(
+            weighing(
+                &sim,
+                more,
+                "marks",
+                Bound::AtMost,
+                Quantity::Doubled(Box::new(Quantity::Elsewhere(fewer.to_owned()))),
+            ),
+            weighing(
+                &sim,
+                more,
+                "marks",
+                Bound::AtMost,
+                Quantity::Plus {
+                    of: Box::new(Quantity::Doubled(Box::new(Quantity::Elsewhere(
+                        fewer.to_owned()
+                    )))),
+                    by: 0,
+                },
+            ),
+            "`plus 0` changed the answer, so `strict` is reading the variant",
+        );
+
+        // **A name inside the tree is still reported when the tower lacks it.**
+        // Bailing at the first `None` would hide a nested culprit, which is the
+        // rule `every` follows one level up.
+        let (answer, missing) = holds(
+            sim.world(),
+            &Condition::Has {
+                place: more.to_owned(),
+                thing: "marks".to_owned(),
+                count: Quantity::Doubled(Box::new(Quantity::Of {
+                    place: "nowhere-at-all".to_owned(),
+                    thing: "marks".to_owned(),
+                })),
+                bound: Bound::AtLeast,
+            },
+        );
+        assert_eq!(answer, None, "a question over a missing place was answered");
+        assert!(
+            missing.iter().any(|name| name == "nowhere-at-all"),
+            "the nested name was not reported: {missing:?}",
+        );
+    }
+
+    /// **`Of` reads a different word over there**, which is the whole reason it
+    /// exists — `Elsewhere` can only ask about the same reading on both sides.
+    #[test]
+    fn a_comparison_can_name_a_different_reading_on_the_far_side() {
+        use crate::parser::{Bound, Quantity};
+        let mut sim = Sim::new(1);
+        walked(&mut sim);
+
+        // **Whichever way this seed's maze actually let the fixture walk.** A
+        // walled way publishes no `marks` at all, so naming one by hand would be
+        // asserting against the seed rather than against the language.
+        let marks = |way: &str| {
+            super::many_at(
+                sim.world(),
+                find(sim.world(), way, &mut Vec::new()).expect("a way"),
+                "marks",
+            )
+        };
+        let walked = ["south", "north", "east", "west"]
+            .into_iter()
+            .find(|way| marks(way) > 0)
+            .expect("the fixture walked somewhere");
+
+        // Against a word that is not published there at all: absent is nought,
+        // so any walked way has strictly more than none of it.
+        assert_eq!(
+            weighing(
+                &sim,
+                walked,
+                "marks",
+                Bound::AtLeast,
+                Quantity::Of {
+                    place: "north".to_owned(),
+                    thing: "nothing-is-called-this".to_owned(),
+                },
+            ),
+            Some(true),
+            "an absent far-side reading did not count as nought",
+        );
+
+        // ...and it really is reading the *far* side's own word: asked for
+        // `marks` over there instead, the same question answers differently
+        // wherever the two ways differ.
+        assert_eq!(
+            weighing(
+                &sim,
+                walked,
+                "marks",
+                Bound::AtMost,
+                Quantity::Of {
+                    place: walked.to_owned(),
+                    thing: "marks".to_owned(),
+                },
+            ),
+            Some(false),
+            "a way has strictly fewer marks than itself",
+        );
     }
 
     #[test]

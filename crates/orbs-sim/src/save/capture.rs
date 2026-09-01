@@ -90,6 +90,11 @@ fn progress(world: &World) -> ProgressSave {
         wizard: world.resource::<Wizard>().name().to_owned(),
         experience: world.resource::<tower::Experience>().get(),
         integrity: Some(world.resource::<tower::Integrity>().get()),
+        // **The clock, so an expired cooldown is not written at all.** Without
+        // it a played-through save carried a dead row per surface for ever.
+        cooling: world
+            .resource::<tower::Cooling>()
+            .to_save(*world.resource::<crate::tick::Tick>()),
         taken: world.resource::<tower::Taken>().ids().to_vec(),
         learned: learned.known().map(str::to_owned).collect(),
         fruitless: learned.since(),
@@ -201,6 +206,11 @@ fn node(world: &World, entity: Entity) -> NodeSave {
         ward: at.get::<Ward>().map(Ward::to_save),
         course: at.get::<tower::Course>().map(tower::Course::to_save),
         chant: at.get::<tower::Chant>().map(tower::Chant::to_save),
+        siege: at.get::<tower::Siege>().cloned(),
+        rewritten: at
+            .get::<tower::Rewritten>()
+            .map(|rewritten| rewritten.was.clone()),
+        retimed: at.get::<tower::Retimed>().map(|retimed| retimed.drag),
         // **`None` for an empty one**, so a tower nobody has queued into writes
         // no rows at all — six satchels each spending a line on `[]` is six
         // lines of noise in a file §15 wants hand-readable.

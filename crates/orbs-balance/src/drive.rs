@@ -128,6 +128,7 @@ pub fn run(policy: Policy, seed: u64, ticks: u64, every: u64) -> Run {
 
     let mut cycle = 0usize;
     let mut sweep = Sweep::default();
+    let mut fighting = Fighting::default();
     let every = every.max(1);
 
     while sim.tick().get() < ticks {
@@ -147,6 +148,7 @@ pub fn run(policy: Policy, seed: u64, ticks: u64, every: u64) -> Run {
                 Body::Scrying => press_one(&mut sim, &mut sweep),
                 Body::Warding => haul_one(&mut sim, &mut cycle),
                 Body::Chanting => sing_one(&mut sim),
+                Body::Besieging => fight_one(&mut sim, &mut fighting),
                 Body::Bound {
                     earning,
                     name,
@@ -426,6 +428,24 @@ fn walk_one(sim: &mut Sim) {
 const SOCKETS: [&str; 4] = ["first", "second", "third", "fourth"];
 const OPENING: [&str; 4] = ["nitre", "alum", "borax", "quartz"];
 
+/// Where a besieging policy has got to.
+///
+/// **Two facts, and they were one `usize`.** `fight_one` took the shared `cycle`
+/// counter and used it as a round marker while a siege ran *and* as an idle tick
+/// count between sieges — so when a siege ended the counter still held its last
+/// round number, and the "every 64 ticks" `defend` retry actually fired 51 to 58
+/// ticks later, at a different offset after every siege depending on how many
+/// rounds it had run. The comment claimed a fixed cadence.
+///
+/// `Sweep` above is the precedent: a policy that needs state gets a named one.
+#[derive(Debug, Default, Clone, Copy)]
+struct Fighting {
+    /// The round a spend has already been made on, so the ladder runs once.
+    spent_on: usize,
+    /// Ticks spent waiting for the road, between sieges.
+    idle: usize,
+}
+
 /// Where a scrying policy has got to in its sweep.
 ///
 /// **Four sockets and a flag is the whole of it**, which is the point: §8's
@@ -565,6 +585,112 @@ fn sing_one(sim: &mut Sim) {
         return;
     };
     issue(sim, &format!("sing {word}"));
+}
+
+/// One turn of a siege, decided the way `besieging` decides one.
+///
+/// **The same ladder, in the same order, and that is the point.** A policy that
+/// played better than the shipped spell would measure a player nobody is, and
+/// one that played worse would blame the domain for the driver. §19's *"the
+/// harness has no player"* applied to a decision tree.
+fn fight_one(sim: &mut Sim, state: &mut Fighting) {
+    let Some(board) = sim.rampart() else {
+        issue(sim, "defend");
+        return;
+    };
+    // A finished siege leaves its board up as a postmortem, so *"there is a
+    // board"* is not *"there is a fight"* — `defend` starts the next one.
+    if board.enemy.troops == 0 || board.garrison.troops == 0 {
+        // **Backing off, rather than asking every tick.** §11.5's cadence keeps
+        // the road empty for twenty minutes after a siege, and a driver that
+        // asked anyway filled the `cost` column with 7143 refusals in 7200
+        // ticks — which is CLAUDE.md's *"anything else means the loop has fallen
+        // out of phase with the tower"* a second time in one policy.
+        //
+        // The wait is real world time either way; what changes is whether the
+        // column says so. A player standing in the bailey between sieges is
+        // brewing, and the additive rates elsewhere are where that shows up.
+        // **Its own counter, so 64 means 64.** Sharing the round marker made
+        // the first retry land 51–58 ticks after a siege rather than 64, and at
+        // a different offset after every one.
+        state.idle = state.idle.wrapping_add(1);
+        if state.idle.is_multiple_of(64) {
+            issue(sim, "defend");
+        } else {
+            issue(sim, "survey rampart");
+        }
+        return;
+    }
+    // **The dice first, and the policy has to allocate or it is measuring the
+    // wrong game.** Pledging is the domain's central decision; a driver that
+    // skipped it would report what a player gets for *ignoring* the mechanic,
+    // which is not a ceiling worth pinning.
+    //
+    // The rule is `steadfast`'s, compressed: the buckler is never wasted, and
+    // the line is thrown away against a volley. One die a tick, because the
+    // driver issues one command a tick.
+    // **Only what it can pay for**, which is what makes this a policy rather
+    // than a stream of refusals. A driver that pledged blind would spend its one
+    // command a tick being told it is broke — CLAUDE.md's *"the loop has fallen
+    // out of phase with the tower"*, and the `cost` column is where it would
+    // show up.
+    if let Some((die, _)) = board
+        .coffer
+        .iter()
+        .find(|(_, cost)| *cost <= board.quintessence)
+    {
+        let volley = board.intent == "volley";
+        let area = match die.as_str() {
+            // The d20 where a bad roll costs least — behind the wall when they
+            // come hard, into succour when you cannot swing back anyway.
+            "d20" if volley => "succour",
+            "d20" => "buckler",
+            "d8" => "buckler",
+            _ => "succour",
+        };
+        issue(sim, &format!("pledge {die} to {area}"));
+        return;
+    }
+
+    // **At most one spend per round, and then hold.** Without this the policy
+    // reaches the `few` rung, is refused for want of a troop, and asks again on
+    // the next tick for ever — 6775 refusals in 7200 ticks, measured. The
+    // shipped spell does not have that failure because `hold` sits *outside* its
+    // ladder and runs every lap; this is that shape, in a driver that issues one
+    // command a tick.
+    //
+    // Marking the round whether or not the spend succeeded is the honest part: a
+    // spell that is refused has still spent its instruction.
+    //
+    // **`turns`, not the tally's length.** This keyed on the byte length of the
+    // rendered line *"round 5, 6 still coming"*, which only changes when a digit
+    // count does — so consecutive rounds collided, `state.spent_on == round`
+    // held, and the driver issued `hold` instead of evaluating its ladder. A
+    // policy that silently stopped using its arsenal is the exact failure the
+    // counter was added to prevent.
+    let round = usize::try_from(board.turns).unwrap_or(0) + 1;
+    if state.spent_on == round {
+        issue(sim, "hold");
+        return;
+    }
+    state.spent_on = round;
+
+    // The ladder, short-circuiting exactly as `else if` does in the spell. Each
+    // rung spends a thing there is a finite number of, which is why only the
+    // first one that fires may spend anything.
+    if board.garrison.troops <= 2 {
+        issue(sim, "deploy troop");
+        return;
+    }
+    if board.garrison.vigour * 2 <= board.garrison.full {
+        // **`warding`, where the spell writes `mending`.** `mending` is a
+        // `secret = true` recipe, so a tower that has not broken a ward cannot
+        // name it — and a policy naming it would be measuring a player further
+        // through the game than the one this column is about.
+        issue(sim, "quaff warding");
+        return;
+    }
+    issue(sim, "hold");
 }
 
 fn haul_one(sim: &mut Sim, cycle: &mut usize) {

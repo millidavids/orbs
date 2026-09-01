@@ -42,6 +42,13 @@ pub fn purge(world: &mut World, target: Entity) {
         // roll renamed it again. §7 makes destruction maintenance; this is the
         // half of that which is *repair*.
         let name = sabotage::restore(world, target).unwrap_or(name);
+        // **And the two adversarial surfaces, for exactly the same reason.** A
+        // rewritten spell and a retimed one are `Poisoned` like everything else,
+        // so without these two lines `purge` would clear the mark, report
+        // `cleansed`, and leave the spell corrupt — the defect the line above
+        // records for a substituted pile, one surface over.
+        super::super::assault::unwrite(world, target);
+        super::super::assault::untime(world, target);
         world
             .resource_mut::<Scrollback>()
             .records_mut()

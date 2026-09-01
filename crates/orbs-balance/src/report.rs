@@ -34,7 +34,7 @@ use crate::drive::Run;
 /// DESIGN.md keeps its idealisation with a §19 note saying what the loop costs on
 /// top. That makes this a regression pin: a number moving here means the *game*
 /// changed, which is exactly the alarm §16 wants.
-const EXPECTED: [(&str, f64); 7] = [
+const EXPECTED: [(&str, f64); 8] = [
     // 0.170 idealised (§19, "16, and why the anchor moved") against 0.140 looped.
     ("clarity", 0.140),
     // §10.1's claimed better play, measured **behind** the careless one — see
@@ -96,6 +96,53 @@ const EXPECTED: [(&str, f64); 7] = [
     // in the timing shows up here as a falling rate *and* as integrity draining,
     // and the pair is what to read.
     ("chanting", 0.243),
+    // **The siege, and it was very nearly left unpinned for the wrong reason.**
+    // The first measurement spread 0.043–0.085 across seeds, which read as dice
+    // variance over the ~6 sieges a two-hour run fits — the argument `stacks`
+    // makes, and it was written into the docs as such.
+    //
+    // It was not the dice. `fight_one` keyed *"have I already spent this round"*
+    // on the byte length of a rendered prose line, so consecutive rounds collided
+    // and the driver stopped using its arsenal at random. Keyed on `turns` the
+    // spread tightened to **0.1225–0.1313 over five seeds**, tight enough to pin.
+    //
+    // **Then the driver learned to pledge dice and it settled at 0.114**, down
+    // from that 0.128 midpoint — and the number moving *down* when the policy
+    // started playing better is the part worth keeping. Allocating wins faster —
+    // a pledged siege runs **6 rounds against about 10** — and costs more
+    // commands to do it, and at three dice a round the second effect is larger.
+    // The version that skipped the domain's central decision was measuring what
+    // a player gets for *ignoring* the mechanic, which is not a ceiling worth
+    // pinning at any spread.
+    //
+    // 0.114 sits under warding's 0.125 and clearly under clarity's 0.140, which
+    // is where a domain that also mends the barrier *and* consumes the arsenal
+    // belongs. It is gated by `siege::CADENCE` far more than by the loop's own
+    // speed, so this pin is mostly watching that constant.
+    //
+    // **0.123 since pledging cost quintessence**, up from 0.114 — and the rate
+    // rising when the domain got *harder* is the part worth understanding.
+    // Nothing about a siege got cheaper: what changed is that the driver stops
+    // asking for dice it cannot pay for, so the commands it used to spend being
+    // refused now reach the arsenal ladder instead. The policy plays better
+    // because the world tells it what it can afford.
+    //
+    // The spread narrowed with it, 23% of the mean to 17%, for the same reason —
+    // a run's rate now depends less on how many refusals it happened to eat.
+    //
+    // **A single-seed sweep will still flag this sometimes, and the flag is not
+    // a finding.** Measured over `agrees::SEEDS`: 0.1225, 0.1342, 0.1225,
+    // 0.1138 — a **mean of 0.1232**. `--ticks 7200` fits only about six sieges,
+    // so one badly-timed sabotage still moves a whole siege and the seed shows
+    // through.
+    //
+    // This is why the pin is read by the **mean of four worlds** and not by the
+    // column. `stacks` is the same problem and is left unpinned because a maze
+    // is one sample per seed with nothing to average; a siege averages, so it is
+    // pinned. Read `--why` before believing `<-- drifted` here: healthy costs are
+    // cadence waits and sabotage notices, and anything else means the driver has
+    // fallen out of phase.
+    ("besieging", 0.123),
 ];
 
 /// How far a measurement may sit from its expectation before it is called out.

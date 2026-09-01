@@ -124,6 +124,19 @@ pub fn finish(world: &mut World) {
             continue;
         }
 
+        // **An audit is the fourth kind**, on the press's argument exactly: it
+        // makes no material, so `transmute` is wrong, and what it says depends
+        // on what it found, so the generic sentence below is wrong too. §8.1's
+        // expensive `verify` — see `execute::audit`.
+        if working.verb == crate::parser::Verb::Verify {
+            crate::execute::land_sweep(world);
+            world
+                .resource_mut::<Scrollback>()
+                .records_mut()
+                .attribute(None);
+            continue;
+        }
+
         let subject = name_of(world, working.subject);
         // `Source` is what makes a domain log a log: §3 keeps one stream, and
         // `peruse laboratory.log` is that stream filtered by where each line

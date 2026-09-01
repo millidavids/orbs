@@ -35,6 +35,8 @@
 //! sim, the shell, or the loop.**
 
 mod archive;
+mod auditing;
+mod bailey;
 mod brewing;
 mod carrying;
 mod keys;

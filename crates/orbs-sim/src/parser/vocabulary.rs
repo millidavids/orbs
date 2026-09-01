@@ -488,6 +488,64 @@ pub const SYNONYMS: &[Synonym] = &[
     // spelling — `sift` and `purge` do the same.
     syn(Verb::Queue, Register::Arcane, &["queue"]),
     syn(Verb::Queue, Register::Plain, &["queue"]),
+    // The bailey (§5.1). **No shell register for any of the five**, as the lens's,
+    // the sanctum's and the menagerie's have none: a shell user has no word for
+    // standing to a siege.
+    //
+    // **`siege` itself cannot be a verb — 600 against `sing`.** The domain keeps
+    // the name and the word the player types is `defend`, which is the same
+    // split `chant` took one room over (§19).
+    syn(Verb::Defend, Register::Arcane, &["defend"]),
+    syn(Verb::Defend, Register::Arcane, &["engage"]),
+    syn(Verb::Defend, Register::Plain, &["guard"]),
+    // **`send` was the plain word and a *spell word* took it — 750 against
+    // `end`.** A spell word is matched before the fuzzy matcher, so that
+    // collision is worse than an ordinary one: §19 records `set` stopping `dial`
+    // from being reachable at the prompt the same way. `order` is clean.
+    syn(Verb::Deploy, Register::Arcane, &["deploy"]),
+    syn(Verb::Deploy, Register::Plain, &["order"]),
+    // `drink` is 600 against `grind` — the one collision this domain could least
+    // afford, since a player reaching for a potion mid-siege would start a brew.
+    // `sip` is clean and `swig` was free too; `sip` reads better in a refusal.
+    syn(Verb::Quaff, Register::Arcane, &["quaff"]),
+    syn(Verb::Quaff, Register::Plain, &["sip"]),
+    // **`wait` is a spell control word**, so it cannot be the plain form of
+    // ending a turn however well it reads — and `stand` prefixes `status`,
+    // `ready` is 800 against `read`, `abide` 800 against `bide`, `yield` 800
+    // against `wield`, `endure` prefixes `end`, `settle` prefixes `set`.
+    //
+    // **`pass` was written here first and it is already `meditate`'s.** The
+    // sweep that cleared it excluded exact matches — comparing each candidate
+    // only against words it was *not* — so the one collision that scores 1000
+    // was the one it could not see. `no_phrase_resolves_to_two_different_verbs`
+    // caught it. **Sweep including exact matches, or the sweep is blind to the
+    // worst case.**
+    //
+    // `watch` is clean on both axes and is the better word anyway: you stand
+    // watch on a wall.
+    //
+    // **`brace` was here and a *reading* took it — 600 against the maze's
+    // `back`.** A reading is nameable from every room, so it sits in the way of
+    // the whole vocabulary, and reading-vs-word is the collision CLAUDE.md calls
+    // the worse one. It bought nothing `hold` did not already have.
+    //
+    // Three sweeps ran before this shipped and each was blind somewhere
+    // different: the first had no readings in its word list, the second no exact
+    // matches, the third did not re-test the words the first had cleared.
+    // **Sweep every candidate against every list, every time** — a partial sweep
+    // reads exactly like a clean one.
+    // The dice allocation. **No shell register**, like the rest of the bailey's.
+    //
+    // `commit` prefixes `combine` and `assign` prefixes `assembling`, which is
+    // the collision a similarity score cannot see; `stake` is 667 against
+    // `stacks` and prefixes `status`. `pledge`, `allot` and `apply` are clean on
+    // both axes against verbs, synonyms, spell words, every domain's readings,
+    // every material and every spell name.
+    syn(Verb::Pledge, Register::Arcane, &["pledge"]),
+    syn(Verb::Pledge, Register::Arcane, &["allot"]),
+    syn(Verb::Pledge, Register::Plain, &["apply"]),
+    syn(Verb::Hold, Register::Arcane, &["hold"]),
+    syn(Verb::Hold, Register::Plain, &["watch"]),
 ];
 
 impl Register {

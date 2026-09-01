@@ -195,6 +195,20 @@ fn sample(verb: Verb) -> (&'static str, &'static str) {
         // The satchel (§8). Every domain has one, so any room would do; the
         // menagerie is where the pipeline this exists for is written.
         Verb::Queue => ("menagerie", "queue skyward"),
+        // The bailey (§5.1). `defend` lets the enemy arrive and needs no setup;
+        // the other three before one has arrived refuse with *"defend first"*,
+        // which is the world answering and is what this table asks for.
+        Verb::Defend => ("bailey", "defend"),
+        Verb::Deploy => ("bailey", "deploy troop"),
+        // **`clarity`, not `mending`.** `mending` is a `secret = true` recipe,
+        // so it is not in the vocabulary until the lens spills it — the argument
+        // never resolves, the parser refuses before dispatch, and the verb looks
+        // dead. §19 records the same drift twice, at `brew` and at `invoke`.
+        Verb::Quaff => ("bailey", "quaff clarity"),
+        Verb::Hold => ("bailey", "hold"),
+        // `pledge` before a siege is open refuses with *"defend first"*, which
+        // is the world answering and is what this table asks for.
+        Verb::Pledge => ("bailey", "pledge d20 buckler"),
     }
 }
 

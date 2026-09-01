@@ -326,6 +326,30 @@ pub fn scene_at(world: &World, at: Entity) -> Scene {
         scene = scene.with(NounKind::Sense, reading);
     }
 
+    // **And the bailey's, for the fifth time and the same reason.** A siege is
+    // begun and finished inside one solve, so at cast there is never one
+    // running — `few`, `hurt` and `outnumbered` would resolve against nothing
+    // and `spell::compile` would null the whole condition, which is the defect
+    // this chain exists to prevent and it is silent: the spell casts, runs, and
+    // does nothing for ever.
+    //
+    // It is not hypothetical here. `besieging` was written before this loop
+    // existed and every one of its four questions came back *"that question
+    // means nothing"* — the ladder dead, the `repeat until` stopping on its
+    // first evaluation, and the spell doing nothing but `defend`.
+    //
+    // **The three intents are in the list too**, because a decision tree that
+    // wants to answer a volley differently from an onslaught asks `if the
+    // rampart has volley`, and that is the whole of what telegraphing buys a
+    // spell.
+    //
+    // **Appended after the menagerie's**, which is the registration-order rule
+    // for the fifth time: §6 resolves a tie to whichever noun came first, so
+    // every word an existing solver names keeps the order it has always had.
+    for reading in super::siege::readings() {
+        scene = scene.with(NounKind::Sense, reading);
+    }
+
     // Every place, wherever the player is. Depth-first from the root, children
     // in spawn order.
     for node in walk(world, super::filesystem_root(world, cwd.0)) {

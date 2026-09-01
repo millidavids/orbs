@@ -51,6 +51,7 @@ mod prompt;
 mod prose;
 mod pylon;
 mod rail;
+mod rampart;
 mod reveal;
 mod save;
 mod screen;

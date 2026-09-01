@@ -412,11 +412,17 @@ fn scripting(world: &mut World) {
 /// `than` sits after `count` because it is the same comparison with the world
 /// on both sides — a player who has not met a number in a question yet has no
 /// use for one.
-const SHAPES: [&str; 5] = [
+const SHAPES: [&str; 6] = [
     "man_scripting_shape_is",
     "man_scripting_shape_has",
     "man_scripting_shape_count",
     "man_scripting_shape_than",
+    // **The far side's own reading, and its two operators.** A row of its own
+    // rather than lengthening `than`'s, because the two are different questions:
+    // one compares a word against itself in two places, the other weighs one
+    // thing against another. A player reaching for the second is not looking in
+    // the first's sentence.
+    "man_scripting_shape_weigh",
     "man_scripting_shape_join",
 ];
 
@@ -1392,6 +1398,12 @@ mod tests {
                 // right, and `to` is §6 filler so the line is also a command
                 // that works.
                 Verb::Haul => Some(&["station"][..]),
+                // ...and the bailey's die and area, fourth time. `pledge
+                // <place> <place>` would be true of the type and useless to a
+                // player: what they are choosing is *which die* and *which part
+                // of the wall*, and getting the two the wrong way round is the
+                // commonest mistake the verb has.
+                Verb::Pledge => Some(&["die", "area"][..]),
                 // ...and the menagerie's syllables, third time. `sing <place>`
                 // would be true of the type and useless to a player: what they
                 // are choosing is one of four sounds, not somewhere to stand.
@@ -1447,11 +1459,19 @@ mod tests {
         // `Vec<&str>` on its own module and there is no registry of those, so
         // the honest options are a list here or a registry nothing else wants.
         // A new domain adds a line, and this fails by name until it does.
+        // **Five domains, and the list is hand-written, which is the weakness.**
+        // It asked `maze::readings()` alone once and three rooms went uncovered;
+        // it then listed four and the *bailey* went uncovered — thirteen readings
+        // a spell must name, and the manual could explain none of them.
+        //
+        // A domain that publishes readings and is not added here ships a
+        // vocabulary the manual cannot reach, with this test green.
         let readings = crate::tower::maze::readings()
             .into_iter()
             .chain(crate::tower::chant::readings())
             .chain(crate::tower::ward::readings())
-            .chain(crate::tower::pylon::readings());
+            .chain(crate::tower::pylon::readings())
+            .chain(crate::tower::siege::readings());
         for reading in readings {
             assert!(
                 prose.has(&format!("recall_{reading}")),

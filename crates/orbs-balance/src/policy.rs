@@ -66,6 +66,13 @@ pub enum Body {
     Warding,
     /// The menagerie, sung correctly and in time.
     Chanting,
+    /// Fight a siege the way `besieging` fights one, then let the next arrive.
+    ///
+    /// The fifth policy that must read the world, and it reads exactly what the
+    /// shipped decision tree reads — `few`, `hurt`, `outnumbered` — because the
+    /// point of the column is what the *loop* is worth, not what a cleverer
+    /// player might manage.
+    Besieging,
     /// Earn a slot by hand, bind a spell, and then do nothing at all.
     ///
     /// **The only policy that measures the script engine**, which is the point
@@ -90,7 +97,7 @@ pub enum Body {
 
 impl Policy {
     /// Every policy the harness knows, in the order `list` prints them.
-    pub const ALL: [Self; 9] = [
+    pub const ALL: [Self; 10] = [
         Self::CLARITY,
         Self::DAMPED,
         Self::HASTE,
@@ -99,6 +106,7 @@ impl Policy {
         Self::SCRYING,
         Self::WARDING,
         Self::CHANTING,
+        Self::BESIEGING,
         Self::BOUND,
     ];
 
@@ -328,6 +336,43 @@ impl Policy {
         gloss: "the menagerie, every syllable answered on the beat",
         setup: &["attend menagerie"],
         body: Body::Chanting,
+    };
+
+    /// The bailey, fought the way the shipped decision tree fights it.
+    ///
+    /// **The one policy whose rate is mostly not up to it.** Every other loop
+    /// converts time into experience at a rate the loop controls; a siege
+    /// converts it at a rate the *dice* control, so this column is a mean over
+    /// however many sieges fit in the run rather than a property of the driver.
+    /// Read it across seeds or conclude nothing — the archive's `stacks` carries
+    /// the same warning for the same reason.
+    ///
+    /// **It is also the only policy that can lose.** A fallen siege still pays
+    /// escrow (§11.5's floor), so the rate never goes to nought — which is the
+    /// thing worth watching here: a regression that made sieges unwinnable would
+    /// show as a rate that *halved* rather than one that vanished, and halving
+    /// is easy to mistake for tuning.
+    const BESIEGING: Self = Self {
+        name: "besieging",
+        gloss: "the bailey, fought as the shipped decision tree fights it",
+        // **Stocked at setup, and that is the policy modelling a player.** A
+        // driver with an empty arsenal reaches the `few` rung, is told *"there
+        // is no troop in the arsenal"*, and asks again on the next tick for
+        // ever — measured at 7195 costs in 7200 ticks and a rate of nought.
+        // The shipped spell does not have that failure because `hold` sits
+        // outside its ladder; the *policy* did, which is CLAUDE.md's *"anything
+        // else means the loop has fallen out of phase with the tower"* arriving
+        // exactly as documented.
+        //
+        // `debug_spawn` earns nothing, so this inflates no rate — it buys the
+        // arsenal a player would have brewed, which is the thing the column is
+        // supposed to be measuring the use of.
+        setup: &[
+            "attend bailey",
+            "debug_spawn troop 60",
+            "debug_spawn warding 60",
+        ],
+        body: Body::Besieging,
     };
 
     /// [`GRIND`](Self::GRIND)'s loop again, run by a spell instead of by hand.

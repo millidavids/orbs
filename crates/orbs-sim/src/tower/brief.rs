@@ -386,19 +386,31 @@ fn name_of(world: &World, id: NodeId) -> Option<String> {
 mod tests {
     use super::*;
     use crate::Sim;
+    use crate::tower::siege;
 
     /// Nodes [`rooms_of`] reaches that are deliberately not domains.
     ///
     /// Spelled out with reasons rather than filtered by shape, because each is a
     /// different kind of not-a-room and a rule broad enough to cover all three
     /// would also cover a domain somebody forgot to register.
-    const NOT_ROOMS: [&str; 2] = [
+    const NOT_ROOMS: [&str; 3] = [
         // The container every other room hangs under (§7).
         "tower",
         // A keep, not a domain pane — §19's arsenal entry is explicit that it is
         // the one room reachable from every other, which is what makes it not
         // one of the seven.
         "arsenal",
+        // **A place you descend into, not an eighth domain.** §10 fixes the
+        // count at *"seven at launch"* and lists them — the siege is not among
+        // them, and §5 says you *"descend into"* one. It is the arsenal's shape
+        // exactly: a real place in the tree, with its own log and its own verbs,
+        // that is deliberately not a rail box.
+        //
+        // The rail is the argument as much as the table is. Seven slots in fixed
+        // positions is what stops a box appearing and pushing the others down at
+        // the one moment it has news, and an eighth would be a redesign of the
+        // rail rather than an addition to it.
+        siege::BAILEY,
     ];
 
     #[test]

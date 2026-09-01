@@ -315,8 +315,14 @@ mod tests {
     fn a_cold_tower_has_taken_nothing_and_is_told_what_is_next() {
         let sim = Sim::new(1);
         let line = ley_line(sim.world());
-        assert_eq!(line.len(), 1);
-        assert_eq!(line[0].standing, Standing::Locked);
+        // **Every step locked, and the first one is what is next.** The count is
+        // deliberately not asserted: the ley line grows as grants are authored,
+        // and what has to hold on a cold tower is that *none* of them is taken.
+        assert!(!line.is_empty(), "the ley line has no steps at all");
+        assert!(
+            line.iter().all(|step| step.standing == Standing::Locked),
+            "a cold tower has already passed a step: {line:?}",
+        );
         assert_eq!(line[0].at, 16);
         assert_eq!(next(sim.world()), Some(16), "nothing to work toward");
     }

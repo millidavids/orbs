@@ -205,6 +205,10 @@ fn progress(world: &mut World, save: &Save) {
     world
         .resource_mut::<tower::Integrity>()
         .restore(progress.integrity.unwrap_or(tower::STANDING));
+    // An absent row is *nothing is cooling*, which is what a save written before
+    // §8.1's rationing existed honestly says — `Cooling::from_save` takes a
+    // short list for that reason.
+    world.insert_resource(tower::Cooling::from_save(&progress.cooling));
     world
         .resource_mut::<tower::Taken>()
         .restore(progress.taken.clone());

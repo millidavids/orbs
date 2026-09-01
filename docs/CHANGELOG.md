@@ -15,6 +15,54 @@
   at 1.0 (DESIGN.md §19).
 -->
 
+## [v0.8.18] - 2026-08-31
+
+### Description
+In development — a dev log, not patch notes. The premise's last clause is built:
+sieges. A sixth room where the enemy attacks the automation you wrote, fought on
+dice and paid for from a pool that runs out. Spells learned to do sums.
+
+### Added
+- **Sieges, and the room you fight them in.** An enemy comes up the road and
+  tells you what it means to do next; you spend what you have and end your turn
+  to let a round resolve. There is no clock in it — nothing moves while you read
+  the board — and it takes nothing away from the rest of the tower, so a brewing
+  spell keeps working while you fight.
+- **The dice, and where you put them.** Three of them, four parts of the wall, so
+  one part is always dark and choosing which is the whole turn. A die is rolled
+  when the round comes rather than when you place it, so the board shows you what
+  it could come to before you commit — and shows the roll afterwards.
+- **Quintessence, which is what a die costs.** A pool granted when the enemy
+  arrives, and it never comes back during a fight. A big die costs five times
+  what a small one does, so the question stopped being *which part of the wall*
+  and became *is this part worth five*. Declining costs nothing, which is what
+  makes leaving a gap a decision.
+- **The arsenal is finally spent.** Every potion, scroll and troop the other five
+  rooms have been making goes onto a wall. Ten lines of the game used to
+  apologise for having nowhere to spend them; they are gone.
+- **The enemy attacks your spells, which was always the point.** Mid-siege it
+  rewrites a line of a script, or drags a bound spell's clock so it falls behind
+  without a word of it being wrong. Nothing is destroyed and nothing is stolen —
+  you are lied to, and finding the lie is the game.
+- **`verify`, in two forms.** Bare, it audits the whole tower and costs you the
+  time a brew would take. Named, it checks one thing and then tires the orb of
+  that *kind* of thing for a while — so *which surface do I look at first* is a
+  real question rather than four free glances.
+- **A lost siege still pays.** What you earn scales with how far you got and
+  never falls below a floor. Effort is never wasted.
+- **Spells can do arithmetic now.** A question could always compare a reading
+  against a number, or the same reading in two places. It can now weigh two
+  different things — what you hold against what a die costs — and say *double* or
+  *plus two*. Words, never symbols, and there are no brackets to learn.
+- **The odds are something a spell can ask about.** The chance each side has to
+  land a blow was printed on the board and readable by nobody; a script can read
+  it now, so it can decide a wall is not worth defending.
+
+### Changed
+- **Keeping the tower repaired now matters to a siege.** A worn tower opens one
+  with half the quintessence a kept one does. There is a floor, so neglect is
+  expensive and never leaves you unable to win.
+
 ## [v0.5.12] - 2026-08-29
 
 ### Description

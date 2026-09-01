@@ -168,6 +168,29 @@ pub fn mend(world: &mut World, height: usize) -> u32 {
     after.saturating_sub(before)
 }
 
+/// Put a number of points back onto the barrier, and say how many landed.
+///
+/// [`mend`]'s point-denominated twin, and [`wear_by`]'s mirror. It exists
+/// because `mend` is denominated in **wards** — the sanctum's unit — and a siege
+/// has no wards in it: expressing a held wall as "one and a half wards" would
+/// leak one domain's currency into another's for no reason but the shape of an
+/// existing signature.
+///
+/// **It republishes**, for the reason `wear_by` documents at length: a writer
+/// that moves the resource and leaves the reading alone is §19's defect, and it
+/// has been made three times. `pylon::fixture`, never `Cwd` — the caller here is
+/// a siege ending in the *bailey*.
+pub fn mend_by(world: &mut World, points: u32) -> u32 {
+    let mut integrity = world.resource_mut::<Integrity>();
+    let before = integrity.get();
+    integrity.mend(points);
+    let after = integrity.get();
+    if let Some(pylon) = super::pylon::fixture(world) {
+        crate::execute::publish_pylon(world, pylon);
+    }
+    after.saturating_sub(before)
+}
+
 /// Take a number of points off the barrier, and say how many were actually
 /// taken.
 ///

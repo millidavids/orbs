@@ -105,6 +105,9 @@ mod mix;
 mod paint;
 mod pulse;
 mod pylon;
+// `pub`, unlike the other painters' modules: `orbs-shell`'s siege painter
+// draws the rule between the two bands and needs the glyph by name.
+pub mod rampart;
 mod span;
 mod style;
 mod tiling;
@@ -142,6 +145,10 @@ pub use pulse::{CYCLE_SECS, FLIP_HZ};
 // glyph is `row`'s business and a frontend is handed cells rather than chars.
 pub use chant::{AHEAD, Figure};
 pub use pylon::{Pylon, TALLEST};
+// `Side`, not `Band` — `mix::Band` already has that name and means a stripe of
+// one reagent in the flask. Two `Band`s in one crate's namespace is a rename
+// waiting to happen.
+pub use rampart::{Allocation, Rampart, Side as SiegeSide};
 pub use record::{
     FieldName, Outcome, Record, RecordBuilder, RecordKind, RecordView, Records, Sift, Value,
     contains_ignoring_case,

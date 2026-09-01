@@ -87,7 +87,7 @@ So a plan must say **how a person reaches this from the running game**, concrete
 ORBS_BOOT=0 ORBS_DUMP="attend laboratory; <the thing>" cargo run -p orbs
 ```
 
-CLAUDE.md's See-it section lists every switch — `ORBS_DUMP`, `ORBS_GRID`, `ORBS_SEED`, `ORBS_EDIT`,
+[docs/SEEING-IT.md](../../../docs/SEEING-IT.md) lists every switch — `ORBS_DUMP`, `ORBS_GRID`, `ORBS_SEED`, `ORBS_EDIT`,
 `ORBS_THEN`, `ORBS_WALK`, `ORBS_WEAVE`, `ORBS_TICK`, `ORBS_FIRE_PHASE`, `ORBS_LOAD`, `ORBS_FLARE`,
 `ORBS_LINE`, `ORBS_SCROLL`, `ORBS_BOOT`, `ORBS_CAPTURE`. **A dump advances no clock and builds no
 `App`**, so anything animated, anything on an edge, and anything about the window's *fit* needs
@@ -146,7 +146,7 @@ Tests: what is asserted, and what property each one holds.
 - [ ] ROADMAP item ticked with a working See-it line
 - [ ] Cargo.toml version bumped
 - [ ] DESIGN.md §19 entry for anything decided
-- [ ] CLAUDE.md See-it block updated if a new switch was added
+- [ ] docs/SEEING-IT.md gains a section for the new surface — and a switch, if one was added
 
 ### Risks
 What could be wrong, and what would show it.

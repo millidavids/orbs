@@ -2204,11 +2204,11 @@ in the suite would have caught it, and none was ever written that could have.
 | **1. Core loop** | World clock, script engine + **concentration** + failure taxonomy, remaining sabotage surfaces, 3 domains, minimal apprenticeship, content data format, balance CLI **sweeping §11.5's first-pass numbers**, **scrappy internal `orbs-tui` as a dev tool** | ~15k | 5 mo | A player automates a duty and feels clever; non-terminal testers in the loop |
 | **2. Scrying** | The `lens/` domain: deduction over sources that disagree. **World sabotage surface**, **`orbs-balance` sweeping §11.5's first-pass numbers** | ~6k | 3 mo | A player finds which of two accounts is lying, and a spell repeats it |
 | **3. Spellcraft** | The `grimoire/` domain: a spell factors into named parts, **within one `.spell` file** (§19 — cross-file sharing struck). **The language overhaul that composition needs** — values, variables, lists, `for each`, in-file parts, builtins over the domains. **Naming pass (~35 verbs)**, hidden-directory authoring | ~7k | 5 mo | A spell factors into named parts and still reads as one file |
-| **4. Enchanting** | The `forge/` domain (derived): sequence + cost → a decaying buff on an instrument. **Shared-engine extraction**, pulled forward from 9a | ~4k | 2 mo | A buffed instrument is visibly faster and the buff runs out |
-| **5. Summoning** | The `menagerie/` domain (derived): allocation → a unit with a standing rule | ~4k | 2 mo | A summoned thing acts without being told to that tick |
 | **4. Defense** ✅ | The `sanctum/` domain: a course of wards, drawn and assembled. **Reflex-avoidance mechanism decided first** — it is the Tower of Hanoi, which has no clock in it, so the accessible-mode item moved to Phase 8 (§19) | ~5k | 3 mo | A pressure survived by choosing, not by reacting |
+| **5. Summoning** ✅ | The `menagerie/` domain (derived): allocation → a unit with a standing rule | ~4k | 2 mo | A summoned thing acts without being told to that tick |
+| **6. Enchanting** | The `forge/` domain (derived): sequence + cost → a decaying buff on an instrument. **Shared-engine extraction**, pulled forward from 9a | ~4k | 2 mo | A buffed instrument is visibly faster and the buff runs out |
 | **7. One machine** | Reagents cross domains, **Focus-slot reservation**, pane addressing, the authored edges between domains | ~3k | 2 mo | The tower runs itself across rooms |
-| **8. Siege** | Autobattler, trait composition, adversarial aberrations, escrow economy, **unattended-siege backlog + dispersal**, pane addressing, one siege type, drift stub, synergy template | ~15k | 4 mo | Sieges are tense and scripts visibly matter |
+| **8. Siege** ✅ | Autobattler on the seven dice, adversarial aberrations closing §8.1's four surfaces, escrow economy, one siege type, the cadence. **Pane addressing struck from this row** — it is Phase 7's, and listing it in both is what made it read as a siege prerequisite (§19). Trait composition, the backlog and difficulty tiers are deferred with reasons in ROADMAP | ~15k | 4 mo | Sieges are tense and scripts visibly matter |
 | **9a. Breadth** | Discovery/research, full drift, **offline progression + its unlock**. *(The five domains and the shared-engine extraction moved to Phases 2–7.)* | ~4k | 2 mo | Discovery closed |
 | **9b. Remote hosts** | The second content type: trees, verbs, infiltration, trace amplification. **`orbs-tui` to ship quality, if the schedule allows** | ~12k | 3 mo | Infiltration loop closed |
 | **9c. Engine upgrade** | Bevy version window — whole-codebase, isolated from new-system work | — | 1 mo | Green on all three platforms |
@@ -2412,6 +2412,307 @@ they are re-pointed at the phases that now need them rather than quietly dropped
 
 ## 19. Decisions log
 
+### Scripting the siege is tested as its own question (Phase 8, `0.8.18`)
+
+`tests/besieging.rs` proves the **game** — the words resolve, a round pays, a
+siege survives a save. `tests/solvers.rs` proves the shipped spells run. Neither
+asked the question a player asks: **can I write a siege spell**, and is every
+state I would need actually emitted? `tests/scripting_the_siege.rs` is that
+question, in eleven claims.
+
+**The reachability lint is the one that matters, and it is the shape that keeps
+failing here.** `siege::readings()` is the domain's contract with the language —
+`scene_at` registers every word in it *unconditionally*, so all eighteen compile
+in a spell whether or not anything ever publishes them. That is deliberate (a
+spell must compile before the siege it asks about exists) and it means **the
+declaration is the only thing between a word and silence**. A declared reading
+nothing publishes is worse than a missing one: `many_at` answers absent with
+nought, so the spell gets a confident wrong number rather than an error.
+
+That had already shipped twice — the die prices, and `Surface::Clock` one module
+over. The lint walks sixty seeds through every state and asserts each word turns
+up, and **it failed on its first run**, which is how you know it is not vacuous.
+`ceiling` is raised only while something is pledged and `hold` clears pledges, so
+a sweep that surveys before pledging never sees it.
+
+**The arithmetic is pinned against numbers this domain fixes**, not a maze's
+luck: the pool opens at 24 and a `d20` costs 5, so `plus`, `double` and the
+comparison have known answers. Four properties beyond the round-trip:
+
+| Claim | Why round-tripping cannot see it |
+|---|---|
+| `double x plus n` is `Plus(Doubled(x), n)` | It writes back as itself either way, and the two trees are **different arithmetic** — `2x+n` against `2(x+n)` |
+| A chained `plus 2 plus 3` is **refused** | There is no associativity to learn because there is nothing to chain; `condition`'s all-or-nothing rule does the work a precedence table would |
+| `plus 0` changes no answer | The identity is where `strict` is caught reading the *variant* rather than the grammar |
+| `u32::MAX` saturates and answers | A question that panicked would take the tower down over a line still being edited |
+
+**Two findings from writing it, and both are the language behaving better than
+assumed.** An *unknown* far-side reading is **refused at cast** rather than read
+as nought — `Condition::rename` walks the whole tree, so the far side inherits
+the near side's `Unplaced::Thing` treatment for free. It is only a *declared*
+reading that is absent here (`ceiling` asked of a band) that reads as nought, and
+that case is pinned rather than asserted away because there is no fix for it.
+
+**And the state is sufficient, which is now evidence rather than a claim.** A
+spell can tell a win from a loss — `lifted` says only *over*, and which band is
+`routed` says which way. Both directions are asserted, because a test that only
+ever wins would pass against a domain that could not express the loss at all.
+
+### An `xhigh` review of the whole siege, and the two it found by playing (Phase 8, `0.8.17`)
+
+Eleven findings. **The two that mattered were verified by running the game, not
+by reading it**, and both are the same shape: a comment asserting a property the
+code did not have.
+
+**The enemy was breaking spells rather than lying to them.** `assault.rs`'s
+header sets the requirement — a corrupted line must *"parse, run, and quietly do
+nothing"*, because *"a line the orb cannot read at all would fault loudly and
+give the game away"*. The guard was a word count and a trailing digit, which let
+through every line whose last word is grammar: `part look()` became `part look()-`
+and invoking printed **three** complaints — a `part` wanting a name, an `end` with
+nothing open, and a call naming no part. `if the mortar is idle` became `is idle-`
+and skipped its whole block with *"that question means nothing"*.
+
+One lie, three faults, and the surface announcing itself — which is the opposite
+of misdirection and cost an audit and a purge to repair. The guard now refuses a
+last word that is a **state**, **bracketed**, or a **`for each` set**, asked of
+`SpellState::WORDS` and `SpellWord::For::particle()` rather than of copies.
+`a_line_the_enemy_may_corrupt_still_reads_as_a_line` runs it over every line of
+every shipped solver, which nothing did.
+
+**A die's price did not exist until the first bailey verb.** It was raised in
+`defend::publish`, which nothing calls until a verb runs — so `survey d20` on a
+fresh tower answered *"the d20 holds nothing"*, while the comment three lines
+above claimed it was published *"whether or not a siege is running, because a
+die's price is a fact about the die rather than about the fight"*.
+
+**The consequence is the sanctum's `integrity` defect exactly.** An absent
+reading is nought, so the affordability guard every solver ships —
+`not the coffer has fewer quintessence than the d20` — compared nought against
+nought and answered **yes, afford it** on a tower with no pool at all. `Sim::bare`
+bootstraps it now, beside the pylon's, and the bootstrap has to find the rampart
+by **walking for its `Operation`**: the first attempt used the ordinary `Cwd`
+lookup, which answers `None` at construction, so it silently did nothing — the
+same trap `publish`'s own doc warns about, made two functions away from the
+warning.
+
+**And one in the language, from the same session.** `expect::question`'s new
+far-side branch found its closer with `rposition` over `"than" | "as"`, which
+matches the **opening** `as` of `as many … as` — so `has as many ` offered the far
+side's words and the room's things were unreachable until the comparative closed.
+All three completion surfaces read that one function. The opener is found first
+now, and its closer after it, with the same *gap in the middle* discriminator
+`eat_comparative` already uses to tell `more than 1 fragment` from a comparison.
+
+| The other eight | |
+|---|---|
+| `Cooling::to_save` | Filtered on *ever checked* rather than *still cooling*, so a played save carried a dead row per surface for ever. It takes the clock now |
+| `dice.rs` | The advantage predicate was written out **six times** across `draws`, `resolve` and `chance` — which must agree or the faces drawn, the face kept and the odds printed describe three different rolls. One `edge()` |
+| `document.rs` | The `FORMAT` doc named `SiegeSave` and `progress.escrow`, **neither of which exists**, and its migration table stopped two bumps short of the function beneath it |
+| `build.rs` | No lint tied the bailey's die and area nodes to `POOL`/`Area::ALL`, and `publish` skipped a missing one silently. Now `every_die_and_area_the_domain_knows_is_a_node_that_answers` |
+| `report.rs` | The sortie's mettle cost was handed to all four area prose keys as `state` — a content edit away from three lines printing a number that is not theirs |
+| `assault.rs` | `corrupt` allocated the lie before two early returns, and rebuilt the line with `join(" ")` — changing the player's own indentation on a line the enemy touched |
+| `drive.rs` | `spent_on` was a round marker *and* an idle counter in one slot, so the "64-tick" retry fired 51–58 ticks after a siege and at a different offset after every one |
+| `SEEING-IT.md` | Shipped saying "thirteen solvers" (16) and "four bailey solvers" (7) — **counts moved verbatim out of CLAUDE.md**, into a file that states *"count them rather than quoting a number"* a few lines away |
+
+**The pattern across all eleven is worth naming: seven of them are a comment, a
+doc or a count that stopped being true**, and the code around each was working.
+The two that were not working were both found by typing a command into the game.
+
+### The far side of a comparison grows an arithmetic (Phase 8, `0.8.16`)
+
+**This reverses §19 twice**, and both entries above are struck through with a
+pointer here rather than quietly contradicted: *"it is not getting arithmetic"*
+and *"an expression tree: no, and this is the ceiling being chosen"*.
+
+**What broke them was quintessence.** The standing answer to *"can a spell do
+sums"* was the maze's pattern — the world publishes a derived word and the spell
+asks for it, so `outnumbered` answers *twice the defenders* without an operator.
+That works while the ratio is **fixed**. It stops working the moment the question
+is *is what I hold more than what this costs*, because there is no word to
+publish: the answer depends on two quantities the player is choosing between, and
+`quintessence` is a resource whose entire point is being weighed.
+
+**What the far side can be now** — `[double] <place> [has <thing>] [plus n]`:
+
+```
+if the coffer has fewer quintessence than the d20 has quintessence
+if the enemy has more spears than double the garrison
+if the garrison has fewer mettle than the enemy has mettle plus 6
+```
+
+| Rule | Why it holds the ceiling |
+|---|---|
+| **Words, never symbols** | `plus` and `double`. There is nothing to parenthesise, so §6's *"a player types what they mean"* survives the change |
+| **One operator** | Subtraction is deliberately absent: `A − n > B` is `A > B + n`, so one word covers both directions. There is also no clean word for it — `less` is already shipped grammar in `BOUNDS` and `minus` scores 667 against `minute` |
+| **No precedence table** | Nothing to disambiguate: an expression sits only on the **far** side, reads strictly left to right, and cannot contain a comparison |
+| **No brackets** | A consequence of the above rather than a separate rule |
+
+**Say what it is.** Once `Quantity::Of` exists this *is* a tree — `Doubled` and
+`Plus` wrap it, and the old entry's own example is expressible as `plus 1`.
+Calling it "not an expression tree because it uses words" would describe the
+notation and not the shape, so the code says **an expression tree with a hard
+depth cap, in word notation**.
+
+**The defect the review caught before it shipped: `strict` must come from the
+grammar.** Written `matches!(count, Elsewhere(_))` the three new variants all
+fall to *inclusive*, so `than the d20` and `than the d20 has quintessence` — two
+spellings of one question — would disagree at equality, and `plus 0` would change
+a sentence's meaning. There is one rule instead: **a world read on the far side
+is strict, a number the player typed is inclusive.**
+
+**`plus` joins `STOPPERS`, which is a permanent reservation.** Nothing in the
+tower may ever be named it; a span stops before it rather than eating it. That is
+what the operator costs and it is paid once. `double` is *not* a stopper, because
+it is consumed ahead of the place it modifies.
+
+**Two surfaces needed the second hinge.** `Reader::eat_comparative` read the far
+side with `to_connective`, which takes everything up to `and`/`or` — so
+`than the d20 has quintessence` yielded a place literally called *"d20 has
+quintessence"*, the silent swallow the stopper list exists to prevent. And
+`expect::question` found the **first** `is`/`has`, so completion after the far
+side's `has` offered the near side's things.
+
+**`sparingly` is the worked example**, and it is the only shipped solver that
+uses `for each die`, a different reading on the far side, or `double`. Its guard
+is a double negative on purpose — `not … fewer … than` is the language's own
+route to *at least as many*, and the affirmative is *wrong* here rather than
+merely clumsy, because a comparison against a place is strict and would refuse
+the die you can exactly afford.
+
+### Quintessence — §11.5's mana, built, and the allocation finally bites (Phase 8, `0.8.15`)
+
+**The siege's central decision did not cost anything.** Three dice, four areas,
+and the dice came back every round, so the only price of a pledge was picking the
+wrong row. Measured, that was not enough: two solvers with opposite allocation
+strategies **tied across seventeen seeds**, and this log, `CLAUDE.md`,
+`TESTING-THE-SIEGE.md` and `dev_spells.toml` all recorded the same conclusion —
+*"if where is meant to be the decision, the pool wants to be larger or the areas
+to differ more."*
+
+**It is not a new mechanic.** §11.5 has always specified *"a fixed pool granted on
+entry, with no regeneration"*; what it lacked was anything to spend it on.
+
+| Question | Decision |
+|---|---|
+| Regeneration | **None, and the reason is §14 rather than balance.** The screen-reader mode advances siege ticks on *player input*, so a per-tick regen would mean **more typing produces more quintessence** — inverting the economy for exactly the players that mode exists to serve |
+| What sizes the pool | **Integrity *and* the ley line.** This is §19's deferred *"integrity → siege"* coupling, arrived at from the other side: keeping the sanctum solved is what lets you gamble on the wall. A **50% floor** is what stops a lost siege spiralling — §11.5's *"never ruinous, only slower"* |
+| The die's price | **Derived from its faces, not authored per die.** A die's expected contribution is `(faces+1)/2`, so a cost proportional to faces is fair by construction at every die — including the four the arsenal has not issued. Three hand-authored numbers could drift into a `d20` cheaper than a `d6`; one divisor cannot. `siege.toml` could not hold it anyway: it is `#[serde(transparent)]` over a flat name → item map, so a nested `[dice]` table parses as an arsenal item missing its `verb` |
+| Affordability in a spell | **A derived word, not a comparison** — see below |
+
+**The affordability sentence is the part worth recording.** The obvious spelling
+is wrong: `watch.rs`'s comparison against another place is **strict**, so
+`if the coffer has more quintessence than the d20` *excludes the die you can
+exactly afford*, and there is no *at least as many* comparative to reach for. Only
+the negative spelling is correct, and a mechanic whose natural sentence is a
+double negative is not one §6 would recognise.
+
+So **the coffer publishes only the dice it can pay for**, and `if the coffer has
+d20` means *"I hold it and can afford it"* — the maze's `spoil`/`exit` pattern.
+The numeric comparison stays available for real weighing and is no longer
+load-bearing. **Both shipped bailey solvers needed no change at all**, because
+both already guarded on `if the coffer has d20`.
+
+**`aim` closes an asymmetry §5.1 did not notice it had.** `Roll::chance` was
+called only from `Siege::view`, so the odds were drawn on the board and askable by
+nobody — a hand player could *show the odds before the commitment* and a bound
+solver could not. It is published on each band now.
+
+**The naming cost three words and one of them was §11.5's own.** `mana` scores 750
+against `many` — inside `as many … as`, the grammar the reading is written for —
+and 750 against `man`. `power` scores 800 against `tower`. `peril`, the first
+choice for `aim`, failed the **prefix** sweep rather than the similarity one:
+`per` reaches it at 940 against `peruse`'s 925, which is the exact case this log
+already records (`chorus`, because `per` reaches `peruse`).
+
+`quintessence` collides with `quickening-scroll` on the three-letter prefix and is
+**tolerated with its cost written down** — the first tolerated collision that
+shares a *room*. `wield` is `Workable` and rejects a `Sense`, so the scroll keeps
+its abbreviation; `purge` and `verify` take `Any` and would pick the reading. That
+property is pinned by `the_scroll_keeps_its_abbreviation_against_the_reading`,
+because a tolerated collision with no test under it is a decision that quietly
+expires.
+
+**The measurement, which is the point of the change:** the two solvers now differ
+on 2 seeds of 5, and where they differ the gap is nearly threefold (83 against
+147; 56 against 168). `besieging` re-pinned 0.114 → **0.123**, and the rate rising
+while the domain got *harder* is not a paradox — the driver stops asking for dice
+it cannot pay for, so commands it used to spend being refused now reach the
+arsenal ladder. The seed spread narrowed with it, 23% of the mean to 17%.
+
+**Two defects folded in.** `foes` was published at nought against `raise_count`'s
+*"never called with nought"*; and `WEARY` is declared, exported and read by
+nothing while `hurt()` hardcodes its threshold.
+
+### What two adversarial review passes over Phase 8 actually found (Phase 8, `0.8.14`)
+
+Twenty-odd findings across two passes. **Four were live defects, and all four sat
+behind a passing test** — worth recording as a class, because each one is a shape
+that will recur.
+
+**A guard whose denominator ate its own threshold.** `quaff mending` refused at
+full strength, correctly; the refusal was computed against a ceiling that
+`Band::mend` did not take, so a heal could raise a band *past* what it had
+mustered. `mend` takes the ceiling now. Enumerating every multiple of `VIGOUR` is
+what settled it — the argument for the old shape was plausible at every value
+except the `hurt` threshold, which is the one that matters.
+
+**An arsenal item that dominated everything else.** `clarity` was authored as
+`upgrade`/`d100`. Against `AGAINST = 11` that is 90 telling faces of 100, where
+the `d20` it replaces has ten of twenty — **90% against 50%**, one potion
+strictly better than every other line in `siege.toml`, in a file whose entire
+point is that the choice is live. It is `bonus`/`+4` (70%) now. **This is the
+failure mode of authored content**: nothing is wrong, everything parses, and the
+domain quietly has one answer.
+
+**A sabotage surface that could not be reached.** `Surface::of` tested `Held`
+before `Retimed`, and a retimed spell is also held — so `Surface::Clock`, one of
+§8.1's four, was dead. The audit's own tests passed because they asked the
+*model*, which is the right thing to test and cannot see a routing order.
+
+**A row that outgrew its box.** `{:>3}` is a floor, not a ceiling, so a garrison
+past 999 vigour widened the rampart's row past `Rampart::COLS` and through the
+border. `mustered` grows with every `deploy` and nothing bounds it. Not reachable
+today — which is exactly why it would have shipped.
+
+**The rest were documentation, and one of those is the real lesson.** `dragged`'s
+doc described a subtract-and-floor design that had already been replaced by a
+skip-whole-ticks one, and it was attached to `dragged_for_test` — so the shipping
+function was undocumented and the only prose about it was wrong. Six sites said
+*"the bailey's four words"* after `pledge` made it five. The `screens` example
+hand-drew a **seven-row** board into its fifteen-row box, omitting every area row
+and the coffer: the entire dice mechanic missing from the one screen whose job is
+to show the board with no sim behind it, and its own empty bottom half was the
+only thing on screen saying so.
+
+**A count in a sentence rots; a count from the code does not.** That is already
+this document's rule for `SpellWord::ALL` and it was broken again within one
+phase, by the same mechanism, in six places at once.
+
+**And the finding that was dismissed and should not have been.** The review said
+`siege.rs` (1,429 lines) and `defend.rs` (809) broke CLAUDE.md's ~300-line rule.
+That was answered with a measurement — every domain model is 650–1,200 lines and
+every `execute` module 570–1,600 — and the answer was written *into the module
+doc* as a section titled *"why this is one file"*.
+
+The measurement was true and the conclusion did not follow. `ward.rs` and
+`maze.rs` are that size holding **one model each**; `siege.rs` held five
+separable things, and the doc defending it even named the seam it was declining
+to take. Both are directory modules now — `siege/` in five files plus its tests,
+`defend/` in five — **and the public surface did not move**: every caller still
+says `siege::SPEARS` and `defend::hold`, because `mod.rs` re-exports exactly what
+was there before.
+
+What it cost is privacy. `Band::wound`, `Band::mend`, `Intent::drawn` and
+`Strengths::of_mut` were private to one file and are `pub(super)` now. That is
+the real trade a split makes and it is worth stating plainly, because it is the
+argument *for* keeping one file when the pieces genuinely interlock —
+`siege/battle.rs` is still 473 lines for that reason, being one type's inherent
+`impl` with no cut that does not separate `hurt` from the round that changes it.
+
+**A line count is evidence, not a verdict; cohesion is the test.** The failure
+here was using the first as an argument against looking at the second.
+
 ### Summoning is a rhythm game, and §10.1's "never a reflex" is amended (Phase 5, `0.5.0`)
 
 **This reverses the decision two phases above it**, and it is written as a
@@ -2479,6 +2780,271 @@ scores **600** three ways, against `cast`, `halt` and `cat`. The verb is `sing`
 and the noun stays `chant`: you sing a chant. `bide`, `troop`, `summon` and
 `syllable` are clean. **Sweep every new word against `fuzzy::similarity` before
 believing it**, including the one that seems obviously free.
+
+### The siege, built — and the number that only a sweep could find (Phase 8, `0.8.1`–`0.8.7`)
+
+The premise's last clause was unbuilt for eight phases. Six domains produced and
+nothing consumed; ten shipped prose lines apologised for it, all saying *"a siege
+will be what spends them"*. They are retired.
+
+| Question | Decision |
+|---|---|
+| Is the siege an eighth domain? | **No.** §10 fixes the count at *"seven at launch"* and lists them; §5 says you *"descend into"* a siege. The bailey is the **arsenal's** shape — a real place in the tree, with its own log and verbs, deliberately not a rail box. The rail's seven fixed slots are the argument as much as the table is: an eighth would be a redesign of the rail rather than an addition to it |
+| Is it turn-based? | **Yes, and it serves the hand before the script.** By hand it makes the board readable with nothing racing you; scripted it is what makes the domain automatable at all, since a real-time siege would outrun a decision tree evaluated at `SCRIPT_BUDGET`. That is `PACE = 1` in the menagerie, one room over. §10's rule is then met *by construction* rather than by exception — the sanctum's position, which §19 already calls better than a reflex mechanic with an escape hatch |
+| Does it take the production slot? | **No**, and this is the one the plan got wrong first. See the entry above: a siege that froze the automation would leave the enemy nothing to attack, which is the premise inverted |
+| Which dice? | **D&D's seven**, `d4` through `d100`. The homage is the point and it is also the cheapest possible route to legibility: nobody has to be taught what a d20 is. `d100` is **one die, not the percentile pair** — the pair is a tabletop affordance for a solid nobody manufactures, and reproducing it would spend two draws for one number |
+| How does a roll reach the arsenal? | **Composed, then resolved.** A `Roll` is assembled — die, modifiers, target — and only then drawn. **This is the expensive retrofit**: with the draw at the call site, every call site has to change to admit a modifier, and there is one per kind of attack. It is why `tower::dice` was built before anything rolled |
+| How is a scroll spent in a siege? | **`wield`, intercepted.** §19 already spends that word on setting a thing going, so a scroll keeps it here — which means the same word must mean that in two places. `pipeline::wield` asks the bailey first, and only while a siege is running and only for a scroll `siege.toml` names. Left unrouted the three scroll rows were dead content and `wield quickening-scroll` on the wall hurried the *laboratory* |
+| Can the language express *"twice the defenders"*? | ~~**No, and it is not getting arithmetic.** The world publishes `outnumbered`, `few` and `hurt` as words and the spell asks for those — the maze's pattern, where `spoil` and `exit` are words rather than sums. Cheap, in keeping, and it keeps the language small~~ — **superseded at `0.8.16`**; it can, and `than double the garrison` is the spelling. See *The far side of a comparison grows an arithmetic* below. The derived words stay and are still the right answer for a *fixed* ratio; what they could not do is weigh two different quantities against each other, which quintessence made the domain's central question |
+
+**The two remaining sabotage surfaces are built, and they are siege-only.** §5.1:
+*"the enemy never touches scripts, schedules, or logs in the calm layer. Phase A
+stays genuinely safe, which pillar 4 requires."* `tower::assault` runs on a
+resolved round and never on a tick. **Script text** is a rewritten line, kept as
+a strict extension of the truth so it still looks like a line; **trigger clocks**
+drag a bound spell's step budget, which makes it the subtlest of the four — the
+text is perfect, `peruse` shows exactly what the player wrote, and only `verify`
+finds it. Floored at one step a tick, because §8's taxonomy is titled *"scripts
+always log and never halt"*: the enemy may slow the automation and may not stop
+it.
+
+#### The cadence, and why the escrow was the wrong thing to tune
+
+**`orbs-balance` found the only serious defect in the domain, and no other
+instrument could have.** Every test passed, every See-it line read correctly, and
+a driver fighting sieges back to back measured **4.70 experience a tick** —
+against clarity's 0.140 and scrying's 0.268. Thirty-three times the flagship, from
+a domain that also mends the barrier.
+
+The first diagnosis was that the escrow was too generous, and it was wrong. A
+siege paying 105 for thirteen rounds is right; **fighting three hundred of them in
+two hours is not.** The fault was that `defend` was free and unlimited — §5.3's
+trace is what will eventually provoke a siege, and until it does there was no gate
+at all. Cutting the reward would have made each siege feel worthless *and* left
+the exploit standing.
+
+So `siege::CADENCE` is 1200 ticks, which is §11.5's own *"every 20–30 min at a
+normal push rate"*. The measured rate is then **0.043–0.085 across seeds** — under
+clarity and under warding, which is right for a domain that pays twice and
+consumes the arsenal.
+
+**It is pinned at 0.128**, and the route there is the lesson. The first
+measurement spread 0.043–0.085 across seeds and was written up as dice variance
+over a small sample — `stacks`'s argument, and wrong. The driver keyed *"have I
+already spent this round"* on the byte length of a rendered prose line, so
+consecutive rounds collided and it stopped spending at random. Keyed on `turns`
+the spread is 0.1225–0.1313 over five seeds, which pins comfortably inside the
+10% band.
+
+**A wide spread is a hypothesis, not a finding** — reaching for *inherently
+noisy* is how a defect in the instrument becomes a documented property of the
+thing it measures.
+
+**Two policy defects were found before the game's**, and both are CLAUDE.md's
+*"anything else means the loop has fallen out of phase with the tower"* arriving
+exactly as documented: a driver with an empty arsenal asked for a troop it did not
+have 6775 times in 7200 ticks, and one that ignored the cadence asked for a siege
+7143 times. **Read the `cost` column before the rate** — twice, in one policy.
+
+### The siege is a dice-allocation game (Phase 8, `0.8.14`)
+
+The autobattler resolved on dice and the player chose *which potion*. It now
+resolves on dice the player **places**: three of them, four parts of the wall,
+and a die is rolled when the round comes rather than when it is pledged.
+
+| Question | Decision |
+|---|---|
+| What does a placed die do? | **It is rolled, and its face is the bonus.** A `d20` behind the buckler is 1–20; a `d6` is 1–6. So the choice is not *how much* but **where variance is cheapest** — a low roll in succour merely heals less, where a low roll behind the wall is a round wasted. That is what having a *set* of dice rather than three of a kind buys, and it is the whole reason the seven are D&D's |
+| How many areas, and how many dice? | **Four against three**, so the board can never be covered and every round leaves one part dark. `line` (your attacks), `buckler` (what they must beat), `succour` (mettle back), `sortie` (mettle spent for damage now) |
+| Why those four? | **Each intent makes a different one urgent**, which is what turns §5.1's telegraph from advice into the thing the turn is spent on. A volley cannot be answered, so `line` is thrown away against one — and the board says `moot` on that row *before* a die goes there |
+| What does a spell read? | The world publishes `ceiling` on each area, `moot` where the intent will waste it, and the free dice by name on the `coffer`. `for each area` walks the four. That is the state the scripting needs, and it is the maze's pattern again: a derived word rather than arithmetic in the language |
+
+**`pledge`, and the obvious words all collided.** `commit` prefixes `combine`,
+`assign` prefixes `assembling`, `stake` is 667 against `stacks`. So did the
+obvious *areas*: `shield` is 667 against `wield` — a live verb, and the one that
+spends a scroll in this very room — and `rally` 600 against the maze's `wall`.
+`buckler` and `succour` are in register anyway for a game with a `balneum_mariae`
+in it.
+
+Two more the lints caught after the fact: `wasted` scored 667 against the potion
+`haste`, and listing all seven dice as readings put `d10` against `d100` at
+**962**. Only the dice a wizard actually holds are readings now.
+
+#### Two defects the work surfaced, and one claim it disproved
+
+**`mend` could not heal a wounded band.** It capped at `count * VIGOUR`, and
+`wound` derives `count` back down from `vigour`, so the cap *was* the band's
+current strength — a line at 14 of 18 could take back two points and no more.
+That made `succour` nearly inert and, quietly and for longer, the `mending`
+potion a third of what it read as. The arsenal matrix test passed throughout
+because the number did move, by one. `the succour rolled 4 and put back 0` on
+screen is what surfaced it.
+
+**A sortie's damage was invisible.** It is applied after the round's `dealt` is
+computed, so the one thing the one area that can lose you the siege does never
+reached the sentence — *"take 2"* for a round that had dealt twelve.
+
+**And the claim that failed:** the generic `for each area` solver was written up
+as *worse on purpose* than the intent-reading one. Measured, they tie on
+seventeen seeds. What the pair actually shows is sharper — **at three dice,
+allocating at all matters far more than allocating well**: no allocation loses
+seed 3 outright, either allocation wins it. If *where* is meant to be the
+decision, the pool wants to be larger or the areas to differ more than they do.
+That is a tuning signal to judge by playing, not a conclusion.
+
+### `host` → `enemy`, because the game is a computer (Phase 8, `0.8.13`)
+
+The besieging army was `host`. Archaic-correct — a *heavenly host* is an army —
+and wrong for this game specifically: **§9b makes remote hosts a content type**,
+*"trees, verbs, infiltration"*, so the word would have meant *a machine you break
+into* and *the army at your wall* in one vocabulary. In a game that is literally a
+terminal, `host` reads as a machine first.
+
+§5.1 already calls it **the enemy** seventeen times, so the design document had
+been using the right word all along while the code used another.
+
+**Only two candidates swept clean** against verbs, synonyms, spell words, every
+domain's readings, every material and every spell name: `enemy` and `rabble`.
+Everything else collided, and three of the collisions were with words this domain
+itself had just added — `warband` and `warhost` prefix `warding`, `foemen`
+prefixes `foes`, `besiegers` scores 667 against the dev spell `besieging`.
+`rabble` is dismissive about an army that can take your wall.
+
+**It is a format change, and the first *content* one the migration handles.** A
+node is addressed by path (§15's readable save), so `/tower/bailey/host` became
+`/tower/bailey/enemy` and a format-6 document names a place this build does not
+have. Rewriting a path is exact, so `FORMAT` went to 7 and the save is migrated
+rather than refused — which is the entry below demonstrating that its *"expressible
+or not"* line is a real distinction rather than a way of saying *no*.
+
+**Three persistence tests passed by asserting nothing** while this landed. Each
+pinned the literal `"format = 6"` to age a document; the bump made `replacen`
+match nothing, so the save stayed current and valid and two tests *expecting a
+refusal* were handed a good save. They derive the stamp from `save::FORMAT` now.
+**A fixture that edits a document has to track the document.**
+
+### An older save is migrated, not refused (Phase 8, `0.8.9`)
+
+`Save::from_toml` refused **every** older format, on the argument that *"the old
+answers are not expressible in the new model"* and that §15 invites a developer
+to delete their save. That is true of the ward rework and **false of every bump
+since**: three of the last four were pure `RngStream::COUNT` increases, and a
+stream a save has never heard of is exactly a stream at position nought. Padding
+is *exact* — `Rngs::restore` derives each stream from the master seed and winds it
+forward, so a padded stream is precisely what a world that had never drawn from
+it would hold.
+
+| Bump | What changed | Migratable |
+|---|---|---|
+| 1 → 2 | The lens's scoring model | **No.** Old readings mean nothing now |
+| 2 → 3, 3 → 4, 5 → 6 | `RngStream::COUNT` | Yes — pad |
+| 4 → 5 | `bide until` withdrawn | Yes. A saved `bide until` loads and compiles to a line the orb cannot read — a fault the player can see and fix, in a file whose text is theirs. Voiding a whole tower for one bad line in one spell is the larger loss, and §8 is *"scripts always log and never halt"* rather than *"a bad line voids the world"* |
+
+**And the second half was the worse defect.** `Opened::Unreadable`'s own doc says
+*"the file is kept … losing a tower is bad; losing it silently and destroying the
+evidence is worse"* — and the code did exactly that: the player got a fresh
+tower, and the autosave overwrote the old one sixty ticks later. An unreadable
+save is now renamed aside before anything can take its place.
+
+### Every shipped solver is driven by a test (Phase 8, `0.8.10`)
+
+`dev_spells.toml` shipped thirteen solvers and **nothing ran any of them**. They
+were reached only by See-it lines and by whichever integration test happened to
+`invoke` one, so a spell could stop compiling, spin for ever, or silently do
+nothing with the gate green — which this log already records happening twice.
+
+`tests/solvers.rs` asserts six things per solver, and the last is a lint: a spell
+added to the file and not to the table is a worked example nothing runs. Two
+solvers are *meant* to fall short and the table says so, rather than the file
+assuming one budget — `chanting` collapses at one step a tick, which is the
+menagerie's progression hook.
+
+**Two defects were found by writing it.** `assembling`'s `repeat 200` needs ~500
+ticks and the first budget was 180, which read as a spell that never terminates;
+and the matrix test asking whether every authored arsenal row *changes* the siege
+found that `mending` did not — a heal spent at full strength was consumed and
+did nothing. It is refused now and the potion kept, which is not §6's bare error
+but is the silent loss of the one resource the domain exists to make you weigh.
+
+### A domain stands alone; the tower-wide systems only enhance it (Phase 8 scoping)
+
+**Every domain must be playable and scriptable on its own, and the arsenal,
+multiplexing and the weave are *enhancements* to that — never prerequisites for
+it.** Stated here because it had never been written down as a rule, only arrived
+at four times in a row, and the first Phase 8 plan then broke it by assuming the
+opposite.
+
+That plan called Phase 7 a hard dependency: `CAPACITY = 1` is tower-wide, so a
+siege holding the production slot would freeze the automation the enemy exists to
+attack. **The premise was false.** A domain puzzle takes no production slot, and
+four shipped domains prove it — scrying's press (§19, `0.3.22`, which *withdrew*
+the twelve-tick cost), defense's `muster`/`haul` (*"`probe`'s decision"*), the
+archive's walk (`Sim::walk`, a third entry point spending no tick at all), and
+summoning's chant (*"costs nothing to attempt"*). Exactly two things hold the
+tower-wide slot: **brewing, and the §8.1 audit** — and the audit holds it because
+§8.1 prices *looking* against *making* on purpose, which is a claim about
+auditing rather than about domains.
+
+It is measured, not merely intended: `orbs-balance` reads `scrying` at 0.268/tick
+*beside* clarity's 0.140 with no contention, which is **additive rather than
+competing**. Domains stack.
+
+| Layer | What it is |
+|---|---|
+| The domain | Complete alone: its own puzzle, its own verbs, its own dev spell, one pane |
+| The arsenal | Cross-domain *goods*. Already the one room reachable from every other, already stocked by three domains |
+| Multiplexing | Watching two domains at once. Better, never required — a siege at one pane is a whole siege |
+| The weave | `steps_1` / `satchel_1` / `cursors_1`: solvable at baseline, better after. The menagerie is the precedent — *unautomatable until the weave grants a second step, solved outright once it does* |
+
+**So the sequencing risk inverts.** Nothing gates the siege; what would break it
+is building one that reaches for the production slot anyway. The gate is
+therefore a measurement rather than a phase ordering — a siege policy must run
+**additive** to `clarity` in `orbs-balance`, the way `scrying` does.
+
+Enchanting is not a dependency either, and its relationship runs backwards: it is
+*derived* in §10, its buffs land on **instruments** rather than on the arsenal,
+and what it gives the siege is a second potion sink that amends §11.5 so the
+siege stops being the only one.
+
+### `verify` had no price, and §8.1 had already set one (Phase 1 debt, `0.5.13`)
+
+§8.1 prices free auditing exactly, and had done since the design: *"four free
+instant checks **are** `verify --all` by another name"*, and a flat cheap audit
+means *"'which surface do I inspect first' would stop being a decision, and the
+four-surface model would collapse on move one."* **Neither half was built.**
+`sabotage.rs` had carried the sentence *"arrives with the remaining surfaces in
+Phase 1"* since Phase 0; Phase 1 closed without it, and four instant looks
+audited the whole tower for nothing through five phases.
+
+Built now rather than in Phase 8 because the siege plan's step 1 depends on it,
+and a domain built on top of an unpriced check would bake the collapse in.
+
+| Question | Decision |
+|---|---|
+| How is `--all` spelled? | **Bare.** §8.1 writes it as a flag and the parser has no flag syntax at all — 0 hits for `"--`. Gaining one for a single word would be a second grammar beside a language with nine control words, so the widening is `Slot::optional`, which is what `survey` and `recall` already do. **Bare-widens is this game's idiom; a flag is not** |
+| What does the audit cost? | **A production slot, and a duration that scales with the tower.** §8.1 says Production-class, so the run hangs on `/tower` and answers to the same tower-wide `CAPACITY` a grind does. `AUDIT_BASE` plus a term per held spell plus a term per length of record stream, clamped at `AUDIT_LONGEST` |
+| Why not the triage slot? | `purge` runs there, and a scour is the answer to a problem you have already found. **The audit is the looking**, and §8.1 prices the looking against the making deliberately |
+| What does the cooldown ration? | **The surface, never the target.** `verify laboratory.log` tires the orb of *logs* — all of them — and leaves shelves untouched. Per-target would be no rationing at all with four targets to hand; per-everything would be the flat wall §8.1 is avoiding. Per-surface is exactly the decision the section names |
+| Does it survive quitting? | **Yes**, and it had to. A cooldown a player clears by saving and loading is not a cooldown, and the exploit would then need its own rule — the shape this log already records for idleness and the clock |
+| Is that a `FORMAT` bump? | **No, and this is the borderline case worth recording.** `ProgressSave.cooling` is additive and optional, and no stored byte changes meaning: an absent table honestly reads as *nothing is cooling*, which is true of every save written before it. Distinct from `bide until`, which loaded perfectly and *then* compiled to a line the orb could not read — a saved spell containing `verify` still compiles, still runs, and is merely sometimes told to wait |
+
+**The save shape is named pairs, and TOML forced it.** The obvious
+`Vec<Option<u64>>`, positional on `Surface::ALL`, does not serialise: the format
+has no null and `toml` answers `unsupported None value`. Naming each surface is
+the better file anyway — §15 wants a save a person can read, `["log", 120]` says
+what `[null, 120]` cannot, and it means Phase 8's two remaining surfaces cannot
+renumber the two that ship.
+
+**`State` is the verdict; the surface rides `Kind`.** The refusal first wrote the
+surface word into `State`, which is where `sound` and `tampered` live — so a
+refusal and an answer became indistinguishable to `sift`, to the §14 stream, and
+to anything counting verdicts. That is rule 4 rather than tidiness, and it was
+found the only way it could be: by a test that counted two answers where one had
+been given.
+
+**The refusal is `Role::Cost`, not `Role::Danger`**, so a bound spell that
+verifies in a loop is told to wait without latching a fault on the rail. Same
+choice `say_blocked` makes, for the same reason — a wait is the loop working.
 
 ### A channel between two spells, and a second cursor in one (Phase 5, `0.5.9`–`0.5.10`)
 
@@ -4199,7 +4765,7 @@ ever be a number the player typed.
 |---|---|
 | Where the value type goes | **On the count, not as a new `Condition`.** `Quantity::Count(1)` is exactly what a bare `has sage` always meant, so the change is additive by construction and the ~110 behavioural tests kept passing *through* it rather than being rewritten around it |
 | Named `Value` or `Quantity` | **`Quantity`.** `orbs_render::Value` is the record field type and `watch` imports it in the same file; two `Value`s in one module is a rename waiting to happen |
-| An expression tree | **No, and this is the ceiling being chosen.** One world read on each side, no arithmetic and no nesting. §6's posture is that a player types what they mean, and `has marks + 1 than east` is the different program wearing the game's clothes. Where more is wanted the answer is a list, not an operator |
+| An expression tree | ~~**No, and this is the ceiling being chosen.** One world read on each side, no arithmetic and no nesting. §6's posture is that a player types what they mean, and `has marks + 1 than east` is the different program wearing the game's clothes. Where more is wanted the answer is a list, not an operator~~ — **superseded at `0.8.16`**, and its own example is now writable as `plus 1`. The ceiling moved rather than being removed: see below for the four rules that replace it, and note that the objection was to *punctuation and precedence* rather than to arithmetic as such |
 | Strict or inclusive | **Strict against a place, inclusive against a number**, which is English rather than an inconsistency: `has 2 or fewer marks` includes two, `has fewer marks than east` does not. *At least as many* is deliberately absent — `not … fewer … than` says it, which is the route already given for `!=` |
 | Whether it reads components | **No — the published `Sense` children**, through one `many_at` used by both sides. A builtin reading `Maze::marks` off the component is the hidden channel `watch.rs` opens by forbidding: *"forging the event and forging the evidence are the same act"* |
 

@@ -385,6 +385,9 @@ const PATTERN_AND_FILE: &[Slot] = &[
 /// offered four arbitrary subjects rather than four readings of an input.
 const TOPIC_OPTIONAL: &[Slot] = &[Slot::optional(NounKind::Subject)];
 const ANYTHING: &[Slot] = &[Slot::required(NounKind::Any)];
+/// `verify`'s, and the second optional slot in the game — see its `signature`
+/// arm for why bare is the audit rather than a refusal.
+const ANYTHING_OPTIONAL: &[Slot] = &[Slot::optional(NounKind::Any)];
 const COUNT: &[Slot] = &[Slot::required(NounKind::Count)];
 // `VESSEL` was `siphon`'s signature, when a finished brew sat in one. §10.1 puts
 // the product in the instrument that made it, so no verb takes a vessel today.
@@ -480,6 +483,14 @@ const STATION_AND_STATION: &[Slot] = &[
 ];
 /// `sing` takes one syllable, and there is no bare form.
 const SYLLABLE: &[Slot] = &[Slot::required(NounKind::Place)];
+/// `pledge` takes a die and an area — the lens's socket-and-sigil shape.
+///
+/// `to` between them is §6 filler, so `pledge d20 to buckler` and `pledge d20
+/// buckler` are the same command and the longer one is what a person types.
+const DIE_AND_AREA: &[Slot] = &[
+    Slot::required(NounKind::Place),
+    Slot::required(NounKind::Place),
+];
 const SCRIPT: &[Slot] = &[Slot::required(NounKind::Script)];
 // `scribe` coins a name rather than naming something that exists — see
 // `NounKind::Name`. `bind` and `invoke` keep `SCRIPT`, because a spell they name
@@ -708,6 +719,54 @@ pub enum Verb {
     /// sweep — which is the opposite of what happened to `chant`, and §19 says
     /// so.
     Summon,
+    /// `defend` — let the enemy arrive, and stand to meet it.
+    ///
+    /// **Takes nothing**, for the reason `muster`, `probe` and `summon` do:
+    /// there is one rampart, and naming it would be naming the only thing there
+    /// is.
+    ///
+    /// Swept clean at 500 (`attend`, `decant`, `find`) against a floor of 600,
+    /// with no three-character prefix collision. `siege` itself is **600 against
+    /// `sing`** and so cannot be a word the player types — the domain keeps the
+    /// name and the verb does not.
+    Defend,
+    /// `deploy <troop>` — send what the menagerie summoned into the line.
+    ///
+    /// The arsenal's troops, spent. Swept clean at 500 against `play`.
+    Deploy,
+    /// `quaff <potion>` — spend a potion on the coming round.
+    ///
+    /// **A potion needed its own word and a scroll did not.** §19: *"spending a
+    /// scroll is setting a thing going, which is what `wield` already means"* —
+    /// so scrolls keep `wield` and this is the drinking verb beside it. Swept
+    /// completely clean: nothing in the vocabulary scores against it at all.
+    Quaff,
+    /// `pledge <die> to <area>` — put one of your dice behind part of the wall.
+    ///
+    /// **The domain's central decision.** Three dice against four areas, so the
+    /// board can never be covered and every round leaves something dark. Which
+    /// area is urgent is what §5.1's telegraph tells you a round ahead, which is
+    /// what turns that announcement from advice into the thing the turn is
+    /// spent on.
+    ///
+    /// A die is *rolled* when the round resolves, so a `d20` is a gamble with a
+    /// high ceiling and a `d6` is a floor you can rely on. The board prints the
+    /// range before the commitment — §5.1's fairness rule, carried from a roll
+    /// to an allocation.
+    ///
+    /// Swept clean against verbs, synonyms, spell words, every domain's
+    /// readings, every material and every spell name. `commit` prefixes
+    /// `combine` and `assign` prefixes `assembling`.
+    Pledge,
+    /// `hold` — end your turn and let one round resolve.
+    ///
+    /// **The only thing in the domain that advances the world**, which is what
+    /// makes the siege turn-based rather than merely slow: §5.0's *"no
+    /// per-command tick cost"* is preserved because everything else on your turn
+    /// is free, and the clock moves here and nowhere else.
+    ///
+    /// Swept clean at 500 (`halt`, `help`, `odd`).
+    Hold,
     /// `sing <syllable>` — answer the syllable at the aperture.
     ///
     /// **The one verb in the game whose value depends on *when* it runs.** A
@@ -788,7 +847,7 @@ pub enum Verb {
 
 impl Verb {
     /// Every verb in the Phase 0 vocabulary, and what the phases since have added.
-    pub const ALL: [Self; 36] = [
+    pub const ALL: [Self; 41] = [
         Self::Attend,
         Self::Survey,
         Self::Peruse,
@@ -828,6 +887,15 @@ impl Verb {
         Self::Sing,
         Self::Chorus,
         Self::Queue,
+        // **Appended, for the reason the block above gives.**
+        // `the_tolerated_collision_set_is_pinned` walks pairs in this order, so
+        // inserting anywhere else would reorder the pinned set without changing
+        // a single score.
+        Self::Defend,
+        Self::Deploy,
+        Self::Quaff,
+        Self::Hold,
+        Self::Pledge,
     ];
 
     /// The longest a canonical verb may be.
@@ -892,6 +960,14 @@ impl Verb {
             | Self::Summon
             | Self::Sing
             | Self::Chorus
+            // ...and the bailey's five, on the same reading. Standing to a
+            // siege, pledging dice, spending the arsenal on it, and ending a
+            // turn are the whole of what this room does.
+            | Self::Defend
+            | Self::Deploy
+            | Self::Quaff
+            | Self::Hold
+            | Self::Pledge
             // ...and the satchel's push. It is §8's channel rather than any one
             // room's puzzle, but it stands in every domain and it changes the
             // world, which is what `Group::Work` collects.
@@ -963,6 +1039,11 @@ impl Verb {
             Self::Sing => "sing",
             Self::Chorus => "chorus",
             Self::Queue => "queue",
+            Self::Defend => "defend",
+            Self::Deploy => "deploy",
+            Self::Quaff => "quaff",
+            Self::Hold => "hold",
+            Self::Pledge => "pledge",
         }
     }
 
@@ -1055,7 +1136,14 @@ impl Verb {
             | Self::Haul
             // The circle declares `summon`.
             | Self::Summon
+            // The rampart declares `defend`.
+            | Self::Defend
             | Self::Research => Some(self),
+            // **The bailey's other four are anchored to the rampart**, which is
+            // the circle's shape rather than the sanctum's: a band is something
+            // you *read*, not somewhere you stand, and there is one rampart to
+            // fight from.
+            Self::Deploy | Self::Quaff | Self::Hold | Self::Pledge => Some(Self::Defend),
             // The maze's other two words, anchored to the stacks.
             Self::Follow | Self::Wander => Some(Self::Research),
             // **`sing` is anchored to the circle, not to a syllable** — the
@@ -1141,6 +1229,11 @@ impl Verb {
             Self::Dial => "dialling",
             Self::Muster => "mustering",
             Self::Haul => "hauling",
+            Self::Defend => "defending",
+            Self::Deploy => "deploying",
+            Self::Quaff => "quaffing",
+            Self::Hold => "holding",
+            Self::Pledge => "pledging",
             Self::Summon => "summoning",
             Self::Sing => "singing",
             Self::Chorus => "chorusing",
@@ -1181,7 +1274,18 @@ impl Verb {
             // no argument because what it does is hand over the keyboard.
             | Self::Chorus
             | Self::Summon
+            // **`defend` takes nothing** for the reason `muster` and `summon` do
+            // — one rampart — and **`hold` takes nothing** for `chorus`'s: it
+            // names no argument because what it does is end your turn.
+            | Self::Defend
+            | Self::Hold
             | Self::Muster => NOTHING,
+            // **What the arsenal holds**, which is `wield`'s shape rather than
+            // `sing`'s: a troop and a potion are things you *have*, carried from
+            // another room, not readings the board publishes. The slot refuses
+            // free text, so `deploy asdfgh` is caught here rather than a round
+            // later.
+            Self::Deploy | Self::Quaff => ANYTHING,
             // One syllable, a `Role::Reading` place — the socket's shape rather
             // than the station's, and **required**: there is no bare `sing`,
             // because unlike `dial` there is nothing for the world to step
@@ -1195,6 +1299,11 @@ impl Verb {
             // abbreviation, so what comes out of the satchel is a word the game
             // knows however it went in.
             Self::Queue => ANYTHING,
+            // **A die and an area, both `Role::Reading` places** — the lens's
+            // socket-and-sigil shape exactly, and for its reason: a spell's
+            // condition resolves its place half against `NounKind::Place`, so
+            // `if the buckler is empty` needs the word to be one.
+            Self::Pledge => DIE_AND_AREA,
             // A socket and a sigil, both `Role::Reading` places.
             Self::Dial => SOCKET_AND_SIGIL,
             // Two stations, likewise.
@@ -1202,7 +1311,22 @@ impl Verb {
             // A way, which is a place — see `Role::Reading`.
             Self::Follow => WAY,
             Self::Recall => TOPIC_OPTIONAL,
-            Self::Verify | Self::Purge => ANYTHING,
+            // **`verify` bare is the audit, so its slot is optional** — the
+            // second verb to take `recall`'s shape, and for the reason §19 gives
+            // there: *"bare and argumented are the same act at two scopes"*.
+            // `verify laboratory.log` asks about one thing; `verify` asks about
+            // everything, which is §8.1's expensive form.
+            //
+            // This is also what settles what that form is *called*. §8.1 writes
+            // it `verify --all`, and **the parser has no flag syntax at all** —
+            // adding one for a single word would be a grammar nobody else in the
+            // game uses. Bare is the widening every other verb already spells
+            // this way.
+            //
+            // `purge` keeps `ANYTHING`: bare, it would be a scour of everything,
+            // which §7 protects against rather than prices.
+            Self::Verify => ANYTHING_OPTIONAL,
+            Self::Purge => ANYTHING,
             Self::Meditate => COUNT,
             Self::Move => MOVE,
             // An instrument is a place (§10.1), and you always name the

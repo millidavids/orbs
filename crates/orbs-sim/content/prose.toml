@@ -577,6 +577,26 @@ spell_unattended = "{name} needed you there. it stops"
 # off `is_gated` — a word that can only say no is worse than a word that is not
 # offered, and none of these can only say no.
 verify_substituted = "something here is not what it says: {detail}"
+
+# ---------------------------------------------------------------------------
+# §8.1's two forms of `verify`, and the price between them.
+#
+# **Bare `verify` is the audit** — the expensive form the design writes as
+# `verify --all`, spelled the way every other widening in this game is, because
+# the parser has no flag syntax. It takes the production slot for a duration
+# that grows with the tower, so the sentence quotes the wait up front: a
+# Production-class action that did not say what it was costing would be the
+# refusal §6 forbids, arriving as a surprise instead of a no.
+verify_sweep_begins = "the orb turns its attention on the whole tower. {quantity} ticks"
+verify_sweep_sound = "everything the orb can see is what it says it is"
+# **Named, not counted** — §8.1's rule that sabotage is engaging to find and
+# never frustrating. Once the audit is paid for, the answer is the thing itself.
+verify_sweep_found = "these are not what they say: {detail}"
+
+# **The cooldown names the wait**, because §6 forbids a bare error and a player
+# told only "not yet" cannot plan the one decision this exists to create: which
+# surface to spend a look on.
+verify_cooling = "the orb is still reading the {state} of things. {quantity} ticks"
 # **`seal`, not `ward` — the word moved rooms** (§19). §10 reserves "ward" for
 # defense (*"ward placement"*, *"wards, made and consumed"*), and the lens had
 # borrowed it. `seal` is a word this domain already uses two lines down, and the
@@ -624,6 +644,10 @@ pylon_spoken = "{quantity} wards, {name} hauled, the barrier at {detail}"
 # the whole thing; the foot of the picture has the rail two columns away saying
 # how the barrier stands.
 pylon_tally = "{quantity} wards, {name} hauled"
+siege_tally = "round {quantity}, {name} still coming"
+siege_title = "rampart"
+siege_coming = "they mean to {state}"
+siege_spoken = "{quantity} against {name}. they {state} next. you tell {detail}"
 muster_opens = "{quantity} wards well up in the wellspring, greatest beneath"
 muster_already = "a course is already drawn. haul it across, or stop the pylon"
 muster_nowhere = "there is no pylon here to draw upon"
@@ -945,6 +969,13 @@ craft_line_sanctum = "muster"
 craft_then_sanctum = "haul wellspring barrier"
 craft_ask_sanctum = "if the wellspring is empty"
 
+# The bailey (§5.1). **It was missing**, so `recall apprentice` in the room told
+# a player *"no work happens here"* and showed them the laboratory's grind — in
+# the one room whose whole point is that it is scripted.
+craft_line_bailey = "defend"
+craft_then_bailey = "hold"
+craft_ask_bailey = "if the garrison has few"
+
 craft_line_menagerie = "summon"
 craft_then_menagerie = "sing skyward"
 craft_ask_menagerie = "if the skyward has next"
@@ -1035,6 +1066,7 @@ man_scripting_shape_is = "<place> is idle, working or empty"
 man_scripting_shape_has = "<place> has <thing>"
 man_scripting_shape_count = "<place> has 2 or more <thing>, or at most 2, or exactly 2"
 man_scripting_shape_than = "<place> has more <thing> than <place>. or fewer, or as many"
+man_scripting_shape_weigh = "...than <place> has <thing>. and double <place>, and plus 2"
 man_scripting_shape_join = "join them with and, or, not, either, both"
 
 recall_repeat = "do a block again. bare it runs for ever, or give it a count"
@@ -1285,12 +1317,15 @@ man_status_2 = "one glance rather than a walk through every room"
 man_status_eg1 = "status after a brew shows the experience it paid"
 man_status_also = "survey, weave, verify"
 
-man_verify_use = "verify <name>"
+man_verify_use = "verify [name]"
 man_verify_gloss = "check something for tampering"
 man_verify_1 = "a siege corrupts what it can reach, quietly"
-man_verify_2 = "this is how you find out before you trust it"
+man_verify_2 = "given a name, one instant look at that one thing"
+man_verify_3 = "bare, it audits everything, and the tower does nothing else"
+man_verify_4 = "a look tires the orb of logs, or of shelves, for a while"
 man_verify_eg1 = "verify orb.log says whether the record was touched"
-man_verify_also = "peruse, sift, status"
+man_verify_eg2 = "verify on its own, when you do not know where to look"
+man_verify_also = "peruse, sift, purge, status"
 
 man_undo_use = "undo"
 man_undo_gloss = "take back the last command"
@@ -1537,3 +1572,185 @@ man_weave_2 = "mastery branches, and a tier is a choice of one"
 man_weave_3 = "ley or mastery hands the arrows over; esc leaves"
 man_weave_eg1 = "weave, then mastery, then the arrows to look about"
 man_weave_also = "status, bind"
+
+# --- the bailey's own voice (§5.1) -----------------------------------------
+defend_nowhere = "there is no rampart here to stand on"
+defend_nothing_to_give = "nothing is at the wall to thin"
+# **It says a thing was touched and never what.** The whole puzzle is spending a
+# look to find out, which is what §8.1's cooldown prices — a message naming the
+# spell would answer the question the audit exists to ask.
+assault_script = "something got past the wall. a spell does not read as it was written"
+assault_clock = "something got past the wall. a spell is not keeping its own time"
+defend_already = "the enemy is already at the wall"
+defend_too_soon = "the road is empty. nothing comes for {quantity} yet"
+defend_opens = "{quantity} come up the road. they mean to {state}"
+hold_unopened = "nothing is at the wall. defend first"
+hold_over = "it is over. defend again when the next one comes"
+spend_incomplete = "name what you want to spend"
+pledge_incomplete = "name a die and where it goes"
+# What each area came to. **The other half of showing the range before the
+# commitment**: a gamble you cannot see the result of is a die behind a curtain.
+area_line = "the line struck at {quantity} above its usual"
+area_buckler = "the buckler put {quantity} on the wall"
+area_succour = "the succour rolled {quantity} and put back {detail}"
+area_sortie = "the sortie dealt {detail} and cost {state}"
+pledge_not_a_die = "{name} is not one of your dice"
+pledge_not_an_area = "there is no {detail} on this wall to hold"
+pledge_spent = "{name} is already pledged to the {state}"
+pledge_made = "{name} goes behind the {detail} for {kind}. {quantity} to {state}"
+
+# The refusal the whole resource exists to produce. It names what the die would
+# have cost and what is left, because a player has to be able to plan around it -
+# and planning around it is the mechanic.
+pledge_short = "{name} would take {kind}, and you hold {detail}"
+# **A pledge the intent will waste is allowed and warned about.** Refusing would
+# be the game playing for you; silence would break the rule that you are told the
+# odds before the commitment, and *this does nothing* is the starkest odds there
+# are.
+pledge_wasted = "{name} goes to the {detail} for {kind}, wasted on a {state}"
+spend_useless = "{name} is worth nothing on a wall"
+spend_wrong_word = "{name} is not quaffed or deployed. {detail} it"
+spend_none = "there is no {name} in the arsenal"
+spend_whole = "the line is whole. keep the {name} for when it is not"
+spend_unanswered = "they {state} next, so you will not swing. keep the {name}"
+deploy_sent = "{name} goes down to the line"
+quaff_drunk = "{name}, drunk. it lasts this round"
+scroll_spent = "{name} burns away on the wall. it lasts this round"
+hold_round = "they {state}. you lose {quantity} and take {detail}"
+roll_tells = "{name} strikes - {kind} gives {detail} against {state}, and it tells"
+roll_misses = "{name} swings - {kind} gives {detail} against {state}, and misses"
+siege_held = "the enemy breaks and runs. the wall holds, and you earn {detail}"
+siege_fallen = "the wall is carried. {quantity} of the way, and you keep {detail}"
+
+# The bailey, where a siege is fought (§5.1). The room, then its five words.
+man_here_bailey = "the courtyard inside the wall. where a siege is met"
+man_start_bailey = "defend lets the enemy arrive. your troops are already yours"
+man_solve_bailey = "pledge the dice, spend the arsenal, then hold for a round"
+
+man_defend_use = "defend"
+man_defend_gloss = "stand to the wall and let the enemy arrive"
+man_defend_1 = "the king assigns you the same six troops every time"
+man_defend_2 = "what changes is what came, and what you brought"
+man_defend_3 = "nothing moves until you hold, so there is time to read"
+man_defend_4 = "the enemy says what it will do next before it does it"
+man_defend_eg1 = "defend, then survey enemy to see what came"
+man_defend_also = "hold, deploy, quaff, recall bailey"
+
+man_deploy_use = "deploy <name>"
+man_deploy_gloss = "send a summoned troop into the line"
+man_deploy_1 = "what the menagerie called up, spent here"
+man_deploy_2 = "it joins the garrison and rolls with it next round"
+man_deploy_eg1 = "deploy troop, when the garrison is few"
+man_deploy_also = "quaff, hold, summon"
+
+man_quaff_use = "quaff <name>"
+man_quaff_gloss = "spend a potion on the coming round"
+man_quaff_1 = "a potion is fight put back, or a better die"
+man_quaff_2 = "it lasts one round. it is bought for the round you hold"
+# **`warding`, not `mending`.** `mending` is a `secret = true` recipe, so the
+# manual's only worked example for this verb was one a new player cannot type —
+# the same drift already caught in the shipped spell, the balance driver and the
+# verb table, left standing in the one surface a player actually reads.
+man_quaff_eg1 = "quaff warding, before they come all at once"
+man_quaff_also = "deploy, wield, hold"
+
+man_pledge_use = "pledge <die> to <area>"
+man_pledge_gloss = "put one of your dice behind part of the wall"
+man_pledge_1 = "three dice, four places to put them. one goes without"
+man_pledge_2 = "the die is rolled when the round comes, not now"
+man_pledge_3 = "so a d20 is a gamble and a d6 is a floor you can lean on"
+man_pledge_4 = "what they mean to do next says which part needs it"
+man_pledge_eg1 = "pledge d20 to buckler, when an onslaught is coming"
+man_pledge_eg2 = "pledge d6 to succour, when you only need a little back"
+man_pledge_also = "hold, survey coffer, recall bailey"
+
+man_hold_use = "hold"
+man_hold_gloss = "end your turn and let one round resolve"
+man_hold_1 = "this is the only thing here that moves the world"
+man_hold_2 = "everything else is free, so take as long as you like"
+man_hold_3 = "both sides roll. the log says every die and every face"
+man_hold_eg1 = "hold, once you have spent what the round wants"
+man_hold_also = "defend, deploy, quaff, peruse bailey.log"
+
+# The bailey's readings (§5.1). Thirteen words a solver's `if` names, and the
+# manual could explain none of them until the lint was widened to see this room.
+#
+# **`recall_` is what makes a word nameable and `using_` is the worked line.**
+# The second is where a page earns its keep: `few` is obvious and *when to ask
+# it* is not.
+
+# --- what the garrison is.
+recall_spears = "how many of a side are still standing"
+using_spears = "if the garrison has fewer than 3 spears. the enemy has foes instead"
+
+recall_mettle = "how much fight a side has left between them"
+using_mettle = "if the garrison has fewer than 6 mettle. it falls before spears do"
+
+recall_few = "the line is thin. two or fewer still standing"
+using_few = "if the garrison has few. bodies first, or nothing else matters"
+
+recall_hurt = "worn down to half of what the garrison ever had"
+using_hurt = "if the garrison has hurt. this is the rung a healing potion answers"
+
+# --- what is coming over the wall.
+recall_foes = "how many of the enemy are still coming"
+using_foes = "if the enemy has fewer than 3 foes. nearly done"
+
+recall_outnumbered = "the enemy has at least twice the garrison's numbers"
+using_outnumbered = "if the enemy has outnumbered. the language has no ratios"
+
+recall_massed = "the enemy has not lost anybody yet"
+using_massed = "if the enemy has massed. true on the first round and after a bad one"
+
+recall_routed = "a side is broken. nobody left standing"
+using_routed = "if the enemy has routed. beware: a lost siege leaves them standing"
+
+# --- the four places a die can go, and what a solver asks of them.
+recall_ceiling = "the best this part could come to, if every die rolls high"
+using_ceiling = "if the buckler is empty. or has fewer than 8 ceiling"
+
+recall_moot = "what they mean to do next will throw this away"
+using_moot = "if the line has moot. they volley, so you will not swing"
+
+# --- what a pledge costs, and what is left to pay with. The one resource in the
+# domain that only ever falls: it is granted at defend and never comes back.
+recall_quintessence = "what is left to spend on dice, and what a die costs"
+using_quintessence = "if the coffer has fewer quintessence than the d20. too dear"
+
+# --- the odds, which used to be on the board and nowhere a spell could ask.
+recall_aim = "how likely a side's blows are to tell, in a hundred"
+using_aim = "if the enemy has fewer than 40 aim. not worth a die to stop"
+
+# The dice themselves. The coffer names the ones still free, so a solver asks
+# the coffer and pledges what it finds.
+recall_d6 = "a six-sided die. a small, dependable floor"
+using_d6 = "if the coffer has d6. pledge it where you need certainty"
+
+recall_d8 = "an eight-sided die. the middle of your three"
+using_d8 = "if the coffer has d8. pledge d8 to buckler"
+
+recall_d20 = "a twenty-sided die. the gamble, and the one that can swing a round"
+using_d20 = "if the coffer has d20. pledge it where a bad roll costs least"
+
+# **Only the three a wizard holds have pages.** `Prose::topics` strips `recall_`
+# to decide what is nameable, so a page for `d100` would register a subject the
+# coffer can never publish — the `clarity_use` trap (§19) with a die in it. The
+# other four are real dice and belong to the arsenal's future, not to `recall`.
+
+# --- the siege itself.
+recall_turns = "how many rounds have resolved"
+using_turns = "if the rampart has more than 8 turns. a long siege is a losing one"
+
+recall_lifted = "the siege is over, either way"
+using_lifted = "repeat until the rampart has lifted. the guard a solver wants"
+
+# --- what the enemy announced. §5.1 tells you a round ahead so the turn is
+# prevention rather than reaction, and these three are the whole of that.
+recall_advance = "the enemy means to close on the wall next round. ordinary"
+using_advance = "if the rampart has advance. reinforce a thin line and ride it out"
+
+recall_onslaught = "the enemy means to come all at once next round, and harder"
+using_onslaught = "if the rampart has onslaught. the round to spend something on"
+
+recall_volley = "the enemy means to shoot from range. fewer of them, and unanswered"
+using_volley = "if the rampart has volley. spend nothing, you cannot strike back"

@@ -59,18 +59,35 @@ pub(super) fn sift(intent: &Intent, world: &mut World) {
 /// signature a *speed bonus for observant players rather than a requirement* —
 /// and what makes sabotage playable at all without sight.
 pub(super) fn verify(intent: &Intent, world: &mut World) {
+    // **Bare is the audit** (§8.1's `verify --all`, spelled the way every other
+    // widening in this game is — see `Verb::signature`). It used to
+    // `acknowledge` and do nothing, which was the one form §8.1 actually prices.
     let Some(target) = intent
         .arguments
         .first()
         .map(|argument| argument.value.clone())
     else {
-        acknowledge(Verb::Verify, world);
+        super::audit::sweep(world);
         return;
     };
-    match here_or_place(world, &target) {
-        Some(node) => tower::verify(world, node),
-        None => missing(Verb::Verify, &target, world),
+    let Some(node) = here_or_place(world, &target) else {
+        missing(Verb::Verify, &target, world);
+        return;
+    };
+
+    // **The cooldown is charged before the answer, and only for a surface.**
+    // §8.1 rations *"which surface do I inspect first"*; a node that is neither
+    // a log nor a shelf can never report tampering, so rationing it would be a
+    // wait with no information behind it — see `Surface::of`.
+    if let Some(surface) = tower::Surface::of(world, node) {
+        let now = *world.resource::<crate::tick::Tick>();
+        if let Some(left) = world.resource::<tower::Cooling>().left(surface, now) {
+            super::audit::say_cooling(world, surface, left);
+            return;
+        }
+        world.resource_mut::<tower::Cooling>().spend(surface, now);
     }
+    tower::verify(world, node);
 }
 
 /// The node `target` names: something where the player stands, or a place.

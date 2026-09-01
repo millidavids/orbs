@@ -24,6 +24,8 @@ pub use compile::{
 };
 pub use invoke::{invoke, stop_spell};
 pub use program::{Block, Complaint, Draft, Kind, Loop, Program, Step};
+#[cfg(test)]
+pub(crate) use run::dragged_for_test;
 pub use run::{
     Caller, Casting, Descent, MAX_DEPTH, MAX_PARTS, MAX_STRANDS, PATIENCE, Running, SCRIPT_BUDGET,
     Strand, advance, budget, line_of, may_issue,

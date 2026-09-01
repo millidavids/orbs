@@ -123,6 +123,24 @@ pylon = 1
 at = 16
 grants = "concentration"
 
+# **The second step, and the one the note above was waiting for.** §11.5's
+# resource table has always named this resource's producers as "Passive
+# regeneration, Ley Line steps"; the regeneration half is struck (§14 - a
+# per-tick regen would mean more typing produces more, inverting the economy for
+# exactly the players the screen-reader mode serves), so a ley step is the whole
+# of what raises it.
+#
+# **56 is two clarities past the first step**, which puts it after a player has
+# automated the laboratory and before they have any reason to stand at a wall.
+# It is a first-pass number: `orbs-balance` decides it, and the sweep that
+# settles `d6 1 / d8 2 / d20 5` settles this with it.
+#
+# Adding it needed one code change - "quintessence" into `GRANTS` - because a
+# `grants` outside that closed set fails the load rather than granting nothing.
+[[ley_line]]
+at = 56
+grants = "quintessence"
+
 # ---------------------------------------------------------------------------
 # MASTERY - the branching tree.
 #

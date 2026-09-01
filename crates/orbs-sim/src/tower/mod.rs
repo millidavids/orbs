@@ -1,9 +1,12 @@
 //! The tower: the directory tree that *is* the world (DESIGN.md §7).
 
+pub mod assault;
+pub mod audit;
 mod boot;
 mod brief;
 mod build;
 pub mod chant;
+pub mod dice;
 mod erosion;
 mod experience;
 mod heat;
@@ -19,18 +22,22 @@ pub mod reach;
 mod sabotage;
 pub mod satchel;
 mod scene;
+pub mod siege;
 mod stock;
 pub mod ward;
 mod work;
 
+pub use assault::{Reached, Retimed, Rewritten};
+pub use audit::{Cooling, Surface};
 pub use boot::report;
 pub use brief::{
     Brief, Cast, DOMAINS, Mark, Marks, briefs, clear_mark, mark, mark_fault_at, running_spells,
 };
 pub use build::{declared, fixture_of, operated, raise, raise_count, raise_reading};
 pub use chant::{Chant, Strike, Syllable};
-pub use erosion::{EROSION, Integrity, STANDING, erode, height_for, mend, wear_by};
-pub use experience::{Experience, concentration, credit, worth};
+pub use dice::{Die, Effect, Landed, Modifier, Roll};
+pub use erosion::{EROSION, Integrity, STANDING, erode, height_for, mend, mend_by, wear_by};
+pub use experience::{Experience, concentration, credit, quintessence_steps, worth};
 pub use heat::{
     ATHANOR, Ash, Banked, Burning, banked, burn, burning, damp, find as find_athanor, kindle, lit,
     refuse_cold,
@@ -53,6 +60,7 @@ pub use sabotage::{
 };
 pub use satchel::{SATCHEL, Satchel};
 pub use scene::{Topics, rebuild, scene_at};
+pub use siege::{Band, Intent, Outcome, Round, Siege};
 pub use stock::{Stock, give, give_endless, held, holdings, take};
 pub use ward::{SIGILS, SOCKETS, Shift, Ward};
 pub mod spell;

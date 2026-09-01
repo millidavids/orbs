@@ -262,7 +262,21 @@ pub(super) fn carry(intent: &Intent, world: &mut World) {
 
 /// Set an instrument working on what is in it (§10.1).
 pub(super) fn wield(intent: &Intent, world: &mut World) {
-    // **A scroll first, and it returns before `start`.** Spending one is not a
+    // **A siege first of all.** §19 keeps `wield` for scrolls — *"spending a
+    // scroll is setting a thing going, which is what `wield` already means"* —
+    // so a scroll spent on the wall has to reach the wall rather than the
+    // laboratory. Without this the three scroll rows in `siege.toml` were dead
+    // content and `wield quickening-scroll` in the bailey quietly hurried the
+    // *laboratory*, while `quaff` refused and pointed the player at it.
+    //
+    // **Only while a siege is running, and only for a scroll the wall can use**,
+    // so `wield gleaning-scroll` in the archive and `wield mortar_and_pestle`
+    // anywhere are untouched. You are on the wall, so you use it on the wall.
+    if super::defend::wielded(intent, world) {
+        return;
+    }
+
+    // **A scroll next, and it returns before `start`.** Spending one is not a
     // run: it takes no production slot, so it is not refused while a brew is in
     // flight — which is exactly when a player reaches for one — and it never
     // reaches `Verb::transmutes`, which `land::finish` reads. `begins_work` is

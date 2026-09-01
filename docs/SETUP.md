@@ -218,7 +218,7 @@ touches the sim, the shell, or the loop.**
 
 It is the only layer that exercises the event loop, the redraw diff, keyboard
 ownership between five surfaces, the clocks measured off `Time`, and colour as a
-terminal resolves it. CLAUDE.md documents the driver's rules — why an assertion
+terminal resolves it. [SEEING-IT.md](SEEING-IT.md) documents the driver's rules — why an assertion
 is scoped to the newest command block, and the four ways a wait can look like it
 passed without the game having done anything.
 

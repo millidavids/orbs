@@ -145,6 +145,24 @@ run chant_collapse ORBS_BOOT=0 ORBS_DUMP="attend menagerie; summon; meditate 18;
 run chant_troop   ORBS_BOOT=0 ORBS_DUMP="recall troop; debug_spawn troop 3; survey arsenal"
 run recall_script_sanctum ORBS_BOOT=0 ORBS_GRID=100x40 ORBS_DUMP="attend sanctum; recall scripting"
 
+# --- the bailey ------------------------------------------------------------
+# **The whole domain was absent from this file**, which shipped with Phase 8 and
+# went unnoticed until quintessence changed the board and the diff came back
+# clean. A capture set that does not hold a surface cannot tell you when it moves,
+# and the rampart is the most numerically dense picture in the game.
+run siege_board    ORBS_BOOT=0 ORBS_DUMP="attend bailey; defend"
+run siege_pledged  ORBS_BOOT=0 ORBS_DUMP="attend bailey; defend; pledge d20 buckler; pledge d6 succour; survey coffer"
+# The refusal, which is the decision the resource exists to force: three full
+# rounds are exactly the pool, so the fourth has nothing to spend.
+run siege_short    ORBS_BOOT=0 ORBS_DUMP="attend bailey; defend; pledge d20 buckler; pledge d8 line; pledge d6 succour; hold; pledge d20 buckler; pledge d8 line; pledge d6 succour; hold; pledge d20 buckler; pledge d8 line; pledge d6 succour; hold; pledge d20 buckler"
+# A worn tower opens with half a pool — §19's integrity coupling, on screen.
+run siege_worn     ORBS_BOOT=0 ORBS_DUMP="attend sanctum; meditate 3600; attend bailey; defend; survey coffer"
+run siege_readings ORBS_BOOT=0 ORBS_DUMP="attend bailey; defend; survey enemy; survey garrison; survey d20"
+run siege_round    ORBS_BOOT=0 ORBS_DUMP="attend bailey; defend; pledge d20 buckler; hold; peruse bailey.log"
+run siege_refuse   ORBS_BOOT=0 ORBS_DUMP="attend bailey; defend; pledge d20 buckler; pledge d20 line; pledge buckler d20; deploy sage"
+run siege_over     ORBS_BOOT=0 ORBS_DUMP="attend bailey; defend; debug_siege; hold; survey rampart"
+run recall_script_bailey ORBS_BOOT=0 ORBS_GRID=100x40 ORBS_DUMP="attend bailey; recall scripting"
+
 # The apprentice's guide. **One per room**, because the worked example is built
 # from where you are standing — five rooms with lines of their own, and the
 # grimoire borrowing the laboratory's and saying so.

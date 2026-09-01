@@ -638,6 +638,63 @@ fn swap_out(world: &mut World, entity: Entity, index: usize) -> bool {
     false
 }
 
+/// What a retimed spell's budget is worth after the enemy has had it.
+///
+/// §8.1's **trigger-clock** surface, and this is the whole of what it does: a
+/// spell whose schedule has been dragged gets fewer instructions a tick, so it
+/// falls behind the world it was written against without a single line of it
+/// being wrong.
+///
+/// **That is what makes it the subtlest of the four.** A rewritten spell shows
+/// its lie to `peruse`; a retimed one reads perfectly and simply stops keeping
+/// up, which is exactly the failure a player will blame on their own logic
+/// first. `verify` is the only thing that finds it.
+///
+/// **It skips whole ticks; it does not shave the budget.** The shipped
+/// `SCRIPT_BUDGET` is 1 until the weave grants more, so `allowance - drag`
+/// floored at one returned *one* for every drag value — the surface announced
+/// itself, marked the spell `Poisoned`, cost an audit and a purge, and changed
+/// nothing at all.
+///
+/// So a dragged spell runs on one tick in every `drag + 1` and gets **nought**
+/// on the others. §8's *"scripts always log and never halt"* is kept by the
+/// **periodicity**, not by a floor: the cycle always contains a tick that runs,
+/// so the spell is slowed and never stopped.
+///
+/// **The doc for all of that used to sit on `dragged_for_test`** — a
+/// `#[cfg(test)]` pass-through — so a release build had no explanation of a
+/// non-obvious global-tick gate at all, and what it did say described the
+/// subtract-and-floor design that had already been replaced.
+fn dragged(world: &World, entity: Entity, allowance: usize) -> usize {
+    // **`entity` is the spell's own node**, because `invoke` inserts `Running`
+    // onto it — so `Retimed` is already here and there is nothing to look up.
+    // It rides the node rather than the `Running`, which is where `Bound` sits
+    // and for the same reason: a `Running` is torn down and rebuilt every lap,
+    // so sabotage hung on one would be repaired for free by the spell simply
+    // running off the end.
+    let Some(drag) = world
+        .get::<super::super::Retimed>(entity)
+        .map(|retimed| retimed.drag)
+        .filter(|drag| *drag > 0)
+    else {
+        return allowance;
+    };
+    // The tick decides, so this is a pure function of replayed state and takes
+    // no draw of its own.
+    let now = world.resource::<crate::tick::Tick>().get();
+    if now.is_multiple_of(drag + 1) {
+        allowance
+    } else {
+        0
+    }
+}
+
+/// [`dragged`], reachable from a test. The doc lives on `dragged` itself.
+#[cfg(test)]
+pub(crate) fn dragged_for_test(world: &World, entity: Entity, allowance: usize) -> usize {
+    dragged(world, entity, allowance)
+}
+
 /// Run up to [`budget`] instructions of the cursor that is currently swapped in.
 ///
 /// **Read once, before the first step.** A node cannot be taken mid-tick, so
@@ -645,7 +702,7 @@ fn swap_out(world: &mut World, entity: Entity, index: usize) -> bool {
 /// change — and if it ever could, a budget that grew while it was being spent is
 /// the shape a loop guard must never have.
 fn step_strand(world: &mut World, entity: Entity) {
-    let allowance = budget(world);
+    let allowance = dragged(world, entity, budget(world));
     for _ in 0..allowance {
         // **Before the state is read, so every step sees its cursors.** Entry
         // and lap both arrive here, which is what makes this the one writer —

@@ -81,6 +81,17 @@ impl Sim {
         if let Some(pylon) = tower::pylon::fixture(&world) {
             crate::execute::publish_pylon(&mut world, pylon);
         }
+        // **And what each die costs, for exactly the same reason one line up.**
+        // A die's price is a fact about the die rather than about a fight, and it
+        // was raised only by `defend::publish` — which nothing calls until the
+        // first bailey verb. So `survey d20` on a fresh tower answered *"the d20
+        // holds nothing"*, and because `many_at` reads an absent child as nought
+        // the affordability guard every solver ships — `not the coffer has fewer
+        // quintessence than the d20` — compared nought against nought and
+        // answered **yes, afford it** on a tower with no pool at all.
+        //
+        // The sanctum paid for this once already; the comment above is its scar.
+        crate::execute::publish_dice(&mut world);
         tower::rebuild(&mut world);
         tower::report(&mut world);
 
@@ -120,6 +131,7 @@ impl Sim {
         world.init_resource::<Pending>();
         world.init_resource::<Submissions>();
         world.init_resource::<Skip>();
+        world.init_resource::<tower::Cooling>();
         world.init_resource::<crate::execute::Answered>();
         world.init_resource::<crate::execute::Chorusing>();
         world.init_resource::<crate::execute::Patient>();
@@ -148,6 +160,12 @@ impl Sim {
         // `(seed, submissions)` unless the content were versioned with it.
         world.init_resource::<Recipes>();
         world.init_resource::<Fuels>();
+        // What the arsenal is worth in a siege. **Recipes' tier, not
+        // materials'**: these reach decisions — how many troops a scroll is
+        // worth changes what a round does — so swapping them mid-session would
+        // break replay from `(seed, submissions)` the same way a recipe swap
+        // would.
+        world.init_resource::<crate::content::Spendables>();
         // Materials **are** hot-reloadable in principle, unlike the two above:
         // a tint is read by the instrument panel and by nothing else, so no verb
         // branches on it and swapping it mid-session cannot change what the
@@ -535,6 +553,12 @@ impl Sim {
         }
 
         #[cfg(debug_assertions)]
+        if crate::execute::beleaguered(line) {
+            self.debug_siege(line);
+            return;
+        }
+
+        #[cfg(debug_assertions)]
         if crate::execute::swapping(line) {
             self.debug_swap(line);
             return;
@@ -804,6 +828,31 @@ impl Sim {
             ],
         );
         Some(course.view(standing, tally))
+    }
+
+    /// The siege being fought in the bailey, if the player is looking at it.
+    ///
+    /// Reads `Cwd` for the reason [`pylon`](Self::pylon) does: the picture
+    /// cannot outrun the readings by following the player out of the room.
+    ///
+    /// **A finished siege still draws.** `settle` leaves the board up so the
+    /// last thing that happened stays readable — a board that vanished on the
+    /// winning round would take the postmortem with it.
+    #[must_use]
+    pub fn rampart(&self) -> Option<orbs_render::Rampart> {
+        let rampart = self.here_with::<tower::Siege>()?;
+        let siege = self.world.get::<tower::Siege>(rampart)?;
+        // The board's own line, written here: `orbs-render` holds no authored
+        // English (rule 6), so the sentence under the rule is composed from the
+        // same prose key the reader hears.
+        let tally = self.prose().line(
+            "siege_tally",
+            &[
+                ("quantity", &siege.turns.to_string()),
+                ("name", &siege.enemy.count.to_string()),
+            ],
+        );
+        Some(siege.view(tally))
     }
 
     /// The figure being sung in the menagerie, if the player is looking at it.
@@ -1362,6 +1411,41 @@ impl Sim {
             .records_mut()
             .push(RecordKind::Completion)
             .text(orbs_render::FieldName::Name, crate::execute::COURSE)
+            .text(orbs_render::FieldName::Message, &message)
+            .role(orbs_render::Role::Cost)
+            .finish();
+    }
+
+    /// Thin the enemy to one, so the next `hold` is the round that ends it.
+    #[cfg(debug_assertions)]
+    fn debug_siege(&mut self, line: &str) {
+        if let Some(node) = self.debug_shortcut::<tower::Siege>(line)
+            && let Some(mut siege) = self.world.get_mut::<tower::Siege>(node)
+            && siege.running()
+        {
+            siege.give_away();
+            // **Republished**, for `debug_course`'s reason rather than
+            // `debug_ward`'s: a siege's readings are rewritten by the *round*
+            // that follows, so `foes`, `outnumbered` and `massed` would all be
+            // describing the enemy that arrived rather than the one left — and a
+            // decision tree reads exactly those.
+            crate::execute::refresh_rampart(&mut self.world);
+            return;
+        }
+
+        // **A shortcut that finds nothing says so**, which is `debug_course`'s
+        // rule: silent, it would leave the *next* line to report the trouble,
+        // and `hold` answering "nothing is at the wall" reads as the hold being
+        // wrong rather than the shortcut.
+        let message = self
+            .world
+            .resource::<crate::content::Prose>()
+            .line("defend_nothing_to_give", &[]);
+        self.world
+            .resource_mut::<Scrollback>()
+            .records_mut()
+            .push(RecordKind::Completion)
+            .text(orbs_render::FieldName::Name, crate::execute::SIEGE)
             .text(orbs_render::FieldName::Message, &message)
             .role(orbs_render::Role::Cost)
             .finish();

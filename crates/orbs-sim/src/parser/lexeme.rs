@@ -244,6 +244,11 @@ fn is_grammar(lower: &str) -> bool {
             | "least" | "most" | "more" | "fewer" | "exactly"
             // `let m be mortar`, and `for each way`.
             | "be" | "each"
+            // The far side's one multiplier — `than double the garrison`.
+            // **`plus` is not here**: it is a `STOPPERS` word, so the line above
+            // already has it, and repeating it would be the second expression of
+            // one rule this module exists to avoid.
+            | "double"
         )
 }
 

@@ -444,6 +444,7 @@ pub fn run_script(seed: u64, wizard: Option<String>, engine: &str, request: &str
             ward: sim.ward(),
             pylon: sim.pylon(),
             figure: sim.figure(),
+            rampart: sim.rampart(),
             briefs: sim.briefs(),
         };
         super::prompt::paint(

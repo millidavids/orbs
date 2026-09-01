@@ -129,13 +129,35 @@ const BOUNDS: &[(&[&str], Bound, i64)] = &[
 /// field type and `watch` imports it beside this; two things called `Value` in
 /// one file is a rename waiting to happen.
 ///
-/// # Not an expression tree, and that is the ceiling being chosen
+/// # An expression tree with a hard depth cap, in word notation
 ///
-/// There is no arithmetic here and no nesting: a comparison has a world read on
-/// one side and a number **or one other world read** on the other. §6's posture
-/// is that a player types what they mean, and `if north has marks + 1 than east`
-/// is the different program wearing the game's clothes. Where more is needed the
-/// answer is a list and `for each`, not an operator.
+/// **This paragraph used to refuse arithmetic outright** — *"no arithmetic here
+/// and no nesting: a world read on one side and a number or one other world read
+/// on the other"* — and §19 records the reversal rather than quietly
+/// contradicting it. Weighing the siege's pool against what a die costs is the
+/// thing that broke it: the tower now has a resource whose whole point is being
+/// compared, and *"the world publishes a derived word"* stops scaling when the
+/// question is `is this one worth more than that one`.
+///
+/// **What is honest about the new shape.** Once [`Of`](Self::Of) exists this
+/// *is* a tree: `Doubled` and `Plus` wrap it, so the old paragraph's own example
+/// — `north has marks + 1 than east` — is expressible, as `Plus` with words
+/// instead of punctuation. Calling that "not an expression tree" would describe
+/// the notation and not the shape.
+///
+/// **What holds the ceiling instead**, and each of these is load-bearing:
+///
+/// - **Words, never symbols.** `plus` and `double`, so there is nothing to
+///   parenthesise and §6's *"a player types what they mean"* survives.
+/// - **One operator, and subtraction is deliberately absent.** `A - n > B` is
+///   `A > B + n`, so one word covers both directions — and there is no clean word
+///   for the other: `less` is already shipped grammar in `BOUNDS` and `minus`
+///   scores 667 against `minute`.
+/// - **No precedence table**, because there is nothing to disambiguate: an
+///   expression sits only on the **far** side of a comparative, reads strictly
+///   left to right, and cannot contain a comparison.
+/// - **No brackets**, which follows from the above rather than being a separate
+///   rule.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Quantity {
     /// A number the player wrote — `has 4 fragment`.
@@ -155,6 +177,109 @@ pub enum Quantity {
     /// against somewhere the tower does not have is §8's *Referent missing* and
     /// stops the question rather than answering it.
     Elsewhere(String),
+    /// What another place holds of a **different** thing — `has fewer
+    /// quintessence than the d20 has cost`.
+    ///
+    /// The variant the siege asked for. [`Elsewhere`](Self::Elsewhere) compares
+    /// one reading in two places, which cannot ask *is what I hold less than what
+    /// this costs* when the two are named differently on each side.
+    Of {
+        /// Where to look.
+        place: String,
+        /// What to look for there.
+        thing: String,
+    },
+    /// Twice what is inside — `than double the garrison`.
+    ///
+    /// **The user's own motivating example** (*"if the enemy count is twice that
+    /// of defenders"*), which the readings answered with a published word
+    /// (`outnumbered`) for as long as the ratio was fixed at two. It is a word
+    /// rather than a `*` for the reason the module doc gives.
+    Doubled(Box<Quantity>),
+    /// What is inside, and `by` more — `than the enemy has mettle plus 6`.
+    ///
+    /// **The only operator, and it is enough for both directions.** Subtraction
+    /// is `A > B + n` read from the other end; see the module doc for why there
+    /// is no word for it.
+    Plus {
+        /// What to add to.
+        of: Box<Quantity>,
+        /// How much.
+        by: u32,
+    },
+}
+
+impl Quantity {
+    /// This written back as the far side of a comparative, if it is one.
+    ///
+    /// **`None` for [`Count`](Self::Count), which is the whole discriminator.**
+    /// A count arrives from `BOUNDS` (`has 2 or fewer marks`) and everything
+    /// else from `COMPARATIVES` (`than …`) — so *"does this render a far
+    /// side"* and *"did the player write a comparative"* are one question, and
+    /// [`strict`](Self::strict) below is the same question again.
+    fn far(&self) -> Option<String> {
+        match self {
+            Self::Count(_) => None,
+            Self::Elsewhere(place) => Some(place.clone()),
+            Self::Of { place, thing } => Some(format!("{place} has {thing}")),
+            Self::Doubled(of) => Some(format!("double {}", of.far()?)),
+            Self::Plus { of, by } => Some(format!("{} plus {by}", of.far()?)),
+        }
+    }
+
+    /// Whether the comparison excludes equality.
+    ///
+    /// **Derived from the grammar, not from the variant**, and the distinction
+    /// is a real defect avoided. Written as `matches!(self, Elsewhere(_))` the
+    /// three variants above would all fall to *inclusive*, so `than the d20` and
+    /// `than the d20 has quintessence` — two spellings of one question — would
+    /// disagree at equality, and `plus 0` would change a sentence's meaning.
+    ///
+    /// Asked this way there is one rule: **a world read on the far side is
+    /// strict, a number the player typed is inclusive.** `has 2 or fewer marks`
+    /// includes two; `has fewer marks than east` does not. That is English, and
+    /// it is why there is no *at least as many* — `not … fewer … than` says it.
+    #[must_use]
+    pub const fn strict(&self) -> bool {
+        !matches!(self, Self::Count(_))
+    }
+
+    /// Every place and thing named inside, in reading order.
+    ///
+    /// One walk for the whole tree, so a name nested inside `double the enemy
+    /// has mettle plus 6` is resolved and reported exactly as a bare one is.
+    fn names<'a>(&'a self, visit: &mut impl FnMut(NounKind, &'a str)) {
+        match self {
+            Self::Count(_) => {}
+            Self::Elsewhere(place) => visit(NounKind::Place, place),
+            Self::Of { place, thing } => {
+                visit(NounKind::Place, place);
+                visit(NounKind::Any, thing);
+            }
+            Self::Doubled(of) | Self::Plus { of, .. } => of.names(visit),
+        }
+    }
+
+    /// Rewrite every name inside, leaving one alone where `rename` declines.
+    fn rename(&mut self, rename: &mut impl FnMut(NounKind, &str) -> Option<String>) {
+        match self {
+            Self::Count(_) => {}
+            Self::Elsewhere(place) => {
+                if let Some(found) = rename(NounKind::Place, place) {
+                    *place = found;
+                }
+            }
+            Self::Of { place, thing } => {
+                if let Some(found) = rename(NounKind::Place, place) {
+                    *place = found;
+                }
+                if let Some(found) = rename(NounKind::Any, thing) {
+                    *thing = found;
+                }
+            }
+            Self::Doubled(of) | Self::Plus { of, .. } => of.rename(rename),
+        }
+    }
 }
 
 impl Default for Quantity {
@@ -185,8 +310,15 @@ const COMPARATIVES: &[(&[&str], Bound, &str)] = &[
 /// `is` and `has` were the first two and the module docs say why. `than` and
 /// `as` join a comparison to its second half, so a span that ate them would give
 /// `more marks than east` a thing called *"marks than east"* — the same silent
-/// swallow, one grammar wider. Nothing in the tower is named any of the four.
-pub(super) const STOPPERS: &[&str] = &["is", "has", "than", "as"];
+/// swallow, one grammar wider.
+///
+/// **`plus` is the fifth, and joining this list is a permanent reservation.**
+/// Nothing in the tower may ever be named any of them: a reading or a material
+/// called `plus` would be unnameable, because a span stops before it rather than
+/// eating it. That is the price of the operator and it is paid once — `double`
+/// is *not* here, because it is consumed ahead of the place it modifies rather
+/// than being something a span could run through.
+pub(super) const STOPPERS: &[&str] = &["is", "has", "than", "as", "plus"];
 
 /// A question a spell can ask about the tower.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -285,9 +417,7 @@ impl Condition {
                 ..
             } => {
                 visit(NounKind::Place, place);
-                if let Quantity::Elsewhere(other) = count {
-                    visit(NounKind::Place, other);
-                }
+                count.names(visit);
                 visit(NounKind::Any, thing);
             }
             Self::Is { place, .. } => visit(NounKind::Place, place),
@@ -318,11 +448,7 @@ impl Condition {
                 if let Some(found) = rename(NounKind::Place, place) {
                     *place = found;
                 }
-                if let Quantity::Elsewhere(other) = count
-                    && let Some(found) = rename(NounKind::Place, other)
-                {
-                    *other = found;
-                }
+                count.rename(rename);
                 if let Some(found) = rename(NounKind::Any, thing) {
                     *thing = found;
                 }
@@ -443,12 +569,18 @@ pub fn write_condition(condition: &Condition) -> String {
         // three, because `COMPARATIVES` already pairs each bound with the word
         // that closes it — so a new spelling is still a row in that table and
         // cannot arrive here without a way back.
+        // **Guarded on `far()` rather than matching one variant**, so the four
+        // world-read shapes share the arm that already knew how to write a
+        // comparative. A variant added to `Quantity` with a `far()` gets written
+        // back for free; one added without gets caught by the round-trip test
+        // rather than by a player.
         Condition::Has {
             place,
             thing,
-            count: Quantity::Elsewhere(other),
+            count,
             bound,
-        } => {
+        } if count.far().is_some() => {
+            let other = count.far().unwrap_or_default();
             // **Falls back rather than panicking**, and the fallback is a
             // question the reader accepts: every `Bound` has a row today, and a
             // writer that could crash the game over a table someone extended
@@ -503,6 +635,18 @@ pub fn write_condition(condition: &Condition) -> String {
             count: Quantity::Count(count),
             bound: Bound::Exactly,
         } => format!("{place} has exactly {count} {thing}"),
+        // **Unreachable, and written rather than `unreachable!`.** The arms
+        // above cover every `Count` bound and the guarded one covers everything
+        // `far()` renders, so the only way here is a `Quantity` variant added
+        // without a `far()` arm. The round-trip test is what catches that; a
+        // panic here would catch it at a player's expense instead, which is the
+        // trade the comparative arm's own fallback already makes.
+        Condition::Has {
+            place,
+            thing,
+            count: _,
+            bound: _,
+        } => format!("{place} has {thing}"),
         Condition::Is { place, state } => format!("{place} is {}", state.canonical()),
         Condition::Not(inner) => format!("not {}", bracketed(inner, Around::Not)),
         Condition::All(items) => join(items, "and", Around::All),
@@ -635,8 +779,14 @@ enum Asking {
 enum Comparative {
     /// No comparative word here; the words ahead are something else.
     Absent,
-    /// `fewer marks than east` — the bound, the thing, and where to compare.
-    Read(Bound, String, String),
+    /// `fewer marks than east` — the bound, the thing, and what to compare
+    /// against.
+    ///
+    /// **The third field was a place name and is now the whole far side.** It
+    /// had to become a [`Quantity`] when that side stopped being a bare name:
+    /// `double the enemy has mettle plus 6` is a tree, and flattening it back to
+    /// a string here would mean parsing it twice.
+    Read(Bound, String, Quantity),
     /// A comparative with nothing to compare against.
     Unclosed,
 }
@@ -798,15 +948,68 @@ impl<'a> Reader<'a> {
             return Comparative::Unclosed;
         }
 
-        // The place compared against runs to the next connective — it is a name
-        // like any other, so `balneum mariae` works here as it does anywhere.
-        let other = self.to_connective();
-        self.at += other.len();
-        if other.is_empty() {
+        let Some(other) = self.far_side() else {
             self.at = start;
             return Comparative::Unclosed;
+        };
+        Comparative::Read(bound, thing.join(" "), other)
+    }
+
+    /// The far side of a comparative — `[double] <place> [has <thing>] [plus n]`.
+    ///
+    /// **Left to right, and it cannot contain a comparison**, which is what
+    /// makes the absence of brackets and precedence a consequence rather than a
+    /// rule. `double` binds to the whole of what follows it, because there is
+    /// only ever one thing following it.
+    ///
+    /// **The place reads to a [`STOPPERS`] word now, not to the next
+    /// connective.** That is the change the operators needed: `to_connective`
+    /// took everything up to `and`/`or`, so `than the d20 has quintessence`
+    /// yielded a place literally called *"d20 has quintessence"* — the silent
+    /// swallow the stopper list exists to prevent, one grammar wider again.
+    /// Multi-word names still work; `balneum mariae` contains no stopper.
+    fn far_side(&mut self) -> Option<Quantity> {
+        let doubled = self.eat("double");
+
+        let place = self.span();
+        self.at += place.len();
+        if place.is_empty() {
+            return None;
         }
-        Comparative::Read(bound, thing.join(" "), other.join(" "))
+        let place = place.join(" ");
+
+        // `has <thing>` names a *different* reading over there. Without it the
+        // far side can only ask about the same word as the near side.
+        let mut quantity = if self.eat("has") {
+            let thing = self.span();
+            self.at += thing.len();
+            if thing.is_empty() {
+                return None;
+            }
+            Quantity::Of {
+                place,
+                thing: thing.join(" "),
+            }
+        } else {
+            Quantity::Elsewhere(place)
+        };
+
+        if doubled {
+            quantity = Quantity::Doubled(Box::new(quantity));
+        }
+
+        // **`plus` last, so it applies to the whole of what came before it.**
+        // `double the enemy plus 2` is `(2 x enemy) + 2` — left to right, which
+        // is the only reading available when there is nothing to bracket.
+        if self.eat("plus") {
+            let by = self.eat_count()?;
+            quantity = Quantity::Plus {
+                of: Box::new(quantity),
+                by,
+            };
+        }
+
+        Some(quantity)
     }
 
     fn disjunction(&mut self) -> Option<Condition> {
@@ -945,11 +1148,11 @@ impl<'a> Reader<'a> {
             match self.eat_comparative() {
                 Comparative::Absent => {}
                 Comparative::Unclosed => return None,
-                Comparative::Read(bound, thing, other) => {
+                Comparative::Read(bound, thing, count) => {
                     let condition = Condition::Has {
                         place: name.to_owned(),
                         thing,
-                        count: Quantity::Elsewhere(other),
+                        count,
                         bound,
                     };
                     return Some(if negated {

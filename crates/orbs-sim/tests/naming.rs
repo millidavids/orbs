@@ -580,24 +580,33 @@ fn a_bare_anything_verb_offers_the_same_four_readings() {
     // Both readings are still places the orb refuses to unmake — the cabinet is a
     // `Store` and therefore `Protected`, exactly as the dispensary is — so what
     // changed is which four are listed and not what answering one does.
-    for verb in ["purge", "verify"] {
-        let mut sim = orbs_sim::Sim::new(1);
-        sim.submit("attend laboratory");
-        sim.step();
-        sim.submit(verb);
-        sim.step();
+    // **`purge` alone now, and `verify` is the reason.** This pinned both while
+    // both took a *required* `NounKind::Any`. §8.1's audit made a bare `verify`
+    // a legal command — the expensive form, spelled the way every widening in
+    // this game is — so it no longer prompts at all, and the test below holds
+    // that instead.
+    //
+    // The pin's job is unchanged: one verb with a required `Any` slot is all it
+    // takes to notice the noun space moving, and `purge` is the one that keeps
+    // it because bare it would be a scour of everything, which §7 protects
+    // against rather than prices.
+    let verb = "purge";
+    let mut sim = orbs_sim::Sim::new(1);
+    sim.submit("attend laboratory");
+    sim.step();
+    sim.submit(verb);
+    sim.step();
 
-        assert_eq!(
-            offered(&sim),
-            [
-                format!("{verb} grimoire"),
-                format!("{verb} tower"),
-                format!("{verb} archive"),
-                format!("{verb} cabinet"),
-            ],
-            "the readings a bare `{verb}` offers moved",
-        );
-    }
+    assert_eq!(
+        offered(&sim),
+        [
+            format!("{verb} grimoire"),
+            format!("{verb} tower"),
+            format!("{verb} archive"),
+            format!("{verb} cabinet"),
+        ],
+        "the readings a bare `{verb}` offers moved",
+    );
 }
 
 #[test]
@@ -694,7 +703,128 @@ fn readings() -> Vec<&'static str> {
     let mut out = orbs_sim::tower::maze::readings();
     out.extend(orbs_sim::tower::ward::readings());
     out.extend(orbs_sim::tower::pylon::readings());
+    // **The bailey's, and it was missed** — twelve words swept by nothing, two
+    // of which collided with real material names: `vigour` was an exact 1000
+    // against the secret potion of that name, and `troops` 834 against `troop`
+    // with a prefix match on top. Renamed to `mettle` and `spears`.
+    //
+    // A domain that adds readings and not a line here is a domain whose
+    // vocabulary is unswept, and the lint reads exactly as green as if it were.
+    out.extend(orbs_sim::tower::siege::readings());
     out
+}
+
+/// Every material name, which a reading must also not collide with.
+///
+/// **The hole all three earlier sweeps had.** A reading is a `NounKind::Sense`
+/// and `NounKind::Any` reaches one, so it sits in the way of *everything* a
+/// player can name — verbs, synonyms, spell words **and materials**. Sweeping
+/// only the first three is what let `vigour` ship against a potion called
+/// `vigour`.
+fn materials() -> Vec<String> {
+    orbs_sim::content::Materials::builtin()
+        .names()
+        .into_iter()
+        .map(str::to_owned)
+        .collect()
+}
+
+#[test]
+fn no_reading_collides_with_a_material() {
+    let mut bad = Vec::new();
+    for reading in readings() {
+        for material in materials() {
+            let score = similarity(reading, &material);
+            if score >= MIN_SIMILARITY {
+                bad.push(format!("{reading} vs {material}: {score}"));
+            }
+            // A prefix collision is invisible to a score, and §19 records three
+            // menagerie words lost to one.
+            if material.len() >= 3 && reading.len() >= 3 && material[..3] == reading[..3] {
+                bad.push(format!("{reading} vs {material}: prefix"));
+            }
+        }
+    }
+    bad.sort();
+    // **Pinned rather than asserted empty**, which is
+    // `the_tolerated_collision_set_is_pinned`'s idiom: all four below predate the
+    // sweep and three of them are *deliberate*. What this test is for is the set
+    // **changing** — a new reading joining it is a real finding.
+    let tolerated = [
+        // The errand is named after the scroll that sets it, which is the whole
+        // point: `wield gleaning-scroll` then `if the stacks has gleaning`.
+        "gleaning vs gleaning-scroll: 930",
+        "gleaning vs gleaning-scroll: prefix",
+        // Two authored words that happen to share three letters. `dreaming` is a
+        // secret potion and `gleaning` an archive errand; nothing takes both.
+        "gleaning vs dreaming: 625",
+        // `potency` is the sanctum's ward magnitude and `potash` a laboratory
+        // byproduct. Three shared letters, different rooms, no shared verb.
+        "potency vs potash: prefix",
+        // **The one tolerated collision that shares a room, and it is accepted
+        // with its cost written down rather than argued away.**
+        //
+        // `quintessence` is the siege's pool and `quickening-scroll` is spent at
+        // the same wall, so the *"different rooms"* half of `potency`'s argument
+        // does not apply here. What does apply is the verb split: `wield` takes
+        // `Workable = Place | Scroll`, which rejects a `Sense`, so `wield qui`
+        // never sees the reading and still reaches the scroll — pinned below by
+        // `the_scroll_keeps_its_abbreviation_against_the_reading`.
+        //
+        // The real exposure is `purge` and `verify`, which take `NounKind::Any`
+        // and see both. `qui` was *already* ambiguous between the two materials;
+        // what changes is that the reading now wins it outright, 887 to 876. So
+        // `purge qui` picks the pool rather than prompting. Both are commands
+        // nobody reaches for, and the alternative was renaming the resource away
+        // from the one word that names it exactly.
+        //
+        // §11.5 calls this resource `mana`; that scores 750 against `many` —
+        // inside `as many … as`, the comparison grammar it is written for — and
+        // 750 against `man`. `power` scores 800 against `tower`. This collision
+        // is the cheapest of the three, and it is a choice rather than an
+        // oversight.
+        "quintessence vs quickening-scroll: prefix",
+        "quintessence vs quiet-draught: prefix",
+    ];
+    let unexpected: Vec<&String> = bad
+        .iter()
+        .filter(|hit| !tolerated.contains(&hit.as_str()))
+        .collect();
+    assert!(
+        unexpected.is_empty(),
+        "a reading collides with a material the player can name: {unexpected:#?}",
+    );
+}
+
+/// **The property that makes `quintessence vs quickening-scroll` tolerable.**
+///
+/// The collision is accepted in the list above, and it is accepted *because* the
+/// verb that spends a scroll cannot see a reading: `wield` is
+/// `Workable = Place | Scroll` and a reading is a `Sense`. That is a fact about
+/// `Verb::accepts`, not about the two words — so if the slot ever widened to
+/// `Any`, the tolerance would silently stop being justified and `wield qui`
+/// would start reaching the pool instead of the scroll.
+///
+/// This is the test that would say so. A tolerated collision with no pin under
+/// it is a decision that quietly expires.
+#[test]
+fn the_scroll_keeps_its_abbreviation_against_the_reading() {
+    let scene = scene()
+        .with(NounKind::Scroll, "quickening-scroll")
+        .with(NounKind::Sense, "quintessence");
+
+    let resolution = resolve("wield qui", &scene, Mode::Calm);
+    let named = resolution.intent().and_then(|intent| {
+        intent
+            .arguments
+            .first()
+            .map(|argument| argument.value.clone())
+    });
+    assert_eq!(
+        named.as_deref(),
+        Some("quickening-scroll"),
+        "`wield qui` stopped reaching the scroll — `Workable` must still reject a Sense",
+    );
 }
 
 #[test]

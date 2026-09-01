@@ -8,7 +8,7 @@ If the two disagree, DESIGN.md wins and this file is wrong.
 > game. An item without a See it line is not started; an item whose line does not
 > work is not finished, however green its tests are. DESIGN.md §15, §19.
 
-Last updated: 2026-08-25 · **Phases 0, 0.5, 1, 2 and 4 closed. Phase 3 (Spellcraft) is met on its exit criterion with three boxes deliberately left.** The language overhaul closed at `0.3.26` and the editor work at `0.3.35`; what remains there is the terse register, a typed action at execution, and the hidden-directory authoring plan. **Phase 4 is Defense, at `0.4.2`** — the sanctum, a course of wards drawn from a wellspring and assembled at a barrier, integrity as the game's first *drain*, and `holding` to hold it. The domain shipped with fortification names and was reskinned at `0.4.1` (§19): §7's tree and §10's table said `battlements/` and both are superseded. **Defense and Enchanting swapped places** (§19): nothing in Defense depended on the two derived domains, and the version is player-visible, so building a later phase first would have made the number go backwards. **Phases 2–7 are the tower's five remaining domains and the phase that makes them one machine; what was Phase 2 (Siege) is now Phase 8.** Two of §8.1's four sabotage surfaces now ship — logs and world state; script text and trigger clocks stay in Phase 8, where their producer is.
+Last updated: 2026-08-30 · **Phases 0, 0.5, 1, 2 and 4 closed. Phase 3 (Spellcraft) is met on its exit criterion with three boxes deliberately left.** The language overhaul closed at `0.3.26` and the editor work at `0.3.35`; what remains there is the terse register, a typed action at execution, and the hidden-directory authoring plan. **Phase 4 is Defense, at `0.4.2`** — the sanctum, a course of wards drawn from a wellspring and assembled at a barrier, integrity as the game's first *drain*, and `holding` to hold it. The domain shipped with fortification names and was reskinned at `0.4.1` (§19): §7's tree and §10's table said `battlements/` and both are superseded. **Defense and Enchanting swapped places** (§19): nothing in Defense depended on the two derived domains, and the version is player-visible, so building a later phase first would have made the number go backwards. **Phases 2–7 are the tower's five remaining domains and the phase that makes them one machine; what was Phase 2 (Siege) is now Phase 8.** Two of §8.1's four sabotage surfaces now ship — logs and world state; script text and trigger clocks stay in Phase 8, where their producer is. **§8.1's pricing of `verify` closed at `0.5.13`** as Phase 1 debt, ahead of Phase 8, whose first step depends on it: a bare `verify` is the expensive audit, and a look now rations its surface. **Phase 8 (Siege) then closed at `0.8.7`** — the bailey, the seven dice, the arsenal spent, a decision tree that fights unaided, escrow, and the two adversarial surfaces that complete §8.1's model. **All four sabotage surfaces now ship.** Three items are deferred with reasons: pane synergies wait on Phase 7's multiplexing, and the backlog and difficulty tiers wait on §5.3's provocation.
 
 ---
 
@@ -34,7 +34,7 @@ were a single line inside a breadth phase two phases away, and the siege that
 | **5. Summoning** `menagerie/` | 2 | ~4k | ⬜ · derived |
 | **6. Enchanting** `forge/` | 2 | ~4k | ⬜ · derived |
 | **7. The tower as one machine** | 2 | ~3k | ⬜ |
-| 8. Siege | 4 | ~15k | ⬜ |
+| 8. Siege | 4 | ~15k | ✅ **Closed at `0.8.7`** · three items deferred, named in the section |
 | 9a. Breadth | 2 | ~4k | ⬜ · five domains moved out of it |
 | 9b. Remote hosts | 3 | ~12k | ⬜ |
 | 9c. Engine upgrade | 1 | — | ⬜ |
@@ -356,6 +356,39 @@ that names its phase gets revisited when the phase arrives; one that says
       decoct warding; meditate 25; verify laboratory.log; peruse laboratory.log"` —
       `verify` says `tampered`, and in the `peruse` below it line 1 has lost its
       number while line 2 still has one
+- [x] **The audit, and what a look costs** — §8.1 prices free checking exactly:
+      *"four free instant checks **are** `verify --all` by another name"*, and a
+      flat cheap audit means *"the four-surface model would collapse on move
+      one."* Neither half existed. `sabotage.rs` had said the expensive form
+      *"arrives with the remaining surfaces in Phase 1"* since Phase 0, and Phase
+      1 closed without it, so `verify` was four instant looks that audited the
+      tower for nothing. Closed as Phase 1 debt at `0.5.13`, ahead of Phase 8,
+      because the siege's step 1 depends on it
+      - **Bare is the wide scope, and there is no flag.** §8.1 writes it
+        `verify --all`; the parser has no flag syntax at all and gaining one for
+        a single word would be a second grammar. Bare-widens is what `survey` and
+        `recall` already do, so `Slot::optional` was the whole change
+      - **Production-class, so an audit is not a brew.** The run hangs on
+        `/tower` and answers to the same tower-wide `CAPACITY` a grind does. The
+        duration scales — a base, plus what the orb holds, plus the record
+        stream — because §8.1 says it scales with the tower
+      - **The cooldown is per *surface*, not per target**, which is what makes
+        *which surface do I inspect first* a decision rather than a formality:
+        one look tires the orb of logs, or of shelves, and never of both. It
+        travels in the save, because a cooldown a player can clear by quitting is
+        the shape §19 calls an exploit that then needs its own rule
+      - **`State` is the verdict and the surface rides `Kind`.** A refusal
+        writing `log` into the field that holds `sound`/`tampered` makes the two
+        indistinguishable to `sift`, to §14 and to any test counting answers —
+        which is how it was found, by a test counting two where one was given
+      **See it:** ✅ `ORBS_BOOT=0 ORBS_DUMP="attend laboratory; verify;
+      grind sage; meditate 25"` — the audit names its duration, `grind` is
+      refused with `the tower is busy verifying`, and the verdict lands
+      **See it:** ✅ the rationing, and that it is per surface —
+      `ORBS_BOOT=0 ORBS_DUMP="attend laboratory; verify laboratory.log;
+      verify laboratory.log; verify dispensary; meditate 21;
+      verify laboratory.log"` reads `sound`, then `still reading the log`, then
+      `sound` for the shelf, then `sound` again once the wait is served
 - [x] **Boot sequence** — status report reflecting real world state. Built by
       walking the tower, so it cannot go stale: one row per domain with what it
       holds and whether it is sound, plus §8.1's `bound` count. `bound: 0` is
@@ -1430,7 +1463,7 @@ they cannot prove it is the code worth writing"*, and no test can prove this.
       narrowed from 1.92× to 1.39× per step so a material catching the light
       stops reading as two materials.
 
-      **See it:** ✅ the eleven-command line in CLAUDE.md prints `green`, `bone`
+      **See it:** ✅ the eleven-command line in SEEING-IT.md prints `green`, `bone`
       and `green+bone` as three regions; step its last `meditate` and the
       mixture grows as both bands shrink. ✅ `ORBS_DUMP="...; digest
       ground-sage; meditate 20"` for a bath that has finished and is still
@@ -3720,36 +3753,213 @@ by *"the economy and the focus system are the same system"*.
 
 ---
 
-## Phase 8 — Siege
+## Phase 8 — Siege ✅
 
 **Exit:** sieges are tense and scripts visibly matter.
 
-- [ ] Autobattler
-      **See it:** watch one resolve without touching it, and want to have prepared
-- [ ] Procedural trait composition
-      **See it:** meet a trait you have not seen and recognise it from its parts
-- [ ] Adversarial aberrations across all four surfaces
-      **See it:** a siege breaks something you automated, and you find which
-      **Also gates:** per-subsystem RNG streams — the first thing that rolls
-      against them (deferred here from Phase 0's status table)
-- [ ] Escrow economy (progress-scaled, 20% floor, 50% completion bonus)
-      **See it:** lose a siege at 60% and keep something worth having
-- [ ] Unattended-siege backlog + dispersal + decay
-      **See it:** miss a siege entirely and come back to a survivable mess
-- [ ] Pane addressing and Focus-slot reservation
-      **See it:** command a named pane mid-siege without losing the one you watch
-- [ ] One siege type, end to end
-      **See it:** play it start to finish and be tense
-- [ ] Drift stub
-      **See it:** a bound script quietly stops matching the world
-- [ ] 21-pair synergy template (shared mechanics, bespoke flavour line)
-      **See it:** two aberrations combine into something worse than either
-- [ ] Siege type definitions + completion-fraction formula for each
-      **See it:** the escrow number matches what the siege felt like
-- [ ] Difficulty tiers within the progression-gated range
-      **See it:** pick the harder one and feel the difference, not just the numbers
+**Built at `0.8.1`–`0.8.7`.** The bailey, a turn-based defence resolved on D&D's
+seven dice, the arsenal spent on it at last, a decision tree that fights one
+unaided, escrow, and the adversarial aberrations that close §8.1's four-surface
+model. **Three items are deliberately left** and are named at the foot.
 
----
+**It is not an eighth domain.** §10 fixes the count at *"seven at launch"* and
+lists them; §5 says you *"descend into"* a siege. The bailey is the **arsenal's**
+shape — a real place in the tree, with its own log and its own verbs, that is
+deliberately not a rail box. The rail's seven slots are the argument as much as
+the table is.
+
+- [x] **Autobattler** — `defend` lets an enemy arrive, `hold` ends your turn and
+      resolves one round, and both sides roll. §10's rule is met by
+      construction: **there is no clock in it**, so outcome follows what the
+      player chooses given readable state and never how fast they act. §10.1's
+      one exception (the menagerie) is not extended
+      - **Turn-based serves the hand first and the script second**, which is the
+        argument the first plan missed by resting it on accessibility alone. A
+        real-time siege would outrun a decision tree evaluated at
+        `SCRIPT_BUDGET`, which is `PACE = 1` in the menagerie (§19) one room over
+      - **§5.0's *"no per-command tick cost"* is preserved.** Everything on your
+        turn is free and instant; the clock advances on `hold` and nowhere else
+      - **It takes no production slot** (§19), which the domain needs most: a
+        siege exists to test the automation, so freezing it would leave the enemy
+        nothing to attack
+      **See it:** ✅ `ORBS_BOOT=0 ORBS_DUMP="attend bailey; defend; survey enemy;
+      survey garrison; hold"` — the enemy says what it means to do, both bands
+      read back, and one round resolves
+- [x] **The seven dice, composed before they are resolved** — `d20`, `d100`,
+      `d12`, `d10`, `d8`, `d6`, `d4`, in `tower::dice`. A `Roll` is *assembled* —
+      which die, what modifies it, what it is against — and only then drawn
+      - **This is the piece that cannot be retrofitted**, and it is why it was
+        built before anything rolled: with the draw at the call site, every call
+        site has to change to admit a modifier, and there is one per kind of
+        attack
+      - **Each modifier carries its source**, so the log says *why* — rule 4, and
+        what makes `peruse bailey.log` a postmortem rather than a list of results
+      - **The draw count is a function of the composed roll, never of the
+        outcome**, so advantage is replayable where a reroll-on-miss would be
+        §19's `drift` defect
+      **See it:** ✅ `peruse bailey.log` after a round names the die and the face
+      for every roll: `enemy strikes - d20 gives 12 against 11, and it tells`
+- [x] **The board** — both bands, the telegraphed intent, and **the odds before
+      the commitment**, which is §5.1's fairness rule drawn. Strength is bar
+      *length*, never colour (§14), so it reads in greyscale and in a dump
+      **See it:** ✅ `cargo run -p orbs-render --example screens` draws it with no
+      sim at all; ✅ `ORBS_BOOT=0 ORBS_DUMP="attend bailey; defend"` draws it
+      beside the transcript
+- [x] **The arsenal spends, and the ten apology lines retire.** Potions, scrolls
+      and the menagerie's troop are pure mathematical advantages applied on your
+      turn — authored in `content/siege.toml` (rule 6), so a tuning pass is a
+      content edit rather than a recompile per guess
+      **See it:** ✅ `ORBS_BOOT=0 ORBS_DUMP="attend bailey; defend;
+      debug_spawn troop 2; deploy troop; quaff troop; deploy sage"` — the troop
+      joins the line, and both refusals name the way forward
+- [x] **The decision tree** — `besieging`, on the grimoire's shelf in a debug
+      build. The shape the brief named: *if base troops low, send demons; if
+      health low, apply potions; if outnumbered, wield a scroll*. Every rung is a
+      reading the world publishes, because the language has no arithmetic and is
+      not getting any — the maze's pattern, where `spoil` is a word rather than a
+      sum
+      **See it:** ✅ `ORBS_BOOT=0 ORBS_DUMP="attend bailey; debug_spawn troop 4"
+      ORBS_THEN="invoke besieging; meditate 300; peruse bailey.log"` — it fights
+      and wins unaided
+- [x] **Escrow economy** (progress-scaled, 20% floor, 50% completion bonus),
+      exactly §11.5's table. Losing at 60% keeps 60%; bailing at nought still
+      pays the floor — *"effort is never wasted; only cynicism is"*
+      **See it:** ✅ a lost siege reads `the wall is carried. 22 of the way, and
+      you keep 27`
+- [x] **Adversarial aberrations across all four surfaces.** §8.1's model is
+      closed: logs and world state shipped in Phase 1, and `tower::assault` adds
+      **script text** and **trigger clocks** — the two that reach a *script*, and
+      the two §19 moved here *"where their producer is"*
+      - **Siege-only**, which is what keeps Phase A genuinely safe (pillar 4).
+        Nothing in that module runs on a tick; it runs on a resolved round
+      - **A retimed spell reads perfectly and stops keeping up**, which makes it
+        the subtlest of the four — only `verify` finds it. Floored at one step a
+        tick, because §8's taxonomy is *"scripts always log and never halt"*
+      - **Misdirection, never theft**: the true lines are kept, so `purge` is a
+        repair rather than a report
+      **See it:** ✅ `ORBS_SEED=3 ORBS_BOOT=0 ORBS_DUMP="attend bailey; defend;
+      hold; hold; hold; hold; verify; meditate 60"` — *"something got past the
+      wall"*, then the audit names the spell it touched
+- [x] **The cadence, and it is the single most load-bearing number in the
+      domain.** §11.5 puts siege provocation at *"every 20–30 min"*; until §5.3's
+      trace provokes them, `siege::CADENCE` stands in for it
+      - **`orbs-balance` found this and nothing else would have.** Back to back,
+        a driver read **4.70 experience a tick** against clarity's 0.140 —
+        thirty-three times the flagship, which says *ignore every other room*
+      - **The escrow was not the thing to tune**, and that was the first
+        diagnosis. A siege paying 105 for thirteen rounds is right; fighting
+        three hundred of them in two hours is not
+      **See it:** ✅ `cargo run -p orbs-balance -- run besieging --ticks 7200`
+      reads 0.114–0.134 across seeds, under clarity and near warding
+      - **This line said 0.043–0.085 for two versions and that was never the
+        game**: it was measured while the driver keyed *"have I already spent
+        this round"* on the byte length of a rendered prose line, so consecutive
+        rounds collided and the policy stopped using its arsenal at random
+- [x] **Quintessence — a pool spent to pledge dice** (`0.8.15`). §11.5's mana,
+      built at last: a fixed pool granted on `defend`, sized by the tower's
+      integrity and raised by the ley line, **and never regenerating** — §14's
+      rule, since a per-tick regen would mean *more typing produces more* for
+      exactly the players the screen-reader mode serves
+      - **The decision now bites, and that is the measurement rather than the
+        claim.** Two solvers with opposite allocation strategies used to tie
+        across seventeen seeds; they now differ on 2 of 5, and where they differ
+        the gap is nearly threefold
+      - **Declining to pledge costs nothing**, so leaving an area dark is a move
+      - **The coffer publishes only what it can pay for**, which is why neither
+        shipped solver needed a line changed — both already asked `if the coffer
+        has d20`. The numeric comparison exists for real weighing and is not
+        load-bearing, because `has more … than` is *strict* and would refuse the
+        die you can exactly afford
+      - **`aim` closes an asymmetry**: `Roll::chance` was drawn on the board and
+        askable by nobody, so a hand player could see the odds and a spell could
+        not
+      **See it:** ✅ `ORBS_BOOT=0 ORBS_DUMP="attend bailey; defend; pledge d20
+      buckler; pledge d8 line; pledge d6 succour; survey coffer"` — three pledges
+      take 5, 2 and 1 of 24, and the board's coffer row prints what each costs
+      beside what is left. Run three rounds of it and the fourth is refused:
+      *"d20 would take 5, and you hold 0"*
+      **See it:** ✅ `ORBS_BOOT=0 ORBS_DUMP="attend sanctum; meditate 3600; attend
+      bailey; defend; survey coffer"` — a worn tower opens with **12 against a
+      kept tower's 24**, which is §19's deferred integrity → siege coupling
+- [x] **The far side of a comparison grows an arithmetic** (`0.8.16`). Reverses
+      §19 twice — *"it is not getting arithmetic"* and *"an expression tree: no"*
+      — and both are struck through with a pointer rather than contradicted
+      - **Quintessence is what broke them.** A derived word answers a *fixed*
+        ratio (`outnumbered`), and there is no word to publish for *is what I
+        hold more than what this costs*: the answer depends on two quantities
+        the player is choosing between
+      - `[double] <place> [has <thing>] [plus n]` — **words never symbols, one
+        operator, no precedence table, no brackets.** Subtraction is absent
+        because `A − n > B` is `A > B + n`
+      - **`strict` is derived from the grammar, not the variant**, or `than the
+        d20` and `than the d20 has quintessence` disagree at equality and
+        `plus 0` changes a sentence's meaning
+      - **`plus` joins `STOPPERS`**, which is a permanent reservation: nothing in
+        the tower may ever be named it
+      **See it:** ✅ `ORBS_BOOT=0 ORBS_GRID=110x40 ORBS_DUMP="attend bailey;
+      scribe maths"` with `ORBS_EDIT` writing the three forms, then `interpret` —
+      each reads back verbatim, which is the surface a swallowed term shows up on
+      **See it:** ✅ `ORBS_BOOT=0 ORBS_GRID=100x40 ORBS_DUMP="attend bailey;
+      recall scripting"` — the manual gains a sixth question shape
+- [x] **`sparingly`, the solver the arithmetic was built for** (`0.8.16`). The
+      only shipped spell that uses `for each die`, a different reading on the far
+      side, or `double` — and the only one that declines to pledge on purpose
+      - **Its guard is a double negative and has to be.** `not … fewer … than` is
+        the language's own route to *at least as many*; the affirmative is
+        *wrong*, because a comparison against a place is strict and would refuse
+        the die you can exactly afford
+      **See it:** ✅ `ORBS_BOOT=0 ORBS_DUMP="attend bailey; debug_spawn troop 6;
+      debug_spawn warding 6" ORBS_THEN="invoke sparingly; meditate 600; sift
+      pledge bailey.log"` — **nine pledges, three rounds, exactly 24 spent**, and
+      then it fights on without dice rather than being refused
+- [x] **An `xhigh` review of the whole siege, and the two it found by playing**
+      (`0.8.17`). Eleven findings; **seven were a comment, a doc or a count that
+      had stopped being true**, and the two that were not working were both found
+      by typing a command into the game
+      - **The enemy was breaking spells rather than lying to them.** The
+        corruptible guard let through any line whose last word is grammar, so
+        `part look()` produced three complaints and `is idle-` skipped a whole
+        block — the surface announcing itself, which is the opposite of the
+        misdirection `assault.rs`'s own header requires
+      - **A die's price did not exist until the first bailey verb**, so the
+        affordability guard every solver ships answered *yes* on a tower with no
+        pool. The sanctum's `integrity` defect, one domain over
+      **See it:** ✅ `ORBS_BOOT=0 ORBS_DUMP="attend bailey; survey d20"` — the
+      price is 5 with no siege ever opened, where it read *"the d20 holds
+      nothing"*
+      **See it:** ✅ six rounds on seeds 3, 11, 17 and 42 print **no** `line n:`
+      complaint, where a corrupted `part` or `is <state>` printed three
+- [x] **Scripting the siege, tested as its own question** (`0.8.18`).
+      `tests/scripting_the_siege.rs` — eleven claims that a *person* can write a
+      siege spell, which neither the game tests nor the solver tests asked
+      - **Every declared reading is reachable.** `scene_at` registers all
+        eighteen unconditionally, so a word nothing publishes still compiles and
+        reads nought for ever. It had shipped twice; the lint **failed on its
+        first run**, which is how you know it is not vacuous
+      - **The arithmetic against fixed numbers** — the pool opens at 24 and a
+        `d20` costs 5, so `plus`, `double` and the comparison have known answers.
+        Tree shape, chained-`plus` refusal, `plus 0` identity and `u32::MAX`
+        saturation are each pinned, and none is visible to a round-trip
+      - **A spell can tell a win from a loss** — `lifted` says only *over*, and
+        which band is `routed` says which way. Both directions asserted
+      **See it:** ✅ `cargo test -p orbs-sim --test scripting_the_siege` — eleven
+      claims; **42 test binaries** in the workspace now
+- [→] **Pane synergies — deferred to Phase 7, not cut.** §18 item 6 and §9's
+      *"an open brewing pane feeds potions to the siege automatically"*. It is an
+      *enhancement* to a siege that already works, and it is the one item here
+      that genuinely wants multiplexing, so it waits for the phase that builds it
+- [→] **Traits, `lens/observed/`, and the eldritch renderer.** Procedural trait
+      composition (§5.2) and the renderer are plumbed in `orbs-render` with zero
+      producers; both are Phase 9-scale content work rather than siege mechanics,
+      and the siege is tense without them
+- [→] **Unattended-siege backlog, dispersal and decay**, and difficulty tiers.
+      All three depend on **provocation** — §5.3's trace deciding *when* a siege
+      arrives — which is unbuilt. A backlog of sieges nobody provoked has nothing
+      to accumulate, so this waits with the thing it counts
+
+**Scarcity: the arsenal, finally spent.** Every domain has been producing into a
+store nothing drew from; this is the phase where six rooms' output becomes a
+decision under known risk.
 
 ## Phase 9a — Breadth
 

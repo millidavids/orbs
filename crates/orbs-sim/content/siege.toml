@@ -1,0 +1,116 @@
+# What the arsenal is worth in a siege (DESIGN.md §5.1, §11.5).
+#
+# **Rule 6, and this file is the reason it applies here.** Balancing this domain
+# means moving numbers dozens of times; in Rust that is a recompile per guess.
+# Which die a thing rolls, what it adds, and how many troops it is worth are all
+# authored, so a tuning pass is a content edit.
+#
+# Every key is a material the arsenal can hold — a potion, a scroll, or the
+# menagerie's troop. `execute::defend` looks a spent name up here and refuses
+# anything absent, so **an item with no entry cannot be spent**, which is what
+# stops `quaff sage` resolving and doing something quietly.
+#
+# `kind` is one of:
+#   troops   — joins the garrison. `count` is how many
+#   vigour   — puts fight back. `points` is how much
+#   bonus    — adds to every garrison roll next round. `amount` may be negative
+#   advantage / disadvantage — draw twice, keep the better / worse
+#   upgrade  — roll a bigger die. `die` is one of d4 d6 d8 d10 d12 d20 d100
+#
+# **`verb` is which word spends it**, and it is authored rather than inferred
+# from the material's kind: §19 keeps `wield` for scrolls because *"spending a
+# scroll is setting a thing going, which is what `wield` already means"*, and a
+# troop is deployed rather than drunk. A mismatch is refused in voice.
+
+# ---------------------------------------------------------------------------
+# THE MENAGERIE'S TROOP.
+#
+# The one thing `deploy` takes, and the answer to the decision tree's first
+# rung — *if base troops low, send out menagerie demons*. Two, because one
+# would make a chant's whole twelve syllables worth a single body and the
+# domain is meant to feed this one.
+[troop]
+verb = "deploy"
+kind = "troops"
+count = 2
+
+# ---------------------------------------------------------------------------
+# THE POTIONS (§10.1's laboratory, spent here at last).
+#
+# These retire the ten shipped prose lines that say *"a siege will be what
+# spends them"*. Each is a **pure mathematical advantage**, which is the whole
+# brief: no potion does anything a player has to learn a second system for.
+
+# The flagship, and the one a player has most of. Fight back into the line.
+[mending]
+verb = "quaff"
+kind = "vigour"
+points = 6
+
+# Warding is defensive, so it buys a flat edge on every answering roll.
+[warding]
+verb = "quaff"
+kind = "bonus"
+amount = 3
+
+# Haste is the second roll — the most valuable thing in the game and the
+# rarest, because advantage is worth far more than any flat bonus at these
+# thresholds.
+[haste]
+verb = "quaff"
+kind = "advantage"
+
+# Clarity sees the weakness rather than adding force. **It was an upgrade to a
+# `d100` and that made it strictly the best thing in the arsenal** — measured, a
+# 90% hit rate against haste's 75%, dreaming's 75% and warding's 65%. A player
+# holding one would never drink anything else, which collapses the decision this
+# whole file exists to create.
+#
+# **`upgrade` does not mean what its own comment claimed.** *"The ceiling rises
+# rather than the floor"* is true of a damage roll and false of a *threshold*
+# check: against a fixed `AGAINST` of 11, a bigger die changes the share of faces
+# that clear the bar, so a d100 is a hit-rate change of forty points. The variant
+# stays in `tower::dice` — it is a real effect and an enchantment may yet scale
+# the target with it — but **nothing shipped uses it**, deliberately.
+#
+# +4 puts clarity at 70%: the best flat bonus in the arsenal and the flagship's
+# due, between warding's 65% and the two 75s that cost more to reach.
+[clarity]
+verb = "quaff"
+kind = "bonus"
+amount = 4
+
+# Insight is the small, reliable one — the potion you drink when nothing is
+# wrong yet.
+[insight]
+verb = "quaff"
+kind = "bonus"
+amount = 2
+
+# Dreaming is a secret recipe and is deliberately the strangest: it is worth
+# more than insight and less than haste, and it is the only potion whose value
+# is easy to misjudge.
+[dreaming]
+verb = "quaff"
+kind = "bonus"
+amount = 5
+
+# ---------------------------------------------------------------------------
+# THE SCROLLS.
+#
+# **Spent with `wield`**, which is the word they already answer to everywhere
+# else in the tower — so a player who has used one in the archive uses it here
+# without learning anything new.
+[quickening-scroll]
+verb = "wield"
+kind = "advantage"
+
+[verdant-scroll]
+verb = "wield"
+kind = "troops"
+count = 3
+
+[gleaning-scroll]
+verb = "wield"
+kind = "bonus"
+amount = 4
