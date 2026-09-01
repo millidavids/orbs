@@ -243,7 +243,22 @@ jobs:
           fi
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
+        # **v3 is the Node 24 line, and the bump is only that.** v0.8.18 released
+        # with an annotation saying this action targets Node 20 and was being
+        # *forced* onto Node 24 — which works until the forcing stops, and then
+        # the one workflow that cannot be tested before it runs would fail on the
+        # step that publishes the release.
+        #
+        # v3.0.0's notes are explicit that the major is the runtime move and
+        # nothing else: no input changed, and this passes `tag_name`, `name` and
+        # `body` exactly as it did. Verified rather than assumed — v2.6.2's
+        # `action.yml` declares `using: node20` and v3's declares `node24`.
+        #
+        # **The SHA is the commit, not the tag object.** v3's tag is *annotated*
+        # where v2.6.2's was lightweight, so `git/ref/tags` answers with a tag
+        # object that has to be dereferenced — pinning that hash instead would
+        # be a ref no `uses:` can resolve.
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           tag_name: v${{ needs.check-version.outputs.version }}
           name: v${{ needs.check-version.outputs.version }}
