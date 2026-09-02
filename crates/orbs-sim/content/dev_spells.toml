@@ -934,3 +934,121 @@ lines = [
     "    hold",
     "end",
 ]
+
+# ---------------------------------------------------------------------------
+# THE FORGE (§10's Enchanting).
+#
+# **The lookup table lives here, in the player's spell, and that is the point.**
+# A Lights Out lattice is settled entirely by its top row, and which top row is
+# right is a function of the residue the three columns publish. Eight residues,
+# eight answers, one table — and `tower::lattice`'s tests prove over all 512
+# boards that the table is *universal*, which is what lets a fixed ladder hold it
+# at all.
+#
+# The orb publishes the state and the spell holds the rule. §8.1: *"the world
+# publishes readings, so a spell holds a rule, not a memory."* Putting the answer
+# in the world instead would be the orb solving the puzzle for you, which is what
+# `tower::ward` refuses one room over.
+#
+# **The all-lit case has no rung**, deliberately: when every column is already lit
+# the answer is *snap nothing*, and an empty branch reads as an oversight. The
+# ladder falls through and `anneal` binds it.
+[forging]
+domain = "forge"
+lines = [
+    "imbue mortar_and_pestle hurried",
+    "repeat until the lattice is empty",
+    "    if the apex has lit and the belt has lit and the hem has no lit",
+    "        snap belt",
+    "        snap hem",
+    "    else if the apex has lit and the belt has no lit and the hem has lit",
+    "        snap apex",
+    "        snap belt",
+    "        snap hem",
+    "    else if the apex has lit and the belt has no lit and the hem has no lit",
+    "        snap apex",
+    "    else if the apex has no lit and the belt has lit and the hem has lit",
+    "        snap apex",
+    "        snap belt",
+    "    else if the apex has no lit and the belt has lit and the hem has no lit",
+    "        snap apex",
+    "        snap hem",
+    "    else if the apex has no lit and the belt has no lit and the hem has lit",
+    "        snap hem",
+    "    else if the apex has no lit and the belt has no lit and the hem has no lit",
+    "        snap belt",
+    "    end",
+    "    anneal",
+    "end",
+]
+
+# **The maintenance spell — Phase 9's fourth box.**
+#
+# `repeat until` keeps a charm alive unattended, and the rung that decides is
+# `ebbing`: the world says *this is nearly out*, so the spell never has to count
+# ticks — which is the hidden state §8.1 forbids automation being driven by.
+#
+# **Two conditions, and the second is the one that is easy to miss.** `ebbing` is
+# published only while a charm is running *and* nearly done, so a tool that has
+# never been charmed publishes neither word and a loop guarded on `ebbing` alone
+# would never start. `has no graced` is the cold-start half.
+#
+# Bound rather than invoked: an invocation binds one charm and stops, and what
+# keeps one alive for ever is the faucet §8 already describes.
+[tending_forge]
+domain = "forge"
+lines = [
+    "if the hurried has ebbing or the hurried has no graced",
+    "    imbue mortar_and_pestle hurried",
+    "    repeat until the lattice is empty",
+    "        if the apex has lit and the belt has lit and the hem has no lit",
+    "            snap belt",
+    "            snap hem",
+    "        else if the apex has lit and the belt has no lit and the hem has lit",
+    "            snap apex",
+    "            snap belt",
+    "            snap hem",
+    "        else if the apex has lit and the belt has no lit and the hem has no lit",
+    "            snap apex",
+    "        else if the apex has no lit and the belt has lit and the hem has lit",
+    "            snap apex",
+    "            snap belt",
+    "        else if the apex has no lit and the belt has lit and the hem has no lit",
+    "            snap apex",
+    "            snap hem",
+    "        else if the apex has no lit and the belt has no lit and the hem has lit",
+    "            snap hem",
+    "        else if the apex has no lit and the belt has no lit and the hem has no lit",
+    "            snap belt",
+    "        end",
+    "        anneal",
+    "    end",
+    "end",
+]
+
+# **The generic one — `for each charm`, and it holds no table at all.**
+#
+# `warding_off` is the bailey's version of this idea: walk the set rather than
+# name its members, and let the world say which one wants attention. Here it
+# reads every charm the forge can lay and acts on the first that is out or
+# nearly out, whichever that turns out to be.
+#
+# **What it cannot do is read the residue**, and that is the honest half. Without
+# the eight rungs it has no way to know which columns to snap, so it opens a
+# binding and anneals blind — one attempt in eight lights it, and every attempt
+# costs quintessence. That is this domain's decision written as two files: the
+# table is worth eight rungs of a player's time, and *this* is what not having it
+# looks like.
+#
+# It is the pair `roaming` and `threading` make in the archive — §19's step-cost
+# lesson as two spells rather than as an argument.
+[tending_blindly]
+domain = "forge"
+lines = [
+    "for each charm",
+    "    if charm has ebbing or charm has no graced",
+    "        imbue mortar_and_pestle charm",
+    "        anneal",
+    "    end",
+    "end",
+]

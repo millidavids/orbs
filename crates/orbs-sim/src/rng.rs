@@ -54,6 +54,13 @@ pub enum RngStream {
     /// sabotage schedule — moving the seeds `scripts/play.sh` chose, and
     /// invalidating every replay that has a siege in it.
     Siege,
+    /// The forge: the lattice a charm is bound with.
+    ///
+    /// **One draw per lattice, nine bits out of it.** Drawing a bit per glyph
+    /// would make the stream position depend on the lattice's size, so widening
+    /// it later would move every seed's world — the shape §19 records `drift`
+    /// paying for.
+    Forge,
 }
 
 impl RngStream {
@@ -70,8 +77,10 @@ impl RngStream {
     /// **A new domain almost always brings a stream, and a stream is always a
     /// format change** — three of the last four bumps were exactly this. The
     /// bump belongs in the same commit as the variant rather than being
-    /// discovered by the first player whose tower will not open.
-    pub const COUNT: usize = 11;
+    /// discovered by the first player whose tower will not open. It went to
+    /// **9** with the twelfth, when the forge brought
+    /// [`Forge`](RngStream::Forge).
+    pub const COUNT: usize = 12;
 
     /// Fixed index into [`Rngs::streams`].
     ///
@@ -94,6 +103,7 @@ impl RngStream {
             Self::Battlements => 8,
             Self::Menagerie => 9,
             Self::Siege => 10,
+            Self::Forge => 11,
         }
     }
 }
@@ -200,6 +210,7 @@ mod tests {
         RngStream::Battlements,
         RngStream::Menagerie,
         RngStream::Siege,
+        RngStream::Forge,
     ];
 
     #[test]

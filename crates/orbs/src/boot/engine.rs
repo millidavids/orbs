@@ -17,7 +17,7 @@
 ///
 /// A const rather than a build script because the version is *pinned* —
 /// CLAUDE.md commits to `=0.19.0` and upgrading it is a deliberate one-window
-/// act in Phase 9c, so a number that can only change when someone edits the
+/// act in Phase 11c, so a number that can only change when someone edits the
 /// manifest is exactly as live as it needs to be.
 /// **A macro so the number is written once**, because `concat!` takes literals
 /// and not consts — and two copies of a version is exactly the drift this whole
@@ -51,7 +51,7 @@ mod tests {
 
     #[test]
     fn the_bevy_version_is_the_one_the_manifest_pins() {
-        // CLAUDE.md pins Bevy exactly and upgrading is a deliberate Phase 9c
+        // CLAUDE.md pins Bevy exactly and upgrading is a deliberate Phase 11c
         // act. This is what stops the splash drifting away from the manifest
         // silently when that window arrives.
         //
@@ -62,7 +62,7 @@ mod tests {
         // **Every declaration, not merely one.** `crates/orbs/Cargo.toml`
         // declares bevy twice — once plainly and once under
         // `cfg(target_os = "linux")` — and a `contains` passes if *either* still
-        // says `0.19.0`. That is the exact shape of a half-finished Phase 9c
+        // says `0.19.0`. That is the exact shape of a half-finished Phase 11c
         // upgrade, and the half most likely to be left behind is the one that
         // decides what a Linux build actually links.
         let manifest = include_str!("../../Cargo.toml");

@@ -137,6 +137,13 @@ pub fn strike(world: &mut World) -> Option<Reached> {
     // to retime, and falls back to the text.
     if !bound.is_empty() {
         let (node, _) = bound[choice as usize % bound.len()];
+        // **A `shielded` spell is struck and holds.** Skipped *after* the
+        // choice, never filtered out of `bound` — filtering would change which
+        // spell the same roll reaches and move every seed's world; this spends
+        // the enemy's turn instead and leaves the arithmetic exactly as it was.
+        if held(world, node) {
+            return None;
+        }
         // The drag is derived from the same roll for the third time, so this
         // whole function takes exactly one draw.
         let drag = u64::from(choice % 3) + 1;
@@ -147,11 +154,24 @@ pub fn strike(world: &mut World) -> Option<Reached> {
 
     if !scripts.is_empty() {
         let (node, _) = scripts[choice as usize % scripts.len()];
+        if held(world, node) {
+            return None;
+        }
         rewrite(world, node);
         return Some(Reached::Script);
     }
 
     None
+}
+
+/// Whether a live `shielded` charm is holding this node.
+///
+/// **The clock, never `With<Charmed>`.** A charm is an interval with no expiry
+/// system, so a lapsed one is still a present component — a component test would
+/// shield a spell for ever after its first charm, which is the one shape this
+/// whole feature must not have.
+fn held(world: &World, node: Entity) -> bool {
+    super::charmed(world, node, super::charm::Kind::Shielded)
 }
 
 /// Corrupt one line of a spell, keeping what it said.

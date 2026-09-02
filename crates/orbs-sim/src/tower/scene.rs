@@ -40,7 +40,7 @@ use crate::parser::{NounKind, Scene};
 /// that domain**. `decoct clarity` works in `/tower/laboratory` and nowhere else.
 ///
 /// That is the base state, not a limitation: §19 settles **pane addressing** —
-/// *"named by domain, routed within the focused set"* — as a **Phase 7** item,
+/// *"named by domain, routed within the focused set"* — as a **Phase 10** item,
 /// which is precisely the unlock that later lets a player act on a domain
 /// without walking to it. Acting at a distance has to *become* possible, and it
 /// cannot if it was free from the start.
@@ -350,6 +350,18 @@ pub fn scene_at(world: &World, at: Entity) -> Scene {
         scene = scene.with(NounKind::Sense, reading);
     }
 
+    // ...and the forge's, appended after the bailey's for the sixth time.
+    //
+    // **Unconditional, like every other domain's.** A spell written before the
+    // player has ever opened a lattice must still compile, or the words would
+    // only mean something in a room the author was standing in — which is the
+    // defect §19 records the bailey shipping with, where `besieging`'s four
+    // questions all came back *"that question means nothing"* and the spell ran
+    // and did nothing, for ever.
+    for reading in super::charm::readings() {
+        scene = scene.with(NounKind::Sense, reading);
+    }
+
     // Every place, wherever the player is. Depth-first from the root, children
     // in spawn order.
     for node in walk(world, super::filesystem_root(world, cwd.0)) {
@@ -411,7 +423,7 @@ pub fn scene_at(world: &World, at: Entity) -> Scene {
             // This does **not** loosen "you can only name what is where you
             // are". That rule is about acting on another *domain* at a distance
             // — the archive's fragments from the laboratory — and a domain is
-            // not a `Fixture`. Phase 7's pane addressing is still what relaxes
+            // not a `Fixture`. Phase 10's pane addressing is still what relaxes
             // it in general.
             if world.get::<Fixture>(node).is_some() {
                 for held in children_of(world, node) {
@@ -557,7 +569,7 @@ mod tests {
     fn a_domains_belongings_are_nameable_only_from_inside_it() {
         // §7: the tree is the tower and navigation is diegetic. Brewing happens
         // in the laboratory because that is where the instruments are, which is
-        // also what gives §19's Phase 7 pane addressing something to be an unlock
+        // also what gives §19's Phase 10 pane addressing something to be an unlock
         // *from* — acting at a distance has to become possible.
         //
         // Tested with `retort` rather than `clarity`: recipe names are `Topic`s

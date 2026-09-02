@@ -60,7 +60,9 @@ pub(super) fn apply(world: &mut World, entity: Entity, node: &NodeSave) {
     at.remove::<tower::Triaging>();
     at.remove::<tower::Burning>();
     at.remove::<tower::Quickened>();
+    at.remove::<tower::Charmed>();
     at.remove::<tower::Substituted>();
+    at.remove::<tower::lattice::Binding>();
     at.remove::<Maze>();
     at.remove::<Ward>();
     at.remove::<spell::Running>();
@@ -111,6 +113,24 @@ pub(super) fn apply(world: &mut World, entity: Entity, node: &NodeSave) {
             ticks: quick.ends.saturating_sub(quick.started),
         });
     }
+    // **A word the build no longer knows is dropped, not guessed.** `from_word`
+    // is exact, so a charm renamed between versions lapses rather than loading
+    // as whichever variant happened to sit nearest — which is the silent-wrong
+    // outcome the format guard exists to refuse in the large.
+    let charms: Vec<tower::Charm> = node
+        .charms
+        .iter()
+        .filter_map(|charm| {
+            tower::charm::Kind::from_word(&charm.kind).map(|kind| tower::Charm {
+                kind,
+                from: Tick::new(charm.started),
+                ticks: charm.ends.saturating_sub(charm.started),
+            })
+        })
+        .collect();
+    if !charms.is_empty() {
+        at.insert(tower::Charmed(charms));
+    }
     if let Some(lie) = node.substituted.as_ref() {
         at.insert(tower::Substituted {
             was: lie.was.clone(),
@@ -150,6 +170,18 @@ pub(super) fn apply(world: &mut World, entity: Entity, node: &NodeSave) {
         }
         None => {
             at.remove::<tower::Siege>();
+        }
+    }
+    // **Both directions**, for the reason the siege above needs them: a save
+    // taken before a lattice was opened must *remove* one that is open, or
+    // loading it would reopen the forge onto a puzzle the document has never
+    // heard of.
+    match node.binding.clone() {
+        Some(binding) => {
+            at.insert(binding);
+        }
+        None => {
+            at.remove::<tower::lattice::Binding>();
         }
     }
     // The two adversarial surfaces, on the same both-directions rule: a spell the

@@ -112,6 +112,8 @@ pub enum Craft {
     Scrying,
     /// Carrying wards between three stations (§10, `tower::pylon`).
     Warding,
+    /// Binding a charm on a lattice of glyphs (§10, `tower::lattice`).
+    Imbuing,
     /// Fragments into a scroll. The archive's lectern.
     ///
     /// **The one craft not named by an [`Operation`](super::Operation)**, because
@@ -414,6 +416,7 @@ fn craft_of(world: &World, node: Entity) -> Craft {
         Some(crate::parser::Verb::Research) => Craft::Reading,
         Some(crate::parser::Verb::Probe) => Craft::Scrying,
         Some(crate::parser::Verb::Muster) => Craft::Warding,
+        Some(crate::parser::Verb::Imbue) => Craft::Imbuing,
         // `Kindle` is the heat source's, and it answered above. Anything else has
         // no operation — which is the dispensary and the cabinet, and is *also*
         // the lectern, whose verb went to the stacks when the maze did.
@@ -497,6 +500,29 @@ fn read(world: &World, node: Entity, name: &str, now: Tick) -> (State, Option<Me
             Some(Meter {
                 done: u64::from(ward.last().0),
                 total: super::ward::WIDTH as u64,
+                unit: Unit::Sigils,
+            }),
+        );
+    }
+    // **An open lattice is `Working`**, which is the ward's arm and for the ward's
+    // reason: a fixture holding readings is not a fixture holding *stock*, and
+    // the fallthrough at the end of this function reads children it cannot make
+    // anything from as leavings. Without this the forge's panel row read
+    // `lattice fouled` from the moment a charm was opened — the panel telling a
+    // player that the thing they are in the middle of needs scouring.
+    //
+    // The meter is columns snapped against columns there are, which is the only
+    // honest measure a lattice has: how many falls it takes is what the player's
+    // reading of the residue decides, exactly as a ward's press count is.
+    if let Some(binding) = world.get::<super::lattice::Binding>(node) {
+        let snapped = (0..super::lattice::WIDTH)
+            .filter(|column| binding.lattice.snapped(*column))
+            .count();
+        return (
+            State::Working,
+            Some(Meter {
+                done: snapped as u64,
+                total: super::lattice::WIDTH as u64,
                 unit: Unit::Sigils,
             }),
         );

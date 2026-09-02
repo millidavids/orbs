@@ -126,7 +126,7 @@ use super::node::NodeSave;
 /// *does* change is how many draws a round takes, since a refused pledge is a die
 /// that never rolls; that makes old *replays* diverge and is a property of the
 /// game rather than of the format.
-pub const FORMAT: u32 = 8;
+pub const FORMAT: u32 = 9;
 
 /// Bring an older document up to [`FORMAT`], or say why it cannot be.
 ///
@@ -146,6 +146,7 @@ pub const FORMAT: u32 = 8;
 /// | 5 → 6 | `RngStream::COUNT` 10 → 11 (`Siege`) | Yes — pad |
 /// | 6 → 7 | `/tower/bailey/host` → `/tower/bailey/enemy` — a **node's path**, the first *content* rename | Yes — rewrite the path |
 /// | 7 → 8 | `Siege::quintessence`, a resource a running siege was fought without | Yes — fill the pool |
+/// | 8 → 9 | `RngStream::COUNT` 11 → 12 (`Forge`), **and** quintessence moving from the siege to the tower | Yes — pad, and lift the pool |
 ///
 /// **The last two rows were missing, and `migrate` performs both.** A table that
 /// stops two bumps short of the function beneath it is worse than no table: it
@@ -224,11 +225,35 @@ fn migrate(mut save: Save) -> Result<Save, super::SaveError> {
     if save.world.format < 8 {
         for node in &mut save.nodes {
             if let Some(siege) = node.siege.as_mut()
-                && siege.quintessence == 0
+                && siege.quintessence.is_none_or(|held| held == 0)
             {
-                siege.quintessence = crate::tower::siege::QUINTESSENCE_BASE;
+                siege.quintessence = Some(crate::tower::QUINTESSENCE_BASE);
             }
         }
+    }
+
+    // **8 → 9: the pool came up to the tower.** A siege used to carry its own
+    // quintessence and spend it privately; the forge spends the same resource,
+    // so it is a world resource now (§11.5's own shape, restored — §19).
+    //
+    // A format-8 document holds the pool on whichever siege was in flight, and a
+    // player mid-fight must not lose it. Lifting the largest is exact in
+    // practice — there is one bailey — and honest in the pathological case.
+    //
+    // **A save with no siege in it gets the ceiling, not nought.** This is
+    // `ProgressSave::integrity`'s rule and the reason it exists: a bare `u32`
+    // defaults to zero and reads as a ruined tower, and here it would read as a
+    // returning player whose forge is inert until the trickle catches up. The
+    // ceiling cannot be computed from the document alone, so `None` travels and
+    // `restore` fills it from the world that is about to be built.
+    if save.world.format < 9 {
+        let carried = save
+            .nodes
+            .iter_mut()
+            .filter_map(|node| node.siege.as_mut())
+            .filter_map(|siege| siege.quintessence.take())
+            .max();
+        save.progress.quintessence = carried;
     }
 
     save.world.format = FORMAT;
@@ -290,14 +315,14 @@ pub struct WorldSave {
 /// # Why it exists before offline progression does
 ///
 /// §5 opens *"initially there is no offline progression — the tower ticks only
-/// while the window is open"* and puts accrual in Phase 9a. Nothing here
+/// while the window is open"* and puts accrual in Phase 11a. Nothing here
 /// advances the world. But a departure time cannot be recovered after the fact,
-/// so a save written today without one is a save Phase 9a can never ask how long
+/// so a save written today without one is a save Phase 11a can never ask how long
 /// the orb was dark. The stamp is cheap; the retrofit is not.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Away {
     /// The tick the save was written at. Always equal to [`WorldSave::tick`]
-    /// today, and separate from it because Phase 9a's catch-up advances one and
+    /// today, and separate from it because Phase 11a's catch-up advances one and
     /// not the other.
     #[serde(default)]
     pub tick: u64,
@@ -341,6 +366,15 @@ pub struct ProgressSave {
     /// nobody had measured. `None` restores to whole.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub integrity: Option<u32>,
+    /// What the tower holds of §11.5's mana.
+    ///
+    /// **`Option` for `integrity`'s reason, and it bites harder here.** A bare
+    /// `u32` defaults to nought, so every returning player would load with an
+    /// empty pool — an inert forge and a siege that cannot pledge, until the
+    /// trickle caught up. `None` restores to the **ceiling**, which is the
+    /// generous reading and the honest one: nobody had measured it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quintessence: Option<u32>,
     /// Which `verify` surfaces are cooling, and the tick each frees at.
     ///
     /// **It travels, because a cooldown that reset on load is one a player can

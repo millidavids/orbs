@@ -18,7 +18,7 @@ use orbs_render::{Presentation, Role, Value};
 
 use super::document::{Away, FORMAT, MarkSave, ProgressSave, RecordSave, RngSave, Save, WorldSave};
 use super::naming;
-use super::node::{NodeSave, RunningSave, SpanSave, SubstitutedSave, WorkingSave};
+use super::node::{CharmSave, NodeSave, RunningSave, SpanSave, SubstitutedSave, WorkingSave};
 use crate::rng::Rngs;
 use crate::session::{Scrollback, Wizard};
 use crate::tick::Tick;
@@ -27,7 +27,7 @@ use crate::tower::{Cwd, Marks};
 
 /// How many records a save carries.
 ///
-/// **A tail, not the stream.** The stream grows without bound — §5's Phase 9a
+/// **A tail, not the stream.** The stream grows without bound — §5's Phase 11a
 /// catch-up alone is ~29k steps — and a save that carried all of it would grow
 /// with the session until the file was mostly transcript. Five hundred is a few
 /// screens of `peruse` and comfortably more than the eight command blocks a
@@ -90,6 +90,7 @@ fn progress(world: &World) -> ProgressSave {
         wizard: world.resource::<Wizard>().name().to_owned(),
         experience: world.resource::<tower::Experience>().get(),
         integrity: Some(world.resource::<tower::Integrity>().get()),
+        quintessence: Some(world.resource::<tower::Quintessence>().get()),
         // **The clock, so an expired cooldown is not written at all.** Without
         // it a played-through save carried a dead row per surface for ever.
         cooling: world
@@ -193,10 +194,37 @@ fn node(world: &World, entity: Entity) -> NodeSave {
             started: fire.lit_at.get(),
             ends: fire.lit_at.get().saturating_add(fire.ticks),
         }),
-        quickened: at.get::<tower::Quickened>().map(|quick| SpanSave {
-            started: quick.from.get(),
-            ends: quick.from.get().saturating_add(quick.ticks),
-        }),
+        // **Only a window that is still open**, which is `Cooling`'s rule one
+        // resource over and the one place it had never been applied. Nothing
+        // ever removes `Quickened` — that is the point of an interval, and
+        // `quickened` simply reads false once it has run out — so a bare `map`
+        // wrote a dead span into *every* autosave from the first scroll a player
+        // ever spent, for the rest of the session and every session after it.
+        // `Burning` needs no such filter because `heat::spend` removes it.
+        quickened: at
+            .get::<tower::Quickened>()
+            .filter(|quick| quick.remaining(*world.resource::<crate::tick::Tick>()) > 0)
+            .map(|quick| SpanSave {
+                started: quick.from.get(),
+                ends: quick.from.get().saturating_add(quick.ticks),
+            }),
+        // **Only the charms still in force**, which is the rule `Quickened`
+        // spent a whole phase without: nothing removes a lapsed charm, because
+        // an interval has no expiry system, so a bare walk would write a dead
+        // row per charm per node for the rest of the save's life. `Charmed::live`
+        // is the same clock the read sites use.
+        charms: at
+            .get::<tower::Charmed>()
+            .map(|held| {
+                held.live(*world.resource::<crate::tick::Tick>())
+                    .map(|charm| CharmSave {
+                        kind: charm.kind.word().to_owned(),
+                        started: charm.from.get(),
+                        ends: charm.from.get().saturating_add(charm.ticks),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default(),
         substituted: at.get::<tower::Substituted>().map(|lie| SubstitutedSave {
             was: lie.was.clone(),
             since: lie.since.get(),
@@ -207,6 +235,7 @@ fn node(world: &World, entity: Entity) -> NodeSave {
         course: at.get::<tower::Course>().map(tower::Course::to_save),
         chant: at.get::<tower::Chant>().map(tower::Chant::to_save),
         siege: at.get::<tower::Siege>().cloned(),
+        binding: at.get::<tower::lattice::Binding>().cloned(),
         rewritten: at
             .get::<tower::Rewritten>()
             .map(|rewritten| rewritten.was.clone()),

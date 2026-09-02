@@ -157,7 +157,7 @@ pub struct Store;
 /// # The exemption, stated as one
 ///
 /// §7 is *"you can only name what is where you are"*, and `tower::scene`
-/// records that acting on another **domain** at a distance is Phase 7's unlock.
+/// records that acting on another **domain** at a distance is Phase 10's unlock.
 /// This is a deliberate hole in that rule, and it is narrow: places, spells and
 /// the maze's readings already have the same one, for the same reason — a
 /// spellbook you carry is not a shelf you walk to, and neither is a bandolier.
@@ -271,6 +271,16 @@ fn readings_of(set: &str) -> Vec<&'static str> {
         "socket" | "sigil" => super::ward::readings(),
         "station" => super::pylon::readings(),
         "syllable" => super::chant::readings(),
+        // The forge's two sets. A column answers with `lit` and nothing else —
+        // absence is what "dark" means here — and a charm answers with how long
+        // it has and whether that is nearly out.
+        "column" => vec!["lit"],
+        "charm" => vec![super::charm::GRACED, super::charm::EBBING],
+        // **The bailey's three have no arm and that is a gap, not a decision.**
+        // `siege::readings()` returns all eighteen words as one list, and
+        // splitting them across `area`, `die` and `band` is a judgement about
+        // which word belongs to which set rather than a line of code. Recorded
+        // here so the next person to open this file finds it named.
         _ => Vec::new(),
     }
 }

@@ -209,6 +209,12 @@ fn sample(verb: Verb) -> (&'static str, &'static str) {
         // `pledge` before a siege is open refuses with *"defend first"*, which
         // is the world answering and is what this table asks for.
         Verb::Pledge => ("bailey", "pledge d20 buckler"),
+        // The forge's three. `snap` and `anneal` before a lattice is open refuse
+        // with *"imbue first"*, which is the world answering and is what this
+        // table asks for.
+        Verb::Imbue => ("forge", "imbue mortar_and_pestle hurried"),
+        Verb::Snap => ("forge", "snap apex"),
+        Verb::Anneal => ("forge", "anneal"),
     }
 }
 

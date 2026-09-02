@@ -398,6 +398,137 @@ empty`**: a band publishes `routed` when it breaks and counts while it stands, s
 it is never childless and `is empty` would be false for ever. That is §19's
 `repeat until the circle is idle` in a third costume.
 
+### The forge — Lights Out on three columns, and charms that decay
+
+**`imbue <tool> <charm>` opens a lattice; `snap <column>` turns a glyph and its
+neighbours; `anneal` lets it fall.** A charm binds only when every glyph is lit.
+Only `anneal` takes the tower's one production slot — §10's scarcity for this
+domain is *"the buff's own lifetime, **and the slot**"*, so this is the first
+room since brewing that competes with brewing.
+
+```bash
+ORBS_BOOT=0 ORBS_DUMP="attend forge; imbue mortar_and_pestle hurried; snap belt" cargo run -p orbs
+```
+```text
+┌ lattice ──────────────────┐
+│apex     belt     hem      │   ← the three words `snap` takes
+│    ·        ·        ·    │
+│    ·        ☼        ·    │   ← the grid, as your snaps have left it
+│    ☼        ☼        ·    │
+│───────────────────────────│   ← the rule. below it is what the last fall left
+│    ☼        ·        ·    │   ← the residue, and the whole signal
+│hurried, 0 spent           │
+└───────────────────────────┘
+```
+
+**The residue is the puzzle.** A Lights Out solution is settled entirely by its
+top row, and the eight openings leave **eight distinct residues** — measured over
+all 512 boards, along with the two facts a solver rests on: every board has
+**exactly one** answer, and the residue-to-answer table is **universal**. So the
+bottom row tells you which columns to snap, if you know the table.
+
+**Three columns and not nine cells, and the sweep decided that.** Nine unique
+place names are not available — `crown` scores 800 against `brown`, `base` 750
+against `bare`, `tier` 600 against `tower`. Since the top row settles everything,
+columns were all a player ever needed to address.
+
+**A column publishes `lit` and never `dark`.** Absence is what dark means, which
+is the tower's own idiom — and `dark` scores 750 against the maze's `marks`.
+
+```bash
+# The whole loop, and the payoff: a grind is eight ticks and lands in four.
+ORBS_BOOT=0 ORBS_DUMP="attend forge; imbue mortar_and_pestle hurried; \
+  snap apex; anneal; meditate 25; attend laboratory; grind sage; meditate 4" cargo run -p orbs
+#   every glyph holds. hurried settles onto the mortar_and_pestle
+#   the mortar_and_pestle yields ground-sage, and leaves husks  +1
+
+# ...and it decays. Past the charm, the same grind takes eight again.
+ORBS_BOOT=0 ORBS_DUMP="attend forge; imbue mortar_and_pestle hurried; \
+  snap apex; anneal; meditate 700; attend laboratory; grind sage; meditate 4" cargo run -p orbs
+```
+
+**The lookup table lives in the spell, and that is the point.** Publishing the
+answer would be the orb solving it for you, which the lens refuses one room over;
+publishing the *state* and letting the player hold the rule is §8.1's *"a rule,
+not a memory"*. Eight rungs, against `threading`'s twenty-four.
+
+```bash
+# `forging` reads the residue, snaps the one right column, and binds in one fall.
+ORBS_BOOT=0 ORBS_DUMP="attend forge" \
+  ORBS_THEN="invoke forging; meditate 120; peruse forge.log" cargo run -p orbs
+#   the glyphs rise for hurried. 6 to bind it
+#   apex turns, and its neighbours with it
+#   every glyph holds. hurried settles onto the mortar_and_pestle
+```
+
+**What made that writable was checked before the design was committed to**:
+`Condition::All` already chains across independent subjects, so `if the apex has
+no lit and the belt has lit` parses. `mortar is idle and flask is idle` has
+round-tripped since the language was built.
+
+**Five charms, each read at a different site**, which is why this is a
+composition rather than the `if` `tower::dice` warned about:
+
+| charm | what it does | read at |
+|---|---|---|
+| `hurried` | work takes half as long | `work::begin` — with the `quickening-scroll`, one call site |
+| `fruitful` | a run yields one more, and no more byproduct | `work::produce` |
+| `bountiful` | a walk of the stacks pays two fragments | `execute::research` |
+| `whetted` | the garrison rolls a bigger die | staged as a `Modifier`, like a potion |
+| `shielded` | a sabotage strike lands and is turned aside | `sabotage`, `assault` |
+
+**`shielded` skips *after* selection, never by filtering.** All three sabotage
+surfaces choose by modulo over a collection, so removing a charmed node from the
+pool would change which node the same roll hits — every seed's world, moved.
+Letting the strike land and be turned aside leaves the arithmetic exactly as it
+was.
+
+```bash
+# The maintenance spell — `ebbing` is the rung, and `has no graced` is the
+# cold start. Bound, it keeps a charm alive unattended.
+ORBS_BOOT=0 ORBS_DUMP="attend forge" \
+  ORBS_THEN="invoke tending_forge; meditate 200; peruse forge.log" cargo run -p orbs
+```
+
+```bash
+cargo test -p orbs-sim --lib tower::lattice   # the 512 boards, and the three proofs
+cargo test -p orbs-sim --lib tower::charm     # the interval, and the clock
+cargo test -p orbs-sim --test enchanting      # every charm reaching its number
+```
+
+### Quintessence is the tower's, and the siege is one of two rooms spending it
+
+**§11.5's mana, at the scope the design always had it.** Its resource table reads
+*"produced by passive regeneration, Ley Line steps"*; the fixed pool granted on
+`defend` was Phase 8's narrowing, and Enchanting spending the same resource
+brought it back up to the tower. §19 records it as the return it is.
+
+**Integrity and the ley line set the ceiling** — how much the tower may *hold*,
+rather than what a siege grants. So repairing the barrier is what buys enchanting
+capacity.
+
+```bash
+# A worn tower holds half as much. The curve is unchanged; the question it
+# answers is what moved.
+ORBS_BOOT=0 ORBS_DUMP="attend sanctum; meditate 3600; attend bailey; defend; survey coffer" cargo run -p orbs
+```
+
+**In the calm it trickles; under siege only a resolved round pays.** Waiting
+inside a turn earns nothing, so the one way to more quintessence is to advance
+the fight and take what the enemy does — and that is §14 satisfied by
+construction rather than by exception, because a per-round lump reads no clock
+where the patient mode advances siege ticks on player input.
+
+**`REGEN_PER_ROUND` is two, and it was four.** At four the reachability sweep
+came back saying **`outnumbered` was no longer published on any seed** — a
+garrison that can afford its dice every round is never overtaken, so a whole
+reading and the solver rungs asking for it went quietly dead. Measured, not
+argued.
+
+**Enchanting during a siege is surcharged**, authored in `forge.toml` rather than
+branched in code: the pool is shared, so a charm laid mid-fight is dice you
+cannot pledge, and the multiplier makes it hurt twice.
+
 ### The enemy attacks the automation — §8.1's four surfaces, closed
 
 **`tower::assault` runs on a resolved round and never on a tick**, which is what
@@ -1142,7 +1273,7 @@ ORBS_BOOT=0 ORBS_GRID=80x22 ORBS_DUMP="attend laboratory; grind sage" cargo run 
 
 **`F4` is visibly inert, and that is recorded rather than fixed.** With one pane
 both tilings are identical, so the key changes nothing until multiplexing returns
-the second pane in Phase 9a. §9 fixes the focus mode on `F4` and §19 fixes the
+the second pane in Phase 11a. §9 fixes the focus mode on `F4` and §19 fixes the
 switch there, so reassigning it to toggle the rail would re-litigate both.
 
 ### `orbs-balance` — the economy, looked at rather than argued
@@ -1658,7 +1789,7 @@ words teaches an order**. `scribe`, `edit`, the lines, `<escape>`, `quit`,
 `invoke`, then the log rather than the pane: seven steps, one of which — *quit is
 the save* — a player otherwise learns by losing work.
 
-§12 puts the in-world grimoire in the *"always"* column; Phase 10 owns the
+§12 puts the in-world grimoire in the *"always"* column; Phase 12 owns the
 interactive apprenticeship. This is the reference half, which is why it is a
 `recall` page and not a scripted sequence.
 
@@ -2899,7 +3030,7 @@ live in `orbs_shell::shortcuts` where a second copy cannot go missing.
 
 | Key | Does | In a terminal |
 |---|---|---|
-| `F4` | flips the focus mode | the border's own hint moves; **the tiling does not**, in either build, until Phase 9a returns the second pane |
+| `F4` | flips the focus mode | the border's own hint moves; **the tiling does not**, in either build, until Phase 11a returns the second pane |
 | `F5` | §14's linear stream | the pane describes itself instead of drawing — the accessibility route, and this is the build §14 calls the cheapest one |
 | `F6` | writes `orbs-parse.tsv` | silent on success in both builds; the file appearing is the confirmation |
 | `F7` | cycles the tonal register | **visibly inert** — `Presentation` picks a glyph-atlas *face* and a terminal has the user's. The world still moves, and `F6`'s `register` column shows it |

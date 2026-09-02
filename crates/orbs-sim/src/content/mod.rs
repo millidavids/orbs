@@ -2,6 +2,7 @@
 //!
 //! CLAUDE.md rule 6 — prose in data files, never string literals in Rust.
 
+mod forge;
 mod fuel;
 mod load;
 mod material;
@@ -11,6 +12,7 @@ mod recipe;
 mod siege;
 mod spell;
 
+pub use forge::{Charm as CharmCost, Charms};
 pub use fuel::{Fuel, Fuels};
 pub use load::ContentError;
 pub use material::Materials;

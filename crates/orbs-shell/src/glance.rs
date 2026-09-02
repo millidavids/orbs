@@ -57,6 +57,8 @@ pub struct Panel {
     /// ever be present, because they belong to five different rooms and the
     /// player stands in one.
     pub rampart: Option<orbs_render::Rampart>,
+    /// The forge's open lattice, if the player is standing at it.
+    pub lattice: Option<orbs_render::LatticeBoard>,
     /// Every domain at a glance, for §9's rail.
     ///
     /// **Here rather than asked from the painter, and it is the most expensive of
@@ -83,6 +85,7 @@ impl Panel {
         self.pylon = sim.pylon();
         self.figure = sim.figure();
         self.rampart = sim.rampart();
+        self.lattice = sim.lattice();
         self.briefs = sim.briefs();
     }
 }

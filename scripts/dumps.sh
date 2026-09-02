@@ -101,7 +101,7 @@ run editor_count ORBS_BOOT=0 ORBS_GRID=100x30 ORBS_DUMP="attend archive; scribe 
   ORBS_EDIT=$'edit\nif the cabinet has 4 fragment\nwield lectern\nend\n<esc>\ninterpret'
 
 # --- the manual, in every room --------------------------------------------
-for room in laboratory archive lens sanctum menagerie grimoire arsenal tower; do
+for room in laboratory archive lens sanctum menagerie grimoire forge arsenal tower; do
   run "help_$room" ORBS_BOOT=0 ORBS_DUMP="attend $room; help"
 done
 run help_floor    ORBS_BOOT=0 ORBS_GRID=80x22 ORBS_DUMP="attend lens; help"
@@ -163,10 +163,29 @@ run siege_refuse   ORBS_BOOT=0 ORBS_DUMP="attend bailey; defend; pledge d20 buck
 run siege_over     ORBS_BOOT=0 ORBS_DUMP="attend bailey; defend; debug_siege; hold; survey rampart"
 run recall_script_bailey ORBS_BOOT=0 ORBS_GRID=100x40 ORBS_DUMP="attend bailey; recall scripting"
 
+# --- the forge -------------------------------------------------------------
+# **Captured from the day it shipped**, which the bailey was not: Phase 8 went a
+# whole phase without a block here and nothing in the repository could have told
+# you when its board moved, because a diff over a surface this file does not hold
+# comes back clean. The blindness looks exactly like stability.
+#
+# The lattice is the densest *shape* in the game where the rampart is the densest
+# numbers, so what these need to catch is a glyph in the wrong column.
+run forge_empty    ORBS_BOOT=0 ORBS_DUMP="attend forge"
+run forge_open     ORBS_BOOT=0 ORBS_DUMP="attend forge; imbue mortar_and_pestle hurried"
+# One snap, so the grid and the residue disagree — which is the state a player
+# spends the whole puzzle in and the one a board can most easily draw wrong.
+run forge_snapped  ORBS_BOOT=0 ORBS_DUMP="attend forge; imbue mortar_and_pestle hurried; snap belt"
+run forge_bound    ORBS_BOOT=0 ORBS_DUMP="attend forge; imbue mortar_and_pestle hurried; snap apex; anneal; survey mortar_and_pestle"
+# The refusals, and the one that prices the domain: a charm you cannot pay for.
+run forge_refuse   ORBS_BOOT=0 ORBS_DUMP="attend forge; snap apex; anneal; imbue sage hurried; imbue mortar_and_pestle nonsense"
+run forge_readings ORBS_BOOT=0 ORBS_DUMP="attend forge; imbue mortar_and_pestle hurried; survey apex; survey belt; survey hem; survey hurried"
+run recall_script_forge ORBS_BOOT=0 ORBS_GRID=100x40 ORBS_DUMP="attend forge; recall scripting"
+
 # The apprentice's guide. **One per room**, because the worked example is built
 # from where you are standing — five rooms with lines of their own, and the
 # grimoire borrowing the laboratory's and saying so.
-for room in laboratory archive lens sanctum menagerie grimoire; do
+for room in laboratory archive lens sanctum menagerie grimoire forge; do
   run "apprentice_$room" ORBS_BOOT=0 ORBS_DUMP="attend $room; recall apprentice"
 done
 

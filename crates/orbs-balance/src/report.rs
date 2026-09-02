@@ -34,7 +34,7 @@ use crate::drive::Run;
 /// DESIGN.md keeps its idealisation with a §19 note saying what the loop costs on
 /// top. That makes this a regression pin: a number moving here means the *game*
 /// changed, which is exactly the alarm §16 wants.
-const EXPECTED: [(&str, f64); 8] = [
+const EXPECTED: [(&str, f64); 9] = [
     // 0.170 idealised (§19, "16, and why the anchor moved") against 0.140 looped.
     ("clarity", 0.140),
     // §10.1's claimed better play, measured **behind** the careless one — see
@@ -78,6 +78,25 @@ const EXPECTED: [(&str, f64); 8] = [
     // finished course puts integrity back as well as earning — which is why the
     // rate sits under the flagship's 0.140 where scrying's sits over it.
     ("warding", 0.125),
+    // **Flatter still, and for a sharper reason: nothing here is drawn.**
+    // 0.0060, 0.0060, 0.0060, 0.0059 across the same four seeds — where
+    // `warding`'s flatness is arithmetic over two course heights, this is a
+    // domain whose whole output is bounded by a resource that regenerates on a
+    // *clock*. The lattice's one draw does not reach the rate at all, because a
+    // spell holding the eight-rung table lights every board in one fall.
+    //
+    // **The lowest rate in the table, deliberately.** Enchanting's payoff is not
+    // experience — it is a mortar at half time, a stacks paying twice — and that
+    // value is realised in whatever room the tool is in. The token 1 a fall pays
+    // is for the slot it held. It earns *something* rather than nothing only
+    // because a domain reading 0.0000 is indistinguishable from a broken one,
+    // which is exactly how this policy's first sweep reported it.
+    //
+    // **And it is the one policy that competes rather than adds.** `anneal` is
+    // an operation, so a tower binding charms is a tower not brewing — which is
+    // §10's stated scarcity for the domain and the thing nothing measured until
+    // this column existed.
+    ("imbuing", 0.006),
     // **A ceiling, not a player**, and the arithmetic is exact: a figure is
     // twelve syllables four ticks apart, so a chant sung perfectly earns twelve
     // over forty-nine ticks and reads 0.243 on every seed. The draw is uniform

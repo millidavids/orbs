@@ -27,7 +27,7 @@ pub const TRACE_PATH: &str = "orbs-parse.tsv";
 ///
 /// §3's three registers, in the order `F7` walks them. **A rule, not a setting**
 /// — it is a development affordance for looking at eldritch and tampered text
-/// without waiting for the world to produce either, and Phase 11's settings
+/// without waiting for the world to produce either, and Phase 13's settings
 /// screen is where a player-facing version would live.
 ///
 /// Returns what it became, for whatever the caller logs.
@@ -44,7 +44,7 @@ pub fn cycle_register(sim: &mut Sim) -> Presentation {
 /// Flip whether a chant waits for the singer rather than for the clock (§14).
 ///
 /// **A rule, not a setting**, exactly as [`cycle_register`] above is — and for
-/// the same reason: `shortcuts.rs` says *"Phase 11's settings screen is where a
+/// the same reason: `shortcuts.rs` says *"Phase 13's settings screen is where a
 /// player-facing version would live"*, and this joins it there. Until then it is
 /// a key, which is how `F3` and `F7` reach the two accommodations that already
 /// exist.

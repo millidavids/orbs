@@ -273,18 +273,13 @@ fn quicken(world: &mut World, name: &str) -> bool {
         .find(|at| tower::domain_of(world, *at) == Some(domain));
     if let Some(at) = hurried
         && let Some(mut working) = world.get_mut::<tower::Working>(at)
+        // **Only ever earlier**, and the guard is not belt-and-braces —
+        // `tower::hurried_from` carries the reason, beside the rate it shares
+        // with `hastened`. It was written out here a second time, which is one
+        // rule in two places and the shape §19 keeps finding defects in.
+        && let Some(ends) = tower::hurried_from(now, working.ends)
     {
-        // **Only ever earlier**, and the guard is not belt-and-braces. `commands`
-        // runs before `tower::finish` in `Sim::advance`, so a scroll spent on the
-        // exact tick a run would land sees `left == 0` — and `(0 / 2).max(1)` is
-        // 1, which pushed `ends` a tick *past* where it already was. A scroll
-        // that makes the thing it hurries land later is the one outcome it must
-        // never have, and `max(1)` was there to stop a one-tick run becoming a
-        // no-tick one, which is a different case entirely.
-        let left = working.ends.get().saturating_sub(now.get());
-        if left > 1 {
-            working.ends = crate::Tick::new(now.get() + (left / tower::QUICKENED_BY).max(1));
-        }
+        working.ends = ends;
     }
 
     let place = world

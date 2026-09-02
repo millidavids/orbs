@@ -264,7 +264,7 @@ pub(crate) fn lapse(world: &mut World) {
 /// Whether a chant waits for the singer rather than for the clock.
 ///
 /// **§14's accommodation, and a *rule* rather than a setting** — which is what
-/// `orbs_shell::shortcuts` says about every other one of these until Phase 11
+/// `orbs_shell::shortcuts` says about every other one of these until Phase 13
 /// builds a settings screen. It lives in the sim because it changes what a
 /// strike is worth, and a frontend deciding that would be two games.
 #[derive(Resource, Debug, Default)]

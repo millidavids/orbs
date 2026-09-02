@@ -52,24 +52,18 @@ pub(in crate::execute) fn defend(world: &mut World) {
         return;
     }
 
-    // **The pool is read before the draws, never between them** (§11.5, and
-    // rule 3). Both inputs are replayed state — integrity is a resource the save
-    // carries, and the ley line is derived from experience — so this is pure
-    // arithmetic and takes no draw of its own. Reading it *after* `Siege::begin`
-    // would be equally correct and is deliberately not done: keeping it above
-    // makes it obvious that nothing here can reorder the stream.
-    let pool = siege::pool_for(
-        world.resource::<tower::Integrity>().get(),
-        tower::quintessence_steps(world),
-    );
-
+    // **A siege grants nothing.** The pool is the tower's, shared with the
+    // forge, and the player brings whatever they have — which is what makes
+    // enchanting during a siege cost something real, and what stops a fight
+    // being a fresh allowance that expires unspent (§19).
+    //
     // **The domain's opening draw, and it is here rather than in a system**, for
     // `muster`'s reason: `RngStream::Siege` advances when the player asks for a
     // siege and never on a tick nobody asked for, which is what lets any future
     // siege system be appended to the schedule without shifting a replay.
     let siege = {
         let mut rngs = world.resource_mut::<crate::rng::Rngs>();
-        Siege::begin(&mut rngs, pool)
+        Siege::begin(&mut rngs)
     };
     let arrived = siege.enemy.count;
     let intent = siege.intent.word();
@@ -184,10 +178,11 @@ pub(in crate::execute) fn pledge(intent: &Intent, world: &mut World) {
     // **A die already pledged is refused, and it names where it went.** A
     // silently ignored second pledge would be the worst shape here: the board
     // would look right and the round would resolve weaker than the player read.
+    let pool = world.resource::<tower::Quintessence>().get();
     let Some(mut siege) = world.get_mut::<Siege>(rampart) else {
         return;
     };
-    let cost = match siege.pledge(die, area) {
+    let cost = match siege.pledge(die, area, pool) {
         siege::Pledged::Made { cost } => cost,
         siege::Pledged::Spent => {
             let already = siege
@@ -210,7 +205,7 @@ pub(in crate::execute) fn pledge(intent: &Intent, world: &mut World) {
         // without the two numbers is a refusal a player cannot plan around — and
         // planning around it is the mechanic.
         siege::Pledged::Short { cost } => {
-            let left = siege.quintessence.to_string();
+            let left = pool.to_string();
             say(
                 world,
                 Verb::Pledge,
@@ -229,6 +224,10 @@ pub(in crate::execute) fn pledge(intent: &Intent, world: &mut World) {
     let wasted = !area.answers(siege.intent);
     let coming = siege.intent.word().to_owned();
     let _ = siege;
+    // **The tower pays, and only once the pledge is made.** `Siege::pledge` says
+    // whether the pool is enough and takes nothing; the spend is here, so the
+    // two refusals above return having touched no resource at all.
+    world.resource_mut::<tower::Quintessence>().spend(cost);
     publish(world, rampart);
 
     // **A pledge the intent will waste is still allowed, and still warned
@@ -282,6 +281,25 @@ pub(in crate::execute) fn hold(world: &mut World) {
     // model, and it keeps `Siege::resolve` a pure function of what it is handed —
     // which is what lets `tower::siege`'s tests prove the arithmetic with no
     // `World` at all.
+    // **A `whetted` rampart rolls a bigger die, staged like a potion.**
+    // `Effect::Upgrade` has shipped unused since the dice were built, with
+    // `siege.toml` reserving it in as many words for *"an enchantment"* — so
+    // this needs no new machinery at all, only the charm asked for at the same
+    // moment a quaffed potion would be.
+    //
+    // **Staged every round while the charm holds**, not once when it is laid: a
+    // charm is a window, and a modifier that survived past it would be a buff
+    // that never expired. `resolve` clears `staged`, which is what makes that
+    // work without a second rule.
+    if tower::charmed(world, rampart, tower::charm::Kind::Whetted)
+        && let Some(mut siege) = world.get_mut::<Siege>(rampart)
+    {
+        siege.stage(
+            tower::charm::Kind::Whetted.word(),
+            tower::Effect::Upgrade(tower::Die::D12),
+        );
+    }
+
     let mut siege = world
         .get::<Siege>(rampart)
         .cloned()
@@ -293,6 +311,21 @@ pub(in crate::execute) fn hold(world: &mut World) {
     *world
         .get_mut::<Siege>(rampart)
         .expect("the siege is still there") = siege;
+
+    // **A resolved round pays, and waiting inside one does not.** The calm
+    // trickle is suspended while a siege runs, so this lump is the only
+    // quintessence a fight produces — which means dawdling earns nothing and the
+    // one way to more is to advance the siege and take what the enemy does.
+    //
+    // **A lump per round rather than a rate**, and that is §14 rather than
+    // balance: the patient mode advances siege ticks on *player input*, so
+    // anything measured in ticks would mean more typing produces more resource
+    // for exactly the players that mode exists to serve. This reads no clock, so
+    // a patient siege and a played one grant identically.
+    let ceiling = tower::ceiling(world);
+    world
+        .resource_mut::<tower::Quintessence>()
+        .restore(tower::REGEN_PER_ROUND, ceiling);
 
     // **Every roll into the log, with its die and its face.** Rule 4: the same
     // record is the transcript line, the §14 utterance and what `sift` finds, so

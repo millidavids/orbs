@@ -321,7 +321,17 @@ fn give_fragment(world: &mut World, stacks: Entity) {
         .resource::<crate::content::Recipes>()
         .kind_of(FRAGMENT);
     let shelf = tower::home(world, FRAGMENT).unwrap_or(stacks);
-    tower::give(world, shelf, FRAGMENT, kind, 1);
+    // **A `bountiful` stacks pays twice.** The charm is read off the *stacks*
+    // rather than off the shelf the fragment lands on: what is enchanted is the
+    // thing doing the work, and the cabinet is only where the answer is put.
+    // Reading the shelf would make a charm on the archive's store — which is not
+    // a tool and cannot be imbued — the thing that mattered.
+    let paid = if tower::charmed(world, stacks, tower::charm::Kind::Bountiful) {
+        2
+    } else {
+        1
+    };
+    tower::give(world, shelf, FRAGMENT, kind, paid);
 }
 
 /// The walk is over: what it was worth, said once.

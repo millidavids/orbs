@@ -491,6 +491,21 @@ const DIE_AND_AREA: &[Slot] = &[
     Slot::required(NounKind::Place),
     Slot::required(NounKind::Place),
 ];
+/// `imbue` takes a tool and a charm — `pledge`'s shape, one room over.
+///
+/// `with` between them is §6 filler, so `imbue mortar_and_pestle with hurried`
+/// and `imbue mortar_and_pestle hurried` are the same command and the longer one
+/// is what a person types.
+///
+/// **Both are `Place`.** A charm is a `Role::Reading` fixture in the forge, so
+/// it resolves the way an area does — and the tool is a place anywhere in the
+/// tower, which is the one widening this domain makes to §7.
+const TOOL_AND_CHARM: &[Slot] = &[
+    Slot::required(NounKind::Place),
+    Slot::required(NounKind::Place),
+];
+/// `snap` takes one column of the lattice.
+const COLUMN: &[Slot] = &[Slot::required(NounKind::Place)];
 const SCRIPT: &[Slot] = &[Slot::required(NounKind::Script)];
 // `scribe` coins a name rather than naming something that exists — see
 // `NounKind::Name`. `bind` and `invoke` keep `SCRIPT`, because a spell they name
@@ -758,6 +773,42 @@ pub enum Verb {
     /// readings, every material and every spell name. `commit` prefixes
     /// `combine` and `assign` prefixes `assembling`.
     Pledge,
+    /// `imbue` — open a lattice to bind a charm onto a tool.
+    ///
+    /// §10's Enchanting, and the verb the whole domain hangs on. It names the
+    /// tool and the charm; what it opens is the puzzle that binds them.
+    ///
+    /// **It names a tool in another room**, which is the one place this domain
+    /// widens §7's *"you can only name what is where you are"*. The widening is
+    /// smaller than it looks: an instrument is a `NounKind::Place` and
+    /// `tower::scene` already registers every place from everywhere, so
+    /// `tower::reach`'s existing `Scope::Tower` axis is all it takes.
+    ///
+    /// Swept clean against verbs, synonyms, spell words, every domain's
+    /// readings, every material and every spell name, **and against the other
+    /// words this domain adds** — which the first sweep did not do, and
+    /// `imbue`/`imbued` came back at 975 by the prefix rule. The reading is
+    /// `graced` for that reason.
+    Imbue,
+    /// `snap` — flip one column's glyph on the lattice's working row.
+    ///
+    /// Three columns, eight openings, one of them right. `temper` was the first
+    /// choice and scores 625 against `tampered`, a `verify` verdict.
+    Snap,
+    /// `anneal` — let the lattice cascade, and bind the charm if it lights.
+    ///
+    /// **The operation, and the only one this domain has.** §10's scarcity for
+    /// Enchanting is *"the buff's own lifetime, and the slot"*, so this holds
+    /// the tower's one production slot while it runs — which is what makes
+    /// maintaining a charm compete with making things.
+    ///
+    /// **It was `settle`, and the sweep is why it is not.** `settle` scores
+    /// **834 against `mettle`**, a live siege reading a spell can name, and
+    /// `set` — already a `dial` synonym — prefixes it outright, which is a
+    /// collision `spellword.rs` records refusing once before. The word was
+    /// chosen after the design was settled and then never swept; three pinned
+    /// tables went red at once and every one of them was right.
+    Anneal,
     /// `hold` — end your turn and let one round resolve.
     ///
     /// **The only thing in the domain that advances the world**, which is what
@@ -847,7 +898,7 @@ pub enum Verb {
 
 impl Verb {
     /// Every verb in the Phase 0 vocabulary, and what the phases since have added.
-    pub const ALL: [Self; 41] = [
+    pub const ALL: [Self; 44] = [
         Self::Attend,
         Self::Survey,
         Self::Peruse,
@@ -896,6 +947,12 @@ impl Verb {
         Self::Quaff,
         Self::Hold,
         Self::Pledge,
+        // **The forge's three, appended.** `the_tolerated_collision_set_is_pinned`
+        // walks pairs in this order, so a word slipped into the middle would
+        // re-order every pair after it and turn a pinned table into noise.
+        Self::Imbue,
+        Self::Snap,
+        Self::Anneal,
     ];
 
     /// The longest a canonical verb may be.
@@ -968,6 +1025,11 @@ impl Verb {
             | Self::Quaff
             | Self::Hold
             | Self::Pledge
+            // ...and the forge's three. Opening a lattice, working it, and
+            // letting it cascade are the whole of what that room does.
+            | Self::Imbue
+            | Self::Snap
+            | Self::Anneal
             // ...and the satchel's push. It is §8's channel rather than any one
             // room's puzzle, but it stands in every domain and it changes the
             // world, which is what `Group::Work` collects.
@@ -1044,6 +1106,9 @@ impl Verb {
             Self::Quaff => "quaff",
             Self::Hold => "hold",
             Self::Pledge => "pledge",
+            Self::Imbue => "imbue",
+            Self::Snap => "snap",
+            Self::Anneal => "anneal",
         }
     }
 
@@ -1087,6 +1152,12 @@ impl Verb {
                 | Self::Haul
                 | Self::Summon
                 | Self::Sing
+                // **The forge takes the slot, and it is the first domain since
+                // brewing to do so.** §10's scarcity for Enchanting is *"the
+                // buff's own lifetime, **and the slot**"* — maintaining a charm
+                // is meant to compete with making things, which is what stops
+                // idle buff-time being free.
+                | Self::Anneal
         )
     }
 
@@ -1144,6 +1215,11 @@ impl Verb {
             // you *read*, not somewhere you stand, and there is one rampart to
             // fight from.
             Self::Deploy | Self::Quaff | Self::Hold | Self::Pledge => Some(Self::Defend),
+            // **The bailey's shape, not the sanctum's.** `imbue` is declared by
+            // the lattice and the other two anchor *to it*, because a column is
+            // something you read and snap rather than somewhere you stand.
+            Self::Imbue => Some(self),
+            Self::Snap | Self::Anneal => Some(Self::Imbue),
             // The maze's other two words, anchored to the stacks.
             Self::Follow | Self::Wander => Some(Self::Research),
             // **`sing` is anchored to the circle, not to a syllable** — the
@@ -1234,6 +1310,11 @@ impl Verb {
             Self::Quaff => "quaffing",
             Self::Hold => "holding",
             Self::Pledge => "pledging",
+            // Spelled out, never `{verb}ing` — that rule is why `divine` does
+            // not read as `divineing`, and `settle` would read as `settleing`.
+            Self::Imbue => "imbuing",
+            Self::Snap => "snapping",
+            Self::Anneal => "annealing",
             Self::Summon => "summoning",
             Self::Sing => "singing",
             Self::Chorus => "chorusing",
@@ -1266,6 +1347,11 @@ impl Verb {
             // thing there is. What changes between presses is the *aperture*,
             // and `dial` is what changes it.
             | Self::Probe
+            // **`settle` takes nothing**, for the reason `probe` does: there is
+            // one lattice open at a time, so naming it would be naming the only
+            // thing there is. What changes between settles is which columns are
+            // snapped, and `snap` is what changes them.
+            | Self::Anneal
             // **`muster` takes nothing**, for the reason `probe` does: there is
             // one pylon, and naming it would be naming the only thing there is.
             // **`summon` takes nothing**, for the reason `muster` does: there is
@@ -1304,6 +1390,8 @@ impl Verb {
             // condition resolves its place half against `NounKind::Place`, so
             // `if the buckler is empty` needs the word to be one.
             Self::Pledge => DIE_AND_AREA,
+            Self::Imbue => TOOL_AND_CHARM,
+            Self::Snap => COLUMN,
             // A socket and a sigil, both `Role::Reading` places.
             Self::Dial => SOCKET_AND_SIGIL,
             // Two stations, likewise.
@@ -1551,7 +1639,10 @@ mod tests {
         // vocabulary of every *other* room exactly as it was, which is what the
         // paragraph above means by what must stay bounded.
         let scoped = Verb::ALL.iter().filter(|verb| verb.is_operation());
-        assert_eq!(scoped.count(), 11);
+        // **Twelve, and the forge moved it by one.** Enchanting adds three verbs
+        // and only `settle` takes the production slot — `imbue` opens a lattice
+        // and `snap` flips a glyph, neither of which is work the tower does.
+        assert_eq!(scoped.count(), 12);
 
         assert!(
             !Verb::ALL.iter().any(|verb| verb.canonical() == "decoct"),

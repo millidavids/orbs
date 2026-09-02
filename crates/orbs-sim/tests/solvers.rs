@@ -149,6 +149,48 @@ const SOLVERS: &[Solver] = &[
         log: "bailey.log",
         did: Some("the wall"),
     },
+    // --- the forge.
+    //
+    // **`did` is the charm binding**, which is the only claim worth making
+    // here: a spell that opens a lattice and snaps at it for ever passes
+    // *terminates* and *latches no fault* and has done nothing at all. What
+    // says the eight-rung table is right is that a glyph lattice actually
+    // lights.
+    Solver {
+        name: "forging",
+        setup: &["attend forge"],
+        ticks: 200,
+        log: "forge.log",
+        did: Some("every glyph holds"),
+    },
+    // The maintenance spell, and it is driven **invoked** rather than bound
+    // because `bind` costs sixteen experience this fixture has not earned. One
+    // pass proves the cold-start rung fires and the charm lands; what a binding
+    // adds is the re-casting, which is `bind::stand`'s and is tested there.
+    Solver {
+        name: "tending_forge",
+        setup: &["attend forge"],
+        ticks: 200,
+        log: "forge.log",
+        did: Some("every glyph holds"),
+    },
+    // **The one that is meant to fall short**, and the table says so rather
+    // than the file assuming one outcome. `tending_blindly` holds no residue
+    // table, so it anneals without reading the board — one attempt in eight
+    // lights it. What it must still do is *open a binding and spend on it*,
+    // which is the work; whether that work pays is the whole argument for
+    // writing the eight rungs.
+    //
+    // `chanting` is the precedent: a shipped solver that collapses at the
+    // shipped budget, driven anyway, because a spell nothing runs can stop
+    // compiling with the gate green.
+    Solver {
+        name: "tending_blindly",
+        setup: &["attend forge"],
+        ticks: 200,
+        log: "forge.log",
+        did: Some("the glyphs rise"),
+    },
     // --- the sanctum.
     Solver {
         name: "holding",

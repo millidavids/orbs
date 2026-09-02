@@ -24,7 +24,7 @@ const AMPLE: u32 = 999;
 
 #[test]
 fn a_siege_starts_with_the_contingent_the_king_assigns() {
-    let siege = Siege::begin(&mut rngs(), AMPLE);
+    let siege = Siege::begin(&mut rngs());
     assert_eq!(siege.garrison.count, ASSIGNED, "the baseline is not static");
     assert_eq!(siege.garrison.vigour, ASSIGNED * VIGOUR);
     assert!(siege.running());
@@ -38,7 +38,7 @@ fn the_baseline_is_the_same_every_time_and_the_enemy_is_not() {
     // dice — never a contingent that quietly changed.
     let mut enemies = std::collections::BTreeSet::new();
     for seed in 0..40 {
-        let siege = Siege::begin(&mut Rngs::from_seed(seed), AMPLE);
+        let siege = Siege::begin(&mut Rngs::from_seed(seed));
         assert_eq!(siege.garrison.count, ASSIGNED);
         enemies.insert(siege.enemy.count);
     }
@@ -48,7 +48,7 @@ fn the_baseline_is_the_same_every_time_and_the_enemy_is_not() {
 #[test]
 fn a_round_advances_the_clock_and_nothing_else_does() {
     let mut rngs = rngs();
-    let mut siege = Siege::begin(&mut rngs, AMPLE);
+    let mut siege = Siege::begin(&mut rngs);
     // Staging is free and moves no round — §5.0's "no per-command tick
     // cost", which is what lets a player think.
     siege.stage("mending", Effect::Bonus(2));
@@ -71,7 +71,7 @@ fn a_volley_draws_the_garrisons_dice_and_throws_them_away() {
     // A volley and an advance genuinely consume *different* counts, because
     // a volley sends fewer attackers — an earlier version of this test
     // asserted they matched, which was a claim about the wrong thing.
-    let mut siege = Siege::begin(&mut rngs(), AMPLE);
+    let mut siege = Siege::begin(&mut rngs());
     siege.intent = Intent::Volley;
 
     let attackers = Intent::Volley.attackers(siege.enemy.count);
@@ -102,7 +102,7 @@ fn a_volley_draws_the_garrisons_dice_and_throws_them_away() {
 #[test]
 fn staged_modifiers_are_spent_on_the_round_they_were_bought_for() {
     let mut rngs = rngs();
-    let mut siege = Siege::begin(&mut rngs, AMPLE);
+    let mut siege = Siege::begin(&mut rngs);
     siege.stage("mending", Effect::Bonus(5));
     assert_eq!(siege.garrison_roll().bonus(), 5);
     siege.resolve(&mut rngs);
@@ -115,7 +115,7 @@ fn staged_modifiers_are_spent_on_the_round_they_were_bought_for() {
 
 #[test]
 fn the_readings_say_what_the_numbers_say() {
-    let mut siege = Siege::begin(&mut rngs(), AMPLE);
+    let mut siege = Siege::begin(&mut rngs());
     siege.garrison = Band::new(6);
     siege.enemy = Band::new(6);
     assert!(!siege.few() && !siege.hurt() && !siege.outnumbered());
@@ -133,7 +133,7 @@ fn the_readings_say_what_the_numbers_say() {
 fn a_routed_band_reads_as_neither_few_nor_hurt() {
     // A broken side is not a *thin* side, and a decision tree that treated
     // them alike would keep pouring potions into nobody.
-    let mut siege = Siege::begin(&mut rngs(), AMPLE);
+    let mut siege = Siege::begin(&mut rngs());
     siege.garrison = Band::new(0);
     assert!(siege.garrison.routed());
     assert!(!siege.few());
@@ -193,7 +193,7 @@ fn every_siege_ends_and_says_how() {
     // is this domain's version of the failure mode `scrying` names.
     for seed in 0..60 {
         let mut rngs = Rngs::from_seed(seed);
-        let mut siege = Siege::begin(&mut rngs, AMPLE);
+        let mut siege = Siege::begin(&mut rngs);
         let mut rounds = 0;
         while siege.running() && rounds < 200 {
             siege.resolve(&mut rngs);
@@ -209,7 +209,7 @@ fn every_siege_ends_and_says_how() {
 
 #[test]
 fn completion_is_what_the_enemy_lost() {
-    let mut siege = Siege::begin(&mut rngs(), AMPLE);
+    let mut siege = Siege::begin(&mut rngs());
     siege.arrived = 8;
     siege.enemy = Band::new(8);
     assert_eq!(siege.completion(), 0);
@@ -224,8 +224,8 @@ fn the_same_seed_fights_the_same_siege() {
     // Rule 3, end to end — the genre's own regression pattern.
     let mut ra = Rngs::from_seed(7);
     let mut rb = Rngs::from_seed(7);
-    let mut a = Siege::begin(&mut ra, AMPLE);
-    let mut b = Siege::begin(&mut rb, AMPLE);
+    let mut a = Siege::begin(&mut ra);
+    let mut b = Siege::begin(&mut rb);
     while a.running() {
         assert_eq!(a.resolve(&mut ra), b.resolve(&mut rb));
     }
@@ -236,7 +236,7 @@ fn the_same_seed_fights_the_same_siege() {
 fn the_odds_are_knowable_before_the_commitment() {
     // §5.1's fairness rule as an assertion: a player can always read the
     // chance before choosing, because `enemy_roll` composes without drawing.
-    let siege = Siege::begin(&mut rngs(), AMPLE);
+    let siege = Siege::begin(&mut rngs());
     assert!(siege.enemy_roll().chance() > 0);
     assert!(siege.garrison_roll().chance() > 0);
     // ...and a staged bonus visibly moves it, or the arsenal is decoration.
@@ -301,7 +301,7 @@ fn a_bigger_enemy_is_worth_more_so_abandoning_a_hard_one_is_never_the_play() {
 fn every_state_a_siege_reaches_obeys_every_rule() {
     for seed in 0..60 {
         let mut rngs = Rngs::from_seed(seed);
-        let mut siege = Siege::begin(&mut rngs, AMPLE);
+        let mut siege = Siege::begin(&mut rngs);
         let mut rounds = 0;
 
         loop {
@@ -376,7 +376,7 @@ fn a_worn_but_standing_garrison_reads_hurt_without_reading_few() {
     let mut found = false;
     for seed in 0..60 {
         let mut rngs = Rngs::from_seed(seed);
-        let mut siege = Siege::begin(&mut rngs, AMPLE);
+        let mut siege = Siege::begin(&mut rngs);
         while siege.running() {
             if siege.hurt() && !siege.few() {
                 assert!(
@@ -396,63 +396,74 @@ fn a_worn_but_standing_garrison_reads_hurt_without_reading_few() {
 }
 
 /// **The decision, in one test: spending is finite and declining is free.**
+///
+/// The pool is the **tower's** now, so this file keeps its own — which is the
+/// point of `pledge` taking it: the model stays `World`-free and the whole
+/// arithmetic is provable with no `Sim` at all.
 #[test]
 fn pledging_spends_the_pool_and_declining_costs_nothing() {
-    let mut siege = Siege::begin(&mut rngs(), 6);
-    assert_eq!(siege.quintessence, 6);
+    let mut siege = Siege::begin(&mut rngs());
+    let mut pool = 6u32;
 
     // The d20 costs five of six.
     assert_eq!(
-        siege.pledge(Die::D20, Area::Buckler),
+        siege.pledge(Die::D20, Area::Buckler, pool),
         Pledged::Made { cost: 5 },
     );
-    assert_eq!(siege.quintessence, 1);
+    pool -= 5;
+    assert_eq!(pool, 1);
 
     // ...which leaves the d8 unaffordable and the d6 just within reach.
     assert_eq!(
-        siege.pledge(Die::D8, Area::Line),
+        siege.pledge(Die::D8, Area::Line, pool),
         Pledged::Short { cost: 2 }
     );
+    assert_eq!(pool, 1, "a refused pledge took something anyway");
     assert_eq!(
-        siege.quintessence, 1,
-        "a refused pledge took something anyway",
-    );
-    assert_eq!(
-        siege.pledge(Die::D6, Area::Succour),
+        siege.pledge(Die::D6, Area::Succour, pool),
         Pledged::Made { cost: 1 }
     );
-    assert_eq!(siege.quintessence, 0);
+    pool -= 1;
+    assert_eq!(pool, 0);
 }
 
 /// A die already behind something and a die you cannot pay for are different
 /// answers — collapsing them would make the refusal say the wrong thing.
 #[test]
 fn a_spent_die_and_an_unaffordable_one_refuse_differently() {
-    let mut siege = Siege::begin(&mut rngs(), AMPLE);
+    let mut siege = Siege::begin(&mut rngs());
     assert!(matches!(
-        siege.pledge(Die::D6, Area::Line),
+        siege.pledge(Die::D6, Area::Line, AMPLE),
         Pledged::Made { .. }
     ));
-    assert_eq!(siege.pledge(Die::D6, Area::Buckler), Pledged::Spent);
-
-    let mut broke = Siege::begin(&mut rngs(), 0);
     assert_eq!(
-        broke.pledge(Die::D6, Area::Line),
+        siege.pledge(Die::D6, Area::Buckler, AMPLE),
+        Pledged::Spent,
+        "a die already behind something refused for the wrong reason",
+    );
+
+    let mut broke = Siege::begin(&mut rngs());
+    assert_eq!(
+        broke.pledge(Die::D6, Area::Line, 0),
         Pledged::Short { cost: 1 }
     );
 }
 
-/// **The pool survives the round; the pledges do not.** §11.5's *no
-/// regeneration* — the dice come back and what paid for them does not.
+/// **The dice come back each round and what paid for them does not.**
+///
+/// The pool no longer lives on the siege, so what this holds is the half that is
+/// still the model's: `resolve` returns every die to the coffer and touches no
+/// resource at all. What the tower does with its quintessence between rounds is
+/// `execute::defend`'s, and `tests/besieging.rs` is where that is proved.
 #[test]
-fn the_dice_come_back_each_round_and_the_pool_does_not() {
+fn the_dice_come_back_each_round() {
     let mut rngs = rngs();
-    let mut siege = Siege::begin(&mut rngs, 12);
+    let mut siege = Siege::begin(&mut rngs);
     assert!(matches!(
-        siege.pledge(Die::D20, Area::Buckler),
-        Pledged::Made { .. }
+        siege.pledge(Die::D20, Area::Buckler, 12),
+        Pledged::Made { cost: 5 }
     ));
-    assert_eq!(siege.quintessence, 7);
+    assert_eq!(siege.coffer().len(), POOL.len() - 1, "the d20 is spent");
 
     siege.resolve(&mut rngs);
     assert_eq!(
@@ -460,25 +471,21 @@ fn the_dice_come_back_each_round_and_the_pool_does_not() {
         POOL.len(),
         "the dice did not come back",
     );
-    assert_eq!(
-        siege.quintessence, 7,
-        "the pool regenerated, which §14 forbids",
-    );
 }
 
 /// What the coffer offers a spell is what it can actually pay for.
 #[test]
 fn the_coffer_offers_only_what_can_be_paid_for() {
-    let siege = Siege::begin(&mut rngs(), 2);
+    let siege = Siege::begin(&mut rngs());
     assert_eq!(siege.coffer().len(), 3, "all three are still held");
-    let afford: Vec<&str> = siege.affordable().iter().map(|d| d.word()).collect();
+    let afford: Vec<&str> = siege.affordable(2).iter().map(|d| d.word()).collect();
     assert_eq!(
         afford,
         vec!["d6", "d8"],
         "the d20 is held and unaffordable, and should not be offered",
     );
     assert!(siege.free(Die::D20), "the d20 is still unpledged");
-    assert!(!siege.affords(Die::D20));
+    assert!(!Siege::affords(Die::D20, 2));
 }
 
 #[test]

@@ -163,10 +163,22 @@ pub(super) fn transmute(world: &mut World, place: Entity) {
     let byproduct = leaves
         .as_ref()
         .map(|leaves| (leaves, NounKind::Reagent, false));
+    // **A `fruitful` tool yields one more of what it made, and never of what it
+    // left behind.** A charm that doubled the husks would be a charm that
+    // doubled the scouring, which is the opposite of a boon — so this rides the
+    // `wanted` flag that already tells the output from the byproduct.
+    //
+    // **A flat one rather than a chance**, and that is a deliberate narrowing of
+    // what was asked for. A chance is a draw, and a draw *here* would be taken
+    // on a path `meditate` can run hundreds of times inside one `step` — the
+    // shape this file's own header warns about. A charm that wants to be a
+    // gamble can have `RngStream::Yield` and a format bump of its own.
+    let over = super::super::charmed(world, place, super::super::charm::Kind::Fruitful);
     for (product, kind, wanted) in std::iter::once((&output, kind, true)).chain(byproduct) {
         // Merged into whatever is already there, so a second run adds to the
         // pile rather than standing a second node beside it under the same name.
-        let node = super::super::stock::give(world, place, product, kind, 1);
+        let made = if wanted && over { 2 } else { 1 };
+        let node = super::super::stock::give(world, place, product, kind, made);
         if wanted {
             world.entity_mut(node).insert(Product);
         }

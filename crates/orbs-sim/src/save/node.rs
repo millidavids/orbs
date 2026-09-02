@@ -124,6 +124,15 @@ pub struct NodeSave {
     /// A quickening window.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub quickened: Option<SpanSave>,
+    /// The forge's enchantments, in the order they were laid.
+    ///
+    /// A `Vec` rather than an `Option<Vec>`: an empty list and an absent one mean
+    /// the same thing — *nothing charmed* — and `skip_serializing_if` keeps the
+    /// file quiet either way. **Needs no format bump for that reason**, which is
+    /// the `cooling` precedent: a document written before charms existed reads
+    /// back honestly rather than wrongly.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub charms: Vec<CharmSave>,
     /// A reagent claiming a name that is not its own.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub substituted: Option<SubstitutedSave>,
@@ -154,6 +163,15 @@ pub struct NodeSave {
     /// afterwards should reopen on the same postmortem.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub siege: Option<tower::Siege>,
+    /// The forge's open lattice.
+    ///
+    /// **The component itself**, which is `siege`'s decision for `siege`'s
+    /// reason: a binding *is* its state — a charm, a tool and a part-worked
+    /// puzzle — so a derived shape would be a copy with a chance to disagree.
+    /// The tool travels as a **path**, because an entity id means nothing across
+    /// a save.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub binding: Option<tower::lattice::Binding>,
     /// What a rewritten spell actually said (§8.1's script-text surface).
     ///
     /// **Without this the corruption travels and the truth does not**, which is
@@ -224,6 +242,26 @@ pub struct SpanSave {
     /// The tick it began.
     pub started: u64,
     /// The tick it ends on. A budget is `ends - started`.
+    pub ends: u64,
+}
+
+/// One enchantment on a tool: what it does, and the span it runs for.
+///
+/// **Named rather than positional**, which is `Cooling`'s decision one resource
+/// over: `[["log", 120]]` says what a bare `[null, 120]` cannot, and it means
+/// adding a sixth charm renumbers nothing in a save written before it. The word
+/// is `charm::Kind::word` — the same one a player types and a spell reads, so
+/// there is no second spelling to keep in step.
+///
+/// A start and a completion tick, like every other interval in this file — the
+/// component holds a *budget*, and the conversion is at the boundary.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CharmSave {
+    /// Which charm, by the word a player would type.
+    pub kind: String,
+    /// The tick it was laid.
+    pub started: u64,
+    /// The tick it lapses on. A budget is `ends - started`.
     pub ends: u64,
 }
 

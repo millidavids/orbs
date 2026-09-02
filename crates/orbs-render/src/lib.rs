@@ -107,6 +107,7 @@ mod pulse;
 mod pylon;
 // `pub`, unlike the other painters' modules: `orbs-shell`'s siege painter
 // draws the rule between the two bands and needs the glyph by name.
+pub mod lattice;
 pub mod rampart;
 mod span;
 mod style;
@@ -148,6 +149,7 @@ pub use pylon::{Pylon, TALLEST};
 // `Side`, not `Band` — `mix::Band` already has that name and means a stripe of
 // one reagent in the flask. Two `Band`s in one crate's namespace is a rename
 // waiting to happen.
+pub use lattice::Lattice as LatticeBoard;
 pub use rampart::{Allocation, Rampart, Side as SiegeSide};
 pub use record::{
     FieldName, Outcome, Record, RecordBuilder, RecordKind, RecordView, Records, Sift, Value,

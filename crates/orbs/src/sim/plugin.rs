@@ -54,7 +54,7 @@ impl Plugin for SimPlugin {
                 // The gap is read here because the sim has no wall clock and §19
                 // forbids it acquiring one; the *words* are the sim's, because
                 // rule 6 puts prose in content files. Nothing accrues for it —
-                // §5 puts offline progression in Phase 9a.
+                // §5 puts offline progression in Phase 11a.
                 resumed.say_resumed(orbs_shell::away_for(&save));
                 resumed
             }

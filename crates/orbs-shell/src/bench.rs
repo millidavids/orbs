@@ -30,7 +30,7 @@
 //! and it stops the fire too.
 //!
 //! `ORBS_FIRE=0` is for scripted runs, not for players. The per-effect toggle
-//! belongs to `ROADMAP.md`'s Phase 11 settings item, beside persisted CRT-off and
+//! belongs to `ROADMAP.md`'s Phase 13 settings item, beside persisted CRT-off and
 //! reduce-motion, rather than to a debug affordance nobody maintains.
 
 use bevy_ecs::prelude::Resource;
@@ -388,7 +388,7 @@ fn bowl(panel: &super::glance::Panel) -> Option<bool> {
 /// **Found by [`Craft`], exactly as [`bowl`] is.** This used to search by *state*
 /// — the first instrument reporting `Burning`, `Banked` or `Cold` — on the
 /// argument that no other instrument reports those three. That is true today and
-/// is a property of a table in another crate: the moment §10's Phase 9a gives a
+/// is a property of a table in another crate: the moment §10's Phase 11a gives a
 /// forge or a kiln a `Burning` state, this would find whichever the sim happened
 /// to list first and flare the athanor when the forge caught. Asking what an
 /// instrument *does* cannot go wrong that way, and it is the rule 2 answer

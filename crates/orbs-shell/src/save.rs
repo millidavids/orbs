@@ -43,7 +43,7 @@ pub const OFF: &str = "off";
 /// Where the save lives when nothing says otherwise.
 ///
 /// **Beside the binary, like the parse trace**, and for a version at least. §13
-/// names `dirs` in the stack and Phase 11's settings screen is where it arrives
+/// names `dirs` in the stack and Phase 13's settings screen is where it arrives
 /// with Steam Cloud; until then this is one function to change rather than a
 /// path scattered through two frontends. The honest cost is written down in
 /// [`write()`]: an install directory can be read-only.
@@ -210,7 +210,7 @@ fn now() -> u64 {
 ///
 /// **Nothing acts on this yet, deliberately.** §5 opens *"initially there is no
 /// offline progression — the tower ticks only while the window is open"* and
-/// puts accrual in Phase 9a. What a frontend does with this today is *say* it.
+/// puts accrual in Phase 11a. What a frontend does with this today is *say* it.
 #[must_use]
 pub fn away_for(save: &Save) -> Option<u64> {
     let departed = save.away.unix;

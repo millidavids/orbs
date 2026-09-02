@@ -104,10 +104,16 @@ pub fn purge(world: &mut World, target: Entity) {
         // runs in §9's triage slot, which is a different pool from the
         // production one. So a purge starts happily during a brew, and this is
         // the one action in the domain that does not answer to `CAPACITY`.
+        // **A quickened room scours quickly too**, and this was the one duration
+        // in the tower that did not ask. §19 says of the scroll that *"everything
+        // the room starts inside that window takes half as long"*; a scour is
+        // something the room starts, and reaching for `PURGE_TICKS` raw made that
+        // sentence false without saying so anywhere.
         let now = *world.resource::<Tick>();
+        let ticks = super::quicken::hastened(world, target, PURGE_TICKS);
         world.entity_mut(target).insert(Triaging {
             started: now,
-            ends: Tick::new(now.get().saturating_add(PURGE_TICKS)),
+            ends: Tick::new(now.get().saturating_add(ticks)),
         });
         let message = world
             .resource::<Prose>()

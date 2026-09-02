@@ -547,7 +547,7 @@ impl Session {
     fn shortcut(&mut self, code: KeyCode) -> bool {
         match code {
             // Flip the focus mode. **Visibly this only moves the border's own
-            // hint** until multiplexing returns the second pane in Phase 9a —
+            // hint** until multiplexing returns the second pane in Phase 11a —
             // with one pane both tilings are identical, which §19 records as
             // deliberate rather than broken. The Bevy build is equally inert and
             // equally bound.
@@ -902,7 +902,7 @@ fn play(session: &mut Session) -> std::io::Result<()> {
 ///
 /// The Bevy build spends `Time<Virtual>`'s `max_delta` on the same question and
 /// picks five seconds: above any frame hitch, below any real absence. An absence
-/// belongs to offline progression, which is Phase 9a's.
+/// belongs to offline progression, which is Phase 11a's.
 const CATCH_UP: u32 = 5;
 
 /// One crossterm key, as every shared table understands it.

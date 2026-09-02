@@ -403,7 +403,7 @@ fn asks(sim: &mut Sim, name: &str, question: &str) -> bool {
 /// wrong answer is a wrong *number* rather than a wrong world.
 #[test]
 fn the_comparison_answers_what_the_numbers_say() {
-    let base = tower::siege::pool_for(tower::STANDING, 0);
+    let base = tower::ceiling_for(tower::STANDING, 0);
     let d20 = tower::siege::cost_of(orbs_sim::tower::dice::Die::D20);
     assert_eq!(base, 24, "the fixture's premise moved");
     assert_eq!(d20, 5, "the fixture's premise moved");
@@ -421,14 +421,27 @@ fn the_comparison_answers_what_the_numbers_say() {
         "a full pool read as too poor for a d20",
     );
 
-    // Spend it down to nothing — three full rounds is exactly 24 — and the same
-    // question flips.
-    for _ in 0..3 {
-        for die in tower::siege::POOL {
-            run(&mut sim, &format!("pledge {} buckler", die.word()));
-        }
-        run(&mut sim, "hold");
-    }
+    // ...and the same question flips when the pool is short.
+    //
+    // **Set directly rather than spent down over rounds**, and that is the
+    // sharper test rather than the lazier one. It used to pledge everything for
+    // three rounds, which emptied the pool *exactly* — an arithmetic
+    // coincidence that stopped holding the moment `hold` began granting
+    // `REGEN_PER_ROUND` back, and would have stopped again on any tuning pass.
+    // Worse, a stronger garrison now ends the fight sooner, so the loop could
+    // run out of siege before it ran out of quintessence and the test would fail
+    // for a reason that has nothing to do with the comparison.
+    //
+    // What is being asked is whether `fewer … than` reads two numbers correctly
+    // at the boundary. So put the number there.
+    let d20_cost = tower::siege::cost_of(orbs_sim::tower::dice::Die::D20);
+    sim.world_mut()
+        .insert_resource(tower::Quintessence::new(d20_cost - 1));
+    // **A verb, because the coffer's readings are published by one.** Setting
+    // the resource changes what the tower holds and nothing else; `publish` runs
+    // on `defend`, `pledge` and `hold`. A `d6` costs one, so this leaves the
+    // pool short of a `d20` either way and is the cheapest thing that republishes.
+    run(&mut sim, "pledge d6 buckler");
     assert!(
         asks(
             &mut sim,

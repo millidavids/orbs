@@ -73,6 +73,21 @@ pub enum Body {
     /// point of the column is what the *loop* is worth, not what a cleverer
     /// player might manage.
     Besieging,
+    /// Bind charms at the forge, reading the residue the way the table does.
+    ///
+    /// **The sixth policy that must read the world**, and it reads exactly what
+    /// `forging` reads — the three columns' `lit` — because the point of the
+    /// column is what the *loop* is worth rather than what a lucky guess is.
+    ///
+    /// **It is the only policy that spends the tower's one slot on something
+    /// other than making a thing**, which is the whole of why the forge needed
+    /// one: §10's scarcity for the domain is *"the buff's own lifetime, and the
+    /// slot"*, and a claim about competing for the slot that nothing measures is
+    /// a claim. It is also the instrument for every number this phase invented —
+    /// `QUINTESSENCE_BASE`, `REGEN_TICKS`, `REGEN_PER_ROUND`, `EBBING_AT` and
+    /// every `costs`/`lasts`/`takes` in `forge.toml` — each of which is
+    /// documented as a placeholder *"and `orbs-balance` is what sweeps it"*.
+    Imbuing,
     /// Earn a slot by hand, bind a spell, and then do nothing at all.
     ///
     /// **The only policy that measures the script engine**, which is the point
@@ -97,7 +112,7 @@ pub enum Body {
 
 impl Policy {
     /// Every policy the harness knows, in the order `list` prints them.
-    pub const ALL: [Self; 10] = [
+    pub const ALL: [Self; 11] = [
         Self::CLARITY,
         Self::DAMPED,
         Self::HASTE,
@@ -107,6 +122,7 @@ impl Policy {
         Self::WARDING,
         Self::CHANTING,
         Self::BESIEGING,
+        Self::IMBUING,
         Self::BOUND,
     ];
 
@@ -308,6 +324,14 @@ impl Policy {
         gloss: "the sanctum, rotated as the cyclic solver rotates it",
         setup: &["attend sanctum"],
         body: Body::Warding,
+    };
+
+    /// The forge, solved the way the shipped table solves it.
+    const IMBUING: Self = Self {
+        name: "imbuing",
+        gloss: "the forge, reading the residue as the eight-rung table reads it",
+        setup: &["attend forge"],
+        body: Body::Imbuing,
     };
 
     /// The menagerie, sung correctly and on the beat.

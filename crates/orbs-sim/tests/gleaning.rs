@@ -754,6 +754,96 @@ fn quickening_also_hurries_what_is_already_running() {
     );
 }
 
+/// A fouled mortar in a laboratory that is, or is not, quickened.
+///
+/// The mortar rather than the alembic: `PURGE_TICKS` is four, so the whole
+/// effect is two ticks, and the fixture has to be exact rather than roomy.
+#[cfg(debug_assertions)]
+fn scouring(quickened: bool) -> Sim {
+    let mut sim = Sim::new(1);
+    for line in [
+        "attend laboratory",
+        "debug_spawn quickening-scroll",
+        "grind sage",
+    ] {
+        sim.submit(line);
+        sim.step();
+    }
+    // The grind lands, leaving husks — which is the thing there is to scour.
+    sim.step_n(9);
+    if quickened {
+        sim.submit("wield quickening-scroll");
+        sim.step();
+    }
+    sim.submit("purge mortar_and_pestle");
+    sim.step();
+    sim
+}
+
+/// Ticks from a scour beginning to the mortar reporting itself clean.
+#[cfg(debug_assertions)]
+fn scoured_after(sim: &mut Sim) -> u64 {
+    for tick in 1..40 {
+        sim.step();
+        if messages(sim).iter().any(|line| line.contains("clean")) {
+            return tick;
+        }
+    }
+    panic!("the scour never finished");
+}
+
+#[cfg(debug_assertions)]
+#[test]
+fn a_quickened_room_scours_quickly_too() {
+    // **The one duration in the tower that did not ask.** `Triaging` was inserted
+    // with a raw `PURGE_TICKS`, so §19's *"everything the room starts inside that
+    // window takes half as long"* was false for a scour and nothing said so —
+    // `hastened` had exactly one caller and this was the path around it.
+    //
+    // The *ratio* rather than the two numbers: `PURGE_TICKS` is a placeholder the
+    // balance CLI sweeps, and a test naming 4 and 2 would fail on a tuning pass
+    // that changed nothing about this rule.
+    let plain = scoured_after(&mut scouring(false));
+    let quick = scoured_after(&mut scouring(true));
+    assert!(
+        quick < plain,
+        "a quickened scour took as long as a plain one: {plain} then {quick}",
+    );
+}
+
+#[cfg(debug_assertions)]
+#[test]
+fn a_window_that_has_closed_is_not_written_into_the_save() {
+    // **`Cooling`'s rule, one component over.** Nothing ever removes `Quickened`
+    // — that is what an interval means, and `quickened` simply reads false once
+    // it has run out — so a bare capture wrote a dead span into *every* autosave
+    // from the first scroll a player ever spent, for ever after.
+    //
+    // The control matters as much as the case: without it this passes against a
+    // capture that has stopped writing the window at all.
+    let mut sim = distilling(1);
+    sim.submit("wield quickening-scroll");
+    sim.step();
+    assert!(
+        sim.snapshot()
+            .to_toml()
+            .expect("a save writes")
+            .contains("quickened"),
+        "an open window is not in the save at all — the case below is vacuous",
+    );
+
+    // Past `QUICKENED_TICKS`, which is 300.
+    sim.submit("meditate 400");
+    sim.step();
+    assert!(
+        !sim.snapshot()
+            .to_toml()
+            .expect("a save writes")
+            .contains("quickened"),
+        "a closed window is still being written into the save",
+    );
+}
+
 /// What the laboratory's shelf holds, by name.
 fn shelved(sim: &Sim) -> Vec<String> {
     let world = sim.world();

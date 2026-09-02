@@ -49,7 +49,7 @@ impl Sim {
     /// Domain systems belong inside [`Sim::new`]. §13 is explicit about why: if
     /// the Bevy build, `orbs-tui` and `orbs-balance` each registered their own,
     /// they would be three different games, and *"if the live game and the CLI
-    /// harness diverged, we would not find out until Phase 9."* The seam is left
+    /// harness diverged, we would not find out until Phase 11."* The seam is left
     /// open because closing it would cost the ordering test its only handle, not
     /// because a frontend may reach through it.
     ///
@@ -92,6 +92,20 @@ impl Sim {
         //
         // The sanctum paid for this once already; the comment above is its scar.
         crate::execute::publish_dice(&mut world);
+        // ...and the forge's, for the same reason and with a sharper edge. A
+        // maintenance spell's whole first rung is `if the hurried has no
+        // graced`, and an unpublished charm node answers *nought* rather than
+        // *nothing* — so without this the rung is true of a tool that has never
+        // been charmed **and** of one that is charmed right now, from tick 0.
+        //
+        // **`lapse_charms`, not `refresh_lattice`**, and the difference is the
+        // whole of what the comment above records. `refresh_lattice` resolves
+        // the forge through `Cwd`, which at construction is the filesystem root
+        // — so it finds nothing and does nothing, which is *exactly* the
+        // bootstrap that silently did nothing three lines up. Writing the
+        // warning and then reintroducing the pattern under it is the shape this
+        // file keeps paying for; `lapse_charms` addresses the forge by path.
+        crate::execute::lapse_charms(&mut world);
         tower::rebuild(&mut world);
         tower::report(&mut world);
 
@@ -166,6 +180,7 @@ impl Sim {
         // break replay from `(seed, submissions)` the same way a recipe swap
         // would.
         world.init_resource::<crate::content::Spendables>();
+        world.init_resource::<crate::content::Charms>();
         // Materials **are** hot-reloadable in principle, unlike the two above:
         // a tint is read by the instrument panel and by nothing else, so no verb
         // branches on it and swapping it mid-session cannot change what the
@@ -206,6 +221,13 @@ impl Sim {
         world.init_resource::<tower::Experience>();
         // Whole, by `Default`. A tower is not built already crumbling.
         world.init_resource::<tower::Integrity>();
+        // **Full, not empty.** A new tower opens holding its whole ceiling, for
+        // the reason `Integrity` opens whole: a wizard has been tending this
+        // place for years before the first tick, and starting at nought would
+        // mean twelve minutes of an inert forge before the game had a decision
+        // in it. Inserted after `Integrity` because the ceiling reads it.
+        let ceiling = tower::ceiling(&world);
+        world.insert_resource(tower::Quintessence::new(ceiling));
         world.init_resource::<tower::Taken>();
         world.init_resource::<crate::execute::Opening>();
         world.init_resource::<crate::execute::Reloaded>();
@@ -285,6 +307,25 @@ impl Sim {
                 // the barrier wears sees the barrier the tick left it, not the
                 // one it started with.
                 crate::execute::lapse_chant,
+                // **The same licence, a fourth time.** Quintessence coming back
+                // is a modulo on the tick and nothing else — the forge's one
+                // draw is `Lattice::from_bits`, on `RngStream::Forge`, and it
+                // happens inside `imbue` rather than in a system. So this is
+                // appended here without shifting a single existing replay.
+                //
+                // **After `erode`**, because the ceiling is a function of
+                // integrity: on a tick where both fire, the pool is capped
+                // against the barrier as the wear left it rather than as it
+                // stood a tick ago. That is the ordering defect §19 records the
+                // sanctum paying for twice.
+                tower::regenerate,
+                // **The same licence, a fifth time**, and this one is load-
+                // bearing rather than tidy: a charm lapsing is a clock reading,
+                // and without a system saying so the forge's words are only
+                // true when a forge verb happens to run. `ebbing` would never
+                // arrive on its own, and the maintenance spell — which is
+                // entirely built on it arriving — could not work at all.
+                crate::execute::lapse_charms,
                 tower::spell::stand,
             )
                 .chain(),
@@ -830,6 +871,41 @@ impl Sim {
         Some(course.view(standing, tally))
     }
 
+    /// The lattice open in the forge, if the player is looking at it.
+    ///
+    /// Reads `Cwd` for the reason [`pylon`](Self::pylon) does: the picture
+    /// cannot outrun the readings by following the player out of the room.
+    #[must_use]
+    pub fn lattice(&self) -> Option<orbs_render::LatticeBoard> {
+        let node = self.here_with::<tower::lattice::Binding>()?;
+        let binding = self.world.get::<tower::lattice::Binding>(node)?;
+        // **The board's own line, written here.** `orbs-render` holds no
+        // authored English (rule 6), so the sentence under the rule is composed
+        // from the same prose key the reader hears.
+        let tally = self.prose().line(
+            "lattice_tally",
+            &[
+                ("name", &binding.kind),
+                ("quantity", &binding.spent.to_string()),
+            ],
+        );
+        let title = self.prose().line("lattice_title", &[]);
+        Some(orbs_render::LatticeBoard {
+            columns: tower::lattice::COLUMNS
+                .iter()
+                .map(|name| (*name).to_owned())
+                .collect(),
+            glyphs: binding.lattice.glyphs().to_vec(),
+            snapped: (0..tower::lattice::WIDTH)
+                .map(|column| binding.lattice.snapped(column))
+                .collect(),
+            width: tower::lattice::WIDTH,
+            residue: binding.lattice.residue().to_vec(),
+            tally,
+            title,
+        })
+    }
+
     /// The siege being fought in the bailey, if the player is looking at it.
     ///
     /// Reads `Cwd` for the reason [`pylon`](Self::pylon) does: the picture
@@ -852,7 +928,7 @@ impl Sim {
                 ("name", &siege.enemy.count.to_string()),
             ],
         );
-        Some(siege.view(tally))
+        Some(siege.view(tally, self.world.resource::<tower::Quintessence>().get()))
     }
 
     /// The figure being sung in the menagerie, if the player is looking at it.

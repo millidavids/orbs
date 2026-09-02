@@ -44,7 +44,7 @@ pub fn seed() -> u64 {
 ///
 /// `ORBS_WIZARD` exists because the alternative was renaming a wizard by
 /// overriding a system variable, which works by accident rather than by
-/// intention. The real answer is a settings screen, which §15 puts in Phase 11
+/// intention. The real answer is a settings screen, which §15 puts in Phase 13
 /// alongside the rest of the options; until then this is the switch.
 ///
 /// A blank value is rejected rather than accepted, so an exported-but-empty

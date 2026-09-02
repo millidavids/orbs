@@ -124,6 +124,20 @@ pub fn finish(world: &mut World) {
             continue;
         }
 
+        // **A fall is the fifth kind**, on the press's argument exactly: it
+        // makes no material, so `transmute` is wrong, and what it says depends
+        // on whether every glyph came up lit, so the generic sentence below is
+        // wrong too. It also credits nothing — what a charm is worth is the
+        // charm.
+        if working.verb == crate::parser::Verb::Anneal {
+            crate::execute::land_fall(world, place);
+            world
+                .resource_mut::<Scrollback>()
+                .records_mut()
+                .attribute(None);
+            continue;
+        }
+
         // **An audit is the fourth kind**, on the press's argument exactly: it
         // makes no material, so `transmute` is wrong, and what it says depends
         // on what it found, so the generic sentence below is wrong too. §8.1's

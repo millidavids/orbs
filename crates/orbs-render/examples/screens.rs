@@ -69,6 +69,10 @@ fn main() {
     show("Figure — a chant, two ticks from the rule (§10)", &figure);
     speak(&figure);
 
+    let glyphs = lattice(GRID);
+    show("Lattice — a charm part-bound (§10's Enchanting)", &glyphs);
+    speak(&glyphs);
+
     let records = brewing_log();
     let views = records_screen(GridSize::new(80, 22), &records);
     show("Records — one stream, three views (§7)", &views);
@@ -1838,6 +1842,83 @@ fn chant(grid: GridSize) -> Frame {
         UtteranceKind::Progress,
         Role::Normal,
         "skyward next, 4 to come, 1 missed",
+    );
+    frame
+}
+
+/// The forge's lattice, part-worked, with no sim behind it.
+///
+/// **The board this example most needed and did not have.** The lattice is the
+/// densest *shape* in the game where the rampart is the densest numbers, and the
+/// failure it is prone to is invisible to every test in `orbs-sim`: a stride
+/// that drifts by one cell leaves the glyphs correct and the picture wrong, and
+/// a player reads *down* a column to see what a snap did.
+///
+/// Drawn in a state where all three of the things that can go wrong are on
+/// screen at once: a **mixed** row (so a lit and a dark glyph are compared side
+/// by side), a residue that **disagrees** with the bottom row of the grid (which
+/// is the normal case and the one a reader must not conflate), and a tally
+/// longer than the grid is wide (which is what makes the board's width the
+/// `max` of two things rather than one).
+fn lattice(grid: GridSize) -> Frame {
+    let board = orbs_render::LatticeBoard {
+        // `tower::lattice`'s own words. The sim hands these through
+        // `Sim::lattice`; an example has no sim, so it repeats them.
+        columns: vec!["apex".to_owned(), "belt".to_owned(), "hem".to_owned()],
+        glyphs: vec![
+            true, false, true, //
+            false, true, false, //
+            true, true, false,
+        ],
+        snapped: vec![true, false, false],
+        width: 3,
+        residue: vec![false, true, false],
+        tally: "hurried, 12 spent".to_owned(),
+        title: "lattice".to_owned(),
+    };
+
+    let layout = ScreenLayout::compute(&ScreenRequest::single(grid));
+    let mut frame = Frame::new(grid);
+    let pane = layout.main()[0];
+    let mut painter = frame.painter(pane);
+    painter.border(pane, Some("forge"), Style::DIM);
+
+    let at = Rect::new(pane.col + 2, pane.row + 2, board.cols(), board.rows());
+    painter.border(at, Some(&board.title), Style::DIM);
+    let inside = at.inset(1);
+    let mut row = inside.row;
+    painter.glyphs(Pos::new(inside.col, row), &board.heading(), Style::DIM);
+    row += 1;
+    let high = board.glyphs.len() / board.width;
+    for line in 0..high {
+        painter.glyphs(Pos::new(inside.col, row), &board.row(line), Style::NORMAL);
+        row += 1;
+    }
+    painter.glyphs(
+        Pos::new(inside.col, row),
+        &"─".repeat(usize::from(inside.cols)),
+        Style::DIM,
+    );
+    row += 1;
+    painter.glyphs(
+        Pos::new(inside.col, row),
+        &board.residue_row(),
+        Style::NORMAL,
+    );
+    row += 1;
+    painter.glyphs(Pos::new(inside.col, row), &board.tally, Style::DIM);
+
+    // **The residue as words, which is the §14 gate this screen gives it.** A
+    // reader hears the sentence a sighted player reads off the strip — and the
+    // strip itself is padded glyph art, which is what this line said before.
+    painter.announce(
+        UtteranceKind::Progress,
+        Role::Normal,
+        &format!(
+            "{}. the bottom row reads {}",
+            board.tally,
+            board.residue_spoken()
+        ),
     );
     frame
 }

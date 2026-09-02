@@ -30,6 +30,7 @@ mod debug_spell;
 mod defend;
 mod dispatch;
 mod files;
+mod imbue;
 mod muster;
 mod navigate;
 mod pipeline;
@@ -79,6 +80,7 @@ pub(crate) use defend::refresh as refresh_rampart;
 // ...and the die prices, which are raised once at construction rather than on a
 // round. `Sim::bare` is the only caller, beside the pylon's for the same reason.
 pub(crate) use defend::publish_dice;
+pub(crate) use imbue::{land as land_fall, lapse as lapse_charms};
 pub(crate) use research::{stacks, tread};
 pub(crate) use scribe::Reloaded;
 pub use scribe::{Opening, Request, write};

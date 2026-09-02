@@ -438,7 +438,7 @@ spell_moved_under_it = "{name} reads differently than when the orb took it up. i
 # waking is the screen they left.
 resumed = "the orb remembers. the tower is as you left it"
 # ...and how long it was dark. **Nothing accrued** — §5 opens "initially there is
-# no offline progression" and puts accrual in Phase 9a — so this says what
+# no offline progression" and puts accrual in Phase 11a — so this says what
 # happened, which is nothing, rather than implying otherwise.
 resumed_away = "it was dark for {span}. nothing turned while you were gone"
 # The save was there and could not be read. Said rather than swallowed: a player
@@ -819,7 +819,7 @@ recall_quiet-draught = "valerian cut with salt. it distils into stillness"
 # spend these, and Phase 8 owes two sinks now rather than one. Saying so is what
 # stops a player hoarding for a use that does not exist yet.
 recall_troop = "something the chant called up. it waits in the arsenal"
-using_troop = "nothing musters a troop yet. a siege will be what spends them"
+using_troop = "deploy it on the wall. two more bodies in the line"
 
 recall_clarity = "a potion of clear sight, and the laboratory's flagship work"
 recall_warding = "a potion that turns harm aside"
@@ -829,14 +829,24 @@ recall_stillness = "a potion of deep quiet, which is valerian's own gift"
 recall_mending = "a potion that knits what is worn. distilled from ash and salt"
 recall_dreaming = "a potion of sleeping sight, out of what a bath leaves"
 recall_vigour = "a potion of hard work, wrung from the dregs of a combination"
-using_clarity = "nothing drinks a potion yet. a siege will be what spends them"
-using_warding = "nothing drinks a potion yet. a siege will be what spends them"
-using_haste = "nothing drinks a potion yet. a siege will be what spends them"
-using_insight = "nothing drinks a potion yet. a siege will be what spends them"
-using_stillness = "nothing drinks a potion yet. a siege will be what spends them"
-using_mending = "nothing drinks a potion yet. a siege will be what spends them"
-using_dreaming = "nothing drinks a potion yet. a siege will be what spends them"
-using_vigour = "nothing drinks a potion yet. a siege will be what spends them"
+# **These nine said "a siege will be what spends them" and it stopped being
+# true when the bailey shipped.** Six of the eight potions have had a `quaff`
+# entry in `siege.toml` since Phase 8, and a troop has been deployable for as
+# long — so every one of these pages told a player the thing they were holding
+# was inert while the verb that spends it stood two rooms away. A page that has
+# stopped being true is the defect this project keeps finding, and the fix is a
+# content edit.
+using_clarity = "quaff it on the wall. it adds four to every answering roll"
+using_warding = "quaff it on the wall. three on every roll, for the whole round"
+using_haste = "quaff it on the wall. you roll twice and keep the better"
+using_insight = "quaff it on the wall. the enemy's next swing comes up short"
+using_mending = "quaff it on the wall. six of the garrison's fight, put back"
+using_dreaming = "quaff it on the wall. they come on slower for a round"
+# **The two with no sink at all**, and they are honest about it. The forge spends
+# quintessence rather than essences (§19), so `stillness` and `vigour` are still
+# waiting for something to want them.
+using_stillness = "nothing spends it yet. it is the quietest thing you can brew"
+using_vigour = "nothing spends it yet, and it is the hardest-won of the eight"
 
 # ---------------------------------------------------------------------------
 # Byproducts. S10.1's rule is that every one has a use, so every page names it -
@@ -975,6 +985,10 @@ craft_ask_sanctum = "if the wellspring is empty"
 craft_line_bailey = "defend"
 craft_then_bailey = "hold"
 craft_ask_bailey = "if the garrison has few"
+
+craft_line_forge = "imbue mortar_and_pestle hurried"
+craft_then_forge = "anneal"
+craft_ask_forge = "if the apex has lit"
 
 craft_line_menagerie = "summon"
 craft_then_menagerie = "sing skyward"
@@ -1754,3 +1768,85 @@ using_onslaught = "if the rampart has onslaught. the round to spend something on
 
 recall_volley = "the enemy means to shoot from range. fewer of them, and unanswered"
 using_volley = "if the rampart has volley. spend nothing, you cannot strike back"
+
+# ---------------------------------------------------------------------------
+# THE FORGE (§10's Enchanting). The room, its three words, and what a charm says.
+
+man_here_forge = "the fire under the tower. where a tool is given something it lacks"
+man_start_forge = "imbue names a tool and a charm. a lattice of glyphs opens"
+man_solve_forge = "snap the columns you want, then anneal and let it fall"
+
+man_imbue_use = "imbue <tool> <charm>"
+man_imbue_gloss = "open a lattice to bind a charm onto a tool"
+man_imbue_1 = "the tool may be in any room. the forge reaches the whole tower"
+man_imbue_2 = "a charm costs quintessence, and so does every anneal it takes"
+man_imbue_eg1 = "imbue mortar_and_pestle with hurried, to halve every grind"
+man_imbue_also = "snap, anneal, recall forge"
+
+man_snap_use = "snap <column>"
+man_snap_gloss = "flip a glyph and the glyphs beside it"
+man_snap_1 = "apex, belt and hem. snapping one twice is snapping neither"
+man_snap_2 = "only the top row is yours. the rest of the lattice follows"
+man_snap_eg1 = "snap apex, when the hem came up dark under it"
+man_snap_also = "anneal, imbue, survey lattice"
+
+man_anneal_use = "anneal"
+man_anneal_gloss = "let the lattice fall, and set the charm if every glyph lights"
+man_anneal_1 = "it holds the tower to it. nothing else brews while a lattice falls"
+man_anneal_2 = "a lattice that does not light springs back, and shows you why"
+man_anneal_eg1 = "anneal, once the columns are as you want them"
+man_anneal_also = "snap, imbue, survey lattice"
+
+# What the forge says.
+forge_nowhere = "there is no lattice here to work"
+forge_unopened = "there is nothing on the lattice. imbue something first"
+# **`anneal it`, and this line missed the rename.** `settle` was dropped in the
+# naming sweep — 834 against `mettle`, and `set` prefixes it — and the rename
+# reached the code, the tests and every other page but this one. A player
+# following it typed a word the parser does not know.
+forge_busy = "a lattice is already open. anneal it or leave it"
+forge_no_charm = "{name} is not a charm this forge knows"
+# **A column, not a charm.** Both are `NounKind::Place` in this room, so
+# `snap hurried` and `snap lattice` both resolve and reach the verb — and the
+# refusal said *"hurried is not a charm this forge knows"*, which is the wrong
+# noun class and, for a charm, flatly untrue.
+forge_no_column = "{name} is not a column of the lattice"
+forge_no_tool = "{name} is not something a charm will hold to"
+forge_short = "{name} would take {kind} quintessence, and you hold {quantity}"
+forge_opened = "the glyphs rise for {name}. {detail} to bind it"
+forge_snapped = "{name} turns, and its neighbours with it"
+forge_settling = "the lattice begins to fall. {quantity} ticks"
+forge_set = "every glyph holds. {name} settles onto the {detail}"
+forge_failed = "the lattice goes dark and springs back. that cost {quantity}"
+forge_charm_gone = "the {name} charm fades, and the tools are as they were"
+
+# The board.
+lattice_title = "lattice"
+lattice_tally = "{name}, {quantity} spent"
+lattice_spoken = "{name}. the bottom row reads {detail}"
+
+# The readings a spell asks for.
+recall_graced = "a tool with a charm still on it, and how long it has"
+using_graced = "if the mortar_and_pestle has graced. it is still quick"
+recall_ebbing = "a charm with little enough left to be worth laying again"
+using_ebbing = "if the mortar_and_pestle has ebbing. the maintenance rung"
+recall_lit = "a column of the lattice whose bottom glyph came up alight"
+using_lit = "if the apex has lit. the three of them name what to snap"
+
+recall_apex = "the first column of the lattice"
+using_apex = "snap apex. or ask if the apex has lit"
+recall_belt = "the middle column of the lattice"
+using_belt = "snap belt. or ask if the belt has lit"
+recall_hem = "the last column of the lattice"
+using_hem = "snap hem. or ask if the hem has lit"
+
+recall_hurried = "a charm that halves how long a tool takes"
+using_hurried = "imbue mortar_and_pestle hurried. an eight tick grind becomes four"
+recall_fruitful = "a charm that makes a tool yield one more than the recipe says"
+using_fruitful = "imbue mortar_and_pestle fruitful. every grind pays twice"
+recall_bountiful = "a charm that makes the stacks pay an extra fragment"
+using_bountiful = "imbue stacks bountiful. a walk is worth two"
+recall_whetted = "a charm that rolls a bigger die"
+using_whetted = "imbue rampart whetted. the wall answers with more"
+recall_shielded = "a charm that turns a sabotage aside"
+using_shielded = "imbue coursing.spell shielded. the enemy strikes and it holds"

@@ -17,7 +17,7 @@
 //!
 //! # The exemption is narrow, and it is stated
 //!
-//! `tower::scene` records that acting on a domain you are not in is **Phase 7's**
+//! `tower::scene` records that acting on a domain you are not in is **Phase 10's**
 //! unlock. This does not repeal that: what reaches everywhere is the arsenal's
 //! *contents*, on exactly the terms places, spells and the maze's readings
 //! already have. A spellbook you carry is not a shelf you walk to, and neither

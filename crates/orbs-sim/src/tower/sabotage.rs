@@ -40,6 +40,7 @@
 use bevy_ecs::prelude::*;
 use orbs_render::{FieldName, Presentation, RecordKind, Records, Role};
 
+use super::charm;
 use super::node::{Name, NodeId};
 use crate::parser::Verb;
 use rand::Rng as _;
@@ -291,6 +292,12 @@ const DRIFT_INTERVAL: u64 = 300;
 pub fn drift(
     mut rngs: ResMut<Rngs>,
     logs: Query<(Entity, &Name, &NodeId), (With<Log>, Without<Poisoned>)>,
+    // **Not a query filter, and it cannot be.** A charm has no expiry system —
+    // it is an interval, so a lapsed one is still a present component — which
+    // means `Without<Charmed>` would shield a log for ever after its first
+    // charm. The clock is what answers, every time.
+    charmed: Query<&charm::Charmed>,
+    now: Res<crate::tick::Tick>,
     mut commands: Commands,
 ) {
     // **Drawn before anything can return, and that is the whole shape of the
@@ -330,7 +337,7 @@ pub fn drift(
     // `sort_unstable` promises nothing for equal keys, so two same-named logs
     // would fall back to input order — which is the archetype order this sort
     // exists to remove. Four domains have four distinct log names today; five
-    // more domains arrive by Phase 9a and nothing forbids two of them holding a
+    // more domains arrive by Phase 11a and nothing forbids two of them holding a
     // `feed.log`. The id is safe as a secondary key because a save carries it.
     surfaces.sort_unstable_by(|(_, a, x), (_, b, y)| a.0.cmp(&b.0).then(x.cmp(y)));
 
@@ -348,6 +355,20 @@ pub fn drift(
     let Some((target, _, _)) = surfaces.get(index).copied() else {
         return;
     };
+    // **A `shielded` log is struck and holds, rather than never being picked.**
+    //
+    // The distinction is the whole design of the charm. Filtering charmed nodes
+    // *out of the pool* would change which log the same roll hits — every seed's
+    // world, moved, by a thing the player did — where letting the strike land
+    // and be turned aside leaves `% surfaces.len()` answering exactly what it
+    // always did and spends the enemy's turn instead. Same arithmetic, and the
+    // better fiction: the charm holds, it does not hide.
+    if charmed
+        .get(target)
+        .is_ok_and(|held| held.left(charm::Kind::Shielded, *now) > 0)
+    {
+        return;
+    }
     commands.entity(target).insert(Poisoned);
 }
 

@@ -617,6 +617,7 @@ fn every_component_the_world_holds_is_one_the_save_knows_about() {
         (TypeId::of::<orbs_sim::tower::Bidden>(), "Bidden"),
         (TypeId::of::<orbs_sim::tower::Product>(), "Product"),
         (TypeId::of::<orbs_sim::tower::Quickened>(), "Quickened"),
+        (TypeId::of::<orbs_sim::tower::Charmed>(), "Charmed"),
         (TypeId::of::<orbs_sim::tower::Burning>(), "Burning"),
         (TypeId::of::<orbs_sim::tower::Banked>(), "Banked"),
         (TypeId::of::<orbs_sim::tower::Ash>(), "Ash"),
@@ -733,7 +734,7 @@ fn show_a_save() {
 #[test]
 fn every_resource_the_world_holds_is_one_the_save_knows_about() {
     // In the document.
-    const CARRIED: [&str; 11] = [
+    const CARRIED: [&str; 12] = [
         "orbs_sim::tick::Tick",
         "orbs_sim::rng::Rngs",
         "orbs_sim::tower::node::NodeIds",
@@ -747,10 +748,14 @@ fn every_resource_the_world_holds_is_one_the_save_knows_about() {
         // §8.1's per-surface rationing. It travels because a cooldown a player
         // can clear by quitting is not a cooldown.
         "orbs_sim::tower::audit::Cooling",
+        // §11.5's mana, tower-wide since Phase 9. It travels for a sharper
+        // version of `Cooling`'s reason: a pool a player could refill by
+        // quitting would make the forge free and the siege's allocation moot.
+        "orbs_sim::tower::quintessence::Quintessence",
     ];
 
     // Not in the document. Each line is a decision; none of them is a shrug.
-    const EXCUSED: [(&str, &str); 17] = [
+    const EXCUSED: [(&str, &str); 18] = [
         (
             "orbs_sim::session::Scrollback",
             "a bounded tail travels; the arena does not",
@@ -792,6 +797,7 @@ fn every_resource_the_world_holds_is_one_the_save_knows_about() {
             "orbs_sim::content::siege::Spendables",
             "content, compiled in",
         ),
+        ("orbs_sim::content::forge::Charms", "content, compiled in"),
         (
             "orbs_sim::content::progression::Progression",
             "content, compiled in",
@@ -1257,6 +1263,72 @@ fn a_tower_in_the_odd_states(seed: u64) -> Sim {
         sim.step();
     }
     sim
+}
+
+/// A charmed tool round-trips, and a lapsed charm is not written at all.
+///
+/// **Placed through `world_mut` rather than through a verb**, because the forge
+/// that lays one does not exist yet — this is the step that adds the component
+/// and the save fields, and carrying them untested until the verb arrives is
+/// exactly the *"written symmetrically in `capture` and `adopt`, and checked by
+/// nothing"* blind spot the test below was written to close. The escape hatch is
+/// for setup between steps, which is what this is.
+///
+/// The liveness half is the one that matters: nothing removes a lapsed charm —
+/// an interval has no expiry system — so a bare walk would write a dead row per
+/// charm per node for the rest of the save's life, which is precisely what
+/// `Quickened` did for a whole phase before this one.
+#[test]
+fn a_charm_travels_and_a_lapsed_one_is_left_behind() {
+    use orbs_sim::tower::{Charm, Charmed, charm::Kind};
+
+    let mut sim = Sim::new(3);
+    sim.submit("attend laboratory");
+    sim.step();
+
+    let mortar = orbs_sim::tower::home(sim.world(), "sage").expect("the shelf");
+    let now = *sim.world().resource::<orbs_sim::Tick>();
+    sim.world_mut().entity_mut(mortar).insert(Charmed(vec![
+        Charm {
+            kind: Kind::Hurried,
+            from: now,
+            ticks: 500,
+        },
+        // Laid at the same moment and already spent, so the two differ only in
+        // whether they are still in force.
+        Charm {
+            kind: Kind::Whetted,
+            from: now,
+            ticks: 0,
+        },
+    ]));
+
+    let save = sim.snapshot();
+    let charms: Vec<&orbs_sim::save::CharmSave> =
+        save.nodes.iter().flat_map(|node| &node.charms).collect();
+    assert_eq!(
+        charms.len(),
+        1,
+        "a lapsed charm was written into the save: {charms:?}",
+    );
+    assert_eq!(charms[0].kind, "hurried");
+    assert_eq!(
+        charms[0].ends - charms[0].started,
+        500,
+        "the budget did not survive the trip through absolute ticks",
+    );
+
+    // ...and it comes back as the same charm, on the same tool.
+    let text = save.to_toml().expect("a save writes");
+    let read = Save::from_toml(&text).expect("a save reads back");
+    let reloaded = Sim::restored(&read);
+    let mortar = orbs_sim::tower::home(reloaded.world(), "sage").expect("the shelf");
+    let held = reloaded
+        .world()
+        .get::<Charmed>(mortar)
+        .expect("the charm did not survive the load");
+    assert_eq!(held.0.len(), 1, "the lapsed charm came back: {held:?}");
+    assert_eq!(held.0[0].kind, Kind::Hurried);
 }
 
 /// The fields the busy tower never reaches, round-tripped.

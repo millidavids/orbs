@@ -229,7 +229,7 @@ const FALLBACK: &str = "laboratory";
 /// save) is a thing a player will otherwise discover by losing work.
 ///
 /// §12 calls this the *in-world grimoire* and puts it in the "always" column,
-/// beside the apprenticeship that Phase 10 owns. This is the reference half of
+/// beside the apprenticeship that Phase 12 owns. This is the reference half of
 /// that, which is why it is a `recall` page and not a scripted sequence.
 ///
 /// # The worked example comes from the room
@@ -1408,6 +1408,14 @@ mod tests {
                 // would be true of the type and useless to a player: what they
                 // are choosing is one of four sounds, not somewhere to stand.
                 Verb::Sing => Some(&["syllable"][..]),
+                // ...and the forge's tool and charm, fifth time. `imbue <place>
+                // <place>` would be true of the type and useless: one of them is
+                // any tool in the tower and the other is one of five charms, and
+                // nothing about "place" says which way round they go.
+                Verb::Imbue => Some(&["tool", "charm"][..]),
+                // ...and its columns, sixth. A column is a thing you snap, not
+                // somewhere to stand.
+                Verb::Snap => Some(&["column"][..]),
                 _ => None,
             } {
                 for wanted in instead {

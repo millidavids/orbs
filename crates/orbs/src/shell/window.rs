@@ -72,7 +72,7 @@ pub(crate) fn spawn_camera(mut commands: Commands) {
         // turning the tube *off* does not turn the accommodation off with it.
         // `ORBS_CAPTURE` presses no keys, so without this that property could
         // only ever be checked by a person, and it is the property most worth
-        // checking automatically. Phase 11's settings screen replaces it.
+        // checking automatically. Phase 13's settings screen replaces it.
         crate::crt::seeded(),
     ));
 }

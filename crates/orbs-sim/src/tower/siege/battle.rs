@@ -84,22 +84,21 @@ pub struct Siege {
     /// *round*, not the die.
     #[serde(default)]
     pub pledges: Vec<Pledge>,
-    /// What is left to spend on dice this siege.
+    /// What a format-8 save recorded as this siege's private pool.
     ///
-    /// **A fixed pool granted on entry, with no regeneration** (§11.5). It is
-    /// decided once — by the tower's integrity and the ley line, in
-    /// [`quintessence::pool_for`](super::pool_for) — and only ever falls.
+    /// **A migration shim, and it has to be a field rather than a lookup.**
+    /// `document::migrate` runs on the already-deserialised save and reads
+    /// `node.siege`, which is *this type* — and `Siege` has no
+    /// `deny_unknown_fields`, so deleting the field outright would have serde
+    /// discard the format-8 value **silently, before the migration could ever
+    /// see it**. Deleting and migrating are not two orderings of one change;
+    /// only one of them works.
     ///
-    /// **Declining to pledge costs nothing**, which is what makes *not* spending
-    /// a move rather than an omission: an area the coming intent would waste is
-    /// one you leave dark and keep the dice for.
-    ///
-    /// `#[serde(default)]` would open an in-flight siege from an older save with
-    /// nothing to pledge for the rest of the fight, so the format is bumped and
-    /// the migration fills it instead — `document.rs`'s *"loads wrongly rather
-    /// than merely incompletely"*.
-    #[serde(default)]
-    pub quintessence: u32,
+    /// Written by nothing and read only by the 8 → 9 migration, which lifts it
+    /// into [`tower::Quintessence`](crate::tower::Quintessence) and leaves
+    /// `None` behind. It costs one `Option<u32>` to keep until 1.0.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quintessence: Option<u32>,
     /// Set once the siege is over.
     pub outcome: Option<Outcome>,
     /// The tick the road is clear again, once this one has ended.
@@ -115,13 +114,16 @@ pub struct Siege {
 impl Siege {
     /// Begin one. The garrison is always [`ASSIGNED`]; the enemy is drawn.
     ///
-    /// **`quintessence` is handed in rather than computed here**, and that is two
-    /// decisions at once. It keeps this module `World`-free — the property that
-    /// lets `siege/tests.rs` prove the whole model with no `World` at all — and it
-    /// puts the pool's arrival *before* the two draws below, where it cannot
-    /// reorder them. Computing it between them would shift every seed.
+    /// **A siege grants nothing now.** The pool is the tower's and the player
+    /// brings whatever they have — which is the whole of what makes enchanting
+    /// during a siege cost something, and what stops a fight being a fresh
+    /// allowance that expires unspent.
+    ///
+    /// It took a pool as an argument for one phase, so that the number arrived
+    /// *before* the two draws below and could not reorder them. That constraint
+    /// is gone with the parameter, and the draws are untouched.
     #[must_use]
-    pub fn begin(rngs: &mut Rngs, quintessence: u32) -> Self {
+    pub fn begin(rngs: &mut Rngs) -> Self {
         use rand::Rng;
         // **Drawn before the intent, and unconditionally.** Order is part of the
         // replay contract: swapping these two would change every existing seed.
@@ -136,7 +138,7 @@ impl Siege {
             mustered: ASSIGNED,
             staged: Vec::new(),
             pledges: Vec::new(),
-            quintessence,
+            quintessence: None,
             outcome: None,
             clear_at: None,
         }
@@ -202,11 +204,15 @@ impl Siege {
     /// derived word makes `if the coffer has d20` mean *"I hold it and can pay for
     /// it"* — the maze's `spoil`/`exit` pattern, and a natural positive with no
     /// grammar at all.
+    ///
+    /// **`pool` is handed in**, which is what keeps this module `World`-free —
+    /// the property that lets `siege/tests.rs` prove the whole model with no
+    /// `World` at all.
     #[must_use]
-    pub fn affordable(&self) -> Vec<Die> {
+    pub fn affordable(&self, pool: u32) -> Vec<Die> {
         self.coffer()
             .into_iter()
-            .filter(|die| super::cost_of(*die) <= self.quintessence)
+            .filter(|die| super::cost_of(*die) <= pool)
             .collect()
     }
 
@@ -216,10 +222,10 @@ impl Siege {
         self.coffer().contains(&die)
     }
 
-    /// Whether there is quintessence enough for `die`.
+    /// Whether `pool` is quintessence enough for `die`.
     #[must_use]
-    pub const fn affords(&self, die: Die) -> bool {
-        super::cost_of(die) <= self.quintessence
+    pub const fn affords(die: Die, pool: u32) -> bool {
+        super::cost_of(die) <= pool
     }
 
     /// The dice pledged to `area`, in the order they were pledged.
@@ -252,17 +258,21 @@ impl Siege {
     /// §6 forbids a bare error for either.
     ///
     /// **Nothing here draws.** A refusal returns before touching anything, and a
-    /// success spends a number; the dice are rolled at
+    /// success records a pledge; the dice are rolled at
     /// [`resolve`](Self::resolve), one face per pledge, in pledge order.
-    pub fn pledge(&mut self, die: Die, area: Area) -> Pledged {
+    ///
+    /// **The caller spends.** `pool` is what the tower holds and this only says
+    /// whether it is enough — the resource lives in `tower::Quintessence` now,
+    /// shared with the forge, and a model that took from it would either need a
+    /// `World` here or keep a second copy of one number.
+    pub fn pledge(&mut self, die: Die, area: Area, pool: u32) -> Pledged {
         if !self.free(die) {
             return Pledged::Spent;
         }
         let cost = super::cost_of(die);
-        if cost > self.quintessence {
+        if cost > pool {
             return Pledged::Short { cost };
         }
-        self.quintessence -= cost;
         self.pledges.push(Pledge { die, area });
         Pledged::Made { cost }
     }
@@ -347,8 +357,11 @@ impl Siege {
     /// The odds go too, composed but undrawn, because §5.1's fairness rule is
     /// *show the odds before the commitment*: a player choosing whether to spend
     /// a potion has to be able to see what it buys.
+    /// `pool` is what the **tower** holds, handed in for the same reason
+    /// `pledge` takes it: the resource is shared with the forge now, and this
+    /// module stays `World`-free.
     #[must_use]
-    pub fn view(&self, tally: String) -> orbs_render::Rampart {
+    pub fn view(&self, tally: String, pool: u32) -> orbs_render::Rampart {
         orbs_render::Rampart {
             garrison: orbs_render::SiegeSide {
                 name: GARRISON,
@@ -396,7 +409,7 @@ impl Siege {
                 .into_iter()
                 .map(|die| (die.word().to_owned(), super::cost_of(die)))
                 .collect(),
-            quintessence: self.quintessence,
+            quintessence: pool,
             intent: self.intent.word().to_owned(),
             tally,
         }

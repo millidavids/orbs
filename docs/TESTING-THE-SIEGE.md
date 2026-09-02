@@ -463,7 +463,7 @@ recall scripting      ← what a spell here can name
 ## Known gaps, so you do not report them as bugs
 
 - **Three Phase 8 items are deliberately unbuilt** and named in `docs/ROADMAP.md`:
-  pane synergies (waits on Phase 7's multiplexing), procedural traits and the
+  pane synergies (waits on Phase 10's multiplexing), procedural traits and the
   eldritch renderer, and the unattended-siege backlog with difficulty tiers
   (waits on §5.3's trace provoking sieges rather than `defend` doing it).
 - **`defend` is how a siege starts.** In the finished game trace provokes one;

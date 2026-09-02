@@ -15,6 +15,52 @@
   at 1.0 (DESIGN.md §19).
 -->
 
+## [v0.9.3] - 2026-09-02
+
+### Description
+In development — a dev log, not patch notes. The seventh and last room opened: a
+forge, where solving a lattice of glyphs binds a charm onto a tool. Charms make
+things faster or richer, and cost the same power a siege spends.
+
+### Added
+- **The forge, and it is the tower's last room.** Seven were planned and seven
+  now stand. It is where you enchant a tool — name the tool and the charm, and a
+  lattice of glyphs opens.
+- **A puzzle to bind one.** Every glyph must be lit, and touching one flips its
+  neighbours as well. Three columns, eight ways to open, and exactly one of them
+  works — the bottom row tells you which, if you can read it.
+- **Five charms, and each wears off.** One halves how long a tool takes. One
+  makes it yield twice. One makes a walk of the stacks pay two fragments. One
+  rolls a bigger die on the wall. The last turns a saboteur's hand aside.
+- **A charm can be laid on anything in the tower**, not only on what is in the
+  room with you — and a spell can keep one alive while you are elsewhere, because
+  the orb will say when a charm is nearly out.
+
+### Changed
+- **Power belongs to the tower now, not to a siege.** It used to be handed out
+  when the enemy arrived and vanish when they left. It is yours, it comes back on
+  its own, and the forge and the wall both draw on it — so a charm bound in the
+  quiet is dice you cannot roll later.
+- **Enchanting during a siege costs double**, which is the wizard's own fault for
+  being at his forge while the wall is under attack.
+- **A siege hands you nothing at the gate.** You bring what you have. Seeing a
+  round out earns a little back, so waiting about earns nothing and the only way
+  to more is to fight.
+- **Mending the walls is what buys enchanting.** How much power the tower can
+  hold rises with the barrier, so a neglected tower is a smaller one.
+- **Binding a charm takes the tower's attention.** Nothing brews while a lattice
+  falls, which is what makes keeping a charm alive a real choice against making
+  things.
+
+### Fixed
+- **Nine potions said nothing would ever drink them.** Six have been spent on a
+  wall since the siege arrived, and a troop deployed for as long. They say what
+  they do now, and the two nothing spends admit it.
+- **A quickening scroll left a mark on every save you took afterwards**, for the
+  rest of the session and every session after it.
+- **A hurried laboratory now scours quickly too.** It was the one job in the room
+  that ignored the scroll.
+
 ## [v0.8.18] - 2026-08-31
 
 ### Description

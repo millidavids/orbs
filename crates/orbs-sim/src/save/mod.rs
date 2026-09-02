@@ -42,7 +42,7 @@
 //! carry. The two lints beside it are what narrow the rest.
 //!
 //! **A restore raises the tower first and then adopts it.** Five more domains
-//! arrive between here and Phase 9a; a save that owned the whole tree would load
+//! arrive between here and Phase 11a; a save that owned the whole tree would load
 //! into a tower permanently lacking them, and refusing the old save is not an
 //! answer because it deletes it. The restore pass matches by path, applies what the
 //! save knows, and leaves what it has never heard of alone.
@@ -58,8 +58,8 @@ mod restore;
 pub use document::{Away, FORMAT, MarkSave, ProgressSave, RecordSave, RngSave, Save, WorldSave};
 pub use error::SaveError;
 pub use node::{
-    ChantSave, CourseSave, DescentSave, HistorySave, MazeSave, NodeSave, RunningSave, SpanSave,
-    StrandSave, SubstitutedSave, WardSave, WorkingSave,
+    ChantSave, CharmSave, CourseSave, DescentSave, HistorySave, MazeSave, NodeSave, RunningSave,
+    SpanSave, StrandSave, SubstitutedSave, WardSave, WorkingSave,
 };
 
 pub(crate) use capture::capture;

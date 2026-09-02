@@ -417,6 +417,10 @@ mod tests {
                     // same reason the oculus is: a haul is not work, a finished
                     // course is.
                     "pylon",
+                    // The forge's one. Its three columns are unpriced on the
+                    // stations' argument exactly: a snap is not work, a fall
+                    // that lights is.
+                    "lattice",
                 ])
                 .is_ok(),
             "the real instruments were rejected",
@@ -516,6 +520,10 @@ mod tests {
                     // same reason the oculus is: a haul is not work, a finished
                     // course is.
                     "pylon",
+                    // The forge's one. Its three columns are unpriced on the
+                    // stations' argument exactly: a snap is not work, a fall
+                    // that lights is.
+                    "lattice",
                 ])
                 .is_ok(),
             "the shipped curve does not ascend",

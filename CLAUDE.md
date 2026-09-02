@@ -13,11 +13,27 @@ Artless by design. No sprites, no characters, no illustrations. A single curved
 CRT glowing in the dark.
 
 **Status: Phases 0, 0.5, 1, 2, 4, 5 and 8 closed; Phase 3 met on its exit with
-three boxes deliberately left. Phases 6 (Enchanting) and 7 (the tower as one
-machine) remain.** The determinism spine, the Frame boundary, the parser, the
+three boxes deliberately left. Phase 9 (Enchanting) is met on three of its four
+boxes — the shared-engine extraction is the one left. Phase 10 (the tower as one
+machine) remains.** The determinism spine, the Frame boundary, the parser, the
 cell renderer, brewing, the archive, the lens, the sanctum, the menagerie, the
-bailey, the tower rail, the balance harness, the spell engine and its scripting
-language are built and the game plays.
+bailey, the forge, the tower rail, the balance harness, the spell engine and its
+scripting language are built and the game plays.
+
+**§10's seven domains are all raised**, which is new: the rail has no dark boxes
+left, and `brief.rs`'s *"some domain still reads as unbuilt"* assertion was
+inverted rather than deleted when the forge landed.
+
+**The phases were renumbered so the version could keep climbing** (§19).
+Enchanting was Phase 6 and is **Phase 9**; the tower-as-one-machine is **10**,
+breadth/remote/engine are **11a/11b/11c**, onboarding is **12** and ship is
+**13**. Phases 0–5 and 8 did not move — they are closed and their tags mean what
+they meant.
+
+**The scheme has now been bent twice for this**, so a third phase taken out of
+turn forces a third renumber. `0.<phase>.<step>` assumes phases are built in
+order and twice they have not been. §19 records the alternative — a minor that
+counts phases *closed* rather than naming the phase — and that it is undecided.
 
 **The premise is complete.** *"Sieges then test everything you automated — because
 the enemy attacks the automation"* was the last unbuilt clause and closed at
@@ -33,14 +49,17 @@ before the thing that consumes them.
 **Phase 8 was built before 6 and 7, and nothing gated it** (§19). A domain stands
 alone; the arsenal, multiplexing and the weave are *enhancements* to that rather
 than prerequisites for it — four shipped domains take no production slot and
-`orbs-balance` measures them as **additive**. An earlier plan called Phase 7 a
-hard dependency on the premise that a siege holds the slot; it does not. Phase numbers in older notes are six lower
-from Phase 2 down; DESIGN.md §19 records the shift.
+`orbs-balance` measures them as **additive**. An earlier plan called the
+one-machine phase a hard dependency on the premise that a siege holds the slot;
+it does not. **Phase numbers in older notes are stale twice over** — six lower
+from Phase 2 down, and then moved again for Enchanting and everything above it;
+DESIGN.md §19 records both shifts.
 
-**Defense and Enchanting swapped, 6 ↔ 4** (§19). Nothing in defense depended on
-either derived domain, and the version is `0.<phase>.<step>` and drawn on the
-POST card — so building Phase 6 first would have made a tester's version number
-go backwards when Phase 4 landed.
+**Defense and Enchanting swapped** (§19), and then Enchanting moved again.
+Nothing in defense depended on either derived domain, and the version is
+`0.<phase>.<step>` and drawn on the POST card — so building the later phase first
+would have made a tester's version number go backwards. It did anyway, when the
+siege shipped ahead of the forge, which is what the second renumber above fixes.
 
 **The design is authoritative and lives in [docs/DESIGN.md](docs/DESIGN.md)** —
 ~2,000 lines, eight drafts, four independent staff-level reviews. Read it before
@@ -59,7 +78,7 @@ such.
 ## Technology Stack
 
 - **Rust**, edition 2024, pinned toolchain
-- **Bevy `=0.19.0`** — exact pin, upgraded deliberately (one window in Phase 9c)
+- **Bevy `=0.19.0`** — exact pin, upgraded deliberately (one window in Phase 11c)
 - `serde` + `toml` (readable saves), `rand` 0.9 (seeded), `thiserror`, `tracing`,
   `clap` (harness), `bevy-steamworks`
 - **No `bevy_text` / `bevy_ui`.** Every screen is terminal content rendered by our
@@ -329,7 +348,8 @@ has exactly the standing it had here: it is the gate, not supplementary reading.
 
 | You are touching | Read |
 |---|---|
-| a domain — laboratory, archive, lens, sanctum, menagerie, bailey | that domain's section |
+| a domain — laboratory, archive, lens, sanctum, menagerie, bailey, forge | that domain's section |
+| quintessence, charms, or anything the forge buffs | *The forge*, *Quintessence is the tower's* |
 | the spell language, the editor, or highlighting | *A spell's verb is read at cast*, *A spell is highlighted*, *The satchel* |
 | a duration, a rate, or anything the economy touches | *`orbs-balance`* — and **run a sweep** |
 | a painter, a record, or the way something reads | *The output style*, *The terminal build* |

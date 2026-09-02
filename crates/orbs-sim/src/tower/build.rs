@@ -2,7 +2,7 @@
 //!
 //! DESIGN.md §15 fixes the slice at **brewing and archive** — the two starting
 //! domains — so only those two branches exist. The other five arrive with §10's
-//! breadth item in Phase 9a.
+//! breadth item in Phase 11a.
 //!
 //! # Names are not prose
 //!
@@ -18,6 +18,7 @@
 
 use bevy_ecs::prelude::*;
 
+use super::charm;
 use super::node::{Cwd, Fixture, Name, Nameable, NodeIds, Protected};
 use super::siege;
 use super::stock::Stock;
@@ -196,6 +197,130 @@ const BRANCHES: &[Branch] = &[
         role: None,
         operation: None,
         group: None,
+    },
+    // §10's Enchanting, and §7 fixes the path: `/tower/forge`. It was in the
+    // rail's seven slots from the day `brief.rs` was written, drawn dark; it
+    // lights up because this raises it and for no other reason.
+    //
+    // **Appended, and it has to be.** §6 resolves a noun tie to whichever was
+    // registered first, so a domain slipped into the middle of this table would
+    // silently re-resolve names every shipped spell already uses.
+    //
+    // **Deliberately no endless base reagent**, fourth time —
+    // `sabotage::substitution` picks its target with `% piles.len()`, so a third
+    // endless pile would move every rate `orbs-balance` has pinned, and the file
+    // that records that also records the same change once dropping clarity from
+    // 0.140 to 0.074. The forge holds a log and nothing else: what a charm costs
+    // is quintessence, which is a resource rather than a shelf.
+    Branch {
+        name: charm::FORGE,
+        holds: &[Holding::new(NounKind::File, &["forge.log"])],
+        places: FORGE,
+        role: None,
+        operation: None,
+        group: None,
+    },
+];
+
+/// The forge: the lattice a charm is bound on, and its three columns.
+///
+/// **The lattice spends its one `Operation` on `imbue`**, which is the rampart's
+/// and the pylon's arrangement — one fixture, one word that opens the puzzle.
+/// `snap` and `settle` anchor to it rather than to the columns, which is the
+/// bailey's shape: a column is a thing you read and snap, not somewhere you stand.
+///
+/// **`group: Some("column")` is on the three and never on the lattice**, so
+/// `for each column` walks them. `groups_at` reads the *children* of where you
+/// stand.
+const FORGE: &[Branch] = &[
+    Branch {
+        name: charm::LATTICE,
+        holds: &[],
+        places: &[],
+        role: None,
+        operation: Some(Verb::Imbue),
+        group: None,
+    },
+    // **The three columns**, `Role::Reading` places for the areas' reason:
+    // `snap apex` resolves against `NounKind::Place`, and the role is what stops
+    // one being somewhere you can `attend`.
+    //
+    // Three and not nine, and that is the sweep's doing rather than a
+    // simplification: a Lights Out solution is settled by its top row, so
+    // columns are all a player needs to address — and nine cell names are not
+    // available, because `crown` scores 800 against `brown`, `base` 750 against
+    // `bare` and `tier` 600 against `tower`.
+    Branch {
+        name: "apex",
+        holds: &[],
+        places: &[],
+        role: Some(Role::Reading),
+        operation: None,
+        group: Some("column"),
+    },
+    Branch {
+        name: "belt",
+        holds: &[],
+        places: &[],
+        role: Some(Role::Reading),
+        operation: None,
+        group: Some("column"),
+    },
+    Branch {
+        name: "hem",
+        holds: &[],
+        places: &[],
+        role: Some(Role::Reading),
+        operation: None,
+        group: Some("column"),
+    },
+    // **The five charms, as places.** `imbue mortar_and_pestle hurried` resolves
+    // its second slot against `NounKind::Place`, which is the dice's arrangement
+    // one room over — `d6`, `d8` and `d20` are `Role::Reading` branches *and*
+    // words `siege::readings()` declares, and a charm is the same thing said
+    // about the forge.
+    //
+    // `group: Some("charm")` so `for each charm` walks them, which is what a
+    // maintenance spell wants: *find the one that is ebbing and lay it again*.
+    Branch {
+        name: "hurried",
+        holds: &[],
+        places: &[],
+        role: Some(Role::Reading),
+        operation: None,
+        group: Some("charm"),
+    },
+    Branch {
+        name: "fruitful",
+        holds: &[],
+        places: &[],
+        role: Some(Role::Reading),
+        operation: None,
+        group: Some("charm"),
+    },
+    Branch {
+        name: "bountiful",
+        holds: &[],
+        places: &[],
+        role: Some(Role::Reading),
+        operation: None,
+        group: Some("charm"),
+    },
+    Branch {
+        name: "whetted",
+        holds: &[],
+        places: &[],
+        role: Some(Role::Reading),
+        operation: None,
+        group: Some("charm"),
+    },
+    Branch {
+        name: "shielded",
+        holds: &[],
+        places: &[],
+        role: Some(Role::Reading),
+        operation: None,
+        group: Some("charm"),
     },
 ];
 
@@ -845,7 +970,7 @@ struct Branch {
 /// **A component, not a name comparison.** Six sites branched on `name ==
 /// ATHANOR` or `name != DISPENSARY` — `wield`, `stop`, the panel's state reader,
 /// the panel's own filter, `heat::find` and `reachable` — with nothing binding
-/// them together. §10 puts five more domains in Phase 9a, and the day a second
+/// them together. §10 puts five more domains in Phase 11a, and the day a second
 /// room gets a forge, `wield forge` would have started a `Working` run with no
 /// recipe instead of lighting it, `stop` would have refused to bank its fuel, and
 /// the panel would have drawn a filling meter where a draining one belongs. Six
@@ -908,7 +1033,7 @@ impl Holding {
 /// Called from `Sim::new`, never by a frontend: if the Bevy build, `orbs-tui`
 /// and `orbs-balance` each built their own world they could diverge, which is
 /// the failure §13 exists to prevent — *"if the live game and the CLI harness
-/// diverged, we would not find out until Phase 9."*
+/// diverged, we would not find out until Phase 11."*
 pub fn raise(world: &mut World) {
     // **The filesystem root is nameless**, and that is what makes the whole
     // restructure free: `path_of` collects a segment only where a `Name` is
@@ -1417,6 +1542,11 @@ mod tests {
             // third time.** It is not one of §10's seven — it is a place you
             // descend into, the arsenal's shape — but it is still a `Branch`, so
             // it still has a spawn index and still has to go on the end.
+            // **The forge is behind the bailey, on the same rule for the
+            // fourth time.** It is §10's seventh domain and the last one the
+            // design has, so it is also the last chance to get this wrong: put
+            // ahead of anything, it would shift that node's spawn index and
+            // silently re-resolve names in every spell already written.
             [
                 "laboratory",
                 "archive",
@@ -1425,6 +1555,7 @@ mod tests {
                 super::super::ARSENAL,
                 "menagerie",
                 siege::BAILEY,
+                charm::FORGE,
             ],
         );
     }

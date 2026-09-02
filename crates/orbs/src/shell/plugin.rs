@@ -197,7 +197,7 @@ impl Plugin for ShellPlugin {
                     // **`F9`, not `F8`** — `F8` is the greyscale accommodation
                     // and these two are neighbours in what they are for, which
                     // is exactly why they must not be neighbours a finger can
-                    // slip between. Both join the settings screen in Phase 11.
+                    // slip between. Both join the settings screen in Phase 13.
                     toggle_patient.run_if(input_just_pressed(KeyCode::F9)),
                     // F10, not Escape: the moment there is a text field, Escape
                     // is "clear the line" muscle memory, and quitting the game
@@ -988,7 +988,7 @@ mod tests {
         // does something it currently cannot. What it is really holding is that
         // **the two modes ask the tiler for different shapes**, which is a
         // property of `cycle_mode` and the tiler and is as true today as it will
-        // be when multiplexing puts the second pane back (Phase 9a).
+        // be when multiplexing puts the second pane back (Phase 11a).
         //
         // The half that is genuinely lost — that `F4` changes what is on screen
         // *right now* — is recorded on `PANES` rather than asserted here,

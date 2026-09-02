@@ -154,7 +154,7 @@ impl Records {
     /// never truncated.
     ///
     /// It never is *today*: [`clear`](Self::clear) is called from one test. But
-    /// the stream grows without bound and §5's Phase 9a offline catch-up is
+    /// the stream grows without bound and §5's Phase 11a offline catch-up is
     /// ~29k steps, so the day someone adds rotation, every saved cursor would
     /// silently point at the wrong record and spells would re-fire or skip
     /// events with **no test catching it**.

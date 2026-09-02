@@ -546,6 +546,30 @@ pub const SYNONYMS: &[Synonym] = &[
     syn(Verb::Pledge, Register::Plain, &["apply"]),
     syn(Verb::Hold, Register::Arcane, &["hold"]),
     syn(Verb::Hold, Register::Plain, &["watch"]),
+    // ---------------------------------------------------------------------
+    // THE FORGE'S THREE (§10's Enchanting).
+    //
+    // **No shell register**, which is the bailey's decision and for the same
+    // reason: there is no `ls` for binding a charm, and inventing one would be
+    // a joke rather than an affordance.
+    //
+    // Every word here was swept on both axes against verbs, synonyms, spell
+    // words, every domain's readings, every material, every spell name **and
+    // against each other** — the check the first pass missed, which is how
+    // `imbue`/`imbued` reached 975 by the prefix rule.
+    syn(Verb::Imbue, Register::Arcane, &["imbue"]),
+    syn(Verb::Imbue, Register::Plain, &["enchant"]),
+    syn(Verb::Snap, Register::Arcane, &["snap"]),
+    syn(Verb::Snap, Register::Plain, &["flip"]),
+    // **`anneal`, and `settle` is why the sweep is a test rather than an
+    // event.** `settle` scores 834 against `mettle` — a live siege reading — and
+    // `set` prefixes it, which is `dial`'s synonym. `release` fell the same way
+    // against `relocate`, which is `move`'s.
+    syn(Verb::Anneal, Register::Arcane, &["anneal"]),
+    // `finish` was the first plain word and `fin` is ambiguous against `sift`'s
+    // `find` — a three-character prefix reaching two verbs, which is the class
+    // `ambiguous_synonym_prefixes_are_known` pins rather than tolerates.
+    syn(Verb::Anneal, Register::Plain, &["tumble"]),
 ];
 
 impl Register {

@@ -96,6 +96,18 @@ prism = 8
 # every line rather than only on the hauls.
 pylon = 1
 
+# The forge, and it is the *lowest* rate in the tower on purpose.
+#
+# **Enchanting is the one domain whose payoff is not experience.** What a bound
+# charm is worth is the charm — a mortar at half time, a stacks paying twice —
+# and that value is realised in whatever room the tool is in rather than here.
+# So a fall pays a token 1 for the slot it held, and nothing for the charm.
+#
+# It pays *something* rather than nothing because a domain earning nought is a
+# domain `orbs-balance` reads as 0.0000/tick, which is indistinguishable from a
+# domain that is broken — and the first sweep of this policy did exactly that.
+lattice = 1
+
 # ---------------------------------------------------------------------------
 # THE LEY LINE - the straight path.
 #

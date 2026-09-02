@@ -40,6 +40,7 @@ mod focus;
 mod glance;
 mod guide;
 mod keys;
+mod lattice;
 mod lexing;
 mod line;
 mod linear;

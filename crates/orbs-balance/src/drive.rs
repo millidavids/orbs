@@ -149,6 +149,7 @@ pub fn run(policy: Policy, seed: u64, ticks: u64, every: u64) -> Run {
                 Body::Warding => haul_one(&mut sim, &mut cycle),
                 Body::Chanting => sing_one(&mut sim),
                 Body::Besieging => fight_one(&mut sim, &mut fighting),
+                Body::Imbuing => bind_one(&mut sim),
                 Body::Bound {
                     earning,
                     name,
@@ -691,6 +692,70 @@ fn fight_one(sim: &mut Sim, state: &mut Fighting) {
         return;
     }
     issue(sim, "hold");
+}
+
+/// One step of the forge's loop, reading the residue as the shipped table does.
+///
+/// **It reads exactly what a spell reads**, which is the rule every world-reading
+/// policy here follows: the three columns' residue, off `Sim::lattice` — the same
+/// view the board draws from — and never the answer.
+///
+/// The eight rungs are `dev_spells.toml`'s `forging`, in Rust. Keeping them in
+/// step is what makes this column measure the *loop* rather than a cleverer
+/// driver: if the two ever disagree, `the_shipped_table_is_the_answer_the
+/// _arithmetic_gives` fails first, because it checks the spell against the model
+/// over all 512 boards.
+fn bind_one(sim: &mut Sim) {
+    // **Wait when the pool is short, rather than asking and being refused.**
+    //
+    // Without this the driver spent 6,236 of 7,200 ticks on *"hurried would take
+    // 6 quintessence, and you hold 4"* — which is the `cost` column's own
+    // diagnosis, *"the loop has fallen out of phase with the tower"*, and it
+    // measures a game nobody plays. A player short of quintessence waits for it;
+    // so does this.
+    let held = sim
+        .world()
+        .resource::<orbs_sim::tower::Quintessence>()
+        .get();
+    let wanted = sim
+        .world()
+        .resource::<orbs_sim::content::Charms>()
+        .cost(orbs_sim::tower::charm::Kind::Hurried, false);
+    if sim.lattice().is_none() && held < wanted {
+        issue(sim, "meditate 30");
+        return;
+    }
+
+    let Some(board) = sim.lattice() else {
+        // Nothing open, so open one. **`hurried` every lap**, so the column
+        // measures one charm's economy rather than an average over five.
+        issue(sim, "imbue mortar_and_pestle hurried");
+        return;
+    };
+    // A fall in flight: let the slot run out rather than spinning. `issue`
+    // advances the clock, which is what keeps `while sim.tick() < ticks` ending.
+    let residue: Vec<bool> = board.residue.clone();
+    let wanted: &[usize] = match (residue.first(), residue.get(1), residue.get(2)) {
+        (Some(true), Some(true), Some(true)) => &[],
+        (Some(true), Some(true), Some(false)) => &[1, 2],
+        (Some(true), Some(false), Some(true)) => &[0, 1, 2],
+        (Some(true), Some(false), Some(false)) => &[0],
+        (Some(false), Some(true), Some(true)) => &[0, 1],
+        (Some(false), Some(true), Some(false)) => &[0, 2],
+        (Some(false), Some(false), Some(true)) => &[2],
+        _ => &[1],
+    };
+    // Snap the columns the table names that are not already snapped, one a tick,
+    // then fall. Asking the board rather than counting laps is what makes this
+    // correct when a fall springs back and the presses clear.
+    for column in wanted {
+        if !board.snapped.get(*column).copied().unwrap_or(false) {
+            let word = orbs_sim::tower::lattice::COLUMNS[*column];
+            issue(sim, &format!("snap {word}"));
+            return;
+        }
+    }
+    issue(sim, "anneal");
 }
 
 fn haul_one(sim: &mut Sim, cycle: &mut usize) {

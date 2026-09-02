@@ -472,6 +472,13 @@ pub(super) fn session(
     }
     body = siege.rest;
 
+    // The forge's board, sixth and last, on exactly the same terms.
+    let binding = super::lattice::split(body, panel.lattice.as_ref());
+    if let Some(open) = panel.lattice.as_ref() {
+        super::lattice::paint(&mut painter, binding.area, open, sim.prose());
+    }
+    body = binding.rest;
+
     // The tower-wide production meter stays: it is the *pool*, not an
     // instrument, and it is what says the slot is spent wherever it was spent.
     // Skipped in the laboratory, where the panel already draws that instrument's

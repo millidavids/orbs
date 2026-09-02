@@ -25,6 +25,10 @@ pub(crate) fn publish(world: &mut World, rampart: Entity) {
         return;
     };
     let siege = world.get::<Siege>(rampart).cloned();
+    // **The tower's pool, not the siege's.** Quintessence is shared with the
+    // forge now, so what the coffer reports is what the whole tower holds — and
+    // a charm laid mid-siege is visible here as dice you can no longer pledge.
+    let pool = world.resource::<tower::Quintessence>().get();
 
     clear(world, rampart);
     if let Some(siege) = &siege {
@@ -97,15 +101,15 @@ pub(crate) fn publish(world: &mut World, rampart: Entity) {
         if let Some(siege) = &siege
             && siege.running()
         {
-            for die in siege.affordable() {
+            for die in siege.affordable(pool) {
                 tower::raise_reading(world, coffer, die.word());
             }
             // **Only while there is any**, which is `potency`'s rule and
             // `raise_count`'s contract: a nought count would make the coffer
             // permanently non-empty and `if the coffer is empty` — *"I can pledge
             // nothing"* — dead.
-            if siege.quintessence > 0 {
-                tower::raise_count(world, coffer, siege::QUINTESSENCE, siege.quintessence);
+            if pool > 0 {
+                tower::raise_count(world, coffer, siege::QUINTESSENCE, pool);
             }
         }
     }

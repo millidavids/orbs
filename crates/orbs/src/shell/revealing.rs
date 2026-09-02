@@ -66,7 +66,7 @@ pub(super) fn drive_panes(time: Res<Time>, mut panes: ResMut<PaneTransition>) {
 /// §9 makes the focus mode a setting the player may change at any time and §19
 /// fixes the switch on `F4`; reassigning it to toggle the rail would re-litigate
 /// both. With one pane the two tilings are identical, so the key changes nothing
-/// until multiplexing returns the second pane in Phase 9a — at which point it
+/// until multiplexing returns the second pane in Phase 11a — at which point it
 /// reclaims its job with no code to change.
 ///
 /// The decision the old constant encoded is not gone: `ORBS_DUMP` can still be

@@ -6,7 +6,7 @@
 //!
 //! # Why this is not a correction filter
 //!
-//! ROADMAP Phase 11 and DESIGN.md §19 specify three **daltonisation** filters —
+//! ROADMAP Phase 13 and DESIGN.md §19 specify three **daltonisation** filters —
 //! simulate the deficiency, take the error, redistribute it into the channels
 //! the player can still see. That was implemented numerically against this
 //! palette before any of it was written, and it makes the game **worse**:

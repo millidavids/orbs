@@ -14,7 +14,7 @@
 //!
 //! So a bound `holding` runs *beside* a full brewing loop rather than instead of
 //! one, which is what §19 calls additive rather than competing. §5.0's slot is
-//! contested in Phase 7, not here.
+//! contested in Phase 10, not here.
 //!
 //! # What a completed course is worth
 //!

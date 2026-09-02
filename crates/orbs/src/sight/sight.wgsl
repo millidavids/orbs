@@ -1,4 +1,4 @@
-// The accommodation pass — DESIGN.md §14, ROADMAP Phase 11.
+// The accommodation pass — DESIGN.md §14, ROADMAP Phase 13.
 //
 // **The last thing that touches a pixel**, and that placement is the whole
 // design. §19 originally said "after the phosphor and before the barrel"; there

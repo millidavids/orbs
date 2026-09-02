@@ -1,0 +1,83 @@
+# What a charm costs and how long it lasts (DESIGN.md §10, §11.5).
+#
+# **Rule 6, and this file is the reason it applies here.** Balancing enchanting
+# means moving these numbers dozens of times; in Rust that is a recompile per
+# guess. What a charm costs, how long it runs and what it may be laid on are all
+# authored, so a tuning pass is a content edit.
+#
+# Every key is a charm the forge can lay — the words are `charm::Kind`, and a
+# key with no variant fails the load rather than being ignored, which is what
+# stops a typo shipping as a charm nobody can make.
+#
+# `costs`  — quintessence to lay it. Spent on the *settle* that binds it, never
+#            on the attempts that fail, because §11.5 is "cost is the resource,
+#            never progress".
+# `lasts`  — ticks. §5.0 makes a tick a second, so 600 is ten minutes.
+# `takes`  — ticks of the tower's one production slot, while the lattice is open.
+#
+# ---------------------------------------------------------------------------
+# THE SURCHARGE.
+#
+# **Enchanting during a siege costs more, and it is authored rather than a
+# branch.** A wizard at his forge while the wall is under attack is neglecting
+# the wall, and the fiction and the mechanics say the same thing: the pool is
+# shared, so a charm laid mid-siege is dice you cannot pledge — and this makes it
+# hurt twice.
+#
+# A multiplier rather than a flat add, so it scales with the charm: hurrying a
+# mortar in the middle of a fight is a small indulgence and shielding a spell is
+# a large one.
+[surcharge]
+besieged = 2
+
+# ---------------------------------------------------------------------------
+# THE CHARMS.
+#
+# Five, and the prices are a first pass. Against a full ceiling of 24 the tower
+# can hold two cheap charms or one expensive one, which is the shape the decision
+# wants — never enough to have everything at once.
+
+# The flagship, and the one the phase's exit criterion names: a buffed instrument
+# visibly works faster. Cheapest, because it is the one a player meets first.
+[hurried]
+costs = 6
+lasts = 600
+takes = 20
+
+# A run yields one more than the recipe says. Dearer than haste because it
+# compounds: a laboratory under this produces more per lit tick *and* per slot.
+[fruitful]
+costs = 8
+lasts = 600
+takes = 24
+
+# A walk of the stacks pays an extra fragment. Long, because the archive's loop
+# is measured in thousands of ticks and a ten-minute charm would cover one walk.
+[bountiful]
+costs = 6
+lasts = 900
+takes = 20
+
+# A die rolls one size up.
+#
+# **Priced against a measurement, not against face count.** `siege.toml` records
+# that an upgrade against a *fixed* threshold was worth forty points of hit rate
+# and that clarity was nerfed off it — "which collapses the decision this whole
+# file exists to create". So this is the dearest of the four ordinary charms, and
+# short: it buys one fight rather than an afternoon.
+[whetted]
+costs = 10
+lasts = 600
+takes = 28
+
+# A sabotage strike lands and is turned aside.
+#
+# **The one that buys off a pillar, so it is the dearest thing here.** §8.1's
+# four surfaces are the premise — the enemy attacks the automation — and what
+# this removes is not the difficulty but the *noticing*: a charmed node produces
+# no fault for `verify` to find. It is bounded by being temporary, per-node and
+# expensive, and it is the first charm to come out if it plays badly.
+[shielded]
+costs = 12
+lasts = 1200
+takes = 32

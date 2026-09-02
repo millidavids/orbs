@@ -11,7 +11,7 @@
 //!
 //! The alternative — letting the save own the whole tree — is simpler and wrong
 //! in a way that arrives on schedule. Five more domains land between here and
-//! Phase 9a, and an authoritative save would open into a tower permanently
+//! Phase 11a, and an authoritative save would open into a tower permanently
 //! lacking them. Refusing the old save by format version is not an answer,
 //! because it deletes it.
 //!
@@ -205,6 +205,23 @@ fn progress(world: &mut World, save: &Save) {
     world
         .resource_mut::<tower::Integrity>()
         .restore(progress.integrity.unwrap_or(tower::STANDING));
+    // **Absent means the ceiling, for the same reason and with a sharper edge.**
+    // A save from before the pool came up to the tower says nothing about it, and
+    // nought would hand a returning player an inert forge and a siege that
+    // cannot pledge until the trickle caught up. Read *after* integrity, because
+    // the ceiling is a function of it.
+    //
+    // **Restored faithfully, never clamped.** The ceiling caps *regeneration*
+    // and nothing else: erosion lowers it without confiscating what the tower
+    // already holds, so a pool above the ceiling is a legal state a live world
+    // reaches by wearing down while full. Clamping here made a save round-trip
+    // lose a point — caught by `a_loaded_tower_keeps_running_the_same_world`,
+    // which is the whole reason that test drives a *lived* world rather than a
+    // fresh one.
+    let ceiling = tower::ceiling(world);
+    world.insert_resource(tower::Quintessence::new(
+        progress.quintessence.unwrap_or(ceiling),
+    ));
     // An absent row is *nothing is cooling*, which is what a save written before
     // §8.1's rationing existed honestly says — `Cooling::from_save` takes a
     // short list for that reason.

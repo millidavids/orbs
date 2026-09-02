@@ -148,7 +148,7 @@ pub fn split(area: Rect, instruments: &[Instrument]) -> Split {
 /// `domain` is where the player is standing, for the spoken summary — passed in
 /// rather than written here, because a frontend must not be the thing that
 /// decides a place name (rule 2). It was the literal `"laboratory"`, next to a
-/// pane title drawn from the real location: the moment §10's Phase 9a adds a
+/// pane title drawn from the real location: the moment §10's Phase 11a adds a
 /// second instrumented room, a sighted player would read `/tower/workshop` in the
 /// border while a screen-reader user heard "laboratory: forge burning".
 pub fn paint(
@@ -298,6 +298,12 @@ const fn bar_of(craft: Craft, state: State, heat: bool) -> Bar {
         // gauge with no meter behind it draws nothing at all. `Empty` here means
         // *no reading open*, and the board is what says so.
         Craft::Scrying => Bar::Plain,
+        // **The lattice, and it is the prism's case exactly.** What is
+        // interesting about a binding is which glyphs are lit and what the
+        // residue says, and neither of those is progress — they are the
+        // **board**, which draws beside the transcript the way the sheet does.
+        // The panel row is a gauge over the settle in flight and nothing more.
+        Craft::Imbuing => Bar::Plain,
         // **The pylon, and it is the prism's case with the states swapped.**
         // Its interesting state is not progress either — it is where three
         // stacks of wards are resting, which is the **board** beside the
@@ -506,7 +512,7 @@ const fn stand_in(state: State) -> Meter {
 /// would be the second place that decides what "lit" means. Found by
 /// [`Craft::Heating`] rather than by name or by state, for the reason
 /// `bench::hearth` records: `Burning` is the heat source's word today and a
-/// forge in Phase 9a would claim it too.
+/// forge in Phase 11a would claim it too.
 ///
 /// It is the bath's whole distinction — see `bar_of`.
 fn burning(instruments: &[Instrument]) -> bool {

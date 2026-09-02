@@ -110,7 +110,7 @@ const STATES: [(&str, CrtSettings); 3] = [
 /// presses no keys, so the state that matters most to §14 — the tube off — was
 /// reachable only by a person at a keyboard, and *"turning the tube off does not
 /// turn the accommodation off"* is exactly the property worth checking without
-/// one. Phase 11's settings screen makes this ordinary.
+/// one. Phase 13's settings screen makes this ordinary.
 pub(crate) fn seeded() -> CrtSettings {
     chosen(std::env::var("ORBS_CRT").ok().as_deref())
 }

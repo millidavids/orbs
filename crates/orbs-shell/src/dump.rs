@@ -317,7 +317,7 @@ pub fn run_script(seed: u64, wizard: Option<String>, engine: &str, request: &str
     // and `F4 deep`.
     //
     // It is only the two labels today, because one pane makes both tilings
-    // identical and §19 records `F4` as visibly inert until Phase 9a returns the
+    // identical and §19 records `F4` as visibly inert until Phase 11a returns the
     // second pane. When it does, every dump would have shown a layout the game
     // never draws — and CLAUDE.md's own See-it blocks quote this output. Its
     // rule for exactly this: *"a See-it line that describes a different screen
@@ -445,6 +445,7 @@ pub fn run_script(seed: u64, wizard: Option<String>, engine: &str, request: &str
             pylon: sim.pylon(),
             figure: sim.figure(),
             rampart: sim.rampart(),
+            lattice: sim.lattice(),
             briefs: sim.briefs(),
         };
         super::prompt::paint(

@@ -39,6 +39,7 @@ mod auditing;
 mod bailey;
 mod brewing;
 mod carrying;
+mod forge;
 mod keys;
 mod lens;
 mod menagerie;

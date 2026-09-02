@@ -135,7 +135,7 @@ pub fn mark_fault_at(world: &mut World, at: NodeId) {
 pub struct Brief {
     /// The directory name, which is also what the rail prints.
     pub name: &'static str,
-    /// Whether the tower has this room yet. Four are `false` until Phase 9a.
+    /// Whether the tower has this room yet. Four are `false` until Phase 11a.
     pub built: bool,
     /// What the busiest instrument in it is doing.
     pub state: State,
@@ -457,9 +457,20 @@ mod tests {
             built.iter().any(|brief| brief.name == "laboratory"),
             "the laboratory is not on the rail",
         );
+        // **Every one of the seven is built now, and the forge was the last.**
+        //
+        // This asserted the *opposite* for six phases — that some domain still
+        // read as unbuilt, so the rail was promising something rather than
+        // drawing seven identical boxes. That was the right claim while rooms
+        // were still arriving and it stopped being true when Enchanting landed:
+        // §10 fixes the count at seven and there is no eighth.
+        //
+        // Kept as an assertion rather than deleted, because `built` is still the
+        // honest bit and a domain that stopped being raised should fail loudly
+        // here rather than quietly draw dark.
         assert!(
-            briefs.iter().any(|brief| !brief.built),
-            "every domain reads as built, so the rail promises nothing",
+            briefs.iter().all(|brief| brief.built),
+            "a domain reads as unbuilt, but §10's seven are all raised now",
         );
     }
 

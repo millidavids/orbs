@@ -59,7 +59,7 @@ pub fn run_pending(world: &mut World) {
 ///
 /// **The script runner's door into the same dispatch a typed line takes.** §13
 /// is explicit that if the live game and the CLI harness diverged *"we would not
-/// find out until Phase 9"*, and a script with its own copy of any verb is that
+/// find out until Phase 11"*, and a script with its own copy of any verb is that
 /// divergence with an extra step. It does not go through
 /// [`Pending`](crate::session::Pending): that queue is drained by the `commands`
 /// schedule which runs **before** the one the runner is in, so a script routed
@@ -97,6 +97,9 @@ fn execute(intent: &Intent, world: &mut World) {
         Verb::Quaff => super::defend::quaff(intent, world),
         Verb::Hold => super::defend::hold(world),
         Verb::Pledge => super::defend::pledge(intent, world),
+        Verb::Imbue => super::imbue::imbue(world, intent),
+        Verb::Snap => super::imbue::snap(world, intent),
+        Verb::Anneal => super::imbue::anneal(world),
         Verb::Move => pipeline::carry(intent, world),
         Verb::Wield => pipeline::wield(intent, world),
         // §10.1's per-instrument verbs. One arm, because the instrument is found
@@ -231,6 +234,13 @@ pub const fn is_live(verb: Verb) -> bool {
             | Verb::Quaff
             | Verb::Hold
             | Verb::Pledge
+            // The forge's three. `imbue` refuses where there is no lattice and
+            // where one is already open; the other two refuse where none is.
+            // **A lattice that does not light is not a refusal** — it is the
+            // puzzle going badly, which is the whole of what the domain is.
+            | Verb::Imbue
+            | Verb::Snap
+            | Verb::Anneal
             // The satchel's push. It refuses where there is no satchel and where
             // one is full — and **full is not a dead end**: it is a producer
             // that has outrun its consumer, which is the pipeline telling you

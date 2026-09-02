@@ -101,9 +101,7 @@ pub use band::{
 };
 pub use battle::{Pledged, Siege};
 pub use escrow::{COMPLETION_BONUS, ESCROW_FLOOR, ESCROW_PER_FOE, escrow};
-pub use quintessence::{
-    FACES_PER_POINT, FLOOR_PCT, PER_LEY_STEP, QUINTESSENCE_BASE, cost_of, pool_for,
-};
+pub use quintessence::{FACES_PER_POINT, cost_of};
 pub use readings::{
     AIM, CEILING, FEW, FOES, HURT, LIFTED, MASSED, METTLE, MOOT, OUTNUMBERED, QUINTESSENCE, ROUTED,
     SPEARS, TURNS, readings,

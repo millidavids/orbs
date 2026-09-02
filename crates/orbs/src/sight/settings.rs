@@ -23,7 +23,7 @@ const VAR: &str = "ORBS_SIGHT";
 ///
 /// # There are two variants, and there were meant to be five
 ///
-/// ROADMAP Phase 11 asks for protanopia, deuteranopia and tritanopia correction
+/// ROADMAP Phase 13 asks for protanopia, deuteranopia and tritanopia correction
 /// beside greyscale. They are **not** here, on measurement rather than on
 /// schedule: daltonisation degrades this palette's accent separation in eleven
 /// of twelve theme × deficiency combinations, because the triad is solved in
@@ -107,7 +107,7 @@ impl SightUniform {
 /// Step through the accommodations — `F8`.
 ///
 /// The `F2`/`F3` shape, and here for the same reason §14 gives for those: an
-/// accommodation a player cannot reach is not an accommodation. Phase 11's
+/// accommodation a player cannot reach is not an accommodation. Phase 13's
 /// settings screen replaces all three.
 pub(super) fn cycle(mut vision: ResMut<Vision>) {
     let at = Sight::ALL.iter().position(|sight| *sight == vision.0);

@@ -39,7 +39,7 @@ mod tests;
 
 pub use land::finish;
 pub use produce::{Product, contents};
-pub use quicken::{QUICKENED_BY, QUICKENED_TICKS, Quickened, quickened};
+pub use quicken::{QUICKENED_BY, QUICKENED_TICKS, Quickened, hurried_from, quickened};
 pub use slot::{
     Bidden, Busy, CAPACITY, DIVINE_TICKS, PURGE_TICKS, Triaging, Working, begin, busy, in_flight,
     occupied, refuse_busy, stop,

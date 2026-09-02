@@ -8,7 +8,38 @@ If the two disagree, DESIGN.md wins and this file is wrong.
 > game. An item without a See it line is not started; an item whose line does not
 > work is not finished, however green its tests are. DESIGN.md §15, §19.
 
-Last updated: 2026-08-30 · **Phases 0, 0.5, 1, 2 and 4 closed. Phase 3 (Spellcraft) is met on its exit criterion with three boxes deliberately left.** The language overhaul closed at `0.3.26` and the editor work at `0.3.35`; what remains there is the terse register, a typed action at execution, and the hidden-directory authoring plan. **Phase 4 is Defense, at `0.4.2`** — the sanctum, a course of wards drawn from a wellspring and assembled at a barrier, integrity as the game's first *drain*, and `holding` to hold it. The domain shipped with fortification names and was reskinned at `0.4.1` (§19): §7's tree and §10's table said `battlements/` and both are superseded. **Defense and Enchanting swapped places** (§19): nothing in Defense depended on the two derived domains, and the version is player-visible, so building a later phase first would have made the number go backwards. **Phases 2–7 are the tower's five remaining domains and the phase that makes them one machine; what was Phase 2 (Siege) is now Phase 8.** Two of §8.1's four sabotage surfaces now ship — logs and world state; script text and trigger clocks stay in Phase 8, where their producer is. **§8.1's pricing of `verify` closed at `0.5.13`** as Phase 1 debt, ahead of Phase 8, whose first step depends on it: a bare `verify` is the expensive audit, and a look now rations its surface. **Phase 8 (Siege) then closed at `0.8.7`** — the bailey, the seven dice, the arsenal spent, a decision tree that fights unaided, escrow, and the two adversarial surfaces that complete §8.1's model. **All four sabotage surfaces now ship.** Three items are deferred with reasons: pane synergies wait on Phase 7's multiplexing, and the backlog and difficulty tiers wait on §5.3's provocation.
+## The numbers moved a second time, and the version is why
+
+**Enchanting was Phase 6 and is Phase 9.** The version is `0.<phase>.<step>` and
+it is drawn on the POST card, so it must never go backwards — and Phase 8 shipped
+first, which meant closing Enchanting as `0.6.x` would have taken a tester's
+build back from `0.8.19`. That is the exact hazard §19 cites for swapping Defense
+and Enchanting in the first place, arriving from the other side.
+
+So the unbuilt phases moved above the highest built one:
+
+| was | is | |
+|---|---|---|
+| 6 | **9** | Enchanting — built, three of four boxes |
+| 7 | **10** | The tower as one machine |
+| 9a / 9b / 9c | **11a / 11b / 11c** | Breadth, remote hosts, engine upgrade |
+| 10 | **12** | Onboarding + demo |
+| 11 | **13** | Ship |
+
+**Phases 0–5 and 8 did not move**, because they are closed and their tags mean
+what they meant. `v0.8.x` is still the siege.
+
+**Done highest-first**, which is the rule §19 records from the last renumber: a
+pass that moved 9 before 11 would have collided two phases into one number, the
+same way one that moved `3` before `3a` corrupted `3a` into `9a`.
+
+**The scheme has now been bent twice to keep a promise it cannot keep on its
+own.** `0.<phase>.<step>` assumes phases are built in order and they are not —
+so the next time a phase is taken out of turn, this happens again. That is worth
+deciding rather than renumbering a third time.
+
+Last updated: 2026-09-02 · **Phases 0, 0.5, 1, 2, 4, 5, 8 closed and 9
+(Enchanting) met on three of its four boxes. Phase 3 (Spellcraft) is met on its exit criterion with three boxes deliberately left.** The language overhaul closed at `0.3.26` and the editor work at `0.3.35`; what remains there is the terse register, a typed action at execution, and the hidden-directory authoring plan. **Phase 4 is Defense, at `0.4.2`** — the sanctum, a course of wards drawn from a wellspring and assembled at a barrier, integrity as the game's first *drain*, and `holding` to hold it. The domain shipped with fortification names and was reskinned at `0.4.1` (§19): §7's tree and §10's table said `battlements/` and both are superseded. **Defense and Enchanting swapped places** (§19): nothing in Defense depended on the two derived domains, and the version is player-visible, so building a later phase first would have made the number go backwards. **Phases 2–7 are the tower's five remaining domains and the phase that makes them one machine; what was Phase 2 (Siege) is now Phase 8.** Two of §8.1's four sabotage surfaces now ship — logs and world state; script text and trigger clocks stay in Phase 8, where their producer is. **§8.1's pricing of `verify` closed at `0.5.13`** as Phase 1 debt, ahead of Phase 8, whose first step depends on it: a bare `verify` is the expensive audit, and a look now rations its surface. **Phase 8 (Siege) then closed at `0.8.7`** — the bailey, the seven dice, the arsenal spent, a decision tree that fights unaided, escrow, and the two adversarial surfaces that complete §8.1's model. **All four sabotage surfaces now ship.** Three items are deferred with reasons: pane synergies wait on Phase 10's multiplexing, and the backlog and difficulty tiers wait on §5.3's provocation.
 
 ---
 
@@ -26,20 +57,20 @@ were a single line inside a breadth phase two phases away, and the siege that
 | Phase | Months | Words | Status |
 |---|---|---|---|
 | 0. Vertical slice | 4 | ~3k | ✅ Closed · numeric gate **deferred** |
-| 0.5. Interlude | — | — | ✅ **Closed, every box ticked** · settings moved to 11 |
-| 1. Core loop | 5 | ~15k | ✅ **Closed** · testers clause moved to 10 |
+| 0.5. Interlude | — | — | ✅ **Closed, every box ticked** · settings moved to 13 |
+| 1. Core loop | 5 | ~15k | ✅ **Closed** · testers clause moved to 12 |
 | **2. Scrying** `lens/` | 3 | ~6k | ✅ **Closed, every box ticked** |
 | **3. Spellcraft** `grimoire/` | 3 | ~6k | ⬜ · exit met, three boxes left |
-| **4. Defense** `sanctum/` | 3 | ~5k | ✅ **Closed** · swapped with 6 (§19) |
-| **5. Summoning** `menagerie/` | 2 | ~4k | ⬜ · derived |
-| **6. Enchanting** `forge/` | 2 | ~4k | ⬜ · derived |
-| **7. The tower as one machine** | 2 | ~3k | ⬜ |
+| **4. Defense** `sanctum/` | 3 | ~5k | ✅ **Closed** · swapped with Enchanting (§19) |
+| **5. Summoning** `menagerie/` | 2 | ~4k | ✅ **Closed** |
 | 8. Siege | 4 | ~15k | ✅ **Closed at `0.8.7`** · three items deferred, named in the section |
-| 9a. Breadth | 2 | ~4k | ⬜ · five domains moved out of it |
-| 9b. Remote hosts | 3 | ~12k | ⬜ |
-| 9c. Engine upgrade | 1 | — | ⬜ |
-| 10. Onboarding + demo | 4 | ~20k | ⬜ |
-| 11. Ship | 3 | ~5k | ⬜ |
+| **9. Enchanting** `forge/` | 2 | ~4k | ⬜ · derived · three of four boxes |
+| **10. The tower as one machine** | 2 | ~3k | ⬜ |
+| 11a. Breadth | 2 | ~4k | ⬜ · five domains moved out of it |
+| 11b. Remote hosts | 3 | ~12k | ⬜ |
+| 11c. Engine upgrade | 1 | — | ⬜ |
+| 12. Onboarding + demo | 4 | ~20k | ⬜ |
+| 13. Ship | 3 | ~5k | ⬜ |
 | **Standing** | — | — | ♾ Never closes, and blocks no phase |
 
 **41 months against a 24-month target**, where it was 28. The gap was already
@@ -48,7 +79,7 @@ line below is rewritten to say how, because §16 rates schedule overrun
 **Critical** and a plan that adds six phases without touching the total is not
 tracking the risk it claims to.
 
-**9a shrinks by 2 months and ~14k words** — five domains and the shared-engine
+**11a shrinks by 2 months and ~14k words** — five domains and the shared-engine
 extraction leave it — so the true addition is ~13 months, not 15. The five
 domains were budgeted at 4 months and ~18k words *combined* while filed as one
 line; giving each its own phase is the admission that the estimate was for a
@@ -78,7 +109,7 @@ measuring their memory. A number that looks like this one but was produced
 in-house would be worse than no number.
 
 This is written down rather than left as a status colour because it is the one
-Phase 0 claim that is **not** evidenced. Deferred to Phase 10, which is where
+Phase 0 claim that is **not** evidenced. Deferred to Phase 12, which is where
 onboarding and the demo put non-terminal players in front of the game anyway —
 and where the scripted scenario it needs will have to be written.
 
@@ -415,11 +446,11 @@ that names its phase gets revisited when the phase arrives; one that says
       ⚠️ **The human read is outstanding**: peak-threat CRT is frontend
       enrichment and is not in a Frame. Size the window to 1280×704, `F4` into
       Deep focus, `F3` to peak threat, `F7` for eldritch, and read the log
-- [x] **Run the gate** — ⏸ **deferred to Phase 10, not passed.** Blocked on people,
+- [x] **Run the gate** — ⏸ **deferred to Phase 12, not passed.** Blocked on people,
       not on code: it needs ≥ 8 external testers, at least half with no shell
       experience, over a 15-minute scripted scenario with expected-intent ground
       truth. Everything it measures is built and reachable; what is missing is the
-      testers and the script. Phase 10 is onboarding and the demo, which puts
+      testers and the script. Phase 12 is onboarding and the demo, which puts
       non-terminal players in front of the game regardless, so that is where this
       belongs rather than stalling here
       **See it:** eight external testers sit down and play. That *is* the gate
@@ -472,7 +503,7 @@ defects — DESIGN.md §19.
       card rather than a table, so it cannot be mistaken for §4's tower report.
       The any-key skip was removed (§19): the sequence is character, and a
       keypress skip made the first thing a player does to the game be dismissing
-      it. §4's *sticky* skip is a different mechanism and still waits on Phase 11
+      it. §4's *sticky* skip is a different mechanism and still waits on Phase 13
       arriving twice. **The world does not tick during it** — `tower::drift`
       rolls once per tick, so the same seed would otherwise build a different
       world depending on how long boot ran
@@ -498,7 +529,7 @@ defects — DESIGN.md §19.
 **Phase 0.5 is closed.** Its one open item — sticky skip, persisted CRT-off,
 reduce-motion — was never Phase 0.5 work: it needs somewhere to persist a
 setting, and nothing in the workspace serialises anything. It has **moved to
-Phase 11** beside §15's settings screen, which is where the thing it depends on
+Phase 13** beside §15's settings screen, which is where the thing it depends on
 is built. A deferred item parked in a finished phase is a phase that never
 finishes.
 
@@ -517,7 +548,7 @@ hand is *mechanical* rather than asserted, because a script ends its loop with
 **The exit had a second clause and it is not met.** *"…non-terminal testers are
 in the loop"* needs a person: its See-it line is *"someone who has never used a
 shell reaches their first bound script while you watch"*. **The clause moves with
-its item to Phase 10**, where §15 already puts onboarding validation and the
+its item to Phase 12**, where §15 already puts onboarding validation and the
 demo. Ticking it here would be the one thing the See-it gate exists to stop —
 §15's own correction is that *"tests prove code does what it was written to do;
 they cannot prove it is the code worth writing"*, and no test can prove this.
@@ -750,7 +781,7 @@ they cannot prove it is the code worth writing"*, and no test can prove this.
         §19 names, any of which being removed brings the rate back down. Motion
         rides `CrtSettings::on`, so the F3 that kills the tube for motion
         sickness kills the shimmer too; the persistent per-effect toggle stays
-        with Phase 11's settings item above, which now has a real dependency
+        with Phase 13's settings item above, which now has a real dependency
         rather than a nominal one.
         **A hearth has three states a gauge does not**, all §19: a **cold** one
         smokes at the bottom and draws no track — it reports no meter at all, so
@@ -853,7 +884,7 @@ they cannot prove it is the code worth writing"*, and no test can prove this.
         to being watched. A staged action must also resolve with **no player
         present** — that is a `meditate`-and-stage-boundary requirement, *not*
         an offline one: §5 opens *"initially there is no offline progression"*
-        and puts it in Phase 9a, covering bound scripts rather than a lit athanor
+        and puts it in Phase 11a, covering bound scripts rather than a lit athanor
   - Durations stay placeholders. §19 records `DECOCT_TICKS = 20` as one, and
         the balance CLI later in this phase is what sweeps it — do not hand-tune
   - Out of scope, stated: the archive's minigame (deferred, below), adversarial
@@ -875,7 +906,7 @@ they cannot prove it is the code worth writing"*, and no test can prove this.
       balance CLI has not swept one of them; `PURGE_TICKS` and the athanor's
       `ticks` are the two most likely to move. Capacity is still hard-wired to 1,
       so the four-instrument pipeline this was designed around cannot be run
-      concurrently until Phase 8 reserves slots and Phase 9a researches them —
+      concurrently until Phase 8 reserves slots and Phase 11a researches them —
       everything shipped here is the capacity-1 game. A separate laboratory
       *pane* above `DEEP_FOCUS_FLOOR` is deferred: the panel works at every size
       inside the session pane, which makes that a layout refinement rather than
@@ -1396,7 +1427,7 @@ they cannot prove it is the code worth writing"*, and no test can prove this.
       **The fire is one orange ramp on every tube**, where it had been four. A
       green fire does not read as a fire; it reads as the meter having changed
       colour. That put hue on the monochrome theme, and §4's accessibility
-      promise moved to Phase 11's colour-vision filters — recorded there and in
+      promise moved to Phase 13's colour-vision filters — recorded there and in
       §19, because it is a promise *deferred*, not dropped.
 
       **See it:** ✅ `ORBS_BOOT=0 ORBS_DUMP="attend laboratory; kindle charcoal;
@@ -1653,10 +1684,10 @@ they cannot prove it is the code worth writing"*, and no test can prove this.
       mortar_and_pestle; move sage to mortar_and_pestle; wield
       mortar_and_pestle"` — still fires, and leaves one sage behind.
 - [x] **The manual, part one: `help` lists what works here** — **moved from
-      Phase 10**, where it sat as *"In-world grimoire (`help` / `man`)"*, because
+      Phase 12**, where it sat as *"In-world grimoire (`help` / `man`)"*, because
       §15's onboarding risk plan names it as item 3 and the gate it feeds is
       Phase 1's. One box, moved rather than duplicated, as the settings item was
-      moved to Phase 11.
+      moved to Phase 13.
 
       **It began as a parser defect, not a missing feature.** `help`, `man` and
       `?` were already synonyms of `recall`, whose slot was a *required* topic —
@@ -2166,14 +2197,19 @@ since Phase 0 with lints enforcing it. What is **not** done is *recipe* reload,
 which is deliberately excluded (`content/recipe.rs`) because a recipe is a
 decision and swapping one mid-session breaks replay from `(seed, submissions)`
 unless the content is versioned into the submission log. That is a real item and
-it is Phase 9b's, with remote hosts, where content versioning arrives.
+it is Phase 11b's, with remote hosts, where content versioning arrives.
 - [x] **Content data format** — hot-reloadable TOML/RON, prose never in Rust
       literals. Recipe reload deliberately excluded; see above.
       **See it:** ✅ edit a line of `prose.toml` with the game running
 
 ---
 
-## Phases 2–7 — the rest of the tower
+## The domain phases — the rest of the tower
+
+> **This was *"Phases 2–7"* and the range no longer holds.** The domains are
+> phases 2, 3, 4, 5 and 9 now, with 8 (Siege) among them and 10 after — see
+> *The numbers moved a second time* at the top of this file. The section covers
+> the same five domains it always did.
 
 **Read this before starting any of them.** §10's table gives each domain a
 *form* — "deduction", "composition", "allocation" — and says outright that
@@ -2508,7 +2544,7 @@ acquisition of words** — and that distinction is the whole of this phase's sco
 A component is a `part`, and it lives in the spell that uses it.
 
 **Earning language words is a §19-priced deferral and stays deferred.** §19
-records that its See-it line *"is already Phase 9a's"* and that delivering it
+records that its See-it line *"is already Phase 11a's"* and that delivering it
 needs `Verb::ALL` to stop being a fixed 27, the synonym table to stop being
 `const`, `is_live` to stop being a `const fn`, and the boot tutorial to read all
 three dynamically — *"the discovery loop pulled forward two phases, not a
@@ -2524,7 +2560,7 @@ rather than smuggled: the save format serves no part of the exit criterion above
 It goes here because Phase 3 is next and because **every phase from here adds
 state to it** — Spellcraft's own spell-parts item adds the first. Building the
 format after five domains have shipped means retrofitting six phases of state,
-and it leaves Phase 11's settings item and Phase 9a's offline progression blocked
+and it leaves Phase 13's settings item and Phase 11a's offline progression blocked
 until then. §19 records the placement argument in full.
 
 - [x] ✅ **The save document, headless.** `Sim::snapshot` reads a world out as
@@ -3372,12 +3408,12 @@ composed spell that holds parts competes with everything else the orb holds, so
 then a spell that survives it. **Met** — a course of wards hauled between three
 stations by hand, and `holding` bound in the sanctum while the player brews.
 
-> **This was Phase 6, and Enchanting was Phase 4.** They swapped (§19). Nothing
+> **This was Phase 9, and Enchanting was Phase 4.** They swapped (§19). Nothing
 > about the order was load-bearing — Defense depends on the spell language,
 > which closed in Phase 3, and on nothing Enchanting or Summoning make — and the
 > version is `0.<phase>.<step>` and player-visible on the POST card, so building
 > a later phase first would have made the number go backwards when the earlier
-> one landed. Phase 7's authored edge *"menagerie → sanctum"* survives the swap
+> one landed. Phase 10's authored edge *"menagerie → sanctum"* survives the swap
 > unchanged.
 
 > **The room is `sanctum/`, and §7's tree and §10's table both said
@@ -3436,7 +3472,7 @@ flattest column in the table, and just under clarity's 0.140.
 
 ---
 
-## Phase 6 — Enchanting
+## Phase 9 — Enchanting
 
 **Exit:** a buffed instrument visibly works faster, the panel says so, and the
 buff decays.
@@ -3445,24 +3481,57 @@ buff decays.
 and the instrument panel rather than new subsystems. The cheapest of the five,
 and the proof that the generalisation §10.1 promises actually holds.
 
-- [ ] The `forge/` domain and a buff that lands on an instrument
-      **See it:** grind a sage before and after, and read two different durations
-- [ ] Decay, and the panel row that shows it draining
-      **See it:** walk away and watch a buff run out
-- [ ] The shared-engine extraction, pulled forward from Phase 9a — §10.1 already
+> **A minigame was missing from the first plan, and a reader caught it.**
+> `imbue` was one command with a duration and a resource cost, which is exactly
+> what §10's Minigame-form column exists to prevent — the column says
+> *"**Sequence** + resource cost"* and the sequence was not there. It is a
+> **lattice** now: Lights Out on three columns, where snapping a glyph flips its
+> neighbours and a charm binds only when every glyph is lit. §19 records the
+> shape and what the sweep cost.
+
+> **The version did not become `0.6.x`, and it cannot.** The scheme is
+> `0.<phase>.<step>` and the number is drawn on the POST card, so a tester's
+> build would have gone *backwards* from `0.8.18` — which is the exact hazard
+> §19 cites for swapping Defense and Enchanting in the first place, arriving
+> from the other direction now that Phase 8 shipped first. This landed as
+> `0.8.19`, and **what the number should say when a phase closes out of order is
+> a decision nobody has taken.** Named here rather than settled quietly.
+
+- [x] ✅ **The `forge/` domain and a buff that lands on an instrument** — the
+      seventh and last of §10's domains, so every box on the rail is lit. `imbue`
+      opens a lattice, `snap` turns a column, `anneal` lets it fall; five charms,
+      each read at a different site
+      **See it:** `ORBS_BOOT=0 ORBS_DUMP="attend forge; imbue mortar_and_pestle hurried; snap apex; anneal; meditate 25; attend laboratory; grind sage; meditate 4" cargo run -p orbs`
+      — the grind lands in four ticks where it takes eight
+- [x] ✅ **Decay, and the panel row that shows it draining** — a charm is an
+      interval, so nothing ticks it down and `meditate 3600` inside one `step`
+      behaves like 3,600 watched ticks
+      **See it:** `ORBS_BOOT=0 ORBS_DUMP="attend forge; imbue mortar_and_pestle hurried; snap apex; anneal; meditate 700; attend laboratory; grind sage; meditate 4" cargo run -p orbs`
+      — past the charm, the same grind takes eight again
+- [ ] The shared-engine extraction, pulled forward from Phase 11a — §10.1 already
       says it belongs *"when the derived domains arrive"*, and they arrive here
       **See it:** one recipe table drives two domains
-- [ ] A maintenance spell
-      **See it:** `repeat until` keeps a buff alive unattended
+- [x] ✅ **A maintenance spell** — `tending_forge`, and the eight-rung lookup
+      table lives in it rather than in the world. §8.1's *"a rule, not a
+      memory"*: the columns publish the residue and the spell holds the mapping
+      **See it:** `ORBS_BOOT=0 ORBS_DUMP="attend forge" ORBS_THEN="invoke forging; meditate 120; peruse forge.log" cargo run -p orbs`
 
 **Scarcity: the buff's own lifetime, and the slot.** Maintaining a buff competes
 with making things, so idle buff-time is waste exactly as idle lit time is.
 
-**A second potion sink, and it amends §11.5.** The table currently makes *"a
-siege consumes 4–8 potions"* the only sink, and five shipped prose lines say
-*"a siege will be what spends them"*. Enchanting spending essences is a
-**resource sink**, which §11.5 allows — unlike a cost on *looking*, which §5.1
-forbids. The table and those five lines change with this phase, deliberately.
+> ~~**A second potion sink, and it amends §11.5.**~~ **Struck.** The plan was for
+> the forge to spend essences; it spends **quintessence**, shared with the siege,
+> which is a decision taken deliberately and recorded in §19. So potions get no
+> second sink and §11.5's table is unamended — what changed instead is that
+> quintessence came *up* to the tower, which is a bigger amendment to the same
+> section and the one §11.5's own resource row always described.
+>
+> **The count in that paragraph was wrong too**, and the fix landed anyway:
+> **nine** prose lines said *"a siege will be what spends them"*, not five — and
+> every one had been false since Phase 8 shipped, because `siege.toml` gives six
+> of the eight potions a `quaff` entry and a troop a `deploy`. Those nine now say
+> what actually spends them. Two — `stillness` and `vigour` — have no sink at all
+> and say so.
 
 ---
 
@@ -3695,7 +3764,7 @@ reversal of §19's `0.4.0` and is argued there rather than assumed.
       words teaches an *order* — `scribe`, `edit`, the lines, `<escape>`, `quit`,
       `invoke`, then the log rather than the pane, one of which (*quit is the
       save*) is otherwise learned by losing work.
-      §12's in-world grimoire is an **always** item and Phase 10 owns the
+      §12's in-world grimoire is an **always** item and Phase 12 owns the
       interactive apprenticeship, so this is the reference half and treads on
       neither. The worked example is **built from the room** — `grind sage` in
       the laboratory, `probe` in the lens — and a room with no work to script
@@ -3720,7 +3789,7 @@ of the gate rather than an afterthought.
 
 ---
 
-## Phase 7 — The tower as one machine
+## Phase 10 — The tower as one machine
 
 **Exit:** the player leaves, comes back, and the tower ran itself — *across*
 rooms, not in one.
@@ -3944,13 +4013,13 @@ the table is.
         which band is `routed` says which way. Both directions asserted
       **See it:** ✅ `cargo test -p orbs-sim --test scripting_the_siege` — eleven
       claims; **42 test binaries** in the workspace now
-- [→] **Pane synergies — deferred to Phase 7, not cut.** §18 item 6 and §9's
+- [→] **Pane synergies — deferred to Phase 10, not cut.** §18 item 6 and §9's
       *"an open brewing pane feeds potions to the siege automatically"*. It is an
       *enhancement* to a siege that already works, and it is the one item here
       that genuinely wants multiplexing, so it waits for the phase that builds it
 - [→] **Traits, `lens/observed/`, and the eldritch renderer.** Procedural trait
       composition (§5.2) and the renderer are plumbed in `orbs-render` with zero
-      producers; both are Phase 9-scale content work rather than siege mechanics,
+      producers; both are Phase 11-scale content work rather than siege mechanics,
       and the siege is tense without them
 - [→] **Unattended-siege backlog, dispersal and decay**, and difficulty tiers.
       All three depend on **provocation** — §5.3's trace deciding *when* a siege
@@ -3961,7 +4030,7 @@ the table is.
 store nothing drew from; this is the phase where six rooms' output becomes a
 decision under known risk.
 
-## Phase 9a — Breadth
+## Phase 11a — Breadth
 
 - [ ] All 7 domains
       **See it:** run a tower where every branch of the tree does something
@@ -3988,7 +4057,7 @@ decision under known risk.
       **See it:** the game plays identically before and after — this one is a
       refactor, and its gate is that nothing changes
 
-## Phase 9b — Remote hosts
+## Phase 11b — Remote hosts
 
 - [ ] Host filesystems, verbs, infiltration
       **See it:** `connect` somewhere hostile and navigate a tree that is not yours
@@ -3997,7 +4066,7 @@ decision under known risk.
 - [ ] Ship-quality `orbs-tui` *if the schedule allows* — **cut-line item 3**
       **See it:** play a full session in a terminal and miss only the tube
 
-## Phase 9c — Engine upgrade
+## Phase 11c — Engine upgrade
 
 - [ ] Bevy version window, isolated from new-system work
       **See it:** the game boots, draws, and plays identically on the new version
@@ -4006,7 +4075,7 @@ decision under known risk.
 
 ---
 
-## Phase 10 — Onboarding + demo
+## Phase 12 — Onboarding + demo
 
 - [ ] Diegetic apprenticeship, polished
       **See it:** a non-terminal player reaches hour two unaided, watched
@@ -4020,7 +4089,7 @@ decision under known risk.
 - [ ] Wishlist target set; revisit the $4 price against actual content volume
       **See it:** a real session's length checked against the price
 
-## Phase 11 — Ship
+## Phase 13 — Ship
 
 - [ ] **Colour-vision filters and a real monochrome mode** — ⚠ **this item now
       carries a promise that used to be carried by a theme.** §4's monochrome
@@ -4059,7 +4128,7 @@ decision under known risk.
       Still owed: the material tints are allowed to collapse under greyscale —
       they are a convenience over `survey`, never the only carrier — but a
       settings screen to reach any of this without an environment variable is
-      Phase 11's, and until it lands there is **no in-game control** for the
+      Phase 13's, and until it lands there is **no in-game control** for the
       accommodation.
 
       **See it:** set each filter in turn with the laboratory on screen and a
@@ -4151,7 +4220,7 @@ content item, never all of it true — move it here.
       gives it *"no parity, polish, or support obligation"*, and its job is to
       prove the `orbs-render` boundary is real and to give the parser and balance
       work a no-GPU, no-window, instant-startup, trivially scriptable target.
-      Ship-quality `orbs-tui` is a different item and stays in Phase 9b as
+      Ship-quality `orbs-tui` is a different item and stays in Phase 11b as
       cut-line item 3.
 
       It accretes for a specific reason: **every new surface either goes through

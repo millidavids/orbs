@@ -946,15 +946,19 @@ fn a_siege_replays_from_its_submissions() {
 /// determinism defect would land. The existing replay test above never runs the
 /// pool dry, so it exercises the path that was always there.
 ///
-/// The script spends the whole pool in three full rounds and then keeps pledging
-/// into an empty one, so the run contains successes, `Short` refusals and the
-/// rounds after them. If the refusal ever drew, or ever skipped a draw it should
-/// have taken, the two runs would disagree about every roll from that point.
+/// The script spends the pool down and then keeps pledging into an empty one, so
+/// the run contains successes, `Short` refusals and the rounds after them. If the
+/// refusal ever drew, or ever skipped a draw it should have taken, the two runs
+/// would disagree about every roll from that point.
+///
+/// **Six rounds, where three used to do.** A resolved round now grants
+/// `REGEN_PER_ROUND` back against a full allocation's eight, so the pool drains
+/// six a round rather than eight. The number of rounds here is arithmetic over
+/// those two constants and moves when either does.
 #[test]
 fn a_siege_replays_through_running_out_of_quintessence() {
     let mut script = vec!["attend bailey".to_owned(), "defend".to_owned()];
-    // Three rounds empty the pool exactly; the fourth and fifth are refused.
-    for _ in 0..5 {
+    for _ in 0..6 {
         for die in ["d20", "d8", "d6"] {
             script.push(format!("pledge {die} buckler"));
         }
