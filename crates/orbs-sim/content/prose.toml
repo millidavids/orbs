@@ -295,6 +295,8 @@ weave_begins_topped_out = "{quantity} earned, and the orb has learned all it can
 # the 80-column floor, which is the *widest* single-pane case.
 weave_words = "ley  mastery  take  quit"
 weave_browsing = "arrows move   take   esc back"
+# On a mastery line there is nothing to take: a station is reached by doing.
+weave_browsing_mastery = "arrows move   esc back"
 weave_ley = "ley line"
 weave_mastery = "mastery"
 weave_title = "weave"
@@ -323,20 +325,45 @@ weave_unlocked = "unlocked"
 weave_locked_state = "locked"
 weave_active = "active"
 weave_inactive = "inactive"
+# A fork's three lanes, named under the aimed node so a player learns which
+# kind of play each row is before they take one.
+weave_lane_provision = "provision"
+weave_lane_war = "war"
+weave_lane_craft = "craft"
+# A mastery station: how much of its deed is done, and what reaching it opens.
+weave_progress = "{count} of {quantity}"
+weave_opens = "opens {name}"
+weave_walk_reached = "reached"
+weave_walk_next = "next"
+weave_walk_later = "later"
+# The road under a room's title once every station on its line is reached.
+road_done = "every station reached"
+# The same line as words, at the end of a room's primer. `{detail}` is the next
+# deed's sentence and its count - "five potions brewed, 3 of 5".
+#
+# **`primer_`, never `recall_`.** Every key under that prefix becomes a manual
+# subject the parser knows (`Prose::topics`), so these two shipped as topics
+# called `road` and `road_done` - and `recall road` answered with the raw
+# template, braces and all. The route templates paid for this once already and
+# the note beside `topics()` says it: a template takes any prefix but that one.
+primer_road = "{name} line: {count} of {quantity} reached. next, {detail}"
+primer_road_done = "{name} line: every station reached"
 # The pane is under the screen's floor. It has to say so rather than draw a
 # blank, because this surface holds the keyboard and `esc` does not close it -
 # a blank pane with the keys held is a player with no visible way out.
 weave_too_small = "the pane is too small for the weave. quit, or press F4"
-# `take` on a node nothing is behind yet. Every authored node is a marker, and
-# saying so plainly is better than a refusal that sounds like a rule.
+# `take` on a mastery station. Nothing there is ever taken - it is reached by
+# doing its deed - and saying so plainly is better than a refusal that sounds
+# like a rule.
 #
 # **All of these fit 46 cells**, which is the status row's whole width in a
-# 48-column pane. Longer is silently cut mid-word - the first draft of the line
-# below ended "...nothing is" and stopped, which reads as a bug in the orb.
-weave_nothing_behind = "{name} is a marker. nothing behind it yet"
+# 48-column pane. Longer is silently cut mid-word - an early draft of one of
+# these ended "...nothing is" and stopped, which reads as a bug in the orb.
+weave_not_a_choice = "{name} is reached by doing, not by taking"
 # **Said by the world, not by the screen**, so it survives the screen closing and
-# `sift` can find the decision in the log.
-weave_took = "the orb takes {name}. it thinks a little faster now"
+# `sift` can find the decision in the log. `{detail}` is the node's own sentence,
+# so the log says what was bought and not only that something was.
+weave_took = "the orb takes {name}: {detail}"
 # **Says "opens at", not "its tier opens at".** A ley line step has no tier, and
 # this line answers for both tracks - the first wording told a player about a
 # tier that does not exist wherever the step they aimed at was on the line.
@@ -354,24 +381,90 @@ weave_unknown = "the orb weaves nothing called {name}"
 # a decision and lives there; the **sentence** is prose and lives here, which is
 # the same split `recipes.toml` makes with the lines about what a recipe yields.
 #
-# Every one of these is a marker today. They are authored anyway, because a row
-# on the screen with no sentence under it is a row that looks broken - and
-# because the first real node replaces a line here rather than adding the idea
-# of one.
-#
 # **Authored to fit 28 cells**, which is the details panel's width inside its
 # border. Longer is clipped mid-word, and a sentence that stops at "while you
 # are" reads as a bug in the orb rather than as a pane that ran out of room.
-weave_node_tbi_b = "nor this"
-weave_node_tbi_d = "another, equally so"
+# `every_node_sentence_fits_the_details_panel` holds every `weave_node_` and
+# `mastery_` line to it.
+#
 # The two the budget reads. Said as what it buys rather than as a number: a step
 # is a tick, so what a player gets is a spell that keeps up.
 weave_node_steps_1 = "one more step a second"
 weave_node_steps_2 = "two more steps a second"
-weave_node_satchel_1 = "a satchel in every room, to queue and pull from"
-weave_node_cursors_1 = "alongside: two places in one spell at once"
-# What the Ley Line's one step gives, said as a capability rather than a number.
+weave_node_satchel_1 = "a satchel, to queue and pull"
+weave_node_cursors_1 = "alongside: two places at once"
+# What the Ley Line's steps give, said as a capability rather than a number.
 weave_node_concentration = "hold a spell while away"
+weave_node_quintessence = "a deeper pool to pledge from"
+# The forks' lanes, each said as what it buys. Provision: the tower's supplies.
+weave_node_fuel_1 = "charcoal burns a fifth longer"
+weave_node_fuel_2 = "charcoal burns longer again"
+weave_node_pool_1 = "four more in the pool"
+weave_node_pool_2 = "eight more in the pool"
+weave_node_escrow_1 = "a siege pays a quarter more"
+weave_node_escrow_2 = "a siege pays half again"
+weave_node_thrift_1 = "every charm two cheaper"
+# War: the wall and the dice.
+weave_node_edge_1 = "one on every answering roll"
+weave_node_edge_2 = "two on every answering roll"
+weave_node_floor_1 = "a worn wall keeps more pool"
+weave_node_floor_2 = "a worn wall keeps most pool"
+weave_node_garrison_1 = "a troop brings one more body"
+weave_node_mend_1 = "every course mends three more"
+weave_node_vigilance_1 = "sabotage a quarter rarer"
+# Craft: the orb. `haste` is the orb's speed, never the tool's - a run a spell
+# issued lands sooner, and a player's own does not.
+weave_node_haste_1 = "spells' work lands a tenth sooner"
+weave_node_haste_2 = "spells' work lands sooner again"
+weave_node_steps_3 = "three more steps a second"
+
+# The seven mastery lines, one sentence per station, keyed by the id in
+# `progression.toml`. Each is the deed as a thing done - "a clarity brewed" -
+# so it reads under a details panel saying `3 of 5` and in the record that says
+# the line advanced. 28 cells, like the node sentences above.
+mastery_reached = "the {name} line advances: {detail}"
+mastery_laboratory_1 = "a clarity brewed"
+mastery_laboratory_2 = "five potions brewed"
+mastery_laboratory_3 = "a warding brewed"
+mastery_laboratory_4 = "fifteen potions brewed"
+mastery_laboratory_5 = "an insight brewed"
+mastery_laboratory_6 = "forty potions brewed"
+mastery_archive_1 = "the stacks walked"
+mastery_archive_2 = "a scroll assembled"
+mastery_archive_3 = "five walks of the stacks"
+mastery_archive_4 = "three scrolls assembled"
+mastery_archive_5 = "fifteen walks of the stacks"
+mastery_lens_1 = "a ward broken"
+mastery_lens_2 = "five wards broken"
+mastery_lens_3 = "a secret learned"
+mastery_lens_4 = "fifteen wards broken"
+mastery_grimoire_1 = "a spell bound"
+mastery_grimoire_2 = "five spells bound"
+mastery_grimoire_3 = "twenty spells bound"
+mastery_sanctum_1 = "a course mustered"
+mastery_sanctum_2 = "five courses mustered"
+mastery_sanctum_3 = "a siege survived"
+mastery_sanctum_4 = "five sieges won"
+mastery_menagerie_1 = "a figure closed"
+mastery_menagerie_2 = "five figures closed"
+mastery_menagerie_3 = "twenty figures closed"
+mastery_forge_1 = "a charm laid"
+mastery_forge_2 = "five charms laid"
+mastery_forge_3 = "fifteen charms laid"
+
+# What a station opened, said once and only if it was shut - a tower restored
+# open that re-reaches the station opening the archive has an archive already.
+# `{name}` is the room, the product, the charm.
+# A room the tower has not opened yet, from any door — `attend`, `survey`, a
+# path into it. It names the room, so `attend stacks` teaches what the stacks
+# are in; it does not say how to open it, because that is the weave's to show.
+room_sealed = "the {name} is not yours yet"
+defend_unarmed = "there is no wall to hold yet. muster a course first"
+forge_charm_unopened = "the forge cannot lay {name} yet"
+opened_domain = "the {name} is yours now. attend it"
+opened_recipe = "the orb knows {name} now. recall it"
+opened_charm = "the forge can lay {name} now"
+opened_siege = "the wall can be held now. defend it"
 
 # The editor's own furniture. Terse: these sit on one row of a pane that may be
 # 80 cells wide, beside the filename and the position.

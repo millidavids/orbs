@@ -364,6 +364,7 @@ fn the_shipped_table_is_the_answer_the_arithmetic_gives() {
 /// unscriptable if the readings were published a tick too late, or the loop
 /// guard were wrong, or `anneal` refused inside a spell. Across several seeds,
 /// so it is not one board's luck.
+#[cfg(debug_assertions)]
 #[test]
 fn a_spell_holding_the_table_binds_a_charm_on_every_seed() {
     for seed in [0, 3, 11, 17, 42] {
@@ -390,6 +391,7 @@ fn a_spell_holding_the_table_binds_a_charm_on_every_seed() {
 /// **The half that is easy to get wrong.** `ebbing` is published only while a
 /// charm is running *and* nearly done, so a loop guarded on it alone would never
 /// start — a maintenance spell that maintains nothing, silently, for ever.
+#[cfg(debug_assertions)]
 #[test]
 fn the_maintenance_spell_starts_from_a_tower_with_no_charm_at_all() {
     let mut sim = at_the_forge(3);
@@ -406,6 +408,7 @@ fn the_maintenance_spell_starts_from_a_tower_with_no_charm_at_all() {
 }
 
 /// ...and it fires again when the charm is nearly out, which is the other half.
+#[cfg(debug_assertions)]
 #[test]
 fn the_maintenance_spell_renews_a_charm_that_is_ebbing() {
     let mut sim = at_the_forge(3);

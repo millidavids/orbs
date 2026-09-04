@@ -59,6 +59,13 @@ pub struct Panel {
     pub rampart: Option<orbs_render::Rampart>,
     /// The forge's open lattice, if the player is standing at it.
     pub lattice: Option<orbs_render::LatticeBoard>,
+    /// The mastery line of the room the player is standing in, for the road
+    /// under the pane's title (§11.5).
+    ///
+    /// On the same clock as the rest, for the same reason: the tally moves at
+    /// most once a tick, and seven lines rebuilt at 60 Hz would be the
+    /// allocation this resource exists to stop.
+    pub line: Option<orbs_sim::Line>,
     /// Every domain at a glance, for §9's rail.
     ///
     /// **Here rather than asked from the painter, and it is the most expensive of
@@ -87,5 +94,10 @@ impl Panel {
         self.rampart = sim.rampart();
         self.lattice = sim.lattice();
         self.briefs = sim.briefs();
+        // **The room, not the leaf.** A player standing in the alembic is in
+        // the laboratory, and the laboratory's line is the road they should see.
+        self.line = sim
+            .domain()
+            .and_then(|domain| sim.mastery().into_iter().find(|line| line.domain == domain));
     }
 }

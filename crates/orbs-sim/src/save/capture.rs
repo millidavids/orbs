@@ -7,7 +7,7 @@
 //! describing would make the lockstep test in `tests/persistence.rs` measure
 //! itself.
 //!
-//! So the walk uses `world.get::<T>(entity)` and [`children_of`], which is also
+//! So the walk uses `world.get::<T>(entity)` and [`crate::tower::children_of`], which is also
 //! the *ordering* rule `tower::node` insists on: **`Children` order, never a
 //! global query.** Archetype order is not insertion order, and a document whose
 //! rows moved when a component was added would fail its own byte-for-byte test
@@ -61,6 +61,7 @@ pub(crate) fn capture(world: &World) -> Save {
             seed: world.resource::<Rngs>().master_seed(),
             tick: world.resource::<Tick>().get(),
             sequence: records.sequence(),
+            sealed: world.resource::<tower::Sealing>().0,
         },
         // The sim has no wall clock and must not acquire one; `orbs-shell`
         // stamps this on the way to the file. The tick is ours to know.
@@ -99,6 +100,21 @@ fn progress(world: &World) -> ProgressSave {
         taken: world.resource::<tower::Taken>().ids().to_vec(),
         learned: learned.known().map(str::to_owned).collect(),
         fruitless: learned.since(),
+        tally: world
+            .resource::<tower::Tally>()
+            .entries()
+            .map(|(key, count)| (key.to_owned(), count))
+            .collect(),
+        reached: world.resource::<tower::mastery::Reached>().ids().to_vec(),
+        // Always written, so a document from this build never reads as one
+        // from before sealing existed.
+        opened: Some(
+            world
+                .resource::<tower::Opened>()
+                .keys()
+                .map(str::to_owned)
+                .collect(),
+        ),
         cwd: Some(tower::path_of(world, cwd)),
         register: Some(
             naming::register_word(world.resource::<Scrollback>().records().register()).to_owned(),

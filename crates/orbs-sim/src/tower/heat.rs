@@ -156,6 +156,10 @@ pub fn kindle(world: &mut World, athanor: Entity) -> bool {
         .get::<Ash>(athanor)
         .map(|owed| owed.0.clone())
         .unwrap_or_default();
+    // **`fuel` lengthens what is lit now, never what was banked.** Banked fuel
+    // was lengthened when it was first lit; lengthening it again on relighting
+    // would pay the grant twice for one charcoal.
+    let longer = super::grant::fuel_percent(world);
     for node in held {
         let Some(name) = world.get::<Name>(node).map(|name| name.0.clone()) else {
             continue;
@@ -171,7 +175,7 @@ pub fn kindle(world: &mut World, athanor: Entity) -> bool {
                 _ => 1,
             };
             for _ in 0..units {
-                ticks = ticks.saturating_add(fuel.ticks);
+                ticks = ticks.saturating_add(fuel.ticks.saturating_mul(100 + longer) / 100);
                 ash.push(fuel.leaves.clone());
             }
             spent.push((name, units));

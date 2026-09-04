@@ -4,7 +4,7 @@
 //!
 //! §8 says what `bind` adds is running **unattended**. The obvious way to make
 //! that mean something — narrow `invoke` to the room you are standing in — does
-//! not work: [`Running`](super::Running) fixes the spell's domain at cast and
+//! not work: [`Running`] fixes the spell's domain at cast and
 //! nothing checks the player's position afterwards, so
 //! `attend laboratory; invoke brewing; attend archive` already runs unattended.
 //! Gating the *cast* would have bought a walk back and nothing else.
@@ -29,7 +29,7 @@
 //! # Concentration is what limits it
 //!
 //! Nothing here counts anything: how many may be held is
-//! [`tower::concentration`](crate::tower::concentration), derived from what the
+//! [`tower::concentration`], derived from what the
 //! player has earned. At 0 the orb cannot hold one at all, which is the tower
 //! worked entirely by hand — §11.5's *"the game's turn"*, and the first thing in
 //! the game that is gated on progression rather than on where you stand.
@@ -46,7 +46,7 @@ use super::run::Running;
 
 /// A spell the orb is holding.
 ///
-/// Beside [`Running`](super::Running) rather than instead of it: a bound spell
+/// Beside [`Running`] rather than instead of it: a bound spell
 /// is *also* running, and the two answer different questions —
 /// *"is it working right now"* and *"is the orb holding it"*. A spell that has
 /// run off the end is un-`Running` for the tick before this casts it again.
@@ -149,12 +149,16 @@ pub fn bind(intent: &Intent, world: &mut World) {
     if let Some(mut running) = world.get_mut::<Running>(node) {
         running.unattended = true;
         say(world, "bind_done", &wanted, Role::Success);
+        // A spell bound is what the grimoire's mastery line counts — after the
+        // sentence, on both doors.
+        crate::tower::note(world, crate::tower::BOUND);
         return;
     }
 
     // Cast now, through the one door — a bound spell that waited for something
     // to start it would be a slot held by nothing.
     super::invoke::cast(world, node, &wanted, Role::Success, "bind_done", true);
+    crate::tower::note(world, crate::tower::BOUND);
 }
 
 /// Let go of a spell the orb is holding. Returns whether it was holding one.

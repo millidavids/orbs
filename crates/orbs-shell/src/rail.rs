@@ -12,12 +12,13 @@
 //! `orbs-tui` draws the same rail from the same `Vec<Brief>`. What is decided
 //! here is layout and glyph, and nothing else.
 //!
-//! # Four of the seven are dark, and that is the point
+//! # Six of the seven are dark in a fresh game, and that is the point
 //!
-//! §10 fixes seven domains and the player starts with two. An unbuilt room draws
-//! as a dim dotted row with no name: seven slots with four dark says *there is
-//! more* without saying what, which is the foreshadowing §11's discovery loop
-//! wants and which naming them would spend.
+//! §10 fixes seven domains and the player starts with one (Phase 10). A shut
+//! room draws as a dim dotted row with no name: seven slots with six dark says
+//! *there is more* without saying what, which is the foreshadowing §11's
+//! discovery loop wants and which naming them would spend. An open room's state
+//! row ends in the percentage to its next mastery station.
 //!
 //! # Each box is ruled off from the next
 //!
@@ -159,10 +160,32 @@ fn domain(painter: &mut orbs_render::Painter<'_>, brief: &Brief, at: Rect, ruled
     if row >= floor {
         return;
     }
+    let state = format!("  {}", word(brief.state));
     painter.span(
         Pos::new(at.col, row),
-        &Span::new(&format!("  {}", word(brief.state))).with_style(Style::DIM),
+        &Span::new(&state).with_style(Style::DIM),
     );
+    // **The percentage to the room's next mastery station, on the state row's
+    // right edge** (§11.5). There is no spare row: `MIN_RAIL_BOX` is name,
+    // state, detail, spell and the rule, and a sixth would be dropped exactly
+    // when a room is busy *and* automated — the state the rail exists to show.
+    // Drawn with `glyphs`, so it is silent: §14's rule for progress is
+    // *completion only*, and the station reaching is what gets said.
+    if let Some(progress) = brief.mastery {
+        let label = format!("{}%", progress.percent());
+        let taken = state.chars().count() + 1;
+        if taken + label.len() <= width {
+            painter.glyphs(
+                Pos::new(
+                    at.col
+                        .saturating_add(u16::try_from(width - label.len()).unwrap_or(0)),
+                    row,
+                ),
+                &label,
+                Style::DIM,
+            );
+        }
+    }
 
     // What is working, and what is automating it. Both are optional and both
     // are the reason a box beats a row: §9's sidebar could hold one or the

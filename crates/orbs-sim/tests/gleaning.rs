@@ -49,6 +49,12 @@ fn with_a_gleaning_scroll(seed: u64) -> Sim {
 }
 
 /// Four fragments on the lectern, wielded — whatever that happens to yield.
+///
+/// **The helpers carry the gate too**, for the reason the header gives about the
+/// tests: with `debug_assertions` off every caller of this is gone, and a
+/// release build reports it as dead code rather than as the deliberate thing it
+/// is. Every helper below that only debug-gated tests reach is marked the same.
+#[cfg(debug_assertions)]
 fn assembled(seed: u64) -> Sim {
     let mut sim = Sim::new(seed);
     sim.submit("attend archive");
@@ -259,6 +265,7 @@ fn a_spell_can_ask_which_errand_the_stacks_are_on() {
 }
 
 /// What happened between two readings of [`verified`].
+#[cfg(debug_assertions)]
 const fn since(before: (usize, usize), after: (usize, usize)) -> (usize, usize) {
     (after.0 - before.0, after.1 - before.1)
 }
@@ -268,6 +275,7 @@ const fn since(before: (usize, usize), after: (usize, usize)) -> (usize, usize) 
 /// `Source` is where `verify` files its **target** — `Name` is the verb, which
 /// is the same on both branches. Reading the wrong one counted nothing at all
 /// and looked exactly like the condition failing.
+#[cfg(debug_assertions)]
 fn verified(sim: &Sim) -> (usize, usize) {
     let named = |wanted: &str| {
         sim.scrollback()
@@ -516,6 +524,7 @@ fn abandoning_a_gleaning_maze_takes_the_word_with_it() {
 /// Driven through a real cast rather than read off the world, because what has
 /// to be true is the *answer a spell gets* — `watch::ask` resolving a named
 /// child is the mechanism, and asserting on the child would skip it.
+#[cfg(debug_assertions)]
 fn asks_gleaning(sim: &mut Sim) -> bool {
     let before = verified(sim);
     sim.write_spell(
@@ -539,6 +548,7 @@ fn asks_gleaning(sim: &mut Sim) -> bool {
 /// The alembic, because 56 ticks is the longest run in the game and a halving is
 /// unmistakable against it — a mortar's eight would be hard to tell from a
 /// rounding.
+#[cfg(debug_assertions)]
 fn distilling(seed: u64) -> Sim {
     let mut sim = Sim::new(seed);
     for line in [
@@ -555,6 +565,7 @@ fn distilling(seed: u64) -> Sim {
 }
 
 /// How far through the one run in flight the tower is, as `(done, total)`.
+#[cfg(debug_assertions)]
 fn meter(sim: &Sim) -> Option<(u64, u64)> {
     sim.instruments()
         .into_iter()
@@ -725,6 +736,7 @@ fn a_run_started_in_the_window_stays_short_when_it_closes() {
 }
 
 /// Whether the laboratory is working at double speed right now.
+#[cfg(debug_assertions)]
 fn quickened(sim: &Sim) -> bool {
     let world = sim.world();
     let shelf = orbs_sim::tower::home(world, "sage").expect("sage has nowhere to live");
@@ -845,6 +857,7 @@ fn a_window_that_has_closed_is_not_written_into_the_save() {
 }
 
 /// What the laboratory's shelf holds, by name.
+#[cfg(debug_assertions)]
 fn shelved(sim: &Sim) -> Vec<String> {
     let world = sim.world();
     let shelf = orbs_sim::tower::home(world, "sage").expect("sage has nowhere to live");

@@ -1,434 +1,494 @@
-//! The two tracks, read (DESIGN.md §11.5, §19).
+//! Mastery: seven straight lines, one per room (DESIGN.md §11.5, §19).
 //!
-//! # Two shapes, one currency
+//! # Per domain, no choices
 //!
-//! The **Ley Line** is a straight path: predefined steps in order, and passing
-//! one *is* the grant. There is no choice in it and nothing to store — what a
-//! player has is a function of [`Experience`] against the
-//! authored list, the same way `concentration` already was.
+//! Each room has a line of stations, and a station is a *deed* — brew a
+//! clarity, walk the stacks five times, close a figure. A line is walked in
+//! order: a station is reached when the one before it is reached and its deed's
+//! count in the [`Tally`] is met, and reaching it *is* the grant.
+//! Nothing here is ever `take`n, and the screen says so.
 //!
-//! **Mastery** branches. A tier opens when the total passes it and gives exactly
-//! **one** of its nodes, so the tier opening is the grant and which node is taken
-//! is the decision. That is what lets experience stay unspendable (§11.5's
-//! *"accumulates and is never spent"*) while still offering a choice — the
-//! ROADMAP's own acceptance line for the upgrade tree.
+//! The choices live on the Ley Line (`tower::ley`), which is where the tree
+//! this module used to read has gone.
 //!
-//! # Nothing here takes anything, yet
+//! # Reaching is said once, and what it opens is said once
 //!
-//! Every authored node is a marker. There is no mutator in this module and no
-//! `Submission` variant behind it, because a screen that cannot change the world
-//! needs neither — and adding a mutator with nothing to grant would be building
-//! the replay leg, the confirm and the irreversibility before anything could
-//! exercise them. `take` lands with the first real node.
+//! [`advance`] runs after every completion, on the tick the work landed. A
+//! station reached is a record, so `sift` and the log see it; what it opened is
+//! a second record, said only if the thing was shut — a tower restored open
+//! that re-reaches the station opening the archive has an archive already.
 //!
-//! What *is* here is the reading, because that is what the screen draws and what
-//! the first real node will be checked against.
+//! # No stream, no `Submission`
+//!
+//! A deed is done by work the submissions already record, and reaching is a
+//! function of the tally against the authored file. Nothing is drawn and nothing
+//! is chosen, so nothing here has to replay on its own.
 
 use bevy_ecs::prelude::*;
+use orbs_render::{FieldName, RecordKind, Role};
 
-use crate::content::Progression;
+use crate::content::{Progression, Prose};
+use crate::session::Scrollback;
 
-use super::Experience;
+use super::Tally;
+use super::opened::{Opened, open, opening};
 
-/// Which mastery nodes the orb has taken.
+/// Which mastery stations the tower has reached.
 ///
-/// **A list of ids, not a set of flags.** An id is what the content file
-/// authors, what a sentence is keyed by, and what a save would carry; a
-/// `bool` per node would have to be regenerated every time the tree grew.
-/// `Progression::check` refuses a duplicate id, so a name here means one node.
-///
-/// Empty and stays empty in this version — nothing can be taken yet.
+/// **A list of ids**, as [`Taken`](super::Taken) is, and for the same reasons.
+/// Saved so a restore need not replay to know it, and never regenerated from
+/// the tally — the tally says a deed is done; this says its station was reached
+/// *and said*, which a migrated save must not do twice.
 #[derive(Resource, Debug, Default, Clone, PartialEq, Eq)]
-pub struct Taken(Vec<String>);
+pub struct Reached(Vec<String>);
 
-impl Taken {
-    /// Put a set of taken nodes back, for a save.
+impl Reached {
+    /// Put a set back, for a save.
     pub(crate) fn restore(&mut self, ids: Vec<String>) {
         self.0 = ids;
     }
 
-    /// The ids taken, in the order they were taken.
+    /// The ids reached, in the order they were reached.
     #[must_use]
     pub fn ids(&self) -> &[String] {
         &self.0
     }
 
-    /// Record one, if it is not held already.
-    ///
-    /// **Idempotent, and the caller does not have to check.** A double `take` is
-    /// a player pressing Enter twice, not a bug worth a second refusal path —
-    /// and a duplicate id here would make `steps_granted` count the same node
-    /// twice and hand out a budget nobody bought.
-    pub(crate) fn hold(&mut self, id: &str) {
-        if !self.0.iter().any(|held| held == id) {
+    /// Whether `id` has been reached.
+    #[must_use]
+    pub fn has(&self, id: &str) -> bool {
+        self.0.iter().any(|held| held == id)
+    }
+
+    fn hold(&mut self, id: &str) {
+        if !self.has(id) {
             self.0.push(id.to_owned());
         }
     }
 }
 
-/// What a mastery node grants, in extra spell steps a tick.
+/// Where a station on a line stands.
 ///
-/// **The id is the contract**, exactly as `progression.toml` says: *"ids are
-/// decisions, not prose — they are what a taken node is stored as."* So the
-/// grant is derived from the id rather than from a second table that could
-/// disagree with the one `weave` draws.
-///
-/// **Moved here from `spell::run`**, where it was private and answered only the
-/// budget's question. The screen needs the same answer to know whether a node is
-/// real or a marker, and two functions parsing one id is the shape §19 records
-/// going wrong more than any other.
-#[must_use]
-pub fn steps_granted(id: &str) -> Option<usize> {
-    match granted(id) {
-        Some(Grant::Steps(many)) => Some(many),
-        _ => None,
-    }
-}
-
-/// What a real mastery node actually does.
-///
-/// # Why this is an enum now, and was a `usize`
-///
-/// Every real node granted **speed** — `steps_<n>`, parsed straight out of the
-/// id and summed into `spell::budget` — so one function answered *what does this
-/// grant* and *is this node real* at once. §8's channel added two grants that
-/// are not numbers, and a boolean squeezed into that shape is a silent bug
-/// waiting: a `satchel_1` that parsed as a step count would quietly hand out a
-/// second instruction a tick.
-///
-/// **The id is still the contract**, exactly as `progression.toml` says: *"ids
-/// are decisions, not prose — they are what a taken node is stored as."* What
-/// changed is that the id names a *kind* of grant rather than always a number.
+/// **Three states, three words** (§14). Not [`Standing`](super::Standing),
+/// which is the fork's vocabulary — a fork node can be open and unchosen, and
+/// a station on a line cannot: it is done, it is the one being worked toward,
+/// or it is further along.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Grant {
-    /// `steps_<n>` — that many more instructions a tick, additive across tiers.
-    Steps(usize),
-    /// `satchel_1` — `queue` and `pull` work at all (§8's channel).
-    Satchel,
-    /// `cursors_1` — `alongside` works: two places in one spell.
-    Cursors,
+pub enum Walk {
+    /// Done.
+    Reached,
+    /// The one the room is working toward.
+    Next,
+    /// Further along the line.
+    Later,
 }
 
-/// What `id` grants, or `None` for a marker.
-///
-/// **One parser, and `Progression::check` holds it to the authored tree** — a
-/// typo'd `satchel1` is silently a marker otherwise, which is the exact failure
-/// that check's own comment argues against for the ley line.
-#[must_use]
-pub fn granted(id: &str) -> Option<Grant> {
-    match id {
-        "satchel_1" => Some(Grant::Satchel),
-        "cursors_1" => Some(Grant::Cursors),
-        _ => id
-            .strip_prefix("steps_")
-            .and_then(|many| many.parse().ok())
-            .map(Grant::Steps),
-    }
-}
-
-/// Whether the orb has taken a node granting `grant`.
-///
-/// **The one question the three gated words ask**, so they cannot come to
-/// disagree about what "unlocked" means. `spell::budget` sums [`Grant::Steps`]
-/// instead, because speed is a quantity and the other two are a yes.
-#[must_use]
-pub fn holds(world: &World, grant: Grant) -> bool {
-    world
-        .resource::<Taken>()
-        .ids()
-        .iter()
-        .any(|id| granted(id) == Some(grant))
-}
-
-/// Whether anything at all is behind a node.
-///
-/// **A marker is not a defect and must not read like one.** Most of the tree is
-/// authored ahead of what it does, so `take` on one of those is refused in voice
-/// (`NothingBehind`) rather than granting nothing silently. This is the question
-/// that separates the two, and it is derived from the grant so a node cannot be
-/// takeable and worthless at the same time.
-#[must_use]
-pub fn is_real(id: &str) -> bool {
-    granted(id).is_some()
-}
-
-/// What a node or a step is, right now.
-///
-/// **Three states, and the screen must draw them apart without colour** (§14).
-/// The glyph carries it for anyone who can see it and `FieldName::State` carries
-/// the word for anyone who cannot — a reader hearing "`○` concentration 1" has
-/// been told nothing.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Standing {
-    /// Held. A ley-line step that has been passed, or a node that was chosen.
-    Taken,
-    /// Reachable now: the tier is open and its choice is unspent.
-    Open,
-    /// Not yet. Either the total is short, or the tier already spent its choice.
-    Locked,
-}
-
-impl Standing {
+impl Walk {
     /// The word a screen reader hears.
-    ///
-    /// Not prose — one word naming a state, which §19 settles is the parser's
-    /// kind of fact rather than a sentence. The *sentence* about a node lives in
-    /// `prose.toml` keyed by its id.
     #[must_use]
     pub const fn word(self) -> &'static str {
         match self {
-            Self::Taken => "taken",
-            Self::Open => "open",
-            Self::Locked => "locked",
+            Self::Reached => "reached",
+            Self::Next => "next",
+            Self::Later => "later",
         }
     }
-
-    /// Whether what this node grants is in effect right now.
-    ///
-    /// **A different question from whether it is reachable**, and the details
-    /// panel asks both: an open Mastery node is unlocked and doing nothing, and
-    /// a node whose sibling took the tier's one choice is unlocked and will
-    /// never do anything.
-    #[must_use]
-    pub const fn active(self) -> bool {
-        matches!(self, Self::Taken)
-    }
 }
 
-/// One row of either track, as the screen draws it.
+/// One station on a room's line, as the screen draws it.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Node {
+pub struct Stop {
     /// The id, which is the content file's word and the prose key.
     pub id: String,
-    /// The total that opens it.
-    pub at: u64,
-    /// Where it stands against the tower's experience.
-    pub standing: Standing,
-    /// Whether the tower has earned enough to reach it at all.
+    /// Where it stands.
+    pub walk: Walk,
+    /// How much of its deed is done, capped at what it asks.
+    pub done: u32,
+    /// What its deed asks.
+    pub needed: u32,
+    /// What reaching it opens.
+    pub opens: Vec<String>,
+}
+
+impl Stop {
+    /// What a cursor holds to mean *this* station.
     ///
-    /// **Not derivable from [`standing`](Self::standing)**, which is why it is a
-    /// field. `Locked` covers two different situations — a total not yet reached,
-    /// and a tier whose one choice a sibling already took — and they are the same
-    /// glyph on purpose, because in both cases the node cannot be had. They are
-    /// *not* the same sentence: one is *work more* and the other is *you chose
-    /// otherwise*, and a details panel that could not tell them apart would be
-    /// telling the player to go and earn something they have already earned.
-    pub unlocked: bool,
-}
-
-/// The Ley Line, in order, against what the tower has earned.
-///
-/// Every step is `Taken` or `Locked` and never `Open`: passing one *is* taking
-/// it, so there is no moment where a step is reachable and unheld.
-#[must_use]
-pub fn ley_line(world: &World) -> Vec<Node> {
-    let earned = world.resource::<Experience>().get();
-    world
-        .resource::<Progression>()
-        .ley_line()
-        .iter()
-        .map(|step| Node {
-            id: step.grants.clone(),
-            at: step.at,
-            standing: if earned >= step.at {
-                Standing::Taken
-            } else {
-                Standing::Locked
-            },
-            unlocked: earned >= step.at,
-        })
-        .collect()
-}
-
-/// Mastery's tiers, in order, each with its nodes.
-///
-/// A tier whose total has not been reached holds only `Locked` nodes. A tier
-/// that is open holds `Open` nodes until one is taken, after which that one is
-/// `Taken` and **its siblings are `Locked`** — the choice is spent, and the
-/// screen has to show that it was spent rather than that the others were never
-/// there.
-#[must_use]
-pub fn mastery(world: &World) -> Vec<Vec<Node>> {
-    let earned = world.resource::<Experience>().get();
-    let taken = world.resource::<Taken>();
-    world
-        .resource::<Progression>()
-        .mastery()
-        .iter()
-        .map(|tier| {
-            let spent = tier
-                .nodes
-                .iter()
-                .any(|node| taken.ids().iter().any(|held| held == node));
-            tier.nodes
-                .iter()
-                .map(|node| Node {
-                    id: node.clone(),
-                    at: tier.at,
-                    standing: standing_of(node, tier.at, earned, spent, taken),
-                    unlocked: earned >= tier.at,
-                })
-                .collect()
-        })
-        .collect()
-}
-
-/// Where one mastery node stands.
-fn standing_of(node: &str, at: u64, earned: u64, spent: bool, taken: &Taken) -> Standing {
-    if taken.ids().iter().any(|held| held == node) {
-        Standing::Taken
-    } else if earned >= at && !spent {
-        Standing::Open
-    } else {
-        Standing::Locked
+    /// A mastery id already names one thing across both tracks
+    /// (`Progression::check`), so the id serves. It exists so the two tracks
+    /// answer the same question the same way — see [`Node::mark`](super::Node::mark),
+    /// where the id alone is not enough.
+    #[must_use]
+    pub fn mark(&self) -> &str {
+        &self.id
     }
 }
 
-/// The next total that opens anything, and what it is.
-///
-/// **The "what's next" line, and the whole reason a locked tier is drawn at
-/// all.** A screen that showed only what you have is a receipt; §11.5 wants the
-/// player to know what the work is *for*. `None` means nothing more is authored
-/// yet, which is not the same as being finished.
+/// One room's line.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Line {
+    /// The room, from [`DOMAINS`](super::DOMAINS).
+    pub domain: &'static str,
+    /// Whether the room may be entered at all.
+    pub open: bool,
+    /// Its stations, in order.
+    pub stops: Vec<Stop>,
+}
+
+impl Line {
+    /// How far along: stations reached, of how many.
+    #[must_use]
+    pub fn reached(&self) -> (usize, usize) {
+        (
+            self.stops
+                .iter()
+                .filter(|stop| stop.walk == Walk::Reached)
+                .count(),
+            self.stops.len(),
+        )
+    }
+
+    /// The station being worked toward, if the line is not finished.
+    #[must_use]
+    pub fn next(&self) -> Option<&Stop> {
+        self.stops.iter().find(|stop| stop.walk == Walk::Next)
+    }
+}
+
+/// Every room's line, in [`DOMAINS`](super::DOMAINS) order.
 #[must_use]
-pub fn next(world: &World) -> Option<u64> {
-    let earned = world.resource::<Experience>().get();
+pub fn mastery(world: &World) -> Vec<Line> {
     let curve = world.resource::<Progression>();
-    let steps = curve.ley_line().iter().map(|step| step.at);
-    let tiers = curve.mastery().iter().map(|tier| tier.at);
-    steps.chain(tiers).filter(|at| *at > earned).min()
+    let tally = world.resource::<Tally>();
+    let reached = world.resource::<Reached>();
+    let opened = world.resource::<Opened>();
+    super::DOMAINS
+        .into_iter()
+        .map(|domain| {
+            let mut seen_next = false;
+            let stops = curve
+                .line(domain)
+                .map(|milestone| {
+                    let needed = milestone.done.times();
+                    let done = tally.count(&milestone.done.key()).min(needed);
+                    let walk = if reached.has(&milestone.id) {
+                        Walk::Reached
+                    } else if seen_next {
+                        Walk::Later
+                    } else {
+                        seen_next = true;
+                        Walk::Next
+                    };
+                    Stop {
+                        id: milestone.id.clone(),
+                        walk,
+                        done,
+                        needed,
+                        opens: milestone.opens.clone(),
+                    }
+                })
+                .collect();
+            Line {
+                domain,
+                open: opened.is_open(domain),
+                stops,
+            }
+        })
+        .collect()
+}
+
+/// How far along one room is: `(reached, of, (done, needed))` toward the next.
+///
+/// **The rail's reading**, in three numbers rather than a `Line`, because a
+/// rail box has one row to put it on. `None` for a line that is finished or a
+/// room that has no line.
+#[must_use]
+pub fn progress(world: &World, domain: &str) -> Option<Progress> {
+    mastery(world)
+        .into_iter()
+        .find(|line| line.domain == domain)?
+        .progress()
+}
+
+impl Line {
+    /// How far along this line is, or `None` once it is finished.
+    #[must_use]
+    pub fn progress(&self) -> Option<Progress> {
+        let (reached, of) = self.reached();
+        let next = self.next()?;
+        Some(Progress {
+            reached,
+            of,
+            toward: (next.done, next.needed),
+        })
+    }
+}
+
+/// How far along a room's line is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Progress {
+    /// Stations reached.
+    pub reached: usize,
+    /// Stations on the line.
+    pub of: usize,
+    /// The next station's deed: done, of needed.
+    pub toward: (u32, u32),
+}
+
+impl Progress {
+    /// How much of the next deed is done, as a percentage.
+    #[must_use]
+    pub fn percent(self) -> u32 {
+        let (done, needed) = self.toward;
+        if needed == 0 {
+            return 100;
+        }
+        (u64::from(done) * 100 / u64::from(needed)).min(100) as u32
+    }
+}
+
+/// Reach every station whose deed is done, in line order, and say so.
+///
+/// Called by [`done`](super::done) after every completion. Cheap: seven lines
+/// of a handful of stations, read against a map.
+pub fn advance(world: &mut World) {
+    let due: Vec<(String, String, Vec<String>)> = {
+        let curve = world.resource::<Progression>();
+        let tally = world.resource::<Tally>();
+        let reached = world.resource::<Reached>();
+        let mut due = Vec::new();
+        for domain in super::DOMAINS {
+            for milestone in curve.line(domain) {
+                if reached.has(&milestone.id) {
+                    continue;
+                }
+                if tally.count(&milestone.done.key()) < milestone.done.times() {
+                    break;
+                }
+                due.push((
+                    domain.to_owned(),
+                    milestone.id.clone(),
+                    milestone.opens.clone(),
+                ));
+            }
+        }
+        due
+    };
+    for (domain, id, opens) in due {
+        reach(world, &domain, &id, &opens);
+    }
+}
+
+/// Open what every station already reached opens, without saying so.
+///
+/// **[`advance`] reaches a station once, ever** — it skips anything already in
+/// [`Reached`] — so what a station opens is applied on exactly one tick in the
+/// life of a save. A document whose station gained an `opens` after it was
+/// written, or one written by a build that applied it wrongly, comes back with
+/// the thing still shut and no deed able to open it: the tally is long past what
+/// the station asks, so `advance` walks straight past it for ever.
+///
+/// [`ley::caught_up`](super::ley::caught_up)'s twin, and silent for its reason.
+pub(crate) fn caught_up(world: &mut World) {
+    let opens: Vec<String> = {
+        let curve = world.resource::<Progression>();
+        let reached = world.resource::<Reached>();
+        super::DOMAINS
+            .into_iter()
+            .flat_map(|domain| curve.line(domain))
+            .filter(|milestone| reached.has(&milestone.id))
+            .flat_map(|milestone| milestone.opens.iter().cloned())
+            .collect()
+    };
+    for key in opens {
+        open(world, &key);
+    }
+}
+
+/// Mark `id` reached, say so, and open what it opens.
+///
+/// **Two records, not one.** The station is one fact and what it opened is
+/// another, and only the second is conditional — see the module header.
+pub(crate) fn reach(world: &mut World, domain: &str, id: &str, opens: &[String]) {
+    world.resource_mut::<Reached>().hold(id);
+    let sentence = world
+        .resource::<Prose>()
+        .line(&format!("mastery_{id}"), &[]);
+    let message = world.resource::<Prose>().line(
+        "mastery_reached",
+        &[("name", domain), ("detail", &sentence)],
+    );
+    world
+        .resource_mut::<Scrollback>()
+        .records_mut()
+        .push(RecordKind::Completion)
+        .text(FieldName::Name, id)
+        .text(FieldName::Source, domain)
+        .text(FieldName::Message, &message)
+        .role(Role::Success)
+        .finish();
+
+    opening(world, opens);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::Sim;
+    use crate::tower::Work;
 
-    /// A tower that has earned `total`, by the only door that grants any.
-    fn earned(total: u64) -> Sim {
-        let mut sim = Sim::new(1);
-        super::super::credit(sim.world_mut(), total);
-        sim
+    fn said(sim: &Sim) -> Vec<String> {
+        sim.scrollback()
+            .records()
+            .iter()
+            .filter_map(|record| record.field(FieldName::Message))
+            .filter_map(|value| match value {
+                orbs_render::Value::Text(text) => Some(text.to_owned()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn line(sim: &Sim, domain: &str) -> Line {
+        mastery(sim.world())
+            .into_iter()
+            .find(|line| line.domain == domain)
+            .expect("no such line")
     }
 
     #[test]
-    fn a_cold_tower_has_taken_nothing_and_is_told_what_is_next() {
+    fn a_cold_tower_has_seven_lines_and_is_working_toward_the_first_station_of_each() {
         let sim = Sim::new(1);
-        let line = ley_line(sim.world());
-        // **Every step locked, and the first one is what is next.** The count is
-        // deliberately not asserted: the ley line grows as grants are authored,
-        // and what has to hold on a cold tower is that *none* of them is taken.
-        assert!(!line.is_empty(), "the ley line has no steps at all");
-        assert!(
-            line.iter().all(|step| step.standing == Standing::Locked),
-            "a cold tower has already passed a step: {line:?}",
-        );
-        assert_eq!(line[0].at, 16);
-        assert_eq!(next(sim.world()), Some(16), "nothing to work toward");
-    }
-
-    #[test]
-    fn passing_a_step_is_taking_it() {
-        // The Ley Line has no `Open`: there is nothing to decide, so a step is
-        // held the instant it is passed. That asymmetry with Mastery is the
-        // whole difference between the two tracks.
-        let sim = earned(16);
-        assert_eq!(ley_line(sim.world())[0].standing, Standing::Taken);
-        assert_eq!(
-            next(sim.world()),
-            Some(24),
-            "the next thing is the first mastery tier",
-        );
-    }
-
-    #[test]
-    fn a_tier_opens_all_at_once_and_its_nodes_wait_to_be_chosen() {
-        let below = earned(23);
-        let tiers = mastery(below.world());
-        assert!(
-            tiers[0]
-                .iter()
-                .all(|node| node.standing == Standing::Locked),
-            "a tier opened early: {tiers:?}",
-        );
-
-        let at = earned(24);
-        let tiers = mastery(at.world());
-        assert!(
-            tiers[0].iter().all(|node| node.standing == Standing::Open),
-            "the tier did not open: {tiers:?}",
-        );
-        assert!(
-            tiers[1]
-                .iter()
-                .all(|node| node.standing == Standing::Locked),
-            "the second tier opened with the first: {tiers:?}",
-        );
-    }
-
-    #[test]
-    fn taking_one_locks_the_rest_of_its_tier() {
-        // **Nothing in the game can reach this state yet**, which is exactly why
-        // it is worth pinning now: the rule is what makes a tier a *choice*, and
-        // the first real node will be checked against it rather than defining it.
-        let mut sim = earned(24);
-        let first = sim.world().resource::<Progression>().mastery()[0].nodes[0].clone();
-        sim.world_mut()
-            .resource_mut::<Taken>()
-            .0
-            .push(first.clone());
-
-        let tier = mastery(sim.world()).remove(0);
-        for node in &tier {
-            let expected = if node.id == first {
-                Standing::Taken
-            } else {
-                Standing::Locked
-            };
-            assert_eq!(node.standing, expected, "{}", node.id);
+        let lines = mastery(sim.world());
+        assert_eq!(lines.len(), 7);
+        for line in &lines {
+            assert!(!line.stops.is_empty(), "the {} has no line", line.domain);
+            assert_eq!(line.reached().0, 0, "the {} started ahead", line.domain);
+            assert_eq!(line.stops[0].walk, Walk::Next, "{}", line.domain);
+            assert!(
+                line.stops[1..].iter().all(|stop| stop.walk == Walk::Later),
+                "{}",
+                line.domain,
+            );
+            assert!(line.open, "{} is shut in an open tower", line.domain);
         }
     }
 
     #[test]
-    fn unlocked_and_active_are_two_different_questions() {
-        // **The pair the details panel asks**, and the reason `unlocked` is a
-        // field rather than a reading of `standing`: `Locked` covers both a total
-        // not yet reached and a tier whose one choice a sibling already took.
-        // They draw the same on purpose — neither can be had — but one says
-        // *work more* and the other says *you chose otherwise*, and a panel that
-        // could not tell them apart would send a player to earn something they
-        // have already earned.
-        let mut sim = earned(24);
-        let below = mastery(sim.world()).remove(1);
-        assert!(!below[0].unlocked, "a tier at 40 was reachable at 24");
-        assert!(!below[0].standing.active());
-
-        let open = mastery(sim.world()).remove(0);
-        assert!(open[0].unlocked, "an open tier was not unlocked");
-        assert!(!open[0].standing.active(), "an unchosen node was in effect");
-
-        // ...and once a sibling takes the tier, the other stays unlocked and
-        // will never be active. That is the state a single word could not carry.
-        let first = sim.world().resource::<Progression>().mastery()[0].nodes[0].clone();
-        sim.world_mut().resource_mut::<Taken>().0.push(first);
-        let spent = mastery(sim.world()).remove(0);
-        assert!(spent[0].standing.active(), "the taken one is not in effect");
-        assert!(spent[1].unlocked, "the sibling stopped being unlocked");
-        assert!(!spent[1].standing.active());
-
-        // The Ley Line answers both at once: passing a step *is* taking it.
-        let step = &ley_line(sim.world())[0];
-        assert!(step.unlocked && step.standing.active());
+    fn a_deed_done_reaches_the_station_and_says_so() {
+        let mut sim = Sim::new(1);
+        super::super::done(
+            sim.world_mut(),
+            &Work::made("alembic", "clarity", true, false),
+            8,
+        );
+        let laboratory = line(&sim, "laboratory");
+        assert_eq!(laboratory.stops[0].walk, Walk::Reached);
+        assert_eq!(laboratory.stops[1].walk, Walk::Next);
+        assert_eq!(laboratory.stops[1].done, 1, "the potion was not counted");
+        assert!(
+            said(&sim).iter().any(|line| line.contains("laboratory")),
+            "reaching was not said: {:?}",
+            said(&sim),
+        );
     }
 
     #[test]
-    fn every_standing_says_a_word_of_its_own() {
-        // §14: the glyph carries the state for anyone who can see it, and this
-        // carries it for anyone who cannot. Three states, three words.
-        let words: Vec<&str> = [Standing::Taken, Standing::Open, Standing::Locked]
+    fn a_line_is_walked_in_order_and_a_late_deed_reaches_two_at_once() {
+        // Five potions before the first clarity: nothing is reached until the
+        // clarity lands, and then both stations do, in order, each said.
+        let mut sim = Sim::new(1);
+        for _ in 0..5 {
+            super::super::done(
+                sim.world_mut(),
+                &Work::made("alembic", "haste", true, false),
+                8,
+            );
+        }
+        assert_eq!(
+            line(&sim, "laboratory").reached().0,
+            0,
+            "a station was skipped to"
+        );
+
+        super::super::done(
+            sim.world_mut(),
+            &Work::made("alembic", "clarity", true, false),
+            8,
+        );
+        let laboratory = line(&sim, "laboratory");
+        assert_eq!(
+            laboratory.reached().0,
+            2,
+            "the second station did not follow"
+        );
+        assert_eq!(
+            sim.world().resource::<Reached>().ids(),
+            ["laboratory_1", "laboratory_2"],
+        );
+    }
+
+    #[test]
+    fn what_a_station_opens_is_said_only_if_it_was_shut() {
+        // `Sim::new` is an open tower, so the archive is open already and
+        // reaching the station that opens it must not announce it.
+        let mut sim = Sim::new(1);
+        super::super::done(
+            sim.world_mut(),
+            &Work::made("alembic", "clarity", true, false),
+            8,
+        );
+        assert!(
+            !said(&sim).iter().any(|line| line.contains("archive")),
+            "an open room was announced as opening: {:?}",
+            said(&sim),
+        );
+    }
+
+    #[test]
+    fn a_station_is_never_reached_twice() {
+        let mut sim = Sim::new(1);
+        for _ in 0..3 {
+            super::super::done(
+                sim.world_mut(),
+                &Work::made("alembic", "clarity", true, false),
+                8,
+            );
+        }
+        let count = said(&sim)
+            .iter()
+            .filter(|line| line.contains("laboratory"))
+            .count();
+        assert_eq!(count, 1, "reaching was said {count} times");
+    }
+
+    #[test]
+    fn progress_reads_the_next_deed_as_a_percentage() {
+        let mut sim = Sim::new(1);
+        super::super::done(
+            sim.world_mut(),
+            &Work::made("alembic", "clarity", true, false),
+            8,
+        );
+        for _ in 0..2 {
+            super::super::done(
+                sim.world_mut(),
+                &Work::made("alembic", "haste", true, false),
+                8,
+            );
+        }
+        let laboratory = progress(sim.world(), "laboratory").expect("the line is finished");
+        assert_eq!(laboratory.reached, 1);
+        assert_eq!(laboratory.toward, (3, 5));
+        assert_eq!(laboratory.percent(), 60);
+        assert!(progress(sim.world(), "kitchen").is_none());
+    }
+
+    #[test]
+    fn every_walk_says_a_word_of_its_own() {
+        let words: Vec<&str> = [Walk::Reached, Walk::Next, Walk::Later]
             .into_iter()
-            .map(Standing::word)
+            .map(Walk::word)
             .collect();
-        assert_eq!(words, ["taken", "open", "locked"]);
+        assert_eq!(words, ["reached", "next", "later"]);
     }
 }

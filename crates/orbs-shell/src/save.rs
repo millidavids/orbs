@@ -19,7 +19,7 @@
 //! one refused. That makes silence the wrong default in the one place it would
 //! otherwise be tempting: a write that fails every minute for an hour, on a
 //! read-only Steam directory, would cost a whole session and report nothing.
-//! [`write`] returns the error and the frontend says it once.
+//! [`write()`] returns the error and the frontend says it once.
 
 use std::io;
 use std::path::{Path, PathBuf};

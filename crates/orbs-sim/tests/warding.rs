@@ -20,6 +20,10 @@ use orbs_sim::Sim;
 const STATIONS: [&str; 3] = ["wellspring", "conduit", "barrier"];
 
 /// The shipped solver's name.
+///
+/// **Gated with the tests that use it**, which are the debug-word ones: in a
+/// release build those are gone and this reads as dead rather than deliberate.
+#[cfg(debug_assertions)]
 const SOLVER: &str = "holding";
 
 fn run(sim: &mut Sim, line: &str) {
@@ -431,6 +435,7 @@ fn neglect_musters_a_taller_course_than_a_kept_tower_does() {
     );
 }
 
+#[cfg(debug_assertions)]
 #[test]
 fn the_barrier_wears_down_and_a_finished_course_puts_it_back() {
     let mut sim = in_the_sanctum(1);

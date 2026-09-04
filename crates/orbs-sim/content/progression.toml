@@ -2,16 +2,28 @@
 #
 # The whole progression curve in one file, so the balance harness sweeps one
 # thing rather than hunting numbers through Rust. Everything here reaches a
-# decision — a weight changes what a run earns and a threshold gates a verb — so
-# unlike `materials.toml` this is **not hot-reloadable**: it loads once with
-# `recipes.toml` and `spells.toml`, because swapping it mid-session would break
-# replay from `(seed, submissions)`.
+# decision — a weight changes what a run earns, a threshold gates a verb, a deed
+# opens a room — so unlike `materials.toml` this is **not hot-reloadable**: it
+# loads once with `recipes.toml` and `spells.toml`, because swapping it
+# mid-session would break replay from `(seed, submissions)`.
 #
-# ## Experience accumulates and is never spent
+# ## Two tracks
 #
-# It only ever rises, and an upgrade opens when the total passes its number and
-# stays open. That is why it is a `u64` and why a save carries one value: there
-# is no balance to track and nothing to regret having spent.
+# **The Ley Line is the tower's.** One line on total experience. A station is a
+# *step* (`grants`: passing it is the grant, no choice) or a *fork* (`nodes`:
+# take one). Experience accumulates and is never spent — it only ever rises, and
+# a station passed stays passed — which is why a save carries one `u64` and a
+# list of taken ids and nothing to regret.
+#
+# **Mastery is per domain.** Seven straight lines, one per room, each a list of
+# stations with a `done` on it — brew a clarity, walk the stacks, close a figure.
+# No choices anywhere: a station is reached when its deed is done and the one
+# before it is reached, and reaching it *is* the grant.
+#
+# **Both may `opens` something** — a room, a recipe, a charm, or the wall — and
+# that is how the tower grows: the laboratory is the whole tower at first, and
+# brewing a clarity opens the archive. §19 records that the two names were
+# attached the other way round when the weave shipped, and why they swapped.
 
 # ---------------------------------------------------------------------------
 # What a completed run is worth, by the instrument that did it.
@@ -30,8 +42,8 @@ balneum_mariae = 2
 flask_and_rod = 4
 alembic = 8
 
-# The archive, which has two instruments now. A maze is minutes of walking
-# against the mortar's eight ticks, so it pays what the flask does.
+# The archive, which has two instruments. A maze is minutes of walking against
+# the mortar's eight ticks, so it pays what the flask does.
 #
 # **The stacks is the walking and the lectern is the assembly**, and they were
 # one fixture until the maze moved to its own. Both keep exactly the 4 the
@@ -57,13 +69,6 @@ lectern = 4
 # beside a full brewing loop instead of instead of one — see DESIGN.md §19,
 # which records the pricing this reverses and why.
 #
-# **The first draft halved the yield per press past par and it is withdrawn.** At
-# 23 presses that lands on a floor of 1, while the walk already pays several
-# times the ticks — so the penalty double-counted and drove automated scrying
-# below the maze. The tick cost does the work; `execute::scry::yield_of` only
-# rewards playing well, at three quarters beyond par — and par is 6, measured
-# against the 1296-code space rather than the 360 it was set against.
-#
 # The oculus is deliberately absent. It carries an `Operation` so `scry` is
 # scoped to this room, but opening a reading is not work and pays nothing —
 # `worth` returns 0 for a name this table does not price, which is the same
@@ -75,25 +80,11 @@ prism = 8
 #
 # It is the only entry in this table that scales, and it has to: a course is
 # `2^n - 1` hauls, so a seven-ward one is sixteen times the work of a three-ward
-# one and a flat number would pay the same for both. The lens has the precedent
-# in `yield_of`, which scales its award against presses spent; this scales
-# against the size of the job instead, because the size is not the player's
-# fault — a tall course is what a neglected tower musters.
-#
-# **The rate this gives is flat at 0.125 and then falls**, which is a property of
-# the arithmetic rather than a coincidence: a course of `n` costs `2^n` ticks and
-# pays `n - 2`, so three wards and four wards both come out at an eighth, and
-# every taller course pays less. `orbs-balance` reads **0.1249 on every seed** —
-# the flattest column in the table.
-#
-# **Just under clarity's 0.140, and deliberately.** It was 2 and measured 0.2497,
-# which is scrying's tier — and scrying earns that by being a deduction with
-# nothing else to show for it, where a finished course *also* puts the walls
-# back. A domain paying twice should not also pay the best rate in the tower, and
-# neither half is worth much if the other is free.
-#
-# A *bound* solver is much lower again, because §8's interpreter spends a tick on
-# every line rather than only on the hauls.
+# one and a flat number would pay the same for both. **The rate this gives is
+# flat at 0.125 and then falls**: a course of `n` costs `2^n` ticks and pays
+# `n - 2`, so three wards and four wards both come out at an eighth. Just under
+# clarity's 0.140, and deliberately — a finished course *also* puts the walls
+# back, and a domain paying twice should not also pay the best rate.
 pylon = 1
 
 # The forge, and it is the *lowest* rate in the tower on purpose.
@@ -109,105 +100,331 @@ pylon = 1
 lattice = 1
 
 # ---------------------------------------------------------------------------
-# THE LEY LINE - the straight path.
+# THE LEY LINE — the tower's line.
 #
-# Predefined, in order, with no choice anywhere in it: a step opens when the
-# total passes `at`, and passing it *is* the grant. Experience is never spent
-# (see above), so there is nothing to decide and nothing to save up for.
+# Stations in ascending order of total experience. A **step** has `grants` and
+# passing it is the grant. A **fork** has `nodes`, and `take` chooses one of
+# them — the tier opening costs nothing, taking a node closes it, and experience
+# is still never spent. Either may `opens` something.
 #
-# `grants` is checked against a closed set at load. A word nothing implements
-# would give the step nothing, which reads exactly like a step authored as a
-# marker - and the track would stop half way up with this file correct on its
-# face. Today the set is one word.
+# `grants` is a closed set checked at load, and every fork node has to parse as
+# a grant (`steps_<n>`, `satchel_1`, `cursors_1`): a word nothing implements
+# would give the station nothing, which reads exactly like a station authored as
+# a marker — and there are no markers on this line. A grant lands here only once
+# the code that reads it exists.
+#
+# **Every fork holds three lanes** — provision, war, craft — one node each, so a
+# choice is always between kinds of play (§19), and `check` refuses a fork with
+# two nodes in one lane. The lane is derived from the grant (`tower::grant`),
+# never authored here. Provision is the tower's supplies (fuel, the pool, what a
+# siege pays, what a charm costs); war is the wall and the dice; craft is the
+# orb — and never an instrument, because that is the forge's to sell.
+#
+# **Tiers add.** `fuel_1` and `fuel_2` taken together are three tiers of fuel,
+# which is `steps_<n>`'s rule everywhere: reading them as a maximum would refund
+# the second choice in silence.
+#
+# **The stations grow by about half each**, so `[earns]`'s doubling feel carries
+# onto the line; three automated rooms stack to ~0.5 experience a tick, which is
+# ~500 an hour early and ~1,500 late. Every `at` past 56 is a first pass and
+# `orbs-balance` decides it. The line runs to concentration 8 — §11.5's *"~8 by
+# the soft ending"*.
 #
 # **16 is one clarity**, arrived at rather than picked: grind 1, digest 2, grind
 # 1, mix 4, distil 8. The player does the whole loop by hand once, and the reward
-# is not having to do it again - which is pillar 3's promise landing as a
-# mechanic rather than as a premise.
-#
-# §11.5's "first bound script in 30-45 minutes" is amended by this (§19): one
-# clarity is about two minutes, and automation arrives early.
-#
-# One step, because there is nothing yet for a second to grant. `weave` draws
-# this list, so a step added here appears on the screen without any code.
+# is not having to do it again — which is pillar 3's promise landing as a
+# mechanic rather than as a premise. It also opens the grimoire: a book appears
+# when there is something to write in it.
 # ---------------------------------------------------------------------------
 [[ley_line]]
 at = 16
 grants = "concentration"
+opens = ["domain:grimoire"]
 
-# **The second step, and the one the note above was waiting for.** §11.5's
-# resource table has always named this resource's producers as "Passive
-# regeneration, Ley Line steps"; the regeneration half is struck (§14 - a
-# per-tick regen would mean more typing produces more, inverting the economy for
-# exactly the players the screen-reader mode serves), so a ley step is the whole
-# of what raises it.
-#
+# The first fork, and the first choice in the game: a fifth more fuel, an edge
+# on every roll at a wall the player has not seen yet, or a second instruction a
+# tick. The craft node is the menagerie's whole reason (§19).
+[[ley_line]]
+at = 24
+nodes = ["fuel_1", "edge_1", "steps_1"]
+
+# The satchel is §8's channel — a shape you could not write at all — and it
+# moved here from 24 when the lanes arrived (§19).
+[[ley_line]]
+at = 40
+nodes = ["pool_1", "floor_1", "satchel_1"]
+
 # **56 is two clarities past the first step**, which puts it after a player has
 # automated the laboratory and before they have any reason to stand at a wall.
-# It is a first-pass number: `orbs-balance` decides it, and the sweep that
-# settles `d6 1 / d8 2 / d20 5` settles this with it.
-#
-# Adding it needed one code change - "quintessence" into `GRANTS` - because a
-# `grants` outside that closed set fails the load rather than granting nothing.
+# It opens the forge, because the forge spends the pool this step grants.
 [[ley_line]]
 at = 56
 grants = "quintessence"
+opens = ["domain:forge"]
 
-# ---------------------------------------------------------------------------
-# MASTERY - the branching tree.
-#
-# A tier opens when the total passes `at`, and gives exactly **one** of its
-# nodes. That is what makes it a choice rather than a schedule, and it is why
-# experience can stay unspendable: the tier opening is the grant, and which node
-# you take is the decision.
-#
-# **Three real nodes now, and the `tbi` ones are still markers.** `tbi` is
-# authored, drawn and refused - there is nothing behind it. `steps_<n>`,
-# `satchel_1` and `cursors_1` all grant something, and `mastery::granted` is the
-# one parser that says which.
-#
-# **Each tier holds one grant of speed and one of §8's channel**, which is the
-# choice the tree exists to make: a second instruction a tick makes everything
-# you already write faster, and the satchel makes a shape you could not write at
-# all. Putting both halves of the channel on one tier would have made them
-# mutually exclusive - a tier gives exactly one node - so the queue opens at 24
-# and the second cursor at 40.
-#
-# **`cursors_1` sells ergonomics, not capability, and that is said out loud.**
-# Two spells already run at once: `invoke` from inside a spell inserts a second
-# `Running` and the caller does not block, ungated, at concentration 0. What
-# `alongside` adds is both halves of a pipeline in one file. It is a real thing
-# to want and it is not a new power, and a tree that implied otherwise would be
-# selling something the player already has.
-#
-# Ids are decisions, not prose - they are what a taken node is stored as, and
-# what its sentence in `prose.toml` is keyed by. `check` refuses a duplicate,
-# because two entries with one id make taking either take both - and it now also
-# refuses an id that *reads* as a grant and does not parse as one, because a
-# `satchel1` would be a marker wearing a real node's name.
-# ---------------------------------------------------------------------------
-[[mastery]]
-at = 24
-nodes = ["steps_1", "satchel_1", "tbi_b"]
+[[ley_line]]
+at = 96
+grants = "concentration"
 
-[[mastery]]
-at = 40
-nodes = ["steps_2", "cursors_1", "tbi_d"]
+[[ley_line]]
+at = 160
+nodes = ["escrow_1", "garrison_1", "steps_2"]
+
+[[ley_line]]
+at = 256
+grants = "concentration"
+
+# The second cursor sells ergonomics rather than capability — two spells already
+# run at once, ungated — which is why it sits this far along.
+[[ley_line]]
+at = 400
+nodes = ["fuel_2", "mend_1", "cursors_1"]
+
+[[ley_line]]
+at = 640
+grants = "concentration"
+
+# `haste_1` is struck invariant 3 landing "as a thing you buy" (§19): a run a
+# spell issued finishes a tenth sooner. The orb's speed, never the tool's.
+[[ley_line]]
+at = 1000
+nodes = ["pool_2", "vigilance_1", "haste_1"]
+
+[[ley_line]]
+at = 1600
+grants = "concentration"
+
+[[ley_line]]
+at = 2500
+nodes = ["thrift_1", "edge_2", "steps_3"]
+
+[[ley_line]]
+at = 4000
+grants = "concentration"
+
+[[ley_line]]
+at = 6400
+nodes = ["escrow_2", "floor_2", "haste_2"]
+
+[[ley_line]]
+at = 8000
+grants = "concentration"
+
+# Concentration 8: the soft ending, and the last authored station.
+[[ley_line]]
+at = 10000
+grants = "concentration"
 
 # ---------------------------------------------------------------------------
 # `steps_<n>` is a contract, not a label.
 #
 # A step of a spell costs a tick, so the script budget *is* the speed of every
-# piece of automation in the game - and `spell::budget` reads these ids to know
+# piece of automation in the game — and `spell::budget` reads these ids to know
 # what it is. The number after the underscore is how many extra steps a tick the
 # node grants, parsed from the id itself rather than from a second table that
 # could disagree with the one `weave` draws.
 #
-# **Still markers, like everything else here.** Nothing can be taken in this
-# version, so the budget is 1 and stays 1; what exists is the wiring and the
-# shape on screen. Making the tree takeable is the weave phase's item.
-#
-# **Additive across tiers.** A tier grants one of its siblings, so a player who
-# takes the step node in both tiers has spent both choices on speed and gets
+# **Additive across forks.** A fork grants one of its siblings, so a player who
+# takes the step node at both forks has spent both choices on speed and gets
 # 1 + 1 + 2 = 4. Reading them as a maximum would refund the second silently.
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# MASTERY — seven lines, one per room.
+#
+# A station is `domain`, `id`, `done` and (optionally) `opens`. `done` is one of:
+#
+#   done = "clarity"                     make this once, at any instrument
+#   done = { potions = 5 }               that many potions, of any kind
+#   done = { scrolls = 1 }               that many scrolls assembled
+#   done = { at = "stacks", times = 3 }  runs finished at an instrument
+#   done = { event = "figure" }          a figure closed, a siege settled or
+#                                        won, a spell bound, a secret learned
+#
+# Stations are reached in the file's order within a line: a player who has
+# brewed forty potions before their first clarity reaches every laboratory
+# station at once when the clarity lands, and each is said.
+#
+# **Ids are decisions, not prose** — they are what a reached station is stored
+# as, and what its sentence in `prose.toml` (`mastery_<id>`) is keyed by. An id
+# names one thing across both tracks.
+#
+# **Every `opens` is thematic, and this is the reveal order** (§19): the
+# laboratory is open at start; a clarity of mind opens the old shelves; the
+# stacks hold a scroll on far-seeing; the lens shows what waits beyond the wall;
+# a warding potion and the wall it belongs on; the forge opens with the pool it
+# spends. Gating the laboratory's own recipes is progressive reveal inside the
+# room — and `haste`, the fastest experience in the game (§19), now arrives
+# after the player has automated clarity.
+#
+# Every `times` is a first pass. `orbs-balance` decides them.
+# ---------------------------------------------------------------------------
+
+# The laboratory. Open at start, knowing clarity's whole chain.
+[[mastery]]
+domain = "laboratory"
+id = "laboratory_1"
+done = "clarity"
+opens = ["domain:archive"]
+
+[[mastery]]
+domain = "laboratory"
+id = "laboratory_2"
+done = { potions = 5 }
+opens = ["recipe:warding"]
+
+[[mastery]]
+domain = "laboratory"
+id = "laboratory_3"
+done = "warding"
+opens = ["domain:sanctum"]
+
+[[mastery]]
+domain = "laboratory"
+id = "laboratory_4"
+done = { potions = 15 }
+opens = ["recipe:insight"]
+
+[[mastery]]
+domain = "laboratory"
+id = "laboratory_5"
+done = "insight"
+opens = ["recipe:haste"]
+
+[[mastery]]
+domain = "laboratory"
+id = "laboratory_6"
+done = { potions = 40 }
+opens = ["recipe:stillness"]
+
+# The archive. Its first walk is what shows the player there is a lens.
+[[mastery]]
+domain = "archive"
+id = "archive_1"
+done = { at = "stacks" }
+opens = ["domain:lens"]
+
+[[mastery]]
+domain = "archive"
+id = "archive_2"
+done = { scrolls = 1 }
+opens = ["recipe:quickening-scroll"]
+
+[[mastery]]
+domain = "archive"
+id = "archive_3"
+done = { at = "stacks", times = 5 }
+opens = ["recipe:verdant-scroll"]
+
+# **A charm that blesses a room opens with that room's mastery**, not the
+# forge's: the forge can bless the stacks once the player has read enough of
+# them for it to matter.
+[[mastery]]
+domain = "archive"
+id = "archive_4"
+done = { scrolls = 3 }
+opens = ["charm:bountiful"]
+
+[[mastery]]
+domain = "archive"
+id = "archive_5"
+done = { at = "stacks", times = 15 }
+
+# The lens. What it shows beyond the wall is what makes a menagerie worth
+# summoning, and a player who has learned to see sabotage may turn it aside.
+[[mastery]]
+domain = "lens"
+id = "lens_1"
+done = { at = "prism" }
+opens = ["domain:menagerie"]
+
+[[mastery]]
+domain = "lens"
+id = "lens_2"
+done = { at = "prism", times = 5 }
+opens = ["charm:shielded"]
+
+[[mastery]]
+domain = "lens"
+id = "lens_3"
+done = { event = "secret" }
+
+[[mastery]]
+domain = "lens"
+id = "lens_4"
+done = { at = "prism", times = 15 }
+
+# The grimoire. Its deeds are spells bound; what they open is still a question
+# (§19) — the line is drawn and said, and opens nothing tangible yet.
+[[mastery]]
+domain = "grimoire"
+id = "grimoire_1"
+done = { event = "bound" }
+
+[[mastery]]
+domain = "grimoire"
+id = "grimoire_2"
+done = { event = "bound", times = 5 }
+
+[[mastery]]
+domain = "grimoire"
+id = "grimoire_3"
+done = { event = "bound", times = 20 }
+
+# The sanctum. A mustered course is a wall worth attacking, which is what arms
+# the siege — a siege against a tower with no wall is not a decision.
+[[mastery]]
+domain = "sanctum"
+id = "sanctum_1"
+done = { at = "pylon" }
+opens = ["siege"]
+
+[[mastery]]
+domain = "sanctum"
+id = "sanctum_2"
+done = { at = "pylon", times = 5 }
+opens = ["charm:whetted"]
+
+[[mastery]]
+domain = "sanctum"
+id = "sanctum_3"
+done = { event = "siege" }
+
+[[mastery]]
+domain = "sanctum"
+id = "sanctum_4"
+done = { event = "siege_won", times = 5 }
+
+# The menagerie. A figure closed is a chant sung to its end.
+[[mastery]]
+domain = "menagerie"
+id = "menagerie_1"
+done = { event = "figure" }
+
+[[mastery]]
+domain = "menagerie"
+id = "menagerie_2"
+done = { event = "figure", times = 5 }
+
+[[mastery]]
+domain = "menagerie"
+id = "menagerie_3"
+done = { event = "figure", times = 20 }
+
+# The forge. Opens at 56 knowing `hurried`, its flagship; the rest of its
+# charms come with its own line, in the order a player would want them.
+[[mastery]]
+domain = "forge"
+id = "forge_1"
+done = { at = "lattice" }
+opens = ["charm:fruitful"]
+
+[[mastery]]
+domain = "forge"
+id = "forge_2"
+done = { at = "lattice", times = 5 }
+
+[[mastery]]
+domain = "forge"
+id = "forge_3"
+done = { at = "lattice", times = 15 }

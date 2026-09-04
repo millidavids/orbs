@@ -115,7 +115,7 @@ fn addressed(world: &World, path: &str) -> Option<(Entity, String)> {
 /// Where the thing called `named` is, among everything within reach.
 ///
 /// The *place*, not the node: taking a unit goes through
-/// [`tower::take`](crate::tower::take), which is keyed by where a thing is
+/// [`tower::take`], which is keyed by where a thing is
 /// standing. [`reachable`] decides what within reach means, so this obeys §10.1's
 /// search order and its lock without a second opinion about either.
 pub(super) fn holder(world: &World, cwd: Entity, named: &str) -> Option<Entity> {
@@ -458,7 +458,7 @@ fn start(world: &mut World, at: Entity, name: &str, verb: Verb) {
     // indistinguishable from "you loaded the wrong thing".
     let Some((ticks, heat)) = world
         .resource::<Recipes>()
-        .matching(name, &holding, world.resource::<tower::Learned>())
+        .matching(name, &holding, &tower::known(world))
         .map(|recipe| (recipe.ticks, recipe.heat))
     else {
         let key = if holding.is_empty() {

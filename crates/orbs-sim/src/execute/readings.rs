@@ -42,7 +42,7 @@ pub(super) fn clear(world: &mut World, node: Entity) {
 /// the picture both follow the room, so neither can outrun the other by
 /// following the player out of it. A publisher that runs on a *tick* — a bound
 /// solver's — must take the entity instead, which is what
-/// [`beside`](self::beside) is for.
+/// [`beside`] is for.
 pub(super) fn fixture(world: &World, verb: Verb) -> Option<Entity> {
     let cwd = world.resource::<Cwd>().0;
     beside(world, cwd, verb)

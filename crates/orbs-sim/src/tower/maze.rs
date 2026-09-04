@@ -573,7 +573,8 @@ impl Maze {
 ///
 /// # Why this lives here rather than in `crate::save`
 ///
-/// The same argument [`Ward::to_save`](crate::tower::Ward::to_save) makes: the
+/// The same argument `Ward::to_save` makes — it is private, so this names it
+/// rather than links it: the
 /// fields are private, and putting the conversion beside them means a new field
 /// breaks the build *here*, in the file being edited.
 ///

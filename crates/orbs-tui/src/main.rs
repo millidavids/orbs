@@ -128,7 +128,7 @@ fn play(seed: u64) -> std::io::Result<()> {
             resumed
         }
         orbs_shell::Opened::Unreadable => {
-            let mut fresh = Sim::new(seed);
+            let mut fresh = orbs_shell::fresh(seed, true);
             if let Some(name) = wizard() {
                 fresh.rename(&name);
             }
@@ -136,7 +136,7 @@ fn play(seed: u64) -> std::io::Result<()> {
             fresh
         }
         orbs_shell::Opened::New => {
-            let mut fresh = Sim::new(seed);
+            let mut fresh = orbs_shell::fresh(seed, true);
             if let Some(name) = wizard() {
                 fresh.rename(&name);
             }

@@ -48,5 +48,6 @@ mod presentation;
 mod routing;
 mod sanctum;
 mod satchel;
+mod sealed;
 mod session;
 mod spells;

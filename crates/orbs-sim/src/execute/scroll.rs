@@ -10,7 +10,7 @@
 //! advance — *"22 is a number to defend, not a budget to spend: the next word
 //! added here needs an argument of this shape"*. Spending a scroll is *setting a
 //! thing going*, which is what `wield` already means, so the verb learned a
-//! second argument kind ([`NounKind::Workable`](crate::parser::NounKind::Workable))
+//! second argument kind ([`NounKind::Workable`])
 //! instead of the tower gaining a twenty-third word.
 //!
 //! # No prose here

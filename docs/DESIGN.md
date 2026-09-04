@@ -443,7 +443,7 @@ hard to push — but it arrives organically rather than through a menu button.
 |---|---|---|
 | **Production heat** — the more you brew, ward, and summon, the more the realm notices | Phase 1 | Yes |
 | **Scrying depth** — looking hard into hostile feeds draws attention | Phase 0 (scrying is in the slice) | Yes |
-| **Infiltration** — connecting to enemy hosts, scaling with time and interference | Phase 11 | **No — cut-line item 3** |
+| **Infiltration** — connecting to enemy hosts, scaling with time and interference | Phase 12 | **No — cut-line item 3** |
 
 Draft 5 rested this entire loop on infiltration alone, which was both a phase
 late (sieges land in Phase 8) and a cut-line dependency. Production heat and
@@ -1262,7 +1262,7 @@ what it cost to find.
 **Archive is bespoke, not derived** — it gates all discovery, is played most, and
 stales fastest. Budget fallback: decipherment becomes mostly a resource sink with
 occasional authored set-pieces. **That fallback is the plan of record until Phase
-11a**: the archive's minigame was considered for the head of Phase 1 and
+12a**: the archive's minigame was considered for the head of Phase 1 and
 deliberately left where discovery is, because its own "see it" line — gaining a
 verb — *is* the discovery loop, and because what the puzzle should feel like
 depends on what it unlocks (§19).
@@ -1403,7 +1403,7 @@ file a recipe lives in, and a material's **state** decides which recipes can fir
 sequence. That is what gives the puzzle repeat-tolerance.
 
 **Capacity 1 is the form that ships.** §11.5 reaches capacity 4 at ~10 h and
-capacity is researched, which is Phase 11a — so for Phases 1 and 2 the four stages
+capacity is researched, which is Phase 12a — so for Phases 1 and 2 the four stages
 are sequential and the decision is *when to light the athanor* and whether both
 heated stages fit one window. Capacity 4 is where the laboratory becomes a
 pipeline, with the mortar grinding the next brew while the alembic distils this
@@ -1413,7 +1413,7 @@ one.
 generic-engine-first; that is the classic route to the wrong abstraction, because
 the generalisation axis is only knowable from the *second* consumer. Instead:
 build each bespoke domain concretely and cheaply, and schedule an explicit,
-budgeted **extraction task in Phase 11** when the derived domains arrive. If the
+budgeted **extraction task in Phase 12** when the derived domains arrive. If the
 derived domains are cut, the extraction is cut with them at zero loss.
 
 ## 11. Progression
@@ -1573,36 +1573,47 @@ rather than a replacement for it.
 
 ### The two tracks: the Ley Line and Mastery
 
-**This replaces *"ley-line upgrades and grimoire rank"***, which named two
-sources of Concentration and gave neither any mechanical content — inherited
-verbatim from the draft-7 economy session, when the pool was still called
-Attention, and carried through three amendments untouched. `grimoire rank` is
-**dropped** (§19): `/grimoire` is already the directory holding the player's
-spells, and a rank of the same name would make one word mean both the book you
-write in and a number beside it.
+**The Ley Line is the tower's, and Mastery is each room's** (**amended §19**,
+Phase 10 — the two names were attached the other way round when the weave
+shipped, and swapped).
 
 | | |
 |---|---|
-| **The Ley Line** | The straight path. Predefined steps in order, and **passing one is the grant** — there is no choice in it and no moment where a step is reachable but unheld. Concentration lives here |
-| **Mastery** | The branching tree. A tier opens when the total passes it and gives exactly **one** of its nodes, so the tier opening is the grant and *which node* is the decision |
+| **The Ley Line** | One line on total experience. A station is a **step** — `grants` concentration or quintessence, and **passing it is the grant** — or a **fork**: one node each of three lanes, *provision* (more resources), *war* (better combat), *craft* (a faster orb), and `take` chooses one. The fork opening costs nothing and taking a node closes it |
+| **Mastery** | Seven straight lines, one per room, **no choices anywhere**. A station is a *deed* — brew a clarity, walk the stacks five times, close a figure — and is reached when the one before it is reached and the deed's count is met. Reaching it *is* the grant |
+
+**Both may open something** — a room, a recipe, a charm, or the wall — and that
+is how the tower grows: a fresh game is a laboratory and nothing else, brewing a
+clarity opens the archive, the first walk of the stacks opens the lens, a
+warding potion opens the sanctum, concentration opens the grimoire and
+quintessence the forge. The reveal order is thematic and authored, and every
+number on either track is a first pass `orbs-balance` decides.
 
 **This is what lets experience stay unspendable while still offering a choice.**
 The ROADMAP asks that a player *"be offered something you choose between, rather
 than a level that arrives on its own"*, and the obvious way to get that — a
 spendable points balance — would contradict *"accumulates and is never spent"*
-above and add something a player can spend and then regret. A tier opening costs
-nothing; taking one of its nodes closes it. A save carries one `u64` and a list
-of taken ids.
+above and add something a player can spend and then regret. A save carries one
+`u64`, a list of taken ids, a list of reached ids, a tally of things done, and
+the set of what is open.
+
+**A deed is a count, not a currency.** No room has an experience number of its
+own; `Tally` counts things done — `made:clarity`, `potion`, `at:stacks`,
+`event:figure` — and a station asks for one count. A per-domain total would be
+a second curve to balance and a second number to save, and both of the user's
+examples (*"a certain number of potions"*, *"certain potions"*) are one count.
+
+**A Ley grant never duplicates a charm.** The forge sells *temporary* instrument
+buffs; a permanent copy on the line would delete the domain. The craft lane is
+the orb — steps, the satchel, cursors, and `haste_n`, which is struck invariant
+3 landing *"as a thing you buy"* — the provision lane the tower's supplies, and
+the war lane the wall and the dice.
 
 **Both are authored in `progression.toml`** and are drawn by `weave` (§6.1), which
-is the only surface progression has. A node's **id** is a decision and lives in
-that file; its **sentence** is prose and lives in `prose.toml` keyed by the id.
-
-**Nothing is behind a Mastery node yet.** Every one is authored as a marker and
-`take` refuses in voice, because the first real node is a balance question and
-the screen is not. What it buys is that the *shape* is visible from inside the
-game before anything is behind it: a player who reaches 24 watches a tier open
-and learns that a choice is coming.
+is the only *progression* surface; the rail's percentage and the room's road are
+readings of it (rule 2). An **id** is a decision and lives in that file; its
+**sentence** is prose and lives in `prose.toml` keyed by the id. `grimoire rank`
+stays dropped (§19).
 
 ### Mana — a fixed siege budget
 
@@ -1832,7 +1843,7 @@ composition architecture either way.
 TOML/RON keyed by state, never string literals in Rust.
 
 **Mitigation 3 — a word budget per phase**, tracked with a running total in §15,
-so slippage is measurable rather than discovered in Phase 13.
+so slippage is measurable rather than discovered in Phase 14.
 
 **Mitigation 4 — vocabulary size is the dominant multiplier** (§11).
 
@@ -1987,7 +1998,7 @@ strip = "symbols"
 
 Dev iteration additionally uses `bevy/dynamic_linking` and a fast linker (lld or
 mold). This is the largest quality-of-life lever available and should be set up in
-Phase 0, not discovered in Phase 11.
+Phase 0, not discovered in Phase 12.
 
 ### Distribution — not literally one binary
 
@@ -2063,7 +2074,7 @@ list.
      must replay identically and match offline to online. At 1 Hz and this entity
      count, parallelism buys nothing and costs the property everything else rests
      on. If the live game and the CLI harness diverged, we would not find out
-     until Phase 11.
+     until Phase 12.
 - **Balance harness (Phase 1):** an `orbs-sim` CLI running a scripted synthetic
   player for N simulated hours, dumping §11.5's curves to CSV. Converts balance
   from vibes into sweeps.
@@ -2188,7 +2199,7 @@ in the suite would have caught it, and none was ever written that could have.
   hard to convey in a capsule, and a deliberate audience-building play for
   Blackhearth's catalogue. Note the trade honestly: at ~$2.50 net per unit after
   Steam's cut and tax, matching a $14.99 return takes roughly four times the
-  units. Revisit at Phase 12 when content volume is visible.
+  units. Revisit at Phase 13 when content volume is visible.
 - **Positioning: Duskers + Zachtronics.** Lead with the terminal atmosphere —
   Duskers proved players will type commands into the dark and love it — and
   support with automation depth for the Exapunks/Shenzhen I/O audience. The two
@@ -2206,14 +2217,15 @@ in the suite would have caught it, and none was ever written that could have.
 | **3. Spellcraft** | The `grimoire/` domain: a spell factors into named parts, **within one `.spell` file** (§19 — cross-file sharing struck). **The language overhaul that composition needs** — values, variables, lists, `for each`, in-file parts, builtins over the domains. **Naming pass (~35 verbs)**, hidden-directory authoring | ~7k | 5 mo | A spell factors into named parts and still reads as one file |
 | **4. Defense** ✅ | The `sanctum/` domain: a course of wards, drawn and assembled. **Reflex-avoidance mechanism decided first** — it is the Tower of Hanoi, which has no clock in it, so the accessible-mode item moved to Phase 8 (§19) | ~5k | 3 mo | A pressure survived by choosing, not by reacting |
 | **5. Summoning** ✅ | The `menagerie/` domain (derived): allocation → a unit with a standing rule | ~4k | 2 mo | A summoned thing acts without being told to that tick |
-| **9. Enchanting** | The `forge/` domain (derived): a **lattice** — Lights Out on three columns — plus a quintessence cost → a decaying charm on a tool. **Shared-engine extraction**, pulled forward from 11a | ~4k | 2 mo | A buffed instrument is visibly faster and the buff runs out |
-| **10. One machine** | Reagents cross domains, **Focus-slot reservation**, pane addressing, the authored edges between domains | ~3k | 2 mo | The tower runs itself across rooms |
-| **8. Siege** ✅ | Autobattler on the seven dice, adversarial aberrations closing §8.1's four surfaces, escrow economy, one siege type, the cadence. **Pane addressing struck from this row** — it is Phase 10's, and listing it in both is what made it read as a siege prerequisite (§19). Trait composition, the backlog and difficulty tiers are deferred with reasons in ROADMAP | ~15k | 4 mo | Sieges are tense and scripts visibly matter |
-| **11a. Breadth** | Discovery/research, full drift, **offline progression + its unlock**. *(The five domains and the shared-engine extraction moved to the domain phases.)* | ~4k | 2 mo | Discovery closed |
-| **11b. Remote hosts** | The second content type: trees, verbs, infiltration, trace amplification. **`orbs-tui` to ship quality, if the schedule allows** | ~12k | 3 mo | Infiltration loop closed |
-| **11c. Engine upgrade** | Bevy version window — whole-codebase, isolated from new-system work | — | 1 mo | Green on all three platforms |
-| **12. Onboarding + demo** | Polish apprenticeship, progressive reveal, grimoire, soft ending, **demo + capsule + trailer** | ~20k | 4 mo | A non-terminal player reaches hour two unaided |
-| **13. Ship** | Accessibility, screen-reader siege mode, options, Steam (**both launch options**), polish | ~5k | 3 mo | Release |
+| **9. Enchanting** | The `forge/` domain (derived): a **lattice** — Lights Out on three columns — plus a quintessence cost → a decaying charm on a tool. **Shared-engine extraction**, pulled forward from 12a | ~4k | 2 mo | A buffed instrument is visibly faster and the buff runs out |
+| **10. Progression** | The two tracks re-strung: **the Ley Line** with a choice at each fork, **Mastery** as seven per-domain lines of deeds, and rooms, recipes and charms opening along both. A sealed fresh tower, the rail's percentage, the domain's road, the line authored to the soft ending | ~4k | 2 mo | A fresh tower is a laboratory, and the rest is earned |
+| **11. One machine** | Reagents cross domains, **Focus-slot reservation**, pane addressing, the authored edges between domains | ~3k | 2 mo | The tower runs itself across rooms |
+| **8. Siege** ✅ | Autobattler on the seven dice, adversarial aberrations closing §8.1's four surfaces, escrow economy, one siege type, the cadence. **Pane addressing struck from this row** — it is Phase 11's, and listing it in both is what made it read as a siege prerequisite (§19). Trait composition, the backlog and difficulty tiers are deferred with reasons in ROADMAP | ~15k | 4 mo | Sieges are tense and scripts visibly matter |
+| **12a. Breadth** | Discovery/research, full drift, **offline progression + its unlock**. *(The five domains and the shared-engine extraction moved to the domain phases.)* | ~4k | 2 mo | Discovery closed |
+| **12b. Remote hosts** | The second content type: trees, verbs, infiltration, trace amplification. **`orbs-tui` to ship quality, if the schedule allows** | ~12k | 3 mo | Infiltration loop closed |
+| **12c. Engine upgrade** | Bevy version window — whole-codebase, isolated from new-system work | — | 1 mo | Green on all three platforms |
+| **13. Onboarding + demo** | Polish apprenticeship, progressive reveal, grimoire, soft ending, **demo + capsule + trailer** | ~20k | 4 mo | A non-terminal player reaches hour two unaided |
+| **14. Ship** | Accessibility, screen-reader siege mode, options, Steam (**both launch options**), polish | ~5k | 3 mo | Release |
 
 **Total: 43 months of work against a 24-month target**, where it was 28 before
 the domains were given phases of their own and 41 before Spellcraft's language
@@ -2224,14 +2236,14 @@ mitigation is only real if the calendar exists to measure against.
 
 **The 13 months are an admission, not an inflation.** Five domains and the
 extraction task were budgeted at 4 months and ~18k words *combined*, filed as one
-line inside a breadth phase; 11a shrinks by exactly that as they leave. Giving
+line inside a breadth phase; 12a shrinks by exactly that as they leave. Giving
 each domain a phase says plainly that the old figure was priced for a table entry
 rather than for five minigames — which is the same correction §10 makes about its
 own table: *"these forms are a table, not a design"*. A 41-month plan that is
 honest is more useful than a 28-month one that was never going to hold, and the
 cut line below is where the difference gets argued.
 
-**Phase 11 is split three ways.** Draft 5 loaded five domains, discovery, full
+**Phase 12 is split three ways.** Draft 5 loaded five domains, discovery, full
 drift, the entire remote-host content type, the engine upgrade, and the extraction
 task into one phase. The engine upgrade in particular must not share a phase with
 new-system work — it touches everything.
@@ -2251,7 +2263,7 @@ instant-startup, trivially scriptable target. It pays for itself in iteration
 speed on the two things Phase 1 is built around, which is why it costs no
 additional calendar.
 
-**Ship-quality `orbs-tui`** sits in Phase 11b and is explicitly cuttable. The Bevy
+**Ship-quality `orbs-tui`** sits in Phase 12b and is explicitly cuttable. The Bevy
 build never waits for it.
 
 **Two things moved into Phase 0.** The naming pass for the slice's 16 commands (now done — §6.1),
@@ -2261,7 +2273,7 @@ sabotage surface (log poisoning — cheapest and most legible), because §16 cla
 Phase 0 de-risks "siege is empty" and it cannot do that with a scrying stub and no
 sabotage at all.
 
-**The demo sits in Phase 12** because its purpose is validating onboarding, and a
+**The demo sits in Phase 13** because its purpose is validating onboarding, and a
 text-game demo is almost entirely apprenticeship and progressive reveal.
 
 **Running total: ~88k words.** If a phase overruns, the vocabulary budget (§11) is
@@ -2325,7 +2337,7 @@ because they are the two whose absence would be felt everywhere — sabotage sta
 illegible without one, and the language stops growing without the other. The two
 **derived** domains sit at 4 and 5 precisely because they are the cut candidates:
 late enough that cutting them costs the least, early enough that the extraction
-task they carry lands before Phase 10 needs it. If both are cut, the extraction
+task they carry lands before Phase 11 needs it. If both are cut, the extraction
 moves to 7 and 7 absorbs it.
 
 ### Naming pass
@@ -2344,13 +2356,13 @@ re-audited by hand.
 |---|---|---|
 | Parser feels frustrating rather than magical | **Critical** | Phase 0 gate with recovery metric; instrumentation; forgiving pipe stages |
 | Siege is empty once scripts are good | **Critical** | Aberration system prototyped Phase 0; four-surface sabotage; trait novelty |
-| Onboarding loses non-terminal players | **Critical** | Three layered approaches from Phase 1; continuous external testing; demo in Phase 12 |
+| Onboarding loses non-terminal players | **Critical** | Three layered approaches from Phase 1; continuous external testing; demo in Phase 13 |
 | **Writing volume overruns the schedule** | **Critical** | Composition over authorship; per-phase word budget; vocabulary as first lever. court_wizard's speed came from externalised art — unavailable here |
 | Economy is wrong or untuneable | High | §11.5 settled with first-pass numbers and worked sinks; balance CLI sweeps them in Phase 1; one headline scarcity per phase — Focus in the tower, mana in the siege |
-| Seven domains + remote hosts spreads thin | High | Concrete-first with a budgeted Phase 11 extraction; cut line |
+| Seven domains + remote hosts spreads thin | High | Concrete-first with a budgeted Phase 12 extraction; cut line |
 | CRT over text is illegible | High | Phase 0 worst-case test at min resolution and max font scale |
 | Sabotage feels unfair rather than solvable | High | Every surface has a structural tell AND a one-command `verify`; log poisoning always leaves a trustworthy source |
-| Bevy 0.19 goes stale over two years | Medium | ~4-month cadence means shipping 5–6 versions behind; one deliberate upgrade window in Phase 11, budgeted |
+| Bevy 0.19 goes stale over two years | Medium | ~4-month cadence means shipping 5–6 versions behind; one deliberate upgrade window in Phase 12, budgeted |
 | Second frontend divides effort | Low-Medium | Bevy is the product and never waits. `orbs-render` owns presentation, so the boundary is cheap and reusable. Ship-quality TUI is cut-line item 3 |
 | Solo continuity — illness, burnout, life | Medium | Cut line defined in advance; minimum shippable state named; per-phase scope buffers |
 | Market: text-only is hard to sell | Medium | CRT *motion* is the hook — trailer over capsule; demo as primary conversion tool |
@@ -2403,7 +2415,7 @@ they are re-pointed at the phases that now need them rather than quietly dropped
    definition or escrow cannot settle.
 8. Difficulty-tier definitions within the progression-gated range.
 
-**Commercial, before Phase 12**
+**Commercial, before Phase 13**
 
 9. Wishlist target, and whether $4 survives contact with actual content volume.
    Note that $4 forfeits discount room (a 50% sale is $2) and may read as a
@@ -2411,6 +2423,79 @@ they are re-pointed at the phases that now need them rather than quietly dropped
    price-shop — Exapunks is $19.99.
 
 ## 19. Decisions log
+
+### The two tracks swapped natures, and the tower learned to be shut (Phase 10, `0.10.1`)
+
+**The Ley Line is the tower's line with a choice at each fork, and Mastery is
+seven per-domain lines with no choices.** When the weave shipped the names were
+attached the other way round — the Ley Line was the no-choice track granting
+concentration and quintessence, and Mastery was the branching tree — and the
+entry *"`weave` — the Ley Line, Mastery, and a surface for progression"* below
+records that shape. Both definitions are **superseded**. The direction, in the
+designer's words: *"Mastery will be the per domain progress, straight lines with
+nodes that unlock over time. There are no choices to be made. The Ley Line is
+going to be where experience is accrued... a straight line progression, but will
+have multiple choices at each milestone that alter how the game is played (more
+resources vs better combat vs faster tools). Peppered within both of these will
+be game progression... Unlocks should be thematic and make sense."*
+
+| Question | Decision |
+|---|---|
+| What a Ley station is | A **step** (`grants`, passing is the grant) or a **fork** (`nodes`, `take` one). Exactly one of the two, refused at load otherwise. Either may `opens` |
+| What a fork offers | One node per **lane** — provision, war, craft — derived from the grant (`Grant::lane`), never authored. **The one-per-lane rule is deferred** until the first non-craft grant exists; today every node is craft, so the four real nodes keep the totals they had rather than moving and breaking old saves |
+| What a mastery station is | A **deed** — `"clarity"`, `{ potions = 5 }`, `{ scrolls = 1 }`, `{ at = "stacks", times = 3 }`, `{ event = "figure" }` — on a room's line, reached in order when its count is met. Every name checked at load against the recipes, the instruments and a closed event set |
+| A deed is a count, not a currency | No per-domain experience. `Tally` counts things done under namespaced keys; a station asks for one count. A second curve would be a second thing to balance and to save, and the designer's two examples are one count each |
+| Every completion goes through one door | `tower::done` counts, credits and advances — ten seams, listed in `tower::tally`'s doc. `sing::settle` counts a figure, `defend::report::settle` a siege and one held, `bind_done` a spell bound, `learned::discover` a secret |
+| What opens, and who holds it | `domain:`, `recipe:`, `charm:`, `siege`, in one `Opened` set. **Not `Learned`**, which stays the lens's: `learn` filters against `secrets()` and would open nothing for a non-secret, and seeding it with gated names would grow every save and break `debug_learn`'s contract |
+| Gating is per output | `Recipes::reachable` asked for *every* output known; the lectern is one recipe with three outputs drawn uniformly, so a recipe-level gate on two scrolls would have sealed the third and deadlocked the archive's second station for ever. A recipe fires if **any** output is known and the draw picks among the known ones |
+| `Sim::new` is an open tower | `Opened::all` — every room, gated product and charm. It is the tower every test, dump, balance policy and `screens` example has always used, and ~200 See-it lines keep meaning what they meant. A fresh *game* starts sealed (`Sim::sealed`, the next box), and the dump's default differing from a fresh game is the same class of difference `ORBS_BOOT=0` already is |
+| The bar's scale | The line's last station — 56 today — rather than a fixed hundred. This entry's predecessor said the hundred *"becomes a number derived from the content"* once the curve reached it, and the curve now runs past it |
+| One track at a time below the bar | Seven rooms' lines and a forked Ley Line do not both fit in eighteen rows beside a details panel. Both headings always draw; the word decides which track draws. Down means a sibling on one and a room on the other, and the status row says which |
+| `take` on a mastery station | Refused in voice by the screen (`NotAChoice`) and again by the world, which only grants an open fork node. `NothingBehind` and the `tbi_` markers are gone: a fork node the orb cannot parse fails the load |
+| Save `FORMAT` 10 | `tally`, `reached`, `opened`. Each defaults to the honest reading of a document that never had it — nothing counted, nothing reached, **everything open** (`opened` is an `Option` for `integrity`'s reason). No stream moved |
+| `haste` gated late | Behind the laboratory's fifth station. The entry on the haste chain below records 0.255/tick as the fastest experience in the game and a risk; it now arrives after clarity is automated rather than instead of it |
+| A Ley grant never duplicates a charm | The forge sells temporary instrument buffs and a permanent copy would delete the domain. Craft is the orb (steps, satchel, cursors, `haste_n` — struck invariant 3 *"as a thing you buy"*), provision the tower's supplies, war the wall and the dice |
+| The plan's first two boxes landed as one | `[[mastery]]` cannot be both the old tiers and the new lines, so the forks moved onto the Ley Line and the lines were strung in one step |
+| What a fresh game starts with (`0.10.2`) | `Opened::start` — everything no station opens. Derived from the content rather than authored twice, so the laboratory and `hurried` are open because nothing opens them and the archive is shut because `laboratory_1` does. The bailey follows the wall |
+| A shut room stays nameable | Dropping it from the scene made `attend archive` fuzz into a numbered prompt of four *other* rooms — §15's dead end, by the one word a new player will try. Kept as a place, the word reaches `attend`'s gate and *"the archive is not yours yet"*; the weave's panel already names what a station opens, so the name was never the secret. The room's manual page stays hidden |
+| One gate, and a marker for the queries | `sealed_room_of` is asked of the *node* — `attend stacks` reaches the archive by a name that is not the archive's. `Sealed` is the same fact as a component on every node under a shut room, for the two sabotage queries that cannot call a function; `seal` is its only writer |
+| `ORBS_SEALED`, and who reads it | `orbs_shell::fresh` alone. The game defaults to sealed, the dump to open, and `scripts/tui.sh` and the scenario suite set `0` — the same class of difference `ORBS_BOOT=0` is, and what keeps ~200 See-it lines true. `Game::sealed` is the suite's one door to the start a player gets |
+| `[world] sealed` | Part of the recorded start beside the seed, since a sealed and an open tower with identical submissions diverge at the first `attend archive`. A document without it is open, which is what every tower was |
+| The rail's percentage (`0.10.4`) | On the state row's right edge, silent. `MIN_RAIL_BOX` is five rows with none spare, and a sixth would be dropped exactly when a room is busy *and* automated. §14's rule for progress is completion only, so the number is glyphs and the station reaching is the utterance |
+| The road | The room's line under the pane's title, one row taken before the panel and the boards divide the body — under the title whichever way the panel runs, and yielded before the transcript is. `stations.rs` is the one vocabulary the loom and the road draw with |
+| `recall` in a room (`0.10.5`) | The primer ends with the line as words, composed from the same `Line` the road draws. Two surfaces, one reading |
+| The grants (`0.10.6`) | `tower::grant`: one parser for `<stem>_<n>`, one lane per grant, one reader per grant summing the tiers taken. Provision touches the tower's supplies (fuel, pool, escrow, thrift), war the wall and the dice (edge, floor, garrison, mend, vigilance), craft the orb (steps, satchel, cursors, haste). **Never an instrument** — that is the forge's to sell, temporarily |
+| The lane rule, enforced | A fork with two nodes in one lane fails the load. The four real nodes moved to their lanes' stations (`satchel_1` 24 → 40, `steps_2` 40 → 160, `cursors_1` 40 → 400), which supersedes the argument for both halves of §8's channel at 24/40: under lanes the craft lane *is* that channel, taken over four forks by a player who wants it |
+| A node held above its fork's total | **Kept.** The plan's reconciliation — drop it and say so — fought `debug_take`, which legitimately holds a node above its total and has to survive a save (`tests/strands.rs`). Kept, the state is consistent: `ley_line` derives *spent* by membership, so the fork reads chosen and the node stays in effect. Nothing earned is taken away, and the player is not told about a thing that did not happen |
+| `haste` is the orb's, never the tool's | A run a *spell* issued lands sooner by the tiers taken; a player's own does not. Read where the charm is read, at `begin`, so a run is an interval set once |
+| `vigilance` widens the interval, not the draw | The calm layer draws once a tick regardless; what changes is which multiple lands. A tower with no vigilance keeps every replay it ever had, and one with it diverges only from the tick the node landed |
+| The Ley Line draws on a logarithmic scale | Sixteen stations growing by about half each stood in a knot at the left of a linear run to ten thousand. Equal cells for equal *ratios* spreads them as the curve does; position is still cost, read the way the curve grows; the bar fills to exactly the cell the total has reached; the totals alternate between two rows. The fixed hundred §19 said would become derived became this |
+| `status` says the pool | `quintessence` and `ceiling` rows, because nothing on screen said the pool's size outside a siege board and a grant nobody can see does not exist |
+| A step's `opens` is `credit`'s to apply | What a step *grants* is derived from the total and needs no writing down; what it *opens* is a set the world holds. Nothing applied it, so the grimoire and the forge — the two rooms hanging off the tower's line rather than a room's — were shut for ever in the only tower a player ever gets, and the forge line's charm with them. `ley::cross` runs from `credit`, the one thing that moves the total, and `opened::opening` is the single loop both tracks announce through |
+| The weave's cursor is a **mark**, not an id | A step's id is what it *grants* and eight stations grant concentration, so an id cursor aimed at all eight at once: every one drew framed, the panel read the first one's cost, and `→` jumped back to the second station — the line could not be walked past its fourth. `Node::mark` carries the total (the line ascends strictly, so it is unique); `Stop::mark` is the id, which already names one thing. The id keeps its three jobs: the content file's word, the prose key, and what `take` names |
+| The Ley Line packs to the pane, and says so when it cannot | The pass that pushed stations apart had nothing pulling them back, so a track narrower than the chain needs painted its tail outside the painter's area, clipped in silence while `announce` still spoke it and the cursor still walked onto it. **Latent today** — `PANES` is 1 until 11a returns multiplexing, and every grid the game accepts leaves one pane at least 60 columns, where sixteen framed stations fit — and live the day a second pane halves it to 52, where the 39 cells left want 48. Fixed rather than noted, because the trigger is a phase away and the failure is invisible: frames come off before positions go wrong (a bare mark needs two cells), a forward pass pushes right, a backward pass pulls left, and a pane too narrow for even that gets *"the orb needs a larger window"* — the answer the screen already gives for too few rows. The minimum is derived from the station count, so a longer line is caught by the picture refusing rather than by nobody noticing |
+| A shut room's mastery line is not walked | The loom draws a room the player cannot enter as an anonymous dotted run with no stations on it, so a cursor there was invisible — and the details panel then read out the deed, its count and the room it opens. That is exactly what the boot report, `survey` and the scene all withhold; the weave must not be the one surface that gives it away |
+| A siege counts after it reports | `done` ran before the `siege_held` record, so winning a first siege printed *"the forge can lay whetted now"* above *"the wall holds"*. Every other seam calls it after its own sentence, which is the order `done` documents: the run's sentence, then the level it bought, then the station it reached, then what that opened |
+| A restore catches **both tracks** up, silently | What a station opened and the fact it was reached are two records of one thing and only the second is written down, so a document with the experience or the station but not the thing it opened keeps that thing shut for ever. Both tracks apply an `opens` exactly once: `credit` crosses an edge now in the past, and `advance` skips anything already in `Reached`. `ley::caught_up` and `mastery::caught_up` run before `seal` and say nothing, for `Experience::restore`'s reason — a load that congratulated you on yesterday's work would be reporting a lie in voice. **The first draft claimed mastery needed no equivalent** because a deed re-done would reach the station again; it does not, and the code said so two lines away |
+| `Opened` is unioned on restore, never replaced | A charm, a gated product or an eighth room that a later build ships *ungated* cannot be named by a document written before it existed, so replacing the set outright shut it for the life of every existing save with no station able to open it. Unioned with `Opened::start` — *everything no station opens*, which is that set's own rule. This is the authoritative-save failure `save::restore`'s header says raise-then-adopt exists to prevent, arriving through capabilities instead of nodes |
+| `seal` runs last at construction, and a node inherits its parent's mark | `seal` marks the tree that exists when it runs, and `Sim::build` published the pylon's integrity and each die's price *after* it while `restore` seals last — so a fresh sealed tower and the same tower reloaded from its own save differed by four nodes, in a component two sabotage queries read and no document compares. Moved after the publishers; and `spawn` now inherits the parent's `Sealed`, because readings are *re*published as numbers move and a hole would reopen at runtime. `tests/sealed.rs` compares the two worlds' marks by path |
+| `Taken` is restored before the ceiling is read | `ceiling` reads `pool_<n>` and `floor_<n>`, and `grant::tiers` answers nought for a resource not yet inserted rather than panicking — deliberately, so `Sim::bare` can read it mid-raise. That makes the *order* load-bearing, and a document with no `quintessence` row came back four short per tier |
+| `sealed_room_of` walks the ancestors itself | It asked `domain_of`, which is documented as returning `None` at `/grimoire` — the grimoire is `/tower`'s *sibling*, not its child. So every node inside a shut grimoire answered *"not in a shut room"* while `seal` had marked all twenty of them: the two representations of one fact, disagreeing, which is the pair's whole reason to exist |
+| A template never takes the `recall_` prefix | Every key under it becomes a manual subject the parser knows, so `recall_road` shipped as a topic called `road` and `recall road` answered with the raw template, braces and all. Renamed `primer_road`; the route templates paid for this once already and only the note beside `topics()` recorded it. **Now a lint**: every subject's page is checked for a brace |
+| A gated product no station opens fails the load | `check_opens` refused a key naming nothing; nothing refused a *product* that no key names. Because `Opened::start` is everything no station opens, such a product is not unreachable — it is handed to every tower at tick 0, with the file correct on its face and every test green. `gated = true` says *earned* |
+| `debug_reach` opens the room the line stands in | `debug_reach archive_3` reached three stations inside a room the player could not enter, because the archive is opened by `laboratory_1` on a *different* line — a state no played tower reaches, which is the one thing the word's doc promises. It walks the chain of what opens what now; the two See-it lines that had the workaround written into them by hand no longer need it |
+| A blank `ORBS_SEALED` falls through | It read as `0`, so an exported-but-empty variable — the shape "unset" most often arrives in — quietly handed a player the open tower with nothing on screen saying so. `wizard()`'s blank `USER` already had this rule |
+| **The release profile was never checked, and was broken** | The gate builds and tests in debug, where `debug_assertions` is on. Turn it off and the shipping profile had **18 warnings and 30 failing tests** — checked against `v0.9.3`, so from before the siege phase closed. Both had one cause: a debug word does not exist in a release build, so the tests that drive one fail against a world that was never built, and the helpers and re-exports that only they reach read as dead code. Gated per item with the same `cfg` their callers carry, which is `tests/gleaning.rs`'s stated convention rather than a new one. **The product code was never wrong** — every failure was a test reaching for a door that is not there. `cargo test --release` and `cargo clippy --release` are green now, and whether they join the gate is worth deciding rather than assuming |
+| The `bevy-idioms` harness could not be run | `.claude/skills/bevy-idioms/verify` sits inside the repo tree and is not a workspace member, and cargo refuses that unless one side says so — so `cargo check` there, which CLAUDE.md points every session at for validating a 0.19 snippet, answered *"current package believes it's in a workspace when it's not"*. An empty `[workspace]` table in its own manifest, so the skill stays self-contained if it is copied elsewhere |
+| Broken doc links, found by documenting private items | `cargo doc --no-deps` lints only what it renders, so 53 broken or ambiguous intra-doc links sat in private and module-level docs: a `[`FLIP_HZ`]` that rendered as literal brackets, a `[`spells`]` naming a function that had been renamed away, `orbs-render` linking into `orbs-sim`, which it deliberately does not depend on, and eleven `super::compile`-style names that are both a function and a module. Fixed rather than allowed, because these docs are the ones §19 keeps telling sessions to read |
+
+**And the phases moved a third time, for the same reason as the second.**
+Progression is Phase 10; the tower as one machine is 11, breadth/remote/engine
+12a/12b/12c, onboarding 13, ship 14. None of the moved phases carried a tag,
+which is the only reason it was a document edit. The two renumber tables below
+keep their own numbers, as the previous entry says a log must — a mechanical
+pass caught them once during this change and they were put back, which is the
+hazard `no-scripted-file-edits` names arriving through a replace-all.
 
 ### The phases moved a second time, because the version may not go backwards
 
@@ -3091,7 +3176,7 @@ That is a tuning signal to judge by playing, not a conclusion.
 ### `host` → `enemy`, because the game is a computer (Phase 8, `0.8.13`)
 
 The besieging army was `host`. Archaic-correct — a *heavenly host* is an army —
-and wrong for this game specifically: **§11b makes remote hosts a content type**,
+and wrong for this game specifically: **§12b makes remote hosts a content type**,
 *"trees, verbs, infiltration"*, so the word would have meant *a machine you break
 into* and *the army at your wall* in one vocabulary. In a game that is literally a
 terminal, `host` reads as a machine first.
@@ -3170,7 +3255,7 @@ it.** Stated here because it had never been written down as a rule, only arrived
 at four times in a row, and the first Phase 8 plan then broke it by assuming the
 opposite.
 
-That plan called Phase 10 a hard dependency: `CAPACITY = 1` is tower-wide, so a
+That plan called Phase 11 a hard dependency: `CAPACITY = 1` is tower-wide, so a
 siege holding the production slot would freeze the automation the enemy exists to
 attack. **The premise was false.** A domain puzzle takes no production slot, and
 four shipped domains prove it — scrying's press (§19, `0.3.22`, which *withdrew*
@@ -3431,7 +3516,7 @@ because **no listing of words teaches an order**. Seven steps — `scribe`, `edi
 the lines, `<escape>`, `quit`, `invoke`, then the *log* rather than the pane —
 one of which, *quit is the save*, a player otherwise learns by losing work.
 
-§12 puts the in-world grimoire in the **always** column and Phase 12 owns the
+§12 puts the in-world grimoire in the **always** column and Phase 13 owns the
 interactive apprenticeship. This is the reference half of the first, which is why
 it is a `recall` page rather than a scripted sequence, and it does not tread on
 the second.
@@ -3662,7 +3747,7 @@ half as its control. Without that control the test would pass against a patient
 mode that yielded nothing.
 
 That is §14's shape for the siege (*"ticks advance on player input"*) arriving one
-domain early, and it is a **rule rather than a setting** until Phase 13 builds a
+domain early, and it is a **rule rather than a setting** until Phase 14 builds a
 settings screen — which is what `shortcuts.rs` already says about `F3` and `F7`.
 
 #### Two things the fifth surface broke, both structural
@@ -3963,7 +4048,7 @@ better position than a real-time mechanic with a reflex escape hatch bolted on.
 | What the pressure is, if not a clock | **Integrity, which decays** — a point every 30 ticks, whether or not anybody is playing. The first *drain* in the game; everything else the tower has only rises. The pressure is measured in hours rather than in seconds, which is what makes it a calm-layer mechanic |
 | What low integrity does | **Musters a taller course, and today nothing else.** Three wards is seven hauls and seven wards is 127, so neglect is expensive and — because the height is capped — never ruinous (§11.5). The coupling to nuisance rates that the siege model eventually wants is **deferred to Phase 8**, because raising `drift`'s odds from integrity would move every rate `orbs-balance` has pinned in exchange for a consequence no siege exists to spend |
 | §10's *"wards, made and consumed"* | **Re-read as integrity.** The wards are the puzzle's pieces rather than stock: nothing mints one and nothing spends one. What the domain mints and loses is the barrier. The precedent for withdrawing a §10 scarcity row is scrying's own *"a read is not a brew"*, withdrawn below |
-| Whether the verbs take the production slot | **Neither does**, which is the lens's decision and not the archive's. A course is up to 127 hauls; one holding the tower's single slot would starve every other spell into `spell_gave_up`. So a bound `holding` runs *beside* a brew — additive, exactly as scrying is — and §5.0's slot stays uncontested until Phase 10 |
+| Whether the verbs take the production slot | **Neither does**, which is the lens's decision and not the archive's. A course is up to 127 hauls; one holding the tower's single slot would starve every other spell into `spell_gave_up`. So a bound `holding` runs *beside* a brew — additive, exactly as scrying is — and §5.0's slot stays uncontested until Phase 11 |
 | Why the height is jittered | **So the parity has to be read.** A course cycles one way round the three stations when it is odd and the other when it is even, and getting it backwards finishes in the *conduit*. Without a jitter a player learns their tower's number and hard-codes the cycle, and the one thing this puzzle asks anybody to read stops being read |
 | The accessible mode | **Moved to Phase 8, not struck.** §14 requires a *real-time* surface to have one and this domain has none. The shape DESIGN.md fixes — *"screen-reader mode advances **siege** ticks on player input"* — is about the siege, which is where the item now sits |
 
@@ -4385,7 +4470,7 @@ reference with no kind of its own would be recited continuously. `Guide` is what
 lets a reader drop the lot, exactly as `Hint` does.
 
 **The toggle is session-scoped and does not persist.** A save carries no editor
-state, and adding some for a view preference is Phase 13's settings item. Stated
+state, and adding some for a view preference is Phase 14's settings item. Stated
 here rather than left to be noticed as an omission.
 
 #### Escape and a letter in one read were arriving as one keystroke
@@ -5057,7 +5142,7 @@ the thing that must be identical.
 
 **Nothing in the workspace serialised anything.** ROADMAP said it twice from
 opposite directions: *"`Running` is not in any save format, because there is no
-save format"*, and the settings item sitting in Phase 13 because *"no `serde`, no
+save format"*, and the settings item sitting in Phase 14 because *"no `serde`, no
 `toml`, nothing in the workspace serialises anything yet."* Close the game and
 the tower was gone.
 
@@ -5072,9 +5157,9 @@ first-class serialisable entities — so what follows is the part they left open
 | What catches a component nobody carried | **The lockstep test, and this was got wrong first.** The journal test runs `capture` on two worlds *neither of which was restored*, so a field `capture` omits is missing from both documents and it passes. `a_loaded_tower_keeps_running_the_same_world` is the instrument, because it is the only one that restores: drop `Burning` and the loaded athanor is cold, the heated stage never lands, and the divergence surfaces in fields the document does carry. The two completeness lints narrow the rest |
 | Is there a `save` verb | **No**, and three reasons. §8 already specifies autosave; §19's editor precedent deleted `save` as a word for the same chore one level down; and **`save` and `sage` are one edit apart**, which is the collision that refused `leave` and `exit` as `quit` synonyms |
 | How a node is addressed | **By path, never by `NodeId`.** An id is a counter in spawn order, stable only while `build.rs`'s tables are. A path is what the player types, survives a phase that adds a domain, and makes `subject = "/tower/laboratory/dispensary/sage"` legible. It is also what lets the lockstep test compare two documents at all — under id-keying a lived world and a rebuilt one hold different ids for the same nodes |
-| Whole tree, or a patch | **Raise first, then adopt.** `Sim::restored` runs `tower::raise` and reconciles by path. An authoritative save is simpler and wrong on a schedule: five domains arrive between here and Phase 11a, and every pre-existing save would open into a tower permanently lacking them. Refusing the old save by format version is not an answer — it deletes it |
+| Whole tree, or a patch | **Raise first, then adopt.** `Sim::restored` runs `tower::raise` and reconciles by path. An authoritative save is simpler and wrong on a schedule: five domains arrive between here and Phase 12a, and every pre-existing save would open into a tower permanently lacking them. Refusing the old save by format version is not an answer — it deletes it |
 | What the RNG carries | **The master seed *and* eight word positions.** `Rngs::master_seed`'s doc already claimed a world could be reconstructed from the seed; it could not. A `ChaCha8Rng` advances in place, and `sabotage`'s two systems each draw once per tick unconditionally, so a rewound stream re-runs the session's whole schedule of drifts and swaps. `the_seed_alone_would_rewind_every_stream` pins it |
-| Offline progression | **Not built.** §5 opens *"initially there is no offline progression"* and puts accrual in Phase 11a. The save carries a **departure stamp** — `[away]`, stamped by the frontend because the sim has no wall clock and must not acquire one — so Phase 11a is a policy change rather than a format migration. A departure time cannot be recovered after the fact |
+| Offline progression | **Not built.** §5 opens *"initially there is no offline progression"* and puts accrual in Phase 12a. The save carries a **departure stamp** — `[away]`, stamped by the frontend because the sim has no wall clock and must not acquire one — so Phase 12a is a policy change rather than a format migration. A departure time cannot be recovered after the fact |
 
 #### `tower::drift` picked its target by query order, and only a rebuilt world could see it
 
@@ -5226,7 +5311,7 @@ world rather than reading the resource.)
 **Two sorts were not total orders.** `drift` and `substitution` both sort by name
 and `sort_unstable` promises nothing for equal keys — so two same-named logs
 would fall back to the archetype order the sort exists to remove. Four domains
-have four distinct log names today and five more arrive by Phase 11a. `NodeId` is
+have four distinct log names today and five more arrive by Phase 12a. `NodeId` is
 the tie-break, and it is only safe as one *because* the save now carries it.
 
 **Every interval in the file is a start and a completion tick**, which is §8's
@@ -5243,7 +5328,7 @@ document and touches no filesystem. Decisions worth keeping:
 
 | Question | Decision |
 |---|---|
-| Where | `orbs-save.toml`, **beside the binary**, on `TRACE_PATH`'s argument. `dirs` is §13's stack and Phase 13's settings screen is where it arrives with Steam Cloud; until then this is one function rather than a path in two frontends. The cost is named: an install directory can be read-only |
+| Where | `orbs-save.toml`, **beside the binary**, on `TRACE_PATH`'s argument. `dirs` is §13's stack and Phase 14's settings screen is where it arrives with Steam Cloud; until then this is one function rather than a path in two frontends. The cost is named: an install directory can be read-only |
 | How | Written to `<path>.writing` and **renamed**. A save lands every sixty ticks for as long as the game is open, so a crash catching a half-written file is not theoretical; the rename turns *"the tower is corrupt"* into *"the tower is one minute stale"*. The scratch file is a **sibling**, because `rename` is only atomic within a filesystem |
 | What a dump does | **Neither loads nor saves unless `ORBS_SAVE` names a path** — the opposite of the running game's default. Otherwise every See-it line in CLAUDE.md becomes order-dependent on whether anyone has played in that directory, and `scripts/dumps.sh`'s baseline stops being one. Both it and the played-game suite pin `off` besides |
 | A save that will not open | **Kept, not deleted**, and said in voice. A later build may read it — the format refuses a *newer* file precisely so it is not half-read — and the next autosave overwrites it anyway. Losing a tower is bad; losing it silently and destroying the evidence is worse |
@@ -5927,7 +6012,7 @@ constantly.
 **`F4` is visibly inert at one pane.** §9 makes the focus mode overridable at any
 time and this log fixes the switch on `F4`; with one pane both tilings are
 identical, so the key does nothing until multiplexing returns the second pane in
-Phase 11a, when it reclaims its job with no code to change. Reassigning it to
+Phase 12a, when it reclaims its job with no code to change. Reassigning it to
 toggle the rail would re-litigate two recorded decisions to buy a key a job for
 one phase. ROADMAP's ✅ line claiming *"`F4` changes the split"* is amended to
 what remains true, and `f4_switches_focus_without_moving_the_grid` now asks about
@@ -6505,7 +6590,7 @@ count.
 **Phase 1's exit had two clauses and one was unmet.** *"A player automates a duty
 and feels clever"* is met and mechanical — a script ends its loop with `stop
 athanor` and a person walks away with the fire lit. *"Non-terminal testers are in
-the loop"* needs a person, and **moved to Phase 12 with the item that carries
+the loop"* needs a person, and **moved to Phase 13 with the item that carries
 it**. Ticking it would have been the failure §15's own See-it rule exists to
 catch.
 
@@ -6523,8 +6608,8 @@ the six new phases spend it rather than minting a currency.
 item: reagents crossing a domain, Focus-slot reservation, and pane addressing.
 §19 parked the first with *"Phase 2's pane addressing"*; renumbering mechanically
 would have sent all three to Phase 8 — *after* the five domains that need them —
-and `CAPACITY = 1` would have made Phase 10's exit unreachable by construction.
-They are Phase 10's, and the code comments that referenced them point there.
+and `CAPACITY = 1` would have made Phase 11's exit unreachable by construction.
+They are Phase 11's, and the code comments that referenced them point there.
 
 **The renumber was 72 references in the docs and 30 in code and content**, none
 of which type-checks, including one player-facing prose line. Three rules made it
@@ -7743,7 +7828,7 @@ can never be finished has stopped being a plan and become a list.
 
 Twice now. The settings item (sticky skip, persisted CRT-off, reduce-motion) sat
 open in Phase 0.5 waiting for somewhere to persist a setting, which no Phase 0.5
-item builds; it moved to Phase 13, beside the settings screen it depends on. The
+item builds; it moved to Phase 14, beside the settings screen it depends on. The
 upgrade tree then sat open in Phase 1 waiting for content, and had no such phase
 to move to — because it is not waiting on one thing, it is waiting on all of
 them.
@@ -8654,7 +8739,7 @@ theme existed so *"a player with a colour vision deficiency loses nothing"*, and
 the accessible option also an aesthetic choice: a player who needs the
 accommodation has to give up amber to get it.
 
-So the guarantee moves to **Phase 13: colour-vision filters and a true greyscale
+So the guarantee moves to **Phase 14: colour-vision filters and a true greyscale
 mode**, applied as a post-pass over the composited frame in the CRT shader, after
 the phosphor and before the barrel. One place catches the fire, the tints and the
 accent triad, rather than four palettes each being solved three more times. A
@@ -9708,7 +9793,7 @@ it:** moving an `end` changes far more meaning than moving a command line.
 
 `Records::sequence()` counts everything ever pushed and does not reset on
 `clear`. An index into the stream is correct only while nothing truncates it, and
-the stream grows without bound against a Phase 11a offline catch-up of ~29k steps
+the stream grows without bound against a Phase 12a offline catch-up of ~29k steps
 — so the day rotation arrives, every saved cursor would point at the wrong record
 and spells would re-fire or skip with no test catching it.
 
@@ -9969,7 +10054,7 @@ the one place instruments are declared), the scene collects them from the
 fixtures present, and the parser skips the rest.
 
 That is not tidiness. It is what keeps the vocabulary safe to grow: §10 puts five
-further domains in Phase 11a, each coining the verbs its tools need, and **none of
+further domains in Phase 12a, each coining the verbs its tools need, and **none of
 them can capture another's typo** because they are never candidates at the same
 time. Without it, every domain added would widen the collision surface for every
 other — the failure the Phase 0 naming pass exists to prevent, arriving by
@@ -10168,7 +10253,7 @@ spent the affordance twice. The default is now `Wide`.
   Bevy crate over a **hardcoded copy** of the instrument list, so renaming an
   instrument left it passing on stale names.
 - **The panel's spoken domain is passed in**, not the literal `"laboratory"`.
-  §10's Phase 11a adds a second instrumented room; a sighted player would have read
+  §10's Phase 12a adds a second instrumented room; a sighted player would have read
   `/tower/workshop` in the border while a reader heard "laboratory: forge burning".
 - **`needs_heat` became `Recipe::heat`.** It was `matches!(instrument,
   "balneum_mariae" | "alembic")` in the executor while `recipes.toml` recorded the
@@ -10285,7 +10370,7 @@ what the reviews changed, because most of it was load-bearing.
 | **Ash at burn-out, not per tick** | Per-tick spawning would issue ids into `Children`, and insertion order *is* the parse. A determinism bug no test in the suite would have caught |
 | **`balneum_mariae`, not `retort`** | `retort` scored **667** against `revert` (a plain synonym for `undo`), so a bare `retort` could reach `undo` — found only because the second review checked the new *nouns* and not just the new verbs. The rename is also the better instrument: a water bath is *gently* heated, which is what sitting on the athanor should mean. It has the side effect of keeping `retort` a live `Vessel` noun, so the kind is never emptied |
 | **`wield` + `kindle`, not `stoke`/`start`/`tend`** | Computed against the real scoring function: `stoke` scores 600 against `stop` and shares its `sto` prefix, `start` prefix-collides with `status`, `tend` scores 667 against `attend`, `exert` 667 against `revert` |
-| **Capacity 1 is the form that ships** | Capacity 4 arrives at ~10 h via research, which is Phase 11a. For Phases 1–2 the pipeline is sequential, and the athanor is what makes that a decision rather than a queue. An earlier draft had this backwards — "designed for 4, degrades to 1" — when 1 is the only capacity anyone plays for a year |
+| **Capacity 1 is the form that ships** | Capacity 4 arrives at ~10 h via research, which is Phase 12a. For Phases 1–2 the pipeline is sequential, and the athanor is what makes that a decision rather than a queue. An earlier draft had this backwards — "designed for 4, degrades to 1" — when 1 is the only capacity anyone plays for a year |
 
 **What the reviews cost, and why the practice stays.** Two context-free reviews
 found: a headline command that could not parse, the deletion of §15's stated
@@ -10361,7 +10446,7 @@ same slot and cut, on three findings:
 
 | | |
 |---|---|
-| Its "see it" line is **already Phase 11a's** | *"`research` a fragment and gain a verb you did not have."* That needs `Verb::ALL` to stop being a fixed sixteen, the synonym table to stop being `const`, `is_live` to stop being a `const fn`, and the boot tutorial to read all three dynamically — plus §18's unstarted naming pass. That is the discovery loop pulled forward two phases, not a minigame |
+| Its "see it" line is **already Phase 12a's** | *"`research` a fragment and gain a verb you did not have."* That needs `Verb::ALL` to stop being a fixed sixteen, the synonym table to stop being `const`, `is_live` to stop being a `const fn`, and the boot tutorial to read all three dynamically — plus §18's unstarted naming pass. That is the discovery loop pulled forward two phases, not a minigame |
 | §10 **pre-authorises the cheap version** | *"decipherment becomes mostly a resource sink with occasional authored set-pieces"* — and §7's only depiction of the verb is exactly that. A bespoke puzzle is an ambition increase, not a debt being paid |
 | It is better bought later | The archive gates all discovery. What the puzzle should feel like depends on what it unlocks, and nothing is unlockable yet |
 
@@ -10426,7 +10511,7 @@ POST naming what the orb is made of.
 | **Sequential, not merged** | The POST is the machine; §4's report is the tower. To stop them reading as one screen twice, the POST is a **centred title card** — no pane, no `name qty state` columns — and the border does not exist until the stage that draws it |
 | **The versions are real** | `tower/boot.rs` exists because *"a report that could go stale is a lie the player reads first."* A POST printing invented numbers is the same lie one screen earlier. Bevy's is the exact pin, held to `Cargo.toml` by a test; Rust's comes from a build script |
 | **The world does not tick during it** | `tower::drift` rolls once per tick, so ticking through a wall-clock animation advances the RNG stream by an amount depending on how long boot took and whether anyone skipped. **The same seed would build a different world.** A correctness fix, not polish |
-| **Skip is a keypress, and §4 asked for sticky** | ~~Sticky needs persistence, which does not exist and arrives with §15's Phase 13 settings screen. The keypress is the honest half-measure.~~ **Superseded — the keypress skip is removed entirely (below).** §4's sticky skip still stands and still waits on Phase 13 |
+| **Skip is a keypress, and §4 asked for sticky** | ~~Sticky needs persistence, which does not exist and arrives with §15's Phase 14 settings screen. The keypress is the honest half-measure.~~ **Superseded — the keypress skip is removed entirely (below).** §4's sticky skip still stands and still waits on Phase 14 |
 | **Any key, including the bound ones** | ~~`F10` quits, and a player reaching for it during boot means *skip*.~~ **Superseded with the keypress.** Every keyed system is still gated on `booted`, which is now the whole story: until the game is up, a keystroke does nothing at all |
 
 #### The keypress skip is removed
@@ -10444,7 +10529,7 @@ an obstacle.
 
 **This does not touch §4's sticky skip**, which is a different mechanism for a
 different person: a remembered setting for someone on their fortieth launch,
-chosen once. It still waits on Phase 13's settings screen, and `Boot::finished` is
+chosen once. It still waits on Phase 14's settings screen, and `Boot::finished` is
 the state it will select.
 
 **What was actually gained by removing it:** the `booted` run condition stops
@@ -10524,7 +10609,7 @@ than the prompt appearing after a bang.
 
 **The consequence worth recording: no part of this game flashes any more.** The
 only photosensitivity exposure Phase 0.5 ever created is retired, which is also
-why §14's health warning stops being urgent — it lands with the Phase 13 settings
+why §14's health warning stops being urgent — it lands with the Phase 14 settings
 screen alongside the persisted CRT toggle rather than ahead of it.
 
 The two entries below are kept because the **reasoning** was wrong twice, in
@@ -10587,7 +10672,7 @@ magnitude in hand rather than a value tuned to sit just inside the limit.
 
 **The off switch is still not the safety mechanism, because it is not
 persisted.** `F3` works in-session; settings and the health warning §14 records
-this product inheriting arrive together in Phase 13.
+this product inheriting arrive together in Phase 14.
 
 #### Amber is the default, and there is a fourth theme
 
@@ -10614,7 +10699,7 @@ all the colour there is. It is the highest contrast the game offers, and its
 > materials carry a tint hinting at what is inside an instrument. Both put hue on
 > this theme.
 >
-> The guarantee moved to **Phase 13's colour-vision filters and true greyscale
+> The guarantee moved to **Phase 14's colour-vision filters and true greyscale
 > mode**, which is a better home for it than a theme ever was: a theme made the
 > accommodation an aesthetic choice, so a player who needed it had to give up
 > amber to get it. A filter is orthogonal to the theme, which is what an
@@ -10765,7 +10850,7 @@ the same band covers.
 **It rides `CrtSettings::on`.** An env var is not a switch a player can reach,
 and the entry below is precisely the failure of gating motion on something
 indirect. F3 cycles the tube to `OFF`; that now stops the fire too. The
-persistent per-effect toggle stays with Phase 13's settings item — and at this
+persistent per-effect toggle stays with Phase 14's settings item — and at this
 rate that item has a real dependency rather than a nominal one.
 
 #### The fire's shape, and what it cost at the boundary
@@ -11268,7 +11353,7 @@ phase on being reachable from the running game.
 | **What went wrong** | Phase 0's first six items were completed in layer order — determinism spine, Frame boundary, parser, cell renderer, CRT port, record model — each tested, reviewed, and correct. The result was **~10,000 lines of Rust that the game binary called under 40% of.** `cargo run -p orbs` answered `Escape`, `F2`, `F3` and `F12`, and no letter key at all. The parser was unreachable from the frontend; the record model had never been drawn by the renderer built to draw it |
 | **Whose error** | Not a judgment call made and lost — **the lists themselves were the defect.** Every item was phrased "build this subsystem", so following one faithfully could not produce something playable until it ended. A correct process executed against a badly ordered list |
 | **Why tests did not catch it** | They were not capable of it. Tests prove code does what it was written to do; they cannot prove it is the code worth writing. Untouched code is *unshaped* code — `report()` needed an `input` parameter no test wanted and no design document predicted, and it surfaced from an adversarial review rather than from a caller. That is luck, not method |
-| **Why this is not a Phase 0 rule** | Later phases need it more, not less. Phase 1 asks whether a player *feels clever*; Phase 8 whether a siege is *tense*; Phase 12 whether a non-terminal player reaches hour two unaided. None of those is assertable, all of them are felt, and the phase exit criteria were already written in exactly those terms — the step-level lists simply did not inherit it |
+| **Why this is not a Phase 0 rule** | Later phases need it more, not less. Phase 1 asks whether a player *feels clever*; Phase 8 whether a siege is *tense*; Phase 13 whether a non-terminal player reaches hour two unaided. None of those is assertable, all of them are felt, and the phase exit criteria were already written in exactly those terms — the step-level lists simply did not inherit it |
 | **The rule** | **No work item in any phase is complete until a person can reach it from the running game.** Every item carries a *See it* line naming the keystrokes. Same standing as the build gate in CLAUDE.md |
 | **Retroactive gating is a work item** | Everything already built without a gate gets one, immediately after the prompt and before any new Phase 0 work. Not a cleanup task and not optional: code the game does not call has been asserted, not verified |
 | **Where a gate is not yet possible** | Some built code has no honest player surface until later content exists — per-subsystem RNG streams cannot be *seen* until something rolls against them, which is aberrations in Phase 8. Those items name the phase that gates them rather than inventing a debug affordance nobody will maintain |
@@ -11494,7 +11579,7 @@ commit.
 | Licence | **GPL-3.0-or-later.** Declared in the workspace manifest, full text at the repository root |
 | Dependency tree | **Audited and compatible.** Every crate in the tree is MIT, Apache-2.0, BSD-2/3, Zlib, ISC, Unicode-3.0, CC0, 0BSD, MIT-0, or Unlicense; all are FSF-listed as GPL-compatible. The only copyleft entry, `r-efi`, offers MIT/Apache-2.0 alternatives and does not build on our targets |
 | One-way constraint | Apache-2.0 is compatible with GPL-**3**.0 but **not** GPL-2.0. Bevy is `MIT OR Apache-2.0`, so 3.0-or-later works and 2.0 would not have |
-| Assets | Both font licences survive the combination. CC0 imposes nothing; Spleen's BSD-2 notice requirement **persists** and still has to reach the shipped build (Phase 13) |
+| Assets | Both font licences survive the combination. CC0 imposes nothing; Spleen's BSD-2 notice requirement **persists** and still has to reach the shipped build (Phase 14) |
 | Commercial release | Unaffected — §15's demo-then-1.0 Steam posture stands. Selling GPL software is permitted; the obligation is to offer source to those you distribute binaries to |
 
 ### Parser corrections — post-review
@@ -11556,7 +11641,7 @@ Two consequences worth remembering:
 |---|---|
 | Font | **Spleen 2.2.0, `cp437/spleen-8x16-ibm-437.bdf`.** In the repo at `assets/fonts/spleen/` with full provenance and checksums |
 | Licence | **BSD-2-Clause**, and **GPL-3.0-compatible** — the FSF lists the 2-clause BSD licence as *"compatible with the GNU GPL"*. Only the 4-clause form is incompatible, and Spleen has no advertising clause. Combining it into a GPL work does **not** discharge its notice requirement |
-| Obligation | Binary redistribution must reproduce the copyright notice *"in the documentation and/or other materials"*. The shipped build therefore carries a third-party notice — naturally a `grimoire licences` topic, since every screen is terminal content. **Phase 13 ship task**; the obligation only attaches on distribution |
+| Obligation | Binary redistribution must reproduce the copyright notice *"in the documentation and/or other materials"*. The shipped build therefore carries a third-party notice — naturally a `grimoire licences` topic, since every screen is terminal content. **Phase 14 ship task**; the obligation only attaches on distribution |
 | Why this file | **Indexed by codepage byte, 0–255, complete.** `cp437_index()` already returns exactly that index, so there is no mapping layer between Frame and atlas. The Unicode-keyed build of the same font is *not* a substitute — it is missing `∟ ► ◄` against our repertoire |
 | Rejected | **int10h Px437** (most authentic, but CC BY-SA share-alike on adaptations, and its "raw bitmaps are uncopyrightable" defence is a US-centric interpretation, not settled law, on a product sold worldwide). **Terminus** (OFL's reserved-font-name clause forces a rename once we edit it). **unscii-16** (public domain and uniform 2px weight, but missing `∙ ⌂ ⌐ ☼`) |
 | Custom variants | Unrestricted. §4's custom glyph variants for §8.1 sabotage tells are a local edit BSD-2 permits outright — which is why a modify-friendly licence outranked a more authentic look |
@@ -11614,7 +11699,7 @@ Two findings from actually rendering these screens rather than only testing them
 | Question | Decision |
 |---|---|
 | Status | **Bevy is the product and never waits.** The terminal build is wanted and pursued, but second-class and cuttable |
-| Split of costs | **Boundary** (`orbs-render`, Phase 0) is non-negotiable and ~free. **Dev-tool TUI** (Phase 1) has no parity obligation. **Ship-quality TUI** (Phase 11b) is cut-line item 3 |
+| Split of costs | **Boundary** (`orbs-render`, Phase 0) is non-negotiable and ~free. **Dev-tool TUI** (Phase 1) has no parity obligation. **Ship-quality TUI** (Phase 12b) is cut-line item 3 |
 | What it is | A full-screen raw-mode application (à la the Ubuntu Steam installer). Terminal as framebuffer + keyboard, nothing more |
 | What it is **not** | It does not shell out, touch the real filesystem, or interoperate with the host shell. Same sim, same commands, same simulated tower |
 | Architecture | New `orbs-render` crate owns the `Frame` (cell buffer + semantic styling + layout). **`orbs-render` decides what appears and where; frontends decide only how a cell is drawn.** Frontend-only enrichment (CRT, audio) may never carry information absent from the Frame |
@@ -11622,8 +11707,8 @@ Two findings from actually rendering these screens rather than only testing them
 | Glyphs | User's terminal font; Unicode U+2500 box drawing instead of CP437 |
 | Not present in TUI | CRT effects, fidelity tiers, embedded bitmap font |
 | Sabotage tells | Glyph/alignment cues are Bevy-only; `verify` is authoritative everywhere (§8.1) |
-| Schedule | Boundary Phase 0 (cannot be retrofitted), dev tool Phase 1, ship quality Phase 11b |
-| Cost | Boundary is ~free. Dev-tool TUI absorbed in Phase 1. Ship-quality TUI sits in Phase 11b and is cuttable |
+| Schedule | Boundary Phase 0 (cannot be retrofitted), dev tool Phase 1, ship quality Phase 12b |
+| Cost | Boundary is ~free. Dev-tool TUI absorbed in Phase 1. Ship-quality TUI sits in Phase 12b and is cuttable |
 | Dividend | If it ships, it is the cheapest route to screen-reader support — but §14 does not depend on it |
 | Distribution | If shipped, both binaries in the Steam depot as two launch options |
 
@@ -12431,7 +12516,7 @@ now takes the ordinary exit.
 from the grid — the only call to `DisplayMode::default_for` in the workspace —
 so the project's primary See-it instrument printed `focus deep` where every
 running frontend printed `focus wide`. One pane makes both tilings identical
-today, so it was two labels; when Phase 11a returns the second pane it would have
+today, so it was two labels; when Phase 12a returns the second pane it would have
 been a layout the game never draws, in the output CLAUDE.md's own See-it blocks
 quote.
 
@@ -12806,7 +12891,7 @@ moved under them, and half a dozen constants existed only to manage that motion.
 | `INPUT_ROWS` is a constant, and it is **1** | It used to be derived: a second row bought back the pixel height a finer tier took away, `32s ≤ 16(s+1) ⇔ s ≤ 1`. With one grid there is no tier to compensate for, so a second row stopped being compensation and became magnification — a prompt twice the transcript's size at *every* window and three times again at 4K. Shipped at 2 and reverted on sight, which is what the risk register predicted. It also cost the player half the line: at 2× the text is written into half the columns, so a 120-column grid gave 60 cells to type into and now gives 118 |
 | The magnified path has no caller now | `Frame::set_magnified` and the renderer's 2× pass are reachable only by setting `INPUT_ROWS` back to 2. Kept rather than deleted **because that is the whole retreat** — one constant — and not on the grounds of a future consumer: the font-scale setting this owes would change the *grid* (80×30, also on the 8:3 line) rather than magnify one row, so it is not the mechanism that would revive this. If the prompt size is settled, deleting it is the honest follow-up |
 | A resize constraint | **Considered and dropped.** `WindowResizeConstraints` is logical pixels while `WindowResolution::new` is physical, so on a 2× display a floor expressed in it would exceed the initial window and the game could not open at its stated size. `paint_too_small` is the guard, and it is physical-unit correct |
-| The debt this owes | §4 justified reflow with *"fixed scaling without reflow would make large accessibility font scales unreadable"*, and that objection is correct. The game now has **one text size per window size and no way to ask for another**. The replacement is a font-scale setting choosing between authored grids on the 8:3 line — 80×30 is the large-text one — which is a Phase 13 settings item, not a tier |
+| The debt this owes | §4 justified reflow with *"fixed scaling without reflow would make large accessibility font scales unreadable"*, and that objection is correct. The game now has **one text size per window size and no way to ask for another**. The replacement is a font-scale setting choosing between authored grids on the 8:3 line — 80×30 is the large-text one — which is a Phase 14 settings item, not a tier |
 
 ~~`INITIAL_WINDOW` stays 1280×720: it is ×1.0 exactly, so the game opens at
 native cell size *and* with visible bars, exercising the letterbox on every
@@ -12920,7 +13005,7 @@ cell size was a nice property that cost a first impression.
 | Composition applied to highest-traffic prose | Inverted — author failure text, compose descriptive text |
 | CRT port understated | Corrected to 2,638 lines + 242-line shader |
 | No schedule | Calendar added; 28 months against a 24-month target, stated plainly |
-| Phase 3 overloaded | Split into 3a breadth / 3b remote hosts / 3c engine upgrade *(those three are 11a/11b/11c after two renumbers; this row records what the review said at the time and keeps its own numbers, because renumbering a log falsifies it)* |
+| Phase 3 overloaded | Split into 3a breadth / 3b remote hosts / 3c engine upgrade *(those three are 12a/12b/12c after three renumbers; this row records what the review said at the time and keeps its own numbers, because renumbering a log falsifies it)* |
 
 ### Draft 4 questions — resolved
 
@@ -12934,7 +13019,7 @@ cell size was a nice property that cost a first impression.
 | Pane addressing | Named by domain, routed within the focused set |
 | Script validation | Bind always succeeds; warn with suggested fix |
 | Synergy matrix | All 21 pairs; shared mechanical template, bespoke flavour |
-| Price | $4 provisional; revisit Phase 12 |
+| Price | $4 provisional; revisit Phase 13 |
 | Positioning | Duskers + Zachtronics |
 | Saves vs achievements | Readable and editable; achievements unguarded |
 | Save timing | Tick boundaries only; scripts atomic within a tick |
@@ -12957,6 +13042,6 @@ cell size was a nice property that cost a first impression.
 | 9 | Difficulty tiers | Progression-gated range, player choice within it |
 | 10 | Siege rewards | Trait knowledge + guaranteed drops. ~~Banked continuously~~ → **superseded (draft 6): progress-scaled escrow** |
 | 11 | Steam Workshop | Deferred; scripts plain text so sharing stays possible |
-| 12 | Release posture | Demo (Phase 12) then full 1.0. No Early Access |
+| 12 | Release posture | Demo (Phase 13) then full 1.0. No Early Access |
 | 13 | Endgame | Soft ending closes the lore arc; play continues |
 | 14 | World beyond the tower | Remote hosts as navigable machines |

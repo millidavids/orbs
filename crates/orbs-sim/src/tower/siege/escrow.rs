@@ -30,9 +30,12 @@ pub const ESCROW_FLOOR: u64 = 20;
 ///
 /// §11.5's table, exactly: a win is the full pool plus half again; a loss is the
 /// pool scaled by how far you got, and never below [`ESCROW_FLOOR`] of it.
+/// `more` is the Ley Line's `escrow` grant in percent, applied to the pool
+/// before either branch, so a loss under it pays more too.
 #[must_use]
-pub fn escrow(arrived: u32, completion: u32, outcome: Outcome) -> u64 {
+pub fn escrow(arrived: u32, completion: u32, outcome: Outcome, more: u64) -> u64 {
     let pool = u64::from(arrived) * ESCROW_PER_FOE;
+    let pool = pool + (pool * more) / 100;
     match outcome {
         Outcome::Held => pool + (pool * COMPLETION_BONUS) / 100,
         Outcome::Fallen => {

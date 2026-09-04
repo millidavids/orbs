@@ -9,6 +9,8 @@
 
 use bevy_ecs::prelude::*;
 
+// Only [`refresh`] resolves the rampart by `Cwd`, and that is `debug_siege`'s.
+#[cfg(debug_assertions)]
 use super::shared::fixture;
 use crate::execute::readings::{clear, reading, room_of};
 use crate::parser::Verb;
@@ -183,6 +185,11 @@ pub(crate) fn publish(world: &mut World, rampart: Entity) {
 }
 
 /// Republish from wherever the player is standing, for the typed path.
+///
+/// **`debug_siege`'s, and nothing else's** — every other caller has the node
+/// already. Gated the way its one caller is, so a release build does not find it
+/// dead; `execute::mod` records the same for the sanctum's.
+#[cfg(debug_assertions)]
 pub(crate) fn refresh(world: &mut World) {
     let Some(rampart) = fixture(world) else {
         return;

@@ -38,7 +38,7 @@
 //!
 //! # The mixture has texture
 //!
-//! It carries the bath's roil ([`Roil`]) — liquids being combined are not flat —
+//! It carries the bath's roil ([`crate::Roil`]) — liquids being combined are not flat —
 //! at the same slow tempo, so the two liquid instruments read as the same kind of
 //! thing. The unmixed bands do **not** move: nothing is happening to them yet,
 //! and motion there would say the whole vessel was working when only part of it
@@ -72,7 +72,7 @@ pub struct Stir {
     ///
     /// **Never [`Motion::Bubbling`]**, however hard it is working: nothing heats
     /// a flask, and bubbles are what heat looks like. See
-    /// [`liquid`](crate::liquid).
+    /// [`liquid`].
     pub motion: Motion,
     /// How far through the current world tick, `0.0..1.0`. See
     /// [`Grind::advance`](crate::Grind).

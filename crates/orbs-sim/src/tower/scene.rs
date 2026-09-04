@@ -110,11 +110,23 @@ pub fn scene_at(world: &World, at: Entity) -> Scene {
     // it — with every test green, because the recipe still refuses to fire.
     let hidden: Vec<String> = {
         let recipes = world.resource::<crate::content::Recipes>();
-        let learned = world.resource::<super::Learned>();
+        let known = super::known(world);
+        let opened = world.resource::<super::Opened>();
+        // Found *or* earned: a gated product the room's line has not reached is
+        // as unsayable as a secret the lens has not found. **And a shut room's
+        // name**, so its manual page is not a subject yet — the rail's dark box
+        // says *there is more* without saying what, and `recall archive`
+        // answering would spend that.
         recipes
             .secrets()
             .into_iter()
-            .filter(|made| !learned.knows(recipes, made))
+            .chain(recipes.gated())
+            .filter(|made| !known.knows(recipes, made))
+            .chain(
+                super::DOMAINS
+                    .into_iter()
+                    .filter(|domain| !opened.is_open(domain)),
+            )
             .map(str::to_owned)
             .collect()
     };
@@ -366,6 +378,14 @@ pub fn scene_at(world: &World, at: Entity) -> Scene {
     // in spawn order.
     for node in walk(world, super::filesystem_root(world, cwd.0)) {
         if world.get::<Nameable>(node).map(|n| n.0) == Some(NounKind::Place) {
+            // **A shut room stays a place the parser knows**, deliberately.
+            // Dropping it from the scene made `attend archive` fuzz into a
+            // numbered prompt offering four *other* rooms — §15's dead end,
+            // reached by the one word a new player is most likely to try. Kept
+            // nameable, the word reaches `attend`, whose gate answers *"the
+            // archive is not yours yet"* — which is what the weave's details
+            // panel already says the first station opens, so the name was never
+            // the secret. What stays hidden is the room's manual page, above.
             // **A satchel from another room is not offered at all**, and it is
             // the one place this walk is not exhaustive. Every domain has one
             // and they are all called `satchel`, so registering the lot would

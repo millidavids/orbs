@@ -1,9 +1,9 @@
 //! Which verb runs what, and the two records every verb can need.
 //!
 //! Registration and dispatch only. The bodies live beside their concern —
-//! [`pipeline`](super::pipeline) for §10.1's brewing loop,
-//! [`navigate`](super::navigate) for §7's places,
-//! [`files`](super::files) for §3's log — because this file is the one every
+//! [`pipeline`] for §10.1's brewing loop,
+//! [`navigate`] for §7's places,
+//! [`files`] for §3's log — because this file is the one every
 //! phase must edit, and a merge between a brewing change and a log change should
 //! not conflict for a reason that is not semantic.
 
@@ -61,7 +61,7 @@ pub fn run_pending(world: &mut World) {
 /// is explicit that if the live game and the CLI harness diverged *"we would not
 /// find out until Phase 11"*, and a script with its own copy of any verb is that
 /// divergence with an extra step. It does not go through
-/// [`Pending`](crate::session::Pending): that queue is drained by the `commands`
+/// [`Pending`]: that queue is drained by the `commands`
 /// schedule which runs **before** the one the runner is in, so a script routed
 /// through it would manage exactly one instruction per tick whatever its budget
 /// said.
@@ -368,7 +368,7 @@ pub fn is_gated(verb: Verb, world: &World) -> bool {
         // until it is, exactly as `bind` is — a word the boot report teaches and
         // the tower then refuses is the affordance-that-does-not-work shape §19
         // records shipping once.
-        Verb::Queue => !tower::mastery::holds(world, tower::mastery::Grant::Satchel),
+        Verb::Queue => !tower::holds(world, tower::Grant::Satchel),
         _ => false,
     }
 }
@@ -409,6 +409,11 @@ fn status(world: &mut World) {
     // at 12 wants to know what 16 buys.
     let earned = world.resource::<tower::Experience>().get();
     let held = tower::concentration(world);
+    // §11.5's mana, and its ceiling — which the Ley Line's `pool` and `floor`
+    // raise. Nothing else on screen said the pool's size outside a siege
+    // board, and a grant nobody can see does not exist.
+    let pool = u64::from(world.resource::<tower::Quintessence>().get());
+    let ceiling = u64::from(tower::ceiling(world));
 
     // **Read before the scrollback is borrowed**, and one walk of `Running`
     // rather than a second — `tower::running_spells` is what the rail folds, so
@@ -422,6 +427,8 @@ fn status(world: &mut World) {
         ("seed", seed),
         ("experience", earned),
         ("concentration", quantity(held)),
+        ("quintessence", pool),
+        ("ceiling", ceiling),
         ("logged", quantity(logged)),
         ("queued", quantity(queued)),
     ] {

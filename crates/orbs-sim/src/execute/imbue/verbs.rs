@@ -54,6 +54,23 @@ pub(in crate::execute) fn imbue(world: &mut World, intent: &Intent) {
         );
         return;
     };
+    // **A charm the tower has not earned refuses in voice** (§11.5). The forge
+    // opens knowing `hurried`; the rest come with the mastery lines — the
+    // forge's own for its second charm, and the room a charm blesses for the
+    // others.
+    if !world
+        .resource::<tower::Opened>()
+        .has(&tower::charm_key(kind.word()))
+    {
+        say(
+            world,
+            Verb::Imbue,
+            "forge_charm_unopened",
+            &[("name", &charm_word)],
+            Role::Cost,
+        );
+        return;
+    }
 
     // **A tool anywhere in the tower**, which is this domain's one widening of
     // §7. Smaller than it looks: an instrument is a `NounKind::Place` and
@@ -94,9 +111,7 @@ pub(in crate::execute) fn imbue(world: &mut World, intent: &Intent) {
         Lattice::from_bits(bits)
     };
     let under_siege = besieged(world);
-    let cost = world
-        .resource::<crate::content::Charms>()
-        .cost(kind, under_siege);
+    let cost = priced(world, kind, under_siege);
 
     world.entity_mut(lattice).insert(Binding {
         kind: charm_word.clone(),
@@ -112,6 +127,18 @@ pub(in crate::execute) fn imbue(world: &mut World, intent: &Intent) {
         &[("name", &charm_word), ("detail", &cost.to_string())],
         Role::Success,
     );
+}
+
+/// What a charm costs this tower: the authored price, less the Ley Line's
+/// `thrift`, never below one.
+///
+/// **One function for both sites** — the price `imbue` quotes and the price
+/// `anneal` takes — so the forge cannot quote one number and charge another.
+fn priced(world: &World, kind: Kind, besieged: bool) -> u32 {
+    let asked = world
+        .resource::<crate::content::Charms>()
+        .cost(kind, besieged);
+    asked.saturating_sub(tower::grant::thrift(world)).max(1)
 }
 
 /// Whether a charm laid on `node` would reach anything.
@@ -199,9 +226,7 @@ pub(in crate::execute) fn anneal(world: &mut World) {
     }
 
     let besieged = besieged(world);
-    let cost = world
-        .resource::<crate::content::Charms>()
-        .cost(kind, besieged);
+    let cost = priced(world, kind, besieged);
     let held = world.resource::<tower::Quintessence>().get();
     if cost > held {
         say(
@@ -298,7 +323,7 @@ pub(crate) fn land(world: &mut World, lattice: Entity) {
         // table in one number: a spell that reads the residue earns every fall,
         // and `tending_blindly` earns one in eight.
         let earned = tower::worth(world, charm::LATTICE);
-        tower::credit(world, earned);
+        tower::done(world, &tower::Work::at(charm::LATTICE), earned);
         publish(world, lattice);
         say(
             world,

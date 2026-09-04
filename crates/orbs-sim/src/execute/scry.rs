@@ -262,7 +262,7 @@ pub fn land(world: &mut World, prism: Entity) {
     answered(world, &message, earned, None, None);
     // After the sentence about the work, for the reason `transmute` gives: the
     // seal opens, *and then* the orb can hold another spell.
-    tower::credit(world, earned);
+    tower::done(world, &tower::Work::at(PRISM), earned);
     spill(world);
 }
 

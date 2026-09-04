@@ -64,9 +64,12 @@ start)
   # sequence is nine and a half seconds. That is the *development* half of the
   # instant-startup argument, and the switch is where it belongs — set
   # `ORBS_BOOT=` to watch the game open properly instead.
+  # **`ORBS_SEALED=0` by default, for the same reason.** A fresh *game* is a
+  # laboratory and nothing else (§11.5); this is the tool that types `attend
+  # archive` on its first line. Set `ORBS_SEALED=1` to play the sealed start.
   tmux new-session -d -s "$session" -x "$cols" -y "$rows" \
-    "$(printf 'ORBS_WIZARD=%q ORBS_SEED=%q ORBS_BOOT=%q %q/target/debug/orbs-tui' \
-      "${ORBS_WIZARD:-wizard}" "${ORBS_SEED:-181}" "${ORBS_BOOT-0}" "$root")"
+    "$(printf 'ORBS_WIZARD=%q ORBS_SEED=%q ORBS_BOOT=%q ORBS_SEALED=%q %q/target/debug/orbs-tui' \
+      "${ORBS_WIZARD:-wizard}" "${ORBS_SEED:-181}" "${ORBS_BOOT-0}" "${ORBS_SEALED-0}" "$root")"
   sleep 1
   ;;
 type)

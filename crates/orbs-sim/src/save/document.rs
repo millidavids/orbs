@@ -126,7 +126,16 @@ use super::node::NodeSave;
 /// *does* change is how many draws a round takes, since a refused pledge is a die
 /// that never rolls; that makes old *replays* diverge and is a property of the
 /// game rather than of the format.
-pub const FORMAT: u32 = 9;
+///
+/// **9 → 10 is the tower learning to be shut.** Three fields join `[progress]`
+/// — `tally`, `reached`, `opened` — and none of them needs a migration step,
+/// because each defaults to the honest reading of a document that never had it:
+/// nothing counted, nothing reached, and *everything open* (`opened` is an
+/// `Option` for exactly that). What the bump buys is the version gate: a
+/// format-10 document read by a format-9 build would drop `opened` in silence
+/// and load a sealed tower as an open one, which is the failure the gate exists
+/// for. No stream moved; a tally is a function of the submissions.
+pub const FORMAT: u32 = 10;
 
 /// Bring an older document up to [`FORMAT`], or say why it cannot be.
 ///
@@ -147,9 +156,10 @@ pub const FORMAT: u32 = 9;
 /// | 6 → 7 | `/tower/bailey/host` → `/tower/bailey/enemy` — a **node's path**, the first *content* rename | Yes — rewrite the path |
 /// | 7 → 8 | `Siege::quintessence`, a resource a running siege was fought without | Yes — fill the pool |
 /// | 8 → 9 | `RngStream::COUNT` 11 → 12 (`Forge`), **and** quintessence moving from the siege to the tower | Yes — pad, and lift the pool |
+/// | 9 → 10 | `[progress]` gains `tally`, `reached` and `opened` — the mastery lines and the sealed tower | Yes — every field defaults to the honest reading; `opened` absent is *everything open* |
 ///
-/// **The last two rows were missing, and `migrate` performs both.** A table that
-/// stops two bumps short of the function beneath it is worse than no table: it
+/// **Two of these rows were once missing, and `migrate` performed both.** A
+/// table that stops short of the function beneath it is worse than no table: it
 /// is the one place a future bump is read for the shape of the thing, and it
 /// described a `migrate` that has not existed since `0.8.13`.
 ///
@@ -301,6 +311,14 @@ pub struct WorldSave {
     /// sequence, so it has to survive the stream being truncated — which is
     /// exactly what carrying only a tail of it does. See `Records::sequence`.
     pub sequence: u64,
+    /// Whether this tower began sealed — a laboratory and nothing else.
+    ///
+    /// **Part of the recorded start**, beside the seed: a sealed and an open
+    /// tower with identical seed and submissions diverge at the first
+    /// `attend archive`, so a replay has to know which it is rebuilding. Absent
+    /// is *open*, which is what every tower was before a tower could be shut.
+    #[serde(default)]
+    pub sealed: bool,
 }
 
 /// When the player left, and by which clock.
@@ -390,12 +408,32 @@ pub struct ProgressSave {
     /// says what `[null, 120]` cannot.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub cooling: Vec<(String, u64)>,
-    /// Mastery nodes taken, by id.
+    /// Ley Line fork nodes taken, by id.
     #[serde(default)]
     pub taken: Vec<String>,
     /// Secret recipes found.
     #[serde(default)]
     pub learned: Vec<String>,
+    /// What has been done, counted — what the mastery lines read.
+    ///
+    /// Absent is *nothing counted*, which a save from before the lines existed
+    /// honestly says: its stations are re-earned, and the CHANGELOG says so.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub tally: std::collections::BTreeMap<String, u32>,
+    /// Mastery stations reached, by id.
+    ///
+    /// Saved rather than derived from `tally`, because reaching is *said* and
+    /// a restore must not say it again.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub reached: Vec<String>,
+    /// What the tower has opened: rooms, recipes, charms, the wall.
+    ///
+    /// **`Option`, for `integrity`'s reason.** A save written before anything
+    /// could be shut says nothing about it, and an empty list would seal every
+    /// room but the laboratory on a tower that had been standing in all seven.
+    /// `None` restores to everything open, because that is the tower it was.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub opened: Option<Vec<String>>,
     /// Solves since the last find, which is what raises the odds of the next.
     #[serde(default)]
     pub fruitless: u32,

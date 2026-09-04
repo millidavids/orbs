@@ -2,12 +2,13 @@
 //!
 //! The athanor is the one instrument that is literally a fire (DESIGN.md §10.1),
 //! and its meter reports fuel **remaining** where every other instrument reports
-//! ticks elapsed — see [`Meter`](orbs_sim::tower::Meter). So its bar drains, and
+//! ticks elapsed — see `orbs_sim::tower::Meter`, which this crate deliberately
+//! does not depend on. So its bar drains, and
 //! drawing it as fire gets the right story for free: the flame shrinks and the
 //! smoke above it grows.
 //!
 //! Nothing here knows what a second is. A frontend owns the clock and passes a
-//! phase, exactly as it does for [`tween`](crate::tween) — this decides only what
+//! phase, exactly as it does for [`tween`] — this decides only what
 //! a cell *is*, never when.
 //!
 //! # The shape of a fire
@@ -21,11 +22,11 @@
 //!
 //! # Four properties this module is built to hold
 //!
-//! **No cell changes faster than [`FLIP_HZ`], by construction.** A cell's
+//! **No cell changes faster than [`crate::FLIP_HZ`], by construction.** A cell's
 //! appearance is a function of its **tick index**, and the tick index advances
-//! [`FLIP_HZ`] times a second and no faster, whatever the noise does.
+//! [`crate::FLIP_HZ`] times a second and no faster, whatever the noise does.
 //!
-//! **[`FLIP_HZ`] is 6 Hz, and that is inside the photosensitive band.** §14 and
+//! **[`crate::FLIP_HZ`] is 6 Hz, and that is inside the photosensitive band.** §14 and
 //! the CRT port both fixed 3–30 Hz as the band to stay out of, and this is a
 //! deliberate, recorded departure from it — DESIGN.md §19. The short version:
 //! the band exists for flashes covering a substantial part of the visual field
@@ -36,7 +37,7 @@
 //! of them is removed, the rate has to come back down with it.
 //!
 //! **Nothing turns over together, and each step is small.** Every cell's tick
-//! boundaries are offset by a fixed fraction of a tick ([`stagger`]), so a change
+//! boundaries are offset by a fixed fraction of a tick (the `stagger` below), so a change
 //! is always a few cells out of thirty rather than the strip as a whole; and the
 //! ramp the base shifts along is deliberately compressed, so a flip is a hue step
 //! rather than an on/off flash. Whole-field modulation is the hazard, not motion.
@@ -416,7 +417,7 @@ fn smoke(lane: u16, step: u16, ahead: u16, phase: f32) -> (char, Depiction) {
     // says so — the drift washed out to 78504 aligned against 78640 in place,
     // which is a coin toss. The term was doing nothing but costing a hash.
     //
-    // Safety survives the exchange because [`FLIP_HZ`] is unaffected — a smoke
+    // Safety survives the exchange because [`crate::FLIP_HZ`] is unaffected — a smoke
     // cell still changes at the capped rate and no faster — and because what
     // moves together here is a dim glyph on the dim half of the bar. The
     // **flame** keeps its stagger, and that is the half where a synchronised

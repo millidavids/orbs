@@ -160,7 +160,10 @@ pub fn erode(world: &mut World) {
 /// were nearly whole — the number the completion line quotes, so a player is
 /// never told they mended forty points into a wall that had ten missing.
 pub fn mend(world: &mut World, height: usize) -> u32 {
-    let asked = MENDED_PER_WARD.saturating_mul(u32::try_from(height).unwrap_or(u32::MAX));
+    // Per ward, plus the Ley Line's `mend` on top of every finished course.
+    let asked = MENDED_PER_WARD
+        .saturating_mul(u32::try_from(height).unwrap_or(u32::MAX))
+        .saturating_add(super::grant::mend_bonus(world));
     let mut integrity = world.resource_mut::<Integrity>();
     let before = integrity.get();
     integrity.mend(asked);

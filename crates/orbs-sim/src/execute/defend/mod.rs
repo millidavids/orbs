@@ -42,5 +42,8 @@ mod shared;
 mod spending;
 mod verbs;
 
-pub(crate) use publish::{publish_dice, refresh};
+pub(crate) use publish::publish_dice;
+// `debug_siege`'s alone — see `publish::refresh` and `execute::mod`.
+#[cfg(debug_assertions)]
+pub(crate) use publish::refresh;
 pub(super) use verbs::{defend, deploy, hold, pledge, quaff, wielded};

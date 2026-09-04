@@ -89,7 +89,7 @@ pub(crate) fn refresh(mut loom: ResMut<Loom>, tower: Res<Tower>) {
         return;
     };
     let sim = tower.sim();
-    screen.refresh(sim.experience(), sim.ley_line(), sim.mastery());
+    screen.refresh(sim.experience(), sim.scale(), sim.ley_line(), sim.mastery());
 }
 
 /// Feed keys to the open screen.
@@ -229,7 +229,7 @@ mod tests {
                 .resource_mut::<Loom>()
                 .get_mut()
                 .expect("open")
-                .ley_line_columns()
+                .ley_line()
                 .is_empty(),
             "the screen drew with no track in it",
         );

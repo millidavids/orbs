@@ -14,26 +14,31 @@ CRT glowing in the dark.
 
 **Status: Phases 0, 0.5, 1, 2, 4, 5 and 8 closed; Phase 3 met on its exit with
 three boxes deliberately left. Phase 9 (Enchanting) is met on three of its four
-boxes — the shared-engine extraction is the one left. Phase 10 (the tower as one
-machine) remains.** The determinism spine, the Frame boundary, the parser, the
+boxes — the shared-engine extraction is the one left. Phase 10 (Progression)
+closed at `0.10.6`; Phase 11 (the tower as one machine) remains.** The determinism spine, the Frame boundary, the parser, the
 cell renderer, brewing, the archive, the lens, the sanctum, the menagerie, the
 bailey, the forge, the tower rail, the balance harness, the spell engine and its
 scripting language are built and the game plays.
 
-**§10's seven domains are all raised**, which is new: the rail has no dark boxes
-left, and `brief.rs`'s *"some domain still reads as unbuilt"* assertion was
-inverted rather than deleted when the forge landed.
+**§10's seven domains are all raised, and a fresh game opens them one at a
+time.** `Sim::new` is the open tower every test, dump and balance policy uses;
+`Sim::sealed` is what a player gets — a laboratory, and the rest earned along
+the mastery lines — so the rail's dark boxes are back for exactly the rooms
+§11.5's breadth track always promised. `ORBS_SEALED=1` shows a dump the sealed
+start.
 
-**The phases were renumbered so the version could keep climbing** (§19).
-Enchanting was Phase 6 and is **Phase 9**; the tower-as-one-machine is **10**,
-breadth/remote/engine are **11a/11b/11c**, onboarding is **12** and ship is
-**13**. Phases 0–5 and 8 did not move — they are closed and their tags mean what
-they meant.
+**The phases were renumbered so the version could keep climbing** (§19), and
+then a third time. Enchanting was Phase 6 and is **Phase 9**; **Progression is
+10** (the Ley Line, Mastery, and the tower that opens as you work); the
+tower-as-one-machine is **11**, breadth/remote/engine are **12a/12b/12c**,
+onboarding is **13** and ship is **14**. Phases 0–5, 8 and 9 did not move — they
+are closed or tagged and their tags mean what they meant.
 
-**The scheme has now been bent twice for this**, so a third phase taken out of
-turn forces a third renumber. `0.<phase>.<step>` assumes phases are built in
-order and twice they have not been. §19 records the alternative — a minor that
-counts phases *closed* rather than naming the phase — and that it is undecided.
+**The scheme has now been bent three times for this.** `0.<phase>.<step>`
+assumes phases are built in order and three times they have not been. §19
+records the alternative — a minor that counts phases *closed* rather than naming
+the phase — and that it is still undecided; the third renumber was cheap only
+because none of the moved phases carried a tag.
 
 **The premise is complete.** *"Sieges then test everything you automated — because
 the enemy attacks the automation"* was the last unbuilt clause and closed at
@@ -78,7 +83,7 @@ such.
 ## Technology Stack
 
 - **Rust**, edition 2024, pinned toolchain
-- **Bevy `=0.19.0`** — exact pin, upgraded deliberately (one window in Phase 11c)
+- **Bevy `=0.19.0`** — exact pin, upgraded deliberately (one window in Phase 12c)
 - `serde` + `toml` (readable saves), `rand` 0.9 (seeded), `thiserror`, `tracing`,
   `clap` (harness), `bevy-steamworks`
 - **No `bevy_text` / `bevy_ui`.** Every screen is terminal content rendered by our

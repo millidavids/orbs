@@ -172,9 +172,12 @@ pub(super) fn settle(world: &mut World, rampart: Entity, outcome: Outcome) {
     // something worth having, which is what stops a lost siege being an evening
     // thrown away — *"effort is never wasted; only cynicism is"*.
     let arrived = world.get::<Siege>(rampart).map_or(0, |siege| siege.arrived);
-    let earned = siege::escrow(arrived, completion, outcome);
-    tower::credit(world, earned);
-
+    let earned = siege::escrow(
+        arrived,
+        completion,
+        outcome,
+        tower::grant::escrow_percent(world),
+    );
     let key = match outcome {
         Outcome::Held => "siege_held",
         Outcome::Fallen => "siege_fallen",
@@ -206,6 +209,15 @@ pub(super) fn settle(world: &mut World, rampart: Entity, outcome: Outcome) {
             Outcome::Fallen => Role::Danger,
         })
         .finish();
+
+    // **After the sentence about the siege, never before it**, which is the
+    // order every other seam keeps and `done` documents: the wall holds, *and
+    // then* the sanctum's line advances and the forge learns a charm. Counted
+    // twice on a win — *survive a siege* and *win five* are different stations.
+    tower::done(world, &tower::Work::event(tower::SIEGE), earned);
+    if outcome == Outcome::Held {
+        tower::note(world, tower::SIEGE_WON);
+    }
 
     // **No rail mark, and that is a consequence of the bailey not being one of
     // the seven.** `briefs()` walks `DOMAINS` and the bailey is deliberately

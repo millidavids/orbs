@@ -31,6 +31,12 @@ pub(in crate::execute) fn defend(world: &mut World) {
         say(world, Verb::Defend, "defend_already", &[], Role::Cost);
         return;
     }
+    // **A siege against a tower with no wall is not a decision** (§11.5). The
+    // sanctum's first station arms it; until then the road stays empty.
+    if !world.resource::<tower::Opened>().has(tower::opened::SIEGE) {
+        say(world, Verb::Defend, "defend_unarmed", &[], Role::Cost);
+        return;
+    }
 
     // **The cadence** (§11.5, `siege::CADENCE`). Without it `defend` is free and
     // unlimited, and `orbs-balance` measured a back-to-back driver at 4.70
@@ -61,10 +67,12 @@ pub(in crate::execute) fn defend(world: &mut World) {
     // `muster`'s reason: `RngStream::Siege` advances when the player asks for a
     // siege and never on a tick nobody asked for, which is what lets any future
     // siege system be appended to the schedule without shifting a replay.
-    let siege = {
+    let mut siege = {
         let mut rngs = world.resource_mut::<crate::rng::Rngs>();
         Siege::begin(&mut rngs)
     };
+    // The Ley Line's `edge`, read once for the whole fight (§11.5).
+    siege.edge = tower::grant::edge_bonus(world);
     let arrived = siege.enemy.count;
     let intent = siege.intent.word();
     world.entity_mut(rampart).insert(siege);

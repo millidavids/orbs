@@ -146,21 +146,36 @@ impl Quintessence {
 /// trust.
 #[must_use]
 pub fn ceiling_for(integrity: u32, steps: usize) -> u32 {
+    ceiling_with(integrity, steps, FLOOR_PCT, 0)
+}
+
+/// [`ceiling_for`], with the Ley Line's forks applied.
+///
+/// `floor` is the floor in percent — [`FLOOR_PCT`] plus the `floor` grant's
+/// tiers — and `bonus` is the `pool` grant's quintessence, added to the base
+/// so integrity scales it like the rest.
+#[must_use]
+pub fn ceiling_with(integrity: u32, steps: usize, floor: u32, bonus: u32) -> u32 {
     let steps = u32::try_from(steps).unwrap_or(u32::MAX);
-    let base = QUINTESSENCE_BASE.saturating_add(steps.saturating_mul(PER_LEY_STEP));
+    let base = QUINTESSENCE_BASE
+        .saturating_add(steps.saturating_mul(PER_LEY_STEP))
+        .saturating_add(bonus);
     // Clamped, because a value past `STANDING` would scale the ceiling *above*
-    // the base rather than up to it.
+    // the base rather than up to it — and a floor past a hundred would too.
+    let floor = floor.min(100);
     let standing = integrity.min(STANDING);
-    let scale = FLOOR_PCT + (100 - FLOOR_PCT) * standing / STANDING;
+    let scale = floor + (100 - floor) * standing / STANDING;
     base.saturating_mul(scale) / 100
 }
 
 /// This tower's ceiling right now.
 #[must_use]
 pub fn ceiling(world: &World) -> u32 {
-    ceiling_for(
+    ceiling_with(
         world.resource::<super::Integrity>().get(),
         super::quintessence_steps(world),
+        FLOOR_PCT.saturating_add(super::grant::floor_bonus(world)),
+        super::grant::pool_bonus(world),
     )
 }
 

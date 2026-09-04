@@ -223,7 +223,7 @@ fn finish(world: &mut World, pylon: Entity) {
 
     // After the sentence about the work, for the reason `transmute` gives: the
     // barrier goes back up, *and then* the orb can hold another spell.
-    tower::credit(world, earned);
+    tower::done(world, &tower::Work::at(PYLON), earned);
 }
 
 /// Publish everything a course has to say, as readings a spell can ask for.

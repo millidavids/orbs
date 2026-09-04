@@ -129,11 +129,14 @@ pub(super) fn spend(intent: &Intent, world: &mut World, verb: Verb) {
         return;
     }
 
+    // The Ley Line's `garrison`: every troop deployed brings more bodies than
+    // the menagerie sang (§11.5). Read before the borrow below.
+    let garrison = crate::tower::grant::garrison_bonus(world);
     let mut siege = world
         .get_mut::<Siege>(rampart)
         .expect("the siege was there a moment ago");
     match entry.kind.as_str() {
-        "troops" => siege.reinforce(entry.count),
+        "troops" => siege.reinforce(entry.count.saturating_add(garrison)),
         "vigour" => siege.heal(entry.points),
         _ => {
             if let Some(effect) = entry.effect() {

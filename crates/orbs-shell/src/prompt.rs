@@ -418,6 +418,16 @@ pub(super) fn session(
     // the only way to see it was to touch it — a bar says it continuously.
     // It follows the shape of the pane: down the side when the pane is wider
     // than it is tall, across the top when it is taller than wide.
+    // §11.5's road: the room's own mastery line, one row under the title,
+    // **before** the panel and the boards divide what is left — so it sits
+    // under the title whichever way the panel runs, and a short pane loses the
+    // road rather than the transcript.
+    let road = super::road::split(body, panel.line.as_ref());
+    if let Some(line) = panel.line.as_ref() {
+        super::road::paint(&mut painter, road.area, line, sim.prose());
+    }
+    body = road.rest;
+
     let instruments = panel.instruments.as_slice();
     let split = super::panel::split(body, instruments);
     super::panel::paint(&mut painter, split, instruments, &panel.domain, bench);

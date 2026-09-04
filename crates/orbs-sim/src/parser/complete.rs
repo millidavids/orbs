@@ -1,6 +1,6 @@
 //! What the player might be about to type — **the prompt's view of it**.
 //!
-//! The answer itself is [`expect`](super::expect)'s, which three surfaces share.
+//! The answer itself is [`expect`](mod@super::expect)'s, which three surfaces share.
 //! What is left here is the shape the prompt's Tab *listing* wants — strings
 //! rather than kinds — and §6's numbered answer.
 //!
@@ -62,7 +62,7 @@ impl Completion {
 
 /// What could finish the word ending at `caret`.
 ///
-/// The prompt's view of [`expect`](super::expect): the same answer with the
+/// The prompt's view of [`expect`](super::expect()): the same answer with the
 /// kinds dropped, because a Tab listing shows strings. `spell` is false — the
 /// prompt cannot run `repeat` or `end`, and offering them would teach a word
 /// that is refused the moment it is used.

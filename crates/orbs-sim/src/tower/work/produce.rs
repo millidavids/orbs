@@ -88,14 +88,19 @@ pub(super) fn transmute(world: &mut World, place: Entity) {
     let held = contents(world, place);
     let holding = super::super::stock::holdings(world, place);
 
-    let made = world
-        .resource::<Recipes>()
-        .matching(&name, &holding, world.resource::<super::super::Learned>())
-        .map(|recipe| {
+    let made = {
+        let recipes = world.resource::<Recipes>();
+        let known = super::super::known(world);
+        recipes.matching(&name, &holding, &known).map(|recipe| {
             (
+                // **Only the outputs the player may make.** A recipe that draws
+                // among several fires once any of them is known, and the draw
+                // must not land on one that is still gated — see
+                // `Recipes::reachable`.
                 recipe
                     .outputs()
                     .into_iter()
+                    .filter(|made| known.knows(recipes, made))
                     .map(str::to_owned)
                     .collect::<Vec<_>>(),
                 recipe.leaves.clone(),
@@ -103,7 +108,8 @@ pub(super) fn transmute(world: &mut World, place: Entity) {
                 recipe.scroll,
                 recipe.count,
             )
-        });
+        })
+    };
 
     // A recipe that stopped matching mid-run should not be reachable — the lock
     // sees to that — but leaving the contents alone is the only safe answer if it
@@ -228,8 +234,14 @@ pub(super) fn transmute(world: &mut World, place: Entity) {
 
     // **After the sentence about the run, never before it.** A level bought by
     // this run is a consequence of it, and announcing the reward first reads as
-    // the orb answering a question nobody asked.
-    super::super::credit(world, earned);
+    // the orb answering a question nobody asked. Counted as well as credited:
+    // what was made, where, and whether it was a potion or a scroll are what a
+    // room's mastery line reads.
+    super::super::done(
+        world,
+        &super::super::Work::made(&name, &output, potion, scroll),
+        earned,
+    );
 }
 
 // `siphon` lived here and is **retired** (§19). It lifted the `Product` out of

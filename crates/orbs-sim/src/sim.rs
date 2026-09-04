@@ -29,9 +29,26 @@ pub struct Sim {
 
 impl Sim {
     /// Create a simulation from a master seed, with an empty schedule.
+    ///
+    /// **An open tower**: every room, every gated recipe and every charm, which
+    /// is the tower every test, dump, balance policy and `screens` example has
+    /// always used. A fresh *game* is [`sealed`](Self::sealed).
     #[must_use]
     pub fn new(seed: u64) -> Self {
-        Self::with_schedule(seed, |_| {})
+        Self::build(seed, false, |_| {})
+    }
+
+    /// Create a simulation that begins as a laboratory and nothing else.
+    ///
+    /// The tower a fresh game builds (§11.5): the rooms, recipes and charms a
+    /// station on either track opens are shut until it is reached, and
+    /// everything nothing opens is open — see `tower::Opened::start`. Whether a
+    /// tower began this way travels in its save, because a sealed and an open
+    /// tower with identical seed and submissions diverge at the first
+    /// `attend archive`.
+    #[must_use]
+    pub fn sealed(seed: u64) -> Self {
+        Self::build(seed, true, |_| {})
     }
 
     /// Create a simulation and populate its schedule.
@@ -62,12 +79,30 @@ impl Sim {
     /// malformed file rather than starting a tower whose work is worth nothing.
     #[must_use]
     pub fn with_schedule(seed: u64, build: impl FnOnce(&mut Schedule)) -> Self {
+        Self::build(seed, false, build)
+    }
+
+    /// The one construction behind [`new`](Self::new), [`sealed`](Self::sealed)
+    /// and [`with_schedule`](Self::with_schedule).
+    fn build(seed: u64, sealed: bool, build: impl FnOnce(&mut Schedule)) -> Self {
         let mut world = Self::bare(seed);
         let (commands, schedule, scene) = Self::schedules(build);
 
         // The tower is raised before the first tick, so tick 0 already has a
         // world to name.
         tower::raise(&mut world);
+        // **Sealed before anything reads the rooms** — the boot report below
+        // lists only what is open, and the scene is built from what is not
+        // sealed. `bare` opened everything; this shuts what a station opens.
+        if sealed {
+            let start = tower::Opened::start(
+                world.resource::<Recipes>(),
+                world.resource::<crate::content::Charms>(),
+                world.resource::<crate::content::Progression>(),
+            );
+            world.insert_resource(start);
+            world.insert_resource(tower::Sealing(true));
+        }
         // **The walls have to say how they stand from tick 0.** `integrity` is a
         // reading on the pylon, published by `erode` when the number moves — and
         // the number does not move for thirty ticks, so a tower nobody had
@@ -105,7 +140,15 @@ impl Sim {
         // bootstrap that silently did nothing three lines up. Writing the
         // warning and then reintroducing the pattern under it is the shape this
         // file keeps paying for; `lapse_charms` addresses the forge by path.
-        crate::execute::lapse_charms(&mut world);
+        // **Last of the three, and after every publisher above.** `seal` marks
+        // the nodes that exist when it runs, and the three calls above *create*
+        // nodes — `pylon/integrity` and each die's `quintessence`. Sealing first
+        // left those four unmarked in a fresh sealed tower while the same tower
+        // reloaded from its own save had them, because `restore` seals last:
+        // two worlds that must be identical, differing in the component two
+        // sabotage queries read. Still before the scene and the boot report,
+        // which is what the ordering was for.
+        tower::seal(&mut world);
         tower::rebuild(&mut world);
         tower::report(&mut world);
 
@@ -119,7 +162,7 @@ impl Sim {
 
     /// Every resource a world needs, and no tower in it.
     ///
-    /// # Why this is a function rather than the top of [`with_schedule`]
+    /// # Why this is a function rather than the top of [`Sim::with_schedule`]
     ///
     /// Because there are two ways to reach a world now — raising a new tower and
     /// loading a saved one — and §13's whole argument is that two constructions
@@ -214,11 +257,34 @@ impl Sim {
         instruments.extend(tower::operated());
         instruments.sort_unstable();
         instruments.dedup();
-        if let Err(error) = curve.check(&instruments) {
-            panic!("the built-in content is authored with the crate: {error}");
+        {
+            let recipes = world.resource::<Recipes>();
+            let charms = world.resource::<crate::content::Charms>();
+            let outputs = recipes.outputs();
+            let gated = recipes.gated();
+            let charms: Vec<&str> = charms.names().collect();
+            let catalogue = crate::content::Catalogue {
+                instruments: &instruments,
+                outputs: &outputs,
+                gated: &gated,
+                charms: &charms,
+            };
+            if let Err(error) = curve.check(&catalogue) {
+                panic!("the built-in content is authored with the crate: {error}");
+            }
         }
         world.insert_resource(curve);
         world.init_resource::<tower::Experience>();
+        // **Everything open**, which is the tower every test, dump and policy
+        // has always used. A fresh *game* starts sealed — see `Sim::sealed`.
+        let opened = tower::Opened::all(
+            world.resource::<Recipes>(),
+            world.resource::<crate::content::Charms>(),
+        );
+        world.insert_resource(opened);
+        world.init_resource::<tower::Sealing>();
+        world.init_resource::<tower::Tally>();
+        world.init_resource::<tower::mastery::Reached>();
         // Whole, by `Default`. A tower is not built already crumbling.
         world.init_resource::<tower::Integrity>();
         // **Full, not empty.** A new tower opens holding its whole ceiling, for
@@ -226,9 +292,13 @@ impl Sim {
         // place for years before the first tick, and starting at nought would
         // mean twelve minutes of an inert forge before the game had a decision
         // in it. Inserted after `Integrity` because the ceiling reads it.
+        // **Before the ceiling is read**, because the ceiling reads what the
+        // Ley Line's forks have granted — and the readers answer nought for a
+        // missing resource, so this order is a courtesy rather than a
+        // requirement.
+        world.init_resource::<tower::Taken>();
         let ceiling = tower::ceiling(&world);
         world.insert_resource(tower::Quintessence::new(ceiling));
-        world.init_resource::<tower::Taken>();
         world.init_resource::<crate::execute::Opening>();
         world.init_resource::<crate::execute::Reloaded>();
         world.init_resource::<crate::execute::Unfurling>();
@@ -617,6 +687,12 @@ impl Sim {
             return;
         }
 
+        #[cfg(debug_assertions)]
+        if let Some(id) = crate::execute::reaching(line) {
+            self.debug_reach(line, id.as_deref());
+            return;
+        }
+
         // `analyse` rather than `resolve`: it keeps every scored reading, which
         // is what §6's *"the parser must explain itself"* means in practice and
         // what the Phase 0 gate needs to cluster failures by cause rather than
@@ -667,7 +743,7 @@ impl Sim {
     /// **The third entry point, and the last one.** [`submit`](Self::submit)
     /// takes a line the player typed; this takes a file the player wrote. Both
     /// are *decisions*, which is the test for what belongs in
-    /// [`Submissions`](crate::session::Submissions) and therefore in a replay —
+    /// [`Submissions`] and therefore in a replay —
     /// and the keystrokes that built the buffer are not, which is why the editor
     /// itself lives in the frontend beside the prompt's own line editor.
     ///
@@ -699,7 +775,7 @@ impl Sim {
     /// Take a mastery node, on the next tick.
     ///
     /// [`write_spell`](Self::write_spell)'s shape, one screen along: the choice
-    /// is recorded as a [`Submission`](crate::session::Submission) and queued as
+    /// is recorded as a [`Submission`] and queued as
     /// an effect, so it lands on a tick boundary like everything else a player
     /// decides. **The id, not the keystrokes** — aiming the cursor changes no
     /// state the world can see.
@@ -1166,7 +1242,7 @@ impl Sim {
     /// A typed line is recorded against the tick it was *queued* on and executes
     /// at the start of the next; this executes immediately, so it lands after
     /// that tick's step. Both are exact, and they are told apart by
-    /// [`Submission::Walked`](crate::session::Submission::Walked) rather than by
+    /// [`Submission::Walked`] rather than by
     /// a driver having to guess: replay a tick, then apply the walks recorded
     /// against it in list order. A tick can never hold both kinds, because the
     /// prompt is dead while the arrows have the maze.
@@ -1237,7 +1313,7 @@ impl Sim {
     /// press arrives in — [`tower::chant::WINDOW`] is two ticks wide — so the
     /// only thing that crosses this boundary is *which syllable*. That is what
     /// keeps `orbs-sim` clockless (rules 1 and 3) and what makes the recorded
-    /// [`Submission::Sang`](crate::session::Submission::Sang) exact rather than
+    /// [`Submission::Sang`] exact rather than
     /// a float somebody has to argue about.
     ///
     /// Returns whether there was a chant to answer at all.
@@ -1300,14 +1376,65 @@ impl Sim {
 
     /// The Ley Line, against what the tower has earned (§11.5).
     #[must_use]
-    pub fn ley_line(&self) -> Vec<tower::Node> {
+    pub fn ley_line(&self) -> Vec<tower::Station> {
         tower::ley_line(&self.world)
     }
 
-    /// Mastery's tiers, in order, each with its nodes.
+    /// The last total the Ley Line is authored to.
     #[must_use]
-    pub fn mastery(&self) -> Vec<Vec<tower::Node>> {
+    pub fn scale(&self) -> u64 {
+        tower::scale(&self.world)
+    }
+
+    /// The seven mastery lines, in `DOMAINS` order.
+    #[must_use]
+    pub fn mastery(&self) -> Vec<tower::Line> {
         tower::mastery(&self.world)
+    }
+
+    /// Which mastery stations the tower has reached, in order.
+    #[must_use]
+    pub fn reached(&self) -> &[String] {
+        self.world.resource::<tower::mastery::Reached>().ids()
+    }
+
+    /// Whether the tower has opened `key` — a room, a recipe, a charm, the wall.
+    #[must_use]
+    pub fn has_opened(&self, key: &str) -> bool {
+        self.world.resource::<tower::Opened>().has(key)
+    }
+
+    /// Whether the room named may be entered.
+    #[must_use]
+    pub fn is_open(&self, domain: &str) -> bool {
+        self.world.resource::<tower::Opened>().is_open(domain)
+    }
+
+    /// Whether this tower began sealed — part of its recorded start.
+    #[must_use]
+    pub fn began_sealed(&self) -> bool {
+        self.world.resource::<tower::Sealing>().0
+    }
+
+    /// The room the player is standing in, by name — `None` at `/tower` or
+    /// above it, where no work happens.
+    ///
+    /// **The room, not the leaf.** A player standing in the alembic is in the
+    /// laboratory, and anything asking *which line, which panel, which log*
+    /// wants the room; `location` is the path and `domain_of` is the walk.
+    #[must_use]
+    pub fn domain(&self) -> Option<String> {
+        let cwd = self.world.resource::<tower::Cwd>().0;
+        tower::domain_of(&self.world, cwd)
+            .and_then(|node| self.world.get::<tower::Name>(node))
+            .map(|name| name.0.clone())
+    }
+
+    /// How many times `key` has been counted — `made:clarity`, `potion`,
+    /// `at:stacks`, `event:figure`.
+    #[must_use]
+    pub fn tally(&self, key: &str) -> u32 {
+        self.world.resource::<tower::Tally>().count(key)
     }
 
     /// Queue a tester's `debug_spawn`, on the next tick like everything else.
@@ -1423,10 +1550,9 @@ impl Sim {
         let real: Vec<String> = self
             .world
             .resource::<crate::content::Progression>()
-            .mastery()
+            .ley_line()
             .iter()
-            .flat_map(|tier| &tier.nodes)
-            .filter(|node| tower::mastery::is_real(node))
+            .flat_map(|station| &station.nodes)
             .cloned()
             .collect();
         let said = match id {
@@ -1443,6 +1569,135 @@ impl Sim {
             .push(RecordKind::Completion)
             .text(orbs_render::FieldName::Message, &said)
             .finish();
+    }
+
+    /// Reach a mastery station without doing its deed.
+    ///
+    /// **Every earlier station on the line too**, because a line is walked in
+    /// order and a tower with its third station reached and its first not is a
+    /// state the game cannot reach. What each one opens is opened and said, so
+    /// the See-it line about a gated recipe or charm sees what a played tower
+    /// would.
+    ///
+    /// **And the room the line stands in.** `debug_reach archive_3` reached three
+    /// stations inside a room the player could not enter — the archive is opened
+    /// by `laboratory_1`, on a *different* line — and `survey cabinet` then
+    /// answered *"the archive is not yours yet"* while the archive's own line read
+    /// three of five. That is exactly the state this doc promises not to make, and
+    /// the workaround had already been written into two See-it lines by hand.
+    #[cfg(debug_assertions)]
+    fn debug_reach(&mut self, line: &str, id: Option<&str>) {
+        let tick = *self.world.resource::<Tick>();
+        self.world
+            .resource_mut::<Scrollback>()
+            .records_mut()
+            .push(RecordKind::Input)
+            .text(orbs_render::FieldName::Message, line)
+            .finish();
+        self.world.resource_mut::<Submissions>().push(tick, line);
+
+        let stations: Vec<(String, String, Vec<String>)> = self
+            .world
+            .resource::<crate::content::Progression>()
+            .mastery()
+            .iter()
+            .map(|milestone| {
+                (
+                    milestone.domain.clone(),
+                    milestone.id.clone(),
+                    milestone.opens.clone(),
+                )
+            })
+            .collect();
+        let ids: Vec<&str> = stations.iter().map(|(_, id, _)| id.as_str()).collect();
+        let said = match id {
+            Some(wanted) if ids.contains(&wanted) => {
+                let domain = stations
+                    .iter()
+                    .find(|(_, id, _)| id == wanted)
+                    .map(|(domain, _, _)| domain.clone())
+                    .unwrap_or_default();
+                self.debug_unseal(&domain, &stations);
+                let mut reached_any = false;
+                for (line_domain, station, opens) in &stations {
+                    if *line_domain != domain {
+                        continue;
+                    }
+                    if !self
+                        .world
+                        .resource::<tower::mastery::Reached>()
+                        .has(station)
+                    {
+                        tower::mastery::reach(&mut self.world, line_domain, station, opens);
+                        reached_any = true;
+                    }
+                    if station == wanted {
+                        break;
+                    }
+                }
+                if reached_any {
+                    format!("the orb reaches {wanted}")
+                } else {
+                    format!("{wanted} is reached already")
+                }
+            }
+            Some(wanted) => format!("{wanted} is no station. one of: {}", ids.join(", ")),
+            None => format!("stations: {}", ids.join(", ")),
+        };
+        self.world
+            .resource_mut::<Scrollback>()
+            .records_mut()
+            .push(RecordKind::Completion)
+            .text(orbs_render::FieldName::Message, &said)
+            .finish();
+    }
+
+    /// Open the room `domain`, and whatever had to open first for it to.
+    ///
+    /// **The chain, outermost first.** A room is opened by a station on *another*
+    /// room's line, which may itself stand in a shut room — the sanctum is the
+    /// laboratory's third, and the See-it lines for the wall reach `laboratory_3`
+    /// by hand before `sanctum_1` for exactly this. Walked here instead.
+    ///
+    /// Where the tower's own line opens a room — the grimoire at 16, the forge at
+    /// 56 — the key is applied directly rather than credited, because this word
+    /// grants no experience and handing out fifty-six would move concentration,
+    /// the pool and every other reading derived from the total.
+    #[cfg(debug_assertions)]
+    fn debug_unseal(&mut self, domain: &str, stations: &[(String, String, Vec<String>)]) {
+        let mut order: Vec<(String, String)> = Vec::new();
+        let mut wanted = domain.to_owned();
+        // Bounded by the rooms there are, so no authored chain can spin here.
+        for _ in 0..=tower::DOMAINS.len() {
+            if self.world.resource::<tower::Opened>().is_open(&wanted) {
+                break;
+            }
+            let key = tower::domain_key(&wanted);
+            let Some((line, id, _)) = stations.iter().find(|(_, _, opens)| opens.contains(&key))
+            else {
+                tower::open(&mut self.world, &key);
+                break;
+            };
+            order.push((line.clone(), id.clone()));
+            wanted = line.clone();
+        }
+        for (line, wanted) in order.into_iter().rev() {
+            for (line_domain, station, opens) in stations {
+                if *line_domain != line {
+                    continue;
+                }
+                if !self
+                    .world
+                    .resource::<tower::mastery::Reached>()
+                    .has(station)
+                {
+                    tower::mastery::reach(&mut self.world, line_domain, station, opens);
+                }
+                if *station == wanted {
+                    break;
+                }
+            }
+        }
     }
 
     /// Hand the open ward's answer to the aperture, so the next press breaks it.
@@ -1774,7 +2029,7 @@ impl Sim {
     /// What the prompt reads, before the caret.
     ///
     /// `<name> $ `. Composed here rather than in a view because the name is
-    /// world state — see [`Wizard`](crate::session::Wizard) — and because both
+    /// world state — see [`Wizard`] — and because both
     /// frontends must show the same one.
     #[must_use]
     pub fn prompt(&self) -> String {

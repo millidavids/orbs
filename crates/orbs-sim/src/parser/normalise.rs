@@ -5,12 +5,12 @@
 //! - **Filler cannot be stripped before the verb is matched.** `to`, `for`,
 //!   `of`, `do`, and `it` are all filler in an argument and all load-bearing in a
 //!   verb phrase — `go to`, `look for`, `get rid of`, `how do i`, `take it back`.
-//!   So [`tokenise`] keeps everything and [`strip_filler`] runs afterwards, on
+//!   So [`Tokens::split`] keeps everything and [`strip_filler`] runs afterwards, on
 //!   the argument tail only.
 //! - **Punctuation is not uniformly noise.** `?` is a synonym for `recall` and
 //!   `./` is one for `invoke`, while `feed.log` and `/tower/laboratory` need their
 //!   separators intact.
-//! - **Lowercasing must not destroy the input.** [`NounKind::Pattern`] is free
+//! - **Lowercasing must not destroy the input.** [`NounKind::Pattern`](super::NounKind::Pattern) is free
 //!   text by definition, so `sift ERROR feed.log` has to search for `ERROR` and
 //!   not `error`. Every token therefore carries **both** forms: `raw` as typed,
 //!   and `matching` folded for comparison. They travel together as a [`Word`] so

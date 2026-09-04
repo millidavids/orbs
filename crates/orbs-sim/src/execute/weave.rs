@@ -8,9 +8,10 @@
 //! advertises"* — arrived as a single line and was never chosen.
 //!
 //! So the way in is a word, exactly as it is for [`unfurl`](super::unfurl). This
-//! hands a frontend screen the keyboard; that screen draws the two tracks
-//! ([`tower::mastery`](crate::tower::mastery)) and the total they are measured
-//! against.
+//! hands a frontend screen the keyboard; that screen draws the two tracks — the
+//! Ley Line ([`tower::ley`]) and the seven mastery lines
+//! ([`mod@crate::tower::mastery`]) — and the total the first is
+//! measured against.
 //!
 //! # What the sim owns, and what it does not
 //!
@@ -22,17 +23,16 @@
 //!
 //! # Taking a node
 //!
-//! This comment used to say nothing here takes one, because every authored node
-//! was a marker — and it named exactly what the first real one would need: *"a
-//! mutator, a `Submission` variant and a queued effect on a tick boundary, the
-//! shape `Sim::write_spell` already has."* [`grant`] is that, and `steps_1` is
-//! the node that earned it: the menagerie cannot be automated at one instruction
-//! a tick, so a second step is the first thing in the game worth buying.
+//! A fork on the Ley Line offers its nodes and `take` chooses one. [`grant`] is
+//! the mutator behind it — *"a `Submission` variant and a queued effect on a
+//! tick boundary, the shape `Sim::write_spell` already has"* — and `steps_1` is
+//! the node that earned it: the menagerie cannot be automated at one
+//! instruction a tick, so a second step was the first thing worth buying.
 //!
-//! **Markers still refuse in voice.** `tower::mastery::is_real` is what separates
-//! them, derived from the grant so a node cannot be takeable and worthless at
-//! once — and the screen asks it *before* sending, so a marker never reaches a
-//! tick boundary at all.
+//! **Nothing on a mastery line is ever taken.** A station there is reached by
+//! doing its deed, and the screen refuses `take` on one in voice before it ever
+//! reaches a tick boundary; the world refuses it again here, because an id is
+//! an id and a screen's arithmetic is a second opinion about the rules.
 
 use bevy_ecs::prelude::*;
 use orbs_render::{FieldName, RecordKind, Role};
@@ -76,32 +76,39 @@ impl Weaving {
     }
 }
 
-/// Take a mastery node, on the tick after the screen asked for it.
+/// Take a fork node, on the tick after the screen asked for it.
 ///
-/// **Every guard is re-asked here.** The screen refuses a locked node, a marker
-/// and a spent tier before it sends — and a queued effect that trusted the
-/// screen's arithmetic would be a second opinion about the rules, which is
-/// exactly how a screen and a world come to disagree. §19 records that shape
-/// going wrong repeatedly; it is cheap to ask twice and the world is the answer.
+/// **Every guard is re-asked here.** The screen refuses a locked node, a
+/// mastery station and a spent fork before it sends — and a queued effect that
+/// trusted the screen's arithmetic would be a second opinion about the rules,
+/// which is exactly how a screen and a world come to disagree. §19 records that
+/// shape going wrong repeatedly; it is cheap to ask twice and the world is the
+/// answer.
 ///
 /// Silent when it refuses, because the screen already said so in voice. What it
 /// says on success is a record, so `sift` and the log see the decision.
 pub(super) fn grant(world: &mut World, id: &str) {
-    if !tower::mastery::is_real(id) {
+    if !tower::is_real(id) {
         return;
     }
-    let open = tower::mastery(world)
+    let open = tower::ley_line(world)
         .into_iter()
-        .flatten()
+        .filter(|station| station.fork)
+        .flat_map(|station| station.nodes)
         .any(|node| node.id == id && node.standing == tower::Standing::Open);
     if !open {
         return;
     }
     world.resource_mut::<tower::Taken>().hold(id);
 
+    // The node's own sentence rides in the record, so the log says what was
+    // bought and not only that something was.
+    let detail = world
+        .resource::<Prose>()
+        .line(&format!("weave_node_{id}"), &[]);
     let message = world
         .resource::<Prose>()
-        .line("weave_took", &[("name", id)]);
+        .line("weave_took", &[("name", id), ("detail", &detail)]);
     world
         .resource_mut::<Scrollback>()
         .records_mut()

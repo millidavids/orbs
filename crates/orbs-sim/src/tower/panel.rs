@@ -657,8 +657,8 @@ fn read(world: &World, node: Entity, name: &str, now: Tick) -> (State, Option<Me
     // that is honest rather than coy: they are holding two things that make
     // nothing, as far as they know. A panel saying `charged` for a run that will
     // never start is the exact lie this column exists to remove.
-    let learned = world.resource::<super::Learned>();
-    if recipes.matching(name, &holding, learned).is_some() {
+    let known = super::known(world);
+    if recipes.matching(name, &holding, &known).is_some() {
         return (State::Charged, None);
     }
     // **Part of a recipe is not leavings.** The lectern wants four distinct
@@ -666,7 +666,7 @@ fn read(world: &World, node: Entity, name: &str, now: Tick) -> (State, Option<Me
     // `Fouled` — the panel telling a player *collecting a set* that their
     // instrument will not start, which is the confusion this whole column exists
     // to remove.
-    if recipes.gathering(name, &holding, learned) {
+    if recipes.gathering(name, &holding, &known) {
         return (State::Gathering, None);
     }
     (State::Fouled, None)

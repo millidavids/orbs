@@ -5,15 +5,16 @@
 //! control, and it says the same things the domain's own pane would say in
 //! fewer words — never anything extra, which is rule 2's line.
 //!
-//! # Seven, always, and four of them are dark
+//! # Seven, always, and six of them are dark in a fresh game
 //!
-//! §10 fixes the domain list at seven and §11.5 starts the player with two of
-//! them. A rail that showed only what exists would grow a box at a time with no
-//! warning, and the arrival of a *room* is the least surprising thing in the
-//! game to foreshadow — so all seven slots are drawn and the unbuilt ones are
-//! anonymous. Seven slots with four dark says *there is more* without saying
+//! §10 fixes the domain list at seven and §11.5 starts the player with one of
+//! them — the laboratory, with the rest earned along the mastery lines
+//! (Phase 10). A rail that showed only what is open would grow a box at a time
+//! with no warning, and the arrival of a *room* is the least surprising thing
+//! in the game to foreshadow — so all seven slots are drawn and the shut ones
+//! are anonymous. Seven slots with six dark says *there is more* without saying
 //! what, which is what §11's discovery loop wants and what naming them would
-//! spend.
+//! spend. Every room is raised at tick 0; `built` reads *opened*.
 //!
 //! # It asks the panel, rather than answering beside it
 //!
@@ -160,6 +161,13 @@ pub struct Brief {
     pub running: usize,
     /// Something latched for the player's attention.
     pub mark: Option<Mark>,
+    /// How far along the room's mastery line is, while it has a station left.
+    ///
+    /// **The one progression reading on the rail** (§11.5): a percentage of the
+    /// next station's deed, so a glance says how close the room is to opening
+    /// something. Absent on a finished line and on a shut room, because a
+    /// number about neither would be a number about nothing.
+    pub mastery: Option<super::Progress>,
 }
 
 /// A glance at all seven domains, in [`DOMAINS`] order.
@@ -174,6 +182,9 @@ pub fn briefs(world: &World) -> Vec<Brief> {
     let rooms = rooms_of(world);
     let marks = world.resource::<Marks>();
     let running = running_by_domain(world);
+    // Once for all seven, rather than once per box: the lines are read from
+    // the tally and the content, and nothing about them differs per room.
+    let lines = super::mastery(world);
 
     DOMAINS
         .into_iter()
@@ -187,13 +198,26 @@ pub fn briefs(world: &World) -> Vec<Brief> {
                     spell: None,
                     running: 0,
                     mark: None,
+                    mastery: None,
                 };
             };
+            let open = world.resource::<super::Opened>().is_open(name);
             let instruments = super::panel::instruments_in(world, node);
             let busiest = busiest(&instruments);
             Brief {
                 name,
-                built: true,
+                // **Raised and opened.** Every room is raised at tick 0; what
+                // a fresh game has not earned draws as the dark box §11.5's
+                // breadth track always promised — *"2 of 7 at start"*.
+                built: open,
+                mastery: if open {
+                    lines
+                        .iter()
+                        .find(|line| line.domain == name)
+                        .and_then(super::Line::progress)
+                } else {
+                    None
+                },
                 state: busiest.map_or(State::Empty, |instrument| instrument.state),
                 detail: busiest.and_then(detail_of),
                 spell: running

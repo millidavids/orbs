@@ -158,7 +158,16 @@ impl Game {
     /// prompt, deliberately: the whole point is the time before there is one.
     #[must_use]
     pub fn booting() -> Self {
-        Self::spawn_with(QUIET, GRID.0, GRID.1, true)
+        Self::spawn_with(QUIET, GRID.0, GRID.1, true, false)
+    }
+
+    /// Start a game **as a fresh game starts**: a laboratory and nothing else
+    /// (§11.5), which every other scenario skips by opening the whole tower.
+    #[must_use]
+    pub fn sealed() -> Self {
+        let game = Self::spawn_with(QUIET, GRID.0, GRID.1, false, true);
+        game.settled();
+        game
     }
 
     fn open(seed: u64, cols: u16, rows: u16) -> Self {
@@ -168,10 +177,10 @@ impl Game {
     }
 
     fn spawn(seed: u64, cols: u16, rows: u16) -> Self {
-        Self::spawn_with(seed, cols, rows, false)
+        Self::spawn_with(seed, cols, rows, false, false)
     }
 
-    fn spawn_with(seed: u64, cols: u16, rows: u16, boot: bool) -> Self {
+    fn spawn_with(seed: u64, cols: u16, rows: u16, boot: bool, sealed: bool) -> Self {
         let binary = env!("CARGO_BIN_EXE_orbs-tui");
         // Unique per game, so scenarios inside one test binary run concurrently
         // without seeing each other's windows.
@@ -215,6 +224,12 @@ impl Game {
             format!("ORBS_SEED={seed}"),
             format!("ORBS_WIZARD={WIZARD}"),
             "ORBS_SAVE=off".to_owned(),
+            // **Every room open**, which is the tower these scenarios were
+            // written against: a fresh *game* is a laboratory and nothing else
+            // (§11.5), and a scenario that walks into the archive on its first
+            // line would otherwise be refused in voice. `Game::sealed` is the
+            // one door to the start a player gets.
+            format!("ORBS_SEALED={}", u8::from(sealed)),
             // **A harness-spawned game gets a lifetime; a player's never does.**
             // The whole suite is under thirty seconds, so ten minutes is a
             // backstop rather than a budget: nothing here should approach it, and

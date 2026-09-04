@@ -133,7 +133,7 @@ pub enum Kind {
     /// Do the enclosed steps once for each member of a set — `for each way`.
     ///
     /// The cursor is bound to `group` itself, so the body reads
-    /// `if way has spoil`. See [`SpellWord::For`](crate::parser::SpellWord::For)
+    /// `if way has spoil`. See [`SpellWord::For`]
     /// for why it is not `it`.
     Each {
         /// The set to walk, and the name the cursor takes.
@@ -224,7 +224,7 @@ pub struct Complaint {
 /// place" — the exact silent failure §19 records as *"it looked exactly like the
 /// condition being inverted"*.
 ///
-/// [`compile`](super::compile) turns one into a [`Program`], and nothing else
+/// [`compile`](super::compile()) turns one into a [`Program`], and nothing else
 /// can. That is a weaker guarantee than it sounds — `Program::new` is reachable
 /// from anywhere in this module — but it is the one that matters, because the
 /// callers that would otherwise reach for the parser directly (`invoke`,
@@ -246,7 +246,7 @@ pub struct Program {
 }
 
 impl Program {
-    /// Assemble one. `pub(super)` so [`compile`](super::compile) is the only
+    /// Assemble one. `pub(super)` so [`compile`](mod@super::compile) is the only
     /// route from text to something runnable.
     #[must_use]
     pub(super) const fn new(body: Block, complaints: Vec<Complaint>) -> Self {
@@ -314,7 +314,7 @@ struct Nesting {
 /// Read `lines` as a shape, resolving nothing.
 ///
 /// `pub(super)` deliberately: the way in from outside this module is
-/// [`compile`](super::compile), which does this and then fixes the names. See
+/// [`compile`](mod@super::compile), which does this and then fixes the names. See
 /// [`Draft`].
 #[must_use]
 pub(super) fn read(lines: &[String]) -> Draft {
@@ -938,7 +938,7 @@ pub fn step_past(
 /// would be a rule to teach and a rule to get wrong, for a program that fits on
 /// a screen.
 ///
-/// The list is what [`compile`](super::compile) uses to tell a variable from a
+/// The list is what [`compile`](mod@super::compile) uses to tell a variable from a
 /// place the room does not have — a distinction it cannot otherwise make, since
 /// both are words that resolve to nothing at cast.
 #[must_use]
@@ -1255,7 +1255,7 @@ fn pulled(argument: &str) -> Option<(String, String)> {
 ///
 /// **Not checked against the world here.** `read` resolves nothing — that is the
 /// whole of what [`Draft`] means — so a set the room does not have is caught by
-/// [`compile`](super::compile), in the room, where every other name is.
+/// [`compile`](mod@super::compile), in the room, where every other name is.
 fn walked(argument: &str) -> Option<String> {
     let mut words = argument.split_whitespace();
     let particle = SpellWord::For.particle()?;

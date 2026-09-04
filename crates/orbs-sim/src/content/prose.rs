@@ -8,7 +8,8 @@
 //!
 //! It is **not** a record formatter. Records stay structured (rule 4) — `sift`,
 //! pipes and §14's linearisation all read fields, not sentences. A line from
-//! here goes into [`FieldName::Message`], *alongside* the fields it was built
+//! here goes into [`FieldName::Message`](orbs_render::FieldName::Message),
+//! *alongside* the fields it was built
 //! from, so a machine still reads the facts and a player reads the sentence.
 //!
 //! # Why the sim parses content but never watches a file
@@ -190,6 +191,24 @@ mod tests {
             !line.contains('{'),
             "a filled line has no braces left: {line}"
         );
+    }
+
+    #[test]
+    fn every_manual_subject_is_a_page_rather_than_a_template() {
+        // **The `recall_` prefix makes a key a parser noun**, so a *template*
+        // filed under it becomes a subject the manual answers with its own
+        // braces: `recall_road` shipped as a topic called `road`, and `recall
+        // road` printed `{name} line: {count} of {quantity} reached`. The route
+        // templates paid for this once already and were renamed; this is the
+        // lint that was missing, and it costs nothing.
+        let prose = Prose::builtin();
+        for topic in prose.topics() {
+            let page = prose.line(&format!("recall_{topic}"), &[]);
+            assert!(
+                !page.contains('{'),
+                "`{topic}` is a manual subject and its page is a template: {page}",
+            );
+        }
     }
 
     #[test]

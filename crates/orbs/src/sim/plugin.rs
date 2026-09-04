@@ -59,7 +59,7 @@ impl Plugin for SimPlugin {
                 resumed
             }
             orbs_shell::Opened::Unreadable => {
-                let mut fresh = Tower::new(self.seed);
+                let mut fresh = Tower::fresh(self.seed);
                 if let Some(wizard) = &self.wizard {
                     fresh.rename(wizard);
                 }
@@ -67,7 +67,7 @@ impl Plugin for SimPlugin {
                 fresh
             }
             orbs_shell::Opened::New => {
-                let mut fresh = Tower::new(self.seed);
+                let mut fresh = Tower::fresh(self.seed);
                 if let Some(wizard) = &self.wizard {
                     fresh.rename(wizard);
                 }

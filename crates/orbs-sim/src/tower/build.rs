@@ -948,7 +948,7 @@ struct Branch {
     places: &'static [Branch],
     /// What makes this fixture behave unlike the rest, if anything.
     role: Option<Role>,
-    /// The verb that charges it and starts it — see [`Operation`].
+    /// The verb that charges it and starts it — see [`super::Operation`].
     operation: Option<Verb>,
     /// The set a `for each` walks, if this fixture is one of a set.
     ///
@@ -1299,6 +1299,17 @@ fn spawn(world: &mut World, parent: Option<Entity>, name: &str, kind: NounKind) 
         .id();
     if let Some(parent) = parent {
         world.entity_mut(node).insert(ChildOf(parent));
+        // **A node inherits its parent's seal.** `tower::seal` marks the tree
+        // that exists when it runs, and readings are published later and
+        // *re*-published as numbers move — `erode` rewrites the pylon's
+        // integrity, `defend::publish` each die's price. A child spawned
+        // unmarked under a shut room is a hole in the one invariant the marker
+        // exists for, and the two sabotage queries read it with a `Without`
+        // filter. Checking the parent alone is enough: the parent was marked by
+        // `seal` or inherited it here, so the property is inductive.
+        if world.get::<super::Sealed>(parent).is_some() {
+            world.entity_mut(node).insert(super::Sealed);
+        }
     }
     node
 }

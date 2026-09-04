@@ -204,6 +204,18 @@ ticks = 56
 potion = true
 heat = true
 
+# ---------------------------------------------------------------------------
+# THE THREE THE LABORATORY EARNS (§11.5, `progression.toml`).
+#
+# `gated = true` means the player has to **earn** this before it will fire — a
+# station on the laboratory's mastery line opens it, and until then the alembic
+# reads `fouled` on the draught exactly as it does for a secret. Progressive
+# reveal inside the room: a fresh tower knows clarity's chain and nothing else.
+#
+# **`haste` is gated deliberately late.** §19 records the haste chain as the
+# fastest experience in the game and a risk; behind the fifth station it arrives
+# after the player has automated clarity rather than instead of it.
+# ---------------------------------------------------------------------------
 [[alembic]]
 input = "fixed-draught"
 output = "warding"
@@ -211,6 +223,7 @@ leaves = "phlegm"
 ticks = 14
 potion = true
 heat = true
+gated = true
 
 [[alembic]]
 input = "weak-tincture"
@@ -219,6 +232,7 @@ leaves = "phlegm"
 ticks = 12
 potion = true
 heat = true
+gated = true
 
 [[alembic]]
 input = "keen-draught"
@@ -227,6 +241,7 @@ leaves = "phlegm"
 ticks = 40
 potion = true
 heat = true
+gated = true
 
 # ---------------------------------------------------------------------------
 # THE THREE ANOTHER WIZARD KNEW (§10, `lens/`).
@@ -273,6 +288,7 @@ potion = true
 heat = true
 secret = true
 
+# The laboratory's last station opens this one — forty potions in.
 [[alembic]]
 input = "quiet-draught"
 output = "stillness"
@@ -280,6 +296,7 @@ leaves = "phlegm"
 ticks = 40
 potion = true
 heat = true
+gated = true
 
 # ---------------------------------------------------------------------------
 # athanor - fuel, not recipes. Arrives with step 4.
@@ -329,9 +346,15 @@ heat = true
 # is adding a line - and `every_scroll_the_lectern_makes_can_be_spent` refuses
 # a name with no effect behind it.
 # ---------------------------------------------------------------------------
+#
+# **Two of the three are gated, per output** (§11.5): the archive's own line
+# opens them, and the recipe fires from the first because *any* known output
+# is enough — a gate on the whole recipe would have sealed the gleaning scroll
+# behind the last station that opens the others.
 [[lectern]]
 input = "fragment"
 count = 4
 outputs = ["gleaning-scroll", "quickening-scroll", "verdant-scroll"]
 ticks = 20
 scroll = true
+gated = ["quickening-scroll", "verdant-scroll"]

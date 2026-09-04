@@ -52,8 +52,8 @@ mod tests;
 
 #[cfg(debug_assertions)]
 pub use debug::{
-    COURSE, LEARN, Order as SpawnOrder, SIEGE, SPAWN, SWAP, TAKE, WARD, beleaguered, giveaway,
-    lesson, order as spawn_order, shortcut, swapping, taking,
+    COURSE, LEARN, Order as SpawnOrder, REACH, SIEGE, SPAWN, SWAP, TAKE, WARD, beleaguered,
+    giveaway, lesson, order as spawn_order, reaching, shortcut, swapping, taking,
 };
 #[cfg(debug_assertions)]
 pub use debug_spell::{
@@ -71,11 +71,20 @@ pub use navigate::find_domain;
 // `debug_course`'s; `publish_pylon` takes the node and is `tower::erode`'s,
 // which runs on a tick when the player may be standing anywhere.
 pub(crate) use muster::publish as publish_pylon;
+// **These two aliases are debug-only, and say so rather than warn.**
+// `debug_course` and `debug_siege` are the only things that reach a republish by
+// `Cwd` from outside its own domain, so with `debug_assertions` off a release
+// build found both re-exports unused. The gate is the one their callers already
+// carry. `muster::refresh` itself stays ungated — `stop` abandoning a course
+// calls it — while `defend`'s has no other caller and is gated at its
+// definition.
+#[cfg(debug_assertions)]
 pub(crate) use muster::refresh as refresh_pylon;
 // The bailey's republish. Only the `Cwd` form is re-exported — `defend`'s own
 // callers take the node directly, and the sanctum's split exists because
 // `tower::erode` republishes on a *tick*, which the siege has no equivalent of
 // while `hold` is the only thing that moves it.
+#[cfg(debug_assertions)]
 pub(crate) use defend::refresh as refresh_rampart;
 // ...and the die prices, which are raised once at construction rather than on a
 // round. `Sim::bare` is the only caller, beside the pylon's for the same reason.

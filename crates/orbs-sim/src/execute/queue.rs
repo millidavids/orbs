@@ -33,7 +33,7 @@ pub(super) fn queue(intent: &Intent, world: &mut World) {
     // shape: the word works, and it says what would make it work. A gate that
     // reported *"there is no satchel here"* would send the player looking round
     // the room for a thing the loom holds.
-    if !tower::mastery::holds(world, tower::mastery::Grant::Satchel) {
+    if !tower::holds(world, tower::Grant::Satchel) {
         say(world, "queue_unlearned", &[], Role::Cost);
         return;
     }

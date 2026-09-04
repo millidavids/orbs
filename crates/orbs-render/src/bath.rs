@@ -41,7 +41,7 @@
 //!   instrument a single row, and a picture whose motion is textural needs
 //!   height to read. This one does not.
 //!
-//! **How it moves lives in [`liquid`](crate::liquid)**, shared with the flask,
+//! **How it moves lives in [`liquid`]**, shared with the flask,
 //! because two vessels must not say different things with the same picture.
 //! The distinction that module exists for is this instrument's: a bath
 //! **bubbles** only while the athanor is lit, and shifts in place when it is not

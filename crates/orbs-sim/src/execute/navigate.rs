@@ -22,7 +22,7 @@ use super::{acknowledge, missing};
 /// §7: *"Navigation is diegetic; paths are places."* Moving is also what makes a
 /// domain's contents nameable at all — the scene holds every place but only the
 /// belongings of where you stand, so `attend` is how a player reaches the nouns
-/// a brewing command needs. See [`tower::rebuild`](crate::tower::rebuild).
+/// a brewing command needs. See [`tower::rebuild`].
 pub(super) fn attend(intent: &Intent, world: &mut World) {
     let Some(target) = intent.arguments.first().map(|argument| &argument.value) else {
         acknowledge(Verb::Attend, world);
@@ -34,6 +34,15 @@ pub(super) fn attend(intent: &Intent, world: &mut World) {
         missing(Verb::Attend, target, world);
         return;
     };
+
+    // **A room the tower has not opened yet refuses in voice** (§11.5). Asked
+    // of the node rather than of the name, because `attend stacks` reaches the
+    // archive by a name that is not the archive's — `tower::sealed_room_of` is
+    // the one gate, and it is asked here for the same reason `survey` asks it.
+    if let Some(room) = tower::sealed_room_of(world, node) {
+        refuse_sealed(world, Verb::Attend, &room);
+        return;
+    }
 
     // **A compass bearing is not a room.** The archive's four ways have to be
     // `NounKind::Place` — that is the only kind the place half of a spell's
@@ -100,6 +109,12 @@ pub(super) fn survey(intent: &Intent, world: &mut World) {
         }
         None => world.resource::<Cwd>().0,
     };
+    // The same gate `attend` asks, so a room you cannot enter is not one you
+    // can look into from the doorway either.
+    if let Some(room) = tower::sealed_room_of(world, at) {
+        refuse_sealed(world, Verb::Survey, &room);
+        return;
+    }
 
     // **A satchel answers with its queue, in queue order.** Everything below
     // sorts by kind and then by name, which is right for a room and wrong for
@@ -132,6 +147,10 @@ pub(super) fn survey(intent: &Intent, world: &mut World) {
 
     let mut here: Vec<(String, &'static str, Option<String>)> = tower::children_of(world, at)
         .into_iter()
+        // **A shut room is not listed**, so the tower's listing says *there is
+        // a laboratory* and nothing about what a fresh player has not earned —
+        // the rail's dark boxes make the same choice, for the same reason.
+        .filter(|node| tower::sealed_room_of(world, *node).is_none())
         .filter_map(|node| {
             let name = world.get::<tower::Name>(node)?.0.clone();
             let kind = world.get::<tower::Nameable>(node)?.0;
@@ -206,6 +225,25 @@ pub(super) fn survey(intent: &Intent, world: &mut World) {
 /// Where the tree begins, which is not where the player stands.
 pub(super) fn root(world: &World) -> Entity {
     tower::root(world)
+}
+
+/// Say that `room` is not the player's yet.
+///
+/// One sentence for every verb that reaches a shut room, so the refusal is the
+/// same whichever door was tried — and it names the room, because a player who
+/// typed `attend stacks` deserves to learn what the stacks are in.
+fn refuse_sealed(world: &mut World, verb: Verb, room: &str) {
+    let message = world
+        .resource::<crate::content::Prose>()
+        .line("room_sealed", &[("name", room)]);
+    world
+        .resource_mut::<Scrollback>()
+        .records_mut()
+        .push(RecordKind::Completion)
+        .text(FieldName::Name, verb.canonical())
+        .text(FieldName::Message, &message)
+        .role(Role::Cost)
+        .finish();
 }
 
 /// The place `target` names, by full path or by last segment (§7).

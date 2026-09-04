@@ -84,6 +84,14 @@ pub struct Siege {
     /// *round*, not the die.
     #[serde(default)]
     pub pledges: Vec<Pledge>,
+    /// The tower's standing bonus on every answering roll — the Ley Line's
+    /// `edge` grant, read once when the siege begins.
+    ///
+    /// **On the siege rather than read per round**, so the board's odds and
+    /// the round's rolls read one number, and a node taken mid-fight lands on
+    /// the next siege rather than half way through this one.
+    #[serde(default)]
+    pub edge: i32,
     /// What a format-8 save recorded as this siege's private pool.
     ///
     /// **A migration shim, and it has to be a field rather than a lookup.**
@@ -138,6 +146,7 @@ impl Siege {
             mustered: ASSIGNED,
             staged: Vec::new(),
             pledges: Vec::new(),
+            edge: 0,
             quintessence: None,
             outcome: None,
             clear_at: None,
@@ -430,6 +439,11 @@ impl Siege {
     #[must_use]
     pub fn garrison_roll(&self) -> Roll {
         let mut roll = Roll::new(Die::D20, AGAINST);
+        // The Ley Line's edge first, named, so `peruse bailey.log` says the
+        // wizard's own standing moved a roll before any potion did.
+        if self.edge != 0 {
+            roll = roll.plus("edge", Effect::Bonus(self.edge));
+        }
         for modifier in &self.staged {
             roll = roll.plus(&modifier.source, modifier.effect);
         }

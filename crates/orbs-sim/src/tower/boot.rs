@@ -46,8 +46,12 @@ pub fn report(world: &mut World) {
     // One row per domain, carrying what it holds and whether it is sound. §8.1's
     // `verify` answers the same question one surface at a time; this is the
     // glance that tells you which surface to ask about.
+    // **Only the rooms the tower has opened**, so a fresh game's first screen
+    // names the laboratory and nothing it has not earned — the foreshadowing
+    // the rail's dark boxes do, kept off the one report that would spend it.
     let domains: Vec<(String, usize, bool)> = children_of(world, root)
         .into_iter()
+        .filter(|branch| super::sealed_room_of(world, *branch).is_none())
         .map(|branch| {
             let name = world
                 .get::<Name>(branch)

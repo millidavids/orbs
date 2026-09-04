@@ -148,19 +148,24 @@ pub fn discover(world: &mut World) -> Option<String> {
         .stream(RngStream::Lens)
         .random_range(0..100);
 
-    let mut learned = world.resource_mut::<Learned>();
-    if roll >= chance {
-        learned.since = learned.since.saturating_add(1);
-        return None;
-    }
+    let found = {
+        let mut learned = world.resource_mut::<Learned>();
+        if roll >= chance {
+            learned.since = learned.since.saturating_add(1);
+            return None;
+        }
 
-    // **The file's order, not a uniform draw.** `recipes.toml`'s order is the
-    // designer's recommendation (§19 says so of `recall`'s primary route), so
-    // the reveal sequence is authored rather than left to a die — and it is
-    // deterministic, which a replay needs.
-    let found = pool.into_iter().next()?;
-    learned.known.insert(found.clone());
-    learned.since = 0;
+        // **The file's order, not a uniform draw.** `recipes.toml`'s order is
+        // the designer's recommendation (§19 says so of `recall`'s primary
+        // route), so the reveal sequence is authored rather than left to a die
+        // — and it is deterministic, which a replay needs.
+        let found = pool.into_iter().next()?;
+        learned.known.insert(found.clone());
+        learned.since = 0;
+        found
+    };
+    // A secret found is what the lens's mastery line counts.
+    super::note(world, super::SECRET);
     Some(found)
 }
 
@@ -192,9 +197,14 @@ pub fn learn(world: &mut World, wanted: Option<&str>) -> Option<String> {
     };
 
     let found = found?;
-    let mut learned = world.resource_mut::<Learned>();
-    learned.known.insert(found.clone());
-    learned.since = 0;
+    {
+        let mut learned = world.resource_mut::<Learned>();
+        learned.known.insert(found.clone());
+        learned.since = 0;
+    }
+    // Counted as a find, so a tower reached this way and one reached by probing
+    // are the same tower — which is the property that makes it worth anything.
+    super::note(world, super::SECRET);
     Some(found)
 }
 

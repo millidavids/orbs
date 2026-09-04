@@ -618,7 +618,7 @@ const fn indent_for(prompt: Option<&str>) -> u16 {
 /// cells once its border and §10.1's instrument panel are taken out, and
 /// `sage-tincture + ground-salt -> clarified-draught` is 47.
 ///
-/// Measured here and drawn by [`draw_lines`] from the same [`Wrap`], so the two
+/// Measured here and drawn by [`draw_lines`] from the same [`crate::Wrap`], so the two
 /// cannot disagree about how many rows a record costs — the failure that left the
 /// transcript with blank rows at the bottom while it dropped history off the top.
 fn wrapped_rows(record: &Record<'_>, cols: u16, prompt: Option<&str>) -> u16 {

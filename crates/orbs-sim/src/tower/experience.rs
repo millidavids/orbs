@@ -8,7 +8,7 @@
 //! and then wish they had not.
 //!
 //! What it is *worth* and what it *buys* are both authored
-//! ([`Progression`](crate::content::Progression)); this module knows only when
+//! ([`Progression`]); this module knows only when
 //! to add and how to say so.
 //!
 //! # Under `tower/`, because it is world state that ticks
@@ -98,8 +98,10 @@ pub fn credit(world: &mut World, earned: u64) {
         return;
     }
 
+    let was = world.resource::<Experience>().get();
     let before = concentration(world);
     world.resource_mut::<Experience>().0 += earned;
+    let now = world.resource::<Experience>().get();
     let after = concentration(world);
 
     // **Said once, at the tick that bought it.** A level is derived, so it would
@@ -110,6 +112,12 @@ pub fn credit(world: &mut World, earned: u64) {
     if after > before {
         say_gained(world, after);
     }
+
+    // **And then what the stations passed opened.** A level is derived from the
+    // total; a room is not, so crossing a step has to write it — see
+    // `ley::cross`. After the level, because the level is what this run bought
+    // and the room is what the line was waiting to give.
+    super::ley::cross(world, was, now);
 }
 
 /// What a run at `named` earned, credited — for callers with nothing to say.
@@ -184,7 +192,13 @@ mod tests {
             )
             .count();
 
-        assert_eq!(said, 1, "the level was announced {said} times");
-        assert!(sim.experience() > 16, "the sweep never crossed it");
+        // Forty alembic runs cross three levels now that the line runs to the
+        // soft ending; each is said exactly once.
+        let crossed = Progression::builtin().concentration(sim.experience());
+        assert!(crossed > 1, "the sweep never crossed a second level");
+        assert_eq!(
+            said, crossed,
+            "{crossed} levels were crossed and {said} announced"
+        );
     }
 }

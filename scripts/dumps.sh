@@ -86,8 +86,24 @@ run maze_log    ORBS_SEED=3 ORBS_BOOT=0 ORBS_GRID=100x40 ORBS_DUMP="attend archi
 
 # --- the weave screen ------------------------------------------------------
 run weave       ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="weave"
-run weave_aim   ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="weave" ORBS_WEAVE=$'mastery\n<down>\ntake'
+run weave_aim   ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="weave" ORBS_WEAVE=$'ley\n<right>\n<down>\ntake'
 run weave_early ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="weave" ORBS_WEAVE=$'<down>\n<right>'
+run weave_lines ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="weave" ORBS_WEAVE=$'mastery\n<down>\n<right>\ntake'
+run weave_reach ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="attend laboratory; debug_reach laboratory_2; weave" ORBS_WEAVE=$'mastery'
+
+# --- a sealed tower -----------------------------------------------------------
+run sealed_doors ORBS_SEALED=1 ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="attend archive; attend stacks; survey archive; survey /tower"
+run sealed_rail  ORBS_SEALED=1 ORBS_BOOT=0 ORBS_GRID=120x45 ORBS_DUMP="attend laboratory; attend archive"
+run sealed_opens ORBS_SEALED=1 ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="attend laboratory; kindle charcoal; debug_spawn clarified-draught 1; distil clarified-draught; meditate 60; attend archive"
+run sealed_wall  ORBS_SEALED=1 ORBS_BOOT=0 ORBS_DUMP="debug_reach laboratory_3; attend bailey; debug_reach sanctum_1; attend bailey"
+
+# --- the ley line's grants ----------------------------------------------------
+run ley_line     ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="weave" ORBS_WEAVE=$'ley\n<right>\n<right>\n<down>'
+run grant_fuel   ORBS_BOOT=0 ORBS_DUMP="debug_take fuel_1; attend laboratory; kindle charcoal"
+run grant_pool   ORBS_BOOT=0 ORBS_DUMP="status; debug_take pool_1; status"
+run grant_thrift ORBS_BOOT=0 ORBS_DUMP="debug_take thrift_1; attend forge; imbue mortar_and_pestle hurried"
+run road_lab     ORBS_BOOT=0 ORBS_GRID=120x45 ORBS_DUMP="attend laboratory; debug_reach laboratory_1"
+run road_recall  ORBS_BOOT=0 ORBS_DUMP="attend laboratory; recall"
 
 # --- the editor ------------------------------------------------------------
 run editor_write ORBS_DUMP="attend laboratory; scribe brewing" \

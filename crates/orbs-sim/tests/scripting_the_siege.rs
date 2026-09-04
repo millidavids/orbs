@@ -299,6 +299,7 @@ fn the_affordability_guard_pledges_while_it_can_and_stops_when_it_cannot() {
 /// Both directions are asserted, because a test that only ever wins would pass
 /// against a domain that could not express the loss at all — and losing is the
 /// case the reading was added for.
+#[cfg(debug_assertions)]
 #[test]
 fn a_spell_can_tell_which_way_a_finished_siege_went() {
     // A win: `debug_siege` leaves the enemy one round from breaking.

@@ -1,6 +1,7 @@
-//! The two facts a frontend reads from the environment before the world exists.
+//! The three facts a frontend reads from the environment before the world
+//! exists: the seed, the wizard's name, and whether a fresh tower begins sealed.
 //!
-//! Both are read *outside* the sim, deliberately: the environment is not
+//! All three are read *outside* the sim, deliberately: the environment is not
 //! deterministic, and reaching for it from inside a world that must replay
 //! identically from a seed is a habit worth not starting.
 //!
@@ -56,6 +57,43 @@ pub fn wizard() -> Option<String> {
         .into_iter()
         .filter_map(|key| std::env::var(key).ok())
         .find(|name| !name.trim().is_empty())
+}
+
+/// The switch that decides whether a fresh tower begins sealed.
+///
+/// `1` seals it; `0` opens it; unset takes the caller's default. **The game
+/// defaults to sealed and a dump defaults to open**, for the reason
+/// `ORBS_BOOT=0` exists: the dump is an instrument, ~200 See-it lines attend
+/// rooms directly, and every one of them keeps meaning what it meant. §19
+/// records the trade-off.
+///
+/// **Blank falls through to the default**, as a blank `USER` does above: an
+/// exported-but-empty variable is the shape "unset" most often arrives in, and
+/// reading it as `0` would quietly hand a player the open tower — the whole
+/// feature off, with nothing on screen saying so.
+pub const SEALED: &str = "ORBS_SEALED";
+
+/// A fresh tower, sealed or open as the environment says — or as `sealed`
+/// says when it does not.
+///
+/// **The one caller of either constructor from a frontend.** There are three
+/// fresh-world sites across two frontends and the dump, and three readings of
+/// one switch is how a rule comes to differ per build.
+#[must_use]
+pub fn fresh(seed: u64, sealed: bool) -> orbs_sim::Sim {
+    let wanted = std::env::var(SEALED)
+        .ok()
+        .and_then(|value| match value.trim() {
+            "1" | "true" | "yes" => Some(true),
+            "0" | "false" | "no" => Some(false),
+            _ => None,
+        })
+        .unwrap_or(sealed);
+    if wanted {
+        orbs_sim::Sim::sealed(seed)
+    } else {
+        orbs_sim::Sim::new(seed)
+    }
 }
 
 /// The compiler that built this binary, captured by `build.rs`.

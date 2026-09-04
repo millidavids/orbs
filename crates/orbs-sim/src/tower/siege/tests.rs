@@ -264,27 +264,33 @@ fn a_lost_siege_still_pays_and_a_won_one_pays_more() {
     // §11.5's table, and the sentence under it: *"effort is never wasted;
     // only cynicism is."*
     let pool = 8 * ESCROW_PER_FOE;
-    assert_eq!(escrow(8, 100, Outcome::Held), pool + pool / 2);
+    assert_eq!(escrow(8, 100, Outcome::Held, 0), pool + pool / 2);
     // Lost at 60% keeps 60%.
-    assert_eq!(escrow(8, 60, Outcome::Fallen), (pool * 60) / 100);
+    assert_eq!(escrow(8, 60, Outcome::Fallen, 0), (pool * 60) / 100);
     // ...and bailing at nought still pays the floor, which is the whole
     // point of having one.
-    assert_eq!(escrow(8, 0, Outcome::Fallen), (pool * ESCROW_FLOOR) / 100);
+    assert_eq!(
+        escrow(8, 0, Outcome::Fallen, 0),
+        (pool * ESCROW_FLOOR) / 100
+    );
     // A win always beats a loss at the same completion.
     for completion in [0, 25, 60, 99, 100] {
         assert!(
-            escrow(8, completion, Outcome::Held) > escrow(8, completion, Outcome::Fallen),
+            escrow(8, completion, Outcome::Held, 0) > escrow(8, completion, Outcome::Fallen, 0),
             "losing at {completion}% paid at least as well as winning",
         );
     }
+    // The Ley Line's `escrow` lifts the pool before either branch, so a loss
+    // under it pays more too.
+    assert!(escrow(8, 0, Outcome::Fallen, 25) > escrow(8, 0, Outcome::Fallen, 0));
 }
 
 #[test]
 fn a_bigger_enemy_is_worth_more_so_abandoning_a_hard_one_is_never_the_play() {
     // The exploit the scaling exists to close: if the pool were flat, the
     // best move would be to abandon anything difficult and wait.
-    assert!(escrow(9, 100, Outcome::Held) > escrow(5, 100, Outcome::Held));
-    assert!(escrow(9, 50, Outcome::Fallen) > escrow(5, 50, Outcome::Fallen));
+    assert!(escrow(9, 100, Outcome::Held, 0) > escrow(5, 100, Outcome::Held, 0));
+    assert!(escrow(9, 50, Outcome::Fallen, 0) > escrow(5, 50, Outcome::Fallen, 0));
 }
 
 /// **Every state a siege can actually reach, checked against every rule.**

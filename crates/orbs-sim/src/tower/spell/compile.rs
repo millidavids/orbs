@@ -149,7 +149,7 @@ pub fn compile(world: &World, from: Entity, lines: &[String]) -> Program {
 /// unreadable one is, which for a `pull` means the loop above it goes round
 /// doing the half it can.
 fn check_learned(world: &World, body: &Block, complaints: &mut Vec<Complaint>) {
-    use crate::tower::mastery::{Grant, holds};
+    use crate::tower::{Grant, holds};
     let satchel = holds(world, Grant::Satchel);
     let cursors = holds(world, Grant::Cursors);
     if satchel && cursors {
@@ -655,7 +655,7 @@ pub struct Reading {
 
 /// What is wrong with a line, in a form prose can be built from.
 ///
-/// Deliberately **not** [`Complaint`](super::Complaint), which carries a prose
+/// Deliberately **not** [`Complaint`], which carries a prose
 /// key and nothing else. Half of what this reports is a *name* — the word the
 /// room could not place — and a `&'static str` has nowhere to put it.
 #[derive(Debug, Clone, PartialEq, Eq)]

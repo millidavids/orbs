@@ -176,6 +176,33 @@ pub fn taking(line: &str) -> Option<Option<String>> {
     Some((!id.is_empty()).then(|| id.to_lowercase()))
 }
 
+/// `debug_reach <id>` — reach a mastery station without doing its deed.
+///
+/// `debug_take`'s argument, one track over: forty potions is an afternoon of
+/// the laboratory before a See-it line about what the sixth station opens can
+/// begin. It reaches every earlier station on the same line too, because a line
+/// is walked in order and a tower with its third station reached and its first
+/// not is a state the game cannot reach.
+///
+/// What it does not skip is what reaching *does*: the grant is the real grant
+/// through `mastery::reach`, so what the station opens is opened and said
+/// exactly as a played tower would.
+pub const REACH: &str = "debug_reach";
+
+/// Read a `debug_reach` line, if that is what this is.
+///
+/// `None` for anything else; `Some(None)` for a bare `debug_reach`, which lists
+/// the stations — `debug_take`'s shape, for its reason.
+#[must_use]
+pub fn reaching(line: &str) -> Option<Option<String>> {
+    let rest = line.trim().strip_prefix(REACH)?;
+    if !rest.is_empty() && !rest.starts_with(char::is_whitespace) {
+        return None;
+    }
+    let id = rest.trim();
+    Some((!id.is_empty()).then(|| id.to_lowercase()))
+}
+
 /// Read a `debug_learn` line, if that is what this is.
 #[must_use]
 pub fn lesson(line: &str) -> Option<Lesson> {

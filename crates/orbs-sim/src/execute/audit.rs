@@ -1,6 +1,6 @@
 //! `verify` bare — §8.1's expensive audit, started and landed.
 //!
-//! The model is [`tower::audit`](crate::tower::audit); this is the half that
+//! The model is [`tower::audit`]; this is the half that
 //! takes the production slot and says what it found.
 //!
 //! # It is Production-class, which is the whole price

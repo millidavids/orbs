@@ -162,7 +162,7 @@ impl Frame {
     /// property of *what is in an instrument*, so every cell of one bar shares
     /// it — encoding it per cell would spend a byte on all 7,040 cells of a
     /// 160×44 grid to express a value that varies across five of them, and
-    /// [`Cell`](crate::Cell) is pinned at 8 bytes by a test that records what the
+    /// [`Cell`] is pinned at 8 bytes by a test that records what the
     /// last such byte cost.
     ///
     /// It lives on the `Frame` rather than beside it for the same reason

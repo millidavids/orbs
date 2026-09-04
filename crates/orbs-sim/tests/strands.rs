@@ -10,7 +10,11 @@
 //! deadlocked.
 
 use orbs_render::{FieldName, Value};
-use orbs_sim::{Save, Sim};
+// `Save` is the debug-gated tests' — `debug_take` buys the second cursor, and
+// that word does not exist in a release build.
+#[cfg(debug_assertions)]
+use orbs_sim::Save;
+use orbs_sim::Sim;
 
 fn run(sim: &mut Sim, line: &str) {
     sim.submit(line);
@@ -61,6 +65,7 @@ fn write(sim: &mut Sim, name: &str, lines: &[&str]) {
 ///
 /// So this asserts both sides: `alongside` says what to buy until it is bought,
 /// and the two-spell road was open the whole time.
+#[cfg(debug_assertions)]
 #[test]
 fn the_second_cursor_is_bought_at_the_loom() {
     let mut sim = Sim::new(11);
@@ -112,6 +117,7 @@ fn the_second_cursor_is_bought_at_the_loom() {
 /// spell would have sat there until `PATIENCE` with the queue permanently empty.
 /// The deadlock was by construction, and it is the one failure mode this feature
 /// exists to avoid.
+#[cfg(debug_assertions)]
 #[test]
 fn a_blocked_cursor_yields_only_itself() {
     let mut sim = in_the_menagerie();
@@ -157,6 +163,7 @@ fn a_blocked_cursor_yields_only_itself() {
 /// The caller runs off the end almost immediately; the forked part is still
 /// working. Before [`ended`] existed the off-the-end path called `finish`
 /// straight away, which would have taken the forked cursor down with it.
+#[cfg(debug_assertions)]
 #[test]
 fn a_spell_lasts_as_long_as_its_longest_cursor() {
     let mut sim = in_the_menagerie();
@@ -187,6 +194,7 @@ fn a_spell_lasts_as_long_as_its_longest_cursor() {
 /// see"* — applied to a cursor that goes on running while the caller does. A
 /// shared store here would be worse than it was for a call, because both sides
 /// keep writing to it.
+#[cfg(debug_assertions)]
 #[test]
 fn a_forked_cursor_binds_its_own_names() {
     let mut sim = in_the_menagerie();
@@ -227,6 +235,7 @@ fn a_forked_cursor_binds_its_own_names() {
 /// argument for a descent — *"at one step a tick a runaway does not hang the
 /// game, it grows the save"* — and a strand is heavier, because each also spends
 /// its own budget.
+#[cfg(debug_assertions)]
 #[test]
 fn a_runaway_fork_is_bounded_and_says_so() {
     let mut sim = in_the_menagerie();
@@ -367,6 +376,7 @@ fn two_cursors_interleave_the_same_way_at_two_steps_a_tick() {
 /// So this asserts the pair, in one world — the glance and the answer are one
 /// walk of `Running` (`tower::running_spells`) precisely so they cannot come to
 /// disagree.
+#[cfg(debug_assertions)]
 #[test]
 fn the_rail_counts_every_cursor_and_status_names_them() {
     let mut sim = in_the_menagerie();
@@ -469,6 +479,7 @@ fn the_shipped_forked_solver_is_still_optimal() {
 /// **Both cursors survive a save**, which is `ChantSave`'s lesson one struct
 /// over: state the world holds and the document does not is state that silently
 /// resets when a player comes back.
+#[cfg(debug_assertions)]
 #[test]
 fn a_forked_spell_comes_back_with_both_cursors() {
     let mut sim = in_the_menagerie();

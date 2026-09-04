@@ -73,7 +73,7 @@ impl Surfaces {
         }
         if self.weaving.is_none() && sim.weaving() {
             let mut screen = Tapestry::default();
-            screen.refresh(sim.experience(), sim.ley_line(), sim.mastery());
+            screen.refresh(sim.experience(), sim.scale(), sim.ley_line(), sim.mastery());
             self.weaving = Some(screen);
         }
         if !self.walking && sim.wandering() {
@@ -115,7 +115,7 @@ impl Surfaces {
             editor.set_reading(sim.read_spell(editor.domain(), editor.lines()));
         }
         if let Some(screen) = &mut self.weaving {
-            screen.refresh(sim.experience(), sim.ley_line(), sim.mastery());
+            screen.refresh(sim.experience(), sim.scale(), sim.ley_line(), sim.mastery());
         }
         if self.walking && sim.stacks().is_none() {
             self.walking = false;
@@ -192,9 +192,11 @@ impl Surfaces {
         }
     }
 
-    /// The weave screen is **read-only against the world** (§19: every Mastery
-    /// node is authored as a marker, so `take` always refuses in voice), which
-    /// is why this is the one surface that needs no `Sim` at all.
+    /// A key at the weave screen, and what it asked the world for.
+    ///
+    /// The screen refuses a locked node, a spent fork and a mastery station in
+    /// voice before anything reaches here; what does reach here is a fork node
+    /// the player chose, handed to the sim the way the Bevy build hands it.
     fn weaving_took(&mut self, code: KeyCode, sim: &mut Sim) {
         let Some(screen) = &mut self.weaving else {
             return;

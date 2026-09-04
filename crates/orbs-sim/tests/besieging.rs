@@ -4,6 +4,20 @@
 //! These prove the *game*: that the words resolve where they should, that the
 //! readings a decision tree asks for are actually published, that spending the
 //! arsenal reaches the dice, and that a siege survives being saved.
+//!
+//! # Eleven of these are `cfg(debug_assertions)`
+//!
+//! A siege runs for as long as the dice take, and the arsenal is spent on stock
+//! a player earns over hours — so `debug_siege` and `debug_spawn` are what make
+//! any of it testable in a hundredth of a second. Neither word exists in a
+//! release build: the line is unresolvable there, the shortcut silently does
+//! nothing, and the test fails against a world that was never built. **They were
+//! failing that way**, all eleven of them, from before the siege phase closed —
+//! `cargo test --release` is not the gate CLAUDE.md runs, so nobody saw it.
+//!
+//! Gated per test rather than per file, which is this project's convention and
+//! what `tests/gleaning.rs` records: the thirty-two below that need no door run
+//! in either profile.
 
 use orbs_render::{FieldName, Value};
 use orbs_sim::{Save, Sim, tower};
@@ -236,6 +250,7 @@ fn a_band_that_is_standing_is_never_empty_and_a_routed_one_is() {
     );
 }
 
+#[cfg(debug_assertions)]
 #[test]
 fn spending_the_arsenal_reaches_the_line() {
     // Step 4's whole claim: potions, scrolls and troops are pure mathematical
@@ -321,6 +336,7 @@ fn every_roll_reaches_the_log_with_its_die_and_its_face() {
     );
 }
 
+#[cfg(debug_assertions)]
 #[test]
 fn a_siege_ends_and_pays() {
     // §11.5's escrow, through the real verbs. `debug_siege` leaves it one round
@@ -342,6 +358,7 @@ fn a_siege_ends_and_pays() {
     assert!(sim.experience() > 0, "a won siege earned nothing",);
 }
 
+#[cfg(debug_assertions)]
 #[test]
 fn a_finished_siege_refuses_a_further_round_and_says_how_to_start_another() {
     let mut sim = at_the_wall(11);
@@ -680,6 +697,7 @@ fn loading_a_save_from_before_a_siege_ends_the_one_in_progress() {
 /// interception the three scroll rows in `siege.toml` were dead content:
 /// `wield quickening-scroll` in the bailey hurried the *laboratory*, and `quaff`
 /// refused and pointed the player at it.
+#[cfg(debug_assertions)]
 #[test]
 fn a_scroll_is_spent_on_the_siege_when_one_is_running() {
     let mut sim = at_the_wall(11);
@@ -706,6 +724,7 @@ fn a_scroll_is_spent_on_the_siege_when_one_is_running() {
 /// **...and everything outside a siege is untouched**, which is the half that
 /// could regress silently. The interception is narrow on purpose: only while a
 /// siege is running, and only for a scroll the wall can actually use.
+#[cfg(debug_assertions)]
 #[test]
 fn a_scroll_keeps_its_ordinary_effect_when_no_siege_is_running() {
     let mut sim = at_the_wall(11);
@@ -739,6 +758,7 @@ fn a_scroll_keeps_its_ordinary_effect_when_no_siege_is_running() {
 ///
 /// This spends each entry through the **real verb** its row names and requires
 /// the world to answer.
+#[cfg(debug_assertions)]
 #[test]
 fn every_authored_arsenal_row_can_actually_be_spent() {
     let spendables = orbs_sim::content::Spendables::builtin();
@@ -781,6 +801,7 @@ fn every_authored_arsenal_row_can_actually_be_spent() {
 }
 
 /// ...and each one actually *changes* the siege rather than only saying so.
+#[cfg(debug_assertions)]
 #[test]
 fn every_authored_arsenal_row_changes_the_siege() {
     let spendables = orbs_sim::content::Spendables::builtin();
@@ -826,6 +847,7 @@ fn every_authored_arsenal_row_changes_the_siege() {
 ///
 /// Without it `defend` is free and `orbs-balance` measured 4.70 experience a
 /// tick against clarity's 0.140 — thirty-three times the flagship.
+#[cfg(debug_assertions)]
 #[test]
 fn a_second_siege_cannot_be_summoned_at_will() {
     let mut sim = at_the_wall(11);
@@ -846,6 +868,7 @@ fn a_second_siege_cannot_be_summoned_at_will() {
 }
 
 /// ...and it survives a save, or it is a cadence a player clears by quitting.
+#[cfg(debug_assertions)]
 #[test]
 fn the_cadence_travels_in_the_save() {
     let mut sim = at_the_wall(11);
@@ -874,6 +897,7 @@ fn the_cadence_travels_in_the_save() {
 /// Not an error — §6's bare error is a different thing — but the silent loss of
 /// the one resource the domain exists to make you weigh, and the next siege
 /// arrives on `CADENCE` whether or not you have anything left.
+#[cfg(debug_assertions)]
 #[test]
 fn a_heal_at_full_strength_is_refused_and_the_potion_kept() {
     let mut sim = at_the_wall(11);
@@ -1026,6 +1050,7 @@ fn the_pool_is_the_same_on_every_seed() {
 /// hits you. What it takes away is your answer, not their attack. The shipped
 /// `answering` solver had that backwards in its first draft and lost a siege the
 /// other three won.
+#[cfg(debug_assertions)]
 #[test]
 fn a_bonus_is_refused_before_a_volley_and_a_troop_is_not() {
     // Walk seeds until one telegraphs a volley on the opening round.

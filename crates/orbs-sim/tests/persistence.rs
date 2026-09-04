@@ -638,6 +638,14 @@ fn every_component_the_world_holds_is_one_the_save_knows_about() {
         // The tree's shape, rebuilt from every node's path.
         (TypeId::of::<bevy_ecs::hierarchy::ChildOf>(), "ChildOf"),
         (TypeId::of::<bevy_ecs::hierarchy::Children>(), "Children"),
+        // Whether the room this node stands in has been opened. Derived from
+        // `Opened`, which *is* carried, and rewritten wholesale by `tower::seal`
+        // at every construction and every restore — so a document carrying it
+        // would be a second copy of one fact, able to disagree with the set it
+        // came from. It exists only because the two calm-layer sabotage systems
+        // are `Query`s and a query cannot walk to a node's room and read a
+        // resource.
+        (TypeId::of::<orbs_sim::tower::Sealed>(), "Sealed"),
     ];
 
     let known: std::collections::HashSet<TypeId> =
@@ -649,6 +657,11 @@ fn every_component_the_world_holds_is_one_the_save_knows_about() {
     // and the caveat below is narrowed by looking at two rather than restated.
     let busy = a_busy_tower(3);
     let odd = a_tower_in_the_odd_states(3);
+    // **And a sealed one**, because `Sealed` is the one node component neither
+    // of the two above can ever hold: both build with `Sim::new`, so the lint
+    // was blind to a whole component the phase that added it introduced. A third
+    // world is the cheapest way to keep the lint's reach equal to the game's.
+    let shut = Sim::sealed(3);
 
     // **Only archetypes that are nodes.** Bevy 0.19 stores every resource on an
     // entity of its own, so an unfiltered archetype walk meets all thirty-odd of
@@ -657,7 +670,7 @@ fn every_component_the_world_holds_is_one_the_save_knows_about() {
     // filter, and it makes the question the lint asks precise: *what can a node
     // be made of that the save has never heard of?*
     let mut strangers: Vec<String> = Vec::new();
-    for sim in [&busy, &odd] {
+    for sim in [&busy, &odd, &shut] {
         let world = sim.world();
         let node_id = world
             .components()
@@ -734,7 +747,7 @@ fn show_a_save() {
 #[test]
 fn every_resource_the_world_holds_is_one_the_save_knows_about() {
     // In the document.
-    const CARRIED: [&str; 12] = [
+    const CARRIED: [&str; 16] = [
         "orbs_sim::tick::Tick",
         "orbs_sim::rng::Rngs",
         "orbs_sim::tower::node::NodeIds",
@@ -742,8 +755,17 @@ fn every_resource_the_world_holds_is_one_the_save_knows_about() {
         "orbs_sim::session::Wizard",
         "orbs_sim::tower::experience::Experience",
         "orbs_sim::tower::erosion::Integrity",
-        "orbs_sim::tower::mastery::Taken",
+        "orbs_sim::tower::ley::Taken",
         "orbs_sim::tower::learned::Learned",
+        // The mastery lines (§11.5): what has been counted, which stations
+        // were reached and said, and what the tower has opened. All three
+        // travel so a restore neither re-earns a station nor re-announces it.
+        "orbs_sim::tower::tally::Tally",
+        "orbs_sim::tower::mastery::Reached",
+        "orbs_sim::tower::opened::Opened",
+        // Whether the tower began sealed — carried in `[world]` beside the seed,
+        // because a replay has to know which start it is rebuilding.
+        "orbs_sim::tower::opened::Sealing",
         "orbs_sim::session::Choices",
         // §8.1's per-surface rationing. It travels because a cooldown a player
         // can clear by quitting is not a cooldown.
@@ -1141,9 +1163,11 @@ fn a_truncated_record_tail_keeps_the_sequence_it_sat_at_the_end_of() {
 /// this file would stay green — it is `[]` in the fixture, because a secret is
 /// found by solving wards for hours.
 ///
-/// `progress.taken` is the same shape and cannot be tested yet: §19 records that
-/// Mastery v1 is deliberately read-only, so `take` always refuses and nothing
-/// can put an id in that list. Named here so it is not mistaken for covered.
+/// `progress.taken`, `progress.reached` and `progress.opened` are the same
+/// shape and are covered elsewhere: `tests/progression.rs` takes a fork node
+/// and replays it, `tests/sealed.rs` restores a sealed tower and a document
+/// without `opened`, and `tests/grants.rs` restores a node held above its
+/// fork's total.
 #[test]
 #[cfg(debug_assertions)]
 fn the_fields_the_fixture_leaves_empty_still_travel() {

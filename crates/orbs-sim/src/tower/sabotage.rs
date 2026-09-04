@@ -291,13 +291,18 @@ const DRIFT_INTERVAL: u64 = 300;
 /// so that adding a roll here cannot perturb the parser's.
 pub fn drift(
     mut rngs: ResMut<Rngs>,
-    logs: Query<(Entity, &Name, &NodeId), (With<Log>, Without<Poisoned>)>,
+    // **Never a log in a room the player cannot enter.** A strike there would
+    // latch a rail mark on a box drawn dark, and be a fault nobody can walk in
+    // and find — `tower::Sealed` is the set of shut rooms, as a marker, for
+    // exactly this query.
+    logs: Query<(Entity, &Name, &NodeId), (With<Log>, Without<Poisoned>, Without<super::Sealed>)>,
     // **Not a query filter, and it cannot be.** A charm has no expiry system —
     // it is an interval, so a lapsed one is still a present component — which
     // means `Without<Charmed>` would shield a log for ever after its first
     // charm. The clock is what answers, every time.
     charmed: Query<&charm::Charmed>,
     now: Res<crate::tick::Tick>,
+    taken: Res<super::Taken>,
     mut commands: Commands,
 ) {
     // **Drawn before anything can return, and that is the whole shape of the
@@ -341,7 +346,12 @@ pub fn drift(
     // `feed.log`. The id is safe as a secondary key because a save carries it.
     surfaces.sort_unstable_by(|(_, a, x), (_, b, y)| a.0.cmp(&b.0).then(x.cmp(y)));
 
-    if !roll.is_multiple_of(DRIFT_INTERVAL) {
+    // **The Ley Line's `vigilance` widens the interval**, so the calm layer
+    // strikes less often by exactly the tiers taken — a quarter less at one.
+    // The draw is unchanged: a tower with no vigilance keeps every replay it
+    // ever had, and one with it diverges only from the tick the node landed.
+    let interval = vigilant_interval(DRIFT_INTERVAL, super::grant::vigilance_percent(&taken));
+    if !roll.is_multiple_of(interval) {
         return;
     }
 
@@ -349,9 +359,9 @@ pub fn drift(
     // gives in full: a sort is a determinism fix, and taking its head turns that
     // fix into content — `archive.log` first, every session, every seed. The
     // index comes out of the *same* `roll`, whose quotient is untouched entropy
-    // once it has cleared `DRIFT_INTERVAL`, so this costs the shared `Threat`
-    // stream no extra draw.
-    let index = (roll / DRIFT_INTERVAL) as usize % surfaces.len().max(1);
+    // once it has cleared the interval, so this costs the shared `Threat` stream
+    // no extra draw.
+    let index = usize::try_from(roll / interval).unwrap_or(usize::MAX) % surfaces.len().max(1);
     let Some((target, _, _)) = surfaces.get(index).copied() else {
         return;
     };
@@ -372,6 +382,18 @@ pub fn drift(
     commands.entity(target).insert(Poisoned);
 }
 
+/// How many ticks apart the calm layer strikes, under `less` percent of
+/// vigilance.
+///
+/// `300` at nought; `400` at a quarter less, because a quarter fewer strikes
+/// is an interval a third longer. Integer, exact, and never nought.
+#[must_use]
+pub const fn vigilant_interval(base: u64, less: u64) -> u64 {
+    let less = if less > 99 { 99 } else { less };
+    let widened = base * 100 / (100 - less);
+    if widened == 0 { 1 } else { widened }
+}
+
 /// Swap a reagent somewhere in the tower, occasionally — §8.1's world surface.
 ///
 /// **A second system rather than a branch inside [`drift`]**, and the reason is
@@ -388,7 +410,10 @@ pub fn drift(
 pub fn substitution(
     mut rngs: ResMut<Rngs>,
     fuels: Res<crate::content::Fuels>,
-    stock: Query<(Entity, &Name, &NodeId, &super::Stock), Without<Poisoned>>,
+    stock: Query<
+        (Entity, &Name, &NodeId, &super::Stock),
+        (Without<Poisoned>, Without<super::Sealed>),
+    >,
     mut commands: Commands,
 ) {
     // **Endless base stock only, and this is the load-bearing restriction.**

@@ -64,7 +64,7 @@ pub fn budget(world: &World) -> usize {
     SCRIPT_BUDGET.saturating_add(extra)
 }
 
-use tower::mastery::steps_granted;
+use tower::steps_granted;
 
 /// How long a blocked instruction waits before it is called a failure.
 ///
@@ -1543,7 +1543,7 @@ fn forked(
 ) {
     // `pull`'s gate, for `pull`'s reason — the complaint at cast is the report
     // and this is what stops the line.
-    if !tower::mastery::holds(world, tower::mastery::Grant::Cursors) {
+    if !tower::holds(world, tower::Grant::Cursors) {
         advance_pc(world, entity);
         return;
     }
@@ -1760,7 +1760,7 @@ fn pull(world: &mut World, entity: Entity, state: &Running, name: &str, from: &s
     // walk around."* `compile::check_learned` is what a player *reads*; this is
     // what stops the line. Silent, because the complaint has already said it —
     // and once per cast, where this would be once per lap.
-    if !tower::mastery::holds(world, tower::mastery::Grant::Satchel) {
+    if !tower::holds(world, tower::Grant::Satchel) {
         advance_pc(world, entity);
         return Progress::Done;
     }

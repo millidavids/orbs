@@ -697,7 +697,7 @@ const fn spell_may(verb: Verb) -> bool {
 ///
 /// Matched through [`match_phrase`](super::resolve::match_phrase) — the same
 /// function `resolve` ranks with — rather than through
-/// [`resolve`](super::resolve) itself: a bare `wield ` has no argument yet, so a
+/// [`resolve`](mod@super::resolve) itself: a bare `wield ` has no argument yet, so a
 /// full resolution comes back `Incomplete` and yields no intent, which is
 /// precisely the moment completion is most wanted.
 ///

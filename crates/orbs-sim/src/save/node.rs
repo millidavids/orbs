@@ -9,7 +9,7 @@
 //! `(NodeId, Protected)` with no `Name`, so `path_of` contributes nothing for
 //! it), which would make `path` optional for exactly one row in the document.
 //! It does not need to be: a restore raises the tower before it adopts, so the
-//! root always exists already. See [`super::restore`].
+//! root always exists already. See [`mod@super::restore`].
 
 use std::collections::BTreeMap;
 

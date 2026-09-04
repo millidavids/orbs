@@ -738,90 +738,93 @@ fn weave_screen(grid: GridSize) -> Frame {
     let mut painter = frame.painter(area);
     painter.border(area, Some("weave"), Style::DIM);
 
-    // **Progression runs rightward**, and the screen says so three times: the
-    // bar fills right, the Ley Line runs right, and Mastery's tiers run right.
-    // A tier's siblings stack *downward*, which is the other axis and the other
-    // meaning — rightward is progress, downward is a choice.
-    let label = "24 of 100";
+    // **Progression runs rightward**, and the screen says so on both tracks:
+    // the bar fills right, the Ley Line runs right, and each room's mastery
+    // line runs right. The bar is measured against the line's last station —
+    // ten thousand, the soft ending — rather than a fixed hundred (§19), and
+    // the label is that wide here so the width left over is the real one.
+    let label = "24 of 10000";
     let width = grid
         .cols
         .saturating_sub(u16::try_from(label.len()).unwrap_or(9) + 3);
     painter.progress(
         Rect::new(1, 1, width, 1),
         24,
-        100,
+        10_000,
         Style::default().with_role(Role::Success),
-        "24 experience of 100",
+        "24 experience of 10000",
     );
     painter.span(Pos::new(width + 2, 1), &Span::new(label));
 
-    // **The Ley Line is one line with its steps standing on it**, drawn across
-    // the same cells the bar above uses — so a step at 16 stands one sixth along
-    // and the fill either has reached it or has not. The two rows are one
-    // picture, which is why the bar's scale is a fixed hundred.
+    // **Both headings, one track drawn.** Seven rooms' lines and a forked Ley
+    // Line do not both fit in eighteen rows beside a details panel, so the word
+    // the player typed decides which draws below; the headings say the other
+    // is there. This replica draws Mastery, the view with the most rows.
     painter.span(
-        Pos::new(1, 3),
+        Pos::new(1, 2),
         &Span::new("ley line").with_style(Style::DIM),
     );
-    painter.rule(Pos::new(1, 4), width, Style::DIM);
-    let at = 2 + u16::try_from(16 * u32::from(width.saturating_sub(3)) / 100).unwrap_or(0);
-    painter.glyphs(Pos::new(at - 1, 4), "[", Style::DIM);
-    painter.glyphs(Pos::new(at, 4), "\u{2022}", Style::default());
-    painter.glyphs(Pos::new(at + 1, 4), "]", Style::DIM);
-    // **The glyph is drawn silently and the state is said as a word**, which is
-    // the §14 property this screen exists to check: `Painter::span` would push
-    // `•` itself into the stream and tell a listener nothing. The real painter
-    // does exactly this — see `loom::glyph`.
-    painter.announce(UtteranceKind::TableRow, Role::Normal, "16: taken");
-    painter.span(Pos::new(at - 1, 5), &Span::new("16").with_style(Style::DIM));
+    painter.span(
+        Pos::new(12, 2),
+        &Span::new("mastery").with_style(Style::default()),
+    );
 
-    // **Mastery is placed at cost too**, on the same cells: one trunk forking
-    // into the first tier, then a line from each node to *its own* successor —
-    // which is what makes it a tree rather than two rows of unrelated marks.
-    // `«»` marks the aimed node, and it is Bright as well: the frame survives
-    // greyscale, the brightness is what the eye finds first.
-    painter.span(Pos::new(1, 7), &Span::new("mastery").with_style(Style::DIM));
-    let along = |cost: u32| 2 + u16::try_from(cost * u32::from(width - 3) / 100).unwrap_or(0);
-    painter.rule(Pos::new(1, 8), along(24) - 3, Style::DIM);
-    painter.glyphs(Pos::new(along(24) - 2, 8), "\u{252c}", Style::DIM);
-    painter.glyphs(Pos::new(along(24) - 2, 9), "\u{2514}", Style::DIM);
-    for row in [8u16, 9] {
-        painter.rule(
-            Pos::new(along(24) + 2, row),
-            along(40) - along(24) - 3,
-            Style::DIM,
-        );
-    }
-    for (cost, glyph) in [(24u32, "\u{25cb}"), (40, "\u{b7}")] {
-        let x = along(cost);
-        for row in [8u16, 9] {
-            // The aimed one is the lower node of the first tier.
-            let (open, close) = if cost == 24 && row == 9 {
+    // **Seven lines, one per room**: a name, then a run with its stations
+    // standing on it, evenly spaced — a mastery station has no total, so
+    // position means *order* here where on the Ley Line it means cost. `[•]`
+    // reached, `[○]` the one being worked toward, `[·]` further along, and
+    // `«»` around the aimed one, Bright as well: the frame survives greyscale,
+    // the brightness is what the eye finds first.
+    let rooms: [(&str, usize, usize); 7] = [
+        ("laboratory", 6, 1),
+        ("archive", 5, 0),
+        ("lens", 4, 0),
+        ("grimoire", 3, 0),
+        ("forge", 3, 0),
+        ("menagerie", 3, 0),
+        ("sanctum", 4, 0),
+    ];
+    let start = 1 + 11;
+    let run = grid.cols.saturating_sub(start + 1);
+    for (row, (room, stations, reached)) in rooms.iter().enumerate() {
+        let y = 3 + u16::try_from(row).unwrap_or(0);
+        painter.span(Pos::new(1, y), &Span::new(room).with_style(Style::DIM));
+        painter.rule(Pos::new(start, y), run, Style::DIM);
+        for index in 0..*stations {
+            let x = start + 1 + 4 * u16::try_from(index).unwrap_or(0);
+            let (glyph, state) = if index < *reached {
+                ("\u{2022}", "reached")
+            } else if index == *reached {
+                ("\u{25cb}", "next")
+            } else {
+                ("\u{b7}", "later")
+            };
+            // The aimed one is the laboratory's first station.
+            let (open, close) = if row == 0 && index == 0 {
                 ("\u{ab}", "\u{bb}")
             } else {
                 ("[", "]")
             };
-            painter.glyphs(Pos::new(x - 1, row), open, Style::DIM);
-            painter.glyphs(Pos::new(x, row), glyph, Style::default());
-            painter.glyphs(Pos::new(x + 1, row), close, Style::DIM);
-            let state = if cost == 24 { "open" } else { "locked" };
+            painter.glyphs(Pos::new(x - 1, y), open, Style::DIM);
+            painter.glyphs(Pos::new(x, y), glyph, Style::default());
+            painter.glyphs(Pos::new(x + 1, y), close, Style::DIM);
+            // **The glyph is drawn silently and the state is said as words**,
+            // which is the §14 property this screen exists to check:
+            // `Painter::span` would push `•` itself into the stream and tell a
+            // listener nothing. The real painter does exactly this — see
+            // `loom::station`.
             painter.announce(
                 UtteranceKind::TableRow,
                 Role::Normal,
-                &format!("{cost}: {state}"),
+                &format!("{room} {}: {state}", index + 1),
             );
         }
-        painter.span(
-            Pos::new(x - 1, 10),
-            &Span::new(&cost.to_string()).with_style(Style::DIM),
-        );
     }
 
-    // **The details panel**, bottom right: what the aimed node is, what it
-    // costs, and the two facts that are not the same fact. *Unlocked* is whether
-    // it can be reached; *active* is whether what it grants is in effect. A
-    // mastery node can be unlocked and idle because nobody chose it, or unlocked
-    // and idle for ever because a sibling took the tier's one choice.
+    // **The details panel**, bottom right: the aimed station's deed as a
+    // sentence, how much of it is done, where it stands, and what reaching it
+    // opens — which is what makes a line worth walking. Every line is authored
+    // to 28 cells, the panel's width inside its border.
     let panel = Rect::new(
         grid.cols.saturating_sub(31),
         grid.rows.saturating_sub(7),
@@ -831,26 +834,27 @@ fn weave_screen(grid: GridSize) -> Frame {
     painter.border(panel, Some("details"), Style::DIM);
     painter.span(
         Pos::new(panel.col + 1, panel.row + 1),
-        &Span::new("not taught yet"),
+        &Span::new("a clarity brewed"),
     );
     painter.span(
         Pos::new(panel.col + 1, panel.row + 2),
-        &Span::new("costs 24").with_style(Style::DIM),
+        &Span::new("1 of 1").with_style(Style::DIM),
     );
     painter.span(
         Pos::new(panel.col + 1, panel.row + 3),
-        &Span::new("unlocked").with_style(Style::default().with_role(Role::Success)),
+        &Span::new("reached").with_style(Style::default().with_role(Role::Success)),
     );
     painter.span(
-        Pos::new(panel.col + panel.cols - 9, panel.row + 3),
-        &Span::new("inactive").with_style(Style::DIM),
+        Pos::new(panel.col + panel.cols - 14, panel.row + 3),
+        &Span::new("opens archive").with_style(Style::DIM),
     );
 
-    // The row that must never be blank: §6 forbids a dead end, and at the
-    // command line this row is the whole interface.
+    // The row that must never be blank: §6 forbids a dead end, and while
+    // browsing a mastery line it says what the arrows do — and not `take`,
+    // which nothing on this track answers to.
     painter.span(
         Pos::new(1, grid.rows.saturating_sub(2)),
-        &Span::new("ley  mastery  take  quit").with_style(Style::DIM),
+        &Span::new("arrows move   esc back").with_style(Style::DIM),
     );
     frame
 }

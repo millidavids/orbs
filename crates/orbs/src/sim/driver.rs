@@ -18,9 +18,20 @@ use orbs_sim::Sim;
 pub(crate) struct Tower(Sim);
 
 impl Tower {
-    /// A tower from a master seed.
+    /// An open tower from a master seed — every room, for the tests that need
+    /// one and never for a player.
+    #[cfg(test)]
     pub(crate) fn new(seed: u64) -> Self {
         Self(Sim::new(seed))
+    }
+
+    /// The tower a fresh game builds.
+    ///
+    /// **Sealed, unless `ORBS_SEALED=0`**: a fresh game is a laboratory and
+    /// nothing else (§11.5), and `orbs_shell::fresh` is the one reader of the
+    /// switch so this build and the terminal one cannot disagree about it.
+    pub(crate) fn fresh(seed: u64) -> Self {
+        Self(orbs_shell::fresh(seed, true))
     }
 
     /// The tower a save describes.

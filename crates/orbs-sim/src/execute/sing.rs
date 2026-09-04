@@ -354,8 +354,9 @@ fn settle(world: &mut World, circle: Entity) {
         ],
         Role::Success,
     );
-    // The work, and then what the work bought.
-    tower::credit(world, u64::from(struck));
+    // The work, and then what the work bought. A figure closed is what the
+    // menagerie's mastery line counts.
+    tower::done(world, &tower::Work::event(tower::FIGURE), u64::from(struck));
 }
 
 /// Publish everything a chant has to say, as readings a spell can ask for.

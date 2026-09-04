@@ -371,21 +371,30 @@ fn a_real_node_can_be_taken_and_changes_what_a_spell_can_do() {
     );
 }
 
-/// A marker is refused by the world as well as by the screen.
+/// A mastery station is refused by the world as well as by the screen.
 ///
 /// **The screen already refuses it**, and this is the second opinion agreeing:
 /// a queued effect that trusted the screen's arithmetic would be two answers to
 /// one rule, which §19 records drifting apart more often than anything else.
+/// Nothing on a mastery line is ever taken — it is reached by doing.
 #[cfg(debug_assertions)]
 #[test]
-fn a_marker_grants_nothing_even_if_it_reaches_the_world() {
+fn a_mastery_station_grants_nothing_even_if_it_reaches_the_world() {
     let mut sim = at_the_first_tier();
     let before = orbs_sim::tower::spell::budget(sim.world());
+    // The fixture distils clarities, so the laboratory's first station is
+    // reached by the *work* already; what must not move it is the `take`.
+    let reached = sim.reached().to_vec();
 
-    sim.take("tbi_b");
+    sim.take("laboratory_2");
     sim.step();
 
-    assert!(sim.taken().is_empty(), "a marker was held");
+    assert!(sim.taken().is_empty(), "a mastery station was held");
+    assert_eq!(
+        sim.reached(),
+        reached,
+        "taking a mastery station reached it"
+    );
     assert_eq!(orbs_sim::tower::spell::budget(sim.world()), before);
 }
 
@@ -406,9 +415,9 @@ fn a_tier_gives_one_choice_and_not_two() {
     let mut sim = at_the_first_tier();
     sim.take("steps_1");
     sim.step();
-    sim.take("tbi_b");
+    sim.take("fuel_1");
     sim.step();
-    assert_eq!(sim.taken(), ["steps_1"], "the tier gave both its nodes");
+    assert_eq!(sim.taken(), ["steps_1"], "the fork gave both its nodes");
 }
 
 /// Rule 3: a take is a decision, so it replays.

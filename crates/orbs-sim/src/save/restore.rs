@@ -45,6 +45,7 @@ use super::adopt;
 use super::document::Save;
 use super::naming;
 use super::node::NodeSave;
+use crate::content::{Charms, Progression, Recipes};
 use crate::rng::{RngStream, Rngs};
 use crate::session::{Scrollback, Wizard};
 use crate::tick::Tick;
@@ -52,10 +53,11 @@ use crate::tower::{self, Cwd, Marks, Stock};
 
 /// Apply a save over a freshly raised tower.
 ///
-/// The order is load-bearing in one place: [`spells`] runs **after**
+/// The order is load-bearing in one place: [`adopt::references`] runs **after**
 /// [`stream`], because a spell whose text has moved under it says so in a
 /// record, and a record pushed before the stream is rebuilt would be thrown
-/// away by the rebuild.
+/// away by the rebuild. (It was called `spells` when this was written, and the
+/// name outlived the function.)
 pub(crate) fn restore(world: &mut World, save: &Save) {
     clock_and_rolls(world, save);
     tree(world, save);
@@ -63,6 +65,28 @@ pub(crate) fn restore(world: &mut World, save: &Save) {
     stream(world, save);
     adopt::references(world, save);
     prompt(world, save);
+    // **What both tracks have already passed is opened again, silently.** What
+    // a station opened and the fact it was reached are two records of one thing
+    // and only the second is written down, so a document from before a station
+    // carried its `opens` comes back with the thing still shut — and nothing
+    // would ever open it, because both tracks apply an `opens` exactly once:
+    // `credit` crosses an edge now in the past, and `advance` skips a station
+    // already in `Reached`. Said nothing about, for `Experience::restore`'s
+    // reason.
+    tower::ley::caught_up(world);
+    tower::mastery::caught_up(world);
+    // **After the tree, the progress and the catching up**, because the markers
+    // a shut room carries are derived from all three: which nodes exist, which
+    // rooms the document says are open, and which the line has since opened.
+    world.insert_resource(tower::Sealing(save.world.sealed));
+    tower::seal(world);
+    // **A taken node above its fork's total is kept, deliberately.** When a
+    // node moves to a later station — `cursors_1` went from 40 to 400 when the
+    // lanes arrived (§19) — an older document holds it below the new total, and
+    // so does a tester's `debug_take`. Both are consistent: `ley_line` derives
+    // *spent* by membership, so the fork reads spent and the node stays in
+    // effect. Nothing the player earned is taken away, and a tester's shortcut
+    // survives the save round-trip `tests/strands.rs` holds it to.
 }
 
 /// The clock, and where each random stream stood.
@@ -205,6 +229,16 @@ fn progress(world: &mut World, save: &Save) {
     world
         .resource_mut::<tower::Integrity>()
         .restore(progress.integrity.unwrap_or(tower::STANDING));
+    // **Before the ceiling is read, because the ceiling now depends on it.**
+    // `pool_<n>` and `floor_<n>` are on the ceiling, and `grant::tiers` answers
+    // nought for a resource that is not there yet rather than panicking — so a
+    // ceiling read first came back as if the orb had taken nothing, and a
+    // document with no `quintessence` row filled the pool to the wrong number.
+    // The reader is deliberately forgiving; that makes the *order* the thing
+    // that has to be right, which is what this line is.
+    world
+        .resource_mut::<tower::Taken>()
+        .restore(progress.taken.clone());
     // **Absent means the ceiling, for the same reason and with a sharper edge.**
     // A save from before the pool came up to the tower says nothing about it, and
     // nought would hand a returning player an inert forge and a siege that
@@ -227,11 +261,41 @@ fn progress(world: &mut World, save: &Save) {
     // short list for that reason.
     world.insert_resource(tower::Cooling::from_save(&progress.cooling));
     world
-        .resource_mut::<tower::Taken>()
-        .restore(progress.taken.clone());
-    world
         .resource_mut::<tower::Learned>()
         .restore(progress.learned.clone(), progress.fruitless);
+    world
+        .resource_mut::<tower::Tally>()
+        .restore(progress.tally.clone());
+    world
+        .resource_mut::<tower::mastery::Reached>()
+        .restore(progress.reached.clone());
+    // **Absent means everything open**, for `integrity`'s reason with a whole
+    // tower behind it: a save from before anything could be shut was a tower
+    // standing in all seven rooms, and an empty set would seal six of them on
+    // load. `Sim::restored` built the world open already, so only a document
+    // that says otherwise changes it.
+    //
+    // **Unioned with what no station opens, never simply replaced.** That set is
+    // `Opened::start`'s own rule and it is derived from this build's content, so
+    // a charm, a gated product or a room this build ships *ungated* is in it —
+    // and a document written before that thing existed cannot name it. Replacing
+    // outright shut it for the life of every existing save, with nothing able to
+    // open it, which is the authoritative-save failure this module's header says
+    // the raise-then-adopt design exists to prevent, arriving through
+    // capabilities instead of nodes.
+    if let Some(opened) = &progress.opened {
+        let ungated = tower::Opened::start(
+            world.resource::<Recipes>(),
+            world.resource::<Charms>(),
+            world.resource::<Progression>(),
+        );
+        let keys: Vec<String> = opened
+            .iter()
+            .cloned()
+            .chain(ungated.keys().map(ToOwned::to_owned))
+            .collect();
+        world.resource_mut::<tower::Opened>().restore(keys);
+    }
     world.resource_mut::<Marks>().restore(
         progress
             .marks

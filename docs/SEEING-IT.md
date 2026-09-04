@@ -1273,7 +1273,7 @@ ORBS_BOOT=0 ORBS_GRID=80x22 ORBS_DUMP="attend laboratory; grind sage" cargo run 
 
 **`F4` is visibly inert, and that is recorded rather than fixed.** With one pane
 both tilings are identical, so the key changes nothing until multiplexing returns
-the second pane in Phase 11a. §9 fixes the focus mode on `F4` and §19 fixes the
+the second pane in Phase 12a. §9 fixes the focus mode on `F4` and §19 fixes the
 switch there, so reassigning it to toggle the rail would re-litigate both.
 
 ### `orbs-balance` — the economy, looked at rather than argued
@@ -1789,7 +1789,7 @@ words teaches an order**. `scribe`, `edit`, the lines, `<escape>`, `quit`,
 `invoke`, then the log rather than the pane: seven steps, one of which — *quit is
 the save* — a player otherwise learns by losing work.
 
-§12 puts the in-world grimoire in the *"always"* column; Phase 12 owns the
+§12 puts the in-world grimoire in the *"always"* column; Phase 13 owns the
 interactive apprenticeship. This is the reference half, which is why it is a
 `recall` page and not a scripted sequence.
 
@@ -1907,8 +1907,11 @@ of a segment and nowhere else.
 **The arrows do nothing until a word has gone into a track.** `ley` or `mastery`
 is what hands them over, the way `edit` drops into the editor's buffer — so a
 dump that opens the screen and presses an arrow is testing the refusal, not the
-movement. **Left/right walks the track; up/down picks between a tier's
-siblings** — rightward is progress, downward is a choice.
+movement. **On the Ley Line left/right walks the stations and up/down picks a
+fork's sibling** — rightward is progress, downward is a choice. **On Mastery
+up/down picks a room and left/right walks its line** — there are no choices
+there, and `take` is refused in voice. One track draws below the bar at a time,
+and the word decides which.
 
 **The session pane is 104 columns, not 120.** The tower rail takes 16 off the
 right, so the grid's width is never this surface's. It **was 60** while the
@@ -1918,44 +1921,230 @@ sentence stops fitting — worth a look, even though the game itself no longer
 reaches it.
 
 ```bash
-# Nothing earned: the bar reads `0 of 100`, the ley line's one station draws
-# `[·]` (untaken) with its cost `16` under it, and mastery's tier is `[·]` too.
-# **The bar is against a fixed SCALE of 100, not against the next threshold** —
-# this line used to claim `0 of 16` and an `opens at`, and neither was ever on
-# screen. A See-it line that describes a different screen is worse than none.
+# Nothing earned: the bar reads `0 of 56` — **against the line's last station,
+# not a fixed hundred and not the next threshold** — and the Ley Line's steps
+# and forks all draw `[·]` with their totals under them.
 ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="weave" cargo run -p orbs
 
-# A tier **opening**, which is the only place the choose-between shape shows.
-# Three alembic runs are 24. `empty alembic` between them, as always.
+# The seven rooms' lines. Every first station is `[○]` — the one being worked
+# toward — and the rest `[·]`; the panel names the aimed deed and what it opens.
+ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="weave" ORBS_WEAVE="mastery" cargo run -p orbs
+
+# One clarity reaches the laboratory's first station: `«•»`, the panel reading
+# *a clarity brewed · 1 of 1 · reached · opens archive*, and the log saying so.
+ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="attend laboratory; kindle charcoal; \
+  debug_spawn clarified-draught 1; distil clarified-draught; meditate 60; weave" \
+  ORBS_WEAVE="mastery" cargo run -p orbs
+
+# A fork **opening**, which is the only place the choose-between shape shows.
+# Three alembic runs are 24; the fork's two nodes stack under its station and
+# `<down>` aims at the second.
 ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="attend laboratory; kindle charcoal; \
   debug_spawn clarified-draught 3; distil clarified-draught; meditate 60; \
   empty alembic; distil clarified-draught; meditate 60; empty alembic; \
-  distil clarified-draught; meditate 60; weave" cargo run -p orbs
+  distil clarified-draught; meditate 60; weave" \
+  ORBS_WEAVE="ley\n<right>\n<down>" cargo run -p orbs
 
-# Aim with the arrows, then type the word — `«○»` moves and the refusal names
-# the node you aimed at, which is what proves typing kept the aim.
+# `take` on a mastery station — refused in voice, because a station there is
+# reached by doing its deed and never taken.
 ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="weave" \
-  ORBS_WEAVE="mastery\n<down>\ntake" cargo run -p orbs
+  ORBS_WEAVE="mastery\ntake" cargo run -p orbs
 
 # ...and the arrows before a word, which must move nothing and say what to do.
 ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="weave" \
   ORBS_WEAVE="<down>\n<right>" cargo run -p orbs
+
+# Reach a station without doing its deed — and every earlier one on its line,
+# since a line is walked in order. What each opens is opened and said.
+ORBS_BOOT=0 ORBS_DUMP="attend laboratory; debug_reach laboratory_2; weave" \
+  ORBS_WEAVE="mastery" cargo run -p orbs
 ```
 
-**Four nodes are real and two are still markers.** `steps_1` and `steps_2` grant
-spell steps; `satchel_1` and `cursors_1` grant §8's channel and its second
-cursor. The `tbi_` pair are authored as markers and `take` refuses them in voice,
-which is the state this block used to describe for the whole tree.
+**Every fork node is real, and there are no markers.** `steps_1` and `steps_2`
+grant spell steps; `satchel_1` and `cursors_1` grant §8's channel and its second
+cursor. A fork node the orb cannot parse fails the load rather than drawing,
+being aimed at, and refusing — which is the promise-about-nothing §19 refused
+for the old tree.
 
-**`mastery::granted` is the one parser**, returning a `Grant` rather than a
+**`ley::granted` is the one parser**, returning a `Grant` rather than a
 `usize` — a boolean squeezed into the step-count parser is a `satchel_1` that
-quietly hands out an instruction a tick. `Progression::check` refuses an id that
-*reads* as a grant and does not parse as one, so `satchel1` fails the build
-rather than shipping as a marker wearing a real node's name.
+quietly hands out an instruction a tick. `Grant::lane` is derived from it the
+same way, so a fork's siblings are always drawn provision, war, craft.
+
+**Thirty mastery stations ship, and `Sim::new` is an open tower.** Every room,
+every gated recipe and every charm is open in a dump, a test and a balance
+policy — so a station's `opens` is said only in a *sealed* tower (`ORBS_SEALED=1`,
+below), and `recall warding` answers here before the station that opens it. The
+log line *"the laboratory line advances"* is what to look for; `sift` the log
+for it.
 
 **`debug_take <id>` skips the earning and nothing else**, which is `debug_spawn`'s
 argument: 24 experience is two hundred ticks of the laboratory before a See-it
 line about a gated word can start. Bare, it lists what there is to take.
+**`debug_reach <id>` is its twin for a mastery station**, and reaches every
+earlier station on the same line too.
+
+## A sealed tower is a laboratory and nothing else
+
+**`ORBS_SEALED=1` starts the dump where a player starts** (§11.5, Phase 10). The
+game defaults to sealed and the dump to open — `orbs_shell::fresh` is the one
+reader of the switch — so every other line in this file describes a tower with
+all seven rooms, and that is deliberate: `Sim::new` is the open tower every test
+and balance policy has always used, and a fresh *game* is `Sim::sealed`. What
+opens what is `progression.toml`'s `opens`, and `Opened::start` is everything no
+station names.
+
+```bash
+# Refused in voice from three doors — the room's name, a path into it, and the
+# doorway — with the boot report naming the laboratory and the arsenal only.
+ORBS_SEALED=1 ORBS_BOOT=0 ORBS_GRID=100x36 \
+  ORBS_DUMP="attend archive; attend stacks; survey archive; survey /tower" \
+  cargo run -p orbs
+
+# ...and six dark boxes on the rail, which needs the deep grid to be drawn at
+# all: the rail takes 16 columns and 100 is not wide enough to give them.
+ORBS_SEALED=1 ORBS_BOOT=0 ORBS_GRID=120x45 \
+  ORBS_DUMP="attend laboratory; attend archive" cargo run -p orbs
+
+# One clarity opens the archive: the station, then *"the archive is yours now.
+# attend it"*, then the room answering.
+ORBS_SEALED=1 ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="attend laboratory; \
+  kindle charcoal; debug_spawn clarified-draught 1; distil clarified-draught; \
+  meditate 60; attend archive" cargo run -p orbs
+
+# The wall is armed by the sanctum's first station and the bailey follows it.
+ORBS_SEALED=1 ORBS_BOOT=0 ORBS_DUMP="debug_reach laboratory_3; attend bailey; \
+  debug_reach sanctum_1; attend bailey" cargo run -p orbs
+
+# Two clarities is sixteen, and sixteen is the tower's own line rather than a
+# room's: *"the orb can hold a spell now"*, then *"the grimoire is yours now"*,
+# then the room answering. The forge is the same step at 56.
+ORBS_SEALED=1 ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="attend laboratory; \
+  kindle charcoal; debug_spawn clarified-draught 2; distil clarified-draught; \
+  meditate 60; empty alembic; distil clarified-draught; meditate 60; \
+  attend grimoire" cargo run -p orbs
+
+# Played rather than photographed: the same route, at a tester's pace.
+scripts/play.sh sealed::
+```
+
+**`recall archive` falls through to the overview in a sealed tower** — the
+room's manual page is hidden with the room — but the *word* still resolves,
+deliberately: dropped from the scene, `attend archive` fuzzed into a numbered
+prompt offering four other rooms, which is §15's dead end by the first word a new
+player will try. `attend`'s gate is asked of the node, so `attend stacks` is
+refused as *"the archive is not yours yet"* too.
+
+**A charm is gated the same way.** `imbue whetted` is refused in voice until the
+sanctum's second station; the forge opens knowing `hurried`.
+
+```bash
+# The forge is behind the ley step at 56 — seven distillations — and
+# `debug_reach` opens the room the line it reaches stands in, so a dump can
+# stand at the lattice: "the forge cannot lay whetted yet", then `hurried` rising.
+ORBS_SEALED=1 ORBS_BOOT=0 ORBS_DUMP="debug_reach forge_1; attend forge; \
+  imbue mortar_and_pestle whetted; imbue mortar_and_pestle hurried" cargo run -p orbs
+```
+
+**`debug_reach <id>` opens whatever had to open first.** It walks the chain — the
+sanctum is the laboratory's third station, so `debug_reach sanctum_1` reaches
+`laboratory_1..3` on the way. It used to reach a line inside a room the player
+could not enter, and the workaround was written into two See-it lines by hand.
+
+**Sabotage never strikes a shut room.** `tower::Sealed` marks every node under
+one, and the two calm-layer queries carry `Without<Sealed>`; `tests/sealed.rs`
+runs two hours of ticks and finds every shut room's log clean.
+
+## The road under a room's title, and the rail's percentage
+
+**Every open room draws its own mastery line one row under the pane's title**,
+in the weave's marks, with the next deed and its count at the far end; and every
+open room's rail box carries the percentage of that deed on its state row. Both
+read from the same `Line` the weave draws, so the three cannot disagree.
+
+```bash
+# Three potions in: the road reads `laboratory [•]─[○]─[·]─[·]─[·]─[·]─── five
+# potions brewed · 3 of 5`, and the rail box `burning  60%`. The deep grid, so
+# the rail is drawn at all.
+ORBS_BOOT=0 ORBS_GRID=120x45 ORBS_DUMP="attend laboratory; kindle charcoal; \
+  debug_spawn clarified-draught 3; distil clarified-draught; meditate 60; \
+  empty alembic; distil clarified-draught; meditate 60; empty alembic; \
+  distil clarified-draught; meditate 60" cargo run -p orbs
+
+# A finished line: the road ends *"every station reached"* and the rail box
+# carries no percentage, because a number about nothing is nothing.
+ORBS_BOOT=0 ORBS_GRID=120x45 ORBS_DUMP="attend laboratory; debug_reach laboratory_6" \
+  cargo run -p orbs
+
+# The primer's last line says the same thing in words.
+ORBS_BOOT=0 ORBS_DUMP="attend laboratory; recall" cargo run -p orbs
+
+# ...and the 80×22 floor, where the sentence at the road's end is the first
+# thing to go and `3 of 5` is the last.
+ORBS_BOOT=0 ORBS_GRID=80x22 ORBS_DUMP="attend laboratory; debug_reach laboratory_1" \
+  cargo run -p orbs
+```
+
+**The road yields before the transcript does.** It takes the top row of the
+body only while the body keeps six rows after it, and a shut room or a finished
+line with nothing to say draws none. The rail's percentage sits on the state
+row's right edge because `MIN_RAIL_BOX` has no spare row, and it is silent glyphs
+— §14's rule for progress is completion only, and the station reaching is what
+gets said.
+
+## The Ley Line to the soft ending, and what its forks grant
+
+**Sixteen stations from 16 to 10,000** — nine steps to concentration 8 and seven
+forks — and the run draws on a **logarithmic** scale, because stations growing by
+half each stood in a knot at the left of a linear line. Position is still cost;
+the bar fills to the cell the total has reached; the totals alternate between two
+rows.
+
+```bash
+# The whole line, forks three deep — provision, war, craft, top to bottom —
+# `40` aimed at its war node, and the panel naming it, its cost and its lane.
+ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="weave" \
+  ORBS_WEAVE="ley\n<right>\n<right>\n<down>" cargo run -p orbs
+
+# Each grant, on the surface it moves. `debug_take` holds the node without
+# the experience, which is the tool's one job.
+ORBS_BOOT=0 ORBS_DUMP="debug_take fuel_1; attend laboratory; kindle charcoal" \
+  cargo run -p orbs                          # "fuel for 720 ticks", not 600
+ORBS_BOOT=0 ORBS_DUMP="status; debug_take pool_1; status" cargo run -p orbs
+                                             # the ceiling row, four higher
+ORBS_BOOT=0 ORBS_DUMP="debug_take thrift_1; attend forge; imbue mortar_and_pestle hurried" \
+  cargo run -p orbs                          # the price quoted, two lower
+ORBS_BOOT=0 ORBS_GRID=120x45 ORBS_DUMP="debug_take edge_1; attend bailey; defend" \
+  cargo run -p orbs                          # the board's garrison odds: 55%, not 50%
+
+# The other seven — haste, escrow, garrison, mend, floor, vigilance, steps_3 —
+# each against its own number:
+cargo test -p orbs-sim --test grants
+```
+
+**The line packs itself to the pane it is given.** At every pane the game can
+draw today it is framed `[·]`, because there is one pane and the narrowest grid
+still leaves it sixty columns. **The narrow case is Phase 11a's**: a second pane
+halves the main window to 52 columns, which leaves the track 39 cells where
+sixteen framed stations want 48 — so the frames come off and the marks stand two
+apart, the aimed one keeping its frame, which is what carries *aimed* without
+colour. Narrower than even that needs and the screen says *"the orb needs a
+larger window"* rather than drawing a line with its tail clipped off the edge.
+
+**No dump can show it**: `PANES` is 1 and the dump never splits. The gate is
+`cargo test -p orbs-shell --lib loom`, which walks every width from the tight
+packing to 120 and asserts no station leaves the run and no two share a cell.
+
+**A node held above its fork's total is kept.** `debug_take cursors_1` at nought
+experience, or an older save from before the node moved to 400: the node stays
+in effect and the fork at 400 reads as chosen, because `ley_line` derives *spent*
+by membership. The plan's "drop it and say so" fought the tester's shortcut
+across a save and lost (§19).
+
+**`haste` is the orb's speed and never the tool's.** `debug_take haste_1`, then
+the same `grind sage` by hand and from a spell: the spell's lands a tenth sooner
+and the player's does not — `tests/grants.rs` measures both. That is struck
+invariant 3, bought.
 
 **The archive draws a map, and `wander` gives it the arrow keys.** The map is
 *not* gated on the word — it draws whenever a maze is open, which is what makes a
@@ -3030,7 +3219,7 @@ live in `orbs_shell::shortcuts` where a second copy cannot go missing.
 
 | Key | Does | In a terminal |
 |---|---|---|
-| `F4` | flips the focus mode | the border's own hint moves; **the tiling does not**, in either build, until Phase 11a returns the second pane |
+| `F4` | flips the focus mode | the border's own hint moves; **the tiling does not**, in either build, until Phase 12a returns the second pane |
 | `F5` | §14's linear stream | the pane describes itself instead of drawing — the accessibility route, and this is the build §14 calls the cheapest one |
 | `F6` | writes `orbs-parse.tsv` | silent on success in both builds; the file appearing is the confirmation |
 | `F7` | cycles the tonal register | **visibly inert** — `Presentation` picks a glyph-atlas *face* and a terminal has the user's. The world still moves, and `F6`'s `register` column shows it |

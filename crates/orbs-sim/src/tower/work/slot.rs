@@ -174,6 +174,16 @@ pub fn begin(world: &mut World, place: Entity, verb: Verb, subject: NodeId, tick
     // `meditate` idempotence rests on. Applied per tick it would be the
     // countdown §19 refused, wearing a multiplier.
     let ticks = super::quicken::hastened(world, place, ticks);
+    // **`haste` is the orb's speed, never the tool's** (§19, struck invariant
+    // 3 landing "as a thing you buy"): a run a *spell* issued lands sooner by
+    // the tiers taken, and a player's own run does not. Read here with the
+    // charm, for the reason the charm is: an interval set once.
+    let ticks = if bidder(world).is_some() {
+        let sooner = crate::tower::grant::haste_percent(world);
+        (ticks.saturating_mul(100u64.saturating_sub(sooner)) / 100).max(1)
+    } else {
+        ticks
+    };
     let now = *world.resource::<Tick>();
     world.entity_mut(place).insert(Working {
         verb,

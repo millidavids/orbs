@@ -512,6 +512,49 @@ fn primer(world: &mut World) {
     for message in lines {
         line(world, Verb::Recall.canonical(), &message);
     }
+    road(world, &room);
+}
+
+/// The room's mastery line, as words, at the end of its primer (§11.5).
+///
+/// **Composed from the same reading the road draws**, so a player who asks is
+/// told exactly what a glance would show — and a room with no line, or one
+/// the player cannot enter, says nothing here rather than a sentence about
+/// nothing.
+fn road(world: &mut World, room: &str) {
+    let Some(line) = tower::mastery(world)
+        .into_iter()
+        .find(|line| line.domain == room && line.open)
+    else {
+        return;
+    };
+    let (reached, of) = line.reached();
+    let message = match line.next() {
+        Some(next) => {
+            let prose = world.resource::<Prose>();
+            let deed = prose.line(&format!("mastery_{}", next.id), &[]);
+            let count = prose.line(
+                "weave_progress",
+                &[
+                    ("count", &next.done.to_string()),
+                    ("quantity", &next.needed.to_string()),
+                ],
+            );
+            prose.line(
+                "primer_road",
+                &[
+                    ("name", room),
+                    ("count", &reached.to_string()),
+                    ("quantity", &of.to_string()),
+                    ("detail", &format!("{deed}, {count}")),
+                ],
+            )
+        }
+        None => world
+            .resource::<Prose>()
+            .line("primer_road_done", &[("name", room)]),
+    };
+    self::line(world, Verb::Recall.canonical(), &message);
 }
 
 /// The room the player is standing in, for the manual's own purposes.

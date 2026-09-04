@@ -5,11 +5,23 @@
 //! editor makes for the same reason: what a key *means* here and how a pane is
 //! laid out are different concerns that change for different reasons.
 //!
+//! # Two tracks, two shapes
+//!
+//! **The Ley Line** is the tower's: stations on total experience, some of them
+//! forks with siblings stacked downward. Left/right walks the stations,
+//! up/down picks a sibling, and `take` chooses one.
+//!
+//! **Mastery** is seven lines, one per room, each read left to right. Up/down
+//! picks a *room* and left/right walks its stations — so down means a different
+//! thing on each track, and the status row says which. Nothing on a mastery
+//! line is ever taken: a station is reached by doing its deed, and `take` there
+//! is refused in voice.
+//!
 //! # It opens in command state, and the way in is a word
 //!
 //! §19 records why the editor does: *"the first keystroke cannot damage
-//! anything."* Taking a Mastery node is irreversible — it closes its tier — so
-//! the same rule applies with more force.
+//! anything."* Taking a fork node is irreversible — it closes its fork — so the
+//! same rule applies with more force.
 //!
 //! **`ley` and `mastery` go into a track**, place the aim on its first node and
 //! hand the arrows over; `<esc>` comes back. That is `edit` dropping into the
@@ -19,32 +31,33 @@
 //! key — and *"my first key press was being ignored"* is how the version that
 //! let them work immediately was reported.
 //!
-//! In this version nothing is takeable at all: every authored node is a marker
-//! and `take` answers with an authored line. The state machine is built for the
-//! choice anyway, because the first real node should change a content file and a
-//! prose key rather than the shape of this.
-//!
 //! # The cursor is an identity, never an index
 //!
-//! The world ticks while the screen is open. Crossing a threshold opens a tier
+//! The world ticks while the screen is open. Crossing a threshold opens a fork
 //! and changes what is in the list, so an index would silently come to point at
 //! a different node — and a view that survives its subject lies, which is the
-//! rule §19 extracted from `Editor::reading`. The cursor holds an id and
-//! unplaces itself when that id is no longer on screen.
+//! rule §19 extracted from `Editor::reading`. The cursor holds a **mark** and
+//! unplaces itself when that mark is no longer on screen.
+//!
+//! **A mark, not an id.** A mastery station's id already names one thing, but a
+//! step's id is what it *grants* and eight stations grant concentration — so an
+//! id cursor pointed at all eight, drew all eight aimed, and could not walk past
+//! the fourth station. `Node::mark` carries the total with it and `Stop::mark`
+//! is the id; both are unique across both tracks, so one cursor serves both.
 
-use orbs_sim::{Node, Standing};
+use orbs_sim::{Line, Node, Standing, Station, Stop};
 
 /// Which track is being looked at.
 ///
-/// **Both are always drawn.** This decides where the cursor may go and which
-/// heading is emphasised, not what is visible — a player who cannot see Mastery
-/// until they ask for it cannot discover that it is there.
+/// This decides where the cursor may go and which view is drawn below the
+/// bar; both headings are always drawn, so a player who has not asked for
+/// Mastery can still see that it is there.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Track {
-    /// The straight path. Nothing here is ever chosen.
+    /// The tower's line: steps and forks.
     #[default]
     LeyLine,
-    /// The branching tree, where a tier gives one of its nodes.
+    /// The seven rooms' lines.
     Mastery,
 }
 
@@ -116,7 +129,7 @@ pub enum Outcome {
     /// Take this node — the shell hands the id to `Sim::take`.
     ///
     /// **An id, not an index.** The screen's rows are a view over
-    /// `tower::mastery` and could be reordered by content; the id is what the
+    /// `tower::ley_line` and could be reordered by content; the id is what the
     /// world stores and what `progression.toml` calls *"a decision, not prose"*.
     Take(String),
 }
@@ -133,18 +146,29 @@ pub enum Complaint {
     Nothing,
     /// `take` on something the tower already has.
     ///
-    /// **Not a marker and not a refusal to be sorry about.** A Ley Line step is
-    /// taken by being passed, so `take` on one is a player asking for something
-    /// they are already holding — and the first version answered *"nothing is
-    /// behind it yet"* about the one grant in the game that certainly does
-    /// something, one row under a details panel saying `active`.
+    /// A step is taken by being passed, so `take` on one is a player asking for
+    /// something they are already holding.
     Already(String),
-    /// `take` on a node nothing is behind yet.
-    NothingBehind(String),
-    /// `take` on a node whose tier has not opened.
+    /// `take` on a mastery station, which is reached by doing and never taken.
+    NotAChoice(String),
+    /// `take` on a node whose fork has not opened.
     Locked(String, u64),
-    /// `take` on a tier that has already given its one.
+    /// `take` on a fork that has already given its one.
     Spent(String),
+}
+
+/// What the cursor is on.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Aimed {
+    /// A node on the Ley Line.
+    Node(Node),
+    /// A station on a room's mastery line.
+    Stop {
+        /// The room.
+        domain: &'static str,
+        /// The station.
+        stop: Stop,
+    },
 }
 
 /// The weave screen.
@@ -156,16 +180,19 @@ pub struct Tapestry {
     mode: Mode,
     /// The half-typed word.
     command: String,
-    /// The node the cursor is on, by id. `None` until an arrow is pressed.
+    /// The node or station the cursor is on, by mark. `None` until an arrow is
+    /// pressed.
     cursor: Option<String>,
     /// What the last word was refused for.
     complaint: Option<Complaint>,
     /// The tower's total, pushed in.
     experience: u64,
+    /// What the bar is measured against: the last station's total.
+    scale: u64,
     /// The Ley Line, pushed in.
-    ley_line: Vec<Node>,
-    /// Mastery's tiers, pushed in.
-    mastery: Vec<Vec<Node>>,
+    ley_line: Vec<Station>,
+    /// The seven lines, pushed in.
+    mastery: Vec<Line>,
 }
 
 impl Tapestry {
@@ -187,7 +214,10 @@ impl Tapestry {
         &self.command
     }
 
-    /// The node the cursor is on, if it has been placed.
+    /// The mark the cursor is on, if it has been placed.
+    ///
+    /// **What a painter compares against**, so a drawn station knows whether it
+    /// is the aimed one. `Node::mark` and `Stop::mark` are what produce it.
     #[must_use]
     pub fn cursor(&self) -> Option<&str> {
         self.cursor.as_deref()
@@ -205,30 +235,45 @@ impl Tapestry {
         self.experience
     }
 
-    /// Mastery's tiers, in order.
+    /// What the bar is measured against.
     #[must_use]
-    pub fn mastery(&self) -> &[Vec<Node>] {
+    pub const fn scale(&self) -> u64 {
+        self.scale
+    }
+
+    /// The Ley Line's stations, in order.
+    #[must_use]
+    pub fn ley_line(&self) -> &[Station] {
+        &self.ley_line
+    }
+
+    /// The seven lines, in the rail's order.
+    #[must_use]
+    pub fn mastery(&self) -> &[Line] {
         &self.mastery
     }
 
-    /// The Ley Line as columns of one, so both tracks draw through one function.
-    ///
-    /// A step has no siblings — there is nothing to choose between on the Ley
-    /// Line — so its column is one node tall, and that *is* the difference
-    /// between the two tracks rather than a special case in the painter.
+    /// What the cursor is on, if it has been placed.
     #[must_use]
-    pub fn ley_line_columns(&self) -> Vec<Vec<Node>> {
-        self.ley_line
+    pub fn aimed(&self) -> Option<Aimed> {
+        let mark = self.cursor.as_ref()?;
+        if let Some(node) = self
+            .ley_line
             .iter()
-            .map(|node| vec![node.clone()])
-            .collect()
-    }
-
-    /// The node the cursor is on, if it has been placed.
-    #[must_use]
-    pub fn aimed(&self) -> Option<Node> {
-        let id = self.cursor.as_ref()?;
-        self.walkable().into_iter().find(|node| &node.id == id)
+            .flat_map(|station| &station.nodes)
+            .find(|node| &node.mark() == mark)
+        {
+            return Some(Aimed::Node(node.clone()));
+        }
+        self.rows().into_iter().find_map(|line| {
+            line.stops
+                .iter()
+                .find(|stop| stop.mark() == mark)
+                .map(|stop| Aimed::Stop {
+                    domain: line.domain,
+                    stop: stop.clone(),
+                })
+        })
     }
 
     /// Take a fresh reading of both tracks.
@@ -238,57 +283,95 @@ impl Tapestry {
     /// frame the screen is open, because the world ticks behind it and a
     /// threshold crossed while a player is looking should land while they are
     /// looking.
-    pub fn refresh(&mut self, experience: u64, ley_line: Vec<Node>, mastery: Vec<Vec<Node>>) {
+    pub fn refresh(
+        &mut self,
+        experience: u64,
+        scale: u64,
+        ley_line: Vec<Station>,
+        mastery: Vec<Line>,
+    ) {
         self.experience = experience;
+        self.scale = scale;
         self.ley_line = ley_line;
         self.mastery = mastery;
         // **The cursor is checked against the new reading, not carried over.**
-        // A tier opening changes what is on screen, and an id that is no longer
+        // A fork opening changes what is on screen, and an id that is no longer
         // there would leave the highlight on a row that has moved.
         if self
             .cursor
             .as_ref()
-            .is_some_and(|id| !self.walkable().iter().any(|node| &node.id == id))
+            .is_some_and(|id| !self.walkable().iter().any(|had| had == id))
         {
             self.cursor = None;
         }
     }
 
-    /// The track being walked, as **columns left to right**.
-    ///
-    /// **One shape for both tracks**, which is what makes the cursor's movement
-    /// one piece of arithmetic rather than two. A column is a step of the Ley
-    /// Line or a tier of Mastery — progression runs rightward in both — and the
-    /// rows within a column are the choice, which the Ley Line never has and
-    /// Mastery always does. So the Ley Line is columns of one.
+    /// The Ley Line as **columns left to right**: a station's nodes are a
+    /// column, so a step is one node tall and a fork is as tall as its choice.
     #[must_use]
     pub fn columns(&self) -> Vec<Vec<Node>> {
+        self.ley_line
+            .iter()
+            .map(|station| station.nodes.clone())
+            .collect()
+    }
+
+    /// The rooms whose lines can be walked: the **open** ones with a station on
+    /// them.
+    ///
+    /// **A shut room's line is not walkable, because it is not drawn.** The loom
+    /// paints a room the player cannot enter as an anonymous dotted run and
+    /// draws no stations on it — so a cursor there was invisible, and the
+    /// details panel then read out the deed, its count and the room it opens.
+    /// That is exactly the foreshadowing the boot report, `survey` and the scene
+    /// all withhold; the weave must not be the one surface that gives it away.
+    fn rows(&self) -> Vec<&Line> {
+        self.mastery
+            .iter()
+            .filter(|line| line.open && !line.stops.is_empty())
+            .collect()
+    }
+
+    /// Every mark the cursor may sit on, on the track being walked, in reading
+    /// order.
+    fn walkable(&self) -> Vec<String> {
         match self.track {
             Track::LeyLine => self
-                .ley_line
-                .iter()
-                .map(|node| vec![node.clone()])
+                .columns()
+                .into_iter()
+                .flatten()
+                .map(|node| node.mark())
                 .collect(),
-            Track::Mastery => self.mastery.clone(),
+            Track::Mastery => self
+                .rows()
+                .into_iter()
+                .flat_map(|line| line.stops.iter().map(|stop| stop.mark().to_owned()))
+                .collect(),
         }
     }
 
-    /// Every node the cursor may sit on, in reading order.
-    fn walkable(&self) -> Vec<Node> {
-        self.columns().into_iter().flatten().collect()
-    }
-
-    /// Where the cursor is, as `(column, row)`.
-    fn at(&self) -> Option<(usize, usize)> {
-        let id = self.cursor.as_ref()?;
+    /// Where the cursor is on the Ley Line, as `(column, row)`.
+    fn at_station(&self) -> Option<(usize, usize)> {
+        let mark = self.cursor.as_ref()?;
         self.columns()
             .iter()
             .enumerate()
             .find_map(|(column, rows)| {
                 rows.iter()
-                    .position(|node| &node.id == id)
+                    .position(|node| &node.mark() == mark)
                     .map(|row| (column, row))
             })
+    }
+
+    /// Where the cursor is on Mastery, as `(line, station)`.
+    fn at_stop(&self) -> Option<(usize, usize)> {
+        let mark = self.cursor.as_ref()?;
+        self.rows().iter().enumerate().find_map(|(row, line)| {
+            line.stops
+                .iter()
+                .position(|stop| stop.mark() == mark)
+                .map(|column| (row, column))
+        })
     }
 
     /// Type into the command line.
@@ -345,12 +428,11 @@ impl Tapestry {
 
     /// Move the cursor by one column (`across`) and one row (`down`).
     ///
-    /// **Two axes, because the picture has two.** Progression runs rightward and
-    /// a tier's choice runs downward, so left/right walks the track and up/down
-    /// picks between siblings — which on the Ley Line, whose columns are one node
-    /// tall, does nothing at all. That is the right nothing: there is no choice
-    /// on the Ley Line, and an arrow that appeared to pick between steps would be
-    /// offering one.
+    /// **Two axes, two meanings per track.** On the Ley Line, progression runs
+    /// rightward and a fork's choice runs downward, so left/right walks the
+    /// stations and up/down picks a sibling — which on a step, one node tall,
+    /// does nothing at all. On Mastery, down picks a *room* and left/right
+    /// walks its line.
     ///
     /// **The first arrow places rather than moves.** Until one is pressed the
     /// cursor is nowhere, which is what keeps `Enter` from committing anything
@@ -358,17 +440,13 @@ impl Tapestry {
     /// anything"*, carried into a screen where the damage is irreversible.
     pub fn step(&mut self, across: i8, down: i8) {
         // **The command line has the keys until a word hands them over**, which
-        // is the editor's shape exactly: `edit` drops into the buffer and `<esc>`
-        // comes back, and here `ley` and `mastery` drop into a track. An arrow
-        // pressed at the command line does nothing, on purpose — a screen where
-        // the arrows are sometimes navigation and sometimes nothing depending on
-        // what you last typed is a screen that answers differently to the same
-        // key.
+        // is the editor's shape exactly. An arrow pressed at the command line
+        // does nothing, on purpose.
         if self.mode != Mode::Browsing {
             return;
         }
-        let columns = self.columns();
-        if columns.iter().all(Vec::is_empty) {
+        let walkable = self.walkable();
+        if walkable.is_empty() {
             return;
         }
         self.complaint = None;
@@ -378,26 +456,41 @@ impl Tapestry {
         // but `refresh` unplaces the cursor when the node under it stops being
         // drawn, and that can happen while browsing, on a tick the player did not
         // ask for. Returning early there left every arrow inert while the status
-        // row still read `arrows move`, with retyping the track word the only way
-        // out: a dead end §6 forbids, arrived at without touching the keyboard.
-        let Some((column, row)) = self.at() else {
-            let first = columns.iter().flatten().next().map(|node| node.id.clone());
-            self.cursor = first;
-            return;
-        };
-
-        // **Stops at the ends rather than wrapping.** A track is read left to
-        // right, and wrapping would make its start and its finish the same place
-        // — which on a progression is the one thing the picture must not say.
-        let column = shift(column, across, columns.len());
-        let rows = &columns[column];
-        if rows.is_empty() {
-            return;
+        // row still read `arrows move`: a dead end §6 forbids, arrived at without
+        // touching the keyboard.
+        match self.track {
+            Track::LeyLine => {
+                let columns = self.columns();
+                let Some((column, row)) = self.at_station() else {
+                    self.cursor = walkable.into_iter().next();
+                    return;
+                };
+                // **Stops at the ends rather than wrapping.** A track is read
+                // left to right, and wrapping would make its start and its
+                // finish the same place.
+                let column = shift(column, across, columns.len());
+                let rows = &columns[column];
+                if rows.is_empty() {
+                    return;
+                }
+                // Clamped, not remembered: columns differ in height, and a
+                // cursor carrying a row past the end of a shorter one would
+                // vanish.
+                let row = shift(row.min(rows.len() - 1), down, rows.len());
+                self.cursor = Some(rows[row].mark());
+            }
+            Track::Mastery => {
+                let rows = self.rows();
+                let Some((row, column)) = self.at_stop() else {
+                    self.cursor = walkable.into_iter().next();
+                    return;
+                };
+                let row = shift(row, down, rows.len());
+                let stops = &rows[row].stops;
+                let column = shift(column.min(stops.len() - 1), across, stops.len());
+                self.cursor = Some(stops[column].mark().to_owned());
+            }
         }
-        // Clamped, not remembered: columns may differ in height, and a cursor
-        // carrying a row index past the end of a shorter one would vanish.
-        let row = shift(row.min(rows.len() - 1), down, rows.len());
-        self.cursor = Some(rows[row].id.clone());
     }
 
     /// Go into a track: aim at its first node and hand the arrows over.
@@ -413,12 +506,7 @@ impl Tapestry {
         self.track = track;
         self.mode = Mode::Browsing;
         self.complaint = None;
-        self.cursor = self
-            .columns()
-            .into_iter()
-            .flatten()
-            .next()
-            .map(|node| node.id);
+        self.cursor = self.walkable().into_iter().next();
     }
 
     /// Run whatever word is at the command line.
@@ -451,34 +539,35 @@ impl Tapestry {
     ///
     /// **Every branch is authored**: §6 forbids a bare error, and a screen whose
     /// central verb answered with silence would be worse than one that had no
-    /// verb. `NothingBehind` is now the *marker* branch rather than every
-    /// branch — a node with a grant behind it returns [`Outcome::Take`] and the
-    /// shell hands the id to the sim, which re-checks every rule before granting.
+    /// verb. An open fork node returns [`Outcome::Take`] and the shell hands the
+    /// id to the sim, which re-checks every rule before granting.
     fn take(&mut self) -> Option<Outcome> {
-        let Some(node) = self.aimed() else {
-            self.complaint = Some(Complaint::Nothing);
-            return None;
+        let node = match self.aimed() {
+            None => {
+                self.complaint = Some(Complaint::Nothing);
+                return None;
+            }
+            // **Reached by doing, never taken.** The one refusal that is about
+            // the shape of the track rather than the state of the node.
+            Some(Aimed::Stop { stop, .. }) => {
+                self.complaint = Some(Complaint::NotAChoice(stop.id));
+                return None;
+            }
+            Some(Aimed::Node(node)) => node,
         };
-        // **Asked before the standing**, so a marker in an open tier is refused
-        // as a marker rather than granted as nothing. The two are different
-        // sentences and a player deserves the right one.
-        if node.standing == Standing::Open && orbs_sim::tower::mastery::is_real(&node.id) {
-            self.complaint = None;
-            return Some(Outcome::Take(node.id));
-        }
-        self.complaint = Some(match node.standing {
-            // **Held already, which is not the same as empty.** A Ley Line step
-            // is taken by being passed, so this is the one branch that is about
+        self.complaint = match node.standing {
+            Standing::Open => {
+                return Some(Outcome::Take(node.id));
+            }
+            // **Held already, which is not the same as empty.** A step is taken
+            // by being passed, so this is the one branch that is about
             // something the tower really has.
-            Standing::Taken => Complaint::Already(node.id),
-            // Open, and nothing is behind any of them yet.
-            Standing::Open => Complaint::NothingBehind(node.id),
-            // `unlocked` rather than a total comparison: the two are the same
-            // arithmetic today, and only the field stays right when a tier is
-            // shut because a sibling took its one choice.
-            Standing::Locked if node.unlocked => Complaint::Spent(node.id),
-            Standing::Locked => Complaint::Locked(node.id, node.at),
-        });
+            Standing::Taken => Some(Complaint::Already(node.id)),
+            // `unlocked` rather than a total comparison: only the field stays
+            // right when a fork is shut because a sibling took its one choice.
+            Standing::Locked if node.unlocked => Some(Complaint::Spent(node.id)),
+            Standing::Locked => Some(Complaint::Locked(node.id, node.at)),
+        };
         None
     }
 }
@@ -486,6 +575,7 @@ impl Tapestry {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use orbs_sim::{Lane, Walk};
 
     /// One node, as the sim would report it at 24 experience.
     fn node(id: &str, at: u64, standing: Standing) -> Node {
@@ -494,21 +584,99 @@ mod tests {
             at,
             standing,
             unlocked: at <= 24,
+            lane: Some(Lane::Craft),
         }
     }
 
-    /// A tapestry with one taken ley-line step and one open tier.
+    fn step(id: &str, at: u64) -> Station {
+        Station {
+            at,
+            fork: false,
+            nodes: vec![Node {
+                id: id.to_owned(),
+                at,
+                standing: if at <= 24 {
+                    Standing::Taken
+                } else {
+                    Standing::Locked
+                },
+                unlocked: at <= 24,
+                lane: None,
+            }],
+            opens: Vec::new(),
+        }
+    }
+
+    fn fork(at: u64, nodes: Vec<Node>) -> Station {
+        Station {
+            at,
+            fork: true,
+            nodes,
+            opens: Vec::new(),
+        }
+    }
+
+    fn stop(id: &str, walk: Walk) -> Stop {
+        Stop {
+            id: id.to_owned(),
+            walk,
+            done: 0,
+            needed: 1,
+            opens: Vec::new(),
+        }
+    }
+
+    fn line(domain: &'static str, stops: Vec<Stop>) -> Line {
+        Line {
+            domain,
+            open: true,
+            stops,
+        }
+    }
+
+    /// A room the player cannot enter yet, with a line behind the door.
+    fn shut(domain: &'static str, stops: Vec<Stop>) -> Line {
+        Line {
+            domain,
+            open: false,
+            stops,
+        }
+    }
+
+    /// A tapestry with one taken step, one open fork, one locked fork, and two
+    /// rooms' lines.
     fn tapestry() -> Tapestry {
         let mut screen = Tapestry::default();
         screen.refresh(
             24,
-            vec![node("concentration", 16, Standing::Taken)],
+            56,
             vec![
-                vec![
-                    node("tbi_a", 24, Standing::Open),
-                    node("tbi_b", 24, Standing::Open),
-                ],
-                vec![node("tbi_c", 40, Standing::Locked)],
+                step("concentration", 16),
+                fork(
+                    24,
+                    vec![
+                        node("steps_1", 24, Standing::Open),
+                        node("satchel_1", 24, Standing::Open),
+                    ],
+                ),
+                fork(40, vec![node("steps_2", 40, Standing::Locked)]),
+            ],
+            vec![
+                line(
+                    "laboratory",
+                    vec![
+                        stop("laboratory_1", Walk::Reached),
+                        stop("laboratory_2", Walk::Next),
+                        stop("laboratory_3", Walk::Later),
+                    ],
+                ),
+                line(
+                    "archive",
+                    vec![
+                        stop("archive_1", Walk::Next),
+                        stop("archive_2", Walk::Later),
+                    ],
+                ),
             ],
         );
         screen
@@ -530,10 +698,9 @@ mod tests {
 
     #[test]
     fn enter_before_any_arrow_takes_nothing() {
-        // **The property the unplaced cursor exists for.** Taking a Mastery node
-        // closes its tier and cannot be undone, so the first keystroke must not
-        // be able to reach it — §19's rule for the editor, where the damage was
-        // only a lost line.
+        // **The property the unplaced cursor exists for.** Taking a fork node
+        // closes its fork and cannot be undone, so the first keystroke must not
+        // be able to reach it.
         let mut screen = tapestry();
         assert_eq!(screen.enter(), None);
         assert_eq!(screen.cursor(), None);
@@ -542,10 +709,6 @@ mod tests {
 
     #[test]
     fn an_arrow_at_the_command_line_does_nothing_at_all() {
-        // **The way in is a word**, as `edit` is for the editor's buffer. This is
-        // also the bug it was reported as: the arrows appeared to do nothing on a
-        // screen that had just opened, because the screen had the keyboard and
-        // the command line was where the keys were going.
         let mut screen = tapestry();
         for (across, down) in [(1, 0), (-1, 0), (0, 1), (0, -1)] {
             screen.step(across, down);
@@ -556,100 +719,113 @@ mod tests {
 
     #[test]
     fn a_word_goes_into_a_track_and_aims_at_its_first_node() {
-        // A browse mode with nothing aimed at would be a mode whose only visible
-        // difference is that the words stopped working.
         let mut screen = tapestry();
         say(&mut screen, "mastery");
         assert_eq!(screen.mode(), Mode::Browsing);
-        assert_eq!(screen.cursor(), Some("tbi_a"));
+        assert_eq!(screen.cursor(), Some("laboratory_1"));
 
         say(&mut screen, "ley");
         assert_eq!(screen.track(), Track::LeyLine);
-        assert_eq!(screen.cursor(), Some("concentration"));
+        assert_eq!(screen.cursor(), Some("16:concentration"));
     }
 
     #[test]
-    fn rightward_is_progress_and_downward_is_the_choice() {
-        // **The two axes are two meanings**, which is the whole of why the
-        // picture is a grid: a tier runs down and the track runs right.
+    fn on_the_ley_line_rightward_is_progress_and_downward_is_the_choice() {
         let mut screen = tapestry();
-        say(&mut screen, "mastery");
-
+        say(&mut screen, "ley");
+        screen.step(1, 0);
+        assert_eq!(
+            screen.cursor(),
+            Some("24:steps_1"),
+            "right did not walk the line"
+        );
         screen.step(0, 1);
         assert_eq!(
             screen.cursor(),
-            Some("tbi_b"),
+            Some("24:satchel_1"),
             "down did not pick a sibling"
         );
         screen.step(1, 0);
         assert_eq!(
             screen.cursor(),
-            Some("tbi_c"),
-            "right did not walk the track"
+            Some("40:steps_2"),
+            "right did not reach the next fork"
         );
-
-        // The second tier is one node tall, so the row clamps rather than the
-        // cursor vanishing — columns may differ in height.
+        // The second fork is one node tall, so the row clamps rather than the
+        // cursor vanishing.
         screen.step(0, 1);
-        assert_eq!(screen.cursor(), Some("tbi_c"));
+        assert_eq!(screen.cursor(), Some("40:steps_2"));
+    }
+
+    #[test]
+    fn on_mastery_downward_is_a_room_and_rightward_is_its_line() {
+        let mut screen = tapestry();
+        say(&mut screen, "mastery");
+        screen.step(1, 0);
+        assert_eq!(
+            screen.cursor(),
+            Some("laboratory_2"),
+            "right did not walk the line"
+        );
+        screen.step(0, 1);
+        assert_eq!(
+            screen.cursor(),
+            Some("archive_2"),
+            "down did not change room"
+        );
+        // A shorter line clamps the station rather than losing the cursor.
+        screen.step(1, 0);
+        screen.step(1, 0);
+        assert_eq!(screen.cursor(), Some("archive_2"));
+        screen.step(0, -1);
+        assert_eq!(screen.cursor(), Some("laboratory_2"));
     }
 
     #[test]
     fn the_cursor_stops_at_the_ends_rather_than_wrapping() {
-        // A track is read left to right, and wrapping would make its start and
-        // its finish the same place — on a progression, the one thing the
-        // picture must not say.
         let mut screen = tapestry();
-        say(&mut screen, "mastery");
+        say(&mut screen, "ley");
         for _ in 0..10 {
             screen.step(1, 0);
         }
-        assert_eq!(screen.cursor(), Some("tbi_c"), "it wrapped");
+        assert_eq!(screen.cursor(), Some("40:steps_2"), "it wrapped");
         for _ in 0..10 {
             screen.step(-1, 0);
         }
-        assert_eq!(screen.cursor(), Some("tbi_a"), "it wrapped the other way");
+        assert_eq!(
+            screen.cursor(),
+            Some("16:concentration"),
+            "it wrapped the other way"
+        );
     }
 
     #[test]
     fn a_cursor_unplaces_when_what_it_pointed_at_goes_away() {
-        // The world ticks behind the screen, so what is on it changes while a
-        // player is looking. An id that is no longer drawn would leave the mark
-        // on a node that has moved — a view outliving its subject.
         let mut screen = tapestry();
         say(&mut screen, "mastery");
         assert!(screen.cursor().is_some());
 
-        screen.refresh(0, Vec::new(), Vec::new());
+        screen.refresh(0, 56, Vec::new(), Vec::new());
         assert_eq!(screen.cursor(), None, "it pointed at something gone");
     }
 
     #[test]
     fn an_arrow_recovers_an_aim_the_world_took_away() {
-        // **The dead end that needed no keystroke to reach.** `refresh` unplaces
-        // the cursor when the node under it stops being drawn, and that happens
-        // on a tick the player did not ask for — after which every arrow was
-        // inert while the status row still read `arrows move`, and retyping the
-        // track word was the only way out.
-        let mut screen = tapestry();
-        say(&mut screen, "mastery");
-        screen.refresh(0, Vec::new(), Vec::new());
-        assert_eq!(screen.cursor(), None);
-        assert_eq!(screen.mode(), Mode::Browsing, "it left browsing on its own");
-
-        // The world comes back — a tier is still open — and an arrow works again.
         let mut restored = tapestry();
-        say(&mut restored, "mastery");
-        restored.refresh(0, Vec::new(), Vec::new());
-        restored.refresh(
-            24,
-            vec![node("concentration", 16, Standing::Taken)],
-            vec![vec![node("tbi_a", 24, Standing::Open)]],
+        say(&mut restored, "ley");
+        restored.refresh(0, 56, Vec::new(), Vec::new());
+        assert_eq!(restored.cursor(), None);
+        assert_eq!(
+            restored.mode(),
+            Mode::Browsing,
+            "it left browsing on its own"
         );
+
+        restored.refresh(24, 56, vec![step("concentration", 16)], Vec::new());
         restored.step(0, 1);
         assert_eq!(
             restored.cursor(),
-            Some("tbi_a"),
+            Some("16:concentration"),
             "the arrows stayed dead after the aim was taken away",
         );
     }
@@ -657,31 +833,26 @@ mod tests {
     #[test]
     fn typing_while_aiming_keeps_the_aim_and_starts_a_word() {
         // **The flow the arrows exist for**: point at a node, then type `take`.
-        // Swallowing the letters would have been a dead end — nothing typed,
-        // nothing said — and clearing the cursor would have made the arrows
-        // useless for the one word that needs them.
         let mut screen = tapestry();
-        say(&mut screen, "mastery");
+        say(&mut screen, "ley");
+        screen.step(1, 0);
         screen.step(0, 1);
-        assert_eq!(screen.cursor(), Some("tbi_b"));
+        assert_eq!(screen.cursor(), Some("24:satchel_1"));
 
         screen.type_text("t");
         assert_eq!(screen.mode(), Mode::Command, "the letter went nowhere");
         assert_eq!(screen.command(), "t");
-        assert_eq!(screen.cursor(), Some("tbi_b"), "typing lost the aim");
+        assert_eq!(screen.cursor(), Some("24:satchel_1"), "typing lost the aim");
 
-        screen.enter();
         assert_eq!(
-            screen.complaint(),
-            Some(&Complaint::NothingBehind("tbi_b".to_owned())),
+            screen.enter(),
+            Some(Outcome::Take("satchel_1".to_owned())),
             "`take` did not act on what was aimed at",
         );
     }
 
     #[test]
     fn backspace_while_aiming_deletes_nothing() {
-        // The editor's `Backspace`-in-`Reading` defect (§19), refused in advance:
-        // every mode is matched rather than treated as "not `Command`".
         let mut screen = tapestry();
         say(&mut screen, "mastery");
         screen.backspace();
@@ -706,29 +877,24 @@ mod tests {
     fn quit_is_the_only_way_out() {
         let mut screen = tapestry();
         assert_eq!(say(&mut screen, "quit"), Some(Outcome::Close));
-        // ...and any unambiguous prefix reaches it, as it does in the editor.
         let mut screen = tapestry();
         assert_eq!(say(&mut screen, "q"), Some(Outcome::Close));
     }
 
     #[test]
     fn no_two_words_share_a_first_letter() {
-        // What makes single-letter prefixes unambiguous, and the reason this is
-        // a property rather than four hand-written cases.
         for (name, expected) in WORDS {
             let first = &name[..1];
             assert_eq!(
                 word(first),
                 Some(expected),
-                "{first:?} does not reach {name}",
+                "{first:?} does not reach {name}"
             );
         }
     }
 
     #[test]
     fn an_unknown_word_says_so_rather_than_clearing() {
-        // §6 forbids a bare error, and a command line that silently empties is
-        // indistinguishable from one that worked.
         let mut screen = tapestry();
         say(&mut screen, "xyzzy");
         assert_eq!(
@@ -739,25 +905,20 @@ mod tests {
 
     #[test]
     fn taking_names_what_it_refused_and_why() {
-        // Nothing is takeable yet, so every branch is a refusal — and each one
-        // has to say something different, because "no" without a reason is the
-        // dead end §15 weighs above the raw resolution rate.
         let mut screen = tapestry();
         say(&mut screen, "take");
         assert_eq!(screen.complaint(), Some(&Complaint::Nothing), "unaimed");
 
+        // **A mastery station is reached, never taken**, and the refusal says
+        // so rather than pretending it is locked.
         say(&mut screen, "mastery");
         say(&mut screen, "take");
         assert_eq!(
             screen.complaint(),
-            Some(&Complaint::NothingBehind("tbi_a".to_owned())),
-            "an open node did not say it was a marker",
+            Some(&Complaint::NotAChoice("laboratory_1".to_owned())),
         );
 
-        // **A step the tower has already passed is not a marker.** This answered
-        // `NothingBehind` — calling the game's one real grant empty, one row
-        // under a details panel reading `active`. The screen contradicted itself
-        // about the only thing the Ley Line delivers.
+        // **A step the tower has already passed is not empty.**
         let mut screen = tapestry();
         say(&mut screen, "ley");
         say(&mut screen, "take");
@@ -766,28 +927,140 @@ mod tests {
             Some(&Complaint::Already("concentration".to_owned())),
         );
 
-        // A locked tier names the total it is waiting for.
+        // An open fork node is taken. Typing `take` stepped back to the
+        // command line, so the arrows need the track word again first.
+        say(&mut screen, "ley");
+        screen.step(1, 0);
+        assert_eq!(
+            say(&mut screen, "take"),
+            Some(Outcome::Take("steps_1".to_owned()))
+        );
+
+        // A locked fork names the total it is waiting for.
         let mut screen = tapestry();
-        say(&mut screen, "mastery");
+        say(&mut screen, "ley");
         for _ in 0..5 {
             screen.step(1, 0);
         }
         say(&mut screen, "take");
         assert_eq!(
             screen.complaint(),
-            Some(&Complaint::Locked("tbi_c".to_owned(), 40)),
+            Some(&Complaint::Locked("steps_2".to_owned(), 40)),
+        );
+    }
+
+    #[test]
+    fn a_spent_fork_says_you_chose_otherwise() {
+        let mut screen = Tapestry::default();
+        screen.refresh(
+            24,
+            56,
+            vec![fork(
+                24,
+                vec![
+                    node("steps_1", 24, Standing::Taken),
+                    node("satchel_1", 24, Standing::Locked),
+                ],
+            )],
+            Vec::new(),
+        );
+        say(&mut screen, "ley");
+        screen.step(0, 1);
+        say(&mut screen, "take");
+        assert_eq!(
+            screen.complaint(),
+            Some(&Complaint::Spent("satchel_1".to_owned())),
         );
     }
 
     #[test]
     fn changing_track_moves_the_aim_onto_the_new_one() {
-        // A cursor left on a node of a track nobody is looking at is a mark the
-        // player cannot see and `take` would still act on.
         let mut screen = tapestry();
         say(&mut screen, "mastery");
-        assert_eq!(screen.cursor(), Some("tbi_a"));
+        assert_eq!(screen.cursor(), Some("laboratory_1"));
         say(&mut screen, "ley");
         assert_eq!(screen.track(), Track::LeyLine);
-        assert_eq!(screen.cursor(), Some("concentration"));
+        assert_eq!(screen.cursor(), Some("16:concentration"));
+    }
+
+    #[test]
+    fn two_steps_granting_one_thing_are_two_places_the_cursor_can_be() {
+        // Eight stations grant concentration. While the cursor held the *id*,
+        // all eight drew aimed at once, the panel read the first one's cost, and
+        // `→` from any of them jumped back to the second station — a player
+        // could not walk past the fourth. The mark carries the total; see the
+        // module header.
+        let mut screen = Tapestry::default();
+        screen.refresh(
+            24,
+            96,
+            vec![
+                step("concentration", 16),
+                fork(24, vec![node("steps_1", 24, Standing::Open)]),
+                step("concentration", 96),
+            ],
+            Vec::new(),
+        );
+        say(&mut screen, "ley");
+        assert_eq!(screen.cursor(), Some("16:concentration"));
+        screen.step(1, 0);
+        screen.step(1, 0);
+        assert_eq!(
+            screen.cursor(),
+            Some("96:concentration"),
+            "the line would not walk past the fork",
+        );
+        let Some(Aimed::Node(node)) = screen.aimed() else {
+            panic!("the cursor is on nothing");
+        };
+        assert_eq!(node.at, 96, "the panel read a different station");
+    }
+
+    #[test]
+    fn a_room_the_player_cannot_enter_yet_is_not_walked() {
+        // The loom draws a shut room as an anonymous dotted run and puts no
+        // stations on it, so a cursor there is invisible — and the details panel
+        // would then read out the deed, its count and the room it opens, which
+        // is the one thing the boot report, `survey` and the scene all withhold.
+        let mut screen = Tapestry::default();
+        screen.refresh(
+            0,
+            56,
+            Vec::new(),
+            vec![
+                line("laboratory", vec![stop("laboratory_1", Walk::Next)]),
+                shut("archive", vec![stop("archive_1", Walk::Next)]),
+            ],
+        );
+        say(&mut screen, "mastery");
+        assert_eq!(screen.cursor(), Some("laboratory_1"));
+        screen.step(0, 1);
+        assert_eq!(
+            screen.cursor(),
+            Some("laboratory_1"),
+            "the cursor walked into a room the player cannot enter",
+        );
+        assert!(matches!(
+            screen.aimed(),
+            Some(Aimed::Stop {
+                domain: "laboratory",
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn the_aim_knows_which_track_it_is_on() {
+        let mut screen = tapestry();
+        say(&mut screen, "mastery");
+        assert!(matches!(
+            screen.aimed(),
+            Some(Aimed::Stop {
+                domain: "laboratory",
+                ..
+            })
+        ));
+        say(&mut screen, "ley");
+        assert!(matches!(screen.aimed(), Some(Aimed::Node(_))));
     }
 }

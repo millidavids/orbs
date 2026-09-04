@@ -13,7 +13,12 @@
 //! this file is asking the same question from different rooms.
 
 use orbs_render::{FieldName, Value};
-use orbs_sim::{Save, Sim};
+// `Save` and the two helpers below belong to the debug-gated tests, which is
+// most of this file: `debug_take` buys the channel and `debug_spawn` fills the
+// satchel, and neither word exists in a release build.
+#[cfg(debug_assertions)]
+use orbs_sim::Save;
+use orbs_sim::Sim;
 
 fn run(sim: &mut Sim, line: &str) {
     sim.submit(line);
@@ -54,6 +59,7 @@ fn ever_said(sim: &Sim, needle: &str) -> bool {
     said(sim).iter().any(|line| line.contains(needle))
 }
 
+#[cfg(debug_assertions)]
 fn last(sim: &Sim) -> String {
     said(sim).last().cloned().unwrap_or_default()
 }
@@ -64,6 +70,7 @@ fn last(sim: &Sim) -> String {
 /// answer at all — the diagnostic CLAUDE.md records costing three experiments in
 /// the menagerie, and `warding.rs` records two tests passing for the wrong
 /// reason against the same mistake.
+#[cfg(debug_assertions)]
 fn listed(sim: &Sim) -> Vec<String> {
     sim.scrollback()
         .records()
@@ -91,6 +98,7 @@ fn write(sim: &mut Sim, name: &str, lines: &[&str]) {
 /// The refusal names the **loom** rather than the satchel. Saying *"there is no
 /// satchel here"* would send a player looking round the room for a thing the
 /// progression tree holds.
+#[cfg(debug_assertions)]
 #[test]
 fn the_channel_is_bought_at_the_loom() {
     let mut sim = Sim::new(11);
@@ -118,6 +126,7 @@ fn the_channel_is_bought_at_the_loom() {
     assert!(ever_said(&sim, "1 waiting"), "{:?}", last(&sim));
 }
 
+#[cfg(debug_assertions)]
 #[test]
 fn a_queued_name_is_read_back_in_the_order_it_went_in() {
     let mut sim = in_room("menagerie");
@@ -153,6 +162,7 @@ fn a_queued_name_is_read_back_in_the_order_it_went_in() {
 /// `satchel` therefore resolved to whichever was registered first — so `queue`
 /// filled the menagerie's and `survey satchel` read the *laboratory's* and
 /// reported it empty, one line apart.
+#[cfg(debug_assertions)]
 #[test]
 fn each_room_has_its_own_satchel() {
     let mut sim = in_room("menagerie");
@@ -182,6 +192,7 @@ fn each_room_has_its_own_satchel() {
 }
 
 /// The arsenal is the Keep and has no satchel, and the refusal says so.
+#[cfg(debug_assertions)]
 #[test]
 fn the_arsenal_has_no_satchel_and_says_so() {
     let mut sim = in_room("arsenal");
@@ -222,6 +233,7 @@ fn a_spell_pulls_what_a_hand_queued_and_can_name_it() {
 /// which is the whole of what §8 could not do before. Both run at once because
 /// `invoke` from inside a spell inserts a second `Running` and the caller does
 /// not block; the satchel is what gives them something to say to each other.
+#[cfg(debug_assertions)]
 #[test]
 fn one_spell_hands_another_spell_a_name() {
     let mut sim = in_room("menagerie");
@@ -307,6 +319,7 @@ fn a_pull_on_an_empty_satchel_waits_without_latching_a_fault() {
 }
 
 /// A name the room cannot place is a fault, not a wait — and it is said.
+#[cfg(debug_assertions)]
 #[test]
 fn pulling_from_something_that_is_not_a_satchel_says_so() {
     let mut sim = in_room("menagerie");
@@ -373,6 +386,7 @@ fn the_shipped_pair_hands_a_work_list_between_two_spells() {
 /// **What is waiting survives a save**, in order, which is `ChantSave`'s lesson:
 /// a component the world holds and the document does not is state that silently
 /// resets when a player comes back.
+#[cfg(debug_assertions)]
 #[test]
 fn a_satchel_full_of_names_survives_a_save() {
     let mut sim = in_room("menagerie");

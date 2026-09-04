@@ -144,6 +144,56 @@ pub struct Recipe {
     /// of "made" and offer it as an endless herb.
     #[serde(default)]
     pub secret: bool,
+    /// Whether the player has to **earn** this before it will fire (§11.5).
+    ///
+    /// **The other door.** A secret is *found* — rolled on a broken ward, in
+    /// the lens — and a gated product is *earned* by reaching a station on a
+    /// room's mastery line; `tower::Opened` holds what has been earned, as
+    /// [`Learned`](crate::tower::Learned) holds what has been found. A recipe
+    /// may not be both.
+    ///
+    /// **Per output, never per recipe.** `gated = true` gates everything the
+    /// recipe makes; `gated = ["quickening-scroll"]` gates only that product of
+    /// a recipe that draws among several. The lectern is one recipe with three
+    /// outputs, and a recipe-level gate on two of them would seal the third —
+    /// so a recipe fires if *any* of its outputs is known, and the draw picks
+    /// among the known ones.
+    #[serde(default)]
+    gated: Gate,
+}
+
+/// Which of a recipe's outputs are gated: all of them, or a named few.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+enum Gate {
+    /// `gated = true` or absent.
+    All(bool),
+    /// `gated = ["a", "b"]`.
+    Named(Vec<String>),
+}
+
+impl Default for Gate {
+    fn default() -> Self {
+        Self::All(false)
+    }
+}
+
+impl Gate {
+    /// Whether `name` is behind this gate.
+    fn holds(&self, name: &str) -> bool {
+        match self {
+            Self::All(all) => *all,
+            Self::Named(names) => names.iter().any(|gated| gated == name),
+        }
+    }
+
+    /// Whether anything at all is behind it.
+    const fn is_any(&self) -> bool {
+        match self {
+            Self::All(all) => *all,
+            Self::Named(names) => !names.is_empty(),
+        }
+    }
 }
 
 /// The default for [`Recipe::count`]: a recipe wants one of each input.
@@ -244,6 +294,27 @@ impl Recipes {
                     ),
                 ));
             }
+            // **Found or earned, never both.** `Learned` and `Opened` would each
+            // answer for it and disagree, which is the defect §19 records most.
+            if recipe.secret && recipe.gated.is_any() {
+                return Err(super::ContentError::new(
+                    FILE,
+                    format!(
+                        "a `{instrument}` recipe is both secret and gated; \
+                         a product is found or earned, not both"
+                    ),
+                ));
+            }
+            if let Gate::Named(names) = &recipe.gated
+                && let Some(stray) = names
+                    .iter()
+                    .find(|name| !recipe.outputs().contains(&name.as_str()))
+            {
+                return Err(super::ContentError::new(
+                    FILE,
+                    format!("a `{instrument}` recipe gates `{stray}`, which it does not make"),
+                ));
+            }
         }
         Ok(parsed)
     }
@@ -261,18 +332,19 @@ impl Recipes {
     /// `held` is what the instrument contains: each name once, with how many
     /// units of it are there. See [`Recipe::count`] for why the count is carried
     /// rather than the name repeated.
-    /// `learned` is what the player has found. A secret recipe they have not
-    /// found does not fire, and the instrument reads `fouled` — which is honest:
-    /// they are holding two things that make nothing, as far as they know.
+    /// `known` is what the player has found and earned. A secret recipe they
+    /// have not found, or a gated one they have not earned, does not fire, and
+    /// the instrument reads `fouled` — which is honest: they are holding two
+    /// things that make nothing, as far as they know.
     #[must_use]
     pub fn matching(
         &self,
         instrument: &str,
         held: &[(String, u32)],
-        learned: &crate::tower::Learned,
+        known: &crate::tower::Known<'_>,
     ) -> Option<&Recipe> {
         self.by_instrument.get(instrument)?.iter().find(|recipe| {
-            if !self.reachable(recipe, learned) {
+            if !self.reachable(recipe, known) {
                 return false;
             }
             let mut wanted: Vec<&str> = recipe.inputs();
@@ -313,14 +385,14 @@ impl Recipes {
         &self,
         instrument: &str,
         held: &[(String, u32)],
-        learned: &crate::tower::Learned,
+        known: &crate::tower::Known<'_>,
     ) -> bool {
         if held.is_empty() {
             return false;
         }
         self.by_instrument.get(instrument).is_some_and(|recipes| {
             recipes.iter().any(|recipe| {
-                if !self.reachable(recipe, learned) {
+                if !self.reachable(recipe, known) {
                     return false;
                 }
                 let mut wanted: Vec<&str> = recipe.inputs();
@@ -498,12 +570,46 @@ impl Recipes {
     /// [`gathering`](Self::gathering) — two expressions of one rule disagreeing
     /// is the defect §19 records most often, and here it would show as an
     /// instrument reading `gathering` for a set it will never assemble.
-    fn reachable(&self, recipe: &Recipe, learned: &crate::tower::Learned) -> bool {
-        !recipe.secret
-            || recipe
-                .outputs()
-                .iter()
-                .all(|made| learned.knows(self, made))
+    ///
+    /// **Any output known, not every one.** A recipe that draws among several
+    /// products fires as soon as one of them may be made, and `produce::draw`
+    /// picks among the known ones; requiring all of them would seal the lectern
+    /// behind the last scroll its line opens.
+    fn reachable(&self, recipe: &Recipe, known: &crate::tower::Known<'_>) -> bool {
+        recipe.outputs().iter().any(|made| known.knows(self, made))
+    }
+
+    /// Whether a name is one the player has to earn before they can make it.
+    ///
+    /// **Every route to it must gate it**, for the reason
+    /// [`is_secret`](Self::is_secret) gives: a product one recipe gates and
+    /// another gives away is not gated.
+    #[must_use]
+    pub fn is_gated(&self, name: &str) -> bool {
+        let mut routes = self
+            .by_instrument
+            .values()
+            .flatten()
+            .filter(|recipe| recipe.outputs().contains(&name))
+            .peekable();
+        routes.peek().is_some() && routes.all(|recipe| recipe.gated.holds(name))
+    }
+
+    /// Every product that has to be earned, in the file's own order.
+    ///
+    /// What `progression.toml`'s `recipe:` keys are checked against, and what an
+    /// open tower holds — see `tower::Opened`.
+    #[must_use]
+    pub fn gated(&self) -> Vec<&str> {
+        let mut out: Vec<&str> = Vec::new();
+        for recipe in self.by_instrument.values().flatten() {
+            for made in recipe.outputs() {
+                if recipe.gated.holds(made) && self.is_gated(made) && !out.contains(&made) {
+                    out.push(made);
+                }
+            }
+        }
+        out
     }
 
     /// Whether a name is one the player has to find before they can make it.
@@ -583,18 +689,24 @@ mod tests {
         assert!(!recipes.for_instrument("alembic").is_empty());
     }
 
-    /// What the player knows at tick 0 — nothing found, everything ordinary
-    /// available. The default, spelled out so a test reads as *a new tower*.
-    fn fresh() -> crate::tower::Learned {
-        crate::tower::Learned::default()
+    /// What the player knows at tick 0 — nothing found, nothing earned,
+    /// everything ordinary available. Spelled out so a test reads as *a new,
+    /// sealed tower*.
+    fn fresh() -> (crate::tower::Learned, crate::tower::Opened) {
+        (
+            crate::tower::Learned::default(),
+            crate::tower::Opened::default(),
+        )
     }
 
     #[test]
     fn a_single_input_recipe_matches_its_reagent() {
         let recipes = Recipes::builtin();
         let held = vec![("sage".to_owned(), 1)];
+        let (learned, opened) = fresh();
+        let known = crate::tower::Known::new(&learned, &opened);
         let recipe = recipes
-            .matching("mortar_and_pestle", &held, &fresh())
+            .matching("mortar_and_pestle", &held, &known)
             .expect("sage grinds");
         assert_eq!(recipe.outputs(), ["ground-sage"]);
         assert_eq!(recipe.leaves.as_deref(), Some("husks"));
@@ -613,17 +725,19 @@ mod tests {
             ("ground-salt".to_owned(), 1),
             ("sage-tincture".to_owned(), 1),
         ];
+        let (learned, opened) = fresh();
+        let known = crate::tower::Known::new(&learned, &opened);
         assert_eq!(
             recipes
-                .matching("flask_and_rod", &forward, &fresh())
+                .matching("flask_and_rod", &forward, &known)
                 .map(Recipe::outputs),
             recipes
-                .matching("flask_and_rod", &backward, &fresh())
+                .matching("flask_and_rod", &backward, &known)
                 .map(Recipe::outputs)
         );
         assert!(
             recipes
-                .matching("flask_and_rod", &backward, &fresh())
+                .matching("flask_and_rod", &backward, &known)
                 .is_some()
         );
     }
@@ -634,9 +748,11 @@ mod tests {
         // Leave the husks in and the mortar does not know what you want.
         let recipes = Recipes::builtin();
         let held = vec![("sage".to_owned(), 1), ("husks".to_owned(), 1)];
+        let (learned, opened) = fresh();
+        let known = crate::tower::Known::new(&learned, &opened);
         assert!(
             recipes
-                .matching("mortar_and_pestle", &held, &fresh())
+                .matching("mortar_and_pestle", &held, &known)
                 .is_none()
         );
     }
@@ -644,7 +760,9 @@ mod tests {
     #[test]
     fn an_empty_instrument_matches_nothing() {
         let recipes = Recipes::builtin();
-        assert!(recipes.matching("alembic", &[], &fresh()).is_none());
+        let (learned, opened) = fresh();
+        let known = crate::tower::Known::new(&learned, &opened);
+        assert!(recipes.matching("alembic", &[], &known).is_none());
     }
 
     #[test]
@@ -654,8 +772,10 @@ mod tests {
         // told it exists.
         let recipes = Recipes::builtin();
         let held = vec![("potash".to_owned(), 1)];
+        let (learned, opened) = fresh();
+        let known = crate::tower::Known::new(&learned, &opened);
         assert!(
-            recipes.matching("alembic", &held, &fresh()).is_none(),
+            recipes.matching("alembic", &held, &known).is_none(),
             "a secret fired before it was found",
         );
 
@@ -663,7 +783,79 @@ mod tests {
         assert!(!secrets.is_empty(), "nothing is authored secret");
         for made in &secrets {
             assert!(recipes.is_secret(made), "{made} is not hidden");
+            assert!(!recipes.is_gated(made), "{made} is both found and earned");
         }
+    }
+
+    #[test]
+    fn a_gated_recipe_does_not_fire_until_it_is_earned() {
+        // §11.5's other door: warding is authored gated, so a sealed tower
+        // holding its draught makes nothing — and an open one makes it.
+        let recipes = Recipes::builtin();
+        let gated = recipes.gated();
+        assert!(
+            gated.contains(&"warding"),
+            "warding is not gated: {gated:?}"
+        );
+        for made in &gated {
+            assert!(recipes.is_gated(made), "{made} is not gated on every route");
+            assert!(!recipes.is_secret(made), "{made} is both earned and found");
+        }
+
+        let held = vec![("fixed-draught".to_owned(), 1)];
+        let (learned, opened) = fresh();
+        let known = crate::tower::Known::new(&learned, &opened);
+        assert!(
+            recipes.matching("alembic", &held, &known).is_none(),
+            "a gated recipe fired before it was earned",
+        );
+        let all = crate::tower::Opened::all(&recipes, &super::super::Charms::builtin());
+        let known = crate::tower::Known::new(&learned, &all);
+        assert!(
+            recipes.matching("alembic", &held, &known).is_some(),
+            "an earned recipe did not fire",
+        );
+    }
+
+    #[test]
+    fn a_recipe_that_draws_fires_once_any_of_its_outputs_is_known() {
+        // The lectern is one recipe with three outputs, two of them gated. A
+        // recipe-level gate would seal the third; per output, the sealed tower
+        // still assembles a gleaning scroll.
+        let recipes = Recipes::builtin();
+        let held = vec![("fragment".to_owned(), 4)];
+        let (learned, opened) = fresh();
+        let known = crate::tower::Known::new(&learned, &opened);
+        assert!(
+            recipes.matching("lectern", &held, &known).is_some(),
+            "the lectern was sealed by its gated outputs",
+        );
+        assert!(recipes.is_gated("quickening-scroll"));
+        assert!(!recipes.is_gated("gleaning-scroll"));
+    }
+
+    #[test]
+    fn a_recipe_cannot_be_both_secret_and_gated_nor_gate_what_it_does_not_make() {
+        assert!(
+            Recipes::parse(
+                "[[alembic]]\ninput = \"x\"\noutput = \"y\"\nticks = 1\nsecret = true\ngated = true\n"
+            )
+            .is_err(),
+            "a recipe both found and earned was accepted",
+        );
+        assert!(
+            Recipes::parse(
+                "[[lectern]]\ninput = \"x\"\noutputs = [\"y\", \"z\"]\nticks = 1\ngated = [\"w\"]\n"
+            )
+            .is_err(),
+            "a gate on a product the recipe does not make was accepted",
+        );
+        assert!(
+            Recipes::parse(
+                "[[lectern]]\ninput = \"x\"\noutputs = [\"y\", \"z\"]\nticks = 1\ngated = [\"z\"]\n"
+            )
+            .is_ok(),
+        );
     }
 
     #[test]
@@ -687,7 +879,9 @@ mod tests {
         // Sequencing is the puzzle: sage grinds, it does not distil.
         let recipes = Recipes::builtin();
         let held = vec![("sage".to_owned(), 1)];
-        assert!(recipes.matching("alembic", &held, &fresh()).is_none());
+        let (learned, opened) = fresh();
+        let known = crate::tower::Known::new(&learned, &opened);
+        assert!(recipes.matching("alembic", &held, &known).is_none());
     }
 
     #[test]

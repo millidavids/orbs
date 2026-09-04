@@ -248,7 +248,7 @@ pub fn run_script(seed: u64, wizard: Option<String>, engine: &str, request: &str
             resumed
         }
         crate::save::Opened::Unreadable => {
-            let mut fresh = Sim::new(seed);
+            let mut fresh = crate::environment::fresh(seed, false);
             if let Some(name) = wizard {
                 fresh.rename(&name);
             }
@@ -256,7 +256,7 @@ pub fn run_script(seed: u64, wizard: Option<String>, engine: &str, request: &str
             fresh
         }
         crate::save::Opened::New => {
-            let mut fresh = Sim::new(seed);
+            let mut fresh = crate::environment::fresh(seed, false);
             // Only a *new* world takes its wizard from the environment: a save
             // carries one, and `session::Wizard` is explicit that a save
             // outranks the machine.
@@ -405,7 +405,7 @@ pub fn run_script(seed: u64, wizard: Option<String>, engine: &str, request: &str
         // The world may have moved while the screen was up — `ORBS_THEN` steps.
         // In the game `weaving::refresh` runs every frame for exactly this.
         if let Some(screen) = weaving.as_mut() {
-            screen.refresh(sim.experience(), sim.ley_line(), sim.mastery());
+            screen.refresh(sim.experience(), sim.scale(), sim.ley_line(), sim.mastery());
         }
         // The running-line marker, and how the orb reads the buffer. In the game
         // both are pushed in by `editing::autosave`; a dump builds no `App` and
@@ -437,17 +437,12 @@ pub fn run_script(seed: u64, wizard: Option<String>, engine: &str, request: &str
         // Taken before the borrow below, because `unfurling` takes rather than
         // reads and `View` holds `&sim` for the whole call.
         let scroll = scrolled(&mut sim);
-        let panel = super::glance::Panel {
-            instruments: sim.instruments(),
-            domain: orbs_sim::parser::leaf(&sim.location()).to_owned(),
-            stacks: sim.stacks(),
-            ward: sim.ward(),
-            pylon: sim.pylon(),
-            figure: sim.figure(),
-            rampart: sim.rampart(),
-            lattice: sim.lattice(),
-            briefs: sim.briefs(),
-        };
+        // **Through `Panel::refresh`, not a second literal.** The literal this
+        // was listed nine fields by hand and was the one place a tenth could be
+        // added to the resource and forgotten here — a dump that silently
+        // omitted a reading would be a picture that proves the wrong thing.
+        let mut panel = super::glance::Panel::default();
+        panel.refresh(&sim);
         super::prompt::paint(
             &mut frame,
             &mut Linear::default(),
@@ -876,7 +871,7 @@ fn choruses(sim: &mut orbs_sim::Sim) {
 /// taken node back: a closure capturing `&sim` holds an immutable borrow for its
 /// whole life and `Sim::take` needs a mutable one.
 fn refresh(screen: &mut super::Tapestry, sim: &orbs_sim::Sim) {
-    screen.refresh(sim.experience(), sim.ley_line(), sim.mastery());
+    screen.refresh(sim.experience(), sim.scale(), sim.ley_line(), sim.mastery());
 }
 
 fn woven(sim: &mut orbs_sim::Sim) -> Option<super::Tapestry> {

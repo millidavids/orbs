@@ -15,6 +15,12 @@ fn run(sim: &mut Sim, line: &str) {
     sim.step();
 }
 
+/// Every message the orb has said, in order.
+///
+/// **Gated with the tests that use it**, which are the `debug_learn` ones: in a
+/// release build `debug_assertions` is off, those tests are gone, and this reads
+/// as dead code rather than as the deliberate thing it is.
+#[cfg(debug_assertions)]
 fn said(sim: &Sim) -> Vec<String> {
     sim.scrollback()
         .records()
@@ -27,6 +33,7 @@ fn said(sim: &Sim) -> Vec<String> {
 }
 
 /// The first secret the file reveals, which is what `debug_learn` bare takes.
+#[cfg(debug_assertions)]
 const FIRST: &str = "mending";
 
 /// **Gated, unlike its neighbours in this file.**

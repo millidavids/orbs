@@ -15,6 +15,52 @@
   at 1.0 (DESIGN.md §19).
 -->
 
+## [v0.10.6] - 2026-09-02
+
+### Description
+In development — a dev log, not patch notes. The tower opens one room at a time
+now: a fresh game is a laboratory and nothing else, and brewing your first
+clarity is what opens the archive. Progression has two tracks again, and they
+swapped natures.
+
+### Added
+- **The tower is earned.** A new game starts in the laboratory with six rooms
+  dark on the rail. Brew a clarity and the archive opens; walk the stacks and the
+  lens does; a warding potion opens the sanctum; the forge comes with the pool it
+  spends. Rooms, recipes and charms all arrive this way, and each arrival is
+  said.
+- **Mastery is a line per room.** Seven straight lines with no choices on them —
+  brew five potions, walk the stacks, close a figure — reached in order, and each
+  station opens something in that room or the next. The room's own line runs
+  under its title, the rail box says how close the next station is, and `recall`
+  says it in words.
+- **The Ley Line is where the choices are.** Sixteen stations from 16 to ten
+  thousand, some of them forks of three lanes: more resources, better combat, or
+  a faster orb. Charcoal that burns longer, a deeper pool, an edge on every roll
+  at the wall, a siege that pays more, a troop worth more bodies, sabotage that
+  comes rarer, charms that cost less, and spells whose work lands sooner — one
+  choice per fork, and the line runs to the soft ending.
+- **`weave` draws both** — the forks three deep on the Ley Line, and the seven
+  rooms' lines — one track at a time below the bar, which is measured against the
+  line's end now rather than a round hundred.
+
+### Changed
+- **Warding, insight, haste and stillness are earned, not known.** The
+  laboratory's line hands them over as potions are brewed, with haste — the
+  fastest thing in the game — last but one. Two of the lectern's three scrolls
+  are the archive's to earn.
+- **A charm is the forge's to earn too**, except the first; the others come
+  with the lines of the rooms they bless.
+- **A siege waits for a wall.** The road stays empty until the sanctum has
+  mustered a course.
+- **`status` says the pool and its ceiling**, since nothing else did.
+- **The phases moved up one** above nine, for the third time and the same
+  reason: progression is Phase 10 now, and the version on the card follows it.
+
+### Fixed
+- **The weave's second Ley Line step had no sentence** and printed its own key.
+- **The example screens drew a tree the game no longer has.**
+
 ## [v0.9.3] - 2026-09-02
 
 ### Description

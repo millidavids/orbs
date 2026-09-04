@@ -1,6 +1,6 @@
 //! What is true of one node, put back on it.
 //!
-//! Split from [`super::restore`], which owns the world's *shape* — the clock,
+//! Split from [`mod@super::restore`], which owns the world's *shape* — the clock,
 //! the streams, the tree, the resources. This owns what hangs off each node, and
 //! the two halves are separated by a real seam rather than a line count: every
 //! function below needs the tree to already exist.

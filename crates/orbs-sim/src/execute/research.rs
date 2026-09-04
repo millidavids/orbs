@@ -246,7 +246,7 @@ pub fn refresh(world: &mut World) {
 ///
 /// **A named child, exactly like a way's reading**, so `if the stacks has
 /// gleaning` is answered by the `has` question §8 already has — no new grammar
-/// and no new [`State`](tower::panel::State).
+/// and no new [`State`](tower::State).
 ///
 /// # Only the errand's own children are cleared
 ///
@@ -360,7 +360,7 @@ fn finish_walk(world: &mut World, stacks: Entity, gathered: bool) {
         .text(FieldName::Message, &message)
         .role(Role::Success)
         .finish();
-    tower::credit(world, earned);
+    tower::done(world, &tower::Work::at("stacks"), earned);
 }
 
 /// What a solved maze yields. Four make a scroll.
