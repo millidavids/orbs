@@ -328,6 +328,7 @@ fn settle(world: &mut World, circle: Entity) {
     let troops = chant.troops();
     let (struck, _) = chant.tally();
     world.entity_mut(circle).remove::<Chant>();
+    let mut work = tower::Work::event(tower::FIGURE);
     // **Through `tower::home`, never to a named room.** A troop is finished work
     // and keeps itself in the arsenal; asking the rule rather than the room is
     // what stops a sung troop and a `debug_spawn`ed one landing in different
@@ -342,6 +343,10 @@ fn settle(world: &mut World, circle: Entity) {
             crate::parser::NounKind::Essence,
             troops,
         );
+        // **Marked where the troops actually landed**, not beside the figure.
+        // A chant that closes its figure and shelves nothing has made nothing to
+        // be paid for, and this is the one branch that knows which happened.
+        work = work.making(TROOP);
     }
     publish(world, circle);
     say(
@@ -355,8 +360,9 @@ fn settle(world: &mut World, circle: Entity) {
         Role::Success,
     );
     // The work, and then what the work bought. A figure closed is what the
-    // menagerie's mastery line counts.
-    tower::done(world, &tower::Work::event(tower::FIGURE), u64::from(struck));
+    // menagerie's mastery line counts — and, when troops were shelved, a making
+    // is what renown asks about.
+    tower::done(world, &work, u64::from(struck));
 }
 
 /// Publish everything a chant has to say, as readings a spell can ask for.

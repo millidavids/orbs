@@ -52,8 +52,8 @@ mod tests;
 
 #[cfg(debug_assertions)]
 pub use debug::{
-    COURSE, LEARN, Order as SpawnOrder, REACH, SIEGE, SPAWN, SWAP, TAKE, WARD, beleaguered,
-    giveaway, lesson, order as spawn_order, reaching, shortcut, swapping, taking,
+    Asking, COURSE, LEARN, Order as SpawnOrder, REACH, SIEGE, SPAWN, SWAP, TAKE, WARD, beleaguered,
+    giveaway, lesson, order as spawn_order, reaching, shortcut, standing, swapping, taking,
 };
 #[cfg(debug_assertions)]
 pub use debug_spell::{

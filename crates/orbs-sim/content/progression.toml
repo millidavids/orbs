@@ -216,6 +216,68 @@ at = 10000
 grants = "concentration"
 
 # ---------------------------------------------------------------------------
+# RENOWN, AND THE TEN THINGS THE TOWER IS CALLED (DESIGN.md §11.5, §19).
+#
+# **Titles, not gates.** A rank unlocks nothing, which is what makes losing one
+# safe: a rank that gated a capability could take it away mid-siege, in the fight
+# that needed it. What a rank does is *name* where the tower stands, and that is
+# the whole of it - so `[[renown]]` carries `at` and `id` and nothing else.
+#
+# **Ten, and they must ascend.** `check` refuses a track that does not, and
+# refuses an id already used by a Ley node or a mastery station, because an id is
+# what prose is keyed by and a duplicate would make one of them unreachable.
+#
+# The curve is the Ley Line's shape - about half again each step - because renown
+# is minted at half a run's experience, so the two climb together and a player
+# reads them side by side on the same screen. Every number is a first pass and
+# `orbs-balance` decides it.
+#
+# The names run from a hedge-wizard nobody has heard of to a title that is not a
+# rank at all: `remembered` is what is left when the tower is gone, and it is
+# where the line stops for the same reason concentration 8 is - it is the soft
+# ending, said the other way round.
+# ---------------------------------------------------------------------------
+[[renown]]
+at = 25
+id = "hedge_wizard"
+
+[[renown]]
+at = 60
+id = "cunning_man"
+
+[[renown]]
+at = 150
+id = "adept"
+
+[[renown]]
+at = 350
+id = "conjurer"
+
+[[renown]]
+at = 800
+id = "magister"
+
+[[renown]]
+at = 1600
+id = "thaumaturge"
+
+[[renown]]
+at = 3000
+id = "archmage"
+
+[[renown]]
+at = 5500
+id = "arch_magus"
+
+[[renown]]
+at = 9000
+id = "the_tower_itself"
+
+[[renown]]
+at = 15000
+id = "remembered"
+
+# ---------------------------------------------------------------------------
 # `steps_<n>` is a contract, not a label.
 #
 # A step of a spell costs a tick, so the script budget *is* the speed of every
@@ -354,22 +416,17 @@ domain = "lens"
 id = "lens_4"
 done = { at = "prism", times = 15 }
 
-# The grimoire. Its deeds are spells bound; what they open is still a question
-# (§19) — the line is drawn and said, and opens nothing tangible yet.
-[[mastery]]
-domain = "grimoire"
-id = "grimoire_1"
-done = { event = "bound" }
-
-[[mastery]]
-domain = "grimoire"
-id = "grimoire_2"
-done = { event = "bound", times = 5 }
-
-[[mastery]]
-domain = "grimoire"
-id = "grimoire_3"
-done = { event = "bound", times = 20 }
+# **The grimoire has no line, and that is the decision** (§19). It had three
+# stations counting spells bound - a deed done wherever you happen to be rather
+# than in the room - and they opened nothing. The room raises no instrument,
+# earns nothing and anchors no verb, so its rail box read `idle` for ever.
+# `domain_of` has always documented it as one of the two places that are *not
+# somewhere work happens*, and §19 said the same three phases earlier. It is
+# still where every spell lives and still shut until the ley step at 16; it is
+# simply not a room you tend.
+#
+# `event:bound` stays in the tally's closed set. Nothing asks for it today, and
+# a deed that wants it later can - the count is honest either way.
 
 # The sanctum. A mustered course is a wall worth attacking, which is what arms
 # the siege — a siege against a tower with no wall is not a decision.

@@ -115,6 +115,38 @@ impl fmt::Display for Key {
     }
 }
 
+/// Every place that can be shut.
+///
+/// **Wider than [`DOMAINS`](super::DOMAINS), and the difference is two rooms.**
+/// That list is the rooms you *work in* — the ones with a mastery line and a
+/// rail box. Sealing asks a different question: the **bailey** is a room you
+/// fight in and the **grimoire** is where your spells live, and both can be shut
+/// before they are earned without either being somewhere you tend.
+///
+/// **A list as well as a predicate**, because a caller that wants to *walk* the
+/// shut rooms had nowhere to get them and reached for `DOMAINS` instead — which
+/// is how `tower::scene` stopped withholding a shut grimoire's name the moment
+/// the grimoire left that list. One list and one predicate over it is the whole
+/// rule; §19 records more defects from two expressions of one rule than from
+/// anything else, and this rule has had four sites.
+pub const ROOMS: [&str; super::DOMAINS.len() + 2] = {
+    let mut rooms = [""; super::DOMAINS.len() + 2];
+    let mut index = 0;
+    while index < super::DOMAINS.len() {
+        rooms[index] = super::DOMAINS[index];
+        index += 1;
+    }
+    rooms[index] = super::siege::BAILEY;
+    rooms[index + 1] = super::GRIMOIRE;
+    rooms
+};
+
+/// Whether `name` is a place that can be shut. See [`ROOMS`].
+#[must_use]
+pub fn is_room(name: &str) -> bool {
+    ROOMS.contains(&name)
+}
+
 /// The key for a room.
 #[must_use]
 pub fn domain_key(name: &str) -> String {
@@ -149,7 +181,10 @@ impl Opened {
     pub fn all(recipes: &Recipes, charms: &Charms) -> Self {
         let mut keys: BTreeSet<String> =
             super::DOMAINS.iter().map(|name| domain_key(name)).collect();
+        // The two rooms that are not in `DOMAINS` and can still be shut — see
+        // `is_room`, which is the one place that rule lives.
         keys.insert(domain_key(super::siege::BAILEY));
+        keys.insert(domain_key(super::GRIMOIRE));
         keys.extend(recipes.gated().into_iter().map(recipe_key));
         keys.extend(charms.names().map(charm_key));
         keys.insert(SIEGE.to_owned());
@@ -301,8 +336,7 @@ pub fn seal(world: &mut World) {
         )
         .filter_map(|node| {
             let name = world.get::<Name>(node)?.0.clone();
-            let is_room = super::DOMAINS.contains(&name.as_str()) || name == super::siege::BAILEY;
-            is_room.then(|| (node, world.resource::<Opened>().is_open(&name)))
+            is_room(&name).then(|| (node, world.resource::<Opened>().is_open(&name)))
         })
         .collect();
     for (room, open) in rooms {
@@ -336,7 +370,7 @@ pub fn sealed_room_of(world: &World, node: Entity) -> Option<String> {
     let mut at = node;
     loop {
         if let Some(name) = world.get::<Name>(at).map(|name| name.0.clone())
-            && (super::DOMAINS.contains(&name.as_str()) || name == super::siege::BAILEY)
+            && is_room(&name)
         {
             return (!world.resource::<Opened>().is_open(&name)).then_some(name);
         }

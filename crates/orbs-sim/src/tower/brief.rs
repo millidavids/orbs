@@ -29,7 +29,22 @@ use bevy_ecs::prelude::*;
 use super::node::{Name, NodeId, children_of, root};
 use super::panel::{Instrument, State};
 
-/// §10's seven domains, in the order the rail draws them.
+/// The rooms where work happens, in the order the rail draws them.
+///
+/// **Six, not §10's seven, and the difference is the grimoire.** §10 names seven
+/// *kinds of play* and Spellcraft is one of them — Phase 3 built the language,
+/// the editor and in-file parts, and none of that is withdrawn. What the
+/// grimoire is not is a room you **work in**: it raises no instrument, earns
+/// nothing, anchors no verb, and `domain_of` has always documented it as one of
+/// the two places that are *"not somewhere work happens"*. §19 said the same
+/// three phases earlier — *"a root domain but not a §9 activity domain… you do
+/// not run the grimoire concurrently with brewing"* — and this list had not
+/// caught up, so it drew a rail box that read `idle` for ever and carried a
+/// mastery line counting a deed done everywhere else.
+///
+/// **This list is what has a line and a box**, which is why the bailey is absent
+/// too: a siege is fought there and it is still not a room you tend. Where a
+/// place can be *shut* is a wider question and `opened::is_room` answers it.
 ///
 /// **A const table, not content.** These are directory names the parser resolves
 /// and `build.rs` raises — decisions, like `Verb::canonical`'s table, rather than
@@ -39,11 +54,10 @@ use super::panel::{Instrument, State};
 ///
 /// The order is §10's table read top to bottom, with the two opening domains
 /// first so the rail's live half is its top half from the first frame.
-pub const DOMAINS: [&str; 7] = [
+pub const DOMAINS: [&str; 6] = [
     "laboratory",
     "archive",
     "lens",
-    "grimoire",
     "forge",
     "menagerie",
     // **`sanctum`, where §10's table says `battlements/`** — §19 records the
@@ -415,9 +429,14 @@ mod tests {
     /// Nodes [`rooms_of`] reaches that are deliberately not domains.
     ///
     /// Spelled out with reasons rather than filtered by shape, because each is a
-    /// different kind of not-a-room and a rule broad enough to cover all three
+    /// different kind of not-a-room and a rule broad enough to cover all four
     /// would also cover a domain somebody forgot to register.
-    const NOT_ROOMS: [&str; 3] = [
+    const NOT_ROOMS: [&str; 4] = [
+        // **Where the spells live, and not a room you work in** (§19). It raises
+        // no instrument, earns nothing and anchors no verb, so its rail box read
+        // `idle` for ever. It is still a place, still `Protected`, and still
+        // shut until the ley step at 16 — see `opened::is_room`.
+        "grimoire",
         // The container every other room hangs under (§7).
         "tower",
         // A keep, not a domain pane — §19's arsenal entry is explicit that it is
@@ -455,46 +474,61 @@ mod tests {
     }
 
     #[test]
-    fn the_grimoire_is_on_the_rail_even_though_it_is_not_in_the_tower() {
-        // §7 puts `/grimoire` *beside* `/tower` rather than inside it, and §10
-        // lists spellcraft as one of the seven domains. Walking only `/tower`
-        // left its box dark for ever with the directory sitting right there —
-        // the rail saying a room does not exist while the player writes files
-        // into it.
+    fn the_grimoire_has_no_box_and_is_still_a_room_that_can_be_shut() {
+        // **This test asserted the opposite for three phases** (§19). The rail
+        // carried a grimoire box because §10 lists spellcraft among the seven —
+        // but the room raises no instrument, earns nothing and anchors no verb,
+        // so the box read `idle` for ever and its mastery line counted a deed
+        // done everywhere else. `domain_of` documented it all along as one of
+        // the two places that are *not somewhere work happens*.
+        //
+        // What it kept is everything that made it worth having: the spells live
+        // there, `scribe` writes into it, and it is shut until the ley step at
+        // 16 — which is `opened::is_room`'s job rather than `DOMAINS`'s.
         let sim = Sim::new(1);
-        let briefs = briefs(sim.world());
-        let grimoire = briefs
-            .iter()
-            .find(|brief| brief.name == "grimoire")
-            .expect("the grimoire has no box");
-        assert!(grimoire.built, "the grimoire reads as unbuilt");
+        assert!(
+            !briefs(sim.world())
+                .iter()
+                .any(|brief| brief.name == "grimoire"),
+            "the grimoire is back on the rail",
+        );
+        assert!(
+            super::super::opened::is_room("grimoire"),
+            "the grimoire stopped being a room that can be shut",
+        );
+        assert!(
+            sim.is_open("grimoire"),
+            "an open tower does not hold the grimoire",
+        );
     }
 
     #[test]
-    fn the_rail_always_has_seven_boxes_and_the_unbuilt_ones_are_anonymous() {
+    fn the_rail_always_has_six_boxes_and_the_unbuilt_ones_are_anonymous() {
         let sim = Sim::new(1);
         let briefs = briefs(sim.world());
-        assert_eq!(briefs.len(), 7, "the rail is not seven domains");
+        // **Six, and the grimoire is the one that left** (§19). §10's seven are
+        // kinds of play; this list is the rooms you *work in*, and writing is
+        // not one of them.
+        assert_eq!(briefs.len(), 6, "the rail is not six rooms");
 
         let built: Vec<_> = briefs.iter().filter(|brief| brief.built).collect();
         assert!(
             built.iter().any(|brief| brief.name == "laboratory"),
             "the laboratory is not on the rail",
         );
-        // **Every one of the seven is built now, and the forge was the last.**
+        // **Every one is built now, and the forge was the last.**
         //
         // This asserted the *opposite* for six phases — that some domain still
         // read as unbuilt, so the rail was promising something rather than
-        // drawing seven identical boxes. That was the right claim while rooms
-        // were still arriving and it stopped being true when Enchanting landed:
-        // §10 fixes the count at seven and there is no eighth.
+        // drawing identical boxes. That was the right claim while rooms were
+        // still arriving and it stopped being true when Enchanting landed.
         //
         // Kept as an assertion rather than deleted, because `built` is still the
         // honest bit and a domain that stopped being raised should fail loudly
         // here rather than quietly draw dark.
         assert!(
             briefs.iter().all(|brief| brief.built),
-            "a domain reads as unbuilt, but §10's seven are all raised now",
+            "a room reads as unbuilt, but every one is raised now",
         );
     }
 

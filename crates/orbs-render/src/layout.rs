@@ -19,8 +19,8 @@
 //! Everything §9 argued for survives the change: awareness only, never
 //! commandable, and it **yields before the main window does**. What moved is the
 //! axis, and the reason is that a row can hold a name *or* a state *or* a spell,
-//! while a box can hold all three — which is what a glance at seven domains
-//! actually needs.
+//! while a box can hold all three — which is what a glance down every room the
+//! player tends actually needs.
 //!
 //! Layout is computed from a grid size, not from pixels, so it is identical
 //! under both frontends. That is what makes §9's parity rule enforceable rather
@@ -39,14 +39,30 @@ use crate::tiling;
 /// The most panes the main window ever holds. §9: "four panes is the cap."
 pub const MAX_MAIN_PANES: usize = 4;
 
-/// One pane per domain, seven domains (§10).
-pub const MAX_PANES: usize = 7;
+/// One box per domain you **work in** — six of them.
+///
+/// **Not §10's seven.** §10 names seven domains and two of them have no box:
+/// spellcraft is a kind of play rather than a room, and the bailey is a room you
+/// fight in rather than tend. The grimoire was the seventh here until it left
+/// `DOMAINS` (§19) for the same reason — nothing happens in it — and this
+/// constant did not follow, so the rail divided itself into seven slots, drew
+/// six, and left a five-row hole above the readings. `fits_rail` was measuring
+/// the same phantom and dropping the whole rail between 39 and 43 rows, which is
+/// where a terminal player sits.
+///
+/// **`orbs-sim`'s `DOMAINS` is the authority and this crate cannot see it**
+/// (rule 1 runs the other way — nothing in `orbs-render` may reach for the sim).
+/// `orbs-shell` depends on both and pins them together in
+/// `rail::tests::the_rail_has_exactly_one_box_per_domain`; that test is what
+/// makes the next domain added or removed a compile-time conversation rather
+/// than a hole nobody notices for a phase.
+pub const MAX_PANES: usize = 6;
 
 // The caps again as pane counts. The public constants are `usize` because they
 // are array lengths; layout arithmetic is `u16` because grid coordinates are.
 // The const assertions keep the two spellings from drifting apart.
 const MAIN_CAP: u16 = 4;
-const SIDEBAR_CAP: u16 = 7;
+const SIDEBAR_CAP: u16 = 6;
 const _: () = assert!(MAIN_CAP as usize == MAX_MAIN_PANES);
 const _: () = assert!(SIDEBAR_CAP as usize == MAX_PANES);
 
@@ -97,9 +113,11 @@ const _: () = assert!(RAIL_FOOT_ROWS >= RAIL_FOOT_CONTENT);
 /// **Five, and it has been three and then four.** Each raise was the same
 /// defect one row up: a squeezed box keeps its name and its state and silently
 /// drops the `►spell` line, which is the one row telling a player that room is
-/// automated. Four still did it — at grid heights 37 to 43, `(rows - 9) / 7` is
-/// four, `rail::paint` returns at `row >= floor` before the spell line, and
-/// nothing falls back.
+/// automated. Four still did it — at grid heights 37 to 43, `(rows - 9) / 7` was
+/// four, `rail::paint` returned at `row >= floor` before the spell line, and
+/// nothing fell back. (That divisor was [`MAX_PANES`] when it was seven; the
+/// arithmetic does not reproduce today, and the constant it justifies is
+/// unaffected — five rows is five rows however many boxes there are.)
 ///
 /// It went unnoticed because the Bevy build's grid is fixed at 120×45, where
 /// each box gets five. **A terminal's grid is whatever size the window is**, and

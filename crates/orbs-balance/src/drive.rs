@@ -32,6 +32,16 @@ pub struct Sample {
     pub experience: u64,
     /// Spells the orb can hold, derived from the total against the curve.
     pub concentration: usize,
+    /// The standing currency (§11.5). Rises on a sale, falls on a bad siege.
+    ///
+    /// **Sampled because the ten rank thresholds are otherwise unfalsifiable.**
+    /// They run 25 to 15,000 and DESIGN.md's own renown entry ends *"every number
+    /// is a first pass and `orbs-balance` decides it"* — which it cannot do
+    /// without a column. Experience is not a usable proxy: several policies earn
+    /// at the tower's highest measured rate and mint no renown at all, so a
+    /// sweep that watched only experience would report *nothing moved* whether
+    /// or not renown had.
+    pub renown: u64,
 }
 
 /// A finished sweep of one policy.
@@ -109,6 +119,7 @@ impl Run {
             tick: 0,
             experience: 0,
             concentration: 0,
+            renown: 0,
         })
     }
 }
@@ -299,6 +310,7 @@ fn sample(sim: &Sim) -> Sample {
         tick: sim.tick().get(),
         experience: sim.experience(),
         concentration: sim.concentration(),
+        renown: sim.renown(),
     }
 }
 

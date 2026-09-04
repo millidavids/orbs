@@ -122,10 +122,17 @@ pub fn scene_at(world: &World, at: Entity) -> Scene {
             .into_iter()
             .chain(recipes.gated())
             .filter(|made| !known.knows(recipes, made))
+            // **`is_room`, not `DOMAINS`** — the fourth site of the "which names
+            // can be shut" rule, and the one that did not follow when the
+            // grimoire left `DOMAINS`. `is_room` exists precisely because that
+            // rule had copies that disagreed; a shut grimoire's name stopped
+            // being withheld here the moment the list shrank, which is inert
+            // only until somebody authors a `recall_grimoire` page and then
+            // fails silently.
             .chain(
-                super::DOMAINS
+                super::opened::ROOMS
                     .into_iter()
-                    .filter(|domain| !opened.is_open(domain)),
+                    .filter(|room| !opened.is_open(room)),
             )
             .map(str::to_owned)
             .collect()

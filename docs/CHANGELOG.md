@@ -15,6 +15,58 @@
   at 1.0 (DESIGN.md §19).
 -->
 
+## [v0.11.4] - 2026-09-04
+
+### Description
+In development — a dev log, not patch notes. The tower has a second number:
+renown, earned when you make something and lost when a siege goes badly. Two
+bars at the top of the pane warm from red through green as they fill.
+
+### Added
+- **Renown, and ten things to be called.** Every potion, scroll, fragment and
+  troop you make earns standing as well as experience — the wizard sells what he
+  makes, and that is why he makes so much of it. Ten titles run from hedge-wizard
+  to remembered, and unlike experience this number can fall: lose enough and the
+  tower is called something lesser again.
+- **Two progress bars at the top of every pane.** One for the Ley Line and one
+  for renown, each measuring the gap between the tier behind you and the tier
+  ahead rather than the whole distance to the end — so they fill visibly instead
+  of sitting still for an hour. They give up their rows to the transcript when a
+  window is short.
+- **The bars warm as they fill.** Red through yellow to green, in six steps, so a
+  glance tells you roughly how far along you are before you have read a number.
+  Green means arrived, not nearly — a bar one step short stays yellow-green.
+
+### Changed
+- **The grimoire is no longer a room you tend.** It had a box on the rail that
+  read `idle` for ever, because nothing happens there and nothing can. The box
+  and its progress line are gone; the spells, the writing and the shelf are all
+  exactly where they were.
+
+### Fixed
+- **The rail drew an empty box, and vanished at window sizes where it fits.**
+  Removing the grimoire left the tower rail dividing itself into seven slots and
+  filling six, so a five-row hole opened between the last room and the readings.
+  The same miscount made the rail disappear entirely at several window heights.
+- **The archive and the menagerie earned no renown for what they stock.** Both
+  put finished work on a shelf — fragments from the stacks, troops from a chant —
+  and neither was paid for it, while the laboratory was paid for the same act.
+  Troops are what a siege spends.
+- **The bars could be mistaken for errors and confirmations.** In the terminal
+  build a nearly-empty bar drew in exactly the red used for failures and a full
+  one in the green used for success. The whole ramp moved off those colours on
+  both builds.
+- **A narrow pane stopped telling screen readers where the tower stands.** When a
+  window was too tight to draw a bar, the row went silent instead of still saying
+  its reading aloud, and left a stray label behind.
+- **A long title crowded out the bar it belonged to.** The tower's name is now
+  the first thing dropped when a row runs out of room, which is what it was
+  always meant to be.
+- **A finished track claimed it was one step from a tier that does not exist.**
+  The Ley Line reads `nothing more authored` when there is nothing left to
+  reach, and now says the same out loud instead of reading out a meaningless
+  count.
+
 ## [v0.10.6] - 2026-09-02
 
 ### Description

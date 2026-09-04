@@ -11,7 +11,7 @@
 //! forks with siblings stacked downward. Left/right walks the stations,
 //! up/down picks a sibling, and `take` chooses one.
 //!
-//! **Mastery** is seven lines, one per room, each read left to right. Up/down
+//! **Mastery** is one line per room, each read left to right. Up/down
 //! picks a *room* and left/right walks its stations — so down means a different
 //! thing on each track, and the status row says which. Nothing on a mastery
 //! line is ever taken: a station is reached by doing its deed, and `take` there
@@ -57,7 +57,7 @@ pub enum Track {
     /// The tower's line: steps and forks.
     #[default]
     LeyLine,
-    /// The seven rooms' lines.
+    /// The rooms' lines.
     Mastery,
 }
 
@@ -187,11 +187,19 @@ pub struct Tapestry {
     complaint: Option<Complaint>,
     /// The tower's total, pushed in.
     experience: u64,
+    /// What the tower is known for, pushed in beside it.
+    ///
+    /// **On the weave rather than the rail**, because this is the progression
+    /// surface and renown is progression. The rail's foot is five readings about
+    /// the *orb* and its own doc says anything already in `status` belongs
+    /// there; experience is not on it for exactly that reason and renown has no
+    /// better claim.
+    renown: u64,
     /// What the bar is measured against: the last station's total.
     scale: u64,
     /// The Ley Line, pushed in.
     ley_line: Vec<Station>,
-    /// The seven lines, pushed in.
+    /// The rooms' lines, pushed in.
     mastery: Vec<Line>,
 }
 
@@ -235,6 +243,12 @@ impl Tapestry {
         self.experience
     }
 
+    /// What the tower is known for.
+    #[must_use]
+    pub const fn renown(&self) -> u64 {
+        self.renown
+    }
+
     /// What the bar is measured against.
     #[must_use]
     pub const fn scale(&self) -> u64 {
@@ -247,7 +261,7 @@ impl Tapestry {
         &self.ley_line
     }
 
-    /// The seven lines, in the rail's order.
+    /// The rooms' lines, in the rail's order.
     #[must_use]
     pub fn mastery(&self) -> &[Line] {
         &self.mastery
@@ -286,11 +300,13 @@ impl Tapestry {
     pub fn refresh(
         &mut self,
         experience: u64,
+        renown: u64,
         scale: u64,
         ley_line: Vec<Station>,
         mastery: Vec<Line>,
     ) {
         self.experience = experience;
+        self.renown = renown;
         self.scale = scale;
         self.ley_line = ley_line;
         self.mastery = mastery;
@@ -649,6 +665,7 @@ mod tests {
         let mut screen = Tapestry::default();
         screen.refresh(
             24,
+            12,
             56,
             vec![
                 step("concentration", 16),
@@ -805,7 +822,7 @@ mod tests {
         say(&mut screen, "mastery");
         assert!(screen.cursor().is_some());
 
-        screen.refresh(0, 56, Vec::new(), Vec::new());
+        screen.refresh(0, 0, 56, Vec::new(), Vec::new());
         assert_eq!(screen.cursor(), None, "it pointed at something gone");
     }
 
@@ -813,7 +830,7 @@ mod tests {
     fn an_arrow_recovers_an_aim_the_world_took_away() {
         let mut restored = tapestry();
         say(&mut restored, "ley");
-        restored.refresh(0, 56, Vec::new(), Vec::new());
+        restored.refresh(0, 0, 56, Vec::new(), Vec::new());
         assert_eq!(restored.cursor(), None);
         assert_eq!(
             restored.mode(),
@@ -821,7 +838,7 @@ mod tests {
             "it left browsing on its own"
         );
 
-        restored.refresh(24, 56, vec![step("concentration", 16)], Vec::new());
+        restored.refresh(24, 12, 56, vec![step("concentration", 16)], Vec::new());
         restored.step(0, 1);
         assert_eq!(
             restored.cursor(),
@@ -954,6 +971,7 @@ mod tests {
         let mut screen = Tapestry::default();
         screen.refresh(
             24,
+            12,
             56,
             vec![fork(
                 24,
@@ -993,6 +1011,7 @@ mod tests {
         let mut screen = Tapestry::default();
         screen.refresh(
             24,
+            12,
             96,
             vec![
                 step("concentration", 16),
@@ -1024,6 +1043,7 @@ mod tests {
         // is the one thing the boot report, `survey` and the scene all withhold.
         let mut screen = Tapestry::default();
         screen.refresh(
+            0,
             0,
             56,
             Vec::new(),

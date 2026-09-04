@@ -179,6 +179,16 @@ pub(crate) const fn resolve(
         // rather than as the thing that has dropped out of it. It falls through
         // to `ember::SEDIMENT`, one muted colour for every vessel.
         Depiction::Sediment => None,
+        // **A gauge is not a material either**, and it is not in an instrument
+        // at all — it stands at the top of the pane. A fill that took the tint
+        // of whatever was being brewed would say the bar meant something about
+        // sage. `declines_tint` returns above; these arms keep the match honest.
+        Depiction::GaugeFaint
+        | Depiction::GaugeLow
+        | Depiction::GaugeMiddle
+        | Depiction::GaugeHigh
+        | Depiction::GaugeNear
+        | Depiction::GaugeWhole => None,
         // **The fire is not a material.** See this function's docs.
         Depiction::FlameEmber
         | Depiction::FlameBody

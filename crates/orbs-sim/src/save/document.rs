@@ -376,6 +376,16 @@ pub struct ProgressSave {
     /// is deliberately not here.
     #[serde(default)]
     pub experience: u64,
+    /// What the tower is known for — the one number that can fall.
+    ///
+    /// **A bare `u64`, not an `Option`, and no `FORMAT` bump.** Nought is the
+    /// honest reading of a document written before renown existed: that tower
+    /// earned none it can show. The rule is *bumped when an older save loads
+    /// wrongly rather than merely incompletely*, and `cooling` is the precedent
+    /// — where `opened` needed a bump because absent meant *everything*, which
+    /// an older build would have silently dropped.
+    #[serde(default)]
+    pub renown: u64,
     /// How the tower's walls stand (§11.5's Integrity).
     ///
     /// **`Option`, not a bare `u32`**, and the difference is the whole tower: a

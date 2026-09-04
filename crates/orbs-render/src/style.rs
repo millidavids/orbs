@@ -137,6 +137,87 @@ pub enum Heat {
     Core,
 }
 
+/// How far along a gauge's fill a cell sits — see [`Depiction::gauge`].
+///
+/// # A hue ramp, where every other ramp in the game is a brightness ramp
+///
+/// Fire, liquid and smoke each climb from dim to bright, and `orbs-tui`'s tests
+/// assert exactly that. This one runs **red through yellow to green** and its
+/// middle is its brightest, so it has no monotonic-brightness test and could not
+/// pass one. That is deliberate: those ramps depict a *substance getting more
+/// intense*, and this depicts a *distance being closed*, which the eye reads as a
+/// journey rather than a temperature.
+///
+/// # Why it may be colour at all (§14)
+///
+/// **The fill length is the information and the hue is reinforcement.** A gauge
+/// with every colour stripped still says how full it is — that is what the
+/// bracket, the pipes and the reading beside it are for — so this passes the one
+/// test a treatment has to pass to be allowed on screen. In greyscale the ramp
+/// collapses and nothing is lost, which is the same bargain the spell's syntax
+/// colouring makes.
+///
+/// **Six steps.** Three would read as a traffic light changing rather than a bar
+/// warming, which is the *"two-tone flicker rather than a glow"* the fire's own
+/// ramp was widened to avoid. Six is also as many as a sixteen-colour terminal
+/// can tell apart, so both frontends draw the whole ramp rather than one drawing
+/// a coarser copy.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Fill {
+    /// Barely begun.
+    #[default]
+    Faint,
+    /// Under way.
+    Low,
+    /// About half.
+    Middle,
+    /// More done than not.
+    High,
+    /// Nearly there.
+    Near,
+    /// Full.
+    Whole,
+}
+
+impl Fill {
+    /// Every step, lowest first. Kept honest by a test rather than by memory.
+    pub const ALL: [Self; 6] = [
+        Self::Faint,
+        Self::Low,
+        Self::Middle,
+        Self::High,
+        Self::Near,
+        Self::Whole,
+    ];
+
+    /// Which step `done` out of `total` sits on.
+    ///
+    /// **Integer throughout**, like every other measurement the render path
+    /// makes: a deterministic sim must render deterministically, and a float here
+    /// would be one more thing replay has to trust. `total` of nought is
+    /// [`Faint`](Self::Faint) — a gauge measuring nothing has not started.
+    #[must_use]
+    pub const fn of(done: u32, total: u32) -> Self {
+        if total == 0 {
+            return Self::Faint;
+        }
+        // **`Whole` is reserved for *actually* full**, and the five below it
+        // split what is left evenly. An even sixth at the top would paint a bar
+        // one short of its tier the same green as one that had arrived, which is
+        // the one thing this ramp must not say.
+        if done >= total {
+            return Self::Whole;
+        }
+        match (done as u64 * 5) / total as u64 {
+            0 => Self::Faint,
+            1 => Self::Low,
+            2 => Self::Middle,
+            3 => Self::High,
+            _ => Self::Near,
+        }
+    }
+}
+
 /// The colour family a material draws its instrument's bar in.
 ///
 /// **A name, never a value.** This module forbids concrete colours and that
@@ -374,6 +455,18 @@ pub enum Depiction {
     SparkBlaze,
     /// A spark at [`Heat::Core`].
     SparkCore,
+    /// A gauge's fill at [`Fill::Faint`].
+    GaugeFaint,
+    /// A gauge's fill at [`Fill::Low`].
+    GaugeLow,
+    /// A gauge's fill at [`Fill::Middle`].
+    GaugeMiddle,
+    /// A gauge's fill at [`Fill::High`].
+    GaugeHigh,
+    /// A gauge's fill at [`Fill::Near`].
+    GaugeNear,
+    /// A gauge's fill at [`Fill::Whole`].
+    GaugeWhole,
     /// Liquid at [`Roil::Still`].
     LiquidStill,
     /// Liquid at [`Roil::Stirred`].
@@ -396,8 +489,14 @@ impl Depiction {
     /// hand-written array in the consumer, which is a list that silently falls
     /// behind the enum the moment a variant is added. `exhaustive` below fails to
     /// *compile* if this misses one.
-    pub const ALL: [Self; 15] = [
+    pub const ALL: [Self; 21] = [
         Self::None,
+        Self::GaugeFaint,
+        Self::GaugeLow,
+        Self::GaugeMiddle,
+        Self::GaugeHigh,
+        Self::GaugeNear,
+        Self::GaugeWhole,
         Self::FlameEmber,
         Self::FlameBody,
         Self::FlameBlaze,
@@ -423,6 +522,33 @@ impl Depiction {
             Heat::Blaze => Self::FlameBlaze,
             Heat::Core => Self::FlameCore,
         }
+    }
+
+    /// A gauge's fill at a given step.
+    #[must_use]
+    pub const fn gauge(fill: Fill) -> Self {
+        match fill {
+            Fill::Faint => Self::GaugeFaint,
+            Fill::Low => Self::GaugeLow,
+            Fill::Middle => Self::GaugeMiddle,
+            Fill::High => Self::GaugeHigh,
+            Fill::Near => Self::GaugeNear,
+            Fill::Whole => Self::GaugeWhole,
+        }
+    }
+
+    /// Whether this is a gauge's fill.
+    #[must_use]
+    pub const fn is_gauge(self) -> bool {
+        matches!(
+            self,
+            Self::GaugeFaint
+                | Self::GaugeLow
+                | Self::GaugeMiddle
+                | Self::GaugeHigh
+                | Self::GaugeNear
+                | Self::GaugeWhole
+        )
     }
 
     /// A spark at a given heat.
@@ -472,7 +598,13 @@ impl Depiction {
             | Self::LiquidStill
             | Self::LiquidStirred
             | Self::LiquidRolling
-            | Self::Sediment => None,
+            | Self::Sediment
+            | Self::GaugeFaint
+            | Self::GaugeLow
+            | Self::GaugeMiddle
+            | Self::GaugeHigh
+            | Self::GaugeNear
+            | Self::GaugeWhole => None,
         }
     }
 
@@ -543,7 +675,15 @@ impl Depiction {
     /// rule [`Style::depicted`] enforces for the other channel.
     #[must_use]
     pub const fn declines_tint(self) -> bool {
-        self.is_flame() || self.is_spark() || self.is_smoke() || matches!(self, Self::Sediment)
+        // **A gauge is not a material either.** It stands at the top of the pane
+        // rather than inside an instrument, so there is no substance whose
+        // colour it could take — and a gauge that picked up the tint of whatever
+        // was being brewed would say the fill meant something about sage.
+        self.is_flame()
+            || self.is_spark()
+            || self.is_smoke()
+            || self.is_gauge()
+            || matches!(self, Self::Sediment)
     }
 }
 
@@ -811,7 +951,13 @@ mod tests {
                 | Depiction::LiquidStill
                 | Depiction::LiquidStirred
                 | Depiction::LiquidRolling
-                | Depiction::Sediment => true,
+                | Depiction::Sediment
+                | Depiction::GaugeFaint
+                | Depiction::GaugeLow
+                | Depiction::GaugeMiddle
+                | Depiction::GaugeHigh
+                | Depiction::GaugeNear
+                | Depiction::GaugeWhole => true,
             };
             assert!(named, "{depiction:?}");
         }
@@ -822,6 +968,60 @@ mod tests {
         for depiction in Depiction::ALL {
             assert!(seen.insert(depiction), "{depiction:?} is in ALL twice");
         }
+    }
+
+    #[test]
+    fn a_gauge_warms_evenly_and_only_a_full_bar_reads_full() {
+        // Asserted as **properties over the whole range**, not at hand-picked
+        // indices: the claim is that the ramp warms evenly, and a spot check
+        // would pass on a ramp that jumped somewhere nobody looked.
+        let steps: Vec<Fill> = (0..=100).map(|done| Fill::of(done, 100)).collect();
+
+        // Monotonic: a bar that filled further must never cool.
+        assert!(steps.windows(2).all(|pair| pair[0] <= pair[1]));
+
+        // Every step is reached, so no colour in the ramp is unreachable.
+        let seen: std::collections::BTreeSet<Fill> = steps.iter().copied().collect();
+        assert_eq!(
+            seen.len(),
+            Fill::ALL.len(),
+            "a step never appears: {seen:?}"
+        );
+
+        // The ends say what they mean.
+        assert_eq!(steps[0], Fill::Faint);
+        assert_eq!(steps[100], Fill::Whole);
+
+        // **A bar one short of full must not read as finished**, which is the
+        // one place an even split would lie: green is the arrival, not the
+        // approach.
+        assert_eq!(Fill::of(99, 100), Fill::Near);
+        assert_eq!(Fill::of(11, 12), Fill::Near);
+
+        // The five below full split evenly, so no step is a sliver.
+        let widest = Fill::ALL
+            .iter()
+            .map(|step| steps.iter().filter(|seen| *seen == step).count())
+            .max()
+            .unwrap_or_default();
+        assert!(widest <= 21, "one step swallowed the ramp: {widest}");
+
+        // Degenerate inputs answer rather than panic: nothing measured has not
+        // started, and past full is full.
+        assert_eq!(Fill::of(0, 0), Fill::Faint);
+        assert_eq!(Fill::of(99, 12), Fill::Whole);
+    }
+
+    #[test]
+    fn every_fill_is_a_depiction_of_its_own() {
+        // A ramp with two steps resolving to one picture would be a bar that
+        // stalled at one colour while the number underneath it moved.
+        let seen: std::collections::BTreeSet<Depiction> =
+            Fill::ALL.into_iter().map(Depiction::gauge).collect();
+        assert_eq!(seen.len(), Fill::ALL.len());
+        assert!(seen.iter().all(|depiction| depiction.is_gauge()));
+        // And a gauge is never mistaken for the fire, which shares no step.
+        assert!(seen.iter().all(|depiction| depiction.heat().is_none()));
     }
 
     #[test]

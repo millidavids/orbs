@@ -90,6 +90,7 @@ fn progress(world: &World) -> ProgressSave {
     ProgressSave {
         wizard: world.resource::<Wizard>().name().to_owned(),
         experience: world.resource::<tower::Experience>().get(),
+        renown: world.resource::<tower::Renown>().get(),
         integrity: Some(world.resource::<tower::Integrity>().get()),
         quintessence: Some(world.resource::<tower::Quintessence>().get()),
         // **The clock, so an expired cooldown is not written at all.** Without

@@ -25,6 +25,7 @@ mod panel;
 pub mod pylon;
 pub mod quintessence;
 pub mod reach;
+pub mod renown;
 mod sabotage;
 pub mod satchel;
 mod scene;
@@ -40,7 +41,7 @@ pub use boot::report;
 pub use brief::{
     Brief, Cast, DOMAINS, Mark, Marks, briefs, clear_mark, mark, mark_fault_at, running_spells,
 };
-pub use build::{declared, fixture_of, operated, raise, raise_count, raise_reading};
+pub use build::{GRIMOIRE, declared, fixture_of, operated, raise, raise_count, raise_reading};
 pub use chant::{Chant, Strike, Syllable};
 pub use charm::{Charm, Charmed, charm_left, charmed};
 pub use dice::{Die, Effect, Landed, Modifier, Roll};
@@ -76,6 +77,7 @@ pub use quintessence::{
     PER_LEY_STEP, QUINTESSENCE_BASE, Quintessence, REGEN_PER_ROUND, REGEN_TICKS, ceiling,
     ceiling_for, regenerate,
 };
+pub use renown::{Ahead, Renown, Toward};
 pub use sabotage::{
     Log, Poisoned, Substituted, claimed, drift, emit_lines, poison, poisoned, restore, settling,
     substitute, substitution, verify, vigilant_interval,

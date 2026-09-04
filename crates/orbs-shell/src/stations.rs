@@ -1,6 +1,6 @@
 //! One vocabulary for a station on a line, wherever a line is drawn.
 //!
-//! The weave draws the Ley Line and the seven mastery lines; a room's pane
+//! The weave draws the Ley Line and the rooms' mastery lines; a room's pane
 //! draws its own line as a road under the title. Three surfaces, one set of
 //! glyphs — `[•]` for a thing had, `[○]` for the thing in reach, `[·]` for
 //! what lies beyond — because a player who has learned the marks on one screen

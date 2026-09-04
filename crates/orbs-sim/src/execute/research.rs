@@ -360,7 +360,10 @@ fn finish_walk(world: &mut World, stacks: Entity, gathered: bool) {
         .text(FieldName::Message, &message)
         .role(Role::Success)
         .finish();
-    tower::done(world, &tower::Work::at("stacks"), earned);
+    // **`making`, because the maze shelved a fragment.** It reached `tower::give`
+    // a dozen lines up and still answered `sold()` with no, so the archive was
+    // the one room that stocked itself for no standing at all.
+    tower::done(world, &tower::Work::at("stacks").making(FRAGMENT), earned);
 }
 
 /// What a solved maze yields. Four make a scroll.

@@ -222,6 +222,11 @@ fn progress(world: &mut World, save: &Save) {
     world
         .resource_mut::<tower::Experience>()
         .restore(progress.experience);
+    // **Silent, like every other restore here.** `earn` says a sentence and a
+    // load must not congratulate the player on yesterday's work.
+    world
+        .resource_mut::<tower::Renown>()
+        .restore(progress.renown);
     // **Absent means whole, not nothing.** A save written before the
     // sanctum existed says nothing about integrity, and defaulting a missing
     // field to nought would hand every returning player a tower worn to the

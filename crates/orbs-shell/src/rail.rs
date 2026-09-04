@@ -12,13 +12,18 @@
 //! `orbs-tui` draws the same rail from the same `Vec<Brief>`. What is decided
 //! here is layout and glyph, and nothing else.
 //!
-//! # Six of the seven are dark in a fresh game, and that is the point
+//! # Five of the six are dark in a fresh game, and that is the point
 //!
-//! §10 fixes seven domains and the player starts with one (Phase 10). A shut
-//! room draws as a dim dotted row with no name: seven slots with six dark says
-//! *there is more* without saying what, which is the foreshadowing §11's
-//! discovery loop wants and which naming them would spend. An open room's state
-//! row ends in the percentage to its next mastery station.
+//! The rail draws the rooms you **work in** — six of them, since the grimoire
+//! left `DOMAINS` (§19) — and the player starts with one (Phase 10). A shut room
+//! draws as a dim dotted row with no name: six slots with five dark says *there
+//! is more* without saying what, which is the foreshadowing §11's discovery loop
+//! wants and which naming them would spend. An open room's state row ends in the
+//! percentage to its next mastery station.
+//!
+//! §10 names *seven* domains and that is not this list: spellcraft is a kind of
+//! play rather than a room you tend, and the bailey is a room you fight in
+//! rather than tend. Neither has a box.
 //!
 //! # Each box is ruled off from the next
 //!
@@ -103,8 +108,8 @@ fn domain(painter: &mut orbs_render::Painter<'_>, brief: &Brief, at: Rect, ruled
     // than `at.bottom()`.
     //
     // Silent, like the border and the foot's rule: §19's frame rule is that
-    // structure writes cells and no speech, and a reader hearing six horizontal
-    // lines read out between seven domains would get box-drawing noise where the
+    // structure writes cells and no speech, and a reader hearing a horizontal
+    // rule read out between every pair of rooms would get box-drawing noise where the
     // sighted player gets separation for free.
     let floor = if ruled && at.rows > 1 {
         let row = at.bottom().saturating_sub(1);
@@ -336,6 +341,33 @@ fn truncate(text: &str, width: usize) -> &str {
 mod tests {
     use super::*;
     use orbs_render::RAIL_COLS;
+
+    /// **The rail divides itself into `MAX_PANES` slots and fills them from
+    /// `DOMAINS`, and nothing but this test holds the two numbers together.**
+    ///
+    /// They are in different crates and must be: rule 1 forbids `orbs-render`
+    /// from reaching into the sim, so the layout cannot read the list it is
+    /// laying out. This crate is the only one that sees both.
+    ///
+    /// It exists because they did drift. The grimoire left `DOMAINS` and
+    /// `MAX_PANES` stayed at seven, so `lay_rail` cut the column into sevenths,
+    /// `paint` zipped six briefs against them, and the leftover slot drew as a
+    /// five-row hole between `sanctum` and the readings. The same phantom made
+    /// `fits_rail` demand room for a box that does not exist, which dropped the
+    /// rail entirely between 39 and 43 rows — the range `scripts/tui.sh start
+    /// 177 38` puts a terminal player in. Neither failed a test and neither
+    /// failed to compile.
+    #[test]
+    fn the_rail_has_exactly_one_box_per_domain() {
+        assert_eq!(
+            orbs_render::MAX_PANES,
+            orbs_sim::tower::DOMAINS.len(),
+            "the rail lays out {} boxes for {} domains — the spare draws as a \
+             hole, and `fits_rail` drops the rail at heights where it fits",
+            orbs_render::MAX_PANES,
+            orbs_sim::tower::DOMAINS.len(),
+        );
+    }
 
     #[test]
     fn both_marks_land_in_the_same_column() {

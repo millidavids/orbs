@@ -27,18 +27,26 @@ the mastery lines — so the rail's dark boxes are back for exactly the rooms
 §11.5's breadth track always promised. `ORBS_SEALED=1` shows a dump the sealed
 start.
 
-**The phases were renumbered so the version could keep climbing** (§19), and
-then a third time. Enchanting was Phase 6 and is **Phase 9**; **Progression is
-10** (the Ley Line, Mastery, and the tower that opens as you work); the
-tower-as-one-machine is **11**, breadth/remote/engine are **12a/12b/12c**,
-onboarding is **13** and ship is **14**. Phases 0–5, 8 and 9 did not move — they
-are closed or tagged and their tags mean what they meant.
+**The phases were renumbered so the version could keep climbing** (§19), four
+times now. Enchanting was Phase 6 and is **Phase 9**; **Progression is 10** (the
+Ley Line, Mastery, and the tower that opens as you work); **Renown is 11** (the
+second number, and a reason to keep making things after the Ley Line stops
+buying); the tower-as-one-machine is **12**, breadth/remote/engine are
+**13a/13b/13c**, onboarding is **14** and ship is **15**. Phases 0–5, 8, 9 and
+10 did not move — they are closed or tagged and their tags mean what they meant.
 
-**The scheme has now been bent three times for this.** `0.<phase>.<step>`
-assumes phases are built in order and three times they have not been. §19
-records the alternative — a minor that counts phases *closed* rather than naming
-the phase — and that it is still undecided; the third renumber was cheap only
-because none of the moved phases carried a tag.
+**The scheme has now been bent four times for this.** `0.<phase>.<step>` assumes
+phases are built in order and four times they have not been. §19 records the
+alternative — a minor that counts phases *closed* rather than naming the phase —
+and that it is **still undecided and now overdue**: the third renumber's own note
+said a fourth phase out of turn should settle the scheme instead, and the fourth
+renumbered anyway. Each has been cheap only because none of the moved phases
+carried a tag, and that luck is not a plan.
+
+**A renumber is done highest-first, always.** A mechanical pass that moved a
+lower number first collided two phases into one, and a replace-all once corrupted
+two *historical* renumber tables in §19 — those record what the numbers were at
+the time and must never be shifted.
 
 **The premise is complete.** *"Sieges then test everything you automated — because
 the enemy attacks the automation"* was the last unbuilt clause and closed at

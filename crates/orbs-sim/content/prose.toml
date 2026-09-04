@@ -199,6 +199,71 @@ wield_cold = "the {name} wants heat, and the athanor is cold"
 concentration_gained = "the orb can hold a spell now. bind one, and walk away"
 
 # ---------------------------------------------------------------------------
+# Renown (§11.5, §19). The tower's second number, and the only one that falls.
+#
+# **Only the loss speaks.** Earning is quiet: a sweep of the clarity loop showed
+# a line per potion taking two hours of transcript from 466 records to 792, which
+# is `credit`'s lesson one file over - a continuous fact is read off `status`,
+# and only an edge is news. The edge that speaks is the rank.
+#
+# A loss is different: it happened *to* the player, possibly while they were not
+# watching, and §6 forbids a state changing under someone in silence.
+#
+# Not scolding, though. §11.5 forbids a punishment that compounds, and a tower
+# that has had a bad night is already being told so by the wall.
+# ---------------------------------------------------------------------------
+renown_lost = "word gets about: {quantity} renown lost, and {count} left"
+
+# ---------------------------------------------------------------------------
+# The two gauges at the top of every pane (§11.5, §14).
+#
+# **Terse, because they share a row with a bar and a reading.** The label is a
+# column nine cells wide and the reading is what is left after the bar, so both
+# are as short as they can be and still be words.
+#
+# `gauge_spoken` is what a screen reader hears instead of a row of pipes - §14
+# names progress bars specifically, and `Painter::gauge` takes the sentence for
+# exactly that. It says the numbers a listener needs and never the glyphs.
+# ---------------------------------------------------------------------------
+gauge_ley = "ley line"
+gauge_renown = "renown"
+gauge_toward = "{count}/{quantity}"
+gauge_topped = "nothing more authored"
+gauge_spoken = "{name}: {count} of {quantity} toward the next"
+
+# ...and what a *topped* track says instead. `Toward::FULL` is `1/1`, which fills
+# the bar and counts nothing, so the sentence above would have told a listener the
+# tower stood one short of a tier that is not authored. This says what the row
+# itself says.
+gauge_spoken_topped = "{name}: nothing more authored"
+
+# ---------------------------------------------------------------------------
+# THE TEN THINGS THE TOWER IS CALLED (§11.5).
+#
+# Titles, not gates - a rank names where you stand and unlocks nothing. Each is
+# short because it is drawn after the renown gauge's reading, on a shared row.
+#
+# They climb from a name nobody would use to one that is not a rank at all: what
+# is said of a tower after it is gone. That is the soft ending, said the other
+# way round.
+# ---------------------------------------------------------------------------
+rank_reached = "they are calling you {name} now"
+rank_fallen = "they are back to calling you {name}"
+rank_lost = "they have stopped calling you {name}"
+renown_hedge_wizard = "hedge-wizard"
+renown_cunning_man = "cunning man"
+renown_adept = "adept"
+renown_conjurer = "conjurer"
+renown_magister = "magister"
+renown_thaumaturge = "thaumaturge"
+renown_archmage = "archmage"
+renown_arch_magus = "arch-magus"
+renown_the_tower_itself = "the tower itself"
+renown_remembered = "remembered"
+# On the weave's headings row, at the right edge. Terse because it shares a row.
+weave_renown = "renown {count}"
+
+# ---------------------------------------------------------------------------
 # `debug_spawn` (§19). A tester's door: the **code** is `cfg(debug_assertions)`
 # and absent from a release build, but this file is compiled in whole, so these
 # four lines ship as text nothing can reach. Kept here anyway rather than moved
@@ -438,9 +503,6 @@ mastery_lens_1 = "a ward broken"
 mastery_lens_2 = "five wards broken"
 mastery_lens_3 = "a secret learned"
 mastery_lens_4 = "fifteen wards broken"
-mastery_grimoire_1 = "a spell bound"
-mastery_grimoire_2 = "five spells bound"
-mastery_grimoire_3 = "twenty spells bound"
 mastery_sanctum_1 = "a course mustered"
 mastery_sanctum_2 = "five courses mustered"
 mastery_sanctum_3 = "a siege survived"

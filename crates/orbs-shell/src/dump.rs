@@ -405,7 +405,13 @@ pub fn run_script(seed: u64, wizard: Option<String>, engine: &str, request: &str
         // The world may have moved while the screen was up — `ORBS_THEN` steps.
         // In the game `weaving::refresh` runs every frame for exactly this.
         if let Some(screen) = weaving.as_mut() {
-            screen.refresh(sim.experience(), sim.scale(), sim.ley_line(), sim.mastery());
+            screen.refresh(
+                sim.experience(),
+                sim.renown(),
+                sim.scale(),
+                sim.ley_line(),
+                sim.mastery(),
+            );
         }
         // The running-line marker, and how the orb reads the buffer. In the game
         // both are pushed in by `editing::autosave`; a dump builds no `App` and
@@ -871,7 +877,13 @@ fn choruses(sim: &mut orbs_sim::Sim) {
 /// taken node back: a closure capturing `&sim` holds an immutable borrow for its
 /// whole life and `Sim::take` needs a mutable one.
 fn refresh(screen: &mut super::Tapestry, sim: &orbs_sim::Sim) {
-    screen.refresh(sim.experience(), sim.scale(), sim.ley_line(), sim.mastery());
+    screen.refresh(
+        sim.experience(),
+        sim.renown(),
+        sim.scale(),
+        sim.ley_line(),
+        sim.mastery(),
+    );
 }
 
 fn woven(sim: &mut orbs_sim::Sim) -> Option<super::Tapestry> {

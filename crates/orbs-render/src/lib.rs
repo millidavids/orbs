@@ -157,7 +157,7 @@ pub use record::{
 };
 pub use span::Span;
 pub use style::{
-    Density, Depiction, Heat, Intensity, Lexeme, Presentation, Roil, Role, Style, Tint, Wash,
+    Density, Depiction, Fill, Heat, Intensity, Lexeme, Presentation, Roil, Role, Style, Tint, Wash,
 };
 pub use viewport::{
     CELL_HEIGHT, CELL_WIDTH, GRID, INPUT_ROWS, MIN_GRID, MIN_SCALE, PICTURE, pixels, scale_for,

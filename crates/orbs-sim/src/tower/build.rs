@@ -48,7 +48,10 @@ const ROOT: &str = "tower";
 /// their own editor, and the fiction that survives that is a book you carry, not
 /// a shelf you walk to — which is also why `tower::scene` registers spells as
 /// nameable from anywhere rather than only from inside here.
-const GRIMOIRE: &str = "grimoire";
+/// **Public because sealing needs it and `DOMAINS` no longer carries it.** The
+/// grimoire is a room that can be shut without being a room you work in — see
+/// `opened::is_room`, which is the one place that distinction lives.
+pub const GRIMOIRE: &str = "grimoire";
 
 /// Branches of the starting tower, and what each holds.
 ///

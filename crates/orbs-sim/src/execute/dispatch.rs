@@ -409,6 +409,10 @@ fn status(world: &mut World) {
     // at 12 wants to know what 16 buys.
     let earned = world.resource::<tower::Experience>().get();
     let held = tower::concentration(world);
+    // §11.5's second number, and the only one that can fall. It sits beside
+    // experience because the pair is the whole of what the work is worth: one
+    // buys capability and stays bought, the other is standing and can be lost.
+    let known = world.resource::<tower::Renown>().get();
     // §11.5's mana, and its ceiling — which the Ley Line's `pool` and `floor`
     // raise. Nothing else on screen said the pool's size outside a siege
     // board, and a grant nobody can see does not exist.
@@ -426,6 +430,7 @@ fn status(world: &mut World) {
         ("tick", tick),
         ("seed", seed),
         ("experience", earned),
+        ("renown", known),
         ("concentration", quantity(held)),
         ("quintessence", pool),
         ("ceiling", ceiling),

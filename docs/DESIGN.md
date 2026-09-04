@@ -2424,6 +2424,138 @@ they are re-pointed at the phases that now need them rather than quietly dropped
 
 ## 19. Decisions log
 
+### Renown, the tower's second number (Phase 11, `0.11.1`)
+
+**The problem is measured, not anticipated.** Experience past the Ley Line's last
+station buys nothing and is consumed by nothing — the weave draws a full bar and
+a number that keeps climbing past `10000 of 10000`. §11.5 said a prestige layer
+was *"none at launch… revisit only if playtesting shows the late game flattens"*;
+the flat late game is the current state by construction, so the condition is met
+without a playtest. Nothing in the game answered *why the wizard makes so many
+potions* once the tree stopped buying.
+
+**Renown is earned by making, moved both ways by a siege, spendable, and it sets
+how big a siege arrives.** It is the first number in the game that can fall.
+
+| Question | Decision |
+|---|---|
+| What it supersedes | Three recorded decisions, knowingly: *"a second curve would be a second thing to balance and to save"* (§19, Phase 10), *"§11.5 keeps experience the one number that buys anything"* (`tally.rs`), and *"quintessence: the tower's one spendable resource"* (`quintessence.rs`). Experience remains the one number that buys **capability**; renown buys advantage and costs standing |
+| What it does **not** supersede | **`CAPACITY = 1`** — §19's *"four of the six new phases spend the existing scarcity rather than minting a currency"*, which is the strongest recorded argument against this and is answered rather than ignored: renown does not compete for the focus slot, it prices a fight the slot has nothing to say about |
+| Minted on makings, not completions | `done` is the one door for **events** as well as makings, so minting on the door would pay for binding a spell and would pay a siege *twice* — escrow arrives through the same call and escrow pays on a loss. `Work::sold` asks the narrower question, and a `made:` key is the answer |
+| **A making is what reaches a shelf, not what runs a recipe** | Reading `sold` as *only* `Work::made` left the archive shelving fragments and the menagerie shelving troops for no standing at all, while the laboratory was paid for the same act — and troops are what a siege spends. Both of those call `tower::give`, which is exactly what `sold`'s doc said it was asking about. `Work::making` is the seam for a run that stocks the tower without being a recipe, and the two now mint |
+| ...and most of the tower still mints nothing, correctly | The lens finds **knowledge**, the sanctum's pylon solves a **course**, the forge's lattice lays a charm on a **tool**. None of them puts stock anywhere, so none is a sale. A first review read all five non-minting seams as the same defect; three of them are not, which is why the rule is *did this reach a shelf* rather than *did this finish a run* |
+| The instrument came before the verdict | `orbs-balance` sampled experience only, so the ten thresholds were unfalsifiable by the one instrument this project trusts for economy — and experience is not a proxy, since the two highest-rate policies mint nothing. A `renown` column went in first; it is what showed the gap above in one glance, and what shows that fixing it moved renown while leaving every experience rate identical to four decimal places |
+| Rounded up | `mortar_and_pestle` earns 1, so a halving that floored would mint nothing for the first instrument the apprenticeship teaches — telling a new player that making things does not count |
+| **Earning is silent; losing speaks** | The first pass announced every mint, and one `orbs-balance` sweep took the clarity loop from 466 records in two hours to 792. That is `credit`'s rule next door: a level is announced at the edge that buys it and never on the way there, because the fact is continuous and only the crossing is news. A *loss* keeps its sentence — it happened to the player, possibly unwatched, and §6 forbids a state changing under someone in silence |
+| It falls to nought and no further | Saturating rather than signed. Owing renown is a state nothing reads and nothing could draw, and a sign in the type would be a sign in every reader |
+| No `FORMAT` bump | Nought is the honest reading of a document written before renown existed. `cooling` is the precedent; `opened` needed a bump only because *absent meant everything* |
+| On the weave, not the rail | The rail foot's own doc is *"these five and no more… everything else is already in `status`, and `status` is where it belongs"*. Experience is off the rail for that reason and renown has no better claim; the weave is the progression surface |
+| **A track has three answers, not two** | `Toward` carried `at: Option<u64>`, which collapsed *nothing more is authored* and *nobody has asked yet* into one `None` — so a `Panel` before its first refresh drew the emptiest possible tower as the most finished one, and spoke the same. Unreachable, because every frontend refreshes before it paints; unrepresentable-apart, which is the half worth fixing. `Ahead` is the three states, and an unmeasured track now draws and says nothing |
+| A topped track speaks what it draws | `Toward::FULL` is `1/1` — a rendering convenience that fills a bar, not a count. The spoken sentence read those two numbers anyway, so a listener was told the tower stood one short of a tier while the screen said `nothing more authored`. Two halves of §14's one stream asserting opposite facts |
+| `debug_renown` refuses what it cannot read | A word that is not a number parsed to nought and *set* the total there, answering `renown is 0` as though that had been asked — so a tester probing the ten ranks by name destroyed the state they were building. `debug_take` and `debug_reach` both answer a bad argument by naming the alternatives and mutating nothing, and this now does too |
+
+#### The gauges warm red through yellow to green (`0.11.4`)
+
+| Question | Decision |
+|---|---|
+| Colour travels as a **`Depiction`**, never as a `Role` | `orbs-shell` is forbidden to resolve a colour and a boundary test enforces it, so a ramp cannot be chosen at the call site. `Depiction` is the one channel that says *nothing* — it selects a ramp — which is exactly what a decorative gauge needs and why §14 permits it |
+| The caller passes **no accent** | `Style::depicted` drops a picture on any accented cell, because §4 reserves the triad for meaning. The first pass passed `Role::Success` and would have painted every gauge one flat green at every fill, with nothing saying why |
+| A hue ramp where every other ramp is a brightness ramp | Fire, liquid and smoke climb dim to bright and `orbs-tui` asserts it; this peaks in the middle, where yellow is. It has no monotonic-brightness test and could not pass one. Those depict a *substance getting more intense*; this depicts a *distance being closed* |
+| Six steps | Three would read as a traffic light rather than a bar warming — the *"two-tone flicker rather than a glow"* the fire's own ramp was widened to avoid. Six is also what a sixteen-colour terminal can tell apart, so both frontends draw the whole ramp rather than one drawing a coarser copy |
+| Green means **arrived**, not nearly | An even sixth at the top would paint a bar one short of its tier the same green as one that had reached it. `Fill::Whole` is reserved for `done >= total` and the five below split what is left |
+| A gauge declines the tint | Like the fire, it is not a material — and unlike the fire it is not even inside an instrument. A fill that took the tint of whatever was being brewed would say the bar meant something about sage |
+| Why colour is allowed at all (§14) | **The fill length is the information and the hue agrees with it.** Strip every colour and the bar still says how full it is. In greyscale the ramp collapses and nothing is lost, which is the bargain the spell's syntax colouring already makes |
+| Its See-it is the `screens` example | The transition is *entirely* hue — the glyph is `|` at every step — so a dump shows a bar filling and proves nothing about the warming. The example prints the ramp as letters `A`–`F`, which is text a person can check, and it is the same trick the bath's roil already needed |
+| **No step may wear an accent's ink** | The terminal ramp first spent `Red` on the low step and `Green` on the full one, which are byte-for-byte `Role::Danger` and `Role::Success`. `ember.rs` had already pulled its own red *off* saturation so the low end would read as **early** rather than as danger, and this side had not followed — so a ley gauge just past a station drew the exact red of every error line, in a row at the top of the pane where errors also land. Fixed by the technique every other ramp here already uses: sixteen indices hold two colours per hue family and `Weight` supplies the steps between them, so the ramp is three families over six pairs and never the triad. `the_gauge_ramp_never_wears_an_accents_ink` holds it |
+| Weight is part of the ink, not an escape from it | A bold green is still green to someone glancing at a colour, and several terminals render bold-plus-dark as the bright index outright. So the check is on the colour and the pair only has to be *distinguishable* |
+| **The Bevy ramp had the same fault, less exactly** | Writing the terminal test led to writing the Bevy one, and it failed: the low step sat 0.18 from `danger` on three of the four tubes, on the file's own claim that it reads as *early* rather than as danger. The red end is now **dark** — every theme's danger is a bright saturated red, so brightness is the axis with room in it, and a bar barely begun reading dim is what it should look like anyway. Margin 0.18 → 0.36, contrast floor still cleared at 3.06:1 |
+| Why a red-to-green ramp is the hard case | It runs through *three* of the triad's own hues. Every step is near something: the amber tube's danger is orange-red, the green tube's success is pale yellow. The separation has to be deliberate at every step rather than only at the ends, and it was searched for numerically rather than eyeballed |
+| The ramp shipped with no test at all | Fire, liquid, smoke and sediment each have one — *climbs*, *visible on every tube*, *never reads as the hearth*, *recedes*. The gauge had none, which is why a hue sitting on an accent went unnoticed on both frontends at once. It now has the two that matter |
+
+#### The grimoire leaves `DOMAINS`: no rail box, no mastery line (`0.11.3`)
+
+**§10 names seven domains and the rail now draws six.** They are different lists
+and always were; the code had one. §10's seven are *kinds of play* — Spellcraft
+is one, Phase 3 built its language, editor and in-file parts, and none of that is
+withdrawn. `DOMAINS` is the rooms you **work in**: the ones with a mastery line
+and a rail box.
+
+**The grimoire is not one.** It raises no instrument, has no entry in `[earns]`,
+anchors no verb, and its rail box read `idle` for ever because nothing can ever
+run there. Its mastery line counted spells *bound* — a deed done wherever the
+player happens to be, not in the room — and opened nothing, which was already
+flagged as a first-pass gap when Phase 10 closed.
+
+**This was recorded three phases earlier and the code never caught up.** The
+entry that made `/grimoire` a sibling of `/tower` says: *"It is a root domain but
+**not a §9 activity domain**. §9's panes are per activity — the seven you
+multiplex between — and writing is not one of them. You do not run the grimoire
+concurrently with brewing; you go and write, and what you wrote runs somewhere
+else."* `domain_of` has said the same all along, naming `/tower` and `/grimoire`
+as the two places that are *"not somewhere work happens"*.
+
+**The comparison that settles it:** the bailey is where sieges are fought and has
+never had a box, on the grounds that it is a place you descend into rather than a
+domain you tend. The busiest room in the game had no box while the emptiest one
+did.
+
+| Question | Decision |
+|---|---|
+| What the grimoire keeps | Everything that made it worth having. The spells live there, `scribe` writes into it, it is `Protected` because *"losing your spellbook is the one loss the game cannot let a command cause"*, and it is still shut until the ley step at 16 |
+| Where "can this be shut" now lives | `opened::is_room` — `DOMAINS` **plus** the bailey and the grimoire. That rule had two copies before this and would have had three after, and §19 records more defects from two expressions of one rule than from anything else. `check_opens` reads it too, which is what stopped the ley step at 16 failing the load |
+| The three `bound` stations | Deleted, not rehomed. There is nowhere to put a deed whose room is not a domain, and rehoming them onto another room's line would have said the grimoire's work belongs to a room it does not happen in |
+| `event:bound` stays in the tally | Nothing asks for it today and the count is honest either way. A deed that wants it later can have it without a code change |
+| The alternative, and why not | Giving the line something to open — revealing shelved example spells — was the smaller change and was offered. The designer took the structural one: a box that never changes is worse than no box |
+
+**It left a seventh box behind, and two surfaces drew the ghost.**
+`orbs-render`'s `MAX_PANES` was the same seven and did not follow, because
+**rule 1 runs the other way**: nothing in `orbs-render` may reach into the sim,
+so the layout cannot read the list it is laying out. `lay_rail` went on cutting
+the column into sevenths while `rail::paint` zipped six briefs against them,
+which drew as a five-row hole between `sanctum` and the readings — and
+`fits_rail` went on demanding room for the box that does not exist, which dropped
+the rail *entirely* between 39 and 43 rows. That range is the one `MIN_RAIL_BOX`
+already names as where a terminal player sits, and `scripts/tui.sh start 177 38`
+is in CLAUDE.md.
+
+Neither failed a test and neither failed to compile, which is the point:
+
+| Question | Decision |
+|---|---|
+| Where the two numbers are pinned together | `orbs-shell`, in `rail::tests::the_rail_has_exactly_one_box_per_domain`. It is the only crate that sees both, so it is the only place the assertion can live — and it makes the next domain added or removed a failing test rather than a hole nobody notices for a phase |
+| Why not derive the count | It cannot be derived without `orbs-render` depending on `orbs-sim`, which is rule 1 inverted for the sake of one integer. A test in the crate above costs nothing and says why |
+| A hole that draws is worse than a rail that vanishes | Both were the same constant, but they fail differently: the hole is visible and looks like a layout bug, while the missing rail at 39–43 rows looks like the *documented* behaviour of `fits_rail`, which drops the rail rather than squeezing it. The second is why the pin is a test and not a comment |
+| **And a fourth site of the room rule** | `tower::scene` withholds a shut room's *name* from the parser's topic vocabulary, so `recall archive` cannot answer before the archive is earned. It walked `DOMAINS`, so a shut grimoire's name stopped being withheld the moment the grimoire left that list — inert only until somebody authors a `recall_grimoire` page, and silent when they do. `opened::ROOMS` is now the list and `is_room` the predicate over it, because the caller that wanted to *walk* the shut rooms had nowhere to get them and reached for the wrong list |
+
+**The two standings are gauges at the top of every pane** (`0.11.2`).
+
+| Question | Decision |
+|---|---|
+| Toward the next tier, from the tier behind | A gauge filling from nought would jump backwards on every crossing — 99% of the way to 150, then 4% of the way to 350. `Toward::among` is the one arithmetic and both gauges share it, so the Ley Line and renown cannot come to disagree about what *nearly there* looks like. Past the last tier it reads **full**, not empty: nothing more is authored, and a bar that emptied at the top of the game would say the opposite of what happened |
+| A second bar vocabulary, deliberately | `Painter::gauge` draws `[\|\|\|\|    ]` where `meter` draws `█░`. `meter_upward`'s doc warns that one meter drawn two ways is a defect — that was the *same* instrument bar rendered differently by pane shape. This is the other case: two kinds of thing told apart by shape, a **tier** against a run in flight, and the brackets give it ends a bare fill has not |
+| Capped at forty cells | Stretched across a 120-cell pane the bar became a solid rule with a number at the far end and the eye could not tell a third full from a half, which is the one thing a bar is for. htop sizes its bars to a column; what is left over stays blank |
+| Relative on both sides of the slash | `done` counts from the tier behind, so pairing it with the *absolute* total ahead would read as two scales at once — `8/16` is honest where `8/10000` is not |
+| Ranks are titles and nothing else | A rank that gated a capability could take it away mid-siege, in the fight that needed it. Ten of them, `at` and `id`, no `opens` |
+| Three sentences for a rank, not two | Climbing, falling to a lower title, and falling out of the ranks are three different pieces of news. Two of them made *"they are calling you cunning man now"* congratulate a player who had just lost two ranks — the direction has to be counted, not inferred from whether a name is still in hand |
+| The rows yield before the transcript | §9's main window does not yield, so the gauges hand the body back untouched in a short or narrow pane. They cost two rows where the road cost one, so their floor is higher |
+| `debug_renown` **sets** rather than adds | One word both ways: a rank is lost by falling back through it, and reaching that state otherwise means losing a siege on purpose. It also sidesteps whether a negative argument parses. Every one of the ten sits behind an hour or a day of play, so without it the titles are a surface nobody can look at |
+
+**The perishable arsenal was designed and withdrawn before a line of it was
+written.** The plan had arsenal stock going stale on a timer, so production had
+to be continuous and a variety of it. An independent review found it unbuildable
+on the tower's inventory primitive: `Stock::Counted(u32)` is *"one node per kind,
+with a count — not one node per unit"* and `give` merges into the existing pile,
+so a timer either keeps a thousand potions fresh off one restock — cheaper than
+playing normally — or makes new stock unusable. Per-unit batches would be a
+rewrite of `Stock` touching every reader, a save migration, and a new published
+reading before a spell could see its own supply. Two further holes: production
+leaves output in the *instrument*, so the timestamp would be the haul rather than
+the make, and the bypass is to bank on the laboratory shelf and haul in before
+`defend`; and it would have starved the `besieging` balance policy, which stocks
+once at setup, reproducing a rate-of-nought collapse the harness has recorded
+before. **A cap on how much of one name the arsenal takes** answers the same
+hoarding problem in one `if`, and is the box that shipped in its place.
+
 ### The two tracks swapped natures, and the tower learned to be shut (Phase 10, `0.10.1`)
 
 **The Ley Line is the tower's line with a choice at each fork, and Mastery is

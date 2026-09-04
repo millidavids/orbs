@@ -275,6 +275,7 @@ impl Sim {
         }
         world.insert_resource(curve);
         world.init_resource::<tower::Experience>();
+        world.init_resource::<tower::Renown>();
         // **Everything open**, which is the tower every test, dump and policy
         // has always used. A fresh *game* starts sealed — see `Sim::sealed`.
         let opened = tower::Opened::all(
@@ -693,6 +694,12 @@ impl Sim {
             return;
         }
 
+        #[cfg(debug_assertions)]
+        if let Some(total) = crate::execute::standing(line) {
+            self.debug_renown(line, total);
+            return;
+        }
+
         // `analyse` rather than `resolve`: it keeps every scored reading, which
         // is what §6's *"the parser must explain itself"* means in practice and
         // what the Phase 0 gate needs to cluster failures by cause rather than
@@ -818,6 +825,12 @@ impl Sim {
     #[must_use]
     pub fn experience(&self) -> u64 {
         self.world.resource::<tower::Experience>().get()
+    }
+
+    /// What the tower is known for, which is the one number that can fall.
+    #[must_use]
+    pub fn renown(&self) -> u64 {
+        self.world.resource::<tower::Renown>().get()
     }
 
     /// How the tower's defences stand, out of [`tower::STANDING`].
@@ -1386,7 +1399,25 @@ impl Sim {
         tower::scale(&self.world)
     }
 
-    /// The seven mastery lines, in `DOMAINS` order.
+    /// Where the tower's total stands against the Ley Line's next station.
+    #[must_use]
+    pub fn toward_station(&self) -> tower::Toward {
+        tower::ley::toward(&self.world)
+    }
+
+    /// Where renown stands against the next rank.
+    #[must_use]
+    pub fn toward_rank(&self) -> tower::Toward {
+        tower::renown::toward(&self.world)
+    }
+
+    /// What the tower is called now, if it has earned a name.
+    #[must_use]
+    pub fn rank(&self) -> Option<String> {
+        tower::renown::rank(&self.world)
+    }
+
+    /// One mastery line per domain, in `DOMAINS` order.
     #[must_use]
     pub fn mastery(&self) -> Vec<tower::Line> {
         tower::mastery(&self.world)
@@ -1562,6 +1593,52 @@ impl Sim {
             }
             Some(id) => format!("{id} grants nothing. one of: {}", real.join(", ")),
             None => format!("nodes: {}", real.join(", ")),
+        };
+        self.world
+            .resource_mut::<Scrollback>()
+            .records_mut()
+            .push(RecordKind::Completion)
+            .text(orbs_render::FieldName::Message, &said)
+            .finish();
+    }
+
+    /// Put renown at a total, for a tester, and say the title it crossed.
+    ///
+    /// **Sets rather than adds**, so one word goes both ways — a rank is lost by
+    /// falling back through it, and reaching that state otherwise means losing a
+    /// siege on purpose. Bare, it says where the tower stands.
+    #[cfg(debug_assertions)]
+    fn debug_renown(&mut self, line: &str, total: crate::execute::Asking) {
+        let tick = *self.world.resource::<Tick>();
+        self.world
+            .resource_mut::<Scrollback>()
+            .records_mut()
+            .push(RecordKind::Input)
+            .text(orbs_render::FieldName::Message, line)
+            .finish();
+        self.world.resource_mut::<Submissions>().push(tick, line);
+
+        let standing = |world: &World| {
+            let held = world.resource::<tower::Renown>().get();
+            let title = tower::renown::rank(world);
+            format!(
+                "renown {held}, and the tower is {}",
+                title.unwrap_or_else(|| "nothing yet".to_owned()),
+            )
+        };
+        let said = match total {
+            crate::execute::Asking::Set(total) => {
+                tower::renown::set(&mut self.world, total);
+                format!("renown is {total}")
+            }
+            crate::execute::Asking::Where => standing(&self.world),
+            // **Refused, and nothing touched** — `debug_take` and `debug_reach`
+            // answer a bad argument the same way. Reading it as nought set the
+            // total to zero and said so, which destroyed whatever the tester had
+            // just built and looked like it had worked.
+            crate::execute::Asking::Unreadable => {
+                format!("that is no number. {}", standing(&self.world))
+            }
         };
         self.world
             .resource_mut::<Scrollback>()

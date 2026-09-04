@@ -35,7 +35,7 @@ use crate::linear::UtteranceKind;
 use crate::maze::{self, Stacks};
 use crate::mix;
 use crate::span::Span;
-use crate::style::{Lexeme, Presentation, Role, Style, Wash};
+use crate::style::{Depiction, Fill, Lexeme, Presentation, Role, Style, Wash};
 use crate::wrap::Wrap;
 
 /// A clipped writer into a region of a [`Frame`].
@@ -142,6 +142,73 @@ impl<'a> Painter<'a> {
             }
         }
         row.saturating_sub(area.row)
+    }
+
+    /// Draw a bracketed gauge — `[||||||      ]` — and record `spoken`.
+    ///
+    /// # A second bar vocabulary, on purpose
+    ///
+    /// [`meter`](Self::meter) draws `█`/`░` and everything that measures a *run*
+    /// uses it — the five instruments, the fire, the grind. This is deliberately
+    /// unlike them, because it measures a different kind of thing: a **tier**, a
+    /// standing the tower is climbing toward rather than a job in flight. The two
+    /// never share a surface.
+    ///
+    /// `meter_upward`'s doc warns that one meter drawn two ways is a defect, and
+    /// it is — that was the *same* instrument bar rendered differently by pane
+    /// shape. This is the other case: two kinds of thing told apart by their
+    /// shape, which is what the brackets are for. They also make the gauge read
+    /// as a discrete widget with ends, where a bare `░` run has none.
+    ///
+    /// Nothing is drawn if the area cannot hold both brackets and a cell between
+    /// them; a gauge with no room for its fill would be two characters claiming
+    /// to be a measurement.
+    ///
+    /// # The fill carries a hue ramp, and the caller does not choose it
+    ///
+    /// It warms red through yellow to green as the bar fills — [`Fill::of`]
+    /// picks the step and the fill is drawn as a [`Depiction`], which is the only
+    /// channel a colour may travel on: `orbs-shell` is forbidden to resolve one
+    /// and both frontends read the ramp from their own theme.
+    ///
+    /// **So `style` must carry no accent.** `Style::depicted` yields nothing on
+    /// an accented cell — §4 reserves the triad for meaning and a depiction means
+    /// nothing — so a caller passing `Role::Success` would get a green bar at
+    /// every fill and never know why. The brackets take `style` as given; the
+    /// fill takes its role from it and its colour from the ramp.
+    pub fn gauge(&mut self, area: Rect, done: u32, total: u32, style: Style, spoken: &str) {
+        // Spoken before the clip test, for `progress`'s reason: §14's stream does
+        // not depend on what happened to fit.
+        self.frame
+            .speech_mut()
+            .push(UtteranceKind::Progress, style.role, spoken);
+        let area = area.intersection(self.area);
+        if area.is_empty() || area.cols < 3 {
+            return;
+        }
+        let inside = area.cols.saturating_sub(2);
+        let filled = filled_of(inside, done, total);
+        self.fill(Rect::new(area.col, area.row, 1, area.rows), '[', style);
+        self.fill(
+            Rect::new(area.col.saturating_add(1), area.row, inside, area.rows),
+            ' ',
+            style,
+        );
+        self.fill(
+            Rect::new(area.col.saturating_add(1), area.row, filled, area.rows),
+            '|',
+            style.with_depiction(Depiction::gauge(Fill::of(done, total))),
+        );
+        self.fill(
+            Rect::new(
+                area.col.saturating_add(area.cols).saturating_sub(1),
+                area.row,
+                1,
+                area.rows,
+            ),
+            ']',
+            style,
+        );
     }
 
     /// Draw a meter as a bar, and record `spoken` as its description.

@@ -291,6 +291,11 @@ fn what_a_save_carries_is_still_true_after_it_is_loaded() {
         lived.experience(),
         "the work already done was forgotten",
     );
+    assert_eq!(
+        loaded.renown(),
+        lived.renown(),
+        "what the tower was known for was forgotten",
+    );
 
     // The eight stream positions, checked by their effect rather than by
     // reading them back: both worlds take the next hundred ticks' worth of
@@ -543,6 +548,7 @@ fn the_test_world_actually_holds_everything_it_is_meant_to() {
         // release build cannot reach. Asserted rather than skipped silently.
         if cfg!(debug_assertions) {
             has("earned experience", save.progress.experience > 0);
+            has("earned renown", save.progress.renown > 0);
             has(
                 "running spell",
                 save.nodes.iter().any(|n| n.running.is_some()),
@@ -747,13 +753,17 @@ fn show_a_save() {
 #[test]
 fn every_resource_the_world_holds_is_one_the_save_knows_about() {
     // In the document.
-    const CARRIED: [&str; 16] = [
+    const CARRIED: [&str; 17] = [
         "orbs_sim::tick::Tick",
         "orbs_sim::rng::Rngs",
         "orbs_sim::tower::node::NodeIds",
         "orbs_sim::tower::node::Cwd",
         "orbs_sim::session::Wizard",
         "orbs_sim::tower::experience::Experience",
+        // What the tower is known for. Travels for `Experience`'s reason and one
+        // more: it is the only number that can *fall*, so a restore that lost it
+        // would hand back standing the player had already spent or been docked.
+        "orbs_sim::tower::renown::Renown",
         "orbs_sim::tower::erosion::Integrity",
         "orbs_sim::tower::ley::Taken",
         "orbs_sim::tower::learned::Learned",

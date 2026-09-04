@@ -73,7 +73,13 @@ impl Surfaces {
         }
         if self.weaving.is_none() && sim.weaving() {
             let mut screen = Tapestry::default();
-            screen.refresh(sim.experience(), sim.scale(), sim.ley_line(), sim.mastery());
+            screen.refresh(
+                sim.experience(),
+                sim.renown(),
+                sim.scale(),
+                sim.ley_line(),
+                sim.mastery(),
+            );
             self.weaving = Some(screen);
         }
         if !self.walking && sim.wandering() {
@@ -115,7 +121,13 @@ impl Surfaces {
             editor.set_reading(sim.read_spell(editor.domain(), editor.lines()));
         }
         if let Some(screen) = &mut self.weaving {
-            screen.refresh(sim.experience(), sim.scale(), sim.ley_line(), sim.mastery());
+            screen.refresh(
+                sim.experience(),
+                sim.renown(),
+                sim.scale(),
+                sim.ley_line(),
+                sim.mastery(),
+            );
         }
         if self.walking && sim.stacks().is_none() {
             self.walking = false;

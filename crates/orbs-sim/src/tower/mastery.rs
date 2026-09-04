@@ -356,10 +356,12 @@ mod tests {
     }
 
     #[test]
-    fn a_cold_tower_has_seven_lines_and_is_working_toward_the_first_station_of_each() {
+    fn a_cold_tower_has_a_line_per_room_and_is_working_toward_the_first_station_of_each() {
         let sim = Sim::new(1);
         let lines = mastery(sim.world());
-        assert_eq!(lines.len(), 7);
+        // Six, since the grimoire left `DOMAINS` (§19): its three stations
+        // counted a deed done everywhere else and opened nothing.
+        assert_eq!(lines.len(), super::super::DOMAINS.len());
         for line in &lines {
             assert!(!line.stops.is_empty(), "the {} has no line", line.domain);
             assert_eq!(line.reached().0, 0, "the {} started ahead", line.domain);

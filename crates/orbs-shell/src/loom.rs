@@ -68,10 +68,15 @@ const PANEL_COLS: u16 = 30;
 
 /// The smallest pane this can honestly be drawn in.
 ///
-/// Two borders, the bar, the headings, seven rooms' lines, a blank, the details
-/// panel and the words: eighteen. Below it the answer is to say so rather than
-/// draw something misleading, exactly as the editor does. §4's declared floor is
+/// Two borders, the bar, the headings, the rooms' lines, a blank, the details
+/// panel and the words. Below it the answer is to say so rather than draw
+/// something misleading, exactly as the editor does. §4's declared floor is
 /// 80×22, so this fits with room to spare.
+///
+/// **Eighteen was exactly right at seven rooms and is one spare at six** (§19).
+/// Left where it is: a floor that tightened every time a room left would be a
+/// screen that appeared and vanished as content moved, and the spare row is the
+/// blank the details panel already sits under.
 const MIN_ROWS: u16 = 18;
 const MIN_COLS: u16 = 24;
 
@@ -108,7 +113,7 @@ pub fn paint(frame: &mut Frame, screen: &Tapestry, pane: Rect, prose: &Prose) {
     let mut y = area.row.saturating_add(1);
 
     y = bar(&mut painter, screen, left, y, inner, prose);
-    y = headings(&mut painter, screen, left, y, prose);
+    y = headings(&mut painter, screen, left, y, inner, prose);
     match screen.track() {
         Track::LeyLine => line_track(&mut painter, screen, left, y, inner),
         Track::Mastery => room_lines(&mut painter, screen, left, y, inner),
@@ -173,7 +178,14 @@ fn bar(
 ///
 /// Both always, so a player who has only ever typed `ley` can see there is a
 /// second track to ask for.
-fn headings(painter: &mut Painter<'_>, screen: &Tapestry, left: u16, y: u16, prose: &Prose) -> u16 {
+fn headings(
+    painter: &mut Painter<'_>,
+    screen: &Tapestry,
+    left: u16,
+    y: u16,
+    inner: u16,
+    prose: &Prose,
+) -> u16 {
     let looking = screen.mode() == Mode::Browsing;
     let ley = prose.line("weave_ley", &[]);
     let mastery = prose.line("weave_mastery", &[]);
@@ -195,6 +207,26 @@ fn headings(painter: &mut Painter<'_>, screen: &Tapestry, left: u16, y: u16, pro
         Pos::new(after, y),
         &Span::new(&mastery).with_style(style(Track::Mastery)),
     );
+
+    // **Renown shares the headings row rather than taking one of its own.** The
+    // pane is eighteen rows at its floor and all but one are spoken for — bar,
+    // headings, the rooms' lines, the panel and the words. The two track names take
+    // under twenty cells, so the tower's other number sits at the right edge of
+    // the same row, where the bar's own total sits one row up.
+    //
+    // Drawn only when there is room for it whole: a truncated number is worse
+    // than none, because a reader cannot tell 1,240 cut short from 12.
+    let renown = prose.line("weave_renown", &[("count", &screen.renown().to_string())]);
+    let width = u16::try_from(renown.chars().count()).unwrap_or(0);
+    let taken = after
+        .saturating_add(u16::try_from(mastery.chars().count()).unwrap_or(7))
+        .saturating_sub(left);
+    if width > 0 && taken.saturating_add(width).saturating_add(2) <= inner {
+        painter.span(
+            Pos::new(left.saturating_add(inner).saturating_sub(width), y),
+            &Span::new(&renown).with_style(Style::DIM),
+        );
+    }
     y.saturating_add(1)
 }
 
@@ -372,7 +404,7 @@ fn along(width: u16, scale: u64, at: u64) -> u16 {
     cells
 }
 
-/// The seven rooms' lines, one row each: the name, then a run with its
+/// The rooms' lines, one row each: the name, then a run with its
 /// stations standing on it.
 ///
 /// **Evenly spaced, not at cost.** A mastery station has no total — its deed is

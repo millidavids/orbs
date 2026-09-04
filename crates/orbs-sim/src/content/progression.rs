@@ -10,7 +10,8 @@
 //! *fork* — `nodes` to choose one of, taken with `take`. A station may also
 //! `opens` something: a room, a recipe, a charm.
 //!
-//! **Mastery is per domain.** Seven straight lines, one per room, each a list of
+//! **Mastery is per domain.** One straight line per room you work in — six, not
+//! §10's seven, since the grimoire left `DOMAINS` (§19) — each a list of
 //! stations with a [`Deed`] on it. No choices anywhere: a station is reached
 //! when its deed is done and the one before it is reached.
 //!
@@ -94,9 +95,27 @@ pub struct Progression {
     /// alone for exactly this reason.
     #[serde(default)]
     ley_line: Vec<Station>,
-    /// The seven lines, one station at a time, in the file's order.
+    /// The rooms' lines, one station at a time, in the file's order.
     #[serde(default)]
     mastery: Vec<Milestone>,
+    /// What the tower is called, by how much renown it holds.
+    ///
+    /// **Titles, not gates**, so a rank carries `at` and `id` and nothing else —
+    /// there is no `opens` here on purpose. Defaulted like the other two tracks,
+    /// so a file with no ranks is a tower nobody has heard of rather than a load
+    /// failure.
+    #[serde(default)]
+    renown: Vec<Rank>,
+}
+
+/// One thing the tower may be called.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Rank {
+    /// The renown that earns the title — and, falling back through it, loses it.
+    pub at: u64,
+    /// The id: a decision, not prose. `renown_<id>` is the name a player reads.
+    pub id: String,
 }
 
 /// One station of the Ley Line: a step or a fork.
@@ -197,6 +216,7 @@ impl Progression {
     /// header for why every one of these is a load failure rather than a warning.
     pub fn check(&self, catalogue: &Catalogue<'_>) -> Result<(), super::ContentError> {
         ascends("ley_line", self.ley_line.iter().map(|station| station.at))?;
+        ascends("renown", self.renown.iter().map(|rank| rank.at))?;
         self.check_stations()?;
         self.check_milestones(catalogue)?;
         self.check_ids()?;
@@ -340,7 +360,8 @@ impl Progression {
             .ley_line
             .iter()
             .flat_map(|station| station.nodes.iter())
-            .chain(self.mastery.iter().map(|milestone| &milestone.id));
+            .chain(self.mastery.iter().map(|milestone| &milestone.id))
+            .chain(self.renown.iter().map(|rank| &rank.id));
         for id in ids {
             if seen.contains(&id.as_str()) {
                 return Err(super::ContentError::new(
@@ -413,11 +434,14 @@ impl Progression {
                     ));
                 };
                 let (known, of): (bool, &[&str]) = match &parsed {
-                    crate::tower::opened::Key::Domain(name) => (
-                        crate::tower::DOMAINS.contains(&name.as_str())
-                            || name == crate::tower::siege::BAILEY,
-                        &crate::tower::DOMAINS,
-                    ),
+                    // **`is_room`, not `DOMAINS`.** A station may open a room
+                    // that is not one you *work* in — the bailey and the
+                    // grimoire are both shut until they are earned and neither
+                    // has a mastery line. Checking the narrower list refused the
+                    // ley step at 16 that opens the grimoire.
+                    crate::tower::opened::Key::Domain(name) => {
+                        (crate::tower::opened::is_room(name), &crate::tower::DOMAINS)
+                    }
                     crate::tower::opened::Key::Recipe(name) => {
                         (catalogue.gated.contains(&name.as_str()), catalogue.gated)
                     }
@@ -450,6 +474,12 @@ impl Progression {
     #[must_use]
     pub fn mastery(&self) -> &[Milestone] {
         &self.mastery
+    }
+
+    /// Every rank, lowest first.
+    #[must_use]
+    pub fn renown(&self) -> &[Rank] {
+        &self.renown
     }
 
     /// One room's line, in order.

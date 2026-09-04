@@ -89,7 +89,13 @@ pub(crate) fn refresh(mut loom: ResMut<Loom>, tower: Res<Tower>) {
         return;
     };
     let sim = tower.sim();
-    screen.refresh(sim.experience(), sim.scale(), sim.ley_line(), sim.mastery());
+    screen.refresh(
+        sim.experience(),
+        sim.renown(),
+        sim.scale(),
+        sim.ley_line(),
+        sim.mastery(),
+    );
 }
 
 /// Feed keys to the open screen.

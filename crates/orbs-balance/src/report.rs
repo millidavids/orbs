@@ -188,9 +188,11 @@ const TOLERANCE: f64 = 0.10;
 #[must_use]
 pub fn table(runs: &[Run]) -> String {
     let mut out = String::new();
-    out.push_str("policy      seed    ticks      xp  conc    xp/tick   landed  cost  expected\n");
     out.push_str(
-        "--------------------------------------------------------------------------------\n",
+        "policy      seed    ticks      xp  conc    xp/tick   landed  cost  renown  expected\n",
+    );
+    out.push_str(
+        "----------------------------------------------------------------------------------------\n",
     );
 
     for run in runs {
@@ -203,7 +205,7 @@ pub fn table(runs: &[Run]) -> String {
         };
         let _ = writeln!(
             out,
-            "{:<10} {:>4} {:>8} {:>7} {:>5} {:>10.4} {:>8} {:>8}{}",
+            "{:<10} {:>4} {:>8} {:>7} {:>5} {:>10.4} {:>8} {:>5} {:>7}{}",
             run.policy,
             run.seed,
             last.tick,
@@ -212,6 +214,7 @@ pub fn table(runs: &[Run]) -> String {
             rate,
             run.landed,
             run.cost,
+            last.renown,
             note,
         );
     }
@@ -221,13 +224,18 @@ pub fn table(runs: &[Run]) -> String {
 /// The curve, one row per sample, for every run in the sweep.
 #[must_use]
 pub fn csv(runs: &[Run]) -> String {
-    let mut out = String::from("policy,seed,tick,experience,concentration\n");
+    let mut out = String::from("policy,seed,tick,experience,concentration,renown\n");
     for run in runs {
         for sample in &run.samples {
             let _ = writeln!(
                 out,
-                "{},{},{},{},{}",
-                run.policy, run.seed, sample.tick, sample.experience, sample.concentration,
+                "{},{},{},{},{},{}",
+                run.policy,
+                run.seed,
+                sample.tick,
+                sample.experience,
+                sample.concentration,
+                sample.renown,
             );
         }
     }
@@ -294,6 +302,7 @@ mod tests {
                 tick,
                 experience,
                 concentration: 0,
+                renown: 0,
             }],
             cost: 0,
             landed: 0,

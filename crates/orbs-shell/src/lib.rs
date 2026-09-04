@@ -37,6 +37,7 @@ mod dump;
 mod editor;
 mod environment;
 mod focus;
+mod gauges;
 mod glance;
 mod guide;
 mod keys;

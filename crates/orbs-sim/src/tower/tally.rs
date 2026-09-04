@@ -93,8 +93,7 @@ impl Work {
     /// A run finished at `instrument` that made `product`.
     #[must_use]
     pub fn made(instrument: &str, product: &str, potion: bool, scroll: bool) -> Self {
-        let mut work = Self::at(instrument);
-        work.keys.push(format!("made:{product}"));
+        let mut work = Self::at(instrument).making(product);
         if potion {
             work.keys.push("potion".to_owned());
         }
@@ -102,6 +101,28 @@ impl Work {
             work.keys.push("scroll".to_owned());
         }
         work
+    }
+
+    /// Also record that this run put `product` on a shelf.
+    ///
+    /// **For the runs that stock the tower without being a recipe.** The
+    /// menagerie's chant closes a *figure* — an event, which is what its mastery
+    /// line counts — and in the same breath gives troops to the arsenal; the
+    /// archive's maze finishes at an instrument and shelves a fragment. Both put
+    /// a nameable thing on a shelf, which is exactly the question [`sold`] asks,
+    /// and both answered no because neither went through [`made`](Self::made).
+    ///
+    /// So the menagerie and the archive stocked the arsenal and the shelves for
+    /// nothing, while the laboratory was paid for the same act — and troops are
+    /// what a siege spends. This is the seam that says *a thing was made here*
+    /// independently of how the run is counted.
+    ///
+    /// [`sold`]: Self::sold
+    /// [`made`]: Self::made
+    #[must_use]
+    pub fn making(mut self, product: &str) -> Self {
+        self.keys.push(format!("made:{product}"));
+        self
     }
 
     /// Something a room did that is not a run. One of [`EVENTS`].
@@ -121,14 +142,41 @@ impl Work {
     pub fn keys(&self) -> &[String] {
         &self.keys
     }
+
+    /// Whether this run put a nameable thing on a shelf.
+    ///
+    /// **The question renown asks, and the reason it is asked here.** `done` is
+    /// the one door for *events* as well as makings, so a mint on the door
+    /// itself would pay for binding a spell and would pay a siege twice — escrow
+    /// arrives through the same call, and escrow pays on a loss.
+    ///
+    /// **A `made:` key is the answer, and three seams set one.**
+    /// [`made`](Self::made) is the recipe case; [`making`](Self::making) is for
+    /// the two runs that stock the tower without being a recipe. It used to read
+    /// *only* `made`, which meant the archive shelved fragments and the
+    /// menagerie shelved troops for no standing — this doc said "on a shelf" the
+    /// whole time and both of those reach `tower::give`.
+    ///
+    /// **What still answers no is anything that shelves nothing**, and that is
+    /// most of the tower: the lens finds knowledge, the sanctum's pylon solves a
+    /// course, the forge's lattice lays a charm on a tool. None of them makes
+    /// stock, so none of them is a sale.
+    #[must_use]
+    pub fn sold(&self) -> bool {
+        self.keys.iter().any(|key| key.starts_with("made:"))
+    }
 }
 
 /// Count a completion, credit what it earned, and move every line it moved.
 ///
 /// **The order is the order a player reads it in**: the run's own sentence has
-/// already been said by the seam; then the level it bought, if any; then the
-/// station it reached, if any; then what that opened. Called where a run
-/// *succeeded*, never where one merely ended — see `credit`.
+/// already been said by the seam; then the level it bought, if any; then what it
+/// was worth in standing; then the station it reached, if any; then what that
+/// opened. Called where a run *succeeded*, never where one merely ended — see
+/// `credit`.
+///
+/// **Renown is minted only for a making**, which is what [`Work::sold`] asks.
+/// The door carries events too, and paying for those would pay a siege twice.
 pub fn done(world: &mut World, work: &Work, earned: u64) {
     {
         let mut tally = world.resource_mut::<Tally>();
@@ -137,6 +185,9 @@ pub fn done(world: &mut World, work: &Work, earned: u64) {
         }
     }
     super::credit(world, earned);
+    if work.sold() {
+        super::renown::earn(world, super::renown::worth(earned));
+    }
     super::mastery::advance(world);
 }
 

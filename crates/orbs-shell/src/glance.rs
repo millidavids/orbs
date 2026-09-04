@@ -59,11 +59,21 @@ pub struct Panel {
     pub rampart: Option<orbs_render::Rampart>,
     /// The forge's open lattice, if the player is standing at it.
     pub lattice: Option<orbs_render::LatticeBoard>,
+    /// Where the tower's total stands against the Ley Line's next station.
+    ///
+    /// On the panel's clock with the rest: both gauges move at most once a tick
+    /// and the pane paints at 60 Hz, so reading them per frame would be the
+    /// per-frame work this resource exists to stop.
+    pub station: orbs_sim::Toward,
+    /// Where renown stands against the next rank, and what the tower is called.
+    pub rankward: orbs_sim::Toward,
+    /// The tower's title, if it has earned one.
+    pub rank: Option<String>,
     /// The mastery line of the room the player is standing in, for the road
     /// under the pane's title (§11.5).
     ///
     /// On the same clock as the rest, for the same reason: the tally moves at
-    /// most once a tick, and seven lines rebuilt at 60 Hz would be the
+    /// most once a tick, and every room's line rebuilt at 60 Hz would be the
     /// allocation this resource exists to stop.
     pub line: Option<orbs_sim::Line>,
     /// Every domain at a glance, for §9's rail.
@@ -99,5 +109,8 @@ impl Panel {
         self.line = sim
             .domain()
             .and_then(|domain| sim.mastery().into_iter().find(|line| line.domain == domain));
+        self.station = sim.toward_station();
+        self.rankward = sim.toward_rank();
+        self.rank = sim.rank();
     }
 }

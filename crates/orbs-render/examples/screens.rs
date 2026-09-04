@@ -101,6 +101,8 @@ fn main() {
     );
     speak(&weave);
 
+    gauge_ramp();
+
     // 35×35 — the block the archive's map takes, at its natural size. Three
     // states, because the fog is the whole mechanic and one of them is not
     // enough to see it. The grid is 33 squares across (`2 × 16 + 1`), and the
@@ -548,6 +550,41 @@ fn show_hearth(label: &str, done: u32, total: u32, burn: Burn, rows: u16) {
     println!("    {label:<10} |{}|  heat |{}|", read(false), read(true));
 }
 
+/// The two gauges' colour ramp, printed as its steps.
+///
+/// **This is the only See-it the ramp has.** Its whole transition is hue — the
+/// glyph is `|` at every step — so `ORBS_DUMP` shows a bar filling and says
+/// nothing at all about the warming. Printed as ramp letters, `A` through `F`,
+/// the red-to-green climb is text a person can check.
+fn gauge_ramp() {
+    println!("\n=== The gauges' fill, red through yellow to green (§11.5) ===\n");
+    let mut frame = Frame::new(GridSize::new(40, 1));
+    println!("    fill   bar");
+    for tenth in 0..=10 {
+        frame.reset(GridSize::new(40, 1));
+        let mut painter = frame.painter(Rect::new(0, 0, 40, 1));
+        painter.gauge(
+            Rect::new(0, 0, 34, 1),
+            tenth,
+            10,
+            Style::default(),
+            "a gauge",
+        );
+        let drawn: String = (0..34)
+            .map(|col| {
+                frame
+                    .cell(Pos::new(col, 0))
+                    .map_or(' ', |cell| depiction_mark(cell.style.depicted()))
+            })
+            .collect();
+        println!("    {:>3}%   {drawn}", tenth * 10);
+    }
+    println!("\n    A faint · B low · C middle · D high · E near · F whole");
+    println!("    `F` is reserved for a bar that is *actually* full: one step short");
+    println!("    reads `E`, so green is the arrival rather than the approach.");
+    println!("    A blank is an unfilled cell — it is a picture of nothing.");
+}
+
 /// A depiction as one character, so a text dump can show colour it cannot draw.
 ///
 /// **This is the only See-it there is for the bath's roil.** All of that
@@ -570,6 +607,15 @@ const fn depiction_mark(depiction: Depiction) -> char {
         Depiction::LiquidStirred => 'b',
         Depiction::LiquidRolling => 'c',
         Depiction::Sediment => ',',
+        // **The gauge ramp, and this is its only See-it.** Its whole transition
+        // is colour — the glyph is `|` at every step — so a dump shows a bar
+        // that proves nothing. Printed as ramp steps, the warming is text.
+        Depiction::GaugeFaint => 'A',
+        Depiction::GaugeLow => 'B',
+        Depiction::GaugeMiddle => 'C',
+        Depiction::GaugeHigh => 'D',
+        Depiction::GaugeNear => 'E',
+        Depiction::GaugeWhole => 'F',
         Depiction::None => ' ',
     }
 }

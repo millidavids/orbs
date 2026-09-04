@@ -115,9 +115,57 @@ pub(crate) const fn resolve(depiction: Depiction) -> Option<Srgba> {
         Depiction::LiquidStill => Some(LIQUID[0]),
         Depiction::LiquidStirred => Some(LIQUID[1]),
         Depiction::LiquidRolling => Some(LIQUID[2]),
+        Depiction::GaugeFaint => Some(GAUGE[0]),
+        Depiction::GaugeLow => Some(GAUGE[1]),
+        Depiction::GaugeMiddle => Some(GAUGE[2]),
+        Depiction::GaugeHigh => Some(GAUGE[3]),
+        Depiction::GaugeNear => Some(GAUGE[4]),
+        Depiction::GaugeWhole => Some(GAUGE[5]),
         other => FIRE.resolve(other),
     }
 }
+
+/// A gauge's fill, red through yellow to green — see [`Fill`](orbs_render::Fill).
+///
+/// **The only ramp here that is not monotonic in brightness.** Fire, liquid and
+/// smoke all climb from dim to bright and their tests assert it; this one peaks
+/// in the middle, where yellow is. That is what a red-to-green ramp *is*, and it
+/// is allowed because the fill's **length** carries the reading — take every
+/// colour away and the bar still says how full it is, which is the test §14 sets
+/// for anything decorative.
+///
+/// Six steps, walked in even sixths, so the bar warms as it fills rather than
+/// switching like a traffic light. The hues are pulled off full saturation and
+/// lifted off the floor so each sits clear of the ground the tube paints, and so
+/// the red end reads as *early* rather than as `Role::Danger` — an accent this
+/// must never be mistaken for, which is also why a gauge is a depiction and
+/// never an accent.
+///
+/// **The red end is dark, and that is the whole of what separates it from
+/// `Role::Danger`.** Every theme's danger is a *bright* saturated red — 0.85 to
+/// 0.95 on the red channel — so brightness is the axis with room in it, and a
+/// bar barely begun reading dim is what it should look like anyway.
+///
+/// The first pass ran the low end at `0.78, 0.24, 0.20` and sat 0.18 away from
+/// danger on three of the four tubes, which is to say it *was* the accent this
+/// doc claims it is not. Nothing caught it, because the ramp shipped without the
+/// test every other ramp in this file has. It now clears every accent on every
+/// tube by 0.36 and every background by 3.06:1, both measured rather than
+/// judged — `no_step_of_the_gauge_reads_as_an_accent` and
+/// `every_step_of_the_gauge_is_visible_on_every_tube` hold them.
+///
+/// **The top half turns green by losing red, not by gaining green**, which is
+/// why luminance peaks at `GaugeHigh` and falls after it. A red-to-green ramp
+/// has no monotonic-brightness reading to preserve; the fill's length is the
+/// reading.
+const GAUGE: [Srgba; 6] = [
+    rgb(0.64, 0.25, 0.05),
+    rgb(0.78, 0.42, 0.10),
+    rgb(0.86, 0.56, 0.12),
+    rgb(0.88, 0.80, 0.16),
+    rgb(0.60, 0.80, 0.20),
+    rgb(0.34, 0.78, 0.34),
+];
 
 impl Ember {
     /// The colour of a depicted cell, or `None` if it is not one of the fire's.
@@ -145,6 +193,7 @@ impl Ember {
 mod tests {
     use super::super::palette::{ALL, contrast, luminance};
     use super::*;
+    use orbs_render::{Role, Style};
 
     #[test]
     fn the_flame_ramp_climbs() {
@@ -327,6 +376,80 @@ mod tests {
             luminance(SEDIMENT) < luminance(LIQUID[0]),
             "sediment is brighter than the stillest liquid",
         );
+    }
+
+    /// **Every step of the gauge is visible on every tube.**
+    ///
+    /// The claim the other ramps each make, and the one this ramp did not. A
+    /// step that sank into the background would draw as a bar that stops part
+    /// way along its own fill — worse than a bar with no colour at all, because
+    /// it reads as a *shorter* bar rather than as an unstyled one.
+    ///
+    /// Held to chrome's 3.0 rather than body text's 4.5: a gauge is furniture,
+    /// like smoke, and the reading it carries is its length.
+    #[test]
+    fn every_step_of_the_gauge_is_visible_on_every_tube() {
+        for theme in ALL {
+            for (index, step) in GAUGE.iter().enumerate() {
+                let ratio = contrast(*step, theme.background);
+                assert!(
+                    ratio >= 3.0,
+                    "{}: gauge step {index} contrasts {ratio:.1}:1",
+                    theme.name,
+                );
+            }
+        }
+    }
+
+    /// **No step of the gauge reads as an accent**, which is this ramp's whole
+    /// reason for being a depiction.
+    ///
+    /// The doc above says the red end must read as *early* rather than as
+    /// `Role::Danger`, and until now nothing checked it. The terminal build
+    /// made exactly that mistake with the same ramp — its low step was
+    /// `Color::Red`, byte-for-byte Danger's ink, and its full step was
+    /// Success's — so the property is worth asserting on the side that got it
+    /// right, not only on the side that did not.
+    ///
+    /// **Measured through `resolve`**, the path the frontend actually takes,
+    /// rather than against the constants: an accent and a depiction reach the
+    /// screen by different arms of the same function and comparing the arms is
+    /// the point.
+    #[test]
+    fn no_step_of_the_gauge_reads_as_an_accent() {
+        let gauges: Vec<_> = Depiction::ALL
+            .into_iter()
+            .filter(|depiction| depiction.is_gauge())
+            .collect();
+        assert_eq!(gauges.len(), 6, "the ramp is not six steps");
+
+        for theme in ALL {
+            for role in [Role::Danger, Role::Cost, Role::Success] {
+                let accent = Srgba::from(theme.resolve(Style::default().with_role(role)));
+                for depiction in &gauges {
+                    let fill =
+                        Srgba::from(theme.resolve(Style::default().with_depiction(*depiction)));
+                    // Distance in RGB rather than luminance: an accent and a
+                    // gauge step are *allowed* to share a brightness, and on a
+                    // red-to-green ramp several do. What they may not share is
+                    // the colour itself.
+                    let apart = (fill.red - accent.red).abs()
+                        + (fill.green - accent.green).abs()
+                        + (fill.blue - accent.blue).abs();
+                    // 0.25 is the floor; the ramp clears it by 0.36. The margin
+                    // is not generous by accident — a red-to-green ramp runs
+                    // through *three* of the triad's own hues, so every step is
+                    // near something and the separation has to be deliberate at
+                    // every one of them rather than only at the ends.
+                    assert!(
+                        apart > 0.25,
+                        "{}: {depiction:?} is {apart:.2} from {role:?} — a bar \
+                         drawn in an accent's own colour",
+                        theme.name,
+                    );
+                }
+            }
+        }
     }
 
     #[test]

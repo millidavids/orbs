@@ -203,6 +203,61 @@ pub fn reaching(line: &str) -> Option<Option<String>> {
     Some((!id.is_empty()).then(|| id.to_lowercase()))
 }
 
+/// A tester's door to a standing, for the ranks.
+///
+/// **It *sets* the total rather than adding to it**, which is what lets one word
+/// go both ways: a rank is lost by falling back through it, and reaching that
+/// state otherwise means losing a siege on purpose. A negative argument is not a
+/// number and is refused with everything else that is not — see [`Asking`],
+/// which exists because folding that case into "nought" wiped the state a tester
+/// was building.
+///
+/// The lowest rank is 25 renown — about seven brewed clarities — and the highest
+/// is fifteen thousand. Every one of the ten sits behind an hour or a day of
+/// play, so without this the titles are a surface nobody can look at.
+pub const RENOWN: &str = "debug_renown";
+
+/// What a `debug_renown` line asked for.
+///
+/// **Three states, because two silently destroyed the thing being set up.** The
+/// argument used to be `Option<u64>` with an unreadable word folded into `None`
+/// by `unwrap_or_default` — so `debug_renown magisterr`, or a tester probing the
+/// ten ranks by name, *zeroed* the tower's renown and answered `renown is 0` as
+/// though that had been asked for. `debug_take` and `debug_reach` both answer a
+/// bad argument by naming the alternatives and mutating nothing, and this is
+/// that shape.
+/// **Named `Asking` rather than `Standing`**, because `tower::Standing` is
+/// already a re-exported type meaning what a ley node *is* — two types with one
+/// name in one crate is the kind of near-collision §19 keeps finding defects
+/// behind.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Asking {
+    /// A bare `debug_renown`: say where the tower stands, change nothing.
+    Where,
+    /// A number: set the total to it.
+    Set(u64),
+    /// A word that is not a number: refuse, and change nothing.
+    Unreadable,
+}
+
+/// Read a `debug_renown` line, if that is what this is.
+///
+/// `None` for anything else — everything that *is* one is an [`Asking`],
+/// including the unreadable argument, which is answered here rather than falling
+/// through to the parser and fuzzing into something unrelated.
+#[must_use]
+pub fn standing(line: &str) -> Option<Asking> {
+    let rest = line.trim().strip_prefix(RENOWN)?;
+    if !rest.is_empty() && !rest.starts_with(char::is_whitespace) {
+        return None;
+    }
+    let total = rest.trim();
+    if total.is_empty() {
+        return Some(Asking::Where);
+    }
+    Some(total.parse().map_or(Asking::Unreadable, Asking::Set))
+}
+
 /// Read a `debug_learn` line, if that is what this is.
 #[must_use]
 pub fn lesson(line: &str) -> Option<Lesson> {

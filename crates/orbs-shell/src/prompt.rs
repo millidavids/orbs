@@ -422,6 +422,21 @@ pub(super) fn session(
     // **before** the panel and the boards divide what is left — so it sits
     // under the title whichever way the panel runs, and a short pane loses the
     // road rather than the transcript.
+    // §11.5's two standings, above the road and above everything: the only two
+    // numbers on screen that are about the tower's whole life rather than the
+    // room in front of you. Taken first so they sit at the very top, and they
+    // yield before the road does — see `gauges::split`.
+    let gauges = super::gauges::split(body);
+    super::gauges::paint(
+        &mut painter,
+        gauges.area,
+        panel.station,
+        panel.rankward,
+        panel.rank.as_deref(),
+        sim.prose(),
+    );
+    body = gauges.rest;
+
     let road = super::road::split(body, panel.line.as_ref());
     if let Some(line) = panel.line.as_ref() {
         super::road::paint(&mut painter, road.area, line, sim.prose());

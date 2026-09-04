@@ -280,6 +280,32 @@ const fn depicted(depiction: Depiction) -> Option<Ink> {
         // Waste declines the tint so that waste always looks like waste, and it
         // must not be mistakable for smoke — hence grey rather than a dark grey.
         Depiction::Sediment => (Color::Grey, Weight::Dim),
+        // **The gauge ramp, and the one that is not monotonic in brightness.**
+        // Red through yellow to green: the middle is the brightest step and the
+        // tests below do not walk this one for that reason. It is a *distance
+        // being closed* rather than a substance getting hotter, and the fill
+        // length says that on its own — the hue only agrees with it.
+        //
+        // **Three hue families, six steps, and not one of them the triad's ink.**
+        // The first version spent `Red` on the low step and `Green` on the full
+        // one, which are byte-for-byte `Role::Danger` and `Role::Success` — so a
+        // ley gauge just past a station drew the exact red of every error line in
+        // this build, and a full one the exact green of every confirmation.
+        // `ember.rs` had already pulled its own ramp off saturation for that
+        // reason, and this side had not followed.
+        //
+        // The fix is the technique every other ramp here already uses: sixteen
+        // indices hold two colours per hue family, and [`Weight`] supplies the
+        // steps between them. Dark-dim and dark for the red end, the fire's two
+        // yellows for the middle, dark and bold-dark for the green — six pairs,
+        // each distinguishable, none of them an accent. `the_gauge_ramp_never_
+        // wears_an_accents_ink` below is what keeps it that way.
+        Depiction::GaugeFaint => (Color::DarkRed, Weight::Dim),
+        Depiction::GaugeLow => (Color::DarkRed, Weight::Plain),
+        Depiction::GaugeMiddle => (Color::DarkYellow, Weight::Plain),
+        Depiction::GaugeHigh => (Color::Yellow, Weight::Plain),
+        Depiction::GaugeNear => (Color::DarkGreen, Weight::Plain),
+        Depiction::GaugeWhole => (Color::DarkGreen, Weight::Bold),
     };
     Some(Ink {
         colour: Some(colour),
@@ -341,6 +367,45 @@ mod tests {
         assert_ne!(danger, cost);
         assert_ne!(cost, success);
         assert_ne!(danger, success);
+    }
+
+    /// **No step of the gauge ramp may wear an accent's ink.**
+    ///
+    /// §4 and §14 reserve the triad for meaning, and a depiction carries none —
+    /// so a bar drawn in Danger's exact red is the one channel borrowing the
+    /// other's voice. It shipped that way once: `GaugeLow` was `Color::Red` and
+    /// `GaugeWhole` was `Color::Green`, which are the two accents a player sees
+    /// most, and the gauge sits at the top of the pane where errors also land.
+    ///
+    /// **Weight is part of the ink and not an escape from this.** A bold green
+    /// is still green to a reader glancing at a colour, and several terminals
+    /// render bold-plus-dark as the bright index outright — so the check is on
+    /// the colour, not on the pair.
+    #[test]
+    fn the_gauge_ramp_never_wears_an_accents_ink() {
+        let triad: Vec<_> = [Role::Danger, Role::Cost, Role::Success]
+            .into_iter()
+            .filter_map(|role| accent(role, Intensity::Normal).colour)
+            .collect();
+
+        let mut seen = Vec::new();
+        for depiction in Depiction::ALL
+            .into_iter()
+            .filter(|depiction| depiction.is_gauge())
+        {
+            let ink = depicted(depiction).expect("a gauge step drew nothing");
+            let colour = ink.colour.expect("a gauge step took no colour");
+            assert!(
+                !triad.contains(&colour),
+                "{depiction:?} draws in {colour:?}, which is an accent's own ink",
+            );
+            assert!(
+                !seen.contains(&ink),
+                "{depiction:?} is indistinguishable from an earlier step",
+            );
+            seen.push(ink);
+        }
+        assert_eq!(seen.len(), 6, "the ramp is not six steps");
     }
 
     #[test]

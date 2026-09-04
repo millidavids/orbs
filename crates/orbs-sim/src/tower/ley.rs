@@ -316,6 +316,25 @@ pub fn next(world: &World) -> Option<u64> {
         .find(|at| *at > earned)
 }
 
+/// Where the tower's total stands against the next station.
+///
+/// **The gauge's reading, and it shares `Toward`'s arithmetic with renown** so
+/// the two bars at the top of the pane cannot come to disagree about what
+/// *nearly there* looks like. Measured from the station *behind*, which is what
+/// stops it jumping backwards each time one is passed.
+#[must_use]
+pub fn toward(world: &World) -> super::renown::Toward {
+    let earned = world.resource::<Experience>().get();
+    super::renown::Toward::among(
+        earned,
+        world
+            .resource::<Progression>()
+            .ley_line()
+            .iter()
+            .map(|station| station.at),
+    )
+}
+
 /// The last total the line is authored to, for a bar to be measured against.
 ///
 /// **Derived, where it was a fixed hundred** — §19 said the hundred would

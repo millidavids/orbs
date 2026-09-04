@@ -30,4 +30,6 @@ pub use session::{
 pub use sim::Sim;
 pub use tick::Tick;
 pub use tower::spell::{Fault, Reading};
-pub use tower::{Cwd, Lane, Line, Name, Node, NodeId, Standing, Station, Stop, Walk, children_of};
+pub use tower::{
+    Ahead, Cwd, Lane, Line, Name, Node, NodeId, Standing, Station, Stop, Toward, Walk, children_of,
+};
