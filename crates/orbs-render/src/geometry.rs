@@ -171,6 +171,32 @@ impl Rect {
         }
     }
 
+    /// The smallest rectangle holding both.
+    ///
+    /// An empty operand is ignored rather than dragging the result to the
+    /// origin: [`Rect::EMPTY`] is `(0, 0, 0, 0)`, so a naive bounding box of
+    /// *nothing* and a pane halfway down the screen reaches up to the top-left
+    /// corner and covers everything between. `tween::edge` records the same trap
+    /// for the same constant.
+    ///
+    /// It is a **bounding box**, not a set union — the region between two
+    /// disjoint rectangles is included. Every caller unions rectangles that abut,
+    /// which is the case where the two agree.
+    #[must_use]
+    pub fn union(self, other: Self) -> Self {
+        if self.is_empty() {
+            return other;
+        }
+        if other.is_empty() {
+            return self;
+        }
+        let col = self.col.min(other.col);
+        let row = self.row.min(other.row);
+        let right = self.right().max(other.right());
+        let bottom = self.bottom().max(other.bottom());
+        Self::new(col, row, right - col, bottom - row)
+    }
+
     /// The rectangle shrunk by `by` cells on every side.
     ///
     /// Saturates to [`Rect::EMPTY`]-sized rather than underflowing, so insetting

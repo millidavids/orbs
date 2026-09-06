@@ -131,13 +131,25 @@ pub(crate) struct Surfaces<'w> {
 impl Surfaces<'_> {
     /// Who the next keystroke belongs to.
     pub(crate) fn focus(&self) -> Focus {
-        Focus::of(opened(
+        Focus::of(self.open())
+    }
+
+    /// What is open, before anything decides who wins.
+    ///
+    /// [`focus`](Self::focus) is the question the keyboard asks; this is the one
+    /// [`Showing`](orbs_shell::Showing) asks, and they are not the same. A
+    /// crossing cares which surface *replaced the pane*, not which surface would
+    /// receive the next keystroke — `chorus` takes the keys and leaves the pane
+    /// alone, and the transcript scrolled back takes them without changing
+    /// anything at all.
+    pub(crate) fn open(&self) -> Open {
+        opened(
             &self.editing,
             &self.loom,
             &self.walk,
             &self.chorus,
             &self.scroll,
-        ))
+        )
     }
 }
 

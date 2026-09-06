@@ -7,20 +7,27 @@
 
 use bevy::prelude::*;
 
-use orbs_shell::{Bench, Panel};
+use orbs_shell::{Bench, Panel, Passing};
 
 use crate::crt::CrtSettings;
 
-/// Advance the fire, and stop it when the tube is off.
+/// Advance the fire and the crossing, and stop them when the tube is off.
 ///
-/// The two are one system because they are one decision: `Bench` has no business
-/// knowing what a `CrtSettings` is on any frame it is not being driven.
+/// One system because it is one decision, and the two clocks it drives are the
+/// two things §14 makes disableable: neither `Bench` nor `Passing` has any
+/// business knowing what a `CrtSettings` is on a frame it is not being driven.
+///
+/// **The crossing's clock is advanced in `revealing::drive_passing`, not here.**
+/// What this hands it is the *switch* — the one thing a terminal cannot supply —
+/// and it is handed to both from the same read, so the fire and the crossing can
+/// never disagree about whether a player asked for motion.
 pub(crate) fn advance(
     time: Res<Time>,
     world_tick: Res<Time<Fixed>>,
     tubes: Query<&CrtSettings>,
     panel: Res<Panel>,
     mut bench: ResMut<Bench>,
+    mut passing: ResMut<Passing>,
 ) {
     // No camera yet, or no CRT component on it: `None`, which leaves whatever
     // `ORBS_FIRE` said. A missing switch is not the same as a switch set to off,
@@ -52,6 +59,9 @@ pub(crate) fn advance(
         motion,
         &panel,
     );
+    // The switch only. Zero seconds, because `drive_passing` owns this clock and
+    // two systems advancing one clock would run it at twice the rate.
+    passing.advance(0.0, motion);
 }
 
 #[cfg(test)]
@@ -68,6 +78,7 @@ mod tests {
         let mut app = App::new();
         app.add_plugins(MinimalPlugins)
             .init_resource::<Bench>()
+            .init_resource::<Passing>()
             .init_resource::<Panel>()
             .add_systems(Update, advance);
         app.world_mut().spawn(CrtSettings::OFF);
@@ -77,6 +88,14 @@ mod tests {
         assert!(
             !app.world().resource::<Bench>().grind(true, false).working,
             "a second tube left the meter shimmering with the first turned off",
+        );
+        // The crossing inherits the hazard because it rides the same read. It
+        // was worth asserting separately rather than trusting that: the two
+        // clocks are handed the switch from one place *today*, and a future
+        // second read is exactly how they would come to disagree.
+        assert!(
+            !crosses(&mut app),
+            "a second tube left screens crossing with the first turned off",
         );
     }
 
@@ -93,6 +112,7 @@ mod tests {
         let mut app = App::new();
         app.add_plugins(MinimalPlugins)
             .init_resource::<Bench>()
+            .init_resource::<Passing>()
             // `advance` reads the panel to catch the moment the athanor lights.
             // Empty here: this test is about the tube, and an empty panel is the
             // "no athanor on screen" case that leaves the flare alone.
@@ -119,5 +139,64 @@ mod tests {
             .insert(CrtSettings::DEFAULT);
         app.update();
         assert!(app.world().resource::<Bench>().grind(true, false).working);
+    }
+
+    #[test]
+    fn killing_the_tube_stops_the_crossings() {
+        // §14 again, for the other clock this system drives — and the
+        // `DESIGN.md:9182` trap with it: reduce-motion must **cut**, never freeze
+        // a half-drawn screen. Three animations learned that independently.
+        //
+        // Through the *system*, for `killing_the_tube_kills_the_fire`'s reason:
+        // the risk is never that the flag fails to work, it is that nothing sets
+        // it.
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .init_resource::<Bench>()
+            .init_resource::<Passing>()
+            .init_resource::<Panel>()
+            .add_systems(Update, advance);
+        let camera = app.world_mut().spawn(CrtSettings::DEFAULT).id();
+
+        app.update();
+        assert!(crosses(&mut app), "screens did not cross with the tube on");
+
+        app.world_mut().entity_mut(camera).insert(CrtSettings::OFF);
+        app.update();
+        // **Before the probe, which keeps a screen of its own.** `crosses` has to
+        // put one there to have something to cross out of, so asking this after
+        // it would be reading the probe rather than the system.
+        assert!(
+            app.world().resource::<Passing>().kept().is_empty(),
+            "a kept screen survived the switch — 43 KiB a player asked not to pay",
+        );
+        assert!(!crosses(&mut app), "F3 to OFF left screens crossing");
+    }
+
+    /// Whether a screen change would start a crossing, right now.
+    ///
+    /// Asked by making one: `Passing` is deliberately opaque about `enabled`,
+    /// because the question a caller ever has is *"will this cross"* rather than
+    /// *"is a flag set"*.
+    fn crosses(app: &mut App) -> bool {
+        let mut passing = std::mem::take(&mut *app.world_mut().resource_mut::<Passing>());
+        passing.pose_kept(&orbs_render::Frame::new(orbs_render::GridSize::new(4, 2)));
+        passing.observe(&showing("laboratory"));
+        passing.observe(&showing("forge"));
+        let crossing = !passing.is_settled();
+        *app.world_mut().resource_mut::<Passing>() = passing;
+        crossing
+    }
+
+    /// A tower standing in `room`, with no surface open.
+    fn showing(room: &str) -> orbs_shell::Showing {
+        orbs_shell::Showing::of(
+            orbs_shell::Open::default(),
+            &Panel {
+                room: room.to_owned(),
+                ..Panel::default()
+            },
+            false,
+        )
     }
 }

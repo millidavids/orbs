@@ -2424,6 +2424,379 @@ they are re-pointed at the phases that now need them rather than quietly dropped
 
 ## 19. Decisions log
 
+### The passage — screens that leave and arrive (Phase 11.5)
+
+Every screen in the game cut. `attend forge` replaced the laboratory's
+instruments with the forge's lattice between one frame and the next; `wander`
+replaced the pane with a maze; `Esc` put it back. Phase 0.5 recorded that exact
+defect for pane **geometry** — *"a pane appearing between one frame and the next
+reads as a glitch"* — and fixed it with `ScreenLayout::transition`. Pane
+**content** was never addressed, because until Phase 10 raised seven domains
+there was nowhere much to go.
+
+A **crossing** is the answer, and it is the same answer: `orbs-render` owns the
+shape, the frontend owns the clock, and a crossing at either endpoint is
+indistinguishable from no crossing at all.
+
+#### Cross what changed, which is not a rectangle
+
+The first plan crossed the whole pane interior for every change. **Review killed
+it and was right:** when you walk to the forge the transcript does not change.
+It is continuous history and the bottom two-thirds of the pane, and wiping it
+says something false — that the session went away.
+
+So the crossed region is *derived*: a room change crosses the boards and spares
+the transcript; a surface that genuinely replaces the pane — the editor, the
+weave screen, the maze, `F5`'s mirror — crosses all of it. `Focus::takes_the_pane`
+already named that set and is what asks the question.
+
+**Two regions, each leaving by the edge it sits against — supersedes the spared
+rectangle.** The instrument panel runs down the *side* at the grid the game draws
+(`Along::of` picks Side whenever a pane is wider in pixels than it is tall, which
+the interior always is), so the panel and the transcript interleave by row and
+the changed part has no bounding rectangle smaller than the whole pane. The first
+implementation described that as a rectangle with a rectangular **hole** in it.
+
+That was one parameter and one direction, and the direction was the problem: a
+hole says what not to touch and says nothing about which way anything goes, so
+the top strip and the side block both wiped sideways and the strip crossed the
+screen it was sitting on top of. **Parts, not a hole:**
+
+- the **gauges and the road** are a strip along the top, and leave *upward*;
+- the **panel and the room's board** are a block against the right edge, and
+  leave *rightward*, out past the tower rail rather than across the text;
+- the **transcript** is neither, and is never named — which is a stronger
+  guarantee than sparing it was, because nothing has to remember to spare it.
+
+**And the block is *two* regions, not one — review found that too, and it was
+wiping the transcript.** What the transcript gives up is an **L** whenever the
+panel runs across the top *and* a board claims columns down the side, which
+`Along::of` produces on any pane taller than it is wide. One rectangle covering an
+L is the whole body: at `ORBS_GRID=80x45` a room change erased every line of
+history on screen — the exact thing this design exists to keep.
+
+The reasoning that let it through is worth recording, because it was written down
+and confidently wrong: *"an L only happens when a board takes columns from a body
+that already lost rows, which the chain above cannot produce because the strip is
+measured before the boards begin."* The strip only covers the gauges and the road.
+The **panel** is measured with the boards, and it is the thing that takes rows.
+
+The two slabs are kept apart and are **disjoint by construction** — the rows span
+the full width, the columns span only the rows the transcript kept. Overlapping
+them would cross the corner twice, and on the arriving half the second pass would
+read the first pass's output as its source.
+
+**The block's direction is derived, not assumed** — review found it assumed.
+`Toward::Right` was hard-coded on the reasoning that `panel::split` puts the
+panel down the side, which it does at the grid the game draws and *not* at a pane
+taller than it is wide, where `Along::of` puts it across the top instead. There
+the block wiped sideways across the transcript it was sitting on: the same defect
+this whole change was made to fix, left in the one region whose orientation the
+layout decides. It is taken from the shape of the slice actually cut — as wide as
+what it came from is a strip and leaves upward, narrower is a column and leaves
+rightward — because the block is the panel *and* whichever board the room has,
+and those are two splits with two opinions.
+
+A surface that genuinely replaces the pane is one region covering the interior,
+and it **stands in for** the other two rather than running beside them. Both were
+found by looking: a maze opening over a laboratory unioned the session's strip
+and block into the interior and drew *three* gathers converging on three
+different centres, which came apart into three piles.
+
+**The union of both screens' regions, not the arriving one's.** A crossing is
+sized from what either side put on screen, so the shell holds the settled
+screen's rectangles beside its cells — two halves of one snapshot, one taken by
+the frontend before the frame is blanked and one by the painter after it has
+drawn. Sized from the arriving screen alone, a laboratory leaving for a forge
+with no instrument panel found an empty block and **cut** rather than left.
+
+Three things fall out that the first plan had to argue for: the domain crossing
+is a strip and a column rather than the field, so §14's photosensitivity question
+is much smaller; the typewriter reveal happens in the transcript and so cannot
+stack with it; and the rectangles already exist, computed every frame by the
+splits, so they resize by construction.
+
+**A screen returns by the edge it left by.** The two halves measure from opposite
+edges: going out toward the right the last content standing is against the right
+edge, so the seam starts at the left; coming back in from the right the first
+content to appear is against the right edge, so the seam starts there instead.
+Measured the same way in both halves — which is what it did first — a screen
+exits rightward and then arrives from the left, and reads as two unrelated
+motions rather than as one thing going and coming back.
+
+**The border, its title, the tower rail and the prompt never move.** The title is
+the game's one continuously-visible statement of place (§7 — paths are places),
+the rail is awareness and is deliberately drawn on every branch, and the prompt
+must stay typeable. A box that comes apart reads as the *machine* breaking rather
+than the screen changing, which is what got the tube strike cut twice.
+
+#### A crossing is one flash, and the floor is a world tick
+
+`pulse`'s exemption to the 3–30 Hz band is **conditional** on three things —
+nothing turning over together, each step small, the element small — and a
+crossing meets none of them the same way. So it does not lean on that argument.
+It makes its own. For the two shapes that **erode**, the argument is about
+direction rather than rate:
+
+> A cell's coverage moves one way and reverses once. On the way out a glyph
+> decays `▓ → ▒ → ░ → blank` and never brightens; on the way in it builds back.
+> §19 already says *"a flash is a **pair** of opposing changes"* — so one whole
+> crossing is exactly **one flash**.
+
+**That rule was applied to all three shapes and was too strict — superseded.**
+It ruled out any motion at all, because a glyph *travelling* past a cell makes
+that cell light and go dark several times, and the rule counted each as a flash.
+So the first `Gather` closed inward from both edges instead of converging, and
+`Furl` peeled instead of sliding. Asked for a literal convergence, the rule had
+to be re-examined rather than the feature declined — and it was wrong at the
+altitude, not at the value. It **conflated a cell changing with the field
+flashing**, which is the distinction `pulse` already draws from the other side:
+*"whole-field modulation is the hazard; motion is not."* The band is about
+flashes covering a substantial share of the visual field; a cell is not one.
+
+So there are two properties, one per family, and both are asserted:
+
+- **Erosion** — `Wipe` and `Furl` — keeps the per-cell rule.
+  `an_eroding_cell_reverses_direction_once` sweeps a whole crossing at 240 Hz.
+- **Convergence** — `Gather` — keeps a *field* rule: everything it can light is
+  inside an envelope that shrinks monotonically to a point and grows back, so the
+  lit area never oscillates however individual cells behave.
+  `a_gather_never_lights_outside_its_envelope` holds it, and the envelope is
+  computed rather than measured, so it is true by construction.
+
+That leaves only how often one may *begin*, which is a floor: **1.0 s, one world
+tick.** Not a tuned number and not free-standing — §5.0 turns the world at 1 Hz,
+so a room change cannot arrive faster than the floor and it costs nothing real.
+What it refuses is a crossing the *keyboard* makes: `F5` mashed, a tool opened
+and shut. Those cut, which is what they did before any of this existed.
+`a_crossing_cannot_begin_within_a_tick_of_the_last` asserts it.
+
+**The first draft's test was wrong twice and both are worth recording.** It first
+asserted "no cell turns over twice", which the three-cell shade wake makes false
+by construction — counting transitions was counting the ramp. Then it asserted
+one reversal of *every* shape, which is the supersession above.
+
+#### A gather is the motion read backwards
+
+`Gather` is the one shape that moves a glyph rather than eroding it, and moving
+is a **scatter**: many source cells land on one destination as the screen shrinks
+to a point, which a per-destination function cannot answer and a pass would have
+to sort. Read backwards it is a *sample* — the cell at `d` shows whatever was at
+`centre + (d − centre) / scale` — which is one position with one answer, and
+keeps it the same kind of function as the other two.
+
+The arriving half moves the frame's **own** cells, so it reads a screen it is
+also writing and a copy has to be taken first. That scratch buffer lives on the
+`Frame`, reused, rather than being allocated for the half-second a crossing runs.
+
+**And `tween::mix` clamps, which is right for a coordinate and wrong for a
+test.** The sample was bounded by asking whether the *rounded* position was
+inside the region — but `mix` clamps into `u16`, so a region whose edge is the
+grid origin catches a sample that has gone off the far side: `−∞` clamps to `0`,
+and `0` is inside. It drew the centre column three rows tall at the beat with the
+top two rows reading the same cell. The offset is judged in `f32` and only then
+rounded, so `mix` stays the crate's single conversion and is asked only for
+positions already known to be real. `examples/screens` is what showed it — a
+still frame of the beat, which no unit test was asking for.
+
+**And the range has to be asked twice, which review found.** Bounding the
+un-rounded `f32` is necessary and not sufficient: `mix` *rounds*, so anything in
+the last half-cell of the range passes the test and comes back one past the end.
+`Kept` holds the **whole grid**, so a sample one cell outside the region is not
+blank — it is whatever is really there, which is the pane's own border. A gather
+drew a full copy of the bottom rule one row up, inside the interior, for the
+first and last tenth of every `wander`.
+
+The test that should have caught it asserted the **envelope**, which is where a
+gather *writes*. This is where it *reads*, and the two are different claims —
+`a_gather_never_samples_outside_its_region` is the second.
+
+#### The new screen flashed whole for a frame — a set with no edge to its writer
+
+Opening the maze drew it **complete for one frame**, and only then started the
+transition — which then departed from the screen it had just arrived at.
+
+`ShellSystems::Drive` holds the animation clocks and was ordered so that
+`repaint` runs after it. It was never ordered after `ShellSystems::Input`, which
+is the `.chain()` that opens and shuts every surface: `wander`'s
+`open_requested`, the editor's, the loom's, `unfurl`'s. So the executor was free
+to drive the crossing first, `Showing` said *"still the prompt"* on the very
+frame the painter drew the maze, and the crossing began a frame late with a stale
+screen to leave from.
+
+**Third time this project has paid for a set ordered against its reader and not
+against its writer.** `Drive` itself exists because `repaint` could otherwise
+draw a burst of output whole and then rewind it; `motion::advance` needed an
+explicit `.after(refresh_panel)` for the same reason one level down; this is the
+same shape one level up. The fix is one edge, and the lesson recorded here is
+that a set naming *when* it runs is not the same as a set naming *what it runs
+after* — and the second is the one that has bitten.
+
+**And a fourth was left in until review, on the grounds that it did not show.**
+`motion::advance` and `drive_passing` both hold `ResMut<Passing>`, so Bevy
+serialises them — but *which order* was the executor's, and they are not
+interchangeable: one carries the tube's switch and the other the clock. Both
+interleavings are invisible today (a crossing one frame late on `F3`-on, a
+crossing started and immediately cleared on `F3`-off), which is exactly the
+reasoning that leaves the fifth one in. The edge is explicit now.
+
+#### Reduce-motion cuts rather than slows, and keeps nothing
+
+Three animations independently learned that *"a picture may never be able to
+vanish"* because reduce-motion pins a phase and froze a blank. A crossing frozen
+at its midpoint is an empty strip for the session, so with motion off there is
+**no crossing to freeze and no screen kept** — the 43 KiB buffer is dropped too,
+because a player who asked for no motion should not be paying for one.
+
+It rides `CrtSettings` through `shell::motion`, which now hands the same read to
+both clocks. Two reads would be two places for the fire and the crossing to
+disagree about whether a player asked for motion.
+
+#### Nothing ends a crossing early, unlike the reveal
+
+`Reveal` finishes on any keystroke and must: waiting for text is a cost, and
+§9's parity rule makes a display setting that costs capability a difficulty
+choice. **A crossing is the opposite trade.** Finishing one early does not give
+the player anything sooner — it deletes the feature for anyone who types fast,
+and makes its visibility a function of typing speed. The duration is kept short
+enough that nothing has to.
+
+#### The duration went up, and only playing it could say so
+
+**It shipped at 0.24 s and is 0.5 s.** The first number was
+`PaneTransition`'s, borrowed on the argument that a crossing should be *felt
+rather than watched* — and every test passed at it, because the properties a
+test can hold are about shape and rate rather than about legibility. Played, a
+seam crossing a hundred columns in seven frames reads as a **flicker** rather
+than as travel.
+
+This is §15's *"work is done when it has been looked at"* landing on a constant.
+It is also the boot sequence's correction repeated: that ran at 4.4 s, *"over
+before they could be followed"*, and went four times slower on the judgement that
+**a sequence nobody can read is worse than one that takes a beat.**
+
+The number is bounded on both sides and neither bound is taste: one world tick is
+the ceiling any animation has here, and the floor between two crossings *is* that
+tick — so a duration reaching it would pace crossings by their own length instead
+of by the bound with the safety argument attached. Half of it leaves as much
+margin again, and `passing.rs` asserts the relation rather than remembering it.
+
+#### The title leads the content — seen, and kept
+
+During a room change the border says `forge` while the strip below still shows
+the laboratory, for the length of a crossing. That is the correct order — you
+*are* in the forge; the instruments are what take a moment to arrive — but it is
+a thing someone will notice, so it is recorded rather than discovered.
+
+#### Two switches, because a crossing at zero is an ordinary crossing
+
+`ORBS_FIRE` and `ORBS_FIRE_PHASE` already settled this shape: *"the two are
+separate switches because a phase of zero is a perfectly ordinary phase."* It is
+doubly true here, where `t = 0` is an *endpoint identity* and draws the departing
+screen exactly. So `ORBS_PASSAGE=0` turns crossings off and `ORBS_PASSAGE_AT`
+poses one, and the off switch outranks the pose.
+
+**A dump paints one frame, so on its own there is nothing to cross from.** When
+`ORBS_PASSAGE_AT` is set the final `;`-separated command is held back: the frame
+is painted and kept, the command runs, and the frame is painted again with the
+crossing posed. That keeps the standard `dump.rs` sets — a dump showing a screen
+the game cannot reach is the one thing that tool must never do.
+
+#### `orbs-tui` holds a settled crossing and does not animate one
+
+Not effort, and not the Frame boundary being ducked. That build has no CRT and
+passes `None` for the motion switch everywhere, so an animating crossing would be
+the **first motion in it with no switch a player can reach** — which `shell::bench`
+says a motion effect may not be. It comes back with the persisted reduce-motion
+setting. The boundary is proven regardless, because the shapes live in
+`orbs-render` and `examples/screens` draws them through the same public API.
+
+#### The card arrives and leaves by the same motion the game does
+
+The boot sequence was the one screen change the interlude had not touched, and it
+was the **first** one a player meets. The name printed a letter at a time and
+then the card was replaced by the game between one frame and the next — the exact
+cut §19 had just spent an interlude removing from every other screen.
+
+Three changes, and all three reuse what was already built rather than adding a
+fourth vocabulary:
+
+- **The name arrives a letter at a time, each growing in from its own middle** —
+  `O.`, then `R.`, then `B.`, then `S.` It no longer prints; it *moves*, four
+  times, and the full stop travels with the letter it belongs to because that is
+  what the name is when it is read aloud. Only the pair in flight is animated:
+  the ones behind it are standing whole and the ones ahead are not drawn, which
+  works because [`GLYPHS`] is column-separable and a `Gather` over one pair's
+  columns cannot reach another's.
+- **A stage of its own for the card leaving**, `Stage::Close`, running `Gather`'s
+  leaving half over half a second. The whole card collapses to a point.
+- **The tower opens out of it** — an arriving-half `Wipe` with the tower rail
+  pushing in from the right and the gauges and road pushing down from the top,
+  each by the edge it lives against.
+
+**The box does not leave with the card**, and that is the decision worth
+recording. Folding the whole screen reads better in isolation and worse in
+sequence: the border would go and then come straight back, because the game draws
+one too. Left standing it *is* the game's pane, and what moves it is the rail
+narrowing it from the right — the frame becoming the main panel rather than being
+replaced by one. The version in the corner is the exception and is dropped when
+the card starts to go, because it is the one thing on that screen sitting outside
+the box.
+
+**The rail moves for this crossing and no other.** Every ordinary crossing leaves
+it standing on purpose — it is awareness rather than a view, drawn on every
+branch including the modal ones, so a player deep in the spell editor still gets
+told the forge caught fire. Arriving out of boot is the one moment it is not on
+screen yet.
+
+**The card is three phases in sequence now, and it is a third shorter.** The name
+takes a fifth of it, the subtitle a tenth, and the report the rest — where it used
+to be one clock with the words riding along with the letters. That pairing —
+`Operational` landing with the `O` — read well while the logo printed left to
+right and stopped reading once the letters began *growing*: a word appearing
+beside a letter still half its size is two clocks arguing. So the name arrives,
+and then it is expanded.
+
+§19's four-times-slower correction is intact and is why the card is 5.5 s rather
+than back at 4.4: the letters still get about a quarter of a second each and the
+report still gets the bulk. What was cut was the room a *single slow event*
+needed — three legible ones in a row do not need the pauses that were holding
+them apart.
+
+**The name is spoken whole from the first frame**, where it used to be as much of
+it as had printed — §14, and the rule every crossing follows: the linear stream is
+the settled screen, because a reader must never be made to wait out an animation.
+**The subtitle is not**, and the difference is the point: the name is one thing
+arriving, and the subtitle is four things appearing in turn.
+
+`Passing::wake` **latches rather than watching an edge** — it is called every
+live frame and does something on the first, which is the frame the sequence hands
+over because everything in `Drive` is gated on `booted`. An edge test would have
+a frame to miss on a hitch; a latch does not.
+
+**Half of this rides the motion switch and half does not, which is recorded
+rather than fixed.** The tower opening is `Passing`'s and so stops with `F3`; the
+card's own two motions are inside `paint_booting`, which takes no resources on
+purpose — *"a screen that needed one could never be dumped as text"* — and so run
+regardless. That is not a new inconsistency: the border drawing itself and the
+report lines typing were already ungated, and gating only the two motions added
+here would be arbitrary. The boot sequence's own switch is `ORBS_BOOT=0`, and
+reduce-motion covering all of it is Phase 15's, with the persisted setting.
+
+#### A second interlude, and no fifth renumber
+
+Phase 11.5 takes **no minor of its own**, for the reason Phase 0.5 took none: an
+interlude is aesthetic work between numbered phases and carries no month or word
+budget. Its four steps bump `0.11.5`–`0.11.8` and nothing renumbers, so
+CLAUDE.md's *"that luck is not a plan"* warning about a fifth renumber is not
+tested.
+
+**The wrinkle, recorded rather than hidden:** Phase 11 was open when this
+started, so `0.11.x` interleaves two phases' steps and the version number stops
+distinguishing Renown work from interlude work while both are open. Phase 0.5 set
+that precedent; holding the interlude until Phase 11 closed was the alternative,
+and it is a scheduling call rather than a design one.
+
 ### Renown, the tower's second number (Phase 11, `0.11.1`)
 
 **The problem is measured, not anticipated.** Experience past the Ley Line's last

@@ -16,8 +16,8 @@ mod window;
 // events with a press/release model, run conditions, the camera, and the system
 // graph that orders them.
 pub(crate) use orbs_shell::{
-    Bench, Editor, EditorOutcome, Ghost, Line, Linear, Offered, PaneTransition, Panel, Reveal,
-    Screen, Scroll, Tapestry, View, WeaveOutcome, paint, paint_booting, paint_too_small,
+    Bench, Editor, EditorOutcome, Ghost, Line, Linear, Offered, PaneTransition, Panel, Passing,
+    Reveal, Screen, Scroll, Tapestry, View, WeaveOutcome, paint, paint_booting, paint_too_small,
 };
 
 pub(crate) use chorusing::Chorus;

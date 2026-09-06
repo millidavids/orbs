@@ -20,7 +20,7 @@
 //! `rust-toolchain.toml` pins to something else again. Three numbers, only one
 //! of them true.
 
-use orbs_render::{Frame, Pos, Span, Style, UtteranceKind};
+use orbs_render::{Crossing, Frame, Passage, Pos, Rect, Span, Style, Toward, UtteranceKind};
 
 use super::stage::Stage;
 
@@ -35,11 +35,12 @@ const NAME: &str = "O.R.B.S.";
 
 /// What the initials stand for, one word per letter.
 ///
-/// Each word lands as **its own letter** does — `Operational` with the `O`,
-/// `Relic` with the `R` — which is what turns the logo printing itself into the
-/// name being spelled out rather than a decoration that happens to be slow.
-/// `every_word_of_the_subtitle_has_a_letter` holds the two together, so renaming
-/// the game cannot leave a word with nothing to arrive with.
+/// **They land after the name, not with it.** Each word used to arrive as its own
+/// letter did — `Operational` with the `O` — which read well while the logo
+/// printed left to right and stopped reading once the letters began *growing*: a
+/// word appearing beside a letter still half its size is two clocks arguing. The
+/// name arrives, and then it is expanded. `the_subtitle_waits_for_the_name` holds
+/// the order.
 const EXPANSION: [&str; 4] = ["Operational", "Relic", "Bewitching", "System"];
 
 /// The subtitle's own width, including the single spaces between its words.
@@ -55,17 +56,16 @@ fn expansion_width() -> usize {
         - 1
 }
 
-/// Where each word of [`EXPANSION`] starts, and which [`GLYPHS`] entry brings it.
+/// Where each word of [`EXPANSION`] starts, in columns from the subtitle's left.
 ///
-/// **The glyph index is `2 * i`**, because the full stops are glyphs too: the
-/// table is `O . R . B . S .`, so the letters are the even entries. That is the
-/// one piece of arithmetic tying the two together, and it is here rather than
-/// inline so there is one place to be wrong.
-fn expansion_places() -> [(usize, usize); 4] {
-    let mut places = [(0, 0); 4];
+/// **It used to carry the [`GLYPHS`] entry that brought each word too**, back
+/// when the words rode the letters' clock. They have their own now, so the pairing
+/// was a second thing to keep true about a relationship that no longer exists.
+fn expansion_places() -> [usize; 4] {
+    let mut places = [0; 4];
     let mut col = 0;
     for (index, word) in EXPANSION.iter().enumerate() {
-        places[index] = (col, index * 2);
+        places[index] = col;
         col += word.chars().count() + 1;
     }
     places
@@ -74,8 +74,11 @@ fn expansion_places() -> [(usize, usize); 4] {
 /// Where each character of [`NAME`] sits in [`ART`], as `(first column, width)`.
 ///
 /// The letterforms are **column-separable** — no glyph shares a column with its
-/// neighbour — which is what lets the logo be printed a character at a time
-/// rather than appearing whole. The letters are eight cells wide except `O`,
+/// neighbour — and that is still what makes the name arrive a letter at a time,
+/// for a subtler reason than it used to be. Each pair is *grown* into place by a
+/// `Gather` over its own columns, and column-separability is what guarantees that
+/// gather cannot reach the letters standing whole beside it. The letters are
+/// eight cells wide except `O`,
 /// which is nine, and the full stops are three; nothing about that is regular
 /// enough to compute, so it is a table, and `the_glyph_table_tiles_the_art`
 /// holds it to covering the art exactly with no gap and no overlap.
@@ -138,12 +141,77 @@ const DONE: &str = "ok";
 /// happens to arrive in pieces.
 const TYPING_SHARE: f32 = 0.6;
 
-/// How much of the stage the logo takes to print itself.
+/// How much of the stage the name takes, a letter at a time.
 ///
-/// The rest belongs to the report lines. Enough that the letters land as
-/// separate events rather than as a stutter, and not so much that the card has
-/// nothing to say for half its life.
-const LOGO_SHARE: f32 = 0.3;
+/// A fifth of 5.5 s, so each of the four gets about a quarter of a second —
+/// enough that they land as separate events rather than as a stutter, and not so
+/// much that the card has nothing to say for half its life.
+const LETTERS_SHARE: f32 = 0.20;
+
+/// How much of the stage the subtitle takes, a word at a time.
+///
+/// **After the letters, not alongside them.** Each word used to land with its own
+/// initial — `Operational` with the `O` — which read well while the logo printed
+/// left to right and stopped reading at all once the letters started *growing*:
+/// a word appearing beside a letter that is still half its size is two clocks
+/// arguing. The name arrives, and then it is expanded.
+const SUBTITLE_SHARE: f32 = 0.10;
+
+/// How much of the stage the name takes before the report begins.
+///
+/// Summed rather than written down, so moving either share above cannot leave
+/// the report lines starting in the middle of the subtitle.
+const LOGO_SHARE: f32 = LETTERS_SHARE + SUBTITLE_SHARE;
+
+/// Which letter pairs have landed, and how far through the one still arriving.
+///
+/// `arrived` counts the pairs to draw — the one in flight included, because it
+/// has to be on screen for the gather to move it. `flight` is that one's own
+/// `0.0`..`1.0`, or `None` when the name is whole.
+fn letters_at(progress: f32) -> (usize, Option<f32>) {
+    let letters = (progress.clamp(0.0, 1.0) / LETTERS_SHARE).clamp(0.0, 1.0);
+    if letters >= 1.0 {
+        return (PAIRS, None);
+    }
+    // Which pair the clock is inside, **counted rather than cast**. A float to
+    // integer conversion is the one arithmetic this workspace keeps in a single
+    // place — `tween::mix` — and `arrived_cells` beneath makes the same choice
+    // for the same reason.
+    let span = 1.0 / f32::from(to_row(PAIRS));
+    let index = (1..PAIRS)
+        .filter(|pair| letters >= f32::from(to_row(*pair)) * span)
+        .count();
+    let start = f32::from(to_row(index)) * span;
+    (index + 1, Some(((letters - start) / span).clamp(0.0, 1.0)))
+}
+
+/// How many letter-and-full-stop pairs the name arrives in.
+const PAIRS: usize = GLYPHS.len() / 2;
+
+/// How many words of the subtitle have landed.
+///
+/// Zero until the letters are done, which is the sequence the card now reads in:
+/// the name, then what it stands for, then what the orb is made of.
+fn spoken_words(progress: f32) -> usize {
+    let after = ((progress.clamp(0.0, 1.0) - LETTERS_SHARE) / SUBTITLE_SHARE).clamp(0.0, 1.0);
+    usize::try_from(arrived_cells(after, EXPANSION.len())).unwrap_or(EXPANSION.len())
+}
+
+/// Where each pair starts and how wide it is, in [`ART`] columns.
+///
+/// **The stops travel with their letters.** [`GLYPHS`] is eight entries because
+/// the full stops are glyphs in their own right, and `expansion_places` already
+/// records that the letters are the even ones. A stop arriving as a beat of its
+/// own would be four extra events in a sequence that is meant to read as a name.
+fn pairs() -> [(usize, usize); PAIRS] {
+    let mut out = [(0, 0); PAIRS];
+    for (index, slot) in out.iter_mut().enumerate() {
+        let (start, _) = GLYPHS[index * 2];
+        let (stop, width) = GLYPHS[index * 2 + 1];
+        *slot = (start, stop + width - start);
+    }
+    out
+}
 
 /// Paint the boot screen for `stage`, `progress` of the way through it.
 ///
@@ -158,13 +226,27 @@ const LOGO_SHARE: f32 = 0.3;
 /// leader dots fill the way a progress indicator fills, and `ok` snaps in behind
 /// them. Then a pause, and the next line.
 ///
-/// The logo prints a **character at a time** as well, six rows at once — `O`,
-/// then the full stop, then `R`, and so on. The letterforms are column-separable
-/// ([`GLYPHS`]), which is the only reason that is possible.
+/// **The logo does not print at all — it grows in from the middle.** It used to
+/// arrive a character at a time, six rows at once; it is now the whole picture
+/// moving, which is [`Passage::Gather`]'s arriving half and so the same motion
+/// the game uses whenever a surface takes the pane. The first thing the orb ever
+/// does is the thing it keeps doing.
+///
+/// [`GLYPHS`] survives that, because the **subtitle** still lands letter by
+/// letter underneath — `Operational` with the `O`, `Relic` with the `R` — and
+/// that pairing is what the table is really for.
 pub fn paint(frame: &mut Frame, stage: Stage, progress: f32, engine: &str) {
-    if !matches!(stage, Stage::Post) {
+    if !matches!(stage, Stage::Post | Stage::Close) {
         return;
     }
+    // **`Close` draws the finished card and then takes it away.** The stage is a
+    // departure rather than a different screen, so everything below runs at full
+    // progress and the gather at the end is the only thing that moves.
+    let progress = if matches!(stage, Stage::Close) {
+        1.0
+    } else {
+        progress
+    };
 
     let area = frame.area();
     let lines = reported(engine);
@@ -183,13 +265,17 @@ pub fn paint(frame: &mut Frame, stage: Stage, progress: f32, engine: &str) {
         .col
         .saturating_add(area.cols.saturating_sub(to_row(logo_width)) / 2);
 
-    let printed = usize::try_from(arrived_cells(
-        (progress / LOGO_SHARE).clamp(0.0, 1.0),
-        GLYPHS.len(),
-    ))
-    .unwrap_or(GLYPHS.len());
-
-    for &(start, width) in GLYPHS.iter().take(printed) {
+    // **One letter at a time, and each one grows into place.** `O.`, then `R.`,
+    // then `B.`, then `S.` — the full stop arrives with the letter it belongs to
+    // rather than as a beat of its own, which is what the name is when it is read
+    // aloud.
+    //
+    // Each pair is drawn whole once its turn has passed and not at all before it,
+    // so the only one that moves is the one in flight — and because the pairs are
+    // column-disjoint, the gather at the end of this function reaches that one
+    // and leaves the letters already standing alone.
+    let (arrived, flight) = letters_at(progress);
+    for (start, width) in pairs().into_iter().take(arrived) {
         for (index, row) in ART.iter().enumerate() {
             painter.glyphs(
                 Pos::new(
@@ -201,16 +287,12 @@ pub fn paint(frame: &mut Frame, stage: Stage, progress: f32, engine: &str) {
             );
         }
     }
-    // The logo is one utterance, not six rows of block glyphs, and it says only
-    // as much of the name as is on screen. §14: what a reader hears is what the
-    // screen says.
-    if printed > 0 {
-        painter.announce(
-            UtteranceKind::Heading,
-            Style::BRIGHT.role,
-            orbs_render::arriving(NAME, to_cells(printed)),
-        );
-    }
+    // The logo is one utterance, not six rows of block glyphs — and it is the
+    // **whole** name from the first frame, where it used to be as much of it as
+    // had printed. §14, and the same rule every crossing follows: the linear
+    // stream is the settled screen, because a reader must never be made to wait
+    // out an animation. The name is *there*; it is only arriving by moving.
+    painter.announce(UtteranceKind::Heading, Style::BRIGHT.role, NAME);
 
     // **Every line spans the logo, edge to edge.** The label sits under the
     // logo's left edge and `ok` ends flush with its right, with the leader
@@ -234,24 +316,27 @@ pub fn paint(frame: &mut Frame, stage: Stage, progress: f32, engine: &str) {
         .col
         .saturating_add(area.cols.saturating_sub(to_row(expansion_width())) / 2);
     let subtitle_row = top.saturating_add(to_row(ART.len()));
-    for (word, (offset, glyph)) in EXPANSION.iter().zip(expansion_places()) {
-        if printed <= glyph {
-            break;
-        }
+    // **Its own clock, starting where the letters finish.** The words land whole
+    // and in order, which is the same progressive disclosure the report lines
+    // below use — they are small enough that growing them in would be motion
+    // nobody could read.
+    let words = spoken_words(progress);
+    for (word, offset) in EXPANSION.iter().zip(expansion_places()).take(words) {
         painter.glyphs(
             Pos::new(subtitle_col.saturating_add(to_row(offset)), subtitle_row),
             word,
             Style::DIM,
         );
     }
-    // Spoken once, as much of it as is on screen — the same rule the logo above
-    // follows, and the reason neither is drawn with `span` per word: §14 wants
-    // one utterance for one thing, not four for a sentence.
+    // Spoken once, as much of it as is on screen — **unlike the name above**,
+    // which is spoken whole from the first frame because it is one thing
+    // *arriving*. This is four things appearing in turn, so what a reader hears
+    // is what is there. §14 wants one utterance for one thing, not four for a
+    // sentence, which is why it is joined rather than announced per word.
     let said = EXPANSION
         .iter()
-        .zip(expansion_places())
-        .take_while(|(_, (_, glyph))| printed > *glyph)
-        .map(|(word, _)| *word)
+        .take(words)
+        .copied()
         .collect::<Vec<_>>()
         .join(" ");
     if !said.is_empty() {
@@ -263,12 +348,19 @@ pub fn paint(frame: &mut Frame, stage: Stage, progress: f32, engine: &str) {
     // under a six-row logo would be the only small text on the card — which is
     // still true, and is exactly why it belongs in the corner instead, where
     // small text is what a corner is for.
-    let version = format!("v{}", env!("CARGO_PKG_VERSION"));
-    painter.glyphs(
-        Pos::new(area.col.saturating_add(1), area.bottom().saturating_sub(1)),
-        &version,
-        Style::DIM,
-    );
+    //
+    // **Not during `Close`.** It is the one thing on the card that sits *outside*
+    // the box, and the box's interior is what leaves — so left drawn it would be
+    // the last of the card still standing after the card had gone, and then be
+    // replaced by the prompt a frame later. It goes when the card starts to.
+    if !matches!(stage, Stage::Close) {
+        let version = format!("v{}", env!("CARGO_PKG_VERSION"));
+        painter.glyphs(
+            Pos::new(area.col.saturating_add(1), area.bottom().saturating_sub(1)),
+            &version,
+            Style::DIM,
+        );
+    }
 
     let first = top.saturating_add(to_row(ART.len() + 2));
     let done_col = logo_col.saturating_add(to_row(logo_width.saturating_sub(DONE.len())));
@@ -300,7 +392,41 @@ pub fn paint(frame: &mut Frame, stage: Stage, progress: f32, engine: &str) {
             painter.glyphs(Pos::new(logo_col, row), label, Style::NORMAL);
         }
     }
+
+    // **The name grows in from the middle**, which is the motion a full-pane
+    // surface leaves and arrives by — so the first thing the game ever does is
+    // the thing it will keep doing. Applied last, after the painter has let the
+    // frame go, and over the logo's own rectangle: the subtitle and the report
+    // below are on their own clocks and must not be dragged into it.
+    //
+    // Arriving-half progress, so it runs from the midpoint to the end. `cross`
+    // reads the frame's own cells on the way in, which is why no kept screen is
+    // needed here.
+    if let Some(growing) = flight {
+        let (start, width) = pairs()[arrived - 1];
+        frame.cross(
+            Rect::new(
+                logo_col.saturating_add(to_row(start)),
+                top,
+                to_row(width),
+                to_row(ART.len()),
+            ),
+            Crossing {
+                passage: Passage::Gather,
+                toward: Toward::Right,
+                progress: MIDPOINT + growing * MIDPOINT,
+            },
+            None,
+        );
+    }
 }
+
+/// Halfway through a crossing: everything has reached the middle.
+///
+/// The card only ever uses one half of one — the name arriving, and later the
+/// whole screen leaving — so both are expressed as a crossing that starts or
+/// stops here.
+const MIDPOINT: f32 = 0.5;
 
 /// How many leader dots fit between `label` and the `ok` column.
 ///
@@ -475,26 +601,57 @@ mod tests {
     }
 
     #[test]
-    fn the_logo_prints_one_character_at_a_time() {
-        // Left to right, and every character eventually. The whole point of the
-        // column table.
+    fn the_name_arrives_one_letter_at_a_time() {
+        // **`O.`, then `R.`, then `B.`, then `S.`** — in order, none skipped, and
+        // never two at once. This replaced a test that measured `arrived_cells`
+        // against `GLYPHS`, which the logo stopped calling when it started
+        // *growing* rather than printing: the arithmetic was still right and no
+        // longer described anything on screen.
         let mut seen = Vec::new();
-        for step in 0..=60u16 {
-            let progress = f32::from(step) / 60.0;
-            let printed = usize::try_from(arrived_cells(
-                (progress / LOGO_SHARE).clamp(0.0, 1.0),
-                GLYPHS.len(),
-            ))
-            .unwrap_or(0);
-            if seen.last() != Some(&printed) {
-                seen.push(printed);
+        for step in 0..=400u16 {
+            let progress = f32::from(step) / 400.0;
+            let (arrived, flight) = letters_at(progress);
+
+            // Exactly one pair is ever moving, and it is the newest — the ones
+            // behind it stand whole, which is what lets a single `Gather` over
+            // its columns leave them alone.
+            assert!((1..=PAIRS).contains(&arrived), "{arrived} of {PAIRS}");
+            if let Some(local) = flight {
+                assert!((0.0..=1.0).contains(&local), "flight {local} at {progress}");
+            }
+            if seen.last() != Some(&arrived) {
+                seen.push(arrived);
             }
         }
-        assert_eq!(seen.first(), Some(&0), "the logo was there from the start");
-        assert_eq!(seen.last(), Some(&GLYPHS.len()), "it never finished");
+        assert_eq!(seen.first(), Some(&1), "it did not start with the first");
+        assert_eq!(seen.last(), Some(&PAIRS), "it never finished");
         assert!(
             seen.windows(2).all(|pair| pair[1] == pair[0] + 1),
-            "it printed in jumps rather than one at a time: {seen:?}",
+            "letters arrived in jumps rather than one at a time: {seen:?}",
+        );
+        assert!(
+            letters_at(1.0).1.is_none(),
+            "a letter was still arriving after the card was done",
+        );
+    }
+
+    #[test]
+    fn the_subtitle_waits_for_the_name() {
+        // The sequence is the name, then what it stands for, then what the orb is
+        // made of — where it used to be the words riding along with the letters.
+        assert_eq!(
+            spoken_words(LETTERS_SHARE - 0.01),
+            0,
+            "a word arrived early"
+        );
+        assert_eq!(
+            spoken_words(1.0),
+            EXPANSION.len(),
+            "the subtitle never finished"
+        );
+        assert!(
+            line_at(LOGO_SHARE - 0.01, 0, 3, 10).is_none(),
+            "the report began before the subtitle was done",
         );
     }
 

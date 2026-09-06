@@ -103,6 +103,10 @@ pub mod liquid;
 mod maze;
 mod mix;
 mod paint;
+// Public for its module docs: it is the one place that decides what a screen
+// *leaving* looks like, and the safety argument for a crossing is written there
+// rather than in `pulse`, whose exemption it deliberately does not lean on.
+pub mod passage;
 mod pulse;
 mod pylon;
 // `pub`, unlike the other painters' modules: `orbs-shell`'s siege painter
@@ -137,6 +141,7 @@ pub use liquid::{DRIFT_EVERY, Motion, RISE_EVERY, STIR_EVERY};
 pub use maze::{Square, Stacks};
 pub use mix::{Band, Stir};
 pub use paint::Painter;
+pub use passage::{Crossing, Kept, Passage, Toward};
 pub use pulse::{CYCLE_SECS, FLIP_HZ};
 // `TALLEST` alongside the type for the reason `SIGILS` travels with `Board`: the
 // board reserves that many rows and the sim raises that many wards, and a caller

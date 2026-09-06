@@ -90,7 +90,7 @@ were a single line inside a breadth phase two phases away, and the siege that
 | Phase | Months | Words | Status |
 |---|---|---|---|
 | 0. Vertical slice | 4 | ~3k | ✅ Closed · numeric gate **deferred** |
-| 0.5. Interlude | — | — | ✅ **Closed, every box ticked** · settings moved to 14 |
+| 0.5. Interlude | — | — | ✅ **Closed, every box ticked** · settings moved to 15 |
 | 1. Core loop | 5 | ~15k | ✅ **Closed** · testers clause moved to 13 |
 | **2. Scrying** `lens/` | 3 | ~6k | ✅ **Closed, every box ticked** |
 | **3. Spellcraft** `grimoire/` | 3 | ~6k | ⬜ · exit met, three boxes left |
@@ -100,6 +100,7 @@ were a single line inside a breadth phase two phases away, and the siege that
 | **9. Enchanting** `forge/` | 2 | ~4k | ⬜ · derived · three of four boxes |
 | **10. Progression** | 2 | ~4k | ✅ **Closed at `0.10.6`** · every box ticked; the numbers are first-pass and `orbs-balance` decides them |
 | **11. Renown** | 2 | ~4k | ⬜ · the second number, and an arsenal that does not keep |
+| 11.5. Interlude | — | — | ⬜ · the tower becomes a place you move through |
 | **12. The tower as one machine** | 2 | ~3k | ⬜ |
 | 13a. Breadth | 2 | ~4k | ⬜ · five domains moved out of it |
 | 13b. Remote hosts | 3 | ~12k | ⬜ |
@@ -4245,6 +4246,91 @@ spends on something the arsenal cannot sell.
 - [ ] **Docs.** §19 for the three supersessions, the `CAPACITY = 1` answer, the
       fourth renumber and the withdrawn arsenal; §11.5's four-column resource
       table gains a row; SEEING-IT gains a *Renown* section.
+
+---
+
+## Phase 11.5 — Interlude
+
+**Aesthetic, and none of it turned out to be only aesthetic**, which is Phase
+0.5's framing because this is Phase 0.5's shape. That one made the orb *a machine
+that moves*; this one makes the tower **a place you move through.**
+
+Every screen in the game cut. `attend forge` swapped the laboratory's instruments
+for the forge's lattice between one frame and the next, and §19 had already
+recorded that exact defect for pane *geometry* in Phase 0.5 — *"a pane appearing
+between one frame and the next reads as a glitch."* Pane **content** was never
+addressed, because until Phase 10 raised seven domains there was nowhere much to
+go. Now there is.
+
+**No minor of its own**, exactly as Phase 0.5 takes none: an interlude carries no
+month or word budget, so the table's arithmetic above is untouched and nothing
+renumbers. Its steps run `0.11.5`–`0.11.8`. Phase 11 was open when this started,
+so those interleave with Renown's — recorded in §19 rather than hidden, and the
+alternative was holding this until Phase 11 closed.
+
+- [x] **A screen leaves by a shape** (`0.11.5`) — `orbs_render::passage`, the
+      `Frame` pass, and the kept cells a crossing departs from. `Wipe` alone:
+      three shapes and a shape-per-change table would be a vocabulary invented
+      before anyone had seen a frame of the first one
+      **See it:** ✅ `cargo run -p orbs-render --example screens` — the "A
+      crossing" blocks, eight fractions in a row. It caught its own demo glyphs
+      on the first run: `◇` is outside CP437 and the arriving half printed `???`
+- [x] **The shell keeps the last screen and knows what changed** (`0.11.6`) —
+      `Passing`, `Showing`, and the two switches. The room and not the leaf, the
+      surfaces that take the pane and not the ones that only take the keys
+      **See it:** ✅
+      `ORBS_BOOT=0 ORBS_PASSAGE_AT=0.30 ORBS_DUMP="attend laboratory; attend forge" cargo run -p orbs`
+      — and `scripts/dumps.sh` byte-identical without it, which is the real gate
+- [x] **The tower plays it, and `F3` stops it** (`0.11.7`) — the Bevy clock, the
+      motion switch both clocks now share, and the one-tick floor between
+      crossings. `orbs-tui` holds a settled one and does not animate: it has no
+      switch a player can reach, and §14 will not have motion without one
+      **See it:** ✅ `cargo run -p orbs`, then `attend forge`. Then `F3` to `OFF`
+      and `attend laboratory` — it cuts
+- [x] **Three shapes, one per kind of change** (`0.11.8`) — `Wipe` for a room,
+      `Gather` for a tool taking the pane, `Furl` for `F5`'s mirror
+      **See it:** ✅ `attend forge`, then `wander`, then `F5` — three motions for
+      three kinds of change
+- [x] **The opening is a crossing too** (`0.11.10`) — the first screen change a
+      player meets was the last one still cutting. The name arrives **a letter at
+      a time, each growing in from its own middle** — `O.`, `R.`, `B.`, `S.` —
+      then the subtitle on its own clock, then the report; `Stage::Close` takes
+      the card away the same way; and the tower opens with the rail pushing in
+      from the right and the gauges and road pushing down from the top. **The
+      card is a third shorter** for it: three legible events in a row do not need
+      the pauses one slow event did.
+
+      **The box stays through all of it**, which is the decision: the border the
+      card drew for itself is the pane the game arrives in, and what moves it is
+      the rail narrowing it from the side. Folding it away would mean drawing a
+      second one over the hole a frame later.
+      **See it:** ✅ `cargo run -p orbs` and watch the opening. As text:
+      `ORBS_DUMP=1 ORBS_BOOT=post:0.06`, `close:0.4`, and
+      `ORBS_PASSAGE_AT=wake:0.35 ORBS_DUMP="attend laboratory"`
+
+      ✅ **Each region leaves by its own edge** (`0.11.9`) — the gauges and the
+      road go *up*, the panel and the board go *right*, and both come back the
+      way they went. It crossed one rectangle with a hole in it before, which
+      said what not to touch and nothing about direction, so the top strip wiped
+      sideways across the screen it was sitting on.
+      ✅ **A gather actually converges** — glyphs fly to the middle and back out
+      of it, rather than eroding inward from the edges. That needed §19's
+      per-cell flash rule re-examined: it forbade *any* motion, by counting a
+      glyph travelling past a cell as a flash. Superseded per family — erosion
+      keeps the per-cell rule, convergence keeps a field-level envelope, and both
+      are asserted.
+      ✅ **The new screen no longer flashes whole for a frame** — `Drive` had no
+      ordering edge to `Input`, so a `wander` drew the finished maze and only
+      then transitioned away from it. Third time a set has been ordered against
+      its reader and not its writer; §19 records the set.
+      **See it:** ✅ `cargo run -p orbs`, then `wander` — the laboratory flies
+      into the middle and the maze flies out of it, with no whole frame between
+
+**What it deliberately does not touch: the transcript, the border, its title, the
+tower rail and the prompt.** History did not change when you walked to the forge,
+and blanking it would say the session went away; a box that came apart would read
+as the *machine* breaking rather than the screen changing, which is what got the
+tube strike cut twice.
 
 ---
 

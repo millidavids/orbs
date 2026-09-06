@@ -10,7 +10,7 @@ use super::commanding::{
 };
 use super::input::{SubmittedMessage, type_into_line};
 use super::reading::{scroll_back, scroll_forward, start_reading, stop_reading};
-use super::revealing::{drive_panes, drive_reveal, finish_reveal};
+use super::revealing::{drive_panes, drive_passing, drive_reveal, finish_reveal};
 use super::window::{cycle_mode, spawn_camera, track_window};
 /// Registration itself names `Tower` only through `resource_changed::<...>`,
 /// which is fully qualified; the tests below drive it directly.
@@ -38,6 +38,19 @@ pub(crate) enum ShellSystems {
     /// The next frame the same text vanishes and types itself in: output that
     /// flashes whole and then rewinds. Same class of defect [`Self::Input`]
     /// exists for.
+    ///
+    /// **And it runs after [`Self::Input`]**, which was missing and cost a
+    /// visible defect. The input chain is what opens and shuts every surface —
+    /// `wander`, `edit`, `weave`, `unfurl` — and the animations here have to
+    /// observe the result, not the state in front of it. Without the edge the
+    /// executor was free to drive the crossing first, so a `wander` drew the
+    /// **whole maze for one frame** and only then started a transition, which
+    /// then departed from the maze it had just arrived at.
+    ///
+    /// The two sets were ordered against `repaint` and never against each other
+    /// — the same shape as the defect recorded one level down for
+    /// `motion::advance` and `refresh_panel`, and the third time this project has
+    /// paid for a set that orders against its reader but not against its writer.
     Drive,
 }
 
@@ -46,7 +59,14 @@ pub struct ShellPlugin;
 
 impl Plugin for ShellPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<Screen>()
+        // **The animations run after the input, and that edge was missing.** The
+        // input chain is what opens and shuts every surface — `wander`, `edit`,
+        // `weave`, `unfurl` — and the clocks in `Drive` have to observe the
+        // result rather than the state in front of it. Without it a `wander` drew
+        // the whole maze for one frame and only then began a crossing, which then
+        // departed from the maze it had just arrived at. See `ShellSystems`.
+        app.configure_sets(Update, ShellSystems::Drive.after(ShellSystems::Input))
+            .init_resource::<Screen>()
             .init_resource::<Line>()
             .init_resource::<orbs_shell::Offered>()
             .init_resource::<super::input::HeldOver>()
@@ -56,6 +76,7 @@ impl Plugin for ShellPlugin {
             .init_resource::<super::input::Quiet>()
             .init_resource::<Linear>()
             .init_resource::<PaneTransition>()
+            .init_resource::<orbs_shell::Passing>()
             .init_resource::<Reveal>()
             .init_resource::<super::Bench>()
             .init_resource::<super::Editing>()
@@ -187,7 +208,15 @@ impl Plugin for ShellPlugin {
                     // §14 makes the linear stream a first-class view of the
                     // frame. Nothing had ever shown it, which is how a stream
                     // that is subtly wrong stays that way.
-                    orbs_shell::toggle_linear.run_if(input_just_pressed(KeyCode::F5)),
+                    // **In the input set, like every other surface switch.** It
+                    // was the one writer of `Showing`'s inputs left outside it,
+                    // so `Drive.after(Input)` did not reach it: on the wrong
+                    // interleaving the mirror painted whole for a frame and only
+                    // then crossed — the same defect that edge was added for,
+                    // one surface over.
+                    orbs_shell::toggle_linear
+                        .in_set(ShellSystems::Input)
+                        .run_if(input_just_pressed(KeyCode::F5)),
                     // §6 requires the parser explain itself, and the Phase 0
                     // gate acts on failure *clustering*. Every reading is kept
                     // as it happens; this is what gets it out to a spreadsheet.
@@ -232,6 +261,30 @@ impl Plugin for ShellPlugin {
                     // Unconditional: all three of these have to keep moving on
                     // the frames where nothing happened, which is most of them.
                     drive_panes.in_set(ShellSystems::Drive),
+                    // **After `refresh_panel`, explicitly**, for the reason
+                    // `motion::advance` below is: `Showing` reads `Panel::room`,
+                    // and a set orders both against `repaint` rather than
+                    // against each other. Left to the executor this would see
+                    // the previous frame's panel and start every crossing a
+                    // frame late.
+                    drive_passing
+                        .in_set(ShellSystems::Drive)
+                        .after(super::input::refresh_panel)
+                        // **After `motion::advance`, which is the other writer.**
+                        // Both hold `ResMut<Passing>`, so Bevy already serialises
+                        // them — but *which order* was left to the executor, and
+                        // they are not interchangeable: `motion` carries the
+                        // tube's switch and this carries the clock. Turning `F3`
+                        // back on, the unordered pair started a crossing a frame
+                        // late; turning it off, one interleaving started a
+                        // crossing that the other immediately cleared.
+                        //
+                        // Both outcomes are invisible, and the edge is here
+                        // anyway — this file records three defects that were
+                        // exactly "a set ordered against its reader and not its
+                        // writer", and a fourth left in on the grounds that it
+                        // does not show yet is how the fifth arrives.
+                        .after(super::motion::advance),
                     drive_reveal.in_set(ShellSystems::Drive),
                     // §10.1's instruments animate on wall-clock time, not on the
                     // tick — the sim must not be able to observe it, or replay

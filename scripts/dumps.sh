@@ -43,6 +43,21 @@ run() {
 run boot_dark  ORBS_DUMP=1 ORBS_BOOT=dark
 run boot_frame ORBS_DUMP=1 ORBS_BOOT=frame
 run boot_post  ORBS_DUMP=1 ORBS_BOOT=post
+# **The name arriving a letter at a time**, each one growing in from its own
+# middle — `O.`, then `R.`, then `B.`, then `S.`. One capture per letter, because
+# what has to hold is the *order*: a single frame cannot show that the one in
+# flight is the only one moving and the ones behind it are standing still.
+run boot_o     ORBS_DUMP=1 ORBS_BOOT=post:0.04
+run boot_r     ORBS_DUMP=1 ORBS_BOOT=post:0.09
+run boot_b     ORBS_DUMP=1 ORBS_BOOT=post:0.14
+run boot_s     ORBS_DUMP=1 ORBS_BOOT=post:0.19
+# ...then what the name stands for, on its own clock and after the letters.
+run boot_words ORBS_DUMP=1 ORBS_BOOT=post:0.24
+run boot_said  ORBS_DUMP=1 ORBS_BOOT=post:0.31
+# ...and the card leaving the same way. **The box is what to watch here**: it
+# stays while its contents collapse, because it is the pane the game arrives in.
+run boot_close ORBS_DUMP=1 ORBS_BOOT=close:0.4
+run boot_gone  ORBS_DUMP=1 ORBS_BOOT=close:1.0
 # The card *finished*, which is the only place its two version lines appear —
 # and the engine line is the one thing on it that differs between the frontends.
 run boot_done  ORBS_DUMP=1 ORBS_BOOT=post:1
@@ -237,5 +252,52 @@ run satchel_rail ORBS_BOOT=0 ORBS_DUMP="attend sanctum; debug_take satchel_1; de
 # --- bindings --------------------------------------------------------------
 run bind_invoke ORBS_BOOT=0 ORBS_DUMP="attend laboratory; invoke first_light; attend archive; meditate 6"
 run bind_holding ORBS_BOOT=0 ORBS_DUMP="attend sanctum; invoke holding; meditate 400" ORBS_THEN="peruse sanctum.log"
+
+# --- the passage -----------------------------------------------------------
+# **A crossing is an edge and a dump observes no edges**, so `ORBS_PASSAGE_AT`
+# holds the last command back, paints the screen it was about to replace, and
+# poses one frame of it leaving. Everything else in this file must be unchanged
+# by the feature existing — a settled `Passing` is a no-op, and that is the gate.
+#
+# Three fractions, because one frame of a motion says nothing about its shape:
+# the wake at 0.15, the empty beat at 0.50, the new screen arriving at 0.85.
+#
+# **What to read in these is the two regions going different ways.** The strip
+# along the top leaves *upward* — its wake runs `▓▒░` down the rows — and the
+# block down the side leaves *rightward*. The transcript between them is
+# untouched, which is the whole argument for crossing parts rather than the pane.
+run cross_out    ORBS_BOOT=0 ORBS_PASSAGE_AT=0.15 ORBS_DUMP="attend laboratory; attend forge"
+run cross_beat   ORBS_BOOT=0 ORBS_PASSAGE_AT=0.50 ORBS_DUMP="attend laboratory; attend forge"
+run cross_in     ORBS_BOOT=0 ORBS_PASSAGE_AT=0.85 ORBS_DUMP="attend laboratory; attend forge"
+run cross_still  ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_PASSAGE_AT=0.30 \
+  ORBS_DUMP="attend laboratory; grind sage; attend archive"
+# **A panel leaving for a room that has none.** The block is sized from the union
+# of both screens' regions, and this is the capture that catches it being sized
+# from the arriving one alone — the laboratory's instruments would cut instead of
+# going, because the forge puts nothing in that column.
+run cross_union  ORBS_BOOT=0 ORBS_PASSAGE_AT=0.30 \
+  ORBS_DUMP="attend forge; attend laboratory; attend forge"
+# **The L, and the capture that would have caught it wiping the transcript.**
+# At this grid `Along::of` puts the panel across the top while the maze still
+# claims columns from the right, so what the transcript gives up is not a
+# rectangle — and one rectangle covering it is the whole body.
+run cross_ell    ORBS_BOOT=0 ORBS_GRID=80x45 ORBS_PASSAGE_AT=0.30 \
+  ORBS_DUMP="attend archive; research; attend forge"
+# ...and a surface that replaces the pane, which gathers to the middle instead.
+# **One gather, not three:** the union carries the departing session's strip and
+# block, and `whole` has to stand in for them rather than run beside them.
+run cross_whole  ORBS_BOOT=0 ORBS_GRID=100x30 ORBS_PASSAGE_AT=0.35 \
+  ORBS_DUMP="attend archive; research; wander"
+run cross_middle ORBS_BOOT=0 ORBS_GRID=100x30 ORBS_PASSAGE_AT=0.50 \
+  ORBS_DUMP="attend archive; research; wander"
+# **The tower opening out of the boot card**, and the only crossing that moves
+# the rail. Started by a system on the one frame the sequence hands over, so a
+# dump reaches it no other way.
+run cross_wake  ORBS_BOOT=0 ORBS_PASSAGE_AT=wake:0.35 ORBS_DUMP="attend laboratory"
+run cross_woken ORBS_BOOT=0 ORBS_PASSAGE_AT=wake:0.75 ORBS_DUMP="attend laboratory"
+# The off switch, which `tui.sh` and the play suite both set. Byte-identical to
+# the same line with no passage variables at all.
+run cross_off    ORBS_BOOT=0 ORBS_PASSAGE=0 ORBS_PASSAGE_AT=0.30 \
+  ORBS_DUMP="attend laboratory; attend forge"
 
 echo "captured $(ls -1 "$out"/*.txt | wc -l) screens into $out"

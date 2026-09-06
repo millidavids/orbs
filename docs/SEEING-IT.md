@@ -1462,6 +1462,42 @@ ORBS_BOOT=0 ORBS_LOAD=0.5 \
 ORBS_BOOT=0 ORBS_TICK=0.5 ORBS_DUMP="attend laboratory; grind sage; meditate 3" cargo run -p orbs
 ```
 
+**A crossing is a fourth edge, and the hardest of them for a dump**, because it
+is an edge between *two screens* rather than inside one. A dump paints one frame,
+so on its own there is nothing to cross from. `ORBS_PASSAGE_AT` therefore does
+something no other switch does: it **holds the last `;`-separated command back**,
+paints the screen that command was about to replace, keeps it, runs the command,
+and paints again with the crossing posed over the result. What prints is a
+crossing between two screens the game can actually reach.
+
+```bash
+# The laboratory leaving and the forge arriving. Step the fraction: 0.15 is the
+# wake mid-strip, 0.50 the empty beat between the screens, 0.85 the arrival.
+ORBS_BOOT=0 ORBS_PASSAGE_AT=0.15 ORBS_DUMP="attend laboratory; attend forge" cargo run -p orbs
+
+# **The transcript is spared, and that is the whole design.** History did not
+# change when you walked to the archive, so a crossing that wiped it would say
+# the session went away. This is the capture that would catch it.
+ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_PASSAGE_AT=0.30 \
+  ORBS_DUMP="attend laboratory; grind sage; attend archive" cargo run -p orbs
+
+# ...and a surface that genuinely replaces the pane, where nothing is spared.
+ORBS_BOOT=0 ORBS_PASSAGE_AT=0.30 ORBS_DUMP="attend archive; research; wander" cargo run -p orbs
+
+# The off switch. Byte-identical to the same line with no passage variables.
+ORBS_BOOT=0 ORBS_PASSAGE=0 ORBS_PASSAGE_AT=0.30 \
+  ORBS_DUMP="attend laboratory; attend forge" cargo run -p orbs
+```
+
+**`ORBS_PASSAGE` and `ORBS_PASSAGE_AT` are two switches on purpose**, and it is
+`ORBS_FIRE`'s rule restated: *a crossing at zero is a perfectly ordinary
+crossing* — it is one of the two endpoints, and it draws the departing screen
+exactly. So the fraction cannot double as an off switch, and the off switch
+outranks the fraction. `scripts/tui.sh` and the play suite both set
+`ORBS_PASSAGE=0`, for the same reason `ORBS_FIRE=0` exists: a harness that types
+a command and reads the screen straight back must not be able to catch one
+part-way through leaving.
+
 **The balneum mariae's See-it line is longer than the others, and it has to be.**
 The bath needs the athanor alight — `heat = true` in `recipes.toml` — and it takes
 its input from the mortar, so reaching a *working* bath means running the first
@@ -3391,6 +3427,101 @@ terminal set to `ambiguous = wide` gives them two columns, which shifts the row
 **and** invalidates the per-cell diff. `orbs-tui` measures rather than assumes:
 it prints one at a known column and reads the cursor back, then swaps in ASCII if
 the answer is two. `cargo test -p orbs-tui` holds the table.
+
+### The passage — a screen leaving, and what it does not touch
+
+**Play it. This one genuinely needs a window**, and the switches above are the
+still photographs that go with it:
+
+```bash
+cargo run -p orbs
+# attend forge      — the laboratory's instruments wipe out, the forge's wipe in
+# attend laboratory — and back
+# attend alembic    — and *nothing*, because the room did not change
+# wander / <Esc>    — the maze takes the whole pane, transcript included
+# F5 / F5           — the linear mirror, on the same terms
+```
+
+**Then press `F3` until the tube is `OFF` and do all of it again.** Every one of
+them must **cut**. §14 makes motion disableable and DESIGN.md §19 records the
+trap that goes with it — three animations independently learned that *"a picture
+may never be able to vanish"*, because reduce-motion pins a phase and froze a
+blank. With the tube off there is no crossing to freeze and no kept screen at
+all, which is a thing to check rather than assume.
+
+**Six things to look at, in the order they are easy to get wrong:**
+
+1. **The transcript does not move** when you change rooms. That is the whole
+   design — history did not change, and blanking it says the session went away.
+   The boards and the instrument panel are what cross.
+2. **The two regions go different ways.** The gauges and the road along the top
+   leave **upward**; the instrument panel and the room's board leave
+   **rightward**, out past the tower rail. Each by the edge it already sits
+   against, so neither crosses the text between them.
+3. **They come back the way they went.** Out to the right, in from the right —
+   not out right and in from the left, which is what it did first and reads as
+   two unrelated motions.
+4. **The border, its title and the tower rail do not move either.** The title
+   says `forge` while the strip below still shows the laboratory, for the length
+   of a crossing; that is the intended order and is recorded in §19 rather than
+   fixed. A box that came apart would read as the machine breaking.
+5. **A tool gathers instead.** `wander`, `edit` and `weave` replace the whole
+   pane, so the screen **flies into the middle**, winks out, and the next one
+   flies back out of the same point. One convergence, not one per region — three
+   piles converging on three centres is what the union did before `whole` was
+   made to stand in for the parts.
+6. **`attend` in a bound spell does not strobe the pane.** A crossing may not
+   begin within a world tick of the last one, which is what caps whole-region
+   flashes at one a second. Nothing you can type gets near it; a spell walking
+   the tower is the case the floor exists for.
+
+**The boot sequence is a crossing too**, and it is the first one anybody meets:
+
+```bash
+cargo run -p orbs        # and watch the opening, which is now three motions
+
+ORBS_DUMP=1 ORBS_BOOT=post:0.04 cargo run -p orbs   # `O.` growing in
+ORBS_DUMP=1 ORBS_BOOT=post:0.09 cargo run -p orbs   # ...`O.` whole, `R.` growing
+ORBS_DUMP=1 ORBS_BOOT=post:0.19 cargo run -p orbs   # ...and `S.`, the last of them
+ORBS_DUMP=1 ORBS_BOOT=post:0.31 cargo run -p orbs   # then what it stands for
+ORBS_DUMP=1 ORBS_BOOT=close:0.4 cargo run -p orbs   # the card collapsing
+ORBS_DUMP=1 ORBS_BOOT=close:1.0 cargo run -p orbs   # ...down to one cell
+ORBS_BOOT=0 ORBS_PASSAGE_AT=wake:0.35 \
+  ORBS_DUMP="attend laboratory" cargo run -p orbs   # the tower opening
+```
+
+1. **The name arrives a letter at a time** — `O.`, then `R.`, then `B.`, then
+   `S.` — each one growing in from its own middle by `Gather`'s arriving half,
+   the same motion `wander` uses. **Only the one in flight moves**: the letters
+   behind it stand whole and the ones ahead are not drawn yet, which is the thing
+   to check and the thing a single frame cannot show. Then the **subtitle**, on
+   its own clock, after the letters rather than alongside them.
+2. **`Stage::Close` takes the card away** the same way, and **the box stays**.
+   That is the thing to check: the border the card drew for itself is the pane the
+   game arrives in, so folding it away would mean drawing a second one over the
+   hole a frame later.
+3. **The tower opens** — the rail pushes in from the right and narrows the pane
+   to make room, and the gauges and road push down from the top. `wake` is the
+   only crossing that moves the rail, and a dump reaches it no other way: it is
+   started by a system on the one frame the sequence hands over.
+
+**And one that is a defect if you see it:** the new screen must never appear
+*whole* for a frame before the motion starts. It did — `ShellSystems::Drive` had
+no edge to `ShellSystems::Input`, so the crossing could be driven before the
+system that opened the surface, and a `wander` drew the finished maze and then
+transitioned away from it. §19 records it.
+
+**The shape, as text, at eight fractions in a row:**
+
+```bash
+cargo run -p orbs-render --example screens    # the "A crossing" block
+```
+
+That is the only place the *motion* can be read rather than inferred — a dump
+poses one frame, and one frame of a wipe says nothing about which way it went.
+It is also what caught the first draft's demo glyphs: `◇` and `◆` are outside
+CP437, so the arriving half printed `???` and nothing else in the project would
+have shown it.
 
 ### The output style — a heading is ruled, a slot is `<bracketed>`
 

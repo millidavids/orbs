@@ -207,6 +207,10 @@ struct ShellState<'w> {
     panel: Res<'w, crate::shell::Panel>,
     scroll: Res<'w, crate::shell::Scroll>,
     panes: Res<'w, crate::shell::PaneTransition>,
+    /// `ResMut` because this is the one thing here that has to see the frame
+    /// *before* it is blanked: a crossing departs from last frame's screen, and
+    /// `Frame::reset` below is the moment it stops existing.
+    passing: ResMut<'w, crate::shell::Passing>,
     reveal: Res<'w, crate::shell::Reveal>,
     bench: Res<'w, crate::shell::Bench>,
     /// `ResMut` because the editor's viewport follows its caret, and how many
@@ -245,6 +249,7 @@ fn repaint(
         panel,
         scroll,
         panes,
+        mut passing,
         reveal,
         bench,
         ref mut editing,
@@ -252,6 +257,12 @@ fn repaint(
         walk,
     } = shell;
     let frame = &mut canvas.frame;
+    // **Before the reset, which is the last moment last frame exists.** A
+    // crossing departs from the screen it is replacing, and nothing can ask for
+    // that screen once the line below has blanked it. Refused while a crossing is
+    // already running, or it would overwrite its own source — see
+    // `Passing::keep`.
+    passing.keep(frame);
     frame.reset(screen.grid);
 
     let booting = boot.filter(|boot| !boot.is_live());
@@ -263,6 +274,7 @@ fn repaint(
         crate::shell::paint(
             frame,
             &mut linear,
+            &mut passing,
             crate::shell::View {
                 sim: tower.sim(),
                 line: &line,

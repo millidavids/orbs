@@ -68,6 +68,35 @@ const LOAD: &str = "ORBS_LOAD";
 /// is the one part of the effect a person cannot reliably catch by playing.
 const FLARE: &str = "ORBS_FLARE";
 
+/// Whether screens cross at all — `0` or `off` to stop them.
+///
+/// **A separate switch from `ORBS_PASSAGE_AT`, and deliberately.** `dump.rs` already
+/// settled this shape for the fire: *"`ORBS_FIRE=0` still turns the effect off
+/// entirely — the two are separate switches because a phase of zero is a
+/// perfectly ordinary phase."* It is doubly true here, where a crossing at zero
+/// is one of the two endpoints and draws the screen exactly.
+///
+/// For scripted runs rather than for players: `scripts/tui.sh` passes it so the
+/// play suite cannot read a screen back mid-crossing. The switch a *player*
+/// reaches is `F3`.
+pub const PASSAGE: &str = "ORBS_PASSAGE";
+
+/// How far through a crossing to draw — `0.42`, or `wipe:0.42`.
+///
+/// **A dump paints one frame, so on its own there is nothing to cross from.**
+/// When this is set the final `;`-separated command is held back: the frame is
+/// painted and kept, the command runs, and the frame is painted again with the
+/// crossing posed over it. That makes the picture a crossing between two screens
+/// the game can actually reach, which is the standard [`bench()`] sets — a dump
+/// showing a screen the game cannot produce is the one thing this tool must
+/// never do.
+///
+/// ```text
+/// ORBS_BOOT=0 ORBS_PASSAGE_AT=0.30 \
+///   ORBS_DUMP="attend laboratory; attend forge" cargo run -p orbs
+/// ```
+const PASSAGE_AT: &str = "ORBS_PASSAGE_AT";
+
 /// A line left **unsubmitted** in the prompt.
 ///
 /// `ORBS_DUMP` submits every `;`-separated segment, so the input buffer is
@@ -291,23 +320,6 @@ pub fn run_script(seed: u64, wizard: Option<String>, engine: &str, request: &str
         }
     }
 
-    // `1` is the idiom for "just boot it"; anything else is a session to type.
-    // Every line goes through `submit` and a real `step`, so what prints is the
-    // world having actually run rather than a pose struck for the screenshot.
-    if request != "1" {
-        drive(&mut sim, request);
-    }
-
-    // Written after the script has run, because what a dump is *for* is the
-    // world the script reached. There is no `quit` involved: a dump has no
-    // session to leave, and `run_script` never reads `Quitting`.
-    if asked && crate::save::write(&sim.snapshot()).is_err() {
-        // In voice, not on stderr — this runs before the frame is painted, so
-        // it lands on the transcript where §3 says output belongs. A dump is
-        // also the one place a person is *looking* for what the orb said.
-        sim.say_save_failed();
-    }
-
     let grid = grid();
     // **Wide, which is what every running frontend opens in.** This derived the
     // mode from the grid instead — the only call to `DisplayMode::default_for`
@@ -323,6 +335,42 @@ pub fn run_script(seed: u64, wizard: Option<String>, engine: &str, request: &str
     // rule for exactly this: *"a See-it line that describes a different screen
     // is worse than none."*
     let screen = Screen::windowless(grid, None);
+
+    // Settled unless `ORBS_PASSAGE_AT` asks otherwise: a dump is a still, and a
+    // still of a screen half gone is a picture of a moment rather than of the
+    // screen.
+    let mut passing = super::passing::Passing::default();
+
+    // `1` is the idiom for "just boot it"; anything else is a session to type.
+    // Every line goes through `submit` and a real `step`, so what prints is the
+    // world having actually run rather than a pose struck for the screenshot.
+    let posed = requested_crossing();
+    if request != "1" {
+        match posed {
+            // **The last command is held back**, the screen it was about to
+            // replace is painted and kept, and then it runs. A dump paints one
+            // frame, so without this there is nothing for a crossing to depart
+            // from and `ORBS_PASSAGE_AT` would print a settled screen while
+            // looking as though it had worked.
+            Some(_) => {
+                let (head, last) = split_last(request);
+                drive(&mut sim, head);
+                leaving(&sim, &screen, grid, &mut passing);
+                drive(&mut sim, last);
+            }
+            None => drive(&mut sim, request),
+        }
+    }
+
+    // Written after the script has run, because what a dump is *for* is the
+    // world the script reached. There is no `quit` involved: a dump has no
+    // session to leave, and `run_script` never reads `Quitting`.
+    if asked && crate::save::write(&sim.snapshot()).is_err() {
+        // In voice, not on stderr — this runs before the frame is painted, so
+        // it lands on the transcript where §3 says output belongs. A dump is
+        // also the one place a person is *looking* for what the orb said.
+        sim.say_save_failed();
+    }
 
     let mut frame = Frame::new(grid);
     // `ORBS_BOOT=frame` dumps that stage instead of the game. Boot runs once per
@@ -449,9 +497,35 @@ pub fn run_script(seed: u64, wizard: Option<String>, engine: &str, request: &str
         // omitted a reading would be a picture that proves the wrong thing.
         let mut panel = super::glance::Panel::default();
         panel.refresh(&sim);
+        // **Posed here rather than where the script ran**, because whether the
+        // transcript is spared turns on which surface ended up open — the same
+        // question `Showing::replaces_the_pane` asks in the game, and the three
+        // flags that answer it are only resolved by this point.
+        if let Some(Posed {
+            passage,
+            progress,
+            waking,
+        }) = posed
+        {
+            // A surface open means the last command took the pane, which is the
+            // same question `Change` asks in the game and the same answer it
+            // gives. Which *regions* move is `prompt::paint`'s, and it works it
+            // out from the screen it just drew rather than from this.
+            let chosen = if editing.is_some() || weaving.is_some() || walking {
+                orbs_render::Passage::Gather
+            } else {
+                orbs_render::Passage::Wipe
+            };
+            if waking {
+                passing.pose_wake(progress);
+            } else {
+                passing.pose(progress, passage.unwrap_or(chosen));
+            }
+        }
         super::prompt::paint(
             &mut frame,
             &mut Linear::default(),
+            &mut passing,
             super::prompt::View {
                 sim: &sim,
                 line: &typed,
@@ -603,9 +677,133 @@ fn requested_stage() -> Option<(Stage, f32)> {
         "dark" => (Stage::Dark, 0.5),
         "frame" => (Stage::Post, Stage::FRAME_SHARE / 2.0),
         "post" => (Stage::Post, 0.5),
+        // **The card leaving**, which is an animation and so needs a fraction
+        // more than the others do: bare `close` is the middle of the collapse,
+        // and `close:1` is the single cell it ends on.
+        "close" => (Stage::Close, 0.5),
         _ => return None,
     };
     Some((stage, asked.unwrap_or(progress).clamp(0.0, 1.0)))
+}
+
+/// A script split into everything but its last command, and that command.
+///
+/// The last **non-empty** segment, so a trailing `;` does not hand back an empty
+/// command and a crossing out of the finished screen into itself.
+fn split_last(script: &str) -> (&str, &str) {
+    let trimmed = script.trim_end().trim_end_matches(SEPARATOR).trim_end();
+    match trimmed.rfind(SEPARATOR) {
+        Some(at) => (&trimmed[..at], &trimmed[at + 1..]),
+        None => ("", trimmed),
+    }
+}
+
+/// Paint the screen a posed crossing departs from, and keep it.
+///
+/// **The plain session, deliberately.** The screen being *left* is by definition
+/// the one before the last command ran, and the last command is what opens a
+/// surface — so a departing screen with an editor or a maze already over it
+/// would be a picture of the wrong moment. `ORBS_EDIT`, `ORBS_THEN` and the rest
+/// belong to the arriving screen and are played there, once.
+fn leaving(
+    sim: &Sim,
+    screen: &Screen,
+    grid: orbs_render::GridSize,
+    passing: &mut super::passing::Passing,
+) {
+    if !screen.is_hostable() {
+        return;
+    }
+    let mut frame = Frame::new(grid);
+    let mut panel = super::glance::Panel::default();
+    panel.refresh(sim);
+    // **Settled, and it must be: this is the frame a crossing departs from**, so
+    // a crossing drawn over it would be a picture of two. It is also where the
+    // departing screen's *regions* are recorded, which is why the posed `Passing`
+    // is handed in rather than a throwaway — `paint` writes them back through it.
+    super::prompt::paint(
+        &mut frame,
+        &mut Linear::default(),
+        passing,
+        super::prompt::View {
+            sim,
+            line: &Line::default(),
+            screen,
+            panes: &PaneTransition::settled(1),
+            reveal: &super::reveal::Reveal::default(),
+            offered: &super::offering::Offered::default(),
+            ghost: "",
+            panel: &panel,
+            scroll: &super::scrollback::Scroll::default(),
+            bench: &super::bench::Bench::default(),
+            editing: None,
+            weaving: None,
+            walking: false,
+        },
+    );
+    passing.pose_kept(&frame);
+}
+
+/// The shape and fraction `ORBS_PASSAGE_AT` asks for, if it asks.
+///
+/// Takes `requested_stage`'s shape — a bare fraction, or `name:fraction` — so a
+/// second one does not have to be learned. A bare fraction poses **the shape the
+/// game would have chosen**, which is what makes the short form the useful one:
+/// `ORBS_PASSAGE_AT=0.3` on a room change is a `Wipe` and on a `wander` is a
+/// `Gather`, exactly as playing it would be. Naming a shape overrides that, which
+/// is how one is looked at somewhere it does not normally run.
+///
+/// A malformed value poses nothing, for the reason a malformed grid falls back:
+/// the useful answer to a typo is the ordinary screen, not a stack trace. An
+/// unknown *name* poses nothing either, rather than silently drawing whichever
+/// shape happened to be default — a dump that ignores half of what it was asked
+/// is worse than one that does nothing.
+fn requested_crossing() -> Option<Posed> {
+    use orbs_render::Passage;
+
+    let request = std::env::var(PASSAGE_AT).ok()?;
+    let (name, fraction) = match request.split_once(':') {
+        Some((name, fraction)) => (Some(name.trim()), fraction),
+        None => (None, request.as_str()),
+    };
+    let (passage, waking) = match name {
+        None => (None, false),
+        Some("wipe") => (Some(Passage::Wipe), false),
+        Some("furl") => (Some(Passage::Furl), false),
+        Some("gather") => (Some(Passage::Gather), false),
+        // **The one that arrives out of the boot card**, and the only crossing
+        // that moves the tower rail. A dump reaches it no other way: it is
+        // started by a system, on the one frame the sequence hands over.
+        Some("wake") => (Some(Passage::Wipe), true),
+        Some(_) => return None,
+    };
+    let parsed = fraction.trim().parse::<f32>().ok()?;
+    parsed.is_finite().then(|| Posed {
+        passage,
+        progress: parsed.clamp(0.0, 1.0),
+        waking,
+    })
+}
+
+/// What `ORBS_PASSAGE_AT` asked for.
+///
+/// A struct rather than a tuple: the three are a shape, a fraction and a flag,
+/// and `View`'s own doc names what a positional list of those invites.
+struct Posed {
+    /// The shape, or `None` to take whichever the change itself would choose.
+    passage: Option<orbs_render::Passage>,
+    /// How far through, `0.0`..`1.0`.
+    progress: f32,
+    /// Whether this is the crossing that arrives out of boot.
+    waking: bool,
+}
+
+/// Whether crossings run at all. See [`PASSAGE`].
+pub(crate) fn passage_permitted() -> bool {
+    !matches!(
+        std::env::var(PASSAGE).as_deref().map(str::trim),
+        Ok("0" | "off" | "false")
+    )
 }
 
 /// A finite `f32` from the environment, if the variable holds one.

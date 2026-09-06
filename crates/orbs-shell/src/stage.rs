@@ -71,13 +71,30 @@ pub enum Stage {
     /// itself against nothing, and only then a name. They start together now,
     /// and the box closes while the logo is still spelling itself out.
     Post,
+    /// The card leaving: everything inside the box flies into the middle.
+    ///
+    /// **The handover, given a beat of its own.** The card used to be replaced
+    /// by the game between one frame and the next — the same cut §19 spent a
+    /// whole interlude removing from every *other* screen change, left in the
+    /// one place a player meets first.
+    ///
+    /// It is [`Passage::Gather`](orbs_render::Passage)'s leaving half, which is
+    /// the motion a full-pane surface already uses: the orb closing one thing
+    /// before opening another.
+    ///
+    /// **The box stays.** Only what is inside it leaves, because the border the
+    /// card drew for itself is the pane the game arrives in — taking it away
+    /// would mean drawing a second one over the hole a frame later. What moves
+    /// it instead is the tower rail, pushing in from the right and narrowing the
+    /// pane to make room as the tower opens.
+    Close,
     /// The game.
     Live,
 }
 
 impl Stage {
     /// Every stage before [`Stage::Live`], in order.
-    pub const SEQUENCE: [Self; 2] = [Self::Dark, Self::Post];
+    pub const SEQUENCE: [Self; 3] = [Self::Dark, Self::Post, Self::Close];
 
     /// How much of the card's time the border spends closing.
     ///
@@ -106,7 +123,23 @@ impl Stage {
     pub const fn duration(self) -> Duration {
         Duration::from_millis(match self {
             Self::Dark => 600,
-            Self::Post => 9000,
+            // **9 s, and now 5.5.** §19's four-times-slower correction was made
+            // when the whole card was one clock — the logo printing left to
+            // right, the words riding along with it — and a stage that read as
+            // one slow event needed the room. It is three now, in sequence: the
+            // name a letter at a time, then what it stands for, then what the orb
+            // is made of. Each one is legible on its own, so the pauses that were
+            // holding them apart were only holding the card open.
+            //
+            // The lesson is intact and is why this is not 4.4 again: the letters
+            // still get about a quarter of a second each and the report still
+            // gets the bulk of it.
+            Self::Post => 5500,
+            // **Half a second, which is a whole crossing's length.** The card
+            // only spends the *leaving* half here, so it runs at half a
+            // crossing's pace — slower than a screen change on purpose, because
+            // this one is the tower opening rather than a room changing.
+            Self::Close => 500,
             Self::Live => 0,
         })
     }
@@ -116,7 +149,8 @@ impl Stage {
     pub const fn next(self) -> Self {
         match self {
             Self::Dark => Self::Post,
-            Self::Post | Self::Live => Self::Live,
+            Self::Post => Self::Close,
+            Self::Close | Self::Live => Self::Live,
         }
     }
 
@@ -134,9 +168,22 @@ impl Stage {
     }
 
     /// Whether the pane border is on screen yet.
+    ///
+    /// **[`Stage::Close`] still draws it**, because it is what that stage takes
+    /// away: the box has to be on screen to shrink with everything else in it.
     #[must_use]
     pub const fn has_frame(self) -> bool {
-        matches!(self, Self::Post | Self::Live)
+        matches!(self, Self::Post | Self::Close | Self::Live)
+    }
+
+    /// How far through the card's departure, or `None` if it is not leaving.
+    ///
+    /// Handed to [`Passage::Gather`](orbs_render::Passage) as the **leaving**
+    /// half, so it runs `0.0` to the midpoint across this stage and the card is
+    /// a single cell by the end of it.
+    #[must_use]
+    pub fn closing(self, progress: f32) -> Option<f32> {
+        matches!(self, Self::Close).then(|| progress.clamp(0.0, 1.0))
     }
 
     /// How far the border has closed, given how far this stage has run.
@@ -364,11 +411,37 @@ mod tests {
         // did not work, offered before anything else on screen did. The stage
         // that existed to draw it went with it — as, later, did the one that
         // drew the border on its own.
-        assert_eq!(Stage::SEQUENCE.len(), 2);
+        //
+        // **This counted the stages, and the count was a proxy.** What it meant
+        // was *"the prompt stage is gone"*, and it fired when `Close` was added
+        // for an unrelated reason — while a `Prompt` stage coming back alongside
+        // a removal would have slipped through it. The properties are asserted
+        // directly now.
         assert!(
             !Stage::SEQUENCE.iter().any(|stage| stage.world_runs()),
-            "a boot stage let the world run"
+            "a boot stage let the world run",
         );
+        assert!(
+            !Stage::SEQUENCE.contains(&Stage::Live),
+            "the game is not a boot stage",
+        );
+    }
+
+    #[test]
+    fn the_sequence_is_the_path_next_actually_walks() {
+        // **Two expressions of one order**, which is how they come to disagree:
+        // `SEQUENCE` is what a dump and the tests iterate, `next` is what the
+        // clock follows. `Close` was added to the enum and to `next` before it
+        // was added here, and nothing but this would have said so — the sequence
+        // would simply have been one stage short of the thing it describes.
+        let mut walked = Vec::new();
+        let mut stage = Stage::SEQUENCE[0];
+        while !stage.world_runs() {
+            walked.push(stage);
+            stage = stage.next();
+        }
+        assert_eq!(walked, Stage::SEQUENCE, "the two orders disagree");
+        assert_eq!(stage, Stage::Live, "the walk did not end at the game");
     }
 
     #[test]

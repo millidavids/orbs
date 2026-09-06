@@ -48,6 +48,7 @@ mod linear;
 mod loom;
 mod offering;
 pub mod panel;
+mod passing;
 mod post;
 mod prompt;
 mod prose;
@@ -69,7 +70,9 @@ mod tapestry;
 mod transition;
 
 pub use bench::Bench;
-pub use dump::{requested as dump_requested, run as dump, run_script as dump_script};
+pub use dump::{
+    PASSAGE as PASSAGE_VAR, requested as dump_requested, run as dump, run_script as dump_script,
+};
 pub use editor::{Editor, Mode as EditorMode, Outcome as EditorOutcome};
 pub use environment::{RUSTC, SEALED, SEED, fresh, seed, wizard};
 pub use focus::{Focus, Open};
@@ -79,6 +82,7 @@ pub use keys::{Key, apply, apply_to_chant, apply_to_editor, apply_to_maze, apply
 pub use line::Line;
 pub use linear::{Linear, toggle as toggle_linear};
 pub use offering::{Ghost, Offered};
+pub use passing::{Passing, Showing};
 pub use prompt::{View, paint, paint_booting, paint_too_small};
 pub use prose::{CONTENT_DIR, PROSE, load, read};
 pub use reveal::Reveal;

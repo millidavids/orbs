@@ -621,6 +621,7 @@ mod tests {
         orbs_shell::paint(
             &mut frame,
             &mut linear,
+            &mut orbs_shell::Passing::default(),
             orbs_shell::View {
                 sim: &sim,
                 line: &Line::default(),

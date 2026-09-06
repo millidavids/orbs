@@ -26,6 +26,18 @@ pub struct Panel {
     pub instruments: Vec<orbs_sim::tower::Instrument>,
     /// That place's leaf name, for the panel's spoken summary.
     pub domain: String,
+    /// The **room** the player is standing in, which is not the same thing.
+    ///
+    /// `Sim::domain` walks up to the room and `domain` above is the leaf, so a
+    /// player standing at the alembic has `domain: "alembic"` and
+    /// `room: "laboratory"`. [`Passing`](crate::Passing) needs the room and only
+    /// the room: keyed on the leaf, `attend alembic` would play a whole crossing
+    /// for a fixture inside the room already on screen.
+    ///
+    /// **On the tick clock with everything else here**, because `Sim::domain`
+    /// clones a `String` per call and the answer changes at most once a second.
+    /// `line` below already had to make the same distinction and says so.
+    pub room: String,
     /// The stacks the player is standing over, if they are open.
     ///
     /// **On the same tick clock as the instruments, and it belongs here for the
@@ -97,6 +109,10 @@ impl Panel {
     pub fn refresh(&mut self, sim: &Sim) {
         self.instruments = sim.instruments();
         self.domain = orbs_sim::parser::leaf(&sim.location()).to_owned();
+        // `None` above `/tower`, where no work happens — the leaf is the honest
+        // fallback there, so `/tower` and the arsenal are still different places
+        // to be standing.
+        self.room = sim.domain().unwrap_or_else(|| self.domain.clone());
         self.stacks = sim.stacks();
         self.ward = sim.ward();
         self.pylon = sim.pylon();

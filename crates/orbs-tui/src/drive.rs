@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use orbs_render::{DisplayMode, Frame, GridSize};
 use orbs_shell::{
-    Bench, Boot, Key, Line, Linear, Offered, PaneTransition, Panel, Reveal, Screen, Scroll,
+    Bench, Boot, Key, Line, Linear, Offered, PaneTransition, Panel, Passing, Reveal, Screen, Scroll,
 };
 use orbs_sim::Sim;
 
@@ -166,6 +166,20 @@ struct Session {
     linear: Linear,
     reveal: Reveal,
     panes: PaneTransition,
+    /// One screen leaving and the next arriving — settled here, always.
+    ///
+    /// **Not effort, and not the boundary being ducked.** §14 requires motion be
+    /// disableable and this build has no CRT to consult, so it passes `None` for
+    /// the motion switch everywhere (see the `bench.advance` call in `play`). An
+    /// animating crossing would be the first motion in this build with no switch
+    /// a player can reach, which `shell::bench` says a motion effect may not be.
+    /// The persisted reduce-motion setting is a later phase's, and this comes
+    /// back with it.
+    ///
+    /// The `orbs-render` boundary is proven regardless: the shapes live there and
+    /// `cargo run -p orbs-render --example screens` draws them through the same
+    /// public API both frontends use.
+    passing: Passing,
     frame: Frame,
     screen: blit::Screen,
     grid: GridSize,
@@ -242,6 +256,8 @@ impl Session {
             // is settled from the first frame and stays there. `transition.rs`
             // says as much: *"`orbs-tui` is free to ignore all of it."*
             panes: PaneTransition::settled(1),
+            // Settled from the first frame and never advanced. See the field.
+            passing: Passing::default(),
             frame: Frame::new(grid),
             screen: blit::Screen::new(grid, narrow),
             grid,
@@ -648,6 +664,11 @@ impl Session {
             orbs_shell::paint(
                 &mut self.frame,
                 &mut self.linear,
+                // Settled, always — see the field. It still travels through
+                // here because `paint` records each screen's regions in it, and
+                // a build that skipped that would be one where the shared
+                // painter took a different path for this frontend.
+                &mut self.passing,
                 orbs_shell::View {
                     sim: &self.sim,
                     line: &self.line,

@@ -244,6 +244,13 @@ impl Game {
             // server. Measured at ~2.4% CPU each, which is survivable and still
             // not something to leave lying about.
             format!("ORBS_LIFETIME={}", LIFETIME.as_secs()),
+            // **No crossings, for a scripted run.** This build holds a settled
+            // `Passing` and does not animate one today, so it is belt and braces
+            // — but a suite that types a command and reads the screen back must
+            // not be able to catch a screen part-way through leaving, and it
+            // should not be *this* file's job to notice when that changes.
+            // `ORBS_FIRE=0` is the same call for the same reason.
+            "ORBS_PASSAGE=0".to_owned(),
         ] {
             args.push("-e".to_owned());
             args.push(pair);

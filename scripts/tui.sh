@@ -67,9 +67,23 @@ start)
   # **`ORBS_SEALED=0` by default, for the same reason.** A fresh *game* is a
   # laboratory and nothing else (§11.5); this is the tool that types `attend
   # archive` on its first line. Set `ORBS_SEALED=1` to play the sealed start.
+  # **`ORBS_PASSAGE=0` by default**, because this is the tool that types a
+  # command and reads the screen straight back, and a screen part-way through
+  # leaving is not the screen anyone is asking about.
+  #
+  # **Setting it back does not show you a crossing** — this build holds a settled
+  # `Passing` and never advances it, deliberately: it has no CRT and so no motion
+  # switch a player could reach, and §14 will not have motion without one. The
+  # default is belt and braces against that ever changing. `cargo run -p orbs` is
+  # where a crossing can be watched.
+  #
+  # Passed here rather than exported, and that is not a style choice: tmux does
+  # not hand the client's environment to a session on an already-running server,
+  # and it fails *silently* — `tests/playing/play.rs` records the same trap.
   tmux new-session -d -s "$session" -x "$cols" -y "$rows" \
-    "$(printf 'ORBS_WIZARD=%q ORBS_SEED=%q ORBS_BOOT=%q ORBS_SEALED=%q %q/target/debug/orbs-tui' \
-      "${ORBS_WIZARD:-wizard}" "${ORBS_SEED:-181}" "${ORBS_BOOT-0}" "${ORBS_SEALED-0}" "$root")"
+    "$(printf 'ORBS_WIZARD=%q ORBS_SEED=%q ORBS_BOOT=%q ORBS_SEALED=%q ORBS_PASSAGE=%q %q/target/debug/orbs-tui' \
+      "${ORBS_WIZARD:-wizard}" "${ORBS_SEED:-181}" "${ORBS_BOOT-0}" "${ORBS_SEALED-0}" \
+      "${ORBS_PASSAGE-0}" "$root")"
   sleep 1
   ;;
 type)

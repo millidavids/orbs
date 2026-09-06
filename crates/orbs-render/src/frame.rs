@@ -14,6 +14,7 @@ use crate::cell::Cell;
 use crate::geometry::{GridSize, Pos, Rect};
 use crate::linear::Speech;
 use crate::paint::Painter;
+use crate::passage::{Crossing, Kept};
 use crate::style::{Lexeme, Wash};
 
 /// One screen's worth of cells, plus its linearisation.
@@ -37,6 +38,15 @@ pub struct Frame {
     /// colour name with a potion in the bar beside it would be one vocabulary
     /// meaning two things on one screen.
     syntax: Vec<(Rect, Lexeme)>,
+    /// Somewhere to hold a region while a crossing reads it and writes over it.
+    ///
+    /// [`Passage::Gather`](crate::Passage) moves glyphs, and on the arriving half
+    /// the screen it moves is *this* one — so a cell would be overwritten while
+    /// another still needed to read it. A copy is the honest fix; it lives here,
+    /// reused, rather than being allocated per frame for the half-second a
+    /// crossing runs. [`reset`](Self::reset) leaves it alone, because it is
+    /// scratch rather than screen.
+    scratch: Kept,
 }
 
 impl Frame {
@@ -270,6 +280,164 @@ impl Frame {
         Painter::new(self, area)
     }
 
+    /// Keep the cells of `area`, for a crossing to depart from.
+    ///
+    /// Called on every *settled* frame, which is what makes a crossing possible
+    /// at all: the shell has no way to ask for last frame's screen after the fact,
+    /// because [`reset`](Self::reset) has already blanked it. The cost is a
+    /// 43 KiB copy at a 120×45 grid, into a buffer [`Kept`] reuses.
+    ///
+    /// An area outside the grid is clipped rather than refused, as every other
+    /// rectangle here is.
+    pub fn keep(&self, area: Rect, into: &mut Kept) {
+        let area = area.intersection(self.area());
+        if area.is_empty() {
+            into.clear();
+            return;
+        }
+        let cells = (area.row..area.bottom()).flat_map(|row| {
+            (area.col..area.right())
+                .map(move |col| Pos::new(col, row))
+                .map(|at| self.cell(at).copied().unwrap_or(Cell::BLANK))
+        });
+        into.fill(area, cells);
+    }
+
+    /// Draw `crossing` over `area`, departing from `from`.
+    ///
+    /// Applied **after** everything else has painted, so `from` supplies the old
+    /// screen and the frame itself supplies the new one. A crossing at either
+    /// endpoint is a no-op by construction — see [`crate::passage`], where that
+    /// is the first property tested.
+    ///
+    /// # One call per region, not one per screen
+    ///
+    /// A room change moves two things that are not one rectangle: the gauges and
+    /// the road along the top, and the instrument panel and its board down the
+    /// side. Between them sits the **transcript**, which did not change — it is
+    /// continuous history, and blanking it would say the session went away.
+    ///
+    /// So the caller crosses each region on its own, with its own
+    /// [`Toward`](crate::Toward): the top strip leaves upward and the side block
+    /// leaves rightward, each by the edge it already sits against, and neither
+    /// touches the text between them. A surface that genuinely replaces the whole
+    /// pane — the maze, the editor, the weave screen — is one call over the lot.
+    ///
+    /// This replaced a spared-rectangle parameter, which described the same shape
+    /// as a hole rather than as its parts and could only give both halves one
+    /// direction.
+    ///
+    /// # What it does not touch
+    ///
+    /// [`speech`](Self::speech) and [`cursor`](Self::cursor). The linear stream
+    /// is the **settled** screen from the first frame of a crossing, so a reader
+    /// is never made to wait for an animation — §14, and the same trade §19
+    /// records for the hearth, whose spoken summary says *burning* from the frame
+    /// the fire is lit.
+    ///
+    /// # What it does clear
+    ///
+    /// Every [`tint`](Self::set_tint) and [`syntax run`](Self::lit) meeting
+    /// `area`. Both are resolved **per cell position** by the frontends, so
+    /// leaving them behind while the glyphs moved would give coloured blank cells
+    /// where a bar used to be and de-coloured glyphs wherever they landed. A wash
+    /// describes content that has left; dropping it is the honest answer, and
+    /// translating the rectangles alongside the cells is not worth it for half a
+    /// second.
+    ///
+    /// A region reaching outside `area` loses the part outside it too. Nothing in
+    /// the game draws one — every wash belongs to an instrument, and an
+    /// instrument is inside one region — so it is stated rather than handled.
+    pub fn cross(&mut self, area: Rect, crossing: Crossing, from: Option<&Kept>) {
+        let area = area.intersection(self.area());
+        if area.is_empty() {
+            return;
+        }
+        // A wash the crossing reaches loses its colour, because both frontends
+        // resolve a tint per cell position and a wash over a moved glyph is the
+        // bar's colour with no bar in it.
+        self.tints
+            .retain(|(region, _)| region.intersection(area).is_empty());
+        self.syntax
+            .retain(|(region, _)| region.intersection(area).is_empty());
+
+        // The two families answer different questions, and the type says which:
+        // a shape with no erosion is one that moves glyphs.
+        let Some(erosion) = crossing.passage.erosion() else {
+            self.gather(area, crossing, from);
+            return;
+        };
+
+        for row in area.row..area.bottom() {
+            for col in area.col..area.right() {
+                let at = Pos::new(col, row);
+                // On the way out the source is the screen that is leaving; on the
+                // way in it is the one already painted here.
+                let source = if crossing.is_leaving() {
+                    from.map_or(Cell::BLANK, |kept| kept.cell(at))
+                } else {
+                    self.cell(at).copied().unwrap_or(Cell::BLANK)
+                };
+                self.set(
+                    at,
+                    crate::passage::cell_at(area, crossing, erosion, at, source),
+                );
+            }
+        }
+    }
+
+    /// Draw `crossing` over `area`, departing from **what is already there**.
+    ///
+    /// [`cross`](Self::cross) departs from a screen the shell kept across the
+    /// frame boundary, because an ordinary crossing replaces one screen with
+    /// another and the first is gone by the time the second is painted. The boot
+    /// card is the case that is not like that: it paints itself and then leaves,
+    /// so the screen it departs from is the one in front of it.
+    ///
+    /// Only the **leaving** half needs this — `cross` already reads the frame's
+    /// own cells on the way in, which is the same thing from the other side.
+    pub fn fold(&mut self, area: Rect, crossing: Crossing) {
+        let area = area.intersection(self.area());
+        if area.is_empty() {
+            return;
+        }
+        // Borrowed out and put back, so the copy costs an allocation once rather
+        // than once a frame. `cross` takes it too on the arriving half, and finds
+        // an empty one — which is why this is documented as the leaving half's.
+        let mut scratch = std::mem::take(&mut self.scratch);
+        self.keep(area, &mut scratch);
+        self.cross(area, crossing, Some(&scratch));
+        self.scratch = scratch;
+    }
+
+    /// The glyphs flying to the middle, or out of it.
+    ///
+    /// Its own pass because it **reads a screen it is also writing**: the
+    /// arriving half moves the frame's own cells, so a copy has to be taken
+    /// before the first write. [`Self::scratch`] is that copy, borrowed out of
+    /// `self` for the pass and put back, so the allocation survives the frame.
+    fn gather(&mut self, area: Rect, crossing: Crossing, from: Option<&Kept>) {
+        let mut scratch = std::mem::take(&mut self.scratch);
+        if !crossing.is_leaving() {
+            self.keep(area, &mut scratch);
+        }
+        for row in area.row..area.bottom() {
+            for col in area.col..area.right() {
+                let at = Pos::new(col, row);
+                let cell =
+                    crate::passage::sampled(area, crossing, at).map_or(Cell::BLANK, |source| {
+                        if crossing.is_leaving() {
+                            from.map_or(Cell::BLANK, |kept| kept.cell(source))
+                        } else {
+                            scratch.cell(source)
+                        }
+                    });
+                self.set(at, cell);
+            }
+        }
+        self.scratch = scratch;
+    }
+
     /// The frame's glyphs as newline-separated rows.
     ///
     /// A diagnostic and test view — it discards every style, which is most of
@@ -357,6 +525,113 @@ mod tests {
 
         frame.set_cursor(Some(Pos::new(3, 3)));
         assert_eq!(frame.cursor(), Some(Pos::new(3, 3)));
+    }
+
+    #[test]
+    fn a_crossing_says_nothing() {
+        // §14: the linear stream is the **settled** screen from the first frame
+        // of a crossing. A reader who had to wait half a second for the
+        // animation to finish would be paying for a display setting in
+        // capability, which is the parity failure §9 exists to prevent and which
+        // `Reveal` already argues at length.
+        let mut frame = Frame::new(GridSize::new(12, 4));
+        let area = frame.area();
+        frame
+            .painter(area)
+            .announce(crate::UtteranceKind::Text, crate::Role::Normal, "the forge");
+        let spoken: Vec<_> = frame
+            .speech()
+            .utterances()
+            .map(|said| said.text.to_owned())
+            .collect();
+
+        frame.cross(area, halfway(), None);
+
+        let after: Vec<_> = frame
+            .speech()
+            .utterances()
+            .map(|said| said.text.to_owned())
+            .collect();
+        assert_eq!(spoken, after);
+    }
+
+    #[test]
+    fn a_crossing_stays_inside_its_region() {
+        // `tween`'s "no pane leaves the span of its own endpoints", for glyphs.
+        // A crossing writing past its rectangle would scribble on the transcript
+        // it was chosen not to touch.
+        let mut frame = Frame::new(GridSize::new(6, 3));
+        frame
+            .painter(frame.area())
+            .fill(Rect::new(0, 0, 6, 3), 'x', Style::NORMAL);
+        frame.cross(Rect::new(1, 1, 2, 1), halfway(), None);
+
+        assert_eq!(frame.to_text(), "xxxxxx\nx  xxx\nxxxxxx\n");
+    }
+
+    #[test]
+    fn what_is_not_crossed_is_left_alone() {
+        // **The transcript, when a domain changes.** It is continuous history and
+        // it did not change, so a crossing that blanked it would say the session
+        // went away. Two calls move the strip along the top and the block down
+        // the side; the text between them is untouched because nothing asked for
+        // it, which is a stronger guarantee than a spared rectangle was.
+        let mut frame = Frame::new(GridSize::new(6, 3));
+        let whole = frame.area();
+        frame.painter(whole).fill(whole, 'x', Style::NORMAL);
+
+        // The strip: the top row, leaving upward.
+        frame.cross(Rect::new(0, 0, 6, 1), halfway(), None);
+        // The block: the last two columns of what is left, leaving rightward.
+        frame.cross(Rect::new(4, 1, 2, 2), halfway(), None);
+
+        assert_eq!(frame.to_text(), "      \nxxxx  \nxxxx  \n");
+    }
+
+    #[test]
+    fn a_crossing_drops_the_washes_it_paints_over() {
+        // Both frontends resolve a tint per cell *position*, so a wash left
+        // behind while the glyphs moved is a coloured blank cell — the bar's
+        // colour with no bar in it.
+        let mut frame = Frame::new(GridSize::new(8, 2));
+        frame.set_tint(Rect::new(0, 0, 4, 1), Wash::plain(crate::Tint::Green));
+        frame.set_tint(Rect::new(6, 1, 2, 1), Wash::plain(crate::Tint::Green));
+
+        frame.cross(Rect::new(0, 0, 4, 1), halfway(), None);
+
+        assert_eq!(
+            frame.tint_at(Pos::new(0, 0)),
+            None,
+            "the crossed wash stayed"
+        );
+        assert_eq!(
+            frame.tint_at(Pos::new(7, 1)),
+            Some(Wash::plain(crate::Tint::Green)),
+            "a wash outside the crossing was taken with it",
+        );
+    }
+
+    #[test]
+    fn keeping_clips_to_the_grid() {
+        // An out-of-date layout produces a smaller picture rather than a panic,
+        // which is the rule `Frame::painter` already states for its own area.
+        let mut frame = Frame::new(GridSize::new(4, 2));
+        frame.set(Pos::new(3, 1), Cell::new('x', Style::NORMAL));
+
+        let mut kept = Kept::default();
+        frame.keep(Rect::new(2, 0, 99, 99), &mut kept);
+
+        assert_eq!(kept.area(), Rect::new(2, 0, 2, 2));
+        assert_eq!(kept.cell(Pos::new(3, 1)), Cell::new('x', Style::NORMAL));
+    }
+
+    /// A crossing frozen at its midpoint, which is where a region is emptiest.
+    fn halfway() -> Crossing {
+        Crossing {
+            passage: crate::Passage::Wipe,
+            toward: crate::Toward::Right,
+            progress: 0.5,
+        }
     }
 
     #[test]

@@ -9,6 +9,7 @@ use bevy::prelude::*;
 
 use super::{PaneTransition, Reveal};
 use crate::sim::Tower;
+use orbs_shell::{Panel, Passing, Showing};
 
 /// Let the newest output arrive, a character at a time.
 ///
@@ -52,6 +53,38 @@ pub(super) fn finish_reveal(mut reveal: ResMut<Reveal>) {
 pub(super) fn drive_panes(time: Res<Time>, mut panes: ResMut<PaneTransition>) {
     panes.retarget(PANES);
     panes.advance(time.delta_secs());
+}
+
+/// Notice what the pane is showing, and let a crossing run.
+///
+/// The content half of [`drive_panes`] above: that one moves rectangles when the
+/// pane *count* changes, this one moves screens when the pane's *contents* do.
+/// Two clocks because they answer to different events — `F4` and the multiplex
+/// against `attend` and `wander`.
+///
+/// **Ordered after `refresh_panel`, explicitly**, and not merely into the same
+/// set. `plugin.rs` records why for `motion::advance`: a set orders both against
+/// `repaint` and **not against each other**, so the executor is free to run this
+/// first and observe the previous frame's panel — which for a crossing means
+/// starting one a frame late, every time.
+///
+/// The motion switch is the tube's, read by `motion::advance` and handed on;
+/// this system has no `CrtSettings` of its own, so `None` here means *"nobody has
+/// told me"* rather than *"off"*.
+pub(super) fn drive_passing(
+    time: Res<Time>,
+    panel: Res<Panel>,
+    surfaces: super::input::Surfaces,
+    linear: Res<crate::shell::Linear>,
+    mut passing: ResMut<Passing>,
+) {
+    // **The tower opening, and it happens once.** This system is gated on
+    // `booted`, so its first run *is* the frame the boot card handed over —
+    // `Passing::wake` latches, so calling it every frame after that is free and
+    // there is no edge for a hitch to miss.
+    passing.wake();
+    passing.advance(time.delta_secs(), None);
+    passing.observe(&Showing::of(surfaces.open(), &panel, linear.showing()));
 }
 
 /// Panes the main window holds outside a siege.

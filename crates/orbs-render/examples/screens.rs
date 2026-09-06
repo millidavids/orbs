@@ -15,9 +15,10 @@
 //! less, the setting would become a difficulty choice."*
 
 use orbs_render::{
-    Burn, Depiction, DisplayMode, FieldName, Frame, GRID, GridSize, Grind, Intensity, Outcome,
-    PICTURE, Painter, Pos, Presentation, RecordKind, RecordView, Records, Rect, Role, ScreenLayout,
-    ScreenRequest, Sift, Span, Square, Stacks, Steep, Style, UtteranceKind,
+    Burn, Crossing, Depiction, DisplayMode, FieldName, Frame, GRID, GridSize, Grind, Intensity,
+    Kept, Outcome, PICTURE, Painter, Passage, Pos, Presentation, RecordKind, RecordView, Records,
+    Rect, Role, ScreenLayout, ScreenRequest, Sift, Span, Square, Stacks, Steep, Style, Toward,
+    UtteranceKind,
 };
 
 /// The wizard's name is world state (`orbs_sim::Wizard`), which this crate does
@@ -127,7 +128,105 @@ fn main() {
     burning();
     grinding();
     steeping();
+    crossing();
     worst_case();
+}
+
+/// One screen leaving and the next arriving — `attend forge`, as text.
+///
+/// **The only See-it a crossing has that is not a window.** `ORBS_DUMP` is a
+/// still photograph: it builds no `App` and advances no clock, so every frame of
+/// this would sit at progress zero. `ORBS_PASSAGE_AT` poses one frame of it in
+/// the running game's own layout; this poses eight in a row, which is the only
+/// place the *shape* of the motion can be read rather than inferred.
+///
+/// What to look for: the seam travelling left to right with three cells of
+/// `▓▒░` trailing it, the whole strip empty at the midpoint, and the two ends
+/// being exactly the two screens — that last is the property everything else
+/// rests on, and `passage::tests::the_endpoints_are_identities` holds it.
+fn crossing() {
+    const STRIP: GridSize = GridSize::new(52, 4);
+
+    // Kept from a settled frame, exactly as `shell::passing` keeps one: the
+    // screen a crossing departs from is last frame's, and nothing can ask for it
+    // after `Frame::reset` has blanked it.
+    let mut leaving = Frame::new(STRIP);
+    strip(&mut leaving, &LABORATORY);
+    let mut kept = Kept::default();
+    leaving.keep(leaving.area(), &mut kept);
+
+    let mut frame = Frame::new(STRIP);
+    for (passage, what) in [
+        (Passage::Wipe, "a room — `attend forge`"),
+        (Passage::Gather, "a tool taking the pane — `wander`"),
+        (Passage::Furl, "the same screen re-read — `F5`"),
+    ] {
+        println!("\n\nA crossing, {passage:?} — {what}\n");
+        println!("  Progress runs 0.00 to 1.00. Out for the first half, in for the");
+        println!("  second, and the midpoint is the beat between the two screens.\n");
+
+        for step in 0..=8u16 {
+            let progress = f32::from(step) / 8.0;
+            frame.reset(STRIP);
+            strip(&mut frame, &FORGE);
+            frame.cross(
+                frame.area(),
+                Crossing {
+                    passage,
+                    toward: Toward::Right,
+                    progress,
+                },
+                Some(&kept),
+            );
+            println!("  progress {progress:.2}");
+            for row in frame.rows() {
+                let line: String = row.iter().map(|cell| cell.glyph).collect();
+                println!("    │{line}│");
+            }
+            println!();
+        }
+    }
+}
+
+/// The laboratory's instruments, as the panel would list them.
+const LABORATORY: [(&str, &str, &str); 4] = [
+    ("athanor", "████████░░░░", "burning"),
+    ("mortar_and_pestle", "█████░░░░░░░", "grinding"),
+    ("balneum_mariae", "██░░░░░░░░░░", "steeping"),
+    ("alembic", "░░░░░░░░░░░░", "cold"),
+];
+
+/// The forge's, which is a different shape as well as different words — a
+/// crossing has to look right between two screens that share no column.
+///
+/// **The glyphs are [`lattice`](orbs_render::lattice)'s own**, and the first
+/// draft's were not: `◇` and `◆` are outside CP437, so `Cell::new` substituted
+/// them and this example printed `???` across the arriving half. Nothing else in
+/// the project would have shown that — which is the thing `screens` is for.
+const FORGE: [(&str, &str, &str); 4] = [
+    ("apex", "☼·☼", "bound"),
+    ("belt", "·☼·", "open"),
+    ("hem", "···", "open"),
+    ("hurried", "──", "8 ticks"),
+];
+
+/// A strip of instruments, hand-built.
+///
+/// Hand-built for `boot_report`'s reason: this example lives in `orbs-render`,
+/// whose `[dependencies]` is deliberately empty, so it cannot reach the shell's
+/// panel painter. What it needs to be is *dense and worded*, because that is
+/// what a crossing has to erode legibly.
+fn strip(frame: &mut Frame, rows: &[(&str, &str, &str)]) {
+    let area = frame.area();
+    let mut painter = frame.painter(area);
+    for (index, (name, bar, state)) in rows.iter().enumerate() {
+        let Ok(row) = u16::try_from(index) else {
+            continue;
+        };
+        painter.glyphs(Pos::new(1, row), name, Style::NORMAL);
+        painter.glyphs(Pos::new(24, row), bar, Style::NORMAL);
+        painter.glyphs(Pos::new(38, row), state, Style::DIM);
+    }
 }
 
 /// The balneum mariae: a vessel of liquid, rolling as it digests.

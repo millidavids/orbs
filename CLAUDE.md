@@ -366,6 +366,7 @@ has exactly the standing it had here: it is the gate, not supplementary reading.
 | the spell language, the editor, or highlighting | *A spell's verb is read at cast*, *A spell is highlighted*, *The satchel* |
 | a duration, a rate, or anything the economy touches | *`orbs-balance`* — and **run a sweep** |
 | a painter, a record, or the way something reads | *The output style*, *The terminal build* |
+| a screen changing — a domain, a tool, `F5` | *The passage* — and it is one of the few that genuinely needs a window |
 | accessibility, colour, or the tube | *Greyscale* |
 | the manual, `recall`, or a room's primer | *`recall apprentice`* |
 

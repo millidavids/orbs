@@ -15,6 +15,34 @@
   at 1.0 (DESIGN.md §19).
 -->
 
+## [v0.11.10] - 2026-09-06
+
+### Description
+In development — a dev log, not patch notes. Screens move now. Walking between
+rooms slides the old instruments away and the new ones back in, tools fly into
+the middle and out again, and the orb's own opening does the same.
+
+### Added
+- **Screens move instead of cutting.** Walking into another room sends its
+  instruments and boards out by the edge they already sit against — the readings
+  along the top go upward, the room's own panel goes off to the side — and the
+  new room's come back the way they went. What you have typed never moves: it
+  did not change, so it stays where it is.
+- **Tools open by flying into the middle.** The archive's map, the spell editor
+  and the progression screen take the whole panel, so the whole panel gathers
+  into a point and the new one grows back out of it.
+- **The orb opens itself.** The name spells out a letter at a time, each one
+  growing into place, then what it stands for, then what the orb is made of —
+  and when the card is done it collapses inward and the tower pushes in around
+  it, the rail from the side and the readings from the top.
+
+### Changed
+- **The opening is a third shorter.** Three things happening in turn read faster
+  than one long one, so the card no longer needs the pauses that were holding it
+  open.
+- **`F3` stops all of it.** The tube's own switch turns the motion off with
+  everything else it turns off, and screens change instantly instead.
+
 ## [v0.11.4] - 2026-09-04
 
 ### Description

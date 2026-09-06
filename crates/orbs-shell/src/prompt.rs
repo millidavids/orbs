@@ -12,8 +12,8 @@
 //! the log a player will `peruse`.
 
 use orbs_render::{
-    DisplayMode, Frame, Painter, Pos, RecordView, Rect, ScreenLayout, ScreenRequest, Span, Style,
-    UtteranceKind,
+    Crossing, DisplayMode, Frame, Painter, Pos, RecordView, Rect, ScreenLayout, ScreenRequest,
+    Span, Style, Toward, UtteranceKind,
 };
 use orbs_sim::Sim;
 
@@ -90,7 +90,161 @@ pub struct View<'a> {
 /// The layout arrives already interpolated: a pane appearing or leaving does so
 /// over a fraction of a second (see [`PaneTransition`]), and every rectangle here
 /// is wherever that motion has reached this frame.
-pub fn paint(frame: &mut Frame, linear: &mut Linear, view: View<'_>) {
+pub fn paint(
+    frame: &mut Frame,
+    linear: &mut Linear,
+    passing: &mut super::passing::Passing,
+    view: View<'_>,
+) {
+    // **A wrapper, because `paint_view` has three early returns and a
+    // fall-through branch.** A crossing applied at each of them would be four
+    // copies of one rule, and the surface that got added without its copy would
+    // simply not animate — the failure `focus::Focus` was extracted to stop, one
+    // level down. This is the single place a screen is handed over.
+    //
+    // `passing` is a parameter rather than a [`View`] field, and `&mut`: it is
+    // the only thing here that outlives the frame, and `paint_view` has no
+    // business with it at all.
+    //
+    // **Only crossed if the kept screen still describes this grid.** A resize
+    // mid-crossing would otherwise blit last frame's cells at this frame's
+    // coordinates, which is the defect `orbs-tui`'s shadow buffer already
+    // records for itself.
+    let crossing = passing.crossing().filter(|_| passing.describes(frame));
+    let crossed = paint_view(frame, linear, view);
+
+    let Some(crossing) = crossing else {
+        // Nothing moving, so this screen's regions are what the next crossing
+        // will have to leave *from* — and only this function knows them.
+        passing.remember(crossed);
+        return;
+    };
+    // **The union of both screens' regions.** Sized from the arriving screen
+    // alone, a laboratory leaving for a room with no instrument panel would find
+    // an empty block and cut rather than leave. `Kept::cell` reads blank outside
+    // its own rectangle, which is what makes the wider region draw correctly for
+    // whichever screen did not have it.
+    let regions = crossed.union(passing.remembered());
+    for (area, toward) in regions.moving() {
+        frame.cross(area, Crossing { toward, ..crossing }, Some(passing.kept()));
+    }
+    // **The rail, and only out of boot.** See `Crossed::rail`: every other
+    // crossing leaves it standing because it is the one thing on screen that is
+    // not about the room you are in. Arriving out of the card it is not on
+    // screen yet, so it pushes in from the edge it lives against.
+    if passing.is_waking() {
+        frame.cross(
+            regions.rail,
+            Crossing {
+                toward: Toward::Right,
+                ..crossing
+            },
+            Some(passing.kept()),
+        );
+    }
+}
+
+/// The regions a crossing moves, each by its own edge.
+///
+/// **Two, or one.** A room change moves the strip along the top and the block
+/// down the side and leaves the transcript between them standing; a surface that
+/// takes the whole pane moves the lot. Nothing else is ever crossed — the border,
+/// its title, the tower rail and the prompt hold still through all of it.
+/// How many regions one screen change can move.
+///
+/// The strip along the top, and the block's two slabs. See [`Crossed::parts`].
+const MOST: usize = 3;
+
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct Crossed {
+    /// The regions that move, each with the edge it leaves by.
+    ///
+    /// **Three, and an array rather than named fields.** It was `strip` and
+    /// `block`, which assumed the block was one rectangle — and it is two
+    /// whenever the layout puts the instrument panel across the top *and* a board
+    /// down the side, which `Along::of` does on any pane taller than it is wide.
+    /// See [`slabs`], where collapsing those two into one is recorded along with
+    /// what it cost.
+    ///
+    /// Slot 0 is the gauges and the road; slots 1 and 2 are the block's two
+    /// slabs. Fixed slots, so [`union`](Self::union) can pair them up across two
+    /// screens without having to match rectangles to each other.
+    parts: [(Rect, Toward); MOST],
+    /// The whole interior, when a surface replaced it. Overrides the two above.
+    whole: Rect,
+    /// The tower rail, which moves for **one** crossing only.
+    ///
+    /// Every ordinary crossing leaves it standing on purpose: it is awareness
+    /// rather than a view, it is drawn on every branch including the modal ones,
+    /// and a player deep in the spell editor still gets told the forge caught
+    /// fire. Taking it away for a room change would be taking away the one thing
+    /// on screen that is not about the room.
+    ///
+    /// Arriving out of the boot card is the exception, because there it is not
+    /// on screen yet — it pushes in from the right as the tower opens. Carried
+    /// here always and used only when `Passing::is_waking`.
+    rail: Rect,
+}
+
+impl Crossed {
+    /// The regions of two screens, together.
+    ///
+    /// A crossing has to cover whatever *either* side put on screen: the
+    /// laboratory's panel has to be able to leave for a forge that has none, and
+    /// the forge's lattice has to be able to arrive over a laboratory that had
+    /// none. [`Kept::cell`](orbs_render::Kept::cell) reads blank outside its own
+    /// rectangle, so the half that never had the region simply has nothing there.
+    fn union(self, other: Self) -> Self {
+        // Slot by slot — the two screens' slabs mean the same thing in the same
+        // place, so the directions match by construction and only the rectangles
+        // have to be joined.
+        let mut parts = self.parts;
+        for (slot, (area, _)) in parts.iter_mut().zip(other.parts) {
+            slot.0 = slot.0.union(area);
+        }
+        Self {
+            parts,
+            whole: self.whole.union(other.whole),
+            rail: self.rail.union(other.rail),
+        }
+    }
+
+    /// A surface that replaced everything inside the border.
+    const fn all(interior: Rect, rail: Rect) -> Self {
+        Self {
+            parts: [(Rect::EMPTY, Toward::Up); MOST],
+            whole: interior,
+            rail,
+        }
+    }
+
+    /// What to cross, and which way each part goes.
+    ///
+    /// **`whole` is not a third part, it is the other two's replacement**, and
+    /// running it alongside them is a defect with a picture: a maze opening over
+    /// a laboratory unioned the session's strip and block into the interior and
+    /// drew *three* gathers, each converging on a different centre, so the screen
+    /// came apart into three piles instead of one. It contains both by
+    /// construction, so it stands in for both.
+    ///
+    /// Empty rectangles are dropped rather than crossed: a short pane refuses the
+    /// road, an empty room draws no panel, and a zero-area region is a divide
+    /// waiting to happen in the shapes.
+    fn moving(self) -> impl Iterator<Item = (Rect, Toward)> {
+        // `Toward` means nothing to the shape a whole-pane change uses — a
+        // `Gather` converges from every side at once — so the value paired with
+        // it here is the default rather than a claim.
+        let mut parts = self.parts;
+        if !self.whole.is_empty() {
+            parts = [(Rect::EMPTY, Toward::Up); MOST];
+            parts[0] = (self.whole, Toward::Right);
+        }
+        parts.into_iter().filter(|(area, _)| !area.is_empty())
+    }
+}
+
+/// Paint the session, and say what a crossing would cover.
+fn paint_view(frame: &mut Frame, linear: &mut Linear, view: View<'_>) -> Crossed {
     let View {
         sim,
         line,
@@ -157,11 +311,20 @@ pub fn paint(frame: &mut Frame, linear: &mut Linear, view: View<'_>) {
     // it five.
     let rail = || (layout.rail(), layout.rail_boxes(), layout.rail_foot());
 
+    // **The interior, not the pane.** A crossing never touches the border: the
+    // title is the game's one continuously-visible statement of place (§7 — paths
+    // are places), and a box coming apart reads as the *machine* breaking rather
+    // than the screen changing, which is exactly why §19 cut the tube strike.
+    let interior = first.inset(1);
+    // The three surfaces that replace the whole pane move all of it —
+    // `Focus::takes_the_pane` names the same set, and `Passing` asks it there.
+    let whole = Crossed::all(interior, layout.rail());
+
     if let Some(tapestry) = weaving {
         super::loom::paint(frame, tapestry, first, sim.prose());
         let (at, boxes, foot) = rail();
         super::rail::paint(frame, sim, screen, at, boxes, foot, &panel.briefs);
-        return;
+        return whole;
     }
 
     if let Some(editor) = editing {
@@ -173,7 +336,7 @@ pub fn paint(frame: &mut Frame, linear: &mut Linear, view: View<'_>) {
         // No prompt row: the prompt is dead while the editor has the keyboard
         // (`editing::not_editing`), and drawing a caret it cannot accept a
         // keystroke into is the clearest possible lie about where typing goes.
-        return;
+        return whole;
     }
 
     // **The maze, when the arrows have it.** Third of three modal branches, and
@@ -193,10 +356,10 @@ pub fn paint(frame: &mut Frame, linear: &mut Linear, view: View<'_>) {
         // keystroke is discarded while this is open, and a caret is the game's
         // one promise about where typing lands.
         frame.set_cursor(None);
-        return;
+        return whole;
     }
 
-    if linear.showing() {
+    let crossed = if linear.showing() {
         super::linear::paint(
             linear,
             frame,
@@ -208,8 +371,12 @@ pub fn paint(frame: &mut Frame, linear: &mut Linear, view: View<'_>) {
             scroll,
             bench,
         );
+        // `F5`'s mirror is the fourth surface that replaces the pane, and the one
+        // no `Focus` variant names — so it is spelled out here rather than
+        // derived, and `Showing::mirrored` is its counterpart in the clock.
+        whole
     } else {
-        session(
+        let parts = session(
             frame,
             sim,
             screen,
@@ -220,7 +387,12 @@ pub fn paint(frame: &mut Frame, linear: &mut Linear, view: View<'_>) {
             scroll,
             bench,
         );
-    }
+        Crossed {
+            parts,
+            whole: Rect::EMPTY,
+            rail: layout.rail(),
+        }
+    };
     let (at, boxes, foot) = rail();
     super::rail::paint(frame, sim, screen, at, boxes, foot, &panel.briefs);
     // The ghost arrives already computed. It stays a pure function of the line,
@@ -232,6 +404,7 @@ pub fn paint(frame: &mut Frame, linear: &mut Linear, view: View<'_>) {
     candidates(frame, list_area, offered);
 
     input_line(frame, prompt_area, line, &sim.prompt(), ghost);
+    crossed
 }
 
 /// The reserved rows, divided into the Tab listing and the prompt proper.
@@ -327,6 +500,28 @@ pub fn paint_booting(frame: &mut Frame, stage: crate::stage::Stage, progress: f3
 
     crate::post::paint(frame, stage, progress, engine);
 
+    // **And then the whole card leaves.** `Stage::Close` draws the finished
+    // screen and takes it away by the leaving half of a `Gather` — the same
+    // motion `wander` and the editor use, because this is the same event: a
+    // surface that had the whole pane giving it back.
+    //
+    // **Over the pane's interior, and the box stays.** Folding the whole screen
+    // reads better in isolation and worse in sequence: the border would go and
+    // then come straight back, because the game draws one too. Left standing, it
+    // *is* the game's pane — the rail pushes it narrower from the right as the
+    // tower opens, which is the frame becoming the main panel rather than being
+    // replaced by one.
+    if let Some(closing) = stage.closing(progress) {
+        frame.fold(
+            pane.inset(1),
+            Crossing {
+                passage: orbs_render::Passage::Gather,
+                toward: Toward::Right,
+                progress: closing * 0.5,
+            },
+        );
+    }
+
     // **No prompt during boot.** It used to type itself here, caret and all,
     // before the frame drew — an input line offered on a screen where nothing
     // can be typed, since every keyed system is gated on `booted`. The first
@@ -334,6 +529,15 @@ pub fn paint_booting(frame: &mut Frame, stage: crate::stage::Stage, progress: f3
 }
 
 /// The transcript: what was typed and what came back.
+///
+/// Returns the two regions a crossing moves — the strip along the top and the
+/// block down the side — and **not** the transcript between them, which did not
+/// change and is what a room change deliberately leaves standing.
+///
+/// They are returned rather than re-derived because the splits below are the
+/// only thing that knows. The panel runs down the *side* at the grid the game
+/// draws, so neither region is a function of the pane alone, and the boards below
+/// take their slices in a fixed order from whatever is left.
 pub(super) fn session(
     frame: &mut Frame,
     sim: &Sim,
@@ -344,9 +548,9 @@ pub(super) fn session(
     panel: &super::glance::Panel,
     scroll: &super::scrollback::Scroll,
     bench: &super::bench::Bench,
-) {
+) -> [(Rect, Toward); MOST] {
     if pane.is_empty() {
-        return;
+        return [(Rect::EMPTY, Toward::Up); MOST];
     }
     let mut painter = frame.painter(pane);
     // **The pane says where you are**, because the pane is the thing that shows
@@ -405,7 +609,8 @@ pub(super) fn session(
     };
     painter.border(pane, Some(&title), Style::DIM);
 
-    let mut body = pane.inset(1);
+    let interior = pane.inset(1);
+    let mut body = interior;
 
     // §5.0's economy, made visible: an action occupies its slot for a duration,
     // and a meter is the only thing on screen that says how much of it is left.
@@ -442,6 +647,16 @@ pub(super) fn session(
         super::road::paint(&mut painter, road.area, line, sim.prose());
     }
     body = road.rest;
+    // **The strip along the top**, which is the two rows above that are about
+    // the tower's whole life rather than about the room. It leaves upward, by the
+    // edge it sits against. Measured as what `body` lost rather than as the sum
+    // of the two splits, because either of them can refuse at a short pane and a
+    // sum of refusals is a rectangle nothing drew in.
+    //
+    // Only ever rows — the gauges and the road span the full width — so the
+    // second slab is empty and is dropped.
+    let [strip, _] = slabs(interior, body);
+    let after_strip = body;
 
     let instruments = panel.instruments.as_slice();
     let split = super::panel::split(body, instruments);
@@ -503,6 +718,19 @@ pub(super) fn session(
         super::lattice::paint(&mut painter, binding.area, open, sim.prose());
     }
     body = binding.rest;
+    // **The block down the side**, which is the panel and whichever one of the
+    // seven domain boards is open — everything the room put on screen. It leaves
+    // rightward, by the edge `panel::split` already puts it against, so it goes
+    // out past the tower rail rather than across the transcript.
+    //
+    // Taken after the whole chain rather than unioned split by split: only one
+    // board can be present at a time and each takes from what the last left, so
+    // the difference is the block and a union would be the same rectangle spelled
+    // seven ways.
+    // **Two slabs, not one.** The panel can run across the top while a board
+    // claims columns down the side, and what the transcript gave up is then an L
+    // — see `slabs`, and what treating it as one rectangle cost.
+    let block = slabs(after_strip, body);
 
     // The tower-wide production meter stays: it is the *pool*, not an
     // instrument, and it is what says the slot is spent wherever it was spent.
@@ -593,6 +821,63 @@ pub(super) fn session(
         view = view.revealing(after, cells);
     }
     view.draw(&mut painter, body, drawn().take(visible).skip(narrowest));
+    [strip, block[0], block[1]]
+}
+
+/// What `after` gave up out of `before`, as up to two disjoint slabs.
+///
+/// **Two, because what a body gives up is an L and not a rectangle.** This
+/// returned one rect — the bounding box of the edges that moved — on the
+/// reasoning that an L "cannot be produced because the strip is measured before
+/// the boards begin". That was wrong, and the way it was wrong wiped the one
+/// thing this whole design exists to keep: `panel::split` puts the instrument
+/// panel **across the top** whenever `Along::of` finds the pane taller than it
+/// is wide, and `stacks::split` claims columns from the right whatever the shape.
+/// Both at once is exactly the L, and the bounding box of a full-width top slab
+/// and a full-height right slab is *the entire body* — transcript included. At
+/// `ORBS_GRID=80x45` a room change erased it.
+///
+/// So the slabs are kept apart, and they are **disjoint by construction**: the
+/// rows one takes span the full width, and the columns the other takes span only
+/// the rows the transcript kept. Overlapping them would double-cross the corner,
+/// and on the arriving half the second pass would read the first pass's output as
+/// its source.
+///
+/// Each leaves by the edge it sits against, which is now a fact about *which
+/// slab it is* rather than a guess from its shape — the `edge` helper that made
+/// that guess is gone with the bounding box that needed it.
+const fn slabs(before: Rect, after: Rect) -> [(Rect, Toward); 2] {
+    if after.is_empty() {
+        // The transcript got nothing, so the whole body is the block.
+        return [(before, Toward::Up), (Rect::EMPTY, Toward::Right)];
+    }
+    let rows = if after.row > before.row {
+        Rect::new(before.col, before.row, before.cols, after.row - before.row)
+    } else if after.bottom() < before.bottom() {
+        Rect::new(
+            before.col,
+            after.bottom(),
+            before.cols,
+            before.bottom() - after.bottom(),
+        )
+    } else {
+        Rect::EMPTY
+    };
+    // Over `after`'s rows rather than `before`'s, which is what keeps the two
+    // from meeting at the corner.
+    let cols = if after.right() < before.right() {
+        Rect::new(
+            after.right(),
+            after.row,
+            before.right() - after.right(),
+            after.rows,
+        )
+    } else if after.col > before.col {
+        Rect::new(before.col, after.row, after.col - before.col, after.rows)
+    } else {
+        Rect::EMPTY
+    };
+    [(rows, Toward::Up), (cols, Toward::Right)]
 }
 
 /// A tick count as a meter value, saturating rather than wrapping.
@@ -908,5 +1193,47 @@ mod tests {
             Intensity::Dim,
             "the ghost lost its weight to a run drawn over it",
         );
+    }
+
+    #[test]
+    fn an_l_shaped_block_stays_two_slabs() {
+        // **The defect this is here for wiped the transcript.** `panel::split`
+        // puts the instrument panel across the top of a pane taller than it is
+        // wide while a board still claims columns from the right, so what the
+        // transcript gives up is an L — and one rectangle covering an L is the
+        // whole body. At `ORBS_GRID=80x45` a room change erased every line of
+        // history on screen.
+        let body = Rect::new(0, 0, 40, 20);
+        // Four rows off the top and eight columns off the right.
+        let left = Rect::new(0, 4, 32, 16);
+
+        let [(rows, up), (cols, right)] = slabs(body, left);
+        assert_eq!(rows, Rect::new(0, 0, 40, 4), "the top slab");
+        assert_eq!(up, Toward::Up, "a row slab leaves upward");
+        assert_eq!(cols, Rect::new(32, 4, 8, 16), "the side slab");
+        assert_eq!(right, Toward::Right, "a column slab leaves rightward");
+
+        // **Disjoint**, which is what keeps the corner from being crossed twice —
+        // on the arriving half a second pass would read the first pass's output.
+        assert!(rows.intersection(cols).is_empty(), "the slabs overlap");
+        // ...and between them they are exactly what was given up.
+        assert_eq!(
+            usize::from(rows.cols) * usize::from(rows.rows)
+                + usize::from(cols.cols) * usize::from(cols.rows),
+            usize::from(body.cols) * usize::from(body.rows)
+                - usize::from(left.cols) * usize::from(left.rows),
+            "the slabs do not cover what the transcript lost",
+        );
+    }
+
+    #[test]
+    fn a_plain_side_block_is_one_slab() {
+        // The grid the game actually draws: the panel runs down the side and
+        // nothing is taken off the top, so the row slab is empty and dropped.
+        let body = Rect::new(0, 0, 100, 30);
+        let [(rows, _), (cols, toward)] = slabs(body, Rect::new(0, 0, 90, 30));
+        assert!(rows.is_empty(), "rows were taken that should not have been");
+        assert_eq!(cols, Rect::new(90, 0, 10, 30));
+        assert_eq!(toward, Toward::Right);
     }
 }
