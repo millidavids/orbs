@@ -100,6 +100,35 @@ impl Prose {
         self.lines.contains_key(key)
     }
 
+    /// A line whose wording depends on how many, with `{count}` filled in.
+    ///
+    /// # Why English needs this and a format string does not give it
+    ///
+    /// A mastery deed's sentence is drawn beside a live `3 of 5` counter, so it
+    /// has to say the number rather than spell it — `"five potions brewed"` on a
+    /// track that now asks for eight is a sentence contradicting the number next
+    /// to it. But `"{count} charms laid"` reads **"1 charms laid"** the moment
+    /// the count is one, and six of the twenty-five deeds ask for exactly one.
+    ///
+    /// So a key that reads wrong in the singular is authored twice — `key` and
+    /// `key_one` — and this picks. Every other key stays one line, because
+    /// looking for `_one` and not finding it falls straight through.
+    ///
+    /// **Not a pluralisation rule.** English inflects more than the noun (*"the
+    /// stacks walked"* against *"3 walks of the stacks"*), and a rule that only
+    /// added an `s` would have to be undone by hand for half of them. Two
+    /// authored sentences are what rule 6 asks for anyway.
+    #[must_use]
+    pub fn counted(&self, key: &str, count: u32) -> String {
+        let one = format!("{key}_one");
+        let key = if count == 1 && self.has(&one) {
+            &one
+        } else {
+            key
+        };
+        self.line(key, &[("count", &count.to_string())])
+    }
+
     /// Every subject the manual can answer on, from the `recall_` keys.
     ///
     /// Derived rather than listed, so authoring a manual entry in the content
@@ -176,6 +205,49 @@ mod tests {
         // to players.
         let prose = Prose::builtin();
         assert!(prose.has("work_busy"), "the busy refusal is authored");
+    }
+
+    #[test]
+    fn a_deed_that_asks_for_one_reads_as_one() {
+        // **The regression this exists for.** Fifteen mastery keys spelled their
+        // counts out in English and were changed to interpolate `{count}`, which
+        // was right for nine and wrong for six: *"1 charms laid"* is worse than
+        // the *"a charm laid"* it replaced. Every test stayed green — nothing
+        // asserts English — and a `dumps.sh` diff is what caught it.
+        let prose = Prose::builtin();
+        assert_eq!(prose.counted("mastery_forge_1", 1), "a charm laid");
+        assert_eq!(prose.counted("mastery_archive_1", 1), "the stacks walked");
+
+        // ...and above one it is the plural, from the same key.
+        assert_eq!(prose.counted("mastery_forge_1", 5), "5 charms laid");
+
+        // **`archive_2` can stop being one.** It sits second on its line, so a
+        // long game stretches it and the plural is then right.
+        assert_eq!(prose.counted("mastery_archive_2", 1), "a scroll assembled");
+        assert_eq!(prose.counted("mastery_archive_2", 2), "2 scrolls assembled");
+
+        // A key with no singular form falls straight through, which is what
+        // keeps the other nine as one authored line each.
+        assert_eq!(prose.counted("mastery_laboratory_2", 1), "1 potions brewed");
+    }
+
+    #[test]
+    fn every_deed_that_can_ask_for_one_has_a_singular() {
+        // **Derived from the content, not a list here.** A deed authored with no
+        // `times` asks for one, and one that reads `1 walks of the stacks` is a
+        // sentence nobody wrote. This is the check that the two files agree.
+        let prose = Prose::builtin();
+        for stone in super::super::Progression::builtin().mastery() {
+            if stone.done.times() != 1 {
+                continue;
+            }
+            let key = format!("mastery_{}", stone.id);
+            let singular = prose.counted(&key, 1);
+            assert!(
+                !singular.starts_with("1 "),
+                "`{key}` asks for one and reads {singular:?} — author `{key}_one`",
+            );
+        }
     }
 
     #[test]

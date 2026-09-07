@@ -50,6 +50,16 @@ const SEEDS: [u64; 4] = [0, 3, 11, 42];
 /// The sampling interval. Coarse: nothing here reads the intermediate rows.
 const EVERY: u64 = 600;
 
+/// The curve every pinned rate below was measured against.
+///
+/// **Baseline, and named rather than passed anonymously.** A game has a length
+/// and the harness can measure any of them, but the numbers in `report::EXPECTED`
+/// were taken against the authored curve — so a test that quietly swept a
+/// different one would be comparing a measurement to a pin that never described
+/// it. `bound` is the column that would move most: it earns its first slot by
+/// hand, so a longer game is a longer hand-played prefix inside the same budget.
+const MEASURED: orbs_sim::content::Length = orbs_sim::content::Length::Baseline;
+
 /// CLAUDE.md's worked clarity, verbatim in effect.
 ///
 /// `meditate` is how a dump waits, and the numbers are one tick past each stage's
@@ -151,7 +161,7 @@ fn a_swept_clarity_and_a_hand_played_one_agree() {
     let by_hand = sim.experience() as f64 / sim.tick().get() as f64;
 
     let policy = Policy::named("clarity").expect("the flagship policy exists");
-    let swept = drive::run(policy, 0, SPAN, EVERY).rate();
+    let swept = drive::run(policy, 0, SPAN, EVERY, MEASURED).rate();
 
     assert!(
         swept >= by_hand,
@@ -199,6 +209,7 @@ fn a_bound_spell_keeps_a_known_fraction_of_the_loop_it_automates() {
             seed,
             SPAN,
             EVERY,
+            MEASURED,
         )
         .rate();
         let bound = drive::run(
@@ -206,6 +217,7 @@ fn a_bound_spell_keeps_a_known_fraction_of_the_loop_it_automates() {
             seed,
             SPAN,
             EVERY,
+            MEASURED,
         )
         .rate();
 
@@ -238,6 +250,7 @@ fn the_bound_policy_actually_gets_a_spell_bound() {
         0,
         SPAN,
         EVERY,
+        MEASURED,
     );
 
     assert!(
@@ -280,7 +293,7 @@ fn every_pinned_rate_is_one_a_sweep_still_reaches() {
         // invisible and any seed change was a false alarm.
         let runs: Vec<_> = SEEDS
             .iter()
-            .map(|seed| drive::run(policy, *seed, SPAN, EVERY))
+            .map(|seed| drive::run(policy, *seed, SPAN, EVERY, MEASURED))
             .collect();
         #[allow(clippy::cast_precision_loss)]
         let mean = runs.iter().map(drive::Run::rate).sum::<f64>() / runs.len() as f64;

@@ -338,6 +338,169 @@ ORBS_BOOT=0 ORBS_DUMP="attend bailey; defend; hold; peruse bailey.log" cargo run
 #   enemy strikes - d20 gives 12 against 11, and it tells
 ```
 
+### The arsenal is worth what your industry is worth
+
+**How much help a thing gives is matched to the *rate* you make it at**, not to
+how many you hold. Three words: `fresh` at full strength, `thin` at half, `spent`
+and refused.
+
+```bash
+ORBS_BOOT=0 ORBS_DUMP="debug_spawn warding 5; survey arsenal; \
+  meditate 1200; survey arsenal; meditate 1800; survey arsenal" cargo run -p orbs
+#   name: warding, qty: 5, state: fresh
+#   name: warding, qty: 5, state: fresh
+#   name: warding, qty: 5, state: spent
+```
+
+**`debug_spawn` stamps a *full* store**, not one making — its own sentence is
+*"the shelf finds it had it all along"*, and the industry behind the shelf is part
+of *all along*. A single stamp made a spawned troop bring half its bodies, and a
+test of the Ley Line's garrison grant failed on the arsenal's freshness rule
+instead of on the grant.
+
+**Read the `qty` column, not the state one.** It is 5 the whole way through.
+**Total stock never enters the arithmetic** — that is what makes this buildable
+where a perishable arsenal was not, and it is why hoarding cannot beat it: a
+thousand wardings and five wardings are the same store if you have made the same
+number lately.
+
+**A spent store is refused, and the potion is kept** — the rule `spend_whole`
+already sets in this room:
+
+```bash
+ORBS_BOOT=0 ORBS_DUMP="debug_spawn warding 1; meditate 3000; attend bailey; \
+  defend; quaff warding; survey arsenal" cargo run -p orbs
+#   your warding stores are out. make one and come back
+#   name: warding, qty: 1, state: spent      ← still on the shelf
+```
+
+**Making something that is already `fresh` mints double renown** — the surplus is
+sold rather than shelved, so there is never a point at which producing stops being
+worth it. That is visible in a sweep rather than in a dump:
+`cargo run -p orbs-balance -- sweep --ticks 7200` shows the production policies'
+`renown` column roughly doubled while every `xp/tick` is untouched.
+
+**It does not thin while the game is closed**, because a tick is *"one real second
+while the window is open"* and nothing catches up. When offline progression lands
+and advances the tick, it will — with no change to any of this.
+
+**And a spell can ask which store has run down**, which is the whole answer to the
+mechanic — the reply to a thinning arsenal is automation, not vigilance:
+
+```
+for each store
+    if the store has spent
+        ...go and make one
+    end
+end
+```
+
+**`fresh`, `thin` and `spent` are all askable**, and `spent` is the one a keeping
+spell acts on. `thin` is the middle of the slope and is reached by production
+*spread over time* — one `debug_spawn` cannot make it, because it stamps a full
+store at a single tick and those makings all fall out of the window together.
+
+```bash
+cargo test -p orbs-sim --test scripting_the_siege a_spell_can_walk
+```
+
+Two lookups had to learn about the arsenal for that to work, and both are
+Cwd-scoped everywhere else: `group_at` (which set does `for each` walk) and
+`watch::find` (what does `has` resolve against). §19's exemption is *"the one room
+reachable from every other"* — a spell that can **say** `warding` anywhere but only
+**ask** about it in one room is that decision half-built.
+
+### Fame draws a crowd, and `petition` is how you are less famous
+
+**How many come up the road is decided by what the tower is worth.** The floor
+never moves — five, at every standing — and what fame lengthens is the *tail*.
+So a famous tower can still draw a quiet night, and an unknown one never meets
+the worst.
+
+```bash
+ORBS_BOOT=0 ORBS_DUMP="attend bailey; defend" cargo run -p orbs
+#   5 come up the road. they mean to onslaught
+
+ORBS_BOOT=0 ORBS_DUMP="debug_renown 9000; attend bailey; defend" cargo run -p orbs
+#   6 come up the road. they mean to onslaught
+```
+
+**Twelve is a written ceiling.** The garrison is six and `outnumbered` is a
+*ratio* — `enemy >= garrison * 2` — so twelve is exactly where that reading turns
+over at the opening. Past it, the rung three shipped solvers branch on would be
+true in every fight.
+
+**`petition` spends standing to shorten the tail**, and it lowers the *ceiling*
+rather than subtracting after the draw — at the moment you type it there is no
+siege and nothing has been drawn:
+
+```bash
+ORBS_BOOT=0 ORBS_GRID=120x45 \
+  ORBS_DUMP="debug_renown 9000; attend bailey; petition; petition; petition; defend" \
+  cargo run -p orbs
+#   word goes out. at most 11 will come, for 7 renown
+#   word goes out. at most 9 will come, for 7 renown
+#   word goes out. at most 8 will come, for 7 renown
+#   5 come up the road. they mean to onslaught
+```
+
+**Read that second line again — it is the mechanic explaining itself.** The
+ceiling falls 11 → 9 → 8, not 11 → 10 → 9, because the first payment cost a rank
+on the way and a lower rank draws a shorter tail on its own. **`petition` retires
+itself** rather than becoming a tax on every fight.
+
+Both refusals are free and name their numbers, which is `pledge`'s rule in this
+room: `that would take 7 renown, and you hold 0`, and at the bottom
+`no fewer than 5 will ever come. keep your renown`.
+
+### A fight moves your standing, and only says so once
+
+**Renown moves on every exchange and the round does not stop to mention it.**
+A round is elected by typing `hold` and has just said what the enemy did, so a
+sentence per exchange would be the same news twice over, six to thirteen times a
+fight. What moves is `(dealt + sortied)` against `(taken + spent) − mended` —
+**`mended` is in there because otherwise healing is punished**, and quaffing a
+`mending` is the domain's headline move.
+
+**It must pledge to show anything.** An unpledged round trades about evenly and
+nets nought, which is why this looked broken before it was written this way:
+
+```bash
+ORBS_BOOT=0 ORBS_GRID=120x45 \
+  ORBS_DUMP="attend bailey; defend; status; pledge d20 to buckler; hold; status" \
+  cargo run -p orbs
+#   renown .........   0
+#   they onslaught. you lose 1 and take 3      ← no renown line between
+#   renown .........   2
+```
+
+**The fight speaks once, on settling**, and the number is the *whole* fight —
+rounds and outcome — because it is measured from what the tower was worth when
+the enemy came up the road:
+
+```bash
+ORBS_BOOT=0 ORBS_GRID=120x45 \
+  ORBS_DUMP="attend bailey; defend; debug_siege; pledge d20 to buckler; hold; status" \
+  cargo run -p orbs
+#   the enemy breaks and runs. the wall holds, and you earn 105
+#   they are singing about it: 37 renown, 37 in all
+```
+
+**And a loss costs, scaled by how far short the wall fell.** A spell's records go
+to the log rather than the pane, so this one is `peruse`d:
+
+```bash
+ORBS_BOOT=0 ORBS_DUMP="debug_renown 200; attend bailey" \
+  ORBS_THEN="invoke besieging; meditate 900; peruse bailey.log" cargo run -p orbs
+#   defend rampart fallen 40  the wall is carried. 40 of the way, and you keep 28
+#   word gets about: the wall cost 31 renown, 169 left
+```
+
+**A fresh tower shows none of this**, and that is the floor rather than a bug:
+renown saturates at nought, so there is nothing to lose until there is. `debug_renown`
+is how to stand somewhere else — every one of the ten ranks sits behind an hour or
+a day of play.
+
 **A scroll spent on the wall reaches the wall.** §19 keeps `wield` for scrolls
 rather than giving them a fourth verb — a player who has spent one in the archive
 spends one here without learning anything new — so `pipeline::wield` asks
@@ -3291,10 +3454,110 @@ not, and §19 records why**: both fuzzy-collide (with `weave` and `edit`), and
 that is the one ambiguity prompt that would offer ending the session beside a
 verb people type constantly.
 
+### `quit` asks once before it leaves
+
+**It is the one word in the game that cannot be undone.** Everything else can be
+waited out, repeated or reversed; this ends the session and writes the tower on
+the way — so a `quit` meant for the spell editor, typed one surface too high,
+would end the game instead of closing a buffer.
+
+So it asks, **and the answer is another `quit`**. Any other command answers *no*
+and the question is gone: it lasts exactly one line, so a `quit` thought better
+of cannot end a session three commands later.
+
+**A word, not a keypress, and not a screen.** A confirmation surface would be one
+more thing that takes the keyboard — and one that opens *because a keystroke
+arrived* reads the keystrokes that opened it, which this project has now paid for
+once (§19, and the section below).
+
+**`F10`, `Ctrl-C` and the window's close button still leave outright**, without
+asking. A key that says *close this window* should close it; the question guards
+the word, which is the one you can typo.
+
 ```bash
-scripts/tui.sh start && scripts/tui.sh type 'quit'   # the session ends
-ORBS_BOOT=0 ORBS_DUMP="quit" cargo run -q -p orbs    # ...and the same word here
+ORBS_BOOT=0 ORBS_DUMP="quit" cargo run -q -p orbs                       # it asks
+ORBS_BOOT=0 ORBS_DUMP="quit" ORBS_THEN="quit" cargo run -q -p orbs      # ...and goes
+ORBS_BOOT=0 ORBS_DUMP="quit" ORBS_THEN="status; quit" cargo run -q -p orbs  # asks again
+scripts/tui.sh start && scripts/tui.sh type 'quit' 'quit'   # the session ends
 ```
+
+### `menu` opens the orb's own screen
+
+**A word of its own, and it used to be `quit`.** For one iteration `quit` opened
+this and leaving was a choice made here, on the argument that the word means
+*leave the thing you are in*. **Superseded** (§19): leaving the game and stepping
+out to a screen are two things, and one word for both made stopping a two-step
+operation through a screen the player had not asked for.
+
+`Focus::Menu` takes the pane and is **first** in the ordering — the way out wins
+any tie, which is the answer a player meant.
+
+```bash
+ORBS_BOOT=0 ORBS_DUMP="menu" cargo run -q -p orbs                     # the menu
+ORBS_BOOT=0 ORBS_DUMP="menu" ORBS_MENU="resume" cargo run -q -p orbs  # ...and back
+ORBS_BOOT=0 ORBS_DUMP="menu" ORBS_MENU="zorb" cargo run -q -p orbs    # §6: it says so
+```
+
+> **A dump could not have caught the defect this shipped with.** `type_into_menu`
+> was gated on the menu being open, and a reader that does not run keeps its
+> cursor — so the first time it ran it read whatever `Messages` still held, which
+> on the frame the menu opened was the word that opened it. Typed back in, that
+> word reached the menu's own `quit` and left the orb, which looked exactly like
+> `quit` never having stopped ending the session.
+>
+> `ORBS_DUMP` builds no `App` and presses no key, so it drew a perfect menu
+> throughout. **The gate for a surface that takes the keyboard is a test that
+> fires a real `KeyboardInput` at the real plugin stack** —
+> `opening_the_menu_does_not_eat_the_word_that_opened_it`, in `shell/plugin.rs`.
+> The fix is the rule `focus.rs` already states: *"a surface that grabs the
+> keyboard on open eats the player's first keystroke."*
+
+**`ORBS_MENU` is the latch**, `\n`-separated, one word per segment with Enter
+implied — `ORBS_WEAVE`'s shape minus the arrows, because the menu has nothing to
+walk. `<esc>` leaves it. **A `quit` typed at the menu inside a dump prints the
+menu**: a dump hosts no process, so there is nothing to end, and what it shows is
+the screen the player was looking at when they left.
+
+The menu's `quit` does **not** ask twice. The question guards the word typed at
+the *prompt*, where it can be a typo for something else; a `quit` chosen from a
+list headed *what now?* is already the second step.
+
+### The menu's three pages, and more than one tower
+
+`resume` · `saves` · `new` · `quit`, then `back` on either inner page. Every
+choice is a word, prefix-matched like the editor's and the weave's — `r`, `s`,
+`n`, `q`, `b`, and `s`/`m`/`l` for the lengths. **Escape steps one page and never
+leaves the orb**: the one irreversible choice here is always typed.
+
+**A dump keeps no save** (`ORBS_SAVE=off`, which `dumps.sh` pins), so `saves` and
+`new` say so rather than drawing an empty list. Point it at a real path to see
+them:
+
+```bash
+mkdir -p /tmp/t
+ORBS_SAVE=/tmp/t/orbs-save.toml ORBS_BOOT=0 ORBS_DUMP="menu" ORBS_MENU="saves" \
+  cargo run -q -p orbs     # the towers, numbered — the dump wrote slot 1 itself
+ORBS_SAVE=/tmp/t/orbs-save.toml ORBS_BOOT=0 ORBS_DUMP="menu" ORBS_MENU="new" \
+  cargo run -q -p orbs     # short / medium / long
+```
+
+**Slot 1 *is* `orbs-save.toml`**, so nothing a player already had has moved;
+2–6 sit beside it as `orbs-save-2.toml` and so on, and `ORBS_SAVE=<file>` names
+slot 1 wherever you point it.
+
+**The swap itself a dump cannot show** — it builds no `App` and hosts no session,
+so `Load` and `Begin` leave the menu on screen. It is tested where it can be
+exercised:
+
+```bash
+cargo test -p orbs --bins menuing
+```
+
+**`loading_a_second_tower_writes_the_first_to_its_own_file` is the exit criterion
+of the whole feature.** Autosave writes to whatever path it holds, so a swap that
+replaced the path before writing would put the tower you *left* into the file of
+the tower you *opened*. `Kept` makes the two one operation, and that test is what
+says so.
 
 `F2` (phosphor) and `F12` (screenshot) are **not** bound, and cannot be: there
 are no themes to cycle and no pixels to capture. That is rule 2 working — the

@@ -20,6 +20,7 @@ use orbs_sim::Sim;
 use super::editor::Editor;
 use super::line::Line;
 use super::linear::Linear;
+use super::menu::Menu;
 use super::reveal::Reveal;
 use super::screen::Screen;
 use super::tapestry::Tapestry;
@@ -77,6 +78,11 @@ pub struct View<'a> {
     /// says is who owns the keyboard, which is what decides whether the maze is
     /// drawn over the pane or beside the transcript.
     pub walking: bool,
+    /// The orb's menu, if `quit` has opened it.
+    ///
+    /// Read-only, like `weaving`, and for the same reason: it holds a typed line
+    /// and nothing that follows a viewport.
+    pub menuing: Option<&'a Menu>,
 }
 
 /// Paint the session into `frame`.
@@ -259,6 +265,7 @@ fn paint_view(frame: &mut Frame, linear: &mut Linear, view: View<'_>) -> Crossed
         editing,
         weaving,
         walking,
+        menuing,
     } = view;
     let grid = frame.size();
     // The prompt spends a second row so it can be drawn at double size — see
@@ -319,6 +326,20 @@ fn paint_view(frame: &mut Frame, linear: &mut Linear, view: View<'_>) -> Crossed
     // The three surfaces that replace the whole pane move all of it —
     // `Focus::takes_the_pane` names the same set, and `Passing` asks it there.
     let whole = Crossed::all(interior, layout.rail());
+
+    // **The menu, and it is checked before the other three.** They are surfaces
+    // of a tower and this is the way out of one, so if the two could ever be up
+    // together the way out is what the player meant — the same order
+    // `Focus::of` takes, and for the same reason.
+    //
+    // **No rail beside it.** The rail is the tower's telemetry, and the point of
+    // this screen is that you have stepped out of the tower: a forge catching
+    // fire behind a menu is not news a player can act on, and drawing it would
+    // say the game is still in front of them.
+    if let Some(menu) = menuing {
+        super::menu::paint(frame, menu, first, sim.prose());
+        return whole;
+    }
 
     if let Some(tapestry) = weaving {
         super::loom::paint(frame, tapestry, first, sim.prose());

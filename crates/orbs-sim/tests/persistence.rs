@@ -230,6 +230,54 @@ fn without_rolls(sim: &Sim) -> String {
     out
 }
 
+/// A long game loads back long, thresholds and all.
+///
+/// # The defect this exists for
+///
+/// **`Sim::restored` would have shipped installing the unpaced curve.** It calls
+/// `bare`, which applies `Progression::default()`, and `save::restore` never
+/// touches `Progression` at all — so a game begun at any length would have
+/// re-opened with every threshold back where it was authored: crossings
+/// re-announced, rooms opened that should not be, concentration jumping.
+///
+/// **No lint would have caught it.** `every_resource_the_world_holds_is_one_the
+/// _save_knows_about` does cover resources and does list `Length`, but what it
+/// asserts is that a resource is *declared* in the document — never that
+/// `restore` puts it back. A world rebuilt at the wrong length passes it green.
+///
+/// So the assertion is the *curve*, not the field: reading `length` back would
+/// only prove the `serde` round-trip, which was never in doubt.
+#[test]
+fn a_long_game_comes_back_long() {
+    use orbs_sim::content::Length;
+
+    let begun = orbs_sim::Sim::begun(9, Length::Long);
+    let scale = begun.scale();
+    assert_eq!(scale, 250_000, "a long game did not begin long");
+
+    let back = orbs_sim::Sim::restored(&begun.snapshot());
+    assert_eq!(
+        back.scale(),
+        scale,
+        "the tower came back at the curve as authored, not the one it was begun at",
+    );
+
+    // ...and the tail is not the only thing that moves: a station part-way up
+    // the line would be the one a re-announced crossing came from.
+    let begun_line: Vec<u64> = begun.ley_line().iter().map(|at| at.at).collect();
+    let back_line: Vec<u64> = back.ley_line().iter().map(|at| at.at).collect();
+    assert_eq!(begun_line, back_line, "the whole line moved under the save");
+
+    // The baseline case, which is what every save written before length existed
+    // reads as — `#[serde(default)]` on an absent field.
+    let plain = orbs_sim::Sim::restored(&orbs_sim::Sim::new(9).snapshot());
+    assert_eq!(
+        plain.scale(),
+        10_000,
+        "a save with no length did not come back as the curve as authored",
+    );
+}
+
 /// Save it, load it, and run both on. The primary property.
 #[test]
 fn a_loaded_tower_keeps_running_the_same_world() {
@@ -753,7 +801,7 @@ fn show_a_save() {
 #[test]
 fn every_resource_the_world_holds_is_one_the_save_knows_about() {
     // In the document.
-    const CARRIED: [&str; 17] = [
+    const CARRIED: [&str; 20] = [
         "orbs_sim::tick::Tick",
         "orbs_sim::rng::Rngs",
         "orbs_sim::tower::node::NodeIds",
@@ -764,6 +812,13 @@ fn every_resource_the_world_holds_is_one_the_save_knows_about() {
         // more: it is the only number that can *fall*, so a restore that lost it
         // would hand back standing the player had already spent or been docked.
         "orbs_sim::tower::renown::Renown",
+        // What renown has already been *spent* on, and what the tower is
+        // stocked in. The allowance was paid for in standing, so losing it to a
+        // quit would be losing the renown; and stores are a rate that a reload
+        // cannot re-derive, because what they measure is a history of makings
+        // rather than anything the world still holds.
+        "orbs_sim::tower::siege::standing::Petitioned",
+        "orbs_sim::tower::stores::Stores",
         "orbs_sim::tower::erosion::Integrity",
         "orbs_sim::tower::ley::Taken",
         "orbs_sim::tower::learned::Learned",
@@ -776,6 +831,14 @@ fn every_resource_the_world_holds_is_one_the_save_knows_about() {
         // Whether the tower began sealed — carried in `[world]` beside the seed,
         // because a replay has to know which start it is rebuilding.
         "orbs_sim::tower::opened::Sealing",
+        // How long the game is, in `[world]` for `Sealing`'s reason and a
+        // stronger one: the length is applied to `Progression` at construction
+        // and the world then holds only its *result*, so a save that lost it
+        // would reopen every threshold at the curve as authored. That is the one
+        // this lint's docs are careful about — it checks that a resource is
+        // *declared*, never that `restore` puts it back, and `Sim::restored`
+        // rebuilding the world at the wrong length would still have passed here.
+        "orbs_sim::content::length::Length",
         "orbs_sim::session::Choices",
         // §8.1's per-surface rationing. It travels because a cooldown a player
         // can clear by quitting is not a cooldown.

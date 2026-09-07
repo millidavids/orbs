@@ -61,17 +61,58 @@ fn f6_writes_the_parse_trace_where_the_game_is_running() {
 
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
-fn quit_is_a_word_and_it_ends_the_session() {
+fn quit_asks_before_it_ends_the_session() {
     if !available() {
         return;
     }
-    // **`quit` lands at the tick, not at `submit`**, and that is not a delay
-    // worth engineering away: the player sees the echo, then `quit_begins` on
-    // the tick, then the terminal comes back — the same beat every other word
-    // has.
+    // **The one word in the game that cannot be undone, so it asks.** A `quit`
+    // meant for the spell editor and typed one surface too high would otherwise
+    // end the game instead of closing a buffer.
+    //
+    // **Each half lands at the tick, not at `submit`**, which is not a delay
+    // worth engineering away: the player sees the echo, then the answer on the
+    // tick, then the terminal comes back — the same beat every other word has.
     let game = Game::start();
     game.send("quit");
+    game.expect_drawn("leave the orb?");
+
+    // Anything else answers no, and the question is gone.
+    game.does("status", "experience");
+    game.send("quit");
+    game.expect_drawn("leave the orb?");
+
+    // ...and the second one goes.
+    game.send("quit");
     game.expect_gone();
+}
+
+#[test]
+#[ignore = "plays a real game through tmux; run with scripts/play.sh"]
+fn menu_opens_the_orbs_own_screen_and_resume_comes_back() {
+    if !available() {
+        return;
+    }
+    // **`menu` is its own word.** `quit` opened this for one iteration and §19
+    // records why that was superseded — leaving the game and stepping out to a
+    // screen are two things.
+    //
+    // This is also the scenario that would have caught the defect the menu
+    // shipped with: `type_into_menu` was gated, a gated reader keeps its cursor,
+    // and the first time it ran it typed the word that opened the menu back into
+    // it. `ORBS_DUMP` presses no key and drew a perfect menu throughout.
+    let game = Game::start();
+    game.send("menu");
+    game.expect_drawn("the tower waits");
+    game.expect_drawn("resume");
+
+    // **Nothing of `menu` was typed into the menu.** The line under `>` is
+    // empty, which is what the ordering in `shell/plugin.rs` buys.
+    game.expect_drawn("what now?");
+
+    // `send` waits for the prompt to echo; the menu has no prompt, so the way
+    // back goes through `type_raw` and is waited for by what it draws.
+    game.type_raw("resume");
+    game.expect_drawn("/tower");
 }
 
 #[test]

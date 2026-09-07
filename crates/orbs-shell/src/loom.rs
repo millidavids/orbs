@@ -138,7 +138,7 @@ fn bar(
 ) -> u16 {
     let earned = screen.experience();
     let scale = screen.scale().max(1);
-    let label = format!("{earned} of {scale}");
+    let label = gauge(earned, scale);
     let label_width = u16::try_from(label.chars().count()).unwrap_or(9);
     let width = inner.saturating_sub(label_width.saturating_add(1));
 
@@ -152,9 +152,10 @@ fn bar(
         ],
     );
     // **Filled to the cell the total stands at on the line below**, so the
-    // fill's edge and the stations read against one scale — which since the
-    // line runs to ten thousand is the logarithmic one `along` draws; see
-    // there. The label carries the plain numbers.
+    // fill's edge and the stations read against one scale — the logarithmic one
+    // `along` draws, since the line's first stations are all inside its first
+    // hundredth however long the game is; see there. The label carries the
+    // numbers, rounded only where six figures will not fit.
     let filled = if earned >= scale {
         width
     } else {
@@ -246,7 +247,9 @@ fn headings(
 ///
 /// **The totals alternate between two rows**, because a five-figure label is
 /// wider than the three cells a station keeps between itself and the next, and
-/// one row of them ran together into a number nobody authored.
+/// one row of them ran together into a number nobody authored. Two rows buy six
+/// cells, which is five figures and no more — so a six-figure total is
+/// abbreviated rather than staggered a third time. See [`figures`].
 fn line_track(painter: &mut Painter<'_>, screen: &Tapestry, left: u16, y: u16, inner: u16) {
     let width = track_width(screen, inner);
     stations::run(painter, Pos::new(left, y), width);
@@ -275,9 +278,45 @@ fn line_track(painter: &mut Painter<'_>, screen: &Tapestry, left: u16, y: u16, i
                 y.saturating_add(u16::try_from(depth).unwrap_or(1))
                     .saturating_add(stagger),
             ),
-            &Span::new(&station.at.to_string()).with_style(Style::DIM),
+            &Span::new(&figures(station.at)).with_style(Style::DIM),
         );
     }
+}
+
+/// A threshold as the line draws it: exact below six figures, `250k` above.
+///
+/// **Six figures is where the label stops fitting**, and that is the whole rule.
+/// The totals alternate between two rows, so a label has `2 * GAP` = 6 cells
+/// before it reaches its same-row neighbour — which five figures fit and six do
+/// not. At a long game the last two ran together into `121766250000`, a number
+/// nobody authored, which is the exact failure the stagger was added to prevent
+/// one scale earlier.
+///
+/// **Nothing below six figures moves.** Baseline tops out at 10,000 and the
+/// longest tier a player is offered short of *long* reads 60,000, so every line
+/// but one draws precisely what it drew before and the dump captures do not
+/// shift.
+///
+/// **It rounds up, never down.** A station's total is a threshold, and a label
+/// reading lower than the real one would say a station is nearer than it is —
+/// the one direction a rounded picture must not err in. The exact number is
+/// never lost either way: `weave_bar`'s spoken form, the details pane and
+/// `weave_locked` all take it unrounded.
+fn figures(at: u64) -> String {
+    if at < 100_000 {
+        return at.to_string();
+    }
+    format!("{}k", at.div_ceil(1_000))
+}
+
+/// The bar's label: what is earned, of the line's scale.
+///
+/// **One function because two rows read it.** [`bar`] draws it and
+/// [`track_width`] subtracts its width, and the bar and the Ley Line share a
+/// scale only if both take the same answer — two `format!`s left to drift apart
+/// would desync the fill from the stations by however many cells they disagreed.
+fn gauge(earned: u64, scale: u64) -> String {
+    format!("{} of {}", figures(earned), figures(scale))
 }
 
 /// How wide the Ley Line's run is: exactly the cells the bar above fills.
@@ -286,7 +325,7 @@ fn line_track(painter: &mut Painter<'_>, screen: &Tapestry, left: u16, y: u16, i
 /// drawn two ways, and they only are if they measure the same span — so the
 /// label's width is subtracted here rather than in each of them.
 fn track_width(screen: &Tapestry, inner: u16) -> u16 {
-    let label = format!("{} of {}", screen.experience(), screen.scale().max(1));
+    let label = gauge(screen.experience(), screen.scale().max(1));
     inner.saturating_sub(u16::try_from(label.chars().count()).unwrap_or(9) + 1)
 }
 
@@ -382,13 +421,26 @@ fn track_needs(count: usize) -> u16 {
 /// a **logarithmic** scale to `scale`.
 ///
 /// **Position is still cost, read the way the curve grows.** The line's
-/// stations grow by about half each — 16, 24, 40, 56, 96 … 10000 — so on a
-/// linear scale the first five stand inside the first cell and the picture is
-/// a knot at the left and a road with nothing on it. Equal cells for equal
-/// *ratios* spreads them as the curve spreads them: a station is still further
-/// right than a cheaper one, and the bar above fills to exactly the cell the
-/// total has reached. §19 said the fixed hundred would become derived once the
-/// curve reached it; what it became is this.
+/// stations grow by about half each — 16, 24, 40, 56, 96 … — so on a linear
+/// scale the first five stand inside the first cell and the picture is a knot at
+/// the left and a road with nothing on it. Equal cells for equal *ratios*
+/// spreads them as the curve spreads them: a station is still further right than
+/// a cheaper one, and the bar above fills to exactly the cell the total has
+/// reached. §19 said the fixed hundred would become derived once the curve
+/// reached it; what it became is this.
+///
+/// # A longer game moves every station, and it moves them *left*
+///
+/// `scale` is the denominator, so raising it shrinks every fraction: the first
+/// station sits at `ln(17)/ln(10001)` = 0.31 of the run at baseline and
+/// `ln(17)/ln(250001)` = 0.23 at long. **The head compresses; it does not spread
+/// out.** A plan for the length feature guessed the opposite — 0.31 → 0.42 — and
+/// the picture settles it, which is what a See-it line is for.
+///
+/// Nothing here needs a length of its own: [`pack`]'s forward pass keeps
+/// consecutive stations a gap apart however tightly `along` wants to stack them,
+/// and its backward pass keeps the tail on the run. What did need one is the
+/// *label* — see [`figures`].
 ///
 /// A float, in a painter — the sim is integer throughout and this crate is not
 /// the sim. The last three cells are kept for the far end's frame.
@@ -626,7 +678,7 @@ fn details(painter: &mut Painter<'_>, screen: &Tapestry, area: Rect, prose: &Pro
             painter.span(
                 Pos::new(text_col, row.saturating_add(1)),
                 &Span::new(orbs_render::arriving(
-                    &prose.line(&format!("mastery_{}", stop.id), &[]),
+                    &prose.counted(&format!("mastery_{}", stop.id), stop.needed),
                     room,
                 ))
                 .with_style(Style::default().with_intensity(Intensity::Bright)),
@@ -733,6 +785,17 @@ mod tests {
         16, 24, 40, 56, 96, 160, 256, 400, 640, 1000, 1600, 2500, 4000, 6400, 8000, 10_000,
     ];
 
+    /// The same line at a long game, which is where six figures arrive.
+    ///
+    /// **Hand-copied like [`CURVE`], and deliberately a stale mirror.** What it
+    /// pins is the geometry of *sixteen six-figure numbers in a narrow pane*,
+    /// which is a fact about the pane rather than about the tier — so if `Long`
+    /// is retuned this does not follow it, and should not.
+    const LONG: [u64; 16] = [
+        16, 26, 57, 109, 259, 586, 1_239, 2_490, 5_008, 9_640, 18_665, 34_765, 65_440, 121_766,
+        175_248, 250_000,
+    ];
+
     /// Where the run starts, in a pane that begins somewhere.
     const LEFT: u16 = 4;
 
@@ -785,6 +848,66 @@ mod tests {
             !pack(LEFT, 39, 10_000, &CURVE).framed,
             "a split pane kept frames it has no room for",
         );
+    }
+
+    #[test]
+    fn a_six_figure_total_is_abbreviated_and_a_five_figure_one_is_not() {
+        // **Nothing baseline draws may move**, or 138 dump captures move with
+        // it — which is why the rule is six figures rather than "large".
+        assert_eq!(figures(0), "0");
+        assert_eq!(figures(10_000), "10000");
+        assert_eq!(figures(60_000), "60000");
+        assert_eq!(figures(99_999), "99999");
+
+        // Rounded **up**, so a label never says a station is nearer than it is.
+        assert_eq!(figures(100_000), "100k");
+        assert_eq!(figures(100_001), "101k");
+        assert_eq!(figures(121_766), "122k");
+        assert_eq!(figures(175_248), "176k");
+        assert_eq!(figures(250_000), "250k");
+    }
+
+    #[test]
+    fn no_total_runs_into_the_one_beside_it_on_its_row() {
+        // **The defect, exactly as the pane drew it.** At long the last two odd
+        // stations printed `121766250000` — a number nobody authored, which is
+        // the same failure the stagger was added to fix one scale earlier.
+        //
+        // A total is drawn at `x - 1` and the totals alternate rows, so the one
+        // it can touch is two stations along. Asserted where the line is framed:
+        // that is `2 * GAP` = 6 cells between neighbours on a row, and below it
+        // the frames have already come off for a pane narrower than the game
+        // hands out.
+        for curve in [&CURVE, &LONG] {
+            let scale = curve[curve.len() - 1];
+            for width in track_needs(curve.len())..=120 {
+                let packed = pack(LEFT, width, scale, curve);
+                if !packed.framed {
+                    continue;
+                }
+                for index in 0..curve.len().saturating_sub(2) {
+                    let label = figures(curve[index]);
+                    let cells = u16::try_from(label.chars().count()).unwrap_or(u16::MAX);
+                    let ends = packed.at[index].saturating_sub(1).saturating_add(cells);
+                    let next = packed.at[index + 2].saturating_sub(1);
+                    assert!(
+                        ends <= next,
+                        "`{label}` runs into `{}` at width {width}",
+                        figures(curve[index + 2]),
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_bar_and_the_track_measure_the_same_label() {
+        // They are two `format!`s one refactor apart from disagreeing, and if
+        // they did the fill's edge would sit some cells away from the station it
+        // is meant to reach. `gauge` is the single answer both take.
+        assert_eq!(gauge(0, 10_000), "0 of 10000");
+        assert_eq!(gauge(250_000, 250_000), "250k of 250k");
+        assert_eq!(gauge(123_456, 250_000), "124k of 250k");
     }
 
     #[test]

@@ -37,6 +37,45 @@ pub struct SimPlugin {
     pub persist: bool,
 }
 
+/// Build the tower a save describes, or a fresh one if there is none.
+///
+/// **Extracted so the menu's loader is not a fourth copy.** This ran only at
+/// App-build time while there was one way into a world; a menu that can put a
+/// *different* tower in front of the player needs the same three-way branch at
+/// runtime, and writing it twice is how the two come to disagree about which of
+/// `Restored`, `Unreadable` and `New` says what.
+///
+/// `wizard` names a *new* tower's wizard and is ignored by a restored one —
+/// `session::Wizard` is explicit that a save outranks the environment.
+pub(crate) fn raise(waiting: orbs_shell::Opened, seed: u64, wizard: Option<&str>) -> Tower {
+    match waiting {
+        orbs_shell::Opened::Restored(save) => {
+            let mut resumed = Tower::restored(&save);
+            // The gap is read here because the sim has no wall clock and §19
+            // forbids it acquiring one; the *words* are the sim's, because rule
+            // 6 puts prose in content files. Nothing accrues for it — §5 puts
+            // offline progression in Phase 11a.
+            resumed.say_resumed(orbs_shell::away_for(&save));
+            resumed
+        }
+        orbs_shell::Opened::Unreadable => {
+            let mut fresh = Tower::fresh(seed);
+            if let Some(wizard) = wizard {
+                fresh.rename(wizard);
+            }
+            fresh.say_save_unreadable();
+            fresh
+        }
+        orbs_shell::Opened::New => {
+            let mut fresh = Tower::fresh(seed);
+            if let Some(wizard) = wizard {
+                fresh.rename(wizard);
+            }
+            fresh
+        }
+    }
+}
+
 impl Plugin for SimPlugin {
     fn build(&self, app: &mut App) {
         // **The save outranks the seed and the environment both.** A world that
@@ -48,36 +87,19 @@ impl Plugin for SimPlugin {
         } else {
             orbs_shell::Opened::New
         };
-        let tower = match waiting {
-            orbs_shell::Opened::Restored(save) => {
-                let mut resumed = Tower::restored(&save);
-                // The gap is read here because the sim has no wall clock and §19
-                // forbids it acquiring one; the *words* are the sim's, because
-                // rule 6 puts prose in content files. Nothing accrues for it —
-                // §5 puts offline progression in Phase 11a.
-                resumed.say_resumed(orbs_shell::away_for(&save));
-                resumed
-            }
-            orbs_shell::Opened::Unreadable => {
-                let mut fresh = Tower::fresh(self.seed);
-                if let Some(wizard) = &self.wizard {
-                    fresh.rename(wizard);
-                }
-                fresh.say_save_unreadable();
-                fresh
-            }
-            orbs_shell::Opened::New => {
-                let mut fresh = Tower::fresh(self.seed);
-                if let Some(wizard) = &self.wizard {
-                    fresh.rename(wizard);
-                }
-                fresh
-            }
-        };
+        let tower = raise(waiting, self.seed, self.wizard.as_deref());
+        // **Where this tower is kept, resolved once and carried.** See `Kept`:
+        // a path read at the moment of writing is a path read after a swap.
+        let kept = super::persist::Kept::at(if self.persist {
+            orbs_shell::save_path()
+        } else {
+            None
+        });
 
         // One tick is one real second (DESIGN.md §5.0). FixedUpdate, not
         // Update, so world speed is independent of frame rate — see `clock`.
         app.insert_resource(tower)
+            .insert_resource(kept)
             .insert_resource(Time::<Fixed>::from_hz(1.0))
             // Gated on the boot sequence being over. Not cosmetic: `tower::drift`
             // rolls once per tick, so ticking through a wall-clock animation

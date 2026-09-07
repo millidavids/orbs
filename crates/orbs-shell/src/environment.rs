@@ -73,14 +73,32 @@ pub fn wizard() -> Option<String> {
 /// feature off, with nothing on screen saying so.
 pub const SEALED: &str = "ORBS_SEALED";
 
-/// A fresh tower, sealed or open as the environment says — or as `sealed`
-/// says when it does not.
+/// The switch that decides how long a fresh game is.
 ///
-/// **The one caller of either constructor from a frontend.** There are three
-/// fresh-world sites across two frontends and the dump, and three readings of
-/// one switch is how a rule comes to differ per build.
+/// `short`, `medium`, `long` — or `baseline`, the curve exactly as authored.
+/// Unset takes the caller's default, and **the split is `ORBS_SEALED`'s**: the
+/// game defaults to medium and **a dump defaults to baseline**, because the dump
+/// is an instrument and all 138 of its captures would otherwise move the day a
+/// default changed.
+///
+/// **Blank falls through to the default**, for the reason recorded on [`SEALED`]
+/// — an exported-but-empty variable is the shape "unset" most often arrives in,
+/// and reading it as anything in particular is how a switch comes to be on when
+/// nobody asked.
+///
+/// **An unrecognised word also falls through**, deliberately: a typo should give
+/// a player the default game rather than refuse to start one, and there is
+/// nowhere at this point in the boot to say so.
+pub const LENGTH: &str = "ORBS_LENGTH";
+
+/// A fresh tower, sealed or open and long or short as the environment says — or
+/// as `sealed` and `length` say when it does not.
+///
+/// **The one caller of any of these constructors from a frontend.** There are
+/// three fresh-world sites across two frontends and the dump, and three readings
+/// of one switch is how a rule comes to differ per build.
 #[must_use]
-pub fn fresh(seed: u64, sealed: bool) -> orbs_sim::Sim {
+pub fn fresh(seed: u64, sealed: bool, length: orbs_sim::content::Length) -> orbs_sim::Sim {
     let wanted = std::env::var(SEALED)
         .ok()
         .and_then(|value| match value.trim() {
@@ -89,10 +107,18 @@ pub fn fresh(seed: u64, sealed: bool) -> orbs_sim::Sim {
             _ => None,
         })
         .unwrap_or(sealed);
-    if wanted {
-        orbs_sim::Sim::sealed(seed)
-    } else {
-        orbs_sim::Sim::new(seed)
+    let long = std::env::var(LENGTH)
+        .ok()
+        .and_then(|value| orbs_sim::content::Length::named(&value))
+        .unwrap_or(length);
+    match (wanted, long) {
+        // An open tower is never a *game*, so it keeps the authored curve
+        // whatever the environment says: it is what every dump, example and
+        // balance policy measures, and a length on it would be a length nobody
+        // asked for on a tower nobody is playing.
+        (false, _) => orbs_sim::Sim::new(seed),
+        (true, orbs_sim::content::Length::Baseline) => orbs_sim::Sim::sealed(seed),
+        (true, long) => orbs_sim::Sim::begun(seed, long),
     }
 }
 

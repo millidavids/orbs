@@ -574,6 +574,20 @@ pub enum Verb {
     /// spell editor and the weave screen already use for *close this*, which
     /// makes it mean one thing at three depths rather than three things.
     Quit,
+    /// Open the orb's menu.
+    ///
+    /// # Why this is not `quit`
+    ///
+    /// It was, for one iteration, on the argument that *"the word means leave
+    /// the thing you are in, whichever thing that is"*. **Superseded** (§19):
+    /// leaving the game and stepping out to a menu are two things, and one word
+    /// for both meant a player who wanted to stop had to learn that stopping was
+    /// two steps. `quit` leaves and asks first; this opens the screen.
+    ///
+    /// The name is free of the naming pass's traps: `meditate` is the only other
+    /// verb beginning `me` and neither prefixes the other, so `men` names this
+    /// one and always will.
+    Menu,
     /// Fast-forward the clock.
     Meditate,
     /// Carry a reagent from one place to another.
@@ -809,6 +823,16 @@ pub enum Verb {
     /// chosen after the design was settled and then never swept; three pinned
     /// tables went red at once and every one of them was right.
     Anneal,
+    /// `petition` — spend standing so that fewer come up the road.
+    ///
+    /// **The first thing renown buys.** Fame lengthens the tail of what arrives;
+    /// this is how a wizard shortens it again, by letting some of that fame go.
+    ///
+    /// It is eight characters, which is exactly [`Verb::MAX_CANONICAL_LEN`] and
+    /// the third word in the game to sit on the limit after `meditate` and
+    /// `research`. Swept before it was taken: `pet` names nothing else,
+    /// `per` is `peruse` and `ple` is `pledge`.
+    Petition,
     /// `hold` — end your turn and let one round resolve.
     ///
     /// **The only thing in the domain that advances the world**, which is what
@@ -898,7 +922,7 @@ pub enum Verb {
 
 impl Verb {
     /// Every verb in the Phase 0 vocabulary, and what the phases since have added.
-    pub const ALL: [Self; 44] = [
+    pub const ALL: [Self; 46] = [
         Self::Attend,
         Self::Survey,
         Self::Peruse,
@@ -909,6 +933,7 @@ impl Verb {
         Self::Undo,
         Self::Unfurl,
         Self::Quit,
+        Self::Menu,
         Self::Meditate,
         Self::Move,
         Self::Wield,
@@ -953,6 +978,11 @@ impl Verb {
         Self::Imbue,
         Self::Snap,
         Self::Anneal,
+        // **The bailey's sixth, appended for the same reason the forge's three
+        // were.** It belongs beside `defend` by anchor and by subject, and it
+        // goes at the end regardless: the pinned collision table walks pairs in
+        // this order.
+        Self::Petition,
     ];
 
     /// The longest a canonical verb may be.
@@ -1017,10 +1047,11 @@ impl Verb {
             | Self::Summon
             | Self::Sing
             | Self::Chorus
-            // ...and the bailey's five, on the same reading. Standing to a
-            // siege, pledging dice, spending the arsenal on it, and ending a
-            // turn are the whole of what this room does.
+            // ...and the bailey's six, on the same reading. Standing to a
+            // siege, buying one down, pledging dice, spending the arsenal on it,
+            // and ending a turn are the whole of what this room does.
             | Self::Defend
+            | Self::Petition
             | Self::Deploy
             | Self::Quaff
             | Self::Hold
@@ -1041,6 +1072,7 @@ impl Verb {
             | Self::Unfurl
             | Self::Weave
             | Self::Quit
+            | Self::Menu
             | Self::Meditate => Group::Orb,
             // Kept in step with `is_destructive`, which had no reader until now
             // — a test asserts the two agree rather than trusting this list.
@@ -1075,6 +1107,7 @@ impl Verb {
             Self::Undo => "undo",
             Self::Unfurl => "unfurl",
             Self::Quit => "quit",
+            Self::Menu => "menu",
             Self::Meditate => "meditate",
             Self::Move => "move",
             Self::Wield => "wield",
@@ -1102,6 +1135,7 @@ impl Verb {
             Self::Chorus => "chorus",
             Self::Queue => "queue",
             Self::Defend => "defend",
+            Self::Petition => "petition",
             Self::Deploy => "deploy",
             Self::Quaff => "quaff",
             Self::Hold => "hold",
@@ -1214,7 +1248,14 @@ impl Verb {
             // the circle's shape rather than the sanctum's: a band is something
             // you *read*, not somewhere you stand, and there is one rampart to
             // fight from.
-            Self::Deploy | Self::Quaff | Self::Hold | Self::Pledge => Some(Self::Defend),
+            // **`petition` anchors to `defend` though it runs *before* a siege.**
+            // The anchor names the fixture that offers the word, not a live
+            // component: the rampart declares `defend` whether or not a `Siege`
+            // is on it, so this resolves at the bailey with the road empty —
+            // which is the only time it is any use.
+            Self::Deploy | Self::Quaff | Self::Hold | Self::Pledge | Self::Petition => {
+                Some(Self::Defend)
+            }
             // **The bailey's shape, not the sanctum's.** `imbue` is declared by
             // the lattice and the other two anchor *to it*, because a column is
             // something you read and snap rather than somewhere you stand.
@@ -1283,6 +1324,7 @@ impl Verb {
             Self::Undo => "undoing",
             Self::Unfurl => "unfurling",
             Self::Quit => "leaving",
+            Self::Menu => "opening the menu",
             Self::Meditate => "meditating",
             Self::Move => "moving",
             Self::Wield => "wielding",
@@ -1306,6 +1348,7 @@ impl Verb {
             Self::Muster => "mustering",
             Self::Haul => "hauling",
             Self::Defend => "defending",
+            Self::Petition => "petitioning",
             Self::Deploy => "deploying",
             Self::Quaff => "quaffing",
             Self::Hold => "holding",
@@ -1339,6 +1382,7 @@ impl Verb {
             | Self::Undo
             | Self::Unfurl
             | Self::Quit
+            | Self::Menu
             | Self::Weave
             | Self::Research
             | Self::Wander
@@ -1364,6 +1408,12 @@ impl Verb {
             // — one rampart — and **`hold` takes nothing** for `chorus`'s: it
             // names no argument because what it does is end your turn.
             | Self::Defend
+            // **`petition` takes nothing**, and it is one foe a word rather than
+            // a count for `pledge`'s reason: the price is only worth paying
+            // against a number you can see move, and paying it again is one more
+            // word. A `petition 3` would also have to answer what a partial
+            // refusal does when the third is at the floor.
+            | Self::Petition
             | Self::Hold
             | Self::Muster => NOTHING,
             // **What the arsenal holds**, which is `wield`'s shape rather than
@@ -1627,7 +1677,14 @@ mod tests {
         // a player meets it in every room. That is exactly what this metric
         // counts, and the paragraph below says why a *domain's* verb must not
         // move it.
-        assert_eq!(tower_wide.count(), 21);
+        //
+        // **22 with `menu`, and it is the kind of word this ceiling is *for*.**
+        // It is the way out of the game rather than a thing done inside one, and
+        // the alternative was the one it replaced: `quit` meaning both, which
+        // kept the count at 21 by making one word do two jobs and made stopping
+        // a two-step operation (§19). A ceiling that buys its number that way is
+        // measuring the wrong thing.
+        assert_eq!(tower_wide.count(), 22);
 
         // One per instrument that has a word of its own: the laboratory's
         // `grind`, `digest`, `mix`, `distil` and `kindle`, the lens's `probe`

@@ -165,6 +165,18 @@ impl Work {
     pub fn sold(&self) -> bool {
         self.keys.iter().any(|key| key.starts_with("made:"))
     }
+
+    /// What this run put on a shelf, if it put anything there.
+    ///
+    /// **The same `made:` key [`sold`](Self::sold) asks about**, read for its
+    /// name rather than its presence — so the two questions cannot come to
+    /// disagree about what a making is. A run makes at most one nameable thing,
+    /// which is why this is an `Option` and not a list: the byproduct goes to
+    /// the instrument and is not a sale.
+    #[must_use]
+    pub fn product(&self) -> Option<&str> {
+        self.keys.iter().find_map(|key| key.strip_prefix("made:"))
+    }
 }
 
 /// Count a completion, credit what it earned, and move every line it moved.
@@ -186,7 +198,39 @@ pub fn done(world: &mut World, work: &Work, earned: u64) {
     }
     super::credit(world, earned);
     if work.sold() {
-        super::renown::earn(world, super::renown::worth(earned));
+        // **What the tower is stocked in, measured before the mint reads it.**
+        // A store's standing is a *rate* — how many were made lately — so this
+        // is the one door that has to see every making, and it is already that
+        // door for renown.
+        //
+        // **Surplus sells**, which is why the order matters: a making of a name
+        // that was *already* at full strength is stock the tower did not need,
+        // so it is sold rather than shelved and pays a second time. Asked before
+        // this making is recorded, or every making would look like its own
+        // surplus.
+        //
+        // **This is the steady state of any sustained loop, not an occasional
+        // bonus, and the number says so**: a bound brewing spell holds `Fresh`
+        // permanently, so every making past the third inside the window pays
+        // double. Measured at `0.11.14`, `clarity` mints 1,103 renown against
+        // 996 experience — a little over twice `worth`.
+        //
+        // That is the mechanic read literally rather than a defect: a loop that
+        // outruns its own stores *is* selling the excess. But it means renown
+        // from production is uniformly doubled, which **rescales the currency
+        // rather than rewarding a behaviour** — so the ten rank thresholds in
+        // `progression.toml` are now priced against a number twice what they
+        // were authored for, and `orbs-balance` is what settles whether they
+        // move or this does.
+        let over = work
+            .product()
+            .is_some_and(|named| super::supply_of(world, named) == super::Supply::Fresh);
+        if let Some(named) = work.product() {
+            let named = named.to_owned();
+            super::made(world, &named);
+        }
+        let worth = super::renown::worth(earned);
+        super::renown::earn(world, if over { worth * 2 } else { worth });
     }
     super::mastery::advance(world);
 }

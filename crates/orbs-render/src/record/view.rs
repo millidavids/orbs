@@ -973,6 +973,16 @@ fn amount_of(record: &Record<'_>) -> Option<String> {
     name.write(&mut out);
     out.push_str(BINDS);
     amount.write(&mut out);
+    // **A listed thing may also be in a *state*, and it has to be drawn.** The
+    // arsenal says how well stocked the tower is in each row — `fresh`, `thin`,
+    // `spent` — and a column that reached the linear stream but never the pane
+    // is §14 backwards: the screen-reader user informed and the sighted player
+    // not. It rides after the amount because the amount is what the row is
+    // *about*, and the state is a note on it.
+    if let Some(state) = record.field(FieldName::State) {
+        out.push_str(STATES);
+        state.write(&mut out);
+    }
     Some(out)
 }
 
@@ -981,6 +991,13 @@ fn amount_of(record: &Record<'_>) -> Option<String> {
 /// Spaced, so the `=` never touches either — the whole point of aligning the
 /// column is that the eye can run down it.
 const BINDS: &str = " = ";
+
+/// What sits between a tiled entry's value and the state it is in.
+///
+/// One space and no glyph. `warding = 5 thin` reads as a note on the row;
+/// a second `=` would claim the state is another value bound to the name, which
+/// is the category error [`DESCRIBES`] records one constant down.
+const STATES: &str = " ";
 
 /// What sits between an entry and what it does.
 ///
@@ -1048,6 +1065,15 @@ impl Tiling {
             if let Some(value) = record.field(FieldName::Quantity) {
                 drawn.clear();
                 value.write(&mut drawn);
+                // **The state is measured with the value it follows**, because
+                // the draw writes them together — a stride set to the value
+                // alone would be short by the width of `spent` and the tiles
+                // would overlap, which is the `attend plasurvey` defect §19
+                // records arriving by a third door.
+                if let Some(state) = record.field(FieldName::State) {
+                    drawn.push_str(STATES);
+                    state.write(&mut drawn);
+                }
                 value_wide = value_wide.max(drawn.chars().count());
             }
             drawn.clear();
@@ -1199,6 +1225,17 @@ fn draw_tiled<'r>(
                             drawn.push_str(BINDS);
                             value.write(&mut drawn);
                             bound = true;
+                            // **A listed thing may also be in a state.** The
+                            // arsenal says how well stocked the tower is in each
+                            // row — `fresh`, `thin`, `spent` — and this is the
+                            // path a *pane* takes; `amount_of` is the stacked
+                            // one. Drawing it in only one of the two left the
+                            // linear stream saying `state: thin` while the
+                            // screen said nothing, which is §14 backwards.
+                            if let Some(state) = record.field(FieldName::State) {
+                                drawn.push_str(STATES);
+                                state.write(&mut drawn);
+                            }
                         }
                     }
                 }

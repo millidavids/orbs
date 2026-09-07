@@ -7,6 +7,8 @@
 //! What each word *costs* is `spending`; what a resolved round *says* is
 //! `report`. The `defend` module doc has the rest.
 
+use std::cmp::Ordering;
+
 use bevy_ecs::prelude::*;
 use orbs_render::Role;
 
@@ -22,6 +24,103 @@ use crate::tower::{
 };
 
 /// `defend` — stand to the wall and let the enemy arrive.
+/// `petition` — spend standing so that fewer come up the road next time.
+///
+/// # The first thing renown buys
+///
+/// Standing has been earned, lost and read for a whole phase and spent on
+/// nothing. This is the other half of *"renown sets how big a siege arrives"*:
+/// fame lengthens the tail, and this is how a wizard shortens it again — by
+/// letting some of that fame go.
+///
+/// **It lowers the ceiling; it does not subtract after the draw.** At the moment
+/// this word is typed there is no siege and no draw, so *"the enemy is already
+/// as small as it goes"* is only answerable against the ceiling. Subtracting
+/// afterwards would let a player pay four times, draw the floor anyway, and lose
+/// the lot in silence.
+///
+/// **Self-limiting without a second rule**: paying drops your rank, and a lower
+/// rank draws a shorter tail on its own — so the habit retires itself rather
+/// than becoming a tax on every fight.
+pub(in crate::execute) fn petition(world: &mut World) {
+    let Some(rampart) = fixture(world) else {
+        say(world, Verb::Petition, "defend_nowhere", &[], Role::Cost);
+        return;
+    };
+    // Gated with the rest of the bailey: there is nothing to petition against
+    // until the sanctum's first station has armed the road.
+    if !world.resource::<tower::Opened>().has(tower::opened::SIEGE) {
+        say(world, Verb::Petition, "defend_unarmed", &[], Role::Cost);
+        return;
+    }
+    // **Refused while they are already at the wall**, which §19 states as the
+    // word's whole shape: it *"resolves with the road empty — which is the only
+    // time it is any use."* What it buys is the size of the **next** siege, and
+    // the one in front of you has already been drawn.
+    //
+    // Allowing it mid-fight was worse than merely useless. `settle` measures the
+    // fight's movement from `Siege::standing`, the snapshot taken when the enemy
+    // arrived — so renown spent on a petition *inside* that window was silently
+    // charged to the fight, and a siege that moved +38 reported +31.
+    if world.get::<Siege>(rampart).is_some_and(Siege::running) {
+        say(world, Verb::Petition, "petition_besieged", &[], Role::Cost);
+        return;
+    }
+
+    let bought = world.resource::<siege::Petitioned>().get();
+    let ranks = tower::renown::reached(world);
+
+    // **Refused at the floor, having spent nothing.** The tail is already as
+    // short as it goes, so there is nothing left to buy.
+    if siege::most_at(ranks, bought) <= siege::FEWEST {
+        say(
+            world,
+            Verb::Petition,
+            "petition_least",
+            &[("quantity", &siege::FEWEST.to_string())],
+            Role::Cost,
+        );
+        return;
+    }
+
+    // **The price is quoted from the same expression that charges it**, which is
+    // the forge's rule: a room may not quote one number and take another.
+    let held = world.resource::<tower::Renown>().get();
+    if !tower::renown::spend(world, siege::PETITION_PER_FOE) {
+        say(
+            world,
+            Verb::Petition,
+            "petition_short",
+            &[
+                ("kind", &siege::PETITION_PER_FOE.to_string()),
+                ("quantity", &held.to_string()),
+            ],
+            Role::Cost,
+        );
+        return;
+    }
+
+    world.resource_mut::<siege::Petitioned>().add();
+    let now = world.resource::<siege::Petitioned>().get();
+    // **Ranks read *again*, after the payment.** Spending drops standing, and
+    // dropping standing can cross a rank — which is the mechanic's own headline
+    // (§19: *"three petitions at 9,000 take the ceiling 11 → 9 → 8, because the
+    // first payment cost a rank on the way"*). Quoting the pre-payment ranks
+    // named a ceiling one higher than the one `defend` would actually draw
+    // against, so the sentence promised more than it had bought.
+    let most = siege::most_at(tower::renown::reached(world), now);
+    say(
+        world,
+        Verb::Petition,
+        "petition_done",
+        &[
+            ("quantity", &most.to_string()),
+            ("kind", &siege::PETITION_PER_FOE.to_string()),
+        ],
+        Role::Success,
+    );
+}
+
 pub(in crate::execute) fn defend(world: &mut World) {
     let Some(rampart) = fixture(world) else {
         say(world, Verb::Defend, "defend_nowhere", &[], Role::Cost);
@@ -67,12 +166,25 @@ pub(in crate::execute) fn defend(world: &mut World) {
     // `muster`'s reason: `RngStream::Siege` advances when the player asks for a
     // siege and never on a tick nobody asked for, which is what lets any future
     // siege system be appended to the schedule without shifting a replay.
+    // **How big it is, decided before the draw and by what the tower is worth.**
+    // A famous tower draws a longer tail; the floor never moves, so a quiet night
+    // is possible at every standing. `petition` has already bought some of the
+    // tail away, and the allowance is spent whole by the siege that opens —
+    // taken here so a refused `defend` (the road still empty) cannot silently
+    // eat what was paid for.
+    let ranks = tower::renown::reached(world);
+    let bought = world.resource_mut::<siege::Petitioned>().take();
+    let most = siege::most_at(ranks, bought);
     let mut siege = {
         let mut rngs = world.resource_mut::<crate::rng::Rngs>();
-        Siege::begin(&mut rngs)
+        Siege::begin_against(&mut rngs, most)
     };
     // The Ley Line's `edge`, read once for the whole fight (§11.5).
     siege.edge = tower::grant::edge_bonus(world);
+    // ...and what the tower was worth before a blow was struck, so the settling
+    // sentence can say what the *fight* came to rather than what its last
+    // moment did.
+    siege.standing = Some(world.resource::<tower::Renown>().get());
     let arrived = siege.enemy.count;
     let intent = siege.intent.word();
     world.entity_mut(rampart).insert(siege);
@@ -342,6 +454,39 @@ pub(in crate::execute) fn hold(world: &mut World) {
     log_rolls(world, &round);
     publish(world, rampart);
     announce(world, &round);
+
+    // **What the exchange was worth in standing** (§11.5, §19). After
+    // `announce`, so the round says what happened before anything says what it
+    // cost — the order `settle` and `done` both keep.
+    //
+    // **All five of the round's numbers, and `mended` is why it is five.**
+    // `taken` and `spent` are vigour lost and `mended` is vigour put back, so
+    // charging the first two without crediting the third bills a player twice
+    // for damage they repaired — and the play it would punish is quaffing a
+    // `mending` or pledging the `succour`, which is the domain's own headline
+    // move. Net vigour lost is the honest measure.
+    //
+    // **The sortie's trade survives netting, deliberately.** `sortied` is
+    // `sortie / 2` and `spent` is `sortie / 3`, so a sortie nets about a sixth
+    // of itself: it buys damage at a price in standing. That is the mechanic,
+    // not the defect `Round::sortied` records — that one was a *sentence*
+    // reading "take 2" for a round that had dealt twelve.
+    let up = u64::from(round.dealt) + u64::from(round.sortied);
+    let down = u64::from(
+        round
+            .taken
+            .saturating_add(round.spent)
+            .saturating_sub(round.mended),
+    );
+    match up.cmp(&down) {
+        // **Quietly, both ways.** A round is elected by typing `hold` and has
+        // just narrated itself, so `renown::lose`'s sentence would be a second
+        // telling six to thirteen times a fight. `settle` says the whole
+        // movement once. `renown::slip` carries the argument.
+        Ordering::Greater => tower::renown::earn(world, up - down),
+        Ordering::Less => tower::renown::slip(world, down - up),
+        Ordering::Equal => {}
+    }
 
     // **The enemy attacks the automation** (§5.1), and this is the line that
     // makes the premise true. It runs on a resolved round and nowhere else, so

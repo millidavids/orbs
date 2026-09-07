@@ -135,7 +135,7 @@ use super::node::NodeSave;
 /// format-10 document read by a format-9 build would drop `opened` in silence
 /// and load a sealed tower as an open one, which is the failure the gate exists
 /// for. No stream moved; a tally is a function of the submissions.
-pub const FORMAT: u32 = 10;
+pub const FORMAT: u32 = 11;
 
 /// Bring an older document up to [`FORMAT`], or say why it cannot be.
 ///
@@ -157,6 +157,7 @@ pub const FORMAT: u32 = 10;
 /// | 7 → 8 | `Siege::quintessence`, a resource a running siege was fought without | Yes — fill the pool |
 /// | 8 → 9 | `RngStream::COUNT` 11 → 12 (`Forge`), **and** quintessence moving from the siege to the tower | Yes — pad, and lift the pool |
 /// | 9 → 10 | `[progress]` gains `tally`, `reached` and `opened` — the mastery lines and the sealed tower | Yes — every field defaults to the honest reading; `opened` absent is *everything open* |
+/// | 10 → 11 | `[world]` gains `length`, and `[progress]` gains `stores` — how long the game was begun to be, and what the arsenal is stocked in | Yes — `length` absent is the curve as authored, `stores` absent is *full* |
 ///
 /// **Two of these rows were once missing, and `migrate` performed both.** A
 /// table that stops short of the function beneath it is worse than no table: it
@@ -319,6 +320,21 @@ pub struct WorldSave {
     /// is *open*, which is what every tower was before a tower could be shut.
     #[serde(default)]
     pub sealed: bool,
+    /// How long this game was begun to be.
+    ///
+    /// **Part of the recorded start, for `sealed`'s reason and more sharply.**
+    /// The length decides every threshold on both tracks, so a save that lost it
+    /// would load into a world whose stations sit somewhere else entirely —
+    /// crossings re-announced, rooms opened that should not be, concentration
+    /// jumping. A replay has to know which curve it is rebuilding.
+    ///
+    /// Absent is [`Length::Baseline`](crate::content::Length::Baseline), the
+    /// curve exactly as authored, which is what every tower had before a game
+    /// could have a length. **This is what the `FORMAT` 11 bump buys**: an older
+    /// build would drop the field in silence and re-derive a long game's curve at
+    /// baseline, which is *loading wrongly* rather than incompletely.
+    #[serde(default)]
+    pub length: crate::content::Length,
 }
 
 /// When the player left, and by which clock.
@@ -386,6 +402,14 @@ pub struct ProgressSave {
     /// an older build would have silently dropped.
     #[serde(default)]
     pub renown: u64,
+    /// How many foes have been bought off the next siege to arrive.
+    ///
+    /// **A bare `u32` and no `FORMAT` bump**, on `renown`'s rule above: nought
+    /// is the honest reading of a document written before anyone could petition
+    /// — that tower has bought nothing off. It is the *allowance*, not a
+    /// setting, so a player who paid and then saved keeps what they paid for.
+    #[serde(default)]
+    pub petitioned: u32,
     /// How the tower's walls stand (§11.5's Integrity).
     ///
     /// **`Option`, not a bare `u32`**, and the difference is the whole tower: a
@@ -430,6 +454,33 @@ pub struct ProgressSave {
     /// honestly says: its stations are re-earned, and the CHANGELOG says so.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub tally: std::collections::BTreeMap<String, u32>,
+    /// When the tower last made each thing, lately — its stores, as a rate.
+    ///
+    /// **Absent is not *nothing made*, and the difference is the whole feature.**
+    /// A store's standing is how many were made inside a window, so an empty map
+    /// reads as *every store is out* — which would hand a returning player an
+    /// arsenal they cannot spend a single thing from. That is `opened`'s shape
+    /// one field down: absent meaning the opposite of the honest reading.
+    ///
+    /// So `restore` **stamps** an absent map at the loaded tick rather than
+    /// taking it at face value, and the tower opens with full stores. No
+    /// `FORMAT` bump, because the older document still loads *correctly* — it
+    /// loads generously, which is the right way to be wrong about a save written
+    /// before the rule existed.
+    ///
+    /// **`Option`, not a bare map, and the difference is the whole migration** —
+    /// `integrity` one field down is the precedent and the reason. A bare map
+    /// cannot tell *a document from before stores existed* from *a tower that
+    /// has genuinely made nothing*: both are empty, so the stamp fired on both,
+    /// a fresh save reloaded into a world with stores it never had, and the
+    /// round-trip stopped being idempotent. Four persistence tests said so at
+    /// once, twice over — the first fix only moved which of the two was wrong.
+    ///
+    /// `None` is *written before stores existed*, and is the only thing the
+    /// stamp answers. `Some(empty)` is a tower that has made nothing lately, and
+    /// is taken at face value.
+    #[serde(default)]
+    pub stores: Option<std::collections::BTreeMap<String, Vec<u64>>>,
     /// Mastery stations reached, by id.
     ///
     /// Saved rather than derived from `tally`, because reaching is *said* and

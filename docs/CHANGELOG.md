@@ -15,6 +15,54 @@
   at 1.0 (DESIGN.md §19).
 -->
 
+## [v0.12.7] - 2026-09-07
+
+### Description
+In development — a dev log, not patch notes. A game has a length now: short,
+medium or long, chosen when you begin one. The orb grew a menu that keeps six
+towers. Sieges move renown both ways, and the arsenal is worth what you keep
+making.
+
+### Added
+- **A game has a length, and you choose it when you start one.** Short, medium
+  or long. The old climb topped out at ten thousand experience, which was
+  reachable by typing — the long haul is twenty-five times that. The early
+  stations barely move, so the first hour is the hour it always was; what
+  stretches is the far end, where you are meant to be teaching the orb to work
+  for you instead of typing every command yourself.
+- **The orb has a menu of its own.** Type `menu`. The towers you keep are listed
+  there with their wizard, their length and how far each has got; open another,
+  raise a new one, or put the orb down.
+- **The orb keeps more than one tower.** Six of them. Loading a second leaves the
+  first exactly as you left it, written out before the new one arrives.
+- **A siege moves your renown both ways.** What you deal and what you sortie
+  raise it; what you lose and what you spend lower it, less whatever you mended.
+  The fight speaks once, on settling, so a round does not narrate itself twice.
+- **Renown decides what comes up the road, and you can pay to turn it down.**
+  A famous tower draws longer odds; `petition` spends standing to shorten them.
+  The floor never moves, so a famous tower can still draw a quiet night and an
+  unknown one never meets the worst.
+- **A spell can ask what has gone thin.** `for each store` walks the arsenal and
+  `if the store has thin` answers, so a thinning arsenal can be met by a spell
+  that keeps making things rather than by guesswork.
+
+### Changed
+- **The arsenal is worth what your industry is worth.** How much help a thing
+  gives is matched to the rate you make it at: full strength while it is fresh,
+  half once it goes thin, and refused in voice once it is spent. This replaces
+  the old cap on how much of one thing the arsenal would hold — a ceiling you
+  hit and stopped at, where this is a reason to keep production going.
+- **`quit` asks before it leaves.** It is the one word that cannot be undone, so
+  it puts the question and another `quit` answers it. Anything else you type
+  says no. `F10`, `Ctrl-C` and the window's close button still leave outright.
+- **Six-figure thresholds are shortened on the weave.** At the longest length the
+  line runs to 250,000, and two numbers that size ran together into one nobody
+  wrote. The exact figure is still there in the details panel and in what a
+  screen reader hears.
+- **A room's line says the number rather than spelling it out.** It sits beside a
+  live count, so "five potions brewed" next to "3 of 8" disagreed with itself the
+  moment a game was longer than the shortest one.
+
 ## [v0.11.10] - 2026-09-06
 
 ### Description

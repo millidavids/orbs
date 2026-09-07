@@ -76,19 +76,25 @@ pub(super) fn quit(mut exit: MessageWriter<AppExit>) {
     exit.write(AppExit::Success);
 }
 
-/// Leave the orb, because the word was typed.
+/// Leave the orb, because the word was typed **and confirmed**.
 ///
-/// The fifth take-once handshake, beside `scribe`, `unfurl`, `weave` and
-/// `wander`: the sim records the decision and the frontend decides what leaving
+/// **The sim asks first.** `quit` once puts the question, `quit` again answers
+/// it, and any other command answers *no* — so `Quitting::take` is only ever
+/// true for a decision the player made twice. `execute::quit` has why leaving is
+/// the one word in the game that asks: it cannot be undone, waited out or
+/// repeated away, and the tower is written on the way.
+///
+/// The take-once handshake beside `scribe`, `unfurl`, `weave`, `wander` and
+/// `menu`: the sim records the decision and the frontend decides what leaving
 /// *means*. Here it is an `AppExit`; in the terminal build it is raw mode being
 /// put back.
 pub(super) fn quit_requested(mut tower: ResMut<Tower>, mut exit: MessageWriter<AppExit>) {
-    // **Peeked before it is taken**, exactly as the other four handshakes are.
+    // **Peeked before it is taken**, exactly as the other handshakes are.
     // `quitting` needs `&mut`, and reaching through `ResMut` for it stamps
     // `Tower`'s change tick — and this system's own run condition is
     // `resource_changed::<Tower>`, so from the first frame Tower changed it
     // re-armed itself for ever and dragged `refresh_panel`, `suggest` and the
-    // four `open_requested` systems back to frame rate with it. `Panel::refresh`
+    // five `open_requested` systems back to frame rate with it. `Panel::refresh`
     // calls `Sim::briefs`, which walks every built room and builds two
     // `QueryState`s per call.
     //

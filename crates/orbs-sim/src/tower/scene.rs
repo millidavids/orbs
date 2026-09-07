@@ -381,6 +381,16 @@ pub fn scene_at(world: &World, at: Entity) -> Scene {
         scene = scene.with(NounKind::Sense, reading);
     }
 
+    // ...and the arsenal's three, appended after the forge's for the seventh
+    // time. **Unconditional, for the same reason every other domain's is**: a
+    // spell that keeps its own stores up is written once and cast anywhere, and
+    // words that only resolved while standing in the bailey would be the exact
+    // defect the entry above records — four questions answering *"that question
+    // means nothing"*, a spell that runs and does nothing, for ever.
+    for reading in super::stores::readings() {
+        scene = scene.with(NounKind::Sense, reading);
+    }
+
     // Every place, wherever the player is. Depth-first from the root, children
     // in spawn order.
     for node in walk(world, super::filesystem_root(world, cwd.0)) {

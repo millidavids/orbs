@@ -44,3 +44,50 @@ pub fn escrow(arrived: u32, completion: u32, outcome: Outcome, more: u64) -> u64
         }
     }
 }
+
+/// What a finished siege is worth in **standing**, either way.
+///
+/// # The rate is derived, not picked
+///
+/// `ESCROW_PER_FOE / renown::RENOWN_PER` — what a foe is worth in experience,
+/// divided by what experience is worth in renown. A siege's standing is
+/// therefore priced at exactly the rate a *making's* standing is, and the two
+/// cannot drift apart without someone moving one of the two numbers it is built
+/// from.
+///
+/// **It is per foe rather than flat** for [`ESCROW_PER_FOE`]'s reason: a bigger
+/// enemy is worth more, or the best play is to duck the hard siege and wait for
+/// an easy one. `arrived` runs [`FEWEST`](super::FEWEST)..=[`MOST`](super::MOST)
+/// — 5 to 12, since standing lengthens the tail — so this is a stake of 35 to
+/// **84**, against a first rank at 25. That is what makes a bad night able to
+/// cost a title; at one per foe the most a defeat could ever take is twelve, and
+/// the box this implements would have built a number that cannot fall.
+pub const RENOWN_PER_FOE: u64 = ESCROW_PER_FOE / crate::tower::renown::RENOWN_PER;
+
+/// What a finished siege moves standing by, and which way.
+///
+/// A win earns the whole stake; a defeat pays it back scaled by **how far short
+/// it fell**, so a collapse on the first round costs far more standing than a
+/// wall carried at ninety percent. That is escrow's own completion scaling,
+/// pointed the other way.
+///
+/// # `div_ceil`, and it is not a rounding nicety
+///
+/// `arrived` is at most [`MOST`](super::MOST), so the stake tops out at 84 and
+/// plain division by 100 truncates **to nought** for every completion above 88 —
+/// losing at ninety-nine percent would cost nothing at all, which says the
+/// near-miss was free. A loss that close should cost *less*, never *nothing*, so
+/// the fraction rounds up and any defeat short of the enemy breaking costs at
+/// least one.
+///
+/// A win needs no scaling: `completion` is `felled * 100 / arrived` and
+/// `Outcome::Held` is set only when the enemy is routed, so it is 100 by
+/// construction.
+#[must_use]
+pub fn renown_stake(arrived: u32, completion: u32, outcome: Outcome) -> u64 {
+    let stake = u64::from(arrived) * RENOWN_PER_FOE;
+    match outcome {
+        Outcome::Held => stake,
+        Outcome::Fallen => (stake * u64::from(100 - completion.min(100))).div_ceil(100),
+    }
+}

@@ -47,7 +47,11 @@ pub const fn worth(earned: u64) -> u64 {
 }
 
 /// How much experience one renown costs.
-const RENOWN_PER: u64 = 2;
+/// **`pub(crate)` so the siege can price a fight at the same rate.**
+/// `siege::RENOWN_PER_FOE` is `ESCROW_PER_FOE / RENOWN_PER`, which is what stops
+/// the two ways of earning standing — making a thing and winning a fight — from
+/// drifting apart as separately-authored numbers.
+pub(crate) const RENOWN_PER: u64 = 2;
 
 /// What the tower is known for.
 ///
@@ -113,7 +117,7 @@ pub fn set(world: &mut World, total: u64) {
 /// **A count, not a name, and the direction depends on it.** Falling from
 /// magister to cunning man leaves a rank in hand, so comparing *names* said the
 /// tower had been promoted — a fall reads as an arrival unless something counts.
-fn reached(world: &World) -> usize {
+pub(crate) fn reached(world: &World) -> usize {
     let held = world.resource::<Renown>().get();
     world
         .resource::<crate::content::Progression>()
@@ -202,6 +206,69 @@ pub fn lose(world: &mut World, cost: u64) {
     }
     say(world, "renown_lost", fell, now, Role::Danger);
     crossed(world, was);
+}
+
+/// Take renown away **without the sentence**, for a loss the player is watching.
+///
+/// # Why [`lose`] cannot simply be used
+///
+/// [`lose`] says so every time, and §19's reason is exact: a loss *"happened to
+/// the player, at a moment they may not have been watching"*. **A siege round is
+/// the one loss that fails that premise.** Every round is elected by typing
+/// `hold`, and the round has already said what the enemy did — so the sentence
+/// would be a second telling of news the player just read, once per round, six
+/// to thirteen times a fight.
+///
+/// That is not a style objection. The same mistake was made and measured once
+/// already: a line per *making* took one `orbs-balance` sweep of the clarity
+/// loop from 466 records to 792, and `earn` was made silent for it.
+///
+/// # What still speaks, and why that is enough
+///
+/// A **rank** crossing speaks, here as everywhere — `crossed` is shared with
+/// [`earn`] and [`lose`] rather than reimplemented, so a title cannot be lost
+/// quietly by coming through this door.
+///
+/// And the siege says the whole movement **once, on settling**, which is what
+/// keeps §6 and §14 satisfied: `gauges::split` drops both gauge rows on a short
+/// or narrow pane, so silence plus a gauge would be silence alone for anyone
+/// reading the linear stream or playing in a small terminal. One record a
+/// siege, not thirteen.
+///
+/// Saturating, exactly as [`lose`] is: a tower disgraced to nothing is at the
+/// floor, not in debt.
+pub fn slip(world: &mut World, cost: u64) {
+    if cost == 0 {
+        return;
+    }
+    let was = reached(world);
+    world.resource_mut::<Renown>().0 = world.resource::<Renown>().0.saturating_sub(cost);
+    crossed(world, was);
+}
+
+/// Pay `cost` out of standing, or say there is not enough. **Never partial.**
+///
+/// # The one door that can *buy* something
+///
+/// [`earn`], [`lose`] and [`slip`] are all things that *happen* to the tower.
+/// This is the first that spends, and it is `Quintessence::spend`'s shape
+/// deliberately: a wallet either covers a price or does not, and a half-paid
+/// petition is not a thing the fiction has a word for.
+///
+/// **`false` and nothing moved**, so a caller may ask before it commits and the
+/// refusal costs the player nothing — which is `pledge`'s rule at the wall, the
+/// one the domain already teaches.
+///
+/// Quiet, like [`slip`]: what is being bought says its own price, and a second
+/// sentence about the number would be the same news twice. **A rank lost by
+/// paying still speaks**, because `crossed` is shared rather than reimplemented.
+#[must_use]
+pub fn spend(world: &mut World, cost: u64) -> bool {
+    if cost > world.resource::<Renown>().get() {
+        return false;
+    }
+    slip(world, cost);
+    true
 }
 
 /// Where a number stands between the tier behind it and the one ahead.
@@ -457,6 +524,50 @@ mod tests {
                 .iter()
                 .any(|line| line.contains("stopped calling you")),
             "falling to nothing did not say the title was gone: {:?}",
+            said(&sim),
+        );
+    }
+
+    #[test]
+    fn a_slip_takes_the_renown_and_says_nothing() {
+        // The half of `lose` a siege round needs: the number falls, the
+        // transcript does not grow. Six to thirteen rounds a fight is what
+        // makes the sentence intolerable, and the fight says the total once.
+        let mut sim = Sim::new(1);
+        earn(sim.world_mut(), 200);
+        let held = sim.scrollback().records().len();
+
+        slip(sim.world_mut(), 10);
+        assert_eq!(total(&sim), 190);
+        assert_eq!(
+            sim.scrollback().records().len(),
+            held,
+            "a slip put a line on the transcript",
+        );
+    }
+
+    #[test]
+    fn a_slip_through_a_rank_still_says_the_title() {
+        // **The one thing a slip may never swallow.** Losing a name is an edge
+        // and an edge is always news, however quiet the number is — `crossed`
+        // is shared with `earn` and `lose` rather than reimplemented, and this
+        // is what holds that.
+        let mut sim = Sim::new(1);
+        earn(sim.world_mut(), 200);
+        let held = sim.scrollback().records().len();
+
+        slip(sim.world_mut(), 1_000);
+        assert_eq!(total(&sim), 0, "a slip went below nought");
+        assert_eq!(
+            sim.scrollback().records().len(),
+            held + 1,
+            "a slip through a rank said the wrong number of things",
+        );
+        assert!(
+            said(&sim)
+                .iter()
+                .any(|line| line.contains("stopped calling you")),
+            "slipping out of the ranks did not say the title was gone: {:?}",
             said(&sim),
         );
     }

@@ -33,9 +33,14 @@ impl Sim {
     /// **An open tower**: every room, every gated recipe and every charm, which
     /// is the tower every test, dump, balance policy and `screens` example has
     /// always used. A fresh *game* is [`sealed`](Self::sealed).
+    /// **The curve exactly as authored**, which is what every test, dump, balance
+    /// policy and example has always measured against. A game's length is a
+    /// choice a *player* makes, so it arrives through
+    /// [`begun`](Self::begun) rather than through here — otherwise every pinned
+    /// rate in the workspace would silently be measuring a different curve.
     #[must_use]
     pub fn new(seed: u64) -> Self {
-        Self::build(seed, false, |_| {})
+        Self::build(seed, false, crate::content::Length::Baseline, |_| {})
     }
 
     /// Create a simulation that begins as a laboratory and nothing else.
@@ -48,7 +53,31 @@ impl Sim {
     /// `attend archive`.
     #[must_use]
     pub fn sealed(seed: u64) -> Self {
-        Self::build(seed, true, |_| {})
+        Self::build(seed, true, crate::content::Length::Baseline, |_| {})
+    }
+
+    /// An **open** tower at a chosen length — what the balance harness measures.
+    ///
+    /// `new` is this at [`Baseline`](crate::content::Length::Baseline), and
+    /// [`begun`](Self::begun) is a *game* and therefore sealed. A policy needs
+    /// every room open, so neither of those can answer *"measure the curve a
+    /// player at medium is actually climbing"* — which is the question the
+    /// harness has to be able to ask, or the shipped game runs a curve the
+    /// instrument never sees.
+    #[must_use]
+    pub fn measured(seed: u64, length: crate::content::Length) -> Self {
+        Self::build(seed, false, length, |_| {})
+    }
+
+    /// The tower a fresh **game** builds: sealed, and as long as the player asked.
+    ///
+    /// **One constructor rather than two flags' worth**, because a fresh game is
+    /// sealed *and* has a length, and a `Sim::paced` beside `Sim::sealed` could
+    /// not say both. `new` and `sealed` keep their signatures — there are over
+    /// three hundred call sites between them and none of them is a game.
+    #[must_use]
+    pub fn begun(seed: u64, length: crate::content::Length) -> Self {
+        Self::build(seed, true, length, |_| {})
     }
 
     /// Create a simulation and populate its schedule.
@@ -79,13 +108,18 @@ impl Sim {
     /// malformed file rather than starting a tower whose work is worth nothing.
     #[must_use]
     pub fn with_schedule(seed: u64, build: impl FnOnce(&mut Schedule)) -> Self {
-        Self::build(seed, false, build)
+        Self::build(seed, false, crate::content::Length::Baseline, build)
     }
 
     /// The one construction behind [`new`](Self::new), [`sealed`](Self::sealed)
     /// and [`with_schedule`](Self::with_schedule).
-    fn build(seed: u64, sealed: bool, build: impl FnOnce(&mut Schedule)) -> Self {
-        let mut world = Self::bare(seed);
+    fn build(
+        seed: u64,
+        sealed: bool,
+        length: crate::content::Length,
+        build: impl FnOnce(&mut Schedule),
+    ) -> Self {
+        let mut world = Self::bare(seed, length);
         let (commands, schedule, scene) = Self::schedules(build);
 
         // The tower is raised before the first tick, so tick 0 already has a
@@ -178,7 +212,7 @@ impl Sim {
     /// # Panics
     ///
     /// As [`with_schedule`](Self::with_schedule) documents.
-    fn bare(seed: u64) -> World {
+    fn bare(seed: u64, length: crate::content::Length) -> World {
         let mut world = World::new();
         world.insert_resource(Rngs::from_seed(seed));
         world.insert_resource(Tick::default());
@@ -246,7 +280,15 @@ impl Sim {
         // and for the same reason: authoring the two files to disagree is a
         // build-time error that `the_builtin_curve_prices_every_instrument`
         // fails on first.
-        let curve = crate::content::Progression::default();
+        // **Stretched before it is checked**, which is the order that matters:
+        // `check`'s `ascends` is the load gate, and it has to run against the
+        // curve the world will actually use rather than the one the file holds.
+        // Every length survives it — a strictly increasing sequence times a
+        // non-decreasing positive one is strictly increasing.
+        let curve = crate::content::Progression::default().stretched(length);
+        // Kept beside the curve it produced, so a save can say what length this
+        // game is without inferring it back out of the thresholds.
+        world.insert_resource(length);
         // **What may be priced: anything that runs.** The recipes' instruments,
         // plus the fixtures that carry a verb and transform nothing — the
         // athanor, and the `stacks`, which earns for every walk finished and
@@ -276,6 +318,8 @@ impl Sim {
         world.insert_resource(curve);
         world.init_resource::<tower::Experience>();
         world.init_resource::<tower::Renown>();
+        world.init_resource::<tower::siege::Petitioned>();
+        world.init_resource::<tower::Stores>();
         // **Everything open**, which is the tower every test, dump and policy
         // has always used. A fresh *game* starts sealed — see `Sim::sealed`.
         let opened = tower::Opened::all(
@@ -304,6 +348,7 @@ impl Sim {
         world.init_resource::<crate::execute::Reloaded>();
         world.init_resource::<crate::execute::Unfurling>();
         world.init_resource::<crate::execute::Quitting>();
+        world.init_resource::<crate::execute::Menuing>();
         world.init_resource::<crate::execute::Weaving>();
         world.init_resource::<crate::execute::Wandering>();
         world.init_resource::<tower::spell::Caller>();
@@ -397,6 +442,18 @@ impl Sim {
                 // arrive on its own, and the maintenance spell — which is
                 // entirely built on it arriving — could not work at all.
                 crate::execute::lapse_charms,
+                // **The same licence, a sixth time, and the same load-bearing
+                // reason as `lapse_charms` beside it.** A store running down is
+                // a comparison of two ticks and draws nothing, so appending it
+                // shifts no existing replay. And without a system saying so, an
+                // arsenal's words would only be true when a bailey verb happened
+                // to run — `thin` would never arrive on its own, and a spell
+                // written to keep its own stores up could not work at all.
+                //
+                // **It writes only when a word changes**, so an idle tick issues
+                // no `NodeId` and §19's *insertion order is the parse* holds
+                // between a watched hour and a `meditate`-collapsed one.
+                tower::stocktake,
                 tower::spell::stand,
             )
                 .chain(),
@@ -456,7 +513,16 @@ impl Sim {
     /// the built-in content is authored with the crate.
     #[must_use]
     pub fn restored(save: &crate::save::Save) -> Self {
-        let mut world = Self::bare(save.world.seed);
+        // **The length comes out of the save, and this line is why the feature
+        // works at all.** `bare` builds the curve, so a restore that did not hand
+        // it the saved length would install the *authored* one — every threshold
+        // silently re-derived, stations re-crossed, rooms opened that should not
+        // be. That is exactly the failure the `FORMAT` gate exists to stop an
+        // older *build* causing, arriving from inside this one instead.
+        //
+        // Nothing would have caught it: `persistence.rs`'s completeness lint
+        // walks components, not resources.
+        let mut world = Self::bare(save.world.seed, save.world.length);
         let (commands, schedule, scene) = Self::schedules(|_| {});
 
         // Raised before the save is applied, never instead of it.
@@ -1217,6 +1283,29 @@ impl Sim {
     /// common, so the sim says only that it was asked for.
     pub fn quitting(&mut self) -> bool {
         self.world.resource_mut::<crate::execute::Quitting>().take()
+    }
+
+    /// Whether the orb has asked *are you sure* and is waiting to be told again.
+    ///
+    /// **Peeked, never taken**: it is state a screen can draw, not a request.
+    #[must_use]
+    pub fn is_asking_to_quit(&self) -> bool {
+        self.world
+            .resource::<crate::execute::Quitting>()
+            .is_asking()
+    }
+
+    /// Whether a `menu` is waiting, without taking it. See [`Sim::has_opening`].
+    #[must_use]
+    pub fn has_menuing(&self) -> bool {
+        self.world.resource::<crate::execute::Menuing>().pending()
+    }
+
+    /// Whether `menu` has asked for the orb's menu.
+    ///
+    /// **Takes** rather than reads, like the handshakes above it.
+    pub fn menuing(&mut self) -> bool {
+        self.world.resource_mut::<crate::execute::Menuing>().take()
     }
 
     /// Whether `weave` has asked for the progression screen.

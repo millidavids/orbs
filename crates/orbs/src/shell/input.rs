@@ -126,6 +126,7 @@ pub(crate) struct Surfaces<'w> {
     walk: Res<'w, super::Walk>,
     chorus: Res<'w, super::Chorus>,
     scroll: Res<'w, Scroll>,
+    standing: Res<'w, super::Standing>,
 }
 
 impl Surfaces<'_> {
@@ -149,6 +150,7 @@ impl Surfaces<'_> {
             &self.walk,
             &self.chorus,
             &self.scroll,
+            &self.standing,
         )
     }
 }
@@ -166,6 +168,7 @@ const fn opened(
     walk: &super::Walk,
     chorus: &super::Chorus,
     scroll: &Scroll,
+    standing: &super::Standing,
 ) -> Open {
     Open {
         editing: editing.is_open(),
@@ -173,6 +176,7 @@ const fn opened(
         walking: walk.is_open(),
         chorusing: chorus.is_open(),
         reading: scroll.is_reading(),
+        menuing: standing.is_open(),
     }
 }
 

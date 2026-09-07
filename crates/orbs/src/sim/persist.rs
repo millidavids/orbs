@@ -8,10 +8,58 @@
 //! must not do, landing on a tick boundary because §8 says a save may land
 //! nowhere else.
 
+use std::path::{Path, PathBuf};
+
 use bevy::app::AppExit;
 use bevy::prelude::*;
 
 use super::driver::Tower;
+
+/// The file the tower in front of the player is kept in.
+///
+/// # Why the path is state rather than a function call
+///
+/// **This is the resource that stops loading a second game destroying the
+/// first.** The autosave fires every sixty ticks and again on the way out,
+/// against whatever path it is given; while there was one game that could be
+/// `save_path()`, read afresh each time. With a menu that can put a *different*
+/// tower in front of the player, a path read at the moment of writing is a path
+/// read after the swap — so the game you just left would be written into the
+/// file of the game you just opened, and the one you left would be gone.
+///
+/// So the path travels **with** the `Sim`: `shell::menuing::swap` replaces both
+/// in one operation and nothing in between can observe one without the other.
+///
+/// `None` when this session keeps nothing at all — `ORBS_SAVE=off`, which
+/// `scripts/dumps.sh` and the played-game suite both pin.
+#[derive(Resource, Debug, Default, Clone)]
+pub(crate) struct Kept(Option<PathBuf>);
+
+impl Kept {
+    /// Keep the tower at `path` from now on.
+    pub(crate) const fn at(path: Option<PathBuf>) -> Self {
+        Self(path)
+    }
+
+    /// Where the tower is kept, if anywhere.
+    pub(crate) fn path(&self) -> Option<&Path> {
+        self.0.as_deref()
+    }
+}
+
+/// Write `tower` to `kept` immediately, before anything else moves.
+///
+/// **The half of a swap that must happen first**, and the reason it is a free
+/// function rather than a method: it is called with the *outgoing* pair, at a
+/// point where the incoming one has already been read off disk and is waiting.
+pub(crate) fn keep_now(tower: &Tower, kept: &Kept) {
+    let Some(path) = kept.path() else {
+        return;
+    };
+    if let Err(error) = orbs_shell::write_save_to(path, &tower.sim().snapshot()) {
+        bevy::log::error!("the tower could not be written out: {error}");
+    }
+}
 
 /// How often the tower writes itself out.
 ///
@@ -42,7 +90,7 @@ fn due(tower: &Tower) -> bool {
 /// world it describes is the one the tick just finished — §8's boundary, and the
 /// moment `Pending` and `Skip` are both empty, which is what lets the document
 /// leave them out.
-pub(super) fn autosave(mut tower: ResMut<Tower>, mut said: Local<bool>) {
+pub(super) fn autosave(mut tower: ResMut<Tower>, kept: Res<Kept>, mut said: Local<bool>) {
     // **Peeked before it is taken.** Reaching for `ResMut` unconditionally
     // stamps `Tower`'s change tick every second, which re-arms its own
     // `resource_changed` run condition for ever and drags the panel, the
@@ -51,7 +99,7 @@ pub(super) fn autosave(mut tower: ResMut<Tower>, mut said: Local<bool>) {
     if !due(&tower) {
         return;
     }
-    keep(&mut tower, &mut said);
+    keep(&mut tower, &kept, &mut said);
 }
 
 /// Write the tower out because the game is closing.
@@ -69,12 +117,13 @@ pub(super) fn autosave(mut tower: ResMut<Tower>, mut said: Local<bool>) {
 pub(super) fn keep_on_the_way_out(
     leaving: MessageReader<AppExit>,
     mut tower: ResMut<Tower>,
+    kept: Res<Kept>,
     mut said: Local<bool>,
 ) {
     if leaving.is_empty() {
         return;
     }
-    keep(&mut tower, &mut said);
+    keep(&mut tower, &kept, &mut said);
 }
 
 /// Write it, and complain **once** if it will not go.
@@ -90,8 +139,15 @@ pub(super) fn keep_on_the_way_out(
 ///
 /// One line, then quiet. `Local<bool>` rather than a resource because the two
 /// callers fail for the same reason and neither needs to know about the other.
-fn keep(tower: &mut Tower, said: &mut bool) {
-    let Err(error) = orbs_shell::write_save(&tower.sim().snapshot()) else {
+fn keep(tower: &mut Tower, kept: &Kept, said: &mut bool) {
+    // **The path this game came from**, never `save_path()` — see `Kept`. A path
+    // resolved here is a path resolved *after* a swap, which is how loading a
+    // second tower writes the first one into the second one's file.
+    let Some(path) = kept.path() else {
+        *said = false;
+        return;
+    };
+    let Err(error) = orbs_shell::write_save_to(path, &tower.sim().snapshot()) else {
         *said = false;
         return;
     };

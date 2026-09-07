@@ -5,6 +5,7 @@
 mod deed;
 mod forge;
 mod fuel;
+mod length;
 mod load;
 mod material;
 mod progression;
@@ -16,6 +17,7 @@ mod spell;
 pub use deed::Deed;
 pub use forge::{Charm as CharmCost, Charms};
 pub use fuel::{Fuel, Fuels};
+pub use length::Length;
 pub use load::ContentError;
 pub use material::Materials;
 pub use progression::{Catalogue, Milestone, Progression, Station};

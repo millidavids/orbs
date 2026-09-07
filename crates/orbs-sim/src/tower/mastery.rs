@@ -310,9 +310,19 @@ pub(crate) fn caught_up(world: &mut World) {
 /// another, and only the second is conditional — see the module header.
 pub(crate) fn reach(world: &mut World, domain: &str, id: &str, opens: &[String]) {
     world.resource_mut::<Reached>().hold(id);
+    // **The deed's count, from the curve this game is actually on.** The
+    // sentences carry `{count}` rather than spelling it — *"five potions
+    // brewed"* was true of one length and wrong at every other, and it is drawn
+    // beside a live tally that would have contradicted it.
+    let needed = world
+        .resource::<crate::content::Progression>()
+        .mastery()
+        .iter()
+        .find(|stone| stone.id == id)
+        .map_or(1, |stone| stone.done.times());
     let sentence = world
         .resource::<Prose>()
-        .line(&format!("mastery_{id}"), &[]);
+        .counted(&format!("mastery_{id}"), needed);
     let message = world.resource::<Prose>().line(
         "mastery_reached",
         &[("name", domain), ("detail", &sentence)],

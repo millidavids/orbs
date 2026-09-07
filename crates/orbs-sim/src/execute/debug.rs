@@ -427,6 +427,25 @@ fn spawn(world: &mut World, name: &str, count: u32, into: Option<&str>) {
         return;
     }
     tower::give(world, into, &known, kind, count);
+    // **Stamped to a full store, not to one making.** A store's standing is a
+    // *rate*, recorded at `tally::done` — and this word never goes through that
+    // door, so without a stamp every spawned thing would arrive `spent`: a
+    // shortcut that hands you stock the game will not let you spend.
+    //
+    // **One stamp is not enough either**, and three tests said so before this
+    // comment did. One making is a rate of one, which is `thin` — so a spawned
+    // troop brought half the bodies it should, and a fixture testing the *Ley
+    // Line's garrison grant* failed on the arsenal's freshness rule instead.
+    // That is a shortcut making a test measure the wrong thing.
+    //
+    // The word's own sentence is *"the shelf finds it had it all along"*, and
+    // the industry behind the shelf is part of *all along*. So it stamps a full
+    // store, and a test that wants a thin one ages it with `meditate` — which is
+    // what the mechanic's own tests do, and is the honest way to reach that
+    // state.
+    for _ in 0..tower::FRESH_AT {
+        tower::made(world, &known);
+    }
     say(world, "debug_spawn_done", &known, Role::Success);
 }
 

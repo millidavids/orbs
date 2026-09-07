@@ -315,10 +315,32 @@ fn every(world: &World, items: &[Condition], missing: &mut Vec<String>) -> Optio
 fn find(world: &World, named: &str, missing: &mut Vec<String>) -> Option<Entity> {
     let cwd = world.resource::<Cwd>().0;
     let leaf = crate::parser::leaf(named).to_owned();
-    let found = tower::children_of(world, cwd).into_iter().find(|node| {
-        world
-            .get::<tower::Name>(*node)
-            .is_some_and(|name| name.0 == leaf)
+    let here = |at: Entity| {
+        tower::children_of(world, at).into_iter().find(|node| {
+            world
+                .get::<tower::Name>(*node)
+                .is_some_and(|name| name.0 == leaf)
+        })
+    };
+    // **The room first, then the arsenal — but only a *store*.**
+    //
+    // `for each store` binds a cursor to an arsenal item and the very next line
+    // asks it a question, so the arsenal has to be reachable from wherever the
+    // spell stands. §19's exemption is *"the one room reachable from every
+    // other"* and `scene` already folds its contents into the naming scope.
+    //
+    // **The fallback is narrowed to `Grouped(STORE)` deliberately**, because an
+    // unrestricted one silences complaints for every other condition: a spell in
+    // the laboratory asking `if the clarity has ready` about a clarity that is
+    // *not there* would stop pushing to `missing`, bind to the arsenal's shelf
+    // instead, read false for ever, and run doing nothing — the exact silent
+    // failure the complaint mechanism exists to surface.
+    let found = here(cwd).or_else(|| {
+        tower::keep(world).and_then(here).filter(|node| {
+            world
+                .get::<tower::Grouped>(*node)
+                .is_some_and(|group| group.0 == tower::STORE)
+        })
     });
     if found.is_none() && !missing.iter().any(|already| *already == named) {
         missing.push(named.to_owned());

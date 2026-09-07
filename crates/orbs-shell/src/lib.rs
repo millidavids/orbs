@@ -46,6 +46,7 @@ mod lexing;
 mod line;
 mod linear;
 mod loom;
+mod menu;
 mod offering;
 pub mod panel;
 mod passing;
@@ -74,21 +75,25 @@ pub use dump::{
     PASSAGE as PASSAGE_VAR, requested as dump_requested, run as dump, run_script as dump_script,
 };
 pub use editor::{Editor, Mode as EditorMode, Outcome as EditorOutcome};
-pub use environment::{RUSTC, SEALED, SEED, fresh, seed, wizard};
+pub use environment::{LENGTH, RUSTC, SEALED, SEED, fresh, seed, wizard};
 pub use focus::{Focus, Open};
 pub use glance::Panel;
 pub use guide::{Entry, Guide, guide};
-pub use keys::{Key, apply, apply_to_chant, apply_to_editor, apply_to_maze, apply_to_weave};
+pub use keys::{
+    Key, apply, apply_to_chant, apply_to_editor, apply_to_maze, apply_to_menu, apply_to_weave,
+};
 pub use line::Line;
 pub use linear::{Linear, toggle as toggle_linear};
+pub use menu::{Menu, Outcome as MenuOutcome, WORDS as MENU_WORDS};
 pub use offering::{Ghost, Offered};
 pub use passing::{Passing, Showing};
 pub use prompt::{View, paint, paint_booting, paint_too_small};
 pub use prose::{CONTENT_DIR, PROSE, load, read};
 pub use reveal::Reveal;
 pub use save::{
-    OFF as SAVE_OFF, Opened, SAVE_PATH, SAVE_VAR, away_for, path as save_path, read as read_save,
-    write as write_save,
+    OFF as SAVE_OFF, Opened, SAVE_PATH, SAVE_VAR, SLOTS as SAVE_SLOTS, Slot, away_for, free_slot,
+    path as save_path, read as read_save, read_from as read_save_from, saves, slot_path,
+    write as write_save, write_to as write_save_to,
 };
 pub use screen::Screen;
 pub use scrollback::{Scroll, page_step};

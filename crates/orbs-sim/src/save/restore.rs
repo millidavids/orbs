@@ -227,6 +227,11 @@ fn progress(world: &mut World, save: &Save) {
     world
         .resource_mut::<tower::Renown>()
         .restore(progress.renown);
+    // The allowance a player has already paid for, kept across a save: renown
+    // was spent on it, and losing it to a quit would be losing the renown.
+    world
+        .resource_mut::<tower::siege::Petitioned>()
+        .restore(progress.petitioned);
     // **Absent means whole, not nothing.** A save written before the
     // sanctum existed says nothing about integrity, and defaulting a missing
     // field to nought would hand every returning player a tower worn to the
@@ -271,6 +276,37 @@ fn progress(world: &mut World, save: &Save) {
     world
         .resource_mut::<tower::Tally>()
         .restore(progress.tally.clone());
+    // **Absent means full, not empty.** A store's standing is a *rate*, so an
+    // empty map reads as *nothing made lately* — every store out, and a
+    // returning player unable to spend a thing from a shelf they filled. A save
+    // written before stores existed says nothing about them, so it is stamped at
+    // the tick it is loading into and opens generously. `integrity` is the
+    // precedent one field up, for the same reason and with the same shape.
+    match progress.stores.clone() {
+        // A document this build wrote. Taken at face value, empty or not — a
+        // tower that has made nothing lately is a real state and must survive a
+        // reload unchanged, or the round trip is not idempotent.
+        Some(stores) => world.resource_mut::<tower::Stores>().restore(stores),
+        // **Written before stores existed.** Absent would otherwise read as
+        // *nothing made lately* — every store out, and a returning player unable
+        // to spend a thing from a shelf they filled.
+        None => {
+            let now = world.resource::<crate::tick::Tick>().get();
+            // **Stock only.** `keeping` returns every child of the arsenal, and
+            // `arsenal.log` is one of them — stamping a log put a store on a
+            // file, which three round-trip tests caught immediately.
+            let kept: Vec<String> = tower::keeping(world)
+                .into_iter()
+                .filter(|node| world.get::<tower::Stock>(*node).is_some())
+                .filter_map(|node| world.get::<tower::Name>(node).map(|name| name.0.clone()))
+                .collect();
+            for named in kept {
+                for _ in 0..tower::FRESH_AT {
+                    world.resource_mut::<tower::Stores>().made(&named, now);
+                }
+            }
+        }
+    }
     world
         .resource_mut::<tower::mastery::Reached>()
         .restore(progress.reached.clone());

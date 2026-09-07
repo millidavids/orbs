@@ -44,4 +44,9 @@ orbs-parse.tsv
 # be the third thing a `git status` in a played-in checkout kept offering.
 orbs-save.toml
 orbs-save.toml.writing
+# ...and the other five slots the menu can keep, plus the one an unreadable save
+# is set aside as. Slot 1 is the line above; 2-6 sit beside it.
+orbs-save-*.toml
+orbs-save-*.toml.writing
+orbs-save*.toml.unreadable
 assets/online/

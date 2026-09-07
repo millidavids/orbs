@@ -155,6 +155,16 @@ fn gone<Fd: std::os::fd::AsFd>(fd: &Fd) -> bool {
 /// Everything the loop keeps between frames.
 struct Session {
     sim: Sim,
+    /// The file this tower is kept in, and where it is written back.
+    ///
+    /// **The path travels with the `Sim`**, which is what stops loading a second
+    /// game destroying the first: the save is written every sixty ticks and
+    /// again on the way out, and a path resolved at the moment of writing is a
+    /// path resolved *after* a swap. Here they are two fields of one struct that
+    /// [`run`] replaces together, by building a new `Session`.
+    ///
+    /// `None` when this session keeps nothing — `ORBS_SAVE=off`.
+    kept: Option<std::path::PathBuf>,
     /// Whether a failed write has already been complained about.
     save_failed: bool,
     line: Line,
@@ -235,7 +245,13 @@ struct Session {
 }
 
 impl Session {
-    fn new(sim: Sim, grid: GridSize, narrow: bool, engine: String) -> Self {
+    fn new(
+        sim: Sim,
+        kept: Option<std::path::PathBuf>,
+        grid: GridSize,
+        narrow: bool,
+        engine: String,
+    ) -> Self {
         let mut panel = Panel::default();
         panel.refresh(&sim);
         Self {
@@ -243,6 +259,7 @@ impl Session {
             held_over: None,
             engine,
             sim,
+            kept,
             save_failed: false,
             line: Line::default(),
             offered: Offered::default(),
@@ -287,17 +304,27 @@ impl Session {
         // **`quit` lands here, not at `submit`**, and that is not a delay worth
         // engineering away. `submit` echoes and queues; every verb's *effect*
         // runs at the next `step`, which is what keeps effects tick-aligned
-        // (§19). So the player sees the echo, then `quit_begins` on the tick,
-        // then the terminal comes back — the same beat every other word has.
+        // (§19). So the player sees the echo, then the answer on the tick, then
+        // the terminal comes back — the same beat every other word has.
+        //
+        // **The flag is only set by a confirmed `quit`**: the sim asks first and
+        // any other command answers no, so there is nothing to check here beyond
+        // the flag itself.
         if self.sim.quitting() {
             return false;
         }
         self.panel.refresh(&self.sim);
         // A verb may have asked for a surface, and an open one may have been
-        // closed from under the player by a spell.
+        // closed from under the player by a spell. `menu`'s handshake is taken
+        // in here, by `Surfaces::open`.
         self.surfaces
             .open(&mut self.sim, &mut self.scroll, self.page);
         self.surfaces.tick(&self.sim);
+        // The menu's own `quit` leaves the loop the same way, and so does a
+        // swap; `run` decides which of the three it was.
+        if self.surfaces.leaving || self.surfaces.swapping.is_some() {
+            return false;
+        }
         self.ghost = self
             .line
             .ghost(self.sim.scene(), !self.sim.choices().is_empty());
@@ -686,6 +713,7 @@ impl Session {
                     editing: self.surfaces.editing.as_mut(),
                     weaving: self.surfaces.weaving.as_ref(),
                     walking: self.surfaces.walking,
+                    menuing: self.surfaces.menuing.as_ref(),
                 },
             );
         } else {
@@ -721,7 +749,12 @@ impl Session {
     /// silent failure is a whole session lost with nothing said — and a save is
     /// attempted every sixty ticks, so a line per attempt is sixty an hour.
     fn keep(&mut self) {
-        let Err(error) = orbs_shell::write_save(&self.sim.snapshot()) else {
+        // **This tower's own path**, never `save_path()` — see `Session::kept`.
+        let Some(path) = self.kept.clone() else {
+            self.save_failed = false;
+            return;
+        };
+        let Err(error) = orbs_shell::write_save_to(&path, &self.sim.snapshot()) else {
             self.save_failed = false;
             return;
         };
@@ -745,18 +778,64 @@ impl Session {
 pub(crate) fn run(sim: Sim, engine: String) -> std::io::Result<()> {
     let narrow = term::symbols_are_narrow().unwrap_or(true);
     let grid = term::grid()?;
-    let mut session = Session::new(sim, grid, narrow, engine);
+    let mut session = Session::new(sim, orbs_shell::save_path(), grid, narrow, engine.clone());
 
-    let result = play(&mut session);
+    loop {
+        let result = play(&mut session);
 
-    // **Every way out converges here**, which is why the loop is a function of
-    // its own. There are four exits — the `quit` verb, `F10`, `Ctrl-C`/`Ctrl-D`,
-    // and an `io::Error` off the terminal — and only the first goes through the
-    // `Quitting` flag. Saving at each `return` in turn would have covered one in
-    // four and looked complete; the Bevy build reads `AppExit` in `Last` for
-    // exactly the same reason.
-    session.keep();
-    result
+        // **Every way out converges here**, which is why the loop is a function
+        // of its own. There are five exits now — the menu's `quit`, `F10`,
+        // `Ctrl-C`/`Ctrl-D`, an `io::Error` off the terminal, and a swap — and
+        // only the first goes through the `Quitting` flag. Saving at each
+        // `return` in turn would have covered one in five and looked complete;
+        // the Bevy build reads `AppExit` in `Last` for exactly the same reason.
+        //
+        // **And it happens before the swap below**, which is that feature's
+        // whole exit criterion: the tower being left is written to the path it
+        // came from while `session` still holds both.
+        session.keep();
+
+        let Some(asked) = session.surfaces.swapping.take() else {
+            return result;
+        };
+        // An error off the terminal is not a thing to swap through.
+        result?;
+
+        // **Read before the old session is dropped**, so a save that will not
+        // open leaves the player where they were rather than in a half-built
+        // world. `read_save_from` has already set an unreadable one aside.
+        let raised = match asked.length {
+            Some(length) => orbs_sim::Sim::begun(orbs_shell::seed(), length),
+            None => match orbs_shell::read_save_from(&asked.path) {
+                orbs_shell::Opened::Restored(save) => {
+                    let mut resumed = orbs_sim::Sim::restored(&save);
+                    resumed.say_resumed(orbs_shell::away_for(&save));
+                    resumed
+                }
+                orbs_shell::Opened::Unreadable => {
+                    tracing::error!("the tower in {} could not be read", asked.path.display());
+                    session.surfaces.menuing = Some(orbs_shell::Menu::default());
+                    continue;
+                }
+                orbs_shell::Opened::New => {
+                    orbs_sim::Sim::begun(orbs_shell::seed(), orbs_sim::content::Length::Medium)
+                }
+            },
+        };
+
+        // **A whole new `Session`**, which is the terminal's answer to the other
+        // build's eighteen-resource reset: every derived field goes back to its
+        // default because it is a new struct, and none of them can be forgotten.
+        // The grid is re-read because the terminal may have been resized while
+        // the menu was up.
+        session = Session::new(
+            raised,
+            Some(asked.path),
+            term::grid().unwrap_or(grid),
+            narrow,
+            engine.clone(),
+        );
+    }
 }
 
 /// The loop itself, so [`run`] has somewhere to stand afterwards.

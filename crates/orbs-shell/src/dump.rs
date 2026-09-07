@@ -168,6 +168,28 @@ const THEN: &str = "ORBS_THEN";
 /// ```
 const WEAVE: &str = "ORBS_WEAVE";
 
+/// Words for the orb's menu a `menu` in `ORBS_DUMP` opened.
+///
+/// `\n`-separated, one word per segment, Enter implied at the end of each —
+/// [`WEAVE`]'s shape, minus the arrows, because the menu has nothing to walk.
+/// `<esc>` leaves it, exactly as Escape does.
+///
+/// **Without this the instrument is blind to the one surface `quit` now
+/// reaches**, and CLAUDE.md names that blindness specifically: *"a domain built
+/// without a block in it is one this instrument is blind to, and the blindness
+/// looks exactly like stability"* — Phase 8 shipped the bailey that way.
+///
+/// **`quit` from the menu prints the menu.** A dump presses no keys and hosts no
+/// process, so there is nothing for `MenuOutcome::PutDown` to end; what it means
+/// here is *this is the screen the player was looking at when they left*, which
+/// is the picture the See-it line wants. `run_script` never read `Quitting`
+/// either, for the same reason.
+///
+/// ```text
+/// ORBS_DUMP="menu" ORBS_MENU="zorb" cargo run -p orbs
+/// ```
+const MENU: &str = "ORBS_MENU";
+
 /// Arrow presses for the stacks a `wander` in `ORBS_DUMP` took the keys for.
 ///
 /// `\n`-separated, one of `<up>`, `<right>`, `<down>`, `<left>` per segment.
@@ -277,7 +299,12 @@ pub fn run_script(seed: u64, wizard: Option<String>, engine: &str, request: &str
             resumed
         }
         crate::save::Opened::Unreadable => {
-            let mut fresh = crate::environment::fresh(seed, false);
+            // **Baseline, and it matters more than the `false` beside it.** The
+            // dump is an instrument: all 138 of its captures read the authored
+            // curve, and a default length here would move every one of them the
+            // day a tier was retuned.
+            let mut fresh =
+                crate::environment::fresh(seed, false, orbs_sim::content::Length::Baseline);
             if let Some(name) = wizard {
                 fresh.rename(&name);
             }
@@ -285,7 +312,12 @@ pub fn run_script(seed: u64, wizard: Option<String>, engine: &str, request: &str
             fresh
         }
         crate::save::Opened::New => {
-            let mut fresh = crate::environment::fresh(seed, false);
+            // **Baseline, and it matters more than the `false` beside it.** The
+            // dump is an instrument: all 138 of its captures read the authored
+            // curve, and a default length here would move every one of them the
+            // day a tier was retuned.
+            let mut fresh =
+                crate::environment::fresh(seed, false, orbs_sim::content::Length::Baseline);
             // Only a *new* world takes its wizard from the environment: a save
             // carries one, and `session::Wizard` is explicit that a save
             // outranks the machine.
@@ -411,6 +443,9 @@ pub fn run_script(seed: u64, wizard: Option<String>, engine: &str, request: &str
         // ...and the same for a `wander`, except that this one owns no surface,
         // so what it produces is a flag and some steps already walked.
         let mut walking = walked(&mut sim);
+        // ...and the same for a `menu`. Taken here so one in `ORBS_DUMP` and one
+        // in `ORBS_THEN` both reach it.
+        let mut menuing = menued(&mut sim);
         // ...and the menagerie's, which owns no surface *and* no flag. The
         // figure draws whenever a chant is running, and `chorus` does not take
         // the pane — so unlike `wander` there is nothing for the drawing side to
@@ -439,6 +474,7 @@ pub fn run_script(seed: u64, wizard: Option<String>, engine: &str, request: &str
             editing = editing.or_else(|| open(&mut sim));
             weaving = weaving.or_else(|| woven(&mut sim));
             walking |= walked(&mut sim);
+            menuing = menuing.or_else(|| menued(&mut sim));
             choruses(&mut sim);
         }
         // **And a maze can close from under the walker.** `walked` only ever
@@ -550,6 +586,7 @@ pub fn run_script(seed: u64, wizard: Option<String>, engine: &str, request: &str
                 editing: editing.as_mut(),
                 weaving: weaving.as_ref(),
                 walking,
+                menuing: menuing.as_ref(),
             },
         );
     } else {
@@ -739,6 +776,7 @@ fn leaving(
             editing: None,
             weaving: None,
             walking: false,
+            menuing: None,
         },
     );
     passing.pose_kept(&frame);
@@ -1082,6 +1120,59 @@ fn refresh(screen: &mut super::Tapestry, sim: &orbs_sim::Sim) {
         sim.ley_line(),
         sim.mastery(),
     );
+}
+
+/// The orb's menu, if a `quit` in the script opened it, with [`MENU`] typed in.
+///
+/// **`sim.menuing()` takes the handshake**, exactly as `woven` takes `weaving`
+/// — so this fires once per `menu` and a second `menu` in `ORBS_THEN` reopens a
+/// screen the first one's `resume` closed, which is the behaviour the game has.
+fn menued(sim: &mut orbs_sim::Sim) -> Option<super::Menu> {
+    if !sim.menuing() {
+        return None;
+    }
+    let mut menu = super::Menu::default();
+
+    let Ok(script) = std::env::var(MENU) else {
+        return Some(menu);
+    };
+    for segment in script.replace("\\n", "\n").split('\n') {
+        match segment.trim() {
+            "" => continue,
+            "<esc>" => {
+                if menu.escape().is_some() {
+                    return None;
+                }
+            }
+            word => {
+                for character in word.chars() {
+                    menu.type_text(&character.to_string());
+                }
+                // Enter is implied at the end of a segment, as it is for the
+                // weave: there is no buffer here, so a segment can only mean
+                // "a word, now run it".
+                match menu.enter() {
+                    // `resume` really closes it, so `ORBS_MENU="resume"` draws
+                    // the tower — which is the half of the See-it line that
+                    // proves the menu is a place you can leave.
+                    Some(super::MenuOutcome::Close) => return None,
+                    // **Nothing to end and nothing to swap.** See [`MENU`]: a
+                    // dump hosts no process and builds no `App`, so putting the
+                    // orb down, loading another tower and beginning one all
+                    // leave the menu on screen as the last thing the player saw.
+                    // The *pages* are what a dump can show, and they are what it
+                    // is for — `ORBS_MENU="saves"` is the listing's See-it line.
+                    Some(
+                        super::MenuOutcome::PutDown
+                        | super::MenuOutcome::Load(_)
+                        | super::MenuOutcome::Begin { .. },
+                    )
+                    | None => {}
+                }
+            }
+        }
+    }
+    Some(menu)
 }
 
 fn woven(sim: &mut orbs_sim::Sim) -> Option<super::Tapestry> {

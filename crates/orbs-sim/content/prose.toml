@@ -215,6 +215,26 @@ concentration_gained = "the orb can hold a spell now. bind one, and walk away"
 renown_lost = "word gets about: {quantity} renown lost, and {count} left"
 
 # ---------------------------------------------------------------------------
+# What a whole siege did to the tower's standing (§11.5, §19).
+#
+# **One line per fight, not one per round.** A round moves renown quietly —
+# it was elected by typing `hold` and has just said what the enemy did, so a
+# sentence per exchange is the same news twice, six to thirteen times over.
+# These are what `settle` says instead, once, after the siege's own sentence.
+#
+# They are also the only thing that says it at all on a short or narrow pane,
+# where the gauges yield and the number moves with nothing drawn — and the
+# only thing §14's linear stream carries. Hence a `{count}` as well as a
+# `{quantity}`: where the fight left you, not only what it moved.
+#
+# **The songs, and the quiet.** A siege is the one place standing is won or
+# lost in public, so the voice is other people talking about it rather than
+# the orb reporting a number.
+# ---------------------------------------------------------------------------
+siege_standing_won = "they are singing about it: {quantity} renown, {count} in all"
+siege_standing_lost = "word gets about: the wall cost {quantity} renown, {count} left"
+
+# ---------------------------------------------------------------------------
 # The two gauges at the top of every pane (§11.5, §14).
 #
 # **Terse, because they share a row with a bar and a reading.** The label is a
@@ -325,11 +345,48 @@ scribe_nowhere = "a spell is written for a place. go where the work is first"
 # player keeps afterwards.
 unfurl_begins = "you unfurl the record"
 
+# **Asked before it happens.** Leaving is the one word in the game that cannot
+# be undone, waited out or repeated away, and the tower is written on the way -
+# so it asks, and the answer is another `quit`. The question names what to type,
+# which is what every refusal here does.
+quit_asks = "leave the orb? quit again to go. anything else stays"
 # **Said before it happens**, so the log ends on a decision rather than simply
-# stopping. The tower keeps working whether or not anyone is looking — §5.0's
+# stopping. The tower keeps working whether or not anyone is looking - §5.0's
 # clock runs only while the window is open, so this is the wizard stepping away
 # rather than the world ending.
 quit_begins = "you let the orb go dark. the tower keeps its own counsel"
+# The menu is its own word now, and its own step out. `quit` opened it for one
+# iteration; §19 records why that was superseded.
+menu_begins = "you lift your eyes from the orb"
+
+# The menu's own furniture. Authored against the narrow pane, like the weave's.
+menu_title = "orbs"
+menu_lead = "the tower waits. what now?"
+menu_word_resume = "resume    go back to the tower"
+menu_word_saves = "saves     the towers the orb is keeping"
+menu_word_new = "new       raise another"
+menu_word_quit = "quit      put the orb down"
+menu_word_back = "back      the way you came"
+menu_too_small = "the pane is too small for the menu. press F4"
+
+# The saves listing. `{count}` is the slot a player types to open it.
+menu_saves_lead = "which tower?"
+menu_saves_none = "no towers kept. new raises one"
+menu_saves_row = "{count}  {name}, a {detail} game, {quantity} earned"
+
+# How long a new game is to be. The tiers are `Length::OFFERED`; baseline is not
+# offered, because it is the numbers we happened to author first rather than a
+# difficulty. See `content/length.rs`.
+menu_new_lead = "how long a game?"
+menu_length_short = "short     a brisk one"
+menu_length_medium = "medium    the usual"
+menu_length_long = "long      the long haul"
+
+# Refusals. §6: never a bare error, and every one names what to do instead.
+menu_unknown = "the orb does not know '{detail}'"
+menu_empty = "there is no tower in {count}. new raises one"
+menu_full = "the orb keeps no more towers. open one and quit from it"
+menu_unkept = "this orb keeps no saves at all - ORBS_SAVE is off"
 # **As short as the `PgDn newest` it replaces.** This rides in the border title
 # beside the location, the tick, the tier and the grid, and at the 80-column
 # floor there is about twenty cells left - the first wording was 39 and drew as
@@ -487,32 +544,62 @@ weave_node_steps_3 = "three more steps a second"
 # `progression.toml`. Each is the deed as a thing done - "a clarity brewed" -
 # so it reads under a details panel saying `3 of 5` and in the record that says
 # the line advanced. 28 cells, like the node sentences above.
+#
+# **`{count}` rather than the number spelled out**, and the spelled-out version
+# is why. These read *"five potions brewed"* under a details panel saying `3 of
+# 5`, which was true of exactly one curve — the moment a game could be short or
+# long, the sentence and the tally beside it disagreed, and the sentence was the
+# one that was wrong.
+#
+# The three that carry no count are the `Made` deeds: *make this thing once* is
+# a reveal gate rather than a grind, and there is nothing in it to stretch.
 mastery_reached = "the {name} line advances: {detail}"
 mastery_laboratory_1 = "a clarity brewed"
-mastery_laboratory_2 = "five potions brewed"
+mastery_laboratory_2 = "{count} potions brewed"
 mastery_laboratory_3 = "a warding brewed"
-mastery_laboratory_4 = "fifteen potions brewed"
+mastery_laboratory_4 = "{count} potions brewed"
 mastery_laboratory_5 = "an insight brewed"
-mastery_laboratory_6 = "forty potions brewed"
-mastery_archive_1 = "the stacks walked"
-mastery_archive_2 = "a scroll assembled"
-mastery_archive_3 = "five walks of the stacks"
-mastery_archive_4 = "three scrolls assembled"
-mastery_archive_5 = "fifteen walks of the stacks"
-mastery_lens_1 = "a ward broken"
-mastery_lens_2 = "five wards broken"
+mastery_laboratory_6 = "{count} potions brewed"
+mastery_archive_1 = "{count} walks of the stacks"
+mastery_archive_2 = "{count} scrolls assembled"
+mastery_archive_3 = "{count} walks of the stacks"
+mastery_archive_4 = "{count} scrolls assembled"
+mastery_archive_5 = "{count} walks of the stacks"
+mastery_lens_1 = "{count} wards broken"
+mastery_lens_2 = "{count} wards broken"
 mastery_lens_3 = "a secret learned"
-mastery_lens_4 = "fifteen wards broken"
-mastery_sanctum_1 = "a course mustered"
-mastery_sanctum_2 = "five courses mustered"
+mastery_lens_4 = "{count} wards broken"
+mastery_sanctum_1 = "{count} courses mustered"
+mastery_sanctum_2 = "{count} courses mustered"
 mastery_sanctum_3 = "a siege survived"
-mastery_sanctum_4 = "five sieges won"
-mastery_menagerie_1 = "a figure closed"
-mastery_menagerie_2 = "five figures closed"
-mastery_menagerie_3 = "twenty figures closed"
-mastery_forge_1 = "a charm laid"
-mastery_forge_2 = "five charms laid"
-mastery_forge_3 = "fifteen charms laid"
+mastery_sanctum_4 = "{count} sieges won"
+mastery_menagerie_1 = "{count} figures closed"
+mastery_menagerie_2 = "{count} figures closed"
+mastery_menagerie_3 = "{count} figures closed"
+mastery_forge_1 = "{count} charms laid"
+mastery_forge_2 = "{count} charms laid"
+mastery_forge_3 = "{count} charms laid"
+
+# **The singular, for the six deeds that ask for one of a thing.** The sentences
+# above say the *number* rather than spelling it, because they are drawn beside a
+# live `3 of 5` counter and a spelled-out count contradicts it the moment a game
+# is longer than baseline - but "1 charms laid" is worse than either. `Prose::counted`
+# reads these when the count is one and falls through when it is not, so only the
+# keys that read wrong in the singular are authored twice.
+#
+# Not a pluralisation rule: English inflects more than the noun here - compare
+# "the stacks walked" with "3 walks of the stacks" - and a rule that added an `s`
+# would have to be undone by hand for half of them.
+#
+# `archive_2` is on the list because it can *stop* being one: it sits second on
+# its line, so a long game stretches it to two and the plural above is then
+# right. The other five are each first on their line and never move.
+mastery_archive_1_one = "the stacks walked"
+mastery_archive_2_one = "a scroll assembled"
+mastery_lens_1_one = "a ward broken"
+mastery_sanctum_1_one = "a course mustered"
+mastery_menagerie_1_one = "a figure closed"
+mastery_forge_1_one = "a charm laid"
 
 # What a station opened, said once and only if it was shut - a tower restored
 # open that re-reaches the station opening the archive has an archive already.
@@ -1510,10 +1597,19 @@ man_undo_also = "stop, empty"
 # true everywhere.
 man_quit_use = "quit"
 man_quit_gloss = "put the orb down and stop"
-man_quit_1 = "the tower stops when you do: nothing brews while the orb"
-man_quit_2 = "is dark, so what you built is here when you look again"
+man_quit_1 = "it asks first, and the answer is another quit: this is the"
+man_quit_2 = "one word that cannot be undone. the tower stops when you"
+man_quit_3 = "do, so what you built is here when you look again"
 man_quit_eg1 = "quit, when the fire is out and the shelf is stocked"
-man_quit_also = "status, weave"
+man_quit_also = "menu, status, weave"
+
+man_menu_use = "menu"
+man_menu_gloss = "step out to the orb's own screen"
+man_menu_1 = "the towers you keep are listed there: open another, or"
+man_menu_2 = "raise a new one and choose how long it runs, and resume"
+man_menu_3 = "comes back to this one"
+man_menu_eg1 = "menu, to leave this tower running and look at another"
+man_menu_also = "quit, weave"
 
 man_unfurl_use = "unfurl"
 man_unfurl_gloss = "read back through the record"
@@ -1772,6 +1868,23 @@ pledge_made = "{name} goes behind the {detail} for {kind}. {quantity} to {state}
 # have cost and what is left, because a player has to be able to plan around it -
 # and planning around it is the mechanic.
 pledge_short = "{name} would take {kind}, and you hold {detail}"
+
+# ---------------------------------------------------------------------------
+# `petition` — spending standing so that fewer come up the road (§11.5, §19).
+#
+# **The price and the number it moves, in the same breath.** `pledge_short`
+# above sets the rule for this room: a refusal a player cannot plan around is
+# not a refusal, it is a wall. So both sentences carry the two numbers.
+#
+# The voice is a wizard asking to be troubled less — not bargaining with the
+# enemy, which would be a different fiction and the wrong one. What is bought
+# is quiet, and it is paid for in fame.
+# ---------------------------------------------------------------------------
+petition_done = "word goes out. at most {quantity} will come, for {kind} renown"
+petition_short = "that would take {kind} renown, and you hold {quantity}"
+petition_least = "no fewer than {quantity} will ever come. keep your renown"
+# What is bought is the size of the *next* siege, and this one is already here.
+petition_besieged = "they are already at the wall. this is the siege you have"
 # **A pledge the intent will waste is allowed and warned about.** Refusing would
 # be the game playing for you; silence would break the rule that you are told the
 # odds before the commitment, and *this does nothing* is the starkest odds there
@@ -1780,6 +1893,17 @@ pledge_wasted = "{name} goes to the {detail} for {kind}, wasted on a {state}"
 spend_useless = "{name} is worth nothing on a wall"
 spend_wrong_word = "{name} is not quaffed or deployed. {detail} it"
 spend_none = "there is no {name} in the arsenal"
+# ---------------------------------------------------------------------------
+# Stores that have run down (§11.5, §19).
+#
+# **The shelf is not empty — the stores behind it are.** What the arsenal holds
+# is one thing and what your industry can still supply is another, so these
+# never say "there is no {name}": `spend_none` is that sentence and it means
+# something else. The potion is kept, exactly as `spend_whole` keeps one.
+#
+# Both name the way out, because the way out is the mechanic: make more.
+# ---------------------------------------------------------------------------
+spend_stale = "your {name} stores are out. make one and come back"
 spend_whole = "the line is whole. keep the {name} for when it is not"
 spend_unanswered = "they {state} next, so you will not swing. keep the {name}"
 deploy_sent = "{name} goes down to the line"
@@ -1811,6 +1935,13 @@ man_deploy_1 = "what the menagerie called up, spent here"
 man_deploy_2 = "it joins the garrison and rolls with it next round"
 man_deploy_eg1 = "deploy troop, when the garrison is few"
 man_deploy_also = "quaff, hold, summon"
+
+man_petition_use = "petition"
+man_petition_gloss = "spend renown so that fewer come up the road"
+man_petition_1 = "fame draws a crowd. this is how you are less famous"
+man_petition_2 = "it buys one fewer foe, on the next siege only"
+man_petition_eg1 = "petition, when the road is empty and you are dreading it"
+man_petition_also = "defend, weave, status"
 
 man_quaff_use = "quaff <name>"
 man_quaff_gloss = "spend a potion on the coming round"

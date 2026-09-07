@@ -198,6 +198,63 @@ fn a_die_is_priced_before_any_siege_has_been_fought() {
 // 2. A person can write a spell with them
 // ---------------------------------------------------------------------------
 
+/// **The arsenal's stores, in a spell a person typed.**
+///
+/// Compiling is not using: `scene_at` registers every declared word, so a spell
+/// naming one always compiles. What this asserts is that the loop's body
+/// actually *runs* — the cursor binds to a store and the condition answers.
+#[test]
+fn a_spell_can_walk_the_arsenal_and_find_what_has_gone_thin() {
+    // **The half that makes the mechanic answerable.** Stores run down with
+    // time, and a player who cannot ask *which* has run down can only guess —
+    // so a spell walks them, exactly as it walks ways and sockets, and the
+    // answer to a thinning arsenal is a spell that keeps making things.
+    //
+    // Registering a nameable word that no `has` can reach is the silent defect
+    // `scene.rs` records the whole registration loop existing to prevent: the
+    // spell casts, runs, and does nothing for ever. `complaints` is what
+    // catches that, which is why this asserts on it rather than on an effect.
+    let mut sim = at_the_wall(11);
+    run(&mut sim, "debug_spawn warding 1");
+    run(&mut sim, "debug_spawn troop 1");
+    // **Aged until the stores have run out**, which is the state worth asking
+    // about: `spent` is what a keeping spell acts on. `thin` is the middle of
+    // the slope and is reached by production *spread over time*, which one
+    // `debug_spawn` cannot make — it stamps a full store at a single tick, so
+    // its makings all fall out of the window together.
+    run(&mut sim, "meditate 3000");
+
+    cast(
+        &mut sim,
+        "keeping",
+        &[
+            "for each store",
+            "    if the store has spent",
+            "        survey arsenal",
+            "    end",
+            "end",
+        ],
+    );
+    assert!(
+        complaints(&sim).is_empty(),
+        "a spell could not ask what the arsenal is stocked in: {:?}",
+        complaints(&sim),
+    );
+    // **And the body actually ran**, which is the half a clean compile does not
+    // prove: a `for each` over a set with no members, or a `has` that is always
+    // false, complains about nothing and does nothing. One `debug_spawn` is a
+    // rate of one, so both of these *are* thin, and the survey inside the loop
+    // is what says the question was answered rather than merely parsed.
+    for _ in 0..8 {
+        sim.step();
+    }
+    assert!(
+        words(&sim).iter().any(|word| word == "warding"),
+        "the loop compiled but never reached a store: {:?}",
+        said(&sim),
+    );
+}
+
 /// **Each new reading, in a spell a person typed.**
 ///
 /// Compiling is not using: `scene_at` registers every declared word, so a spell

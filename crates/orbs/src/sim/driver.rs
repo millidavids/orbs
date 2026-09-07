@@ -31,7 +31,34 @@ impl Tower {
     /// nothing else (§11.5), and `orbs_shell::fresh` is the one reader of the
     /// switch so this build and the terminal one cannot disagree about it.
     pub(crate) fn fresh(seed: u64) -> Self {
-        Self(orbs_shell::fresh(seed, true))
+        Self(orbs_shell::fresh(
+            seed,
+            true,
+            orbs_sim::content::Length::Medium,
+        ))
+    }
+
+    /// The tower a *chosen* length builds, for a new game begun at the menu.
+    ///
+    /// **Not [`fresh`](Self::fresh) with an argument**, because the two differ in
+    /// where the length comes from and that difference is the point: `fresh` is
+    /// the game the binary starts with and lets `ORBS_LENGTH` speak, while this
+    /// is a game the player has just been asked about and answered. An
+    /// environment variable outranking an answer typed a second ago would be the
+    /// wrong way round.
+    ///
+    /// Renamed here, unlike a restored tower: this **is** a new world, which is
+    /// exactly the case `session::Wizard` says the environment may seed.
+    pub(crate) fn begun(
+        seed: u64,
+        length: orbs_sim::content::Length,
+        wizard: Option<&str>,
+    ) -> Self {
+        let mut tower = Self(Sim::begun(seed, length));
+        if let Some(wizard) = wizard {
+            tower.rename(wizard);
+        }
+        tower
     }
 
     /// The tower a save describes.
@@ -138,6 +165,17 @@ impl Tower {
     /// time.
     pub(crate) fn is_quitting(&self) -> bool {
         self.0.is_quitting()
+    }
+
+    /// Whether `menu` is waiting, **without** mutating. See
+    /// [`Tower::has_opening`] for the regression the peek exists to prevent.
+    pub(crate) fn has_menuing(&self) -> bool {
+        self.0.has_menuing()
+    }
+
+    /// Whether `menu` has asked for the orb's own screen.
+    pub(crate) fn menuing(&mut self) -> bool {
+        self.0.menuing()
     }
 
     /// Whether `weave` has asked for the progression screen, **without**

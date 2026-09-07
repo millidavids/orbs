@@ -90,19 +90,23 @@ mod battle;
 mod escrow;
 mod quintessence;
 mod readings;
+mod standing;
 
 #[cfg(test)]
 mod tests;
 
 pub use allocation::{Area, COFFER, POOL, Pledge, SORTIE_COST, SORTIE_DEALT, Strengths};
 pub use band::{
-    AGAINST, ASSIGNED, BAILEY, Band, CADENCE, DEFEAT_WEAR, ENEMY, GARRISON, Intent, Outcome,
-    RAMPART, Round, THIN, VICTORY_MEND, VIGOUR, WEARY,
+    AGAINST, ASSIGNED, BAILEY, BASE_MOST, Band, CADENCE, DEFEAT_WEAR, ENEMY, FEWEST, GARRISON,
+    Intent, MOST, Outcome, RAMPART, RANKS_PER_FOE, Round, THIN, VICTORY_MEND, VIGOUR, WEARY,
 };
 pub use battle::{Pledged, Siege};
-pub use escrow::{COMPLETION_BONUS, ESCROW_FLOOR, ESCROW_PER_FOE, escrow};
+pub use escrow::{
+    COMPLETION_BONUS, ESCROW_FLOOR, ESCROW_PER_FOE, RENOWN_PER_FOE, escrow, renown_stake,
+};
 pub use quintessence::{FACES_PER_POINT, cost_of};
 pub use readings::{
     AIM, CEILING, FEW, FOES, HURT, LIFTED, MASSED, METTLE, MOOT, OUTNUMBERED, QUINTESSENCE, ROUTED,
     SPEARS, TURNS, readings,
 };
+pub use standing::{PETITION_PER_FOE, Petitioned, most_at};

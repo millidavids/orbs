@@ -65,6 +65,41 @@ const fn once() -> u32 {
 }
 
 impl Deed {
+    /// This deed as the `index`th of `count` on its line, at `length`.
+    ///
+    /// **[`Made`](Self::Made) has no count and is returned untouched** — it is
+    /// *make this thing once*, a reveal gate rather than a grind, and there is no
+    /// field in it to stretch. That is a property of the variant rather than an
+    /// exemption someone has to remember.
+    ///
+    /// Every other variant stretches its own count. The `at` and `event` names
+    /// are what the tally is keyed by and are never touched.
+    #[must_use]
+    pub fn stretched(&self, length: crate::content::Length, index: usize, count: usize) -> Self {
+        let grown = |n: u32| -> u32 {
+            u32::try_from(length.stretch(u64::from(n), index, count)).unwrap_or(u32::MAX)
+        };
+        match self {
+            Self::Made(name) => Self::Made(name.clone()),
+            Self::Potions { potions } => Self::Potions {
+                potions: grown(*potions),
+            },
+            Self::Scrolls { scrolls } => Self::Scrolls {
+                scrolls: grown(*scrolls),
+            },
+            Self::At { at, times } => Self::At {
+                at: at.clone(),
+                times: grown(*times),
+            },
+            Self::Event { event, times } => Self::Event {
+                event: event.clone(),
+                times: grown(*times),
+            },
+        }
+    }
+}
+
+impl Deed {
     /// The tally key this deed reads.
     ///
     /// **One key per deed, and the key is the contract.** `Tally` is written by

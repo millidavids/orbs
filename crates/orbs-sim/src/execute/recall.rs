@@ -532,7 +532,13 @@ fn road(world: &mut World, room: &str) {
     let message = match line.next() {
         Some(next) => {
             let prose = world.resource::<Prose>();
-            let deed = prose.line(&format!("mastery_{}", next.id), &[]);
+            // **The deed's own count, interpolated.** These sentences used to
+            // spell it out — *"five potions brewed"* — beside a live `3 of 5`,
+            // so the moment a game had a length the sentence and the number next
+            // to it disagreed. `counted` rather than `line`, because six of the
+            // deeds ask for one of a thing and *"1 charms laid"* is worse than
+            // either.
+            let deed = prose.counted(&format!("mastery_{}", next.id), next.needed);
             let count = prose.line(
                 "weave_progress",
                 &[

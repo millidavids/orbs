@@ -34,22 +34,106 @@ use crate::content::Prose;
 use crate::parser::Verb;
 use crate::session::Scrollback;
 
-/// A request to put the orb down.
+/// A request to put the orb down, and whether it has been confirmed.
 ///
-/// **Taken rather than read**, for the reason [`Unfurling`](super::Unfurling)
-/// gives: `quit` asks once. A frontend polling a persistent flag would be
-/// correct here by luck — there is no frame after this one — but the shape is
-/// the shape, and a fifth handshake that behaved differently from the other four
-/// is the one somebody copies wrong.
+/// # Why leaving is asked twice
+///
+/// **Nothing else in the game is irreversible and unannounced.** Every other
+/// word can be undone, waited out or simply repeated; this one ends the session,
+/// and the tower is written out on the way — so a `quit` meant for the spell
+/// editor, typed one surface too high, would end the game instead of closing a
+/// buffer. §6 makes this a game played by typing, which means the cost of a
+/// mistyped word has to be bounded.
+///
+/// So `quit` **asks**, and the answer is another `quit`. No new vocabulary, no
+/// modal surface, and the question says what to type — which is what the
+/// refusals do everywhere else.
+///
+/// **A word, not a keypress.** A confirmation screen would be a fourth surface
+/// that takes the keyboard, and one that opens *because a keystroke arrived*
+/// reads the keystrokes that opened it — a defect this project has now paid for
+/// once (§19).
+///
+/// The confirmed half is **taken rather than read** — see [`take`](Self::take)
+/// — for the reason [`Unfurling`](super::Unfurling) gives: it fires once.
 #[derive(Resource, Debug, Default, Clone, Copy)]
-pub struct Quitting(bool);
+pub struct Quitting {
+    /// The orb has asked, and the next line answers.
+    asked: bool,
+    /// The answer was yes.
+    leaving: bool,
+}
 
 impl Quitting {
-    /// Ask for the session to end.
-    pub const fn ask(&mut self) {
-        self.0 = true;
+    /// Whether the orb is waiting to be told again.
+    #[must_use]
+    pub const fn is_asking(&self) -> bool {
+        self.asked
     }
 
+    /// Forget the question, because the player did something else.
+    ///
+    /// **Any other command answers *no*.** A question that outlived the next
+    /// line would be a `quit` typed a minute ago ending a session a minute
+    /// later, which is the surprise the question exists to prevent.
+    pub const fn never_mind(&mut self) {
+        self.asked = false;
+    }
+
+    /// Whether a confirmed request is waiting, without taking it.
+    #[must_use]
+    pub const fn pending(&self) -> bool {
+        self.leaving
+    }
+
+    /// Take the pending request, if there is one.
+    pub const fn take(&mut self) -> bool {
+        let leaving = self.leaving;
+        self.leaving = false;
+        leaving
+    }
+}
+
+/// Ask to leave, or leave if the orb already asked.
+pub(super) fn quit(world: &mut World) {
+    let asked = world.resource::<Quitting>().is_asking();
+    let key = if asked { "quit_begins" } else { "quit_asks" };
+    if asked {
+        let mut quitting = world.resource_mut::<Quitting>();
+        quitting.asked = false;
+        quitting.leaving = true;
+    } else {
+        world.resource_mut::<Quitting>().asked = true;
+    }
+
+    // **Said before it happens, and it is not ceremony.** The line lands in the
+    // scrollback, which is the log a player can `peruse` next session — so a
+    // recording ends with the player choosing to stop rather than simply
+    // stopping, and a session that ended in a crash reads differently from one
+    // that ended in a decision.
+    let message = world.resource::<Prose>().line(key, &[]);
+    world
+        .resource_mut::<Scrollback>()
+        .records_mut()
+        .push(RecordKind::Completion)
+        .text(FieldName::Name, Verb::Quit.canonical())
+        .text(FieldName::Message, &message)
+        .role(Role::Normal)
+        .finish();
+}
+
+/// A request to open the orb's menu.
+///
+/// The sixth take-once handshake, beside `scribe`, `unfurl`, `weave`, `wander`
+/// and `chorus`: the sim records the decision and the frontend owns the screen.
+///
+/// **Its own resource rather than a second flag on [`Quitting`]**, because the
+/// two are no longer the same question. They were for one iteration — §19 has
+/// why that was superseded.
+#[derive(Resource, Debug, Default, Clone, Copy)]
+pub struct Menuing(bool);
+
+impl Menuing {
     /// Whether a request is waiting, without taking it.
     #[must_use]
     pub const fn pending(&self) -> bool {
@@ -64,21 +148,16 @@ impl Quitting {
     }
 }
 
-/// Ask the frontend to put the orb down.
-pub(super) fn quit(world: &mut World) {
-    world.resource_mut::<Quitting>().ask();
+/// Ask the frontend for the menu.
+pub(super) fn menu(world: &mut World) {
+    world.resource_mut::<Menuing>().0 = true;
 
-    // **Said before it happens, and it is not ceremony.** The line lands in the
-    // scrollback, which is the log a player can `peruse` next session — so a
-    // recording ends with the player choosing to stop rather than simply
-    // stopping, and a session that ended in a crash reads differently from one
-    // that ended in a decision.
-    let message = world.resource::<Prose>().line("quit_begins", &[]);
+    let message = world.resource::<Prose>().line("menu_begins", &[]);
     world
         .resource_mut::<Scrollback>()
         .records_mut()
         .push(RecordKind::Completion)
-        .text(FieldName::Name, Verb::Quit.canonical())
+        .text(FieldName::Name, Verb::Menu.canonical())
         .text(FieldName::Message, &message)
         .role(Role::Normal)
         .finish();

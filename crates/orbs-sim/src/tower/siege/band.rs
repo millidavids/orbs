@@ -25,6 +25,34 @@ pub const ENEMY: &str = "enemy";
 /// scaled would blur all three together.
 pub const ASSIGNED: u32 = 6;
 
+/// The smallest enemy that ever comes up the road.
+///
+/// **The floor never moves, at any standing.** A famous tower can still draw a
+/// quiet night; what fame lengthens is the *tail*, not the whole band — so a
+/// player who has just lost three fights is never handed a fourth they cannot
+/// win, which is §11.5's *"never ruinous, only slower"* at the scale of one
+/// evening.
+pub const FEWEST: u32 = 5;
+
+/// The largest enemy a tower nobody has heard of will meet.
+pub const BASE_MOST: u32 = 9;
+
+/// The largest enemy anyone will ever meet.
+///
+/// **Twelve, and it is a written ceiling rather than a drawn one.** The garrison
+/// opens at [`ASSIGNED`] six and `Siege::outnumbered` is a *ratio* —
+/// `enemy >= garrison * 2` — so twelve is exactly where that reading becomes true
+/// at the opening. A curve that ran past it would put every fight above the rung
+/// three shipped solvers branch on and stop the reading meaning anything, and one
+/// that stopped short would leave `outnumbered` unreachable except after the
+/// garrison is thinned. Twelve is the number that makes it a *decision*.
+pub const MOST: u32 = 12;
+
+/// How many ranks of standing buy one more foe.
+///
+/// Ten ranks over three foes: [`BASE_MOST`] at nought, [`MOST`] at the top.
+pub const RANKS_PER_FOE: usize = 3;
+
 /// How much fight one troop has.
 pub const VIGOUR: u32 = 3;
 

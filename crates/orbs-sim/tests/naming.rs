@@ -135,6 +135,14 @@ fn a_phrase_that_leads_with_another_verbs_word_is_pinned() {
             // `look` is `survey`, which is what anyone typing it means, and the
             // second word turns it into a search.
             ("look", Verb::Sift, Verb::Survey),
+            // `open the menu` (menu) opens with `open`, which `peruse` owns as a
+            // plain synonym. **Benign, and checked rather than assumed**: bare
+            // `open` is `peruse`, which asks what to read — a refusal naming
+            // files, not an offer to leave the tower. The one thing this list
+            // exists to prevent is a lead word that resolves to something a
+            // player cannot type back, and reading a file is the opposite of
+            // that.
+            ("open", Verb::Menu, Verb::Peruse),
             // `put it down` (quit) opens with `put`, which `dial` owns as its
             // plain synonym. **The phrase is not the hazard.** Bare `put`
             // resolves to `dial` and always has — it predates `quit` entirely —
@@ -1018,6 +1026,9 @@ fn multi_word_plain_synonyms_are_pinned() {
         "how are things",
         "how do i",
         "look for",
+        // The menu, said the way someone who has never met a shell would say
+        // it. `menu` alone is the arcane register's word for the same verb.
+        "open the menu",
         "page back",
         "page up",
         "put it down",

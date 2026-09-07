@@ -636,6 +636,7 @@ mod tests {
                 editing: None,
                 weaving: None,
                 walking: false,
+                menuing: None,
             },
         );
 

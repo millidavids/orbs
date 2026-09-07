@@ -161,6 +161,34 @@ pub enum Effect {
     Upgrade(Die),
 }
 
+impl Effect {
+    /// Whether this carries a **magnitude** that a thin store could halve.
+    ///
+    /// **Only [`Bonus`](Self::Bonus) does.** The other three are switches: draw
+    /// twice, draw twice badly, roll a bigger die. There is no half of any of
+    /// them, so a store that cannot supply one in full supplies none — which is
+    /// the rule authored here rather than guessed at the call site, because two
+    /// shipped spendables are [`Advantage`](Self::Advantage).
+    #[must_use]
+    pub const fn scales(self) -> bool {
+        matches!(self, Self::Bonus(_))
+    }
+
+    /// This effect as a `supply` store can still deliver it.
+    ///
+    /// A magnitude halves toward nought; a switch is handed back whole. Both are
+    /// safe here because `spending` refuses, above this call, anything that would
+    /// scale away to nothing — a `Spent` store, or a magnitude that halves to
+    /// zero.
+    #[must_use]
+    pub const fn scaled(self, supply: crate::tower::Supply) -> Self {
+        match self {
+            Self::Bonus(amount) => Self::Bonus(supply.scale_signed(amount)),
+            other => other,
+        }
+    }
+}
+
 /// A roll, assembled and not yet drawn.
 ///
 /// Build it, let anything that wants to edit it, then [`resolve`](Self::resolve).

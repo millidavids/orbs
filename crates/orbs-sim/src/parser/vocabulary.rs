@@ -132,6 +132,8 @@ pub const SYNONYMS: &[Synonym] = &[
     // there cannot be typed back. Nothing is bought by it: `single_words` is
     // what the collision check walks, so plain English arriving as a **phrase**
     // reaches the verb with no collision at all.
+    syn(Verb::Menu, Register::Arcane, &["menu"]),
+    syn(Verb::Menu, Register::Plain, &["open", "the", "menu"]),
     syn(Verb::Quit, Register::Arcane, &["quit"]),
     syn(Verb::Quit, Register::Shell, &["logout"]),
     syn(Verb::Quit, Register::Plain, &["put", "it", "down"]),
@@ -498,6 +500,23 @@ pub const SYNONYMS: &[Synonym] = &[
     syn(Verb::Defend, Register::Arcane, &["defend"]),
     syn(Verb::Defend, Register::Arcane, &["engage"]),
     syn(Verb::Defend, Register::Plain, &["guard"]),
+    // **`petition` has one arcane word and no second, and the sweep spent three
+    // candidates getting there.** `entreat` and `beg` went red together — `ent`
+    // prefixes `attend`, and `beg` prefixes `begin`, which is already a `wield`
+    // synonym. `beseech` survived the prefix tables and then **fuzzed against
+    // `research`**, which is a live archive verb a player types often; the
+    // pinned collision set caught it, and tolerating a collision with `research`
+    // to buy a *second* way of saying one word is a bad trade.
+    //
+    // `parley` was clean throughout and refused on meaning: it reads as *talking
+    // to the enemy*, and what is bought here is a quieter road rather than a
+    // truce.
+    //
+    // So the arcane register carries the canonical alone, which is all the rule
+    // requires. `ask` is the plain word — what the act *is* once the fiction is
+    // stripped off, which is what the plain register is for.
+    syn(Verb::Petition, Register::Arcane, &["petition"]),
+    syn(Verb::Petition, Register::Plain, &["ask"]),
     // **`send` was the plain word and a *spell word* took it — 750 against
     // `end`.** A spell word is matched before the fuzzy matcher, so that
     // collision is worse than an ordinary one: §19 records `set` stopping `dial`

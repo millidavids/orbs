@@ -47,6 +47,12 @@ pub struct Open {
     pub reading: bool,
     /// The arrows are answering a chant — `chorus`.
     pub chorusing: bool,
+    /// The orb's menu is up — `quit`.
+    ///
+    /// **The sixth, and the first that is not about the tower.** Everything
+    /// above it is a surface *inside* a game; this one is the way out of one, so
+    /// it wins the keyboard over all of them — see [`Focus::of`].
+    pub menuing: bool,
 }
 
 /// The surfaces that can hold the keyboard, in the order they take it.
@@ -60,6 +66,15 @@ pub enum Focus {
     /// player's first keystroke.
     #[default]
     Prompt,
+    /// The orb's menu, opened by `quit`.
+    ///
+    /// **First in the order, and the only one that is not a surface of the
+    /// tower.** The five below it are places inside a game and cannot coexist;
+    /// this is the way out of the game, and it is reached by a word typed at the
+    /// prompt — so in principle it opens over nothing. It is ordered first
+    /// anyway, because if it ever did tie, the way *out* is the answer a player
+    /// meant.
+    Menu,
     /// A spell, opened by `scribe`.
     Editor,
     /// The progression screen, opened by `weave`.
@@ -86,7 +101,9 @@ impl Focus {
     /// to find, so the newer surface never wins by accident.
     #[must_use]
     pub const fn of(open: Open) -> Self {
-        if open.editing {
+        if open.menuing {
+            Self::Menu
+        } else if open.editing {
             Self::Editor
         } else if open.weaving {
             Self::Weave
@@ -118,7 +135,8 @@ impl Focus {
 
     /// Whether this surface takes the whole pane, transcript included.
     ///
-    /// The editor, the weave screen and the maze are **deliberate modes** rather
+    /// The menu, the editor, the weave screen and the maze are **deliberate
+    /// modes** rather
     /// than layout accidents, and three things follow from it that are otherwise
     /// easy to get wrong: `prompt::paint` returns early for them, `F5`'s linear
     /// mirror does not run over them (§14 — a known hole, recorded rather than
@@ -132,7 +150,7 @@ impl Focus {
     /// read what the orb is saying about them, which is the thing `wander` gives
     /// up and would rather not.
     pub const fn takes_the_pane(self) -> bool {
-        matches!(self, Self::Editor | Self::Weave | Self::Maze)
+        matches!(self, Self::Menu | Self::Editor | Self::Weave | Self::Maze)
     }
 }
 
@@ -149,6 +167,13 @@ mod tests {
     #[test]
     fn each_surface_takes_the_keyboard_from_the_prompt() {
         let cases = [
+            (
+                Open {
+                    menuing: true,
+                    ..Open::default()
+                },
+                Focus::Menu,
+            ),
             (
                 Open {
                     editing: true,
@@ -205,6 +230,14 @@ mod tests {
             walking: true,
             chorusing: true,
             reading: true,
+            menuing: true,
+        };
+        // The way *out* wins, which is the one tie whose resolution a player
+        // would have an opinion about.
+        assert_eq!(Focus::of(all), Focus::Menu);
+        let all = Open {
+            menuing: false,
+            ..all
         };
         assert_eq!(Focus::of(all), Focus::Editor);
         assert_eq!(
@@ -236,6 +269,7 @@ mod tests {
     /// Reading is the one that shares the screen, and the three modes do not.
     #[test]
     fn only_the_modal_surfaces_take_the_pane() {
+        assert!(Focus::Menu.takes_the_pane());
         assert!(Focus::Editor.takes_the_pane());
         assert!(Focus::Weave.takes_the_pane());
         assert!(Focus::Maze.takes_the_pane());

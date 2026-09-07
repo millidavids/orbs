@@ -360,6 +360,302 @@ fn a_siege_ends_and_pays() {
 
 #[cfg(debug_assertions)]
 #[test]
+fn a_store_runs_down_and_the_shelf_keeps_what_it_will_not_spend() {
+    // **Stores are a rate, and the shelf is not what is measured.** The count
+    // never moves here; what changes is whether the tower has made one lately.
+    let mut sim = at_the_wall(11);
+    run(&mut sim, "debug_spawn warding 1");
+    run(&mut sim, "defend");
+    run(&mut sim, "meditate 3000");
+
+    // Surveyed first, because `last` reads what `survey` has published — with no
+    // survey behind it the count is `None` rather than the shelf being empty.
+    run(&mut sim, "survey arsenal");
+    let held = last(&sim, "warding");
+    assert_eq!(held, Some(1), "the shelf did not have the warding");
+    run(&mut sim, "quaff warding");
+    assert!(
+        ever_said(&sim, "stores are out"),
+        "a store that had run down was spent anyway: {:?}",
+        said(&sim),
+    );
+    run(&mut sim, "survey arsenal");
+    assert_eq!(
+        last(&sim, "warding"),
+        held,
+        "a refused spend still took the potion",
+    );
+}
+
+#[cfg(debug_assertions)]
+#[test]
+fn an_empty_shelf_says_so_rather_than_blaming_the_stores() {
+    // **Two facts, two sentences.** A name the arsenal does not hold has never
+    // been made either, so the supply check would answer *"your troop stores are
+    // out"* for a shelf that is simply bare — the wrong refusal, and one a
+    // player cannot act on. Asked in the right order, it says the true thing.
+    let mut sim = at_the_wall(11);
+    run(&mut sim, "defend");
+    run(&mut sim, "deploy troop");
+    assert!(
+        ever_said(&sim, "there is no troop"),
+        "a bare shelf blamed the stores: {:?}",
+        said(&sim),
+    );
+}
+
+#[cfg(debug_assertions)]
+#[test]
+fn a_famous_tower_draws_a_longer_tail_and_the_floor_never_moves() {
+    // **Fame lengthens the tail, it does not shift the band.** Asserted over
+    // seeds rather than on one, because the draw is a draw: what is pinned is
+    // that the ceiling rises and the floor does not.
+    let quiet: Vec<u32> = (0..40).map(|seed| opening(seed, 0)).collect();
+    let famous: Vec<u32> = (0..40).map(|seed| opening(seed, 9_000)).collect();
+
+    assert_eq!(
+        quiet.iter().copied().min(),
+        famous.iter().copied().min(),
+        "standing moved the floor, and it must never",
+    );
+    assert!(
+        famous.iter().copied().max() > quiet.iter().copied().max(),
+        "standing did not lengthen the tail: {quiet:?} against {famous:?}",
+    );
+    assert!(
+        famous.iter().all(|&n| n <= tower::siege::MOST),
+        "a draw went past the written ceiling: {famous:?}",
+    );
+}
+
+#[cfg(debug_assertions)]
+#[test]
+fn petitioning_buys_the_tail_down_and_costs_standing_to_do_it() {
+    let mut sim = at_the_wall(11);
+    run(&mut sim, "debug_renown 9000");
+    let before = sim.renown();
+
+    run(&mut sim, "petition");
+    assert!(
+        ever_said(&sim, "word goes out"),
+        "petition said nothing: {:?}",
+        said(&sim),
+    );
+    assert!(
+        sim.renown() < before,
+        "petitioning cost no standing: {before} either side",
+    );
+}
+
+#[cfg(debug_assertions)]
+#[test]
+fn petitioning_is_refused_at_the_floor_and_keeps_the_renown() {
+    // **The gate the reading sweep cannot be.** `every_reading_…_reaches` never
+    // petitions, so it passes whatever this does — and the risk that matters is
+    // a tower buying the tail away until `outnumbered` can never fire. This is
+    // the test that actually walks it down to the floor.
+    let mut sim = at_the_wall(11);
+    run(&mut sim, "debug_renown 9000");
+    for _ in 0..12 {
+        run(&mut sim, "petition");
+    }
+    assert!(
+        ever_said(&sim, "no fewer than"),
+        "buying the tail past its floor was allowed: {:?}",
+        said(&sim),
+    );
+
+    // ...and the refusal is free, which is `pledge`'s rule in this room.
+    let held = sim.renown();
+    run(&mut sim, "petition");
+    assert_eq!(sim.renown(), held, "a refused petition still took renown");
+}
+
+#[cfg(debug_assertions)]
+#[test]
+fn petitioning_is_refused_once_they_are_at_the_wall() {
+    // **What is bought is the size of the *next* siege**, and this one has
+    // already been drawn — §19: it *"resolves with the road empty, which is the
+    // only time it is any use."*
+    //
+    // Allowing it was worse than useless: `settle` measures the fight from the
+    // snapshot taken when the enemy arrived, so renown spent *inside* that
+    // window was charged to the fight. A siege that moved +38 reported +31.
+    let mut sim = at_the_wall(11);
+    run(&mut sim, "debug_renown 400");
+    run(&mut sim, "defend");
+    let held = sim.renown();
+
+    run(&mut sim, "petition");
+    assert!(
+        ever_said(&sim, "already at the wall"),
+        "petition was allowed mid-siege: {:?}",
+        said(&sim),
+    );
+    assert_eq!(sim.renown(), held, "a refused petition still took renown");
+}
+
+#[cfg(debug_assertions)]
+#[test]
+fn petitioning_with_nothing_to_spend_says_both_numbers() {
+    // `pledge_short`'s rule: a refusal a player cannot plan around is a wall,
+    // so the sentence carries the price *and* what is held.
+    let mut sim = at_the_wall(11);
+    run(&mut sim, "petition");
+    assert!(
+        ever_said(&sim, "that would take"),
+        "an unaffordable petition did not name its price: {:?}",
+        said(&sim),
+    );
+    assert_eq!(sim.renown(), 0, "a refused petition moved standing");
+}
+
+/// How many came up the road on `seed`, at `renown` standing.
+#[cfg(debug_assertions)]
+fn opening(seed: u64, renown: u64) -> u32 {
+    let mut sim = at_the_wall(seed);
+    if renown > 0 {
+        run(&mut sim, &format!("debug_renown {renown}"));
+    }
+    run(&mut sim, "defend");
+    run(&mut sim, "survey enemy");
+    last(&sim, tower::siege::SPEARS)
+        .unwrap_or(0)
+        .try_into()
+        .unwrap_or(0)
+}
+
+#[cfg(debug_assertions)]
+#[test]
+fn a_round_moves_standing_and_says_nothing_about_it() {
+    // **The exchange is worth something, and the round does not stop to say
+    // so.** A fight is six to thirteen rounds and each has already said what
+    // the enemy did, so a sentence per exchange is the same news twice over —
+    // the shape `earn` was made silent for when a line per making took one
+    // sweep of the clarity loop from 466 records to 792.
+    let mut sim = at_the_wall(11);
+    // **Standing to move, in either direction.** A fresh tower is at nought and
+    // `slip` saturates there, so a round that went badly would leave the total
+    // untouched and this would assert nothing. A real tower has fought nothing
+    // by then either — a siege opens on a pylon course, hours of brewing in.
+    run(&mut sim, "debug_renown 400");
+    run(&mut sim, "defend");
+    // Pledged, because an unpledged round trades about evenly and can net to
+    // nought — which would make this pass without measuring anything.
+    run(&mut sim, "pledge d20 to buckler");
+
+    let before = sim.renown();
+    let quiet = sim.scrollback().records().len();
+
+    // **Rounds, not a round.** A single exchange can genuinely trade even — the
+    // dice decide — so pinning one would be pinning a seed's arithmetic rather
+    // than the mechanism. Held short of a settle, so nothing here is the
+    // outcome's doing.
+    for _ in 0..4 {
+        run(&mut sim, "hold");
+        // **"the wall" is not the end of a siege** — `the buckler put 14 on the
+        // wall` is a round saying what a pledge bought, and matching it here
+        // ended the loop after one exchange.
+        if ever_said(&sim, "the wall is carried") || ever_said(&sim, "breaks and runs") {
+            break;
+        }
+    }
+
+    assert!(
+        sim.renown() != before,
+        "four pledged rounds left standing untouched: {before} either side",
+    );
+    // ...and not one of them stopped to talk about it.
+    assert!(
+        !said(&sim)
+            .iter()
+            .any(|line| line.contains("word gets about")),
+        "a round stopped to talk about standing: {:?}",
+        said(&sim),
+    );
+    assert!(
+        sim.scrollback().records().len() > quiet,
+        "the rounds said nothing at all",
+    );
+}
+
+#[cfg(debug_assertions)]
+#[test]
+fn a_won_siege_pays_standing_and_says_what_the_fight_came_to() {
+    // The other half: the fight speaks **once**, on settling, and the number
+    // it says is the whole movement — the rounds *and* the outcome — because
+    // it is measured from `Siege::standing`, the snapshot taken when the enemy
+    // came up the road.
+    let mut sim = at_the_wall(11);
+    let before = sim.renown();
+    run(&mut sim, "defend");
+    run(&mut sim, "debug_siege");
+    run(&mut sim, "pledge d20 to buckler");
+    for _ in 0..6 {
+        run(&mut sim, "hold");
+        if ever_said(&sim, "breaks and runs") {
+            break;
+        }
+    }
+    assert!(ever_said(&sim, "breaks and runs"), "the enemy never broke");
+
+    let won = sim.renown() - before;
+    assert!(won > 0, "a won siege paid no standing at all");
+    assert!(
+        ever_said(&sim, "singing about it"),
+        "a won siege never said what it was worth: {:?}",
+        said(&sim),
+    );
+    // The sentence's number is the fight's, not the settle's.
+    assert!(
+        ever_said(&sim, &format!("{won} renown")),
+        "the sentence did not say the {won} the fight actually moved: {:?}",
+        said(&sim),
+    );
+}
+
+#[cfg(debug_assertions)]
+#[test]
+fn a_lost_siege_costs_standing_and_a_near_miss_costs_less_than_a_collapse() {
+    // **The box's whole purpose: a number that can go down.** The stake scales
+    // by how far short the wall fell, so this asserts the direction rather than
+    // a value — the seeds decide how the dice land, and `orbs-balance` decides
+    // the constant.
+    let collapse = tower::siege::renown_stake(7, 10, tower::siege::Outcome::Fallen);
+    let near_miss = tower::siege::renown_stake(7, 90, tower::siege::Outcome::Fallen);
+    assert!(
+        collapse > near_miss,
+        "collapsing early cost no more standing than nearly holding",
+    );
+    assert!(near_miss > 0, "losing at ninety percent was free");
+
+    // ...and through the real verbs, with standing to lose. A tower at nought
+    // cannot fall, so this one has to start somewhere.
+    let mut sim = at_the_wall(11);
+    run(&mut sim, "debug_renown 400");
+    let before = sim.renown();
+    run(&mut sim, "defend");
+    for _ in 0..40 {
+        run(&mut sim, "hold");
+        if ever_said(&sim, "the wall is carried") {
+            break;
+        }
+    }
+    if ever_said(&sim, "the wall is carried") {
+        assert!(
+            sim.renown() < before,
+            "a lost siege cost no standing: {before} either side",
+        );
+        assert!(
+            ever_said(&sim, "the wall cost"),
+            "a lost siege never said what it cost: {:?}",
+            said(&sim),
+        );
+    }
+}
+
+#[cfg(debug_assertions)]
+#[test]
 fn a_finished_siege_refuses_a_further_round_and_says_how_to_start_another() {
     let mut sim = at_the_wall(11);
     run(&mut sim, "defend");

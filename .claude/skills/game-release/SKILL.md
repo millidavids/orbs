@@ -68,7 +68,10 @@ Promotion just tags it.
   `## [vV] - <date>` block and refresh its date to today.
 - **Tag `vV` exists** → `V` has shipped. Open the next one:
   1. Bump the patch in `Cargo.toml` (keep bumping until you find an untagged
-     version).
+     version). **If every patch on this minor is tagged, the minor is finished
+     — ask which feature the next minor names**, and open `0.<next>.0`. The minor
+     names the large feature in hand (DESIGN.md §15); it is not derived from a
+     count, so it is never inferred here.
   2. `cargo update --workspace --offline` so `Cargo.lock` follows.
   3. Insert a fresh `## [vV+1] - <today>` block at the top of the changelog,
      below the `# Changelog` header **and its HTML comment**.
@@ -78,7 +81,7 @@ repair it in place: rename that heading to `## [vV] - <today>` and keep its
 bullets. Never stack two blocks for the same version.
 
 **A caution specific to this project.** `CLAUDE.md` bumps the version on every
-roadmap *step*, and a step is much smaller than a release. So `Cargo.toml` will
+roadmap *item*, and an item is much smaller than a release. So `Cargo.toml` will
 often have moved on its own between releases, and the version you are opening a
 block for is whatever it says now — do not bump again on top of that. The bump in
 step 2 above is only for the case where the current version is already tagged.
@@ -163,7 +166,7 @@ interesting first. The bullets below carry the detail. A version that touched on
 area says so in one sentence.
 
 **This switches at 1.0**, in the same commit as the version scheme
-(`0.<phase>.<step>` → ordinary semver, DESIGN.md §19). After it, the Description
+(`0.<feature>.<iteration>` → ordinary semver, DESIGN.md §15). After it, the Description
 is the release's public hook written for someone who has never heard of the game,
 and the dev-log framing goes.
 

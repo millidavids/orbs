@@ -62,6 +62,7 @@ pub(crate) fn capture(world: &World) -> Save {
             tick: world.resource::<Tick>().get(),
             sequence: records.sequence(),
             sealed: world.resource::<tower::Sealing>().0,
+            length: *world.resource::<crate::content::Length>(),
         },
         // The sim has no wall clock and must not acquire one; `orbs-shell`
         // stamps this on the way to the file. The tick is ours to know.
@@ -91,6 +92,7 @@ fn progress(world: &World) -> ProgressSave {
         wizard: world.resource::<Wizard>().name().to_owned(),
         experience: world.resource::<tower::Experience>().get(),
         renown: world.resource::<tower::Renown>().get(),
+        petitioned: world.resource::<tower::siege::Petitioned>().get(),
         integrity: Some(world.resource::<tower::Integrity>().get()),
         quintessence: Some(world.resource::<tower::Quintessence>().get()),
         // **The clock, so an expired cooldown is not written at all.** Without
@@ -106,6 +108,15 @@ fn progress(world: &World) -> ProgressSave {
             .entries()
             .map(|(key, count)| (key.to_owned(), count))
             .collect(),
+        // **Always `Some`**, so a document this build writes never reads as one
+        // from before stores existed — which is what the restore stamp keys on.
+        stores: Some(
+            world
+                .resource::<tower::Stores>()
+                .entries()
+                .map(|(name, makings)| (name.to_owned(), makings.to_vec()))
+                .collect(),
+        ),
         reached: world.resource::<tower::mastery::Reached>().ids().to_vec(),
         // Always written, so a document from this build never reads as one
         // from before sealing existed.

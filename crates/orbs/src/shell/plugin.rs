@@ -54,6 +54,77 @@ pub(crate) enum ShellSystems {
     Drive,
 }
 
+/// Every resource this plugin owns, handed to `$mac` as a list of types.
+///
+/// # Why the list exists rather than eighteen `init_resource` calls
+///
+/// **Because the list is read twice.** `build` registers them; `reset_for_swap`
+/// puts them back to their defaults when the menu loads a different tower. A
+/// hand-written second copy of eighteen types is a copy that drifts, and the
+/// failure it drifts into is invisible: a resource left holding the *old* game's
+/// state after a swap does not crash, it just quietly lies — `Reveal` holds raw
+/// indices into a record stream that no longer exists, `Passing` holds a cell
+/// snapshot of a screen from another world.
+///
+/// So there is one list, in one place, and adding a resource to it registers and
+/// resets it in the same edit.
+macro_rules! shell_resources {
+    ($mac:ident) => {
+        $mac!(
+            Screen,
+            Line,
+            orbs_shell::Offered,
+            super::input::HeldOver,
+            orbs_shell::Ghost,
+            orbs_shell::Panel,
+            orbs_shell::Scroll,
+            super::input::Quiet,
+            Linear,
+            PaneTransition,
+            orbs_shell::Passing,
+            Reveal,
+            super::Bench,
+            super::Editing,
+            super::Loom,
+            super::Standing,
+            super::Walk,
+            super::Chorus,
+        );
+    };
+}
+
+/// Put every shell resource back to what it is at startup, for a new tower.
+///
+/// # Two survive, and they are lifted out rather than left off the list
+///
+/// - **`Screen`** holds the grid the window actually is. Resetting it would tell
+///   the renderer the window had changed size, which it has not.
+/// - **`Standing`** is the menu, and the menu is what is asking for this. It
+///   closes itself afterwards, on its own terms.
+///
+/// Taking them out and putting them back — rather than writing a list of
+/// sixteen — is what keeps [`shell_resources!`] the single list. A resource
+/// added there is reset here by construction, and the two exceptions are named
+/// once, here, with the reason.
+pub(crate) fn reset_for_swap(world: &mut World) {
+    let screen = world.remove_resource::<Screen>();
+    let standing = world.remove_resource::<super::Standing>();
+
+    macro_rules! blank {
+        ($($resource:ty,)*) => {
+            $( world.insert_resource(<$resource>::default()); )*
+        };
+    }
+    shell_resources!(blank);
+
+    if let Some(screen) = screen {
+        world.insert_resource(screen);
+    }
+    if let Some(standing) = standing {
+        world.insert_resource(standing);
+    }
+}
+
 /// The window, the camera, the grid, and the command line.
 pub struct ShellPlugin;
 
@@ -65,25 +136,31 @@ impl Plugin for ShellPlugin {
         // result rather than the state in front of it. Without it a `wander` drew
         // the whole maze for one frame and only then began a crossing, which then
         // departed from the maze it had just arrived at. See `ShellSystems`.
-        app.configure_sets(Update, ShellSystems::Drive.after(ShellSystems::Input))
-            .init_resource::<Screen>()
-            .init_resource::<Line>()
-            .init_resource::<orbs_shell::Offered>()
-            .init_resource::<super::input::HeldOver>()
-            .init_resource::<orbs_shell::Ghost>()
-            .init_resource::<orbs_shell::Panel>()
-            .init_resource::<orbs_shell::Scroll>()
-            .init_resource::<super::input::Quiet>()
-            .init_resource::<Linear>()
-            .init_resource::<PaneTransition>()
-            .init_resource::<orbs_shell::Passing>()
-            .init_resource::<Reveal>()
-            .init_resource::<super::Bench>()
-            .init_resource::<super::Editing>()
-            .init_resource::<super::Loom>()
-            .init_resource::<super::Walk>()
-            .init_resource::<super::Chorus>()
-            .add_message::<SubmittedMessage>()
+        app.configure_sets(Update, ShellSystems::Drive.after(ShellSystems::Input));
+
+        // **One list, read twice** — see `shell_resources!`. It is also what
+        // `reset_for_swap` puts back when the menu loads a different tower.
+        macro_rules! register {
+            ($($resource:ty,)*) => {
+                $( app.init_resource::<$resource>(); )*
+            };
+        }
+        shell_resources!(register);
+
+        app.add_message::<SubmittedMessage>()
+            .add_message::<super::menuing::SwapMessage>()
+            // **Ordered into `Input`, so `Drive` sees the world it arrives at.**
+            // `Panel` self-heals from the new tower, but only if it is refreshed
+            // *after* the swap — and `refresh_panel` is in `Drive`, which is
+            // configured `.after(Input)`. Without this edge the executor is free
+            // to refresh the panel from the outgoing world and leave it there
+            // until the next tick.
+            .add_systems(
+                Update,
+                super::menuing::swap
+                    .in_set(ShellSystems::Input)
+                    .run_if(on_message::<super::menuing::SwapMessage>),
+            )
             .add_systems(Startup, (spawn_camera, track_window).chain())
             // **Not** gated on `booted`, and not in the input set. A focus loss
             // during the boot sequence strands held keys exactly as one during
@@ -134,6 +211,16 @@ impl Plugin for ShellPlugin {
                     super::weaving::type_into_loom
                         .run_if(on_message::<KeyboardInput>)
                         .run_if(super::weaving::weaving),
+                    // **The keys first, then the opening** — and this order is a
+                    // shipped defect, not a preference. `type_into_menu` is
+                    // ungated for the reason `type_into_line` is: a reader that
+                    // does not run keeps its cursor, so a gated one read the
+                    // word that opened the menu straight back into it, reached
+                    // the menu's own `quit`, and left the orb. Running it here,
+                    // before `open_requested`, means the opening frame is one it
+                    // has already emptied. See `menuing`'s module doc.
+                    super::menuing::type_into_menu.run_if(on_message::<KeyboardInput>),
+                    super::menuing::open_requested.run_if(resource_changed::<crate::sim::Tower>),
                     // **Unconditional while it is open**, like `autosave`: the
                     // world ticks behind the screen, so a threshold crossed
                     // while a player is looking should land while they look.
@@ -232,9 +319,11 @@ impl Plugin for ShellPlugin {
                     // is "clear the line" muscle memory, and quitting the game
                     // mid-sentence is not a recoverable surprise.
                     quit.run_if(input_just_pressed(KeyCode::F10)),
-                    // **Gated on the world having moved**, like the other four
+                    // **Gated on the world having moved**, like the other
                     // handshakes: `submit` resolves the verb and marks `Tower`
-                    // changed, so this runs on that frame and no other.
+                    // changed, so this runs on that frame and no other. The flag
+                    // it takes is only ever set by a *confirmed* `quit` — the
+                    // sim asks first, and `menu` is a different word now.
                     quit_requested.run_if(resource_changed::<crate::sim::Tower>),
                     // **PageUp/PageDown, not the arrows.** Up and Down walk the
                     // command history (§19) and must keep doing so — a shell
@@ -1223,6 +1312,167 @@ mod tests {
     /// What the app's surfaces answer, as they stand.
     ///
     /// **Built from the resources rather than run through the `SystemParam`**,
+    /// The word, through the real plugin stack, to the real menu.
+    ///
+    /// # Why this test and not the dump
+    ///
+    /// **`ORBS_DUMP` proved the wrong thing.** It goes through
+    /// `orbs_shell::dump`, which builds no `App` and takes the handshake itself
+    /// — so it drew a menu while the live build's route to one was never
+    /// exercised. The whole point of `menuing::open_requested` is that it is a
+    /// *system*, with a run condition, in a schedule; none of that is reachable
+    /// from a still photograph.
+    #[test]
+    fn the_word_menu_opens_the_menu() {
+        let mut app = app();
+        type_line(&mut app, "menu");
+        // **The effect lands on the tick, not at `submit`.** `submit` echoes and
+        // queues; every verb's effect runs at the next `step`, which is what
+        // keeps effects tick-aligned — so a check before this one finds the flag
+        // unset, which is the mistake `quit` shipped with once already.
+        app.world_mut().resource_mut::<Tower>().step();
+        app.update();
+
+        assert!(
+            app.world().resource::<crate::shell::Standing>().is_open(),
+            "`menu` did not open the menu",
+        );
+        assert_eq!(focus_of(&app), orbs_shell::Focus::Menu);
+        assert!(
+            app.world()
+                .resource::<Messages<bevy::app::AppExit>>()
+                .is_empty(),
+            "opening the menu left the orb",
+        );
+    }
+
+    /// `quit` asks once, and the second one goes.
+    ///
+    /// # The behaviour this replaces
+    ///
+    /// For one iteration `quit` opened the menu and leaving was a choice made
+    /// there — so a player who wanted to stop had to learn that stopping was two
+    /// steps through a screen they had not asked for. **Superseded** (§19):
+    /// `quit` leaves, and the two steps are a *question* instead, which is what
+    /// every other refusal in the game already looks like.
+    #[test]
+    fn quit_asks_once_and_the_second_one_leaves() {
+        let mut app = app();
+        type_line(&mut app, "quit");
+        app.world_mut().resource_mut::<Tower>().step();
+        app.update();
+        assert!(
+            app.world()
+                .resource::<Messages<bevy::app::AppExit>>()
+                .is_empty(),
+            "the first `quit` left the orb without asking",
+        );
+        assert!(
+            app.world().resource::<Tower>().sim().is_asking_to_quit(),
+            "the first `quit` did not ask",
+        );
+        assert!(
+            !app.world().resource::<crate::shell::Standing>().is_open(),
+            "`quit` opened the menu, which is the behaviour that was superseded",
+        );
+
+        type_line(&mut app, "quit");
+        app.world_mut().resource_mut::<Tower>().step();
+        app.update();
+        assert!(
+            !app.world()
+                .resource::<Messages<bevy::app::AppExit>>()
+                .is_empty(),
+            "the second `quit` did not leave",
+        );
+    }
+
+    /// ...and anything else answers *no*.
+    #[test]
+    fn any_other_word_calls_off_a_pending_quit() {
+        // **The surprise the question exists to prevent**: a `quit` typed and
+        // thought better of, ending a session three commands later.
+        let mut app = app();
+        type_line(&mut app, "quit");
+        app.world_mut().resource_mut::<Tower>().step();
+        app.update();
+
+        type_line(&mut app, "look around");
+        app.world_mut().resource_mut::<Tower>().step();
+        app.update();
+        assert!(
+            !app.world().resource::<Tower>().sim().is_asking_to_quit(),
+            "the question outlived the next line",
+        );
+
+        type_line(&mut app, "quit");
+        app.world_mut().resource_mut::<Tower>().step();
+        app.update();
+        assert!(
+            app.world()
+                .resource::<Messages<bevy::app::AppExit>>()
+                .is_empty(),
+            "a `quit` after a cancelled one left without asking again",
+        );
+    }
+
+    /// The menu must not eat the word that opened it.
+    ///
+    /// # The timing the other two tests do not have
+    ///
+    /// `type_line` runs an `app.update()` per keystroke, so by the time the menu
+    /// opens the `KeyboardInput` messages are long dropped. In the real game
+    /// `advance` is `FixedUpdate` at 1 Hz, so usually sixty frames pass between
+    /// the Enter and `Quitting` — but **when `quit` lands on a tick boundary
+    /// they are the same frame**, and `type_into_menu`'s `MessageReader` has
+    /// never run, so its cursor is at the start of whatever `Messages` still
+    /// retains.
+    ///
+    /// That is `weaving.rs`'s recorded defect one surface over: *"a system that
+    /// does not run keeps its message cursor"*, and a menu that re-reads the
+    /// keystrokes that opened it spells `quit` into itself and leaves the orb —
+    /// which looks exactly like `quit` having never stopped ending the session.
+    #[test]
+    fn opening_the_menu_does_not_eat_the_word_that_opened_it() {
+        let mut app = app();
+
+        // The keystrokes, with **no update between them and the tick**.
+        type_only(&mut app, "menu");
+        app.world_mut().write_message(KeyboardInput {
+            key_code: KeyCode::Enter,
+            logical_key: Key::Enter,
+            state: ButtonState::Pressed,
+            text: Some("\r".into()),
+            repeat: false,
+            window: Entity::PLACEHOLDER,
+        });
+        {
+            let mut tower = app.world_mut().resource_mut::<Tower>();
+            tower.submit("menu");
+            tower.step();
+        }
+        app.update();
+
+        assert!(
+            app.world().resource::<crate::shell::Standing>().is_open(),
+            "the menu ate the word that opened it and closed again",
+        );
+        assert!(
+            app.world()
+                .resource::<Messages<bevy::app::AppExit>>()
+                .is_empty(),
+            "the menu read back the word that opened it and left the orb",
+        );
+        assert_eq!(
+            app.world()
+                .resource::<crate::shell::Standing>()
+                .get()
+                .map(orbs_shell::Menu::command),
+            Some(""),
+            "the keystrokes that opened the menu were typed into it",
+        );
+    }
+
     /// because a `SystemParam` needs a system to live in and this is a helper
     /// inside an assertion. The ordering it asks about is `orbs_shell::Focus`'s
     /// either way, which is the whole point of that type.
@@ -1236,6 +1486,7 @@ mod tests {
             walking: app.world().resource::<crate::shell::Walk>().is_open(),
             chorusing: app.world().resource::<crate::shell::Chorus>().is_open(),
             reading: app.world().resource::<orbs_shell::Scroll>().is_reading(),
+            menuing: app.world().resource::<crate::shell::Standing>().is_open(),
         })
     }
 }

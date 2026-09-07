@@ -106,6 +106,27 @@ run weave_early ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="weave" ORBS_WEAVE=$'<dow
 run weave_lines ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="weave" ORBS_WEAVE=$'mastery\n<down>\n<right>\ntake'
 run weave_reach ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="attend laboratory; debug_reach laboratory_2; weave" ORBS_WEAVE=$'mastery'
 
+# --- the weave at a longer game -----------------------------------------------
+# Six-figure thresholds. Before `figures()` the last two totals printed
+# `121766250000` — a number nobody authored — and only a capture like this one
+# would have shown it.
+run weave_long   ORBS_LENGTH=long ORBS_SEALED=1 ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="weave"
+run weave_medium ORBS_LENGTH=medium ORBS_SEALED=1 ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="weave"
+
+# --- the orb's menu -----------------------------------------------------------
+# `menu` opens it; `quit` leaves, asking first. Without these the instrument is
+# blind to the surface, and CLAUDE.md names that blindness specifically: it looks
+# exactly like stability.
+run menu         ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="menu"
+run menu_unknown ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="menu" ORBS_MENU="zorb"
+run menu_resume  ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="menu" ORBS_MENU="resume"
+run menu_narrow  ORBS_BOOT=0 ORBS_GRID=80x22 ORBS_DUMP="menu"
+# ...and the question `quit` asks, which is the whole of what it now does before
+# the second one.
+run quit_asks    ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="quit"
+run quit_again   ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="quit" ORBS_THEN="quit"
+run quit_off     ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="quit" ORBS_THEN="status; quit"
+
 # --- a sealed tower -----------------------------------------------------------
 run sealed_doors ORBS_SEALED=1 ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="attend archive; attend stacks; survey archive; survey /tower"
 run sealed_rail  ORBS_SEALED=1 ORBS_BOOT=0 ORBS_GRID=120x45 ORBS_DUMP="attend laboratory; attend archive"

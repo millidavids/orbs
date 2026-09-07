@@ -145,22 +145,36 @@ pub(super) fn survey(intent: &Intent, world: &mut World) {
         return;
     }
 
-    let mut here: Vec<(String, &'static str, Option<String>)> = tower::children_of(world, at)
-        .into_iter()
-        // **A shut room is not listed**, so the tower's listing says *there is
-        // a laboratory* and nothing about what a fresh player has not earned —
-        // the rail's dark boxes make the same choice, for the same reason.
-        .filter(|node| tower::sealed_room_of(world, *node).is_none())
-        .filter_map(|node| {
-            let name = world.get::<tower::Name>(node)?.0.clone();
-            let kind = world.get::<tower::Nameable>(node)?.0;
-            // Only stock is counted. A place, a file and a spell are each one
-            // thing that is either there or not, and `x1` beside every row is a
-            // column of noise.
-            let stock = world.get::<tower::Stock>(node).map(|stock| stock.label());
-            Some((name, kind.label(), stock))
-        })
-        .collect();
+    // **How well stocked the tower is in each of these, but only where the
+    // question means anything** (§19). A store's standing is about what the
+    // arsenal can still *supply* to a wall, so a dispensary shelf of sage has no
+    // answer and is given none rather than a word that would read as a warning.
+    let keep = tower::keep(world) == Some(at);
+    let mut here: Vec<(String, &'static str, Option<String>, Option<&'static str>)> =
+        tower::children_of(world, at)
+            .into_iter()
+            // **A shut room is not listed**, so the tower's listing says *there is
+            // a laboratory* and nothing about what a fresh player has not earned —
+            // the rail's dark boxes make the same choice, for the same reason.
+            .filter(|node| tower::sealed_room_of(world, *node).is_none())
+            .filter_map(|node| {
+                let name = world.get::<tower::Name>(node)?.0.clone();
+                let kind = world.get::<tower::Nameable>(node)?.0;
+                // Only stock is counted. A place, a file and a spell are each one
+                // thing that is either there or not, and `x1` beside every row is a
+                // column of noise.
+                let stock = world.get::<tower::Stock>(node).map(|stock| stock.label());
+                // **Only what is stocked, and `arsenal.log` is why.** The
+                // arsenal's children include its log, and asking a *file* how
+                // well stocked the tower is in it printed `arsenal.log spent` —
+                // a warning about a thing that cannot run out. The dumps caught
+                // it; `stocktake` and the save migration already filter the same
+                // way, and this was the third place that had to.
+                let supply =
+                    (keep && stock.is_some()).then(|| tower::supply_of(world, &name).word());
+                Some((name, kind.label(), stock, supply))
+            })
+            .collect();
 
     // **Grouped by kind, then by name.** A room's contents arrive in whatever
     // order the tree was walked, which put the two files either side of the
@@ -206,7 +220,7 @@ pub(super) fn survey(intent: &Intent, world: &mut World) {
     // where there is one, an amount — which is what lets the view line the two
     // up in columns (`Tiling`).
     let mut section = "";
-    for (name, kind, stock) in here {
+    for (name, kind, stock, supply) in here {
         if kind != section {
             section = kind;
             records
@@ -217,6 +231,12 @@ pub(super) fn survey(intent: &Intent, world: &mut World) {
         let mut record = records.push(RecordKind::Entry).text(FieldName::Name, &name);
         if let Some(stock) = stock {
             record = record.text(FieldName::Quantity, &stock);
+        }
+        // **A third column, and only in the arsenal.** `State` is what every
+        // other surface says a derived condition with, so a spell and a screen
+        // reader meet this the way they meet `ready` and `fouled`.
+        if let Some(supply) = supply {
+            record = record.text(FieldName::State, supply);
         }
         record.finish();
     }

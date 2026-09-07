@@ -1371,6 +1371,11 @@ pub const fn may_issue(verb: Verb) -> bool {
             // end, so it would do so on the orb's clock with nothing the player
             // pressed able to intervene.
             | Verb::Quit
+            // **And it may not open the menu**, which is the same argument as
+            // the three keyboard-seizing verbs above rather than as `quit`: the
+            // menu takes the pane and the keys, and a bound spell re-casting off
+            // the end would put it back up every lap.
+            | Verb::Menu
     )
 }
 

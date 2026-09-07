@@ -70,6 +70,13 @@ pub fn execute_one(intent: &Intent, world: &mut World) {
 }
 
 fn execute(intent: &Intent, world: &mut World) {
+    // **Any other word answers *no* to a pending `quit`.** The question lasts
+    // exactly one line, so a `quit` typed and thought better of cannot end a
+    // session three commands later. `quit` itself is excluded because it is the
+    // *yes* — see `quit::Quitting`.
+    if intent.verb != Verb::Quit {
+        world.resource_mut::<super::quit::Quitting>().never_mind();
+    }
     match intent.verb {
         Verb::Attend => navigate::attend(intent, world),
         Verb::Survey => navigate::survey(intent, world),
@@ -77,6 +84,7 @@ fn execute(intent: &Intent, world: &mut World) {
         Verb::Status => status(world),
         Verb::Unfurl => super::unfurl::unfurl(world),
         Verb::Quit => super::quit::quit(world),
+        Verb::Menu => super::quit::menu(world),
         Verb::Weave => super::weave::weave(world),
         Verb::Peruse => files::peruse(intent, world),
         Verb::Sift => files::sift(intent, world),
@@ -97,6 +105,7 @@ fn execute(intent: &Intent, world: &mut World) {
         Verb::Quaff => super::defend::quaff(intent, world),
         Verb::Hold => super::defend::hold(world),
         Verb::Pledge => super::defend::pledge(intent, world),
+        Verb::Petition => super::defend::petition(world),
         Verb::Imbue => super::imbue::imbue(world, intent),
         Verb::Snap => super::imbue::snap(world, intent),
         Verb::Anneal => super::imbue::anneal(world),
@@ -193,6 +202,10 @@ pub const fn is_live(verb: Verb) -> bool {
             // also the only verb here whose absence a player discovers by
             // reaching for the window's close button.
             | Verb::Quit
+            // **Beside `quit` for the same reason, and it is not the same word.**
+            // The menu is where a game is chosen, so a player who cannot reach
+            // it is stuck with the one they are in.
+            | Verb::Menu
             // **Live and never gated**, unlike `bind` below. At experience 0 it
             // shows the first threshold named and nothing taken, which is the
             // onboarding value rather than a dead end — a new player learns what
@@ -234,6 +247,12 @@ pub const fn is_live(verb: Verb) -> bool {
             | Verb::Quaff
             | Verb::Hold
             | Verb::Pledge
+            // ...and `petition`, which refuses where there is no rampart, where
+            // the road is unarmed, where the tail is already at its floor and
+            // where the standing will not cover it. **Being unable to afford it
+            // is not a dead end** — it is a price, and the sentence names both
+            // numbers so it can be planned around.
+            | Verb::Petition
             // The forge's three. `imbue` refuses where there is no lattice and
             // where one is already open; the other two refuse where none is.
             // **A lattice that does not light is not a refusal** — it is the

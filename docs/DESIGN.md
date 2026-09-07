@@ -1747,6 +1747,8 @@ concurrency**.
 | **Experience** | Completed runs, weighted by instrument | **Nothing — it only rises** | Progression gate |
 | **Integrity** | Repair, warding | Damaged by sieges, decay, aberrations | Tower health, persistent |
 | **Concentration** | The Ley Line, against experience (**not** pane count) | Shared pool across all bound scripts | Caps total automation |
+| **Renown** | Making things (half a run's experience, doubled when the store is already full); a siege, both ways | `petition`, to buy a smaller siege | **The second number, and the only one that falls.** It also *sets* how big a siege arrives |
+| **Stores** | Making a thing, lately — a **rate**, never a count | Time. Nothing else | What the arsenal is worth: `fresh`, `thin` at half, `spent` and refused |
 
 **Concentration is a shared pool, not a per-script bound.** Draft 5 described
 both; they are different mechanisms with different balance behaviour. A shared
@@ -2424,6 +2426,345 @@ they are re-pointed at the phases that now need them rather than quietly dropped
 
 ## 19. Decisions log
 
+### The arsenal is worth what your industry is worth — supersedes the cap (Phase 11, `0.11.13`)
+
+**A per-name cap was the box, and it is struck.** Its own text admitted the
+problem was hypothetical — *"if a real player is seen banking a thousand potions,
+which nobody has been"* — and nobody structurally could without deliberate
+hauling, since production goes to the instrument and `empty` sends it to the
+**domain's store**. Renown, shipped over this phase, now answers *"why keep making
+things"*, which is what the withdrawn perishable arsenal was actually for. And a
+cap is a **wall, not a bottleneck**: a ceiling you hit and stop at, which is the
+opposite of the *"production must be continuous and varied"* intent it inherited.
+
+**What ships instead: how much help a thing gives is matched to the rate you make
+it at.** `fresh` at full strength, `thin` at half, `spent` and refused.
+
+| Question | Decision |
+|---|---|
+| **A rate, not a timestamp** | This is the entry to read before touching any of it. A first pass keyed freshness to *when one was last made*, and **that is the exact hole this document recorded when perishability was withdrawn**: *"a timer either keeps a thousand potions fresh off one restock — cheaper than playing normally — or makes new stock unusable."* One `made:warding` refreshing an unbounded pile **is** the first branch. The draft claimed the objection did not apply; it applied verbatim, and an independent review caught it |
+| ...and why a rate defeats it | One restock is a rate of one, which is thin at best. Staying fresh takes *sustained* production, and sustained production is the game. A hoard is worth exactly what your current industry is worth, and nothing when you stop |
+| **Total stock never enters the arithmetic** | Which is the property that makes it buildable on `Stock::Counted(u32)` **untouched** — the per-unit batches that killed perishability, the rewrite of every reader, and the save migration are all things this does not need rather than things it solves |
+| Three words, not a fraction | `few`, `hurt` and `outnumbered` are how this game says a derived fact and how a spell asks for one. A percentage would be the odd one out and unaskable besides |
+| **Surplus sells** | Making a name already `fresh` mints its renown twice. So **nothing is refused at the door** — there is no point at which producing stops being worth it, which is the cap's worst property removed rather than inherited. It also dissolves the cap's one unanswerable case: a chant gives up to four troops *after* the figure closed and the making was recorded, with nowhere to refuse. Under this it sells |
+| ...and it is the **steady state**, not an occasional bonus | Recorded honestly rather than dressed up. Any sustained loop holds `Fresh`, so every making past the third inside the window pays double: measured, `clarity` mints **1,103 renown against 996 experience**, a little over twice `worth`. That is the mechanic read literally — a loop outrunning its own stores *is* selling the excess — but it means renown from production is **uniformly** doubled, which rescales the currency rather than rewarding a behaviour. **The ten rank thresholds are now priced against a number twice what they were authored for**, and `orbs-balance` settles whether they move or this does |
+| ...and the variety incentive is the **siege**, not the mint | A one-name grinder earns well and walks to the wall with one thing fresh and everything else out. They are running a business rather than an armoury, and the wall is where that is priced |
+| **A boolean effect has no half** | `advantage` is draw-twice and `upgrade` is a bigger die; two shipped spendables are `advantage`. A thin store loses them outright rather than being spent for nothing, and the rule is authored on `Effect::scales` rather than guessed where it is spent |
+| A magnitude that halves to nought | Meets the existing *"a potion that would do nothing is refused rather than drunk"* guard, which is the right answer and needed no new branch |
+| **Offline was free, and stays correct later** | A tick is *"one real second while the window is open"*, restored verbatim, with no wall clock anywhere in the sim — so a closed game thins nothing. **And when Phase 13a's catch-up advances the tick, stores will thin across an absence automatically**, same expression, nothing rewritten. That is the deliberate answer to *"tie it to offline progression, which we have not implemented"* |
+| `debug_spawn` stamps a **full store** | It never goes through `done`, so with no stamp every spawned thing arrives `spent` — a shortcut handing you stock the game will not let you spend. **And one stamp is not enough either**, which took three failing tests to establish: one making is a rate of one, which is `thin`, so a spawned troop brought half its bodies and a fixture testing the *Ley Line's garrison grant* failed on the arsenal's freshness rule instead. A shortcut that makes a test measure the wrong thing is worse than no shortcut. Its own sentence is *"the shelf finds it had it all along"*, and the industry behind the shelf is part of *all along* |
+| ...which means `thin` is not reachable from a spawn | It stamps a full store at one tick, so those makings fall out of the window together and the state goes `fresh` → `spent`. **`thin` is what production *spread over time* looks like**, which is the honest way to reach it and what a real session does. A test wanting one ages a store rather than spawning into it |
+| The balance driver keeps rather than fills | `besieging` stocks once at setup and cannot top up, so a rate would collapse it into the refusal-loop this log already records. **A `debug_spawn` top-up rung, not a trip to the laboratory** — the column measures *"the bailey, fought as the shipped decision tree fights it"*, and folding production in would make the pinned rate a blend of two domains |
+| An older save opens **full**, not empty | Absent stores would read as *nothing made lately* — every store out, and a returning player unable to spend a thing from a shelf they filled. That is `opened`'s shape: absent meaning the opposite of the honest reading. `restore` stamps at the loaded tick instead. **No `FORMAT` bump**, because the old document still loads correctly; it loads *generously*, which is the right way to be wrong about one written before the rule existed |
+
+**Measured.** Every experience rate in `orbs-balance` is unchanged to four
+decimal places, `besieging` included — so the top-up rung did its job and no pin
+moved. Renown roughly doubles on the production policies, which is surplus
+selling and is the mechanic rather than a surprise.
+
+**Numbers, all first pass:** `WINDOW = 1800` ticks, `FRESH_AT = 3`, `THIN_AT = 1`.
+Three makings in half an hour to stay sharp, one to stay usable, none and you are
+out — against a 1,200-tick siege cadence.
+
+### Renown sets the siege, and `petition` buys it down (Phase 11, `0.11.12`)
+
+**Standing had been earned, lost and drawn for a whole phase and spent on
+nothing.** §19's Renown entry promises *"spent to buy a smaller siege, and it sets
+how big a siege arrives"*; this is both halves.
+
+| Question | Decision |
+|---|---|
+| How standing sizes a siege | **The floor never moves and the tail lengthens.** `FEWEST` is 5 at every rank; the ceiling runs `BASE_MOST` 9 → `MOST` 12 over ten ranks, one foe per three. A famous tower can still draw a quiet night, an unknown one never meets the worst, and variance stays meaningful at both ends rather than being squeezed against the top |
+| Why twelve | **`outnumbered` is a ratio, not a number** — `enemy >= garrison * 2` — and the garrison opens at six, so twelve is exactly where that reading turns over at the *opening*. A curve running past it would make the rung three shipped solvers branch on true in every fight; one stopping short leaves the reading unreachable until the garrison is thinned. Twelve is what makes it a decision, and it is **written** rather than emergent |
+| What `petition` moves | **The ceiling, before the draw — never a subtraction after it.** At the moment the word is typed no siege exists and nothing has been drawn, so *"already as small as it goes"* is only answerable against the ceiling. Subtracting afterwards lets a player pay four times, draw the floor anyway, and lose the lot in silence |
+| ...and it keeps `arrived` honest for free | Because the reduction lands in the *draw*, `arrived` is simply the smaller number — so `massed` (`enemy.count == arrived`), escrow and the renown stake all stay consistent with no second rule. A draft that decremented `enemy.count` alone would have made `massed` false from round one of every petitioned siege: a published reading quietly lying |
+| The price | `PETITION_PER_FOE = RENOWN_PER_FOE` — what a foe is *worth* when the wall holds. Buying one off hands back exactly what it would have paid, so it is a wash on the night and a real cost across an evening |
+| **Self-limiting, and visibly so** | Paying drops a rank and a lower rank draws a shorter tail, so the habit retires itself instead of becoming a tax on every fight. Three petitions at 9,000 renown take the ceiling **11 → 9 → 8**, not 11 → 10 → 9, because the first payment cost a rank on the way |
+| One foe a word, not a count | `pledge`'s reason: the price is only worth paying against a number you watch move, and paying again is one more word. A `petition 3` would also have to answer what a partial refusal does when the third is at the floor |
+| Refused free, and both numbers said | `pledge_short`'s rule in this room — *"a refusal a player cannot plan around is a wall"* — so `petition_short` names the price and what is held, and `petition_least` names the floor. Neither spends anything |
+| **`begin` took a parameter back** | `battle.rs` records one being *removed* so the number *"arrived before the two draws and could not reorder them."* This one is different in the way that matters: it is consumed **inside** the first draw rather than sitting before it, so it cannot move either draw's position. `begin(rngs)` remains the whole of the old behaviour and delegates, so every caller and every seed is untouched |
+| The verb | `petition` is **exactly** `MAX_CANONICAL_LEN`, the third word on the limit after `meditate` and `research`. Swept: `pet` names nothing else, `per` is `peruse`, `ple` is `pledge` |
+| **...and it ships with no second arcane word**, after three tried | `entreat` and `beg` went red together — `ent` prefixes `attend`, `beg` prefixes `begin` (already a `wield` synonym). `beseech` cleared the prefix tables and then **fuzzed against `research`**, a live archive verb; tolerating a collision with that to buy a second way of saying one word is a bad trade. `parley` was clean throughout and refused on meaning — it reads as talking to the enemy, and what is bought is a quieter road rather than a truce. So the arcane register carries the canonical alone, which is all the rule requires, and `ask` is the plain word. **An earlier draft of this row named `entreat` as shipping**, which would have sent a reader of the log to type a word the parser refuses |
+| Anchored to `defend`, though it runs before one | The anchor names the fixture that *offers* the word, not a live component: the rampart declares `defend` whether or not a `Siege` sits on it, so this resolves with the road empty — which is the only time it is any use |
+
+**No `FORMAT` bump.** `Petitioned` saves as a bare `u32` on `renown`'s rule:
+nought is the honest reading of a document written before anyone could petition.
+The allowance is kept across a save because renown was spent on it.
+
+**Nothing existing moved, which was not the expectation.** The box warned this
+*"breaks every recorded seed"*. It does not: renown is nought in every existing
+siege fixture, and `random_range(5..=9)` with a ceiling of nine consumes the same
+stream and yields the same value. The ten bailey dump blocks, the replay pair and
+`double_and_plus_are_worth_what_they_say` are all untouched — the last of those
+being the test whose doc says twelve is *"more than any enemy this domain draws"*,
+which is still true at nought standing.
+
+**And the named risk needed a test the sweep could not be.** *"`outnumbered`
+becomes unreachable"* cannot be caught by
+`every_reading_the_domain_declares_is_one_some_state_reaches`, which never
+petitions and never raises renown, so it passes whatever this does.
+`petitioning_is_refused_at_the_floor_and_keeps_the_renown` walks the tail down to
+`FEWEST` and is the gate.
+
+### The siege moves renown both ways (Phase 11, `0.11.11`)
+
+§19 above says renown is *"earned by making, **moved both ways by a siege**"*, and
+only the first clause was built. **A siege minted nothing**: `settle` pays through
+`done` with a `Work::event`, and `done` mints only for a `Work::sold` — which is
+correct and stays, because minting on that door *"would pay a siege twice, since
+escrow arrives through the same call and escrow pays on a loss."* So the siege's
+standing is an explicit call at the two siege seams, and `done` is untouched.
+
+| Question | Decision |
+|---|---|
+| What a round is worth | `(dealt + sortied)` against `(taken + spent)`, netted and applied once. Both directions, per exchange, which is what the roadmap box asks for |
+| **...and `mended`, which the box did not name** | The box says four fields; there are five. `taken` and `spent` are vigour lost and `mended` is vigour put back, so charging the first two without crediting the third **bills a player twice for damage they repaired** — and the play it punishes is quaffing a `mending` or pledging the `succour`, which is the domain's headline move. `(taken + spent) − mended` is net vigour lost, and the incentive points the right way |
+| The sortie still nets about a sixth of itself | `sortied` is `sortie/2` and `spent` is `sortie/3`, so netting leaves roughly `sortie/6`. **That is the mechanic, not the defect `Round::sortied` records** — that one was a *sentence* reading "take 2" for a round that had dealt twelve, a display bug. Here a sortie buys damage at a price in standing, which is what the box means by bolding *"and `spent`"* |
+| **Rounds move it quietly** | §19's rule is *"earning is silent; losing speaks"*, and its stated reason is that a loss *"happened to the player, at a moment they may not have been watching."* **A siege round is the one loss that fails that premise**: it is elected by typing `hold` and has just narrated itself, so the sentence is the same news twice, six to thirteen times a fight. That is not a style objection — a line per *making* took one sweep of the clarity loop from 466 records to 792, which is why `earn` is silent at all |
+| ...but the fight speaks **once**, on settling | Silence *plus a gauge* is silence alone for two kinds of player: `gauges::split` yields both gauge rows on a short or narrow pane, and §14's linear stream carries records rather than gauges. One record a siege answers *what did that fight cost me*, satisfies §6, and gives a mid-siege rank crossing its explanation — a title lost with nothing on screen saying why is the worst reading available |
+| The sentence measures from **when the enemy arrived** | `Siege::standing` is an opening snapshot, exactly as `arrived` is. A total read at `settle` reports the *stake* and silently omits everything the exchanges cost — the half a player most wants explained. Measured rather than accumulated, so there is no running sum to keep in step and the saturating floor is included for nothing. `#[serde(default)]` per `mustered`, so an in-flight siege in an older save degrades to reporting its outcome alone and no `FORMAT` bump is needed |
+| A fall costs a **stake**, scaled by how far short | Escrow's completion scaling pointed the other way: a collapse on round one costs far more standing than a wall carried at ninety percent. A win pays the whole stake, and needs no scaling because `completion` is 100 on a win by construction |
+| **`div_ceil`, and it is not a rounding nicety** | `arrived` is 5..=9, so the stake tops out at 63 and plain division by 100 truncates **to nought** for every completion above 80 — losing at ninety-nine percent would be free, which says the near-miss cost nothing. It should cost *less*. Never *nothing* |
+| `RENOWN_PER_FOE = ESCROW_PER_FOE / RENOWN_PER` = **7** | Arrived at rather than picked: what a foe is worth in experience over what experience is worth in renown, so a siege's standing is priced at exactly the rate a *making's* is and the two cannot drift apart as separately-authored numbers. A test asserts the derivation rather than the value |
+| ...and one per foe was the number that fails | **`arrived` is 5..=9, not 21.** The 21 on the board is `arrived × VIGOUR` — the enemy's *vigour*, not its count, and a first pass read the wrong one. At one per foe the most a defeat could ever take is nine against a first rank of 25, so **a lost siege could never cost a title** — the one thing this box exists to build |
+| A silent door rather than a flag on `lose` | `renown::slip`. `lose` keeps its sentence for every other caller — `renown.rs`'s own tests pin *"one loss, one record"* — and `slip` shares `crossed` rather than reimplementing it, so a **rank cannot be lost quietly** by coming through the new door |
+| One argument, not two | A `shift(up, down)` was drafted and rejected: two same-typed positional parameters with no compiler help, where transposing them silently inverts a whole siege. The netting belongs at the siege seam, and `renown.rs` goes on knowing nothing about combat |
+| The floor is a feature | `slip` saturates, so a disgraced tower cannot be disgraced further — §11.5's *"never ruinous, only slower."* It does not hollow out the early game either: a siege opens on a pylon course, hours of brewing in, so nobody arrives at their first fight at nought. **It does bite in tests**, where a fresh `Sim` is at nought and a bad round moves nothing — two of the new tests set a total first and say why |
+
+**What a fight now comes to, measured:** a won siege pays a stake of 35–63 plus
+10–20 from its rounds, against brewing's ~94 renown over the same 1200-tick siege
+cadence. Competitive and slightly under, which is right — a siege also pays
+experience and stocks the arsenal. Every number is a first pass and `orbs-balance`
+decides it; the `renown` column it already reports is how.
+
+**No `RENOWN_PER_HIT`.** A hit is worth a renown, and a constant at 1 is an identity
+that never appears in the arithmetic. If a sweep says otherwise it can be added
+then, with a reason.
+
+**One thing the sweep now reads differently, recorded so a later balance session is
+not misled.** `orbs-balance`'s `landed` column counts `Role::Success` +
+`RecordKind::Completion` + a positive `Quantity`, and its own comment glosses that
+as *"a run that yielded experience"*. The **won** siege's standing sentence matches
+that shape without being a run, so `besieging` reads `landed 9` where it read `3` —
+six won sieges, one summary each. That is also the cheapest available proof the
+record is **per siege and not per round**: per round it would be in the dozens.
+
+The lost sentence is `Role::Danger` and was never counted; a rank crossing carries
+no `Quantity` and is not counted either. The shape was kept rather than contorted
+to dodge the heuristic — it matches `renown_lost`, which has always written its
+number to `Quantity` so `sift --field qty` can ask what moved. **If `landed` is ever
+to mean strictly *runs*, the fix belongs in its own guard**, not in the shape of a
+record that is honestly a completion.
+
+### The tower counts runs, not things — the dependency web (Phases 9, 12, 13a)
+
+**Every progression track in the game increments once per completed run at an
+instrument, regardless of what that run produced or how much of it.** `worth` is
+charged per run from `[earns]`; renown is `earned.div_ceil(2)`, a function of that
+same number; and `Work` carries a key list that `done` bumps once — so
+`done = { potions = 5 }` counts *five runs that made a potion*, not five potions.
+The one exception is `pylon`, which scales by course height.
+
+Exactly two things in the game read actual material: **recipes**, as inputs, and
+**the siege arsenal**. Nothing else is denominated in goods. That is why the
+economy is a star rather than a web, and the game already shipped the end state:
+
+> **`stillness` and `vigour` cannot be spent anywhere.** Both are real potions
+> with recipes and prose. Neither has a `siege.toml` entry, and `defend::spending`
+> refuses any name not in `spendables`. Phase 9's own section notes they *"have no
+> sink at all and say so"* — what it did not say is that nothing else could ever
+> spend them either. `every_scroll_the_lectern_makes_can_be_spent` is why the
+> scrolls never had this problem, and there is no potion equivalent.
+
+The same fact is why `fruitful` is nearly worthless: it adds one to the *material*
+a run yields and credits `worth` once, outside the loop. On the alembic — the
+terminal product — it changes no number the player is scored on. **The tower's own
+yield charm is defeated by the tower not counting yield.**
+
+#### The web's job is bottlenecks, not demand
+
+Four independent sources converge on the loop that sustains these games, and it is
+not accumulation: *find the bottleneck → fix it → a new bottleneck appears.*
+Kittens Game states the governing laws in its own repository, and all four bear
+here:
+
+| Law | What it demands |
+|---|---|
+| *"Every problem or bottleneck should be addressed in multiple ways"* | Every bottleneck the web creates needs **≥2 answers**. One answer is a toll; two is a decision |
+| *"Every solution to a problem should create a new problem"* | Feeding one room must starve another — which is §5's *"the economy and the focus system are the same system"*, arrived at from outside |
+| *"For god's sake, never, ever nerf anything"* | `siege.toml` has nerfed `clarity` once (d100 → +4). The structural fix below is the non-nerfing version |
+| *"Consider how things will scale at later stages"* | An automated tower makes **thousands**. Size every sink against the automated rate, not the hand-played one |
+
+**A first draft claimed the game had no bottlenecks. That was wrong, and the
+counter-example is the model to copy.** Quintessence is a textbook one: a ceiling
+(`QUINTESSENCE_BASE`, `PER_LEY_STEP`) that is itself **a function of integrity**
+floored at half — *"repairing the barrier is what buys enchanting capacity"* — a
+regen rate, two consumers in contention priced by `forge.toml`'s `[surcharge]`,
+and an authored anti-spiral so neglect *"is expensive and never fatal."* The
+production slot, concentration, fragments and integrity are bottlenecks too.
+
+> **The honest claim, and the only one the web needs: no bottleneck in the game is
+> denominated in goods.** Nothing the player *makes* is ever the thing they run
+> out of. That is the gap, and quintessence is the proof the shape works here.
+
+#### The two economies, and the rule that keeps them apart
+
+**The Ley Line is the runs clock. The web is the goods economy. They are not
+wired together.** The last station is `at = 10000` against a 54,000–90,000-tick
+soft ending, so the curve wants 0.111–0.185 experience/tick and `orbs-balance`
+pins `clarity` at 0.140: the line is calibrated to roughly one automated flagship
+loop for the length of the game. A first draft proposed a web lifting the tower to
+1.5–2.0/tick and claimed no number needed retuning; that consumes every authored
+station, concentration 8 included, in **1.85 hours**.
+
+So what goods buy is capability *inside a room*, which is Mastery's business and
+the arsenal's. Mastery is already the trigger-technology track — `done = "clarity"`
+fires on the deed — and the web belongs on the track that already unlocks on
+encounter rather than on the one that can be raced ahead of the tower.
+
+#### Most of the crossing already exists
+
+`keep::admits` admits `Essence | Scroll`, **asked of the kind and never of the
+name**, and the arsenal is already the one room reachable from every other.
+
+> **The tower's three genuinely scarce made goods — potions, scrolls, troops —
+> already cross every room boundary today, with no new mechanism.**
+
+A potion is expensive by construction; a scroll is four fragments and a walk
+measured in thousands of ticks. So the first tier of the web needs **no new
+content file, no new `NounKind`, and no save migration** — all of which two drafts
+spent themselves on. What it needs is only that the `pylon` and the menagerie's
+`circle` can *consume*, which is the shared-engine extraction Phase 9 already
+carries.
+
+Reagent crossing is deferred to a second tier, where it is texture rather than
+mechanism. When it comes, the rule is **derived** — *a good is a material some
+other domain's recipe consumes* — which falls out of `Recipes` the way the verdant
+scroll's herb list already does, and never asks a question about a name. A
+by-name list in a content file was proposed and is **refused**: it is the
+judgement `keep::admits` and §10.1 both forbid, relocated into TOML.
+
+#### Two mistakes recorded because drafts were built on them
+
+**Salt is not a bottleneck.** Two drafts made `ground-salt` the contested good and
+the phase exit. `rock-salt` is `Holding::endless`, so "brew more salt" is a no-op
+against an infinite pile; the `phlegm`+`potash` relief route yields `rock-salt`,
+which still needs the mortar, from `potash`, which is *itself* a mortar product —
+so the relief costs two more grinds than it saves. The mortar contention is real
+and is contention for the slot, which is the scarcity the game already has. The
+contested good is a **`warding` potion**: worth a siege round *or* a ward that
+holds, never both.
+
+**`sanctum → lens` is not an edge and never was.** The lens's `Ward` is the cipher
+seal broken by `probe` inside the lens; the sanctum's is arcane energy assembled
+into the barrier. Two unrelated things with one name. A draft claimed the edge was
+already built and rested two graph properties on it; **the laboratory is a cut
+vertex today**, and stops being one when `menagerie → sanctum` and the siege's
+drop land.
+
+#### The calm layer breaks the automation contract, and §5.1 already forbids it
+
+**This is the most actionable finding and it is a defect, not a design.**
+
+`sabotage::drift` poisons a domain `.log` every ~300 ticks and
+`sabotage::substitution` swaps a base reagent every ~3600. Both are registered in
+the tick schedule **unconditionally — no `run_if`, no siege guard** — and
+`tower::audit` says so in its own words: *"the environmental ones are not… in the
+calm layer, today."*
+
+§5.1's table says the idle layer touches *"Environmental only — **never scripts,
+schedules, or logs**."* `drift` targets `With<Log>` in the calm layer. That is a
+live violation of a settled rule.
+
+Worse, it does not heal. `Poisoned` is cleared in two places, and the settling
+path only restores `Substituted` nodes — a poisoned *log* carries no
+`Substituted`, so it never recovers on its own. `drift`'s own comment records
+saturation at *"roughly 1500 unattended ticks."* **Twenty-five minutes away and
+every log in the tower is lying.**
+
+Against the contract the genre runs on — *once something is automated it stays
+automated* — the four §8.1 surfaces pass three of five tests:
+
+| Test | Verdict |
+|---|---|
+| **Elected** | ❌ Two of four surfaces are ambient and unconditional; only Script and Clock are siege-only |
+| **Findable** | ✅ `verify`, with the cheap/expensive split |
+| **Repairable in one move** | ✅ `purge` clears `Poisoned`, `restore`, `unwrite`, `untime` |
+| **Non-accumulating** | ❌ for logs — see above |
+| **Never silently permanent** | ✅ only arguments are corrupted, so it parses, does nothing, and `verify` finds it |
+
+**The design already answers this and the code has not caught up.** §8's *Soft
+drift* is the standing rule — *"Drift produces Degraded, never Capability lost.
+Maintenance is an invitation, not a punishment"* — and pillar 4 is *"the idle
+layer is safe."* Pillar 3 makes the attack legitimate; pillar 4 bounds it. The fix
+is to guard `drift` to the siege or give log poisoning the decay `substitution`'s
+settling already has.
+
+Two related facts, recorded so they are not rediscovered: **`Rewritten` and
+`Retimed` are never cleared at siege end** — only `purge` clears them, and they
+persist across saves; and *"sieges are elected"* holds today only because
+provocation is unbuilt. §5.3 roadmaps trace provoking them automatically, and
+`RngStream::Trace` is already reserved.
+
+#### The arsenal is typed on one axis and it collapses the decision
+
+The siege types the threat — `advance` / `onslaught` / `volley` — and types the
+answer — `line` / `buckler` / `succour` / `sortie` — and `siege::allocation`
+spells out the interaction. **But every arsenal item resolves to a global scalar**,
+so the only question is which number is largest, and `siege.toml` records where
+that ends: `clarity` as a `d100` was *"strictly the best thing in the arsenal…
+which collapses the decision this whole file exists to create."*
+
+**The fix is one optional `area` field on an arsenal row**, not a new subsystem:
+`warding` strengthens the buckler, `mending` the succour, a troop the line or
+sortie. Repricing cannot fix a one-axis system because some number is always
+largest — and scoping is the **non-nerfing** fix Kittens' third law asks for:
+clarity stays exactly as strong, and stops being strong everywhere at once.
+
+#### What is *not* wrong, and was reported as such
+
+- **The arsenal cap** is an open Phase 11 box, not a forgotten hole. It does not
+  exist in the code and the ROADMAP says so; a review reporting it as an
+  unnoticed defect was reading the code without the plan.
+- **The duration band** is a build problem, not a design one. §11.5 authors four
+  classes across 0–600 ticks; the shipped recipes run 6–56, and this document
+  already calls that *"the number to attack."* It is a tuning pass `orbs-balance`
+  exists to make, not a reopening of §11.5.
+- **The late game is not empty.** Twenty-five Mastery stations sit outside the Ley
+  cap, deed-gated rather than experience-gated. What ends past the last station is
+  *choice* — the forks stop — and repeating the three lanes at widening intervals
+  answers it with no new system.
+- **Trace is not a live risk.** It has no resource, no accrual and no provocation;
+  only `RngStream::Trace` is reserved. The production-punishes-production hazard
+  is a constraint filed against §5.3 whenever it is built, not a gate on this work.
+
+#### Two spellings a proposal got wrong, kept as a warning
+
+`status --rates` and `cat lens/observed/` both appeared as See-it lines. **The
+parser has no flag syntax at all** — recorded when §8.1's `verify --all` had to be
+respelled — and the read verbs are `peruse` and `sift`. A See-it line is the gate,
+so a line that cannot be typed is worse than no line.
+
+#### Open, and named rather than settled quietly
+
+1. **The 21-pair pane synergies against the goods web.** §9 authors standing
+   cross-domain effects from co-presence — *"forge beside the sanctum auto-repairs
+   wards"* — and ROADMAP defers all 21 to **Phase 12**, this work's phase. Two
+   cross-domain mechanisms in one phase is the worst available outcome. The
+   division that suits them: **synergy is what two rooms give you for being
+   watched together; the web is what they give you for being plumbed together.**
+   A pair must not be paid twice.
+2. **The additive-policy stack.** `scrying` (0.268), `warding` (0.125) and
+   `chanting` (0.243) take no production slot, so a late tower stacking them reads
+   ~0.78/tick and reaches `at = 10000` in ~3.6 hours against a 15–25 hour soft
+   ending. Either the line's top or additivity is wrong, and it wants settling
+   before the web adds anything. *(`progression.toml`'s own "~0.5 a tick" note is
+   a red herring: the same sentence says "~500 an hour", which is 0.139 — the file
+   disagrees with itself by 3.6× and the measured rate is right.)*
+3. **Whether the shared-engine extraction is bought at Phase 9**, and whether
+   ROADMAP's duplicate box is split — it appears in Phase 9 *and* Phase 13a with
+   contradictory gates, one asking for new behaviour and one for none.
+
 ### The passage — screens that leave and arrive (Phase 11.5)
 
 Every screen in the game cut. `attend forge` replaced the laboratory's
@@ -2926,8 +3267,20 @@ leaves output in the *instrument*, so the timestamp would be the haul rather tha
 the make, and the bypass is to bank on the laboratory shelf and haul in before
 `defend`; and it would have starved the `besieging` balance policy, which stocks
 once at setup, reproducing a rate-of-nought collapse the harness has recorded
-before. **A cap on how much of one name the arsenal takes** answers the same
-hoarding problem in one `if`, and is the box that shipped in its place.
+before. ~~**A cap on how much of one name the arsenal takes** answers the same
+hoarding problem in one `if`, and is the box that shipped in its place.~~
+
+**Struck twice over, and the second half was false the whole time.** The cap
+**never shipped** — `stock::give` is a bare `saturating_add` and always was — so
+this sentence sat in the log as a completed decision for a phase, and an
+independent review read it as an unnoticed defect rather than an open box, which
+is exactly what a wrong tense in a decisions log costs.
+
+And the cap is now **superseded rather than pending**: what ships in its place is
+a *rate* (`0.11.13`, above) — how much help a thing gives is matched to how often
+you make it. That answers this entry's own objection properly, because the
+objection was never really about hoarding: it was that *"production had to be
+continuous and a variety of it"*, which a cap cannot buy and a rate can.
 
 ### The two tracks swapped natures, and the tower learned to be shut (Phase 10, `0.10.1`)
 
@@ -3001,6 +3354,245 @@ which is the only reason it was a document edit. The two renumber tables below
 keep their own numbers, as the previous entry says a log must — a mechanical
 pass caught them once during this change and they were put back, which is the
 hazard `no-scripted-file-edits` names arriving through a replace-all.
+
+### A game has a length, and the orb has a menu (`0.12`)
+
+**The curve was calibrated to one loop, not a tower.** The Ley Line topped out at
+10,000 experience — about five thousand hand-played commands, genuinely reachable
+by typing — which made playing manually barely worse than automating and
+undercut pillar 3. So a game has a **length**, chosen once when it begins, and
+the place to choose it is a screen the orb never had.
+
+**The head is anchored and the tail is stretched.** A flat multiplier would have
+broken the thing this exists to serve: `progression.toml` says of the first
+station that *"the player does the whole loop by hand once, and the reward is not
+having to do it again"*, and ×6 makes that six hand-brewed clarities before the
+first spell slot. The stretch ramps quadratically from nothing at a line's first
+station to its full factor at the last — `1 + (k-1)(i/(n-1))²`, in integers over
+a fixed-point scale, because a curve that depended on float rounding would replay
+differently on a different target.
+
+**The ramp dissolved the room-reveal problem without a list.** A first draft named
+five stations to exempt and **three of the five were wrong** — the archive opens
+on `laboratory_1` and the sanctum on `laboratory_3`, neither listed, while
+`menagerie_1` opens nothing. And because a mastery line is *sequential*,
+exempting a station does not protect it when a scaled one precedes it. An
+index-anchored ramp needs no exemptions: every line's first station is unchanged
+by construction.
+
+**`earns` is never scaled, and that is the failure that would have gone silent.**
+Those are the *rates*; the thresholds are what a run is worth *against*. Scale
+both and you have multiplied numerator and denominator — the curve looks longer,
+plays identically, and every rate `orbs-balance` pins still passes. A test asserts
+`earns` is unchanged at every tier.
+
+**The tiers are the curve, not the clock.** Each is defined by what the last
+station reads — 30,000 / 60,000 / 250,000 — which is a fact; what that costs in
+hours is for `orbs-balance` to measure. This section's own additivity question
+stays open, and `bound` still measures **0.0910 against `grind`'s 0.1000**, so
+automation costs 9% throughput and its win is running unattended rather than
+running faster. **Nothing here settles that**, and a tier defined in hours would
+have been a guess wearing a fact's clothes.
+
+**`Sim::restored` would have shipped broken.** It calls `bare`, which installs
+the *unpaced* curve, and `save::restore` never touches `Progression` — so every
+save would have loaded back at ×1. No lint would have caught it: `persistence.rs`
+does cover resources and did fire for `Length`, but what it asserts is that a
+resource is *declared* in the document, never that `restore` puts it back.
+
+**`menu` is its own verb, and `quit` asks before it leaves.**
+
+For one iteration `quit` opened the menu, on `execute::quit`'s own argument —
+*"the word means leave the thing you are in, whichever thing that is"* — with
+leaving chosen from the menu. **Superseded.** The sentence is true and the
+conclusion did not follow: leaving the game and stepping out to a screen are two
+things, and one word for both made **stopping a two-step operation through a
+screen the player had not asked for**. A way out that costs an extra step is the
+thing `execute::quit` was written to prevent, arriving from the other side. It
+was reported the day it shipped.
+
+So `menu` is a verb of its own — 46 in `Verb::ALL`, with a `Menuing` handshake
+beside the other five — and `quit` leaves. **It asks once**: `quit` puts the
+question, another `quit` answers it, any other command answers *no*, and the
+question lasts exactly one line. That guard is worth its keystroke for this word
+and no other: it is the only one that cannot be undone, waited out or repeated
+away, and the tower is written on the way out.
+
+**The confirmation is a word, not a screen**, and that is the entry below
+speaking. A confirmation surface would be a seventh thing that takes the
+keyboard, opened *by a keystroke arriving* — which is exactly the shape that had
+just cost a shipped defect.
+
+**The tower-wide verb ceiling moved from 21 to 22, and that is correct.** The
+alternative kept the number by making one word do two jobs, and a ceiling bought
+that way is measuring the wrong thing.
+
+### A surface that opens on a keystroke reads the keystroke that opened it
+
+**Shipped, reported by a player, reproduced before it was fixed.** Typing the
+word that opened the orb's menu appeared to exit the game outright.
+
+`type_into_menu` was gated on the menu being open — the shape `type_into_loom`
+uses — and **a gated `MessageReader` keeps its cursor**. So the first time it
+ran, it read whatever `Messages` still retained, which on the frame the menu
+opened was the word that had just opened it. Typed back in, that word reached the
+menu's own `quit` and wrote an `AppExit`.
+
+`focus.rs` already carried the rule: *"a surface that grabs the keyboard on open
+eats the player's first keystroke."* `input.rs` already carried the fix for the
+prompt: *"it has to **run** to throw the keystrokes away — a reader that never
+runs keeps its cursor."* The menu was written against the wrong precedent of the
+two.
+
+**The fix is both halves.** Run always, decline and *clear*; and order the reader
+**before** the opener, so the frame a menu opens on is one the reader has already
+emptied.
+
+**The instrument was blind and the blindness looked like stability.** `ORBS_DUMP`
+builds no `App` and presses no key, so it drew a correct menu throughout and all
+four `dumps.sh` latches were green — CLAUDE.md names that failure mode
+specifically and this is a second instance of it. **The gate a keyboard-owning
+surface needs is a test that fires a real `KeyboardInput` at the real plugin
+stack**, and `shell/plugin.rs`'s header already said so: *"a test that fires a
+real `KeyboardInput` at the real plugin stack is the one this surface most
+needs."* The menu shipped without one.
+
+**`type_into_loom` and the other gated readers have the same latent hazard**, and
+it is harmless there only because no word in their vocabularies is destructive —
+the weave's `quit` closes a screen. Recorded rather than fixed, because the fix
+is the ordering above and it should be applied when one of them next changes.
+
+**More than one save needed no `FORMAT` bump.** Wizard, seed, tick, length and
+`away.unix` were all already in the document and read by exactly one caller. Slot
+1 *is* `orbs-save.toml`, so nothing migrates. The listing reads through a private
+`load` that cannot reach `keep_aside`: a listing that renamed the files it listed
+would set a whole directory aside the first time this build met one save it could
+not read, turning *one tower did not come back* into *none of them are where they
+were*.
+
+**The path travels with the `Sim`, and that is the whole of the dangerous part.**
+Autosave fires every sixty ticks and again on the way out, against whatever path
+it holds. A path resolved at the moment of writing is a path resolved *after* a
+swap — so loading a second tower would have written the first into the second's
+file and the game you left would be gone. `Kept` makes the two one operation.
+
+**The eighteen shell resources became one list read twice.** A hand-written reset
+list is a second expression of the registration list and drifts, and what it
+drifts into is invisible: nothing crashes, the screen just describes the wrong
+tower — `Reveal` holding raw indices into a record stream that no longer exists,
+`Passing` holding a cell snapshot of another world's screen. The two that survive
+a swap (`Screen`, the window; `Standing`, the menu doing the asking) are lifted
+out and put back rather than left off the list, so a resource added to the macro
+is reset by construction.
+
+**A correction the `dumps.sh` diff made, and only it would have.** Fifteen
+mastery keys spelled their counts out in English — *"five potions brewed"*, drawn
+beside a live `3 of 5` — so at any length above baseline the sentence contradicted
+the number next to it, and they were changed to interpolate `{count}`. That was
+right for nine of them and wrong for six: the deeds that ask for **one** of a
+thing then read *"1 charms laid"*, which is worse than what it replaced. Every
+test stayed green — nothing asserts English — and the before/after capture is
+what showed it, on a phase whose changes were supposed to be additive.
+
+The fix is `Prose::counted`: a key that reads wrong in the singular is authored
+twice, `key` and `key_one`, and everything else stays one line because looking
+for `_one` and not finding it falls through. **Not a pluralisation rule** —
+English inflects more than the noun here (*"the stacks walked"* against *"3 walks
+of the stacks"*), and two authored sentences are what rule 6 asks for anyway.
+`archive_2` is on the list because it can *stop* being one: it sits second on its
+line, so a long game stretches it to two and the plural is then correct.
+
+**A correction the picture made, and the plan had backwards.** `loom::along` is
+logarithmic in `scale`, so a longer game moves every station *left*, not right —
+`ln(17)/ln(10001)` = 0.31 of the run at baseline against 0.23 at long. The plan
+predicted 0.31 → 0.42. `pack`'s two passes already hold the spacing whatever
+`along` wants, so the positions were never the problem; the **label** was, and at
+long the last two totals printed `121766250000`, a number nobody authored. Six
+figures is where a label stops fitting — two staggered rows buy exactly six cells
+— so a six-figure total abbreviates and nothing below six figures moves.
+
+### There is no fifth renumber: the minor names the feature
+
+> **The minor names the large feature in hand. The patch is an iteration within
+> it. `1.0` is the release on Steam.** §15 carries the table.
+
+**The new rule first, and what it replaces second.** `0.<phase>.<step>` is
+superseded. The roadmap is now a **list of items rather than a sequence of
+phases**: an item is open, or it is done and carries the phase name it was done
+under. Nothing in it claims to come next.
+
+**Only the referent changed, which is why this costs nothing.** The numbers were
+already behaving this way — Renown was minor `11` and its steps were patches
+`0`–`14`. What the minor stops being is a *phase index*. No tag moves, no
+historical table is touched, and `v0.8.x` is still the siege.
+
+**`0.12` is the orb's menu**, and is the first minor that names a feature rather
+than a phase. The tower as one machine keeps that name as a label in ROADMAP.md
+and stops being a version claim.
+
+**The alternative this section carried undecided through four renumbers is
+superseded**, not merely passed over: *"let the minor count phases closed"* is
+monotonic by construction, but it makes the number answer a question nobody asks
+— *how many are finished* — instead of the one every reader has, *what is this
+build*. It also needs a tie-break the moment two phases are open at once, which
+is the normal state here rather than an edge case: Spellcraft and Enchanting are
+both met-on-exit with boxes left while Renown closed and the menu began. Naming
+the feature answers the asked question and needs no rule.
+
+**Why now, after three entries said "overdue".** The fourth renumber's own note
+said a fourth phase out of turn should settle the scheme, and the fourth phase
+out of turn renumbered instead. Each bend was cheap only because no moved phase
+carried a tag, and that was luck. What finally forced it was not a fifth
+out-of-turn phase but the **cost of the ordering itself**: moving items between
+phases to preserve an order nobody was keeping had become the expensive part of
+planning, and the order was not earning it.
+
+**The historical renumber tables stay exactly as they are** — including the four
+below. They record what the numbers were at the time; §19 twice records a
+mechanical pass corrupting them, once through a replace-all, and there is no
+reason to run a fifth pass over them now that nothing renumbers again.
+
+**Radius, checked rather than assumed.** Nothing in `scripts/`, `.github/`,
+`.claude/` or any test reads `ROADMAP.md`, so the tooling cost is two lines in
+the `game-release` skill: its *"`0.<phase>.<step>` → ordinary semver"* sentence,
+and its patch-search, which assumed patch-per-step and must be able to climb the
+minor.
+
+### The phases moved a fourth time, and Renown is why
+
+**Renown was inserted as Phase 11**, and everything above it moved up one: the
+tower as one machine 11 → **12**, breadth/remote/engine 12a/b/c → **13a/13b/13c**,
+onboarding 13 → **14**, ship 14 → **15**.
+
+| was | is |
+|---|---|
+| 11 | **12** — the tower as one machine |
+| 12a / 12b / 12c | **13a / 13b / 13c** |
+| 13 | **14** — onboarding + demo |
+| 14 | **15** — ship |
+
+**Phases 0–5, 8, 9 and 10 did not move.** They are closed or tagged and their
+tags mean what they meant.
+
+**Written late, and that is the finding.** The renumber happened when Renown was
+scheduled; this entry did not, and ROADMAP asserted *"§19 records that the scheme
+has now been bent four times"* while §19 recorded three. The gap was found by
+auditing Phase 11's own docs box rather than by anything going wrong, which is
+the argument for the box existing.
+
+**Done highest-first**, the rule the second renumber's entry sets: a pass that
+rewrote 11 before 14 would collide two phases into one number. And **the
+historical tables keep their own numbers** — the entries below and Draft 2's
+*"Phase 3 overloaded"* row record what the numbers were at the time, and
+renumbering a log falsifies it.
+
+**This is the fourth bend of `0.<phase>.<step>` and the third entry to say the
+scheme is overdue a decision.** The third renumber's own note said a fourth phase
+out of turn should settle the scheme instead of moving the numbers again; it
+moved the numbers again. The alternative is unchanged and still undecided: let the
+minor count phases *closed* rather than name the phase, which is monotonic by
+construction. Each bend has been cheap only because no moved phase carried a tag,
+and that remains luck rather than a plan.
 
 ### The phases moved a second time, because the version may not go backwards
 
@@ -9490,23 +10082,40 @@ Two things about the solve are the reason this is written down:
   says *compute the constant*; the amendment is that the arithmetic has to match
   the target's, not merely resemble it.
 
-### Versioning — `0.<phase>.<step>` until release
+### Versioning — the minor names the feature, and `1.0` is the release
 
-The workspace version tracks [ROADMAP.md](ROADMAP.md) rather than a public API,
-because there is no public API: every crate here is consumed only by this
-workspace, so the semver contract has nothing to describe. What a reader wants
-from the number before release is *where in the plan is this*, and the phase and
-step say exactly that. It is also player-visible — `boot::screen` draws
+> **The minor names the large feature in hand. The patch is an iteration within
+> it. `1.0` is the release on Steam.**
+
+**This supersedes `0.<phase>.<step>`**, which assumed phases were built in order
+and was bent four times when they were not — §19 has the entry. **Only the
+referent changed.** The numbers were already doing this: Renown was minor `11`
+and its steps were patches `0`–`14`. What the minor stops being is a *phase
+index*, which is the part that could not survive work taken out of turn, and
+which cost a document-wide renumber every time it failed.
+
+The version tracks the work rather than a public API, because there is no public
+API: every crate here is consumed only by this workspace, so the semver contract
+has nothing to describe. It is also player-visible — `boot::screen` draws
 `v{CARGO_PKG_VERSION}` on the POST card — so it doubles as the thing a tester
-quotes in a report.
+quotes in a report, which is why it must never go backwards.
 
 | Question | Decision |
 |---|---|
-| Form | `0.<phase>.<step>`, one workspace version inherited by all five crates |
-| Phase 0.5 | The interlude gets **no minor of its own** — it is bookkeeping between 0 and 1, and `0.0.5` would collide with a Phase 0 step. Work done there versions under the phase it serves |
-| A step is a **completed roadmap item**, not a commit | Commits are not a unit anyone reads; a checked box is. Corrections folded into an item (the `✅` entries under Phase 1) do not advance it — they are the item still being finished |
-| Completing a phase | Bumps the **minor** and resets the patch to zero |
-| After 1.0 | Ordinary semver, and the switch is **one-way**. Recorded here so the jump from `0.<phase>` to `1.<minor>` is never read as a thirteenth phase |
+| Form | `0.<feature>.<iteration>`, one workspace version inherited by all five crates |
+| What bumps the **minor** | Starting the next large feature. It **names** that feature and is chosen when the work begins, not derived from a count — `0.12` is the orb's menu |
+| What bumps the **patch** | Finishing an iteration within that feature: a roadmap box going from `[ ]` to `[x]` |
+| A patch is a **completed roadmap item**, not a commit | Commits are not a unit anyone reads; a checked box is. Corrections folded into an item (the `✅` entries under Phase 1) do not advance it — they are the item still being finished |
+| Phase 0.5 | The interlude got **no minor of its own** — it was bookkeeping between 0 and 1, and `0.0.5` would have collided with a Phase 0 step. Historical; the rule it was an exception to is gone |
+| Historical minors | `0.0`–`0.11` **named phases**, and their tags mean what they meant. `v0.8.x` is the siege. Nothing is retagged |
+| After 1.0 | Ordinary semver, and the switch is **one-way**. Recorded here so the jump from `0.<n>` to `1.<minor>` is never read as another feature |
+
+**Why not let the minor count phases *closed*** — the alternative §19 carried
+undecided through four renumbers. It survives an out-of-turn phase, but it makes
+the number answer a question nobody asks (*how many are finished*) instead of the
+one every reader has (*what is this build*), and it needs a tie-break the moment
+two phases are open at once, which is the normal state here. Naming the feature
+answers the asked question directly and needs no rule at all. **Superseded.**
 
 **Bumping it is part of finishing a step, not a release chore.** CLAUDE.md's
 *Finishing a step* makes the three things one action: the box is ticked, the

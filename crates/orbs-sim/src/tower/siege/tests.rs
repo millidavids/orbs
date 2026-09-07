@@ -286,6 +286,74 @@ fn a_lost_siege_still_pays_and_a_won_one_pays_more() {
 }
 
 #[test]
+fn a_near_miss_costs_standing_but_less_than_a_collapse() {
+    // **The whole shape of the stake**: falling short costs, and how much
+    // depends on how far short. A collapse on the first round is a different
+    // kind of night from a wall carried at ninety percent, and the number has
+    // to say so.
+    let full = 8 * RENOWN_PER_FOE;
+    assert_eq!(
+        renown_stake(8, 100, Outcome::Held),
+        full,
+        "a win pays it all"
+    );
+    assert_eq!(
+        renown_stake(8, 0, Outcome::Fallen),
+        full,
+        "a collapse pays it all back"
+    );
+
+    let mut worse = 0;
+    for completion in [90, 60, 25, 0] {
+        let cost = renown_stake(8, completion, Outcome::Fallen);
+        assert!(
+            cost > worse,
+            "falling at {completion}% cost no more than falling further",
+        );
+        worse = cost;
+    }
+}
+
+#[test]
+fn a_defeat_that_nearly_won_still_costs_something() {
+    // **`div_ceil`, and why it is not a rounding nicety.** `arrived` is 5..=9,
+    // so the stake tops out at 63 and plain division by 100 truncates to
+    // *nought* for every completion above 80 — losing at ninety-nine percent
+    // would be free, which says the near-miss cost nothing at all. It should
+    // cost less. Never nothing.
+    // **The whole reachable range, not the opening one.** This swept 5..=9 —
+    // the band before standing lengthened the tail — so it stopped covering the
+    // sizes a famous tower actually meets, which are the ones with the largest
+    // stake and therefore the widest truncation window.
+    for arrived in FEWEST..=MOST {
+        for completion in 81..100 {
+            assert!(
+                renown_stake(arrived, completion, Outcome::Fallen) > 0,
+                "falling at {completion}% with {arrived} foes was free",
+            );
+        }
+    }
+}
+
+#[test]
+fn the_stake_is_priced_at_the_rate_a_making_is() {
+    // The rate is derived rather than picked — `ESCROW_PER_FOE / RENOWN_PER` —
+    // so the two ways of earning standing cannot drift apart as separately
+    // authored numbers. This is what fails if someone moves one of them.
+    assert_eq!(
+        RENOWN_PER_FOE,
+        ESCROW_PER_FOE / crate::tower::renown::RENOWN_PER,
+    );
+    // And it has to be big enough for a bad night to cost the first rank,
+    // which the shipped file puts at 25. At one per foe the most a defeat
+    // could ever take is nine, and the number would not fall.
+    assert!(
+        renown_stake(9, 0, Outcome::Fallen) > 25,
+        "a lost siege cannot cost even the first rank",
+    );
+}
+
+#[test]
 fn a_bigger_enemy_is_worth_more_so_abandoning_a_hard_one_is_never_the_play() {
     // The exploit the scaling exists to close: if the pool were flat, the
     // best move would be to abandon anything difficult and wait.

@@ -218,6 +218,9 @@ struct ShellState<'w> {
     editing: ResMut<'w, crate::shell::Editing>,
     /// `ResMut` only to reach `get_mut`; the painter tells this surface nothing.
     weaving: ResMut<'w, crate::shell::Loom>,
+    /// The orb's menu. `Res`, because unlike the two above it there is nothing
+    /// here for the painter to hand back.
+    menuing: Res<'w, crate::shell::Standing>,
     /// Whether the arrows are walking the archive's stacks.
     ///
     /// `Res`, not `ResMut`: this one owns no pane, so there is nothing for the
@@ -255,6 +258,7 @@ fn repaint(
         ref mut editing,
         ref mut weaving,
         walk,
+        menuing,
     } = shell;
     let frame = &mut canvas.frame;
     // **Before the reset, which is the last moment last frame exists.** A
@@ -289,6 +293,7 @@ fn repaint(
                 editing: editing.get_mut(),
                 weaving: weaving.get_mut().map(|screen| &*screen),
                 walking: walk.is_open(),
+                menuing: menuing.get(),
             },
         );
     } else {

@@ -46,4 +46,4 @@ pub(crate) use publish::publish_dice;
 // `debug_siege`'s alone — see `publish::refresh` and `execute::mod`.
 #[cfg(debug_assertions)]
 pub(crate) use publish::refresh;
-pub(super) use verbs::{defend, deploy, hold, pledge, quaff, wielded};
+pub(super) use verbs::{defend, deploy, hold, petition, pledge, quaff, wielded};

@@ -205,6 +205,23 @@ pub struct Grouped(pub String);
 /// walks.
 #[must_use]
 pub fn group_at(world: &World, node: Entity, group: &str) -> Vec<Entity> {
+    // **The arsenal is walked wherever you are standing, and it is the only set
+    // that is.** §19 built it as *"the one room reachable from every other"* and
+    // `scene` already folds its contents into the naming scope for that reason —
+    // so `for each store` resolving only in a room nobody attends would be the
+    // words being nameable and unreachable, which is the exact defect the
+    // registration loop exists to prevent.
+    //
+    // Every other set is a fixture in the room the spell is standing in: a way
+    // belongs to a maze, a socket to a ward. A store belongs to the tower.
+    let node = if group == super::stores::STORE {
+        match super::keep(world) {
+            Some(arsenal) => arsenal,
+            None => return Vec::new(),
+        }
+    } else {
+        node
+    };
     children_of(world, node)
         .into_iter()
         .filter(|child| {
@@ -276,6 +293,10 @@ fn readings_of(set: &str) -> Vec<&'static str> {
         // it has and whether that is nearly out.
         "column" => vec!["lit"],
         "charm" => vec![super::charm::GRACED, super::charm::EBBING],
+        // The arsenal's items, which answer with how well stocked the tower is
+        // in each — `fresh`, `thin`, `spent`. This is what lets a spell keep its
+        // own stores up: walk them, find what has gone thin, and go make it.
+        super::stores::STORE => super::stores::readings(),
         // **The bailey's three have no arm and that is a gap, not a decision.**
         // `siege::readings()` returns all eighteen words as one list, and
         // splitting them across `area`, `die` and `band` is a judgement about

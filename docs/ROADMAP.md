@@ -8,71 +8,62 @@ If the two disagree, DESIGN.md wins and this file is wrong.
 > game. An item without a See it line is not started; an item whose line does not
 > work is not finished, however green its tests are. DESIGN.md §15, §19.
 
-## The numbers moved a fourth time, and the note below predicted it
+## The list is not an order
 
-**Renown is Phase 11, and everything above it moved up one.** The tower as one
-machine is **12**, breadth/remote/engine are **13a/13b/13c**, onboarding is
-**14** and ship is **15**. Nothing that moved carried a tag, so this was again a
-document edit rather than a decision — done **highest-first**, which is the rule
-the second renumber left behind after a mechanical pass collided two phases into
-one number.
+**This file is a list of work, not a sequence of phases.** An item is open, or it
+is done and carries the phase name it was done under. Nothing here claims to come
+next, because nothing here ever reliably did.
 
-**The note below said a fourth phase out of turn should settle the scheme rather
-than renumber again, and it was renumbered again.** That is the decision, taken
-knowingly: `0.<phase>.<step>` is player-visible on the POST card and a tester's
-number must never go backwards, so the alternative — appending Renown above ship
-— would have put the late game after the release. §19 records that the scheme has
-now been bent four times and that the *"minor counts phases closed"* alternative
-is still undecided and now overdue.
+`0.<phase>.<step>` assumed phases were built in sequence and **four times they
+were not**. Each time cost a document-wide renumber whose only product was
+keeping a promise the numbers could not keep, and §19 recorded the scheme as
+*"still undecided and now overdue"* after the fourth. Deciding it is cheaper than
+a fifth pass.
 
-## The numbers moved a third time, and the reason was the same
+### What the version means now
 
-**Progression is Phase 10, and everything above it moved up one.** At that point
-the tower as one machine was **11**, breadth/remote/engine **12a/12b/12c**,
-onboarding **13** and ship **14** — all since moved up again by the pass above.
+> **The minor names the large feature in hand. The patch is an iteration within
+> it. `1.0` is the release on Steam.**
 
-## The numbers moved a second time, and the version is why
+**Only the referent changed.** It is what the numbers were already doing — Renown
+was minor `11` and its steps were patches `0`–`14` — so no tag moves and no
+history is rewritten. What the minor stops being is a *phase index*, which is the
+part that could not survive work taken out of turn.
 
-**Enchanting was Phase 6 and is Phase 9.** The version is `0.<phase>.<step>` and
-it is drawn on the POST card, so it must never go backwards — and Phase 8 shipped
-first, which meant closing Enchanting as `0.6.x` would have taken a tester's
-build back from `0.8.19`. That is the exact hazard §19 cites for swapping Defense
-and Enchanting in the first place, arriving from the other side.
+**`0.12` is the orb's menu**, and is not "Phase 12". The tower as one machine
+keeps that name as a label in this file and stops being a version claim.
 
-So the unbuilt phases moved above the highest built one:
+**§19's recorded alternative — *"let the minor count phases closed"* — is
+superseded** by the rule above and is no longer a live proposal.
 
-| was | is | |
+### The renumbers, kept as history
+
+**The tags mean what they meant** — `v0.8.x` is the siege, `v0.10.x` is
+Progression, `v0.11.x` is Renown — and §19 twice records a mechanical pass
+corrupting the tables that say so. Nothing below is edited again.
+
+| pass | what moved | why |
 |---|---|---|
-| 6 | **9** | Enchanting — built, three of four boxes |
-| 7 | **10** | The tower as one machine |
-| 9a / 9b / 9c | **11a / 11b / 11c** | Breadth, remote hosts, engine upgrade |
-| 10 | **12** | Onboarding + demo |
-| 11 | **13** | Ship |
+| first | Siege 2 → **8**; the five domains take 2–7 | *"If we don't have a series of interesting puzzles, then there really is no game"* |
+| second | Enchanting 6 → **9**, and 7 / 9a–c / 10 / 11 up with it | Phase 8 shipped first, and the POST card's number must never go backwards |
+| third | Progression → **10**, everything above up one | built out of turn |
+| fourth | Renown → **11**, everything above up one | built out of turn |
 
-**Phases 0–5 and 8 did not move**, because they are closed and their tags mean
-what they meant. `v0.8.x` is still the siege.
+**Every pass was done highest-first.** One that moved a lower number first
+collided two phases into a single number, and a replace-all once corrupted two
+*historical* renumber tables in §19. There is no fifth pass: with the minor
+naming a feature rather than indexing a phase, there is nothing left to renumber.
 
-**Done highest-first**, which is the rule §19 records from the last renumber: a
-pass that moved 9 before 11 would have collided two phases into one number, the
-same way one that moved `3` before `3a` corrupted `3a` into `9a`.
+**Phase numbers survive in the prose below as names**, not as an order — *"waits
+on Breadth's offline catch-up"* says which body of work, and says nothing about
+what comes first.
 
-**The scheme has now been bent twice to keep a promise it cannot keep on its
-own.** `0.<phase>.<step>` assumes phases are built in order and they are not —
-so the next time a phase is taken out of turn, this happens again. That is worth
-deciding rather than renumbering a third time.
-
-Last updated: 2026-09-03 · **Phase 11 is Renown, and the phases above it moved
-up one** — the fourth renumber, done highest-first, recorded in §19. **Phase 10
-(Progression) closed at `0.10.6`** — the
-two tracks re-strung, the tower sealed and earned back one room at a time, the
-rail's percentage and the room's road, and the Ley Line authored to the soft
-ending with every grant built. **A review of the whole phase then found five
-defects**, folded in without advancing a box and listed at the end of the
-section — the largest was that a Ley step's `opens` was never applied, which
-left the grimoire and the forge shut for ever in a real game. Three things stay
-first-pass and are named in the section: every `at` and `times`, the charms that
-open cross-domain, and the grimoire's line opening nothing tangible. **Phases 0, 0.5, 1, 2, 4, 5, 8 closed
-and 9 (Enchanting) met on three of its four boxes. Phase 3 (Spellcraft) is met on its exit criterion with three boxes deliberately left.** The language overhaul closed at `0.3.26` and the editor work at `0.3.35`; what remains there is the terse register, a typed action at execution, and the hidden-directory authoring plan. **Phase 4 is Defense, at `0.4.2`** — the sanctum, a course of wards drawn from a wellspring and assembled at a barrier, integrity as the game's first *drain*, and `holding` to hold it. The domain shipped with fortification names and was reskinned at `0.4.1` (§19): §7's tree and §10's table said `battlements/` and both are superseded. **Defense and Enchanting swapped places** (§19): nothing in Defense depended on the two derived domains, and the version is player-visible, so building a later phase first would have made the number go backwards. **Phases 2–7 are the tower's five remaining domains and the phase that makes them one machine; what was Phase 2 (Siege) is now Phase 8.** Two of §8.1's four sabotage surfaces now ship — logs and world state; script text and trigger clocks stay in Phase 8, where their producer is. **§8.1's pricing of `verify` closed at `0.5.13`** as Phase 1 debt, ahead of Phase 8, whose first step depends on it: a bare `verify` is the expensive audit, and a look now rations its surface. **Phase 8 (Siege) then closed at `0.8.7`** — the bailey, the seven dice, the arsenal spent, a decision tree that fights unaided, escrow, and the two adversarial surfaces that complete §8.1's model. **All four sabotage surfaces now ship.** Three items are deferred with reasons: pane synergies wait on Phase 12's multiplexing, and the backlog and difficulty tiers wait on §5.3's provocation.
+Last updated: 2026-09-07 · **The phases stopped being an order** and this file
+became the list above and below; `0.12` is the orb's menu. **Renown closed at
+`0.11.14`** — the second number, spendable, an arsenal worth what your industry
+is worth, and a siege that moves renown both ways. **The interlude closed at
+`0.11.10`** — every screen in the game crosses rather than cuts, the opening
+included.
 
 ---
 
@@ -81,45 +72,55 @@ and 9 (Enchanting) met on three of its four boxes. Phase 3 (Spellcraft) is met o
 Solo, commercial, Steam. Release posture: demo first, then full 1.0. No Early
 Access.
 
-**The domains come before the siege**, which is a reordering of the whole plan
-and the reason the numbers below moved. *"If we don't have a series of
-interesting puzzles, then there really is no game"* — five of §10's seven domains
-were a single line inside a breadth phase two phases away, and the siege that
-*consumes* the puzzles was being built first.
+**The domains come before the siege**, which was the reordering the whole plan
+turned on. *"If we don't have a series of interesting puzzles, then there really
+is no game"* — five of §10's seven domains were a single line inside a breadth
+phase two phases away, and the siege that *consumes* the puzzles was being built
+first. That is settled and shipped; it is recorded here because it is why the
+numbers below are not consecutive.
 
-| Phase | Months | Words | Status |
+### Done
+
+| | Shipped at | |
+|---|---|---|
+| Phase 0. Vertical slice | — | ✅ numeric gate **deferred** |
+| Phase 0.5. Interlude | — | ✅ every box ticked · settings moved to *Ship* |
+| Phase 1. Core loop | — | ✅ testers clause moved to *Breadth* |
+| **Phase 2. Scrying** `lens/` | — | ✅ every box ticked |
+| **Phase 3. Spellcraft** `grimoire/` | `0.3.35` | ✅ exit met · **three boxes left**, open below |
+| **Phase 4. Defense** `sanctum/` | `0.4.2` | ✅ swapped with Enchanting (§19) |
+| **Phase 5. Summoning** `menagerie/` | — | ✅ |
+| Phase 8. Siege | `0.8.7` | ✅ three items deferred, named in the section |
+| **Phase 9. Enchanting** `forge/` | `0.9.3` | ✅ three of **five** boxes — the extraction split in two (§19); **two left**, open below |
+| **Phase 10. Progression** | `0.10.6` | ✅ every box ticked; the numbers are first-pass and `orbs-balance` decides them |
+| **Phase 11. Renown** | `0.11.14` | ✅ every box ticked |
+| Phase 11.5. Interlude | `0.11.10` | ✅ every box ticked |
+
+### Open — and **this table is not a running order**
+
+| | Months | Words | |
 |---|---|---|---|
-| 0. Vertical slice | 4 | ~3k | ✅ Closed · numeric gate **deferred** |
-| 0.5. Interlude | — | — | ✅ **Closed, every box ticked** · settings moved to 15 |
-| 1. Core loop | 5 | ~15k | ✅ **Closed** · testers clause moved to 13 |
-| **2. Scrying** `lens/` | 3 | ~6k | ✅ **Closed, every box ticked** |
-| **3. Spellcraft** `grimoire/` | 3 | ~6k | ⬜ · exit met, three boxes left |
-| **4. Defense** `sanctum/` | 3 | ~5k | ✅ **Closed** · swapped with Enchanting (§19) |
-| **5. Summoning** `menagerie/` | 2 | ~4k | ✅ **Closed** |
-| 8. Siege | 4 | ~15k | ✅ **Closed at `0.8.7`** · three items deferred, named in the section |
-| **9. Enchanting** `forge/` | 2 | ~4k | ⬜ · derived · three of four boxes |
-| **10. Progression** | 2 | ~4k | ✅ **Closed at `0.10.6`** · every box ticked; the numbers are first-pass and `orbs-balance` decides them |
-| **11. Renown** | 2 | ~4k | ⬜ · the second number, and an arsenal that does not keep |
-| 11.5. Interlude | — | — | ⬜ · the tower becomes a place you move through |
-| **12. The tower as one machine** | 2 | ~3k | ⬜ |
-| 13a. Breadth | 2 | ~4k | ⬜ · five domains moved out of it |
-| 13b. Remote hosts | 3 | ~12k | ⬜ |
-| 13c. Engine upgrade | 1 | — | ⬜ |
-| 14. Onboarding + demo | 4 | ~20k | ⬜ |
-| 15. Ship | 3 | ~5k | ⬜ |
-| **Standing** | — | — | ♾ Never closes, and blocks no phase |
+| [**The orb's menu**](#the-orbs-menu) | — | ~1k | `0.12.x` — **in hand.** A game has a length, and the orb has more than one save |
+| [The tower as one machine](#the-tower-as-one-machine) | 2 | ~3k | the dependency web, and two defects it cannot open on top of (§19) |
+| [Spellcraft's three](#phase-3--spellcraft) | — | ~1k | the terse register, a typed action at execution, hidden-directory authoring |
+| [Enchanting's two](#phase-9--enchanting) | — | ~1k | the shared-engine extraction, split into a refactor and a behaviour box |
+| [Breadth](#breadth) | 2 | ~4k | all seven domains, research, full drift, offline progression |
+| [Remote hosts](#remote-hosts) | 3 | ~12k | `connect`, infiltration, trace |
+| [Engine upgrade](#engine-upgrade) | 1 | — | one Bevy window, isolated from new-system work |
+| [Onboarding + demo](#onboarding--demo) | 4 | ~20k | the apprenticeship, the reveal, the soft ending, the capsule |
+| [Ship](#ship) | 3 | ~5k | settings, accessibility, store, launch |
+| [**Standing**](#standing--work-that-rides-with-the-content) | — | — | ♾ never closes, and blocks nothing |
 
-**41 months against a 24-month target**, where it was 28. The gap was already
-deliberate and *"the cut line's job to close"*; this widens it by 13 and the cut
-line below is rewritten to say how, because §16 rates schedule overrun
-**Critical** and a plan that adds six phases without touching the total is not
-tracking the risk it claims to.
+**~15 months of open work**, against a whole-plan estimate that reached 41 months
+on a 24-month target. The gap was already deliberate and *"the cut line's job to
+close"*; the [cut line](#cut-line--decided-in-advance) below says how. §16 rates
+schedule overrun **Critical**, so the total is carried here rather than dropped
+along with the ordering — an unordered list is not a shorter one.
 
-**13a shrinks by 2 months and ~14k words** — five domains and the shared-engine
-extraction leave it — so the true addition is ~13 months, not 15. The five
-domains were budgeted at 4 months and ~18k words *combined* while filed as one
-line; giving each its own phase is the admission that the estimate was for a
-table entry rather than for five minigames.
+**The five domains were budgeted at 4 months and ~18k words *combined*** while
+filed as one line inside Breadth. Giving each its own phase was the admission
+that the estimate had been made for a table entry rather than for five minigames,
+and it is the single largest reason the total moved.
 
 ---
 
@@ -2243,9 +2244,10 @@ it is Phase 13b's, with remote hosts, where content versioning arrives.
 ## The domain phases — the rest of the tower
 
 > **This was *"Phases 2–7"* and the range no longer holds.** The domains are
-> phases 2, 3, 4, 5 and 9 now, with 8 (Siege) among them and 10 after — see
-> *The numbers moved a second time* at the top of this file. The section covers
-> the same five domains it always did.
+> phases 2, 3, 4, 5 and 9, with 8 (Siege) among them and 10 after — see
+> *The renumbers, kept as history* at the top of this file. Those numbers are
+> names now, not an order. The section covers the same five domains it always
+> did, and all seven are raised.
 
 **Read this before starting any of them.** §10's table gives each domain a
 *form* — "deduction", "composition", "allocation" — and says outright that
@@ -3544,9 +3546,26 @@ and the proof that the generalisation §10.1 promises actually holds.
       behaves like 3,600 watched ticks
       **See it:** `ORBS_BOOT=0 ORBS_DUMP="attend forge; imbue mortar_and_pestle hurried; snap apex; anneal; meditate 700; attend laboratory; grind sage; meditate 4" cargo run -p orbs`
       — past the charm, the same grind takes eight again
-- [ ] The shared-engine extraction, pulled forward from Phase 13a — §10.1 already
-      says it belongs *"when the derived domains arrive"*, and they arrive here
-      **See it:** one recipe table drives two domains
+- [ ] **The shared-engine extraction**, pulled forward from Phase 13a — §10.1
+      already says it belongs *"when the derived domains arrive"*, and they arrive
+      here. **Its gate is that nothing changes**, which is Phase 13a's wording and
+      the right one for a refactor
+      **See it:** `scripts/dumps.sh` byte-identical before and after
+- [ ] **The `pylon` and the `circle` gain a recipe table and a store** — a
+      separate box, because it is new behaviour and the extraction's gate is that
+      there is none. Merging the two makes the refactor unverifiable, which is how
+      the duplicate box below got its contradictory gate in the first place.
+      `build.rs` already calls a room without a store a defect — *"a room with an
+      instrument and nowhere to set anything down is a room where `empty` is a
+      word that can never work"* — and four of seven rooms are in that state.
+      **This is what every supply edge in Phase 12 is waiting on** (§19)
+      **See it:** `attend sanctum`, `survey pylon` — it names what it would take
+
+> **The extraction is written twice and the two disagree.** It is this box and
+> Phase 13a's, whose See-it line is *"the game plays identically before and
+> after — this one is a refactor, and its gate is that nothing changes."* One
+> asks for new behaviour and one for none. They are now one refactor here and one
+> behaviour box beside it; 13a's entry points at these rather than repeating them.
 - [x] ✅ **A maintenance spell** — `tending_forge`, and the eight-rung lookup
       table lives in it rather than in the world. §8.1's *"a rule, not a
       memory"*: the columns publish the residue and the spell holds the mapping
@@ -4153,12 +4172,43 @@ spends on something the arsenal cannot sell.
       status"` — `renown ......... 4` under `experience ..... 8`; and
       `ORBS_WEAVE="mastery"` in place of `status` puts `renown 4` at the right of
       the headings row.
-- [ ] **The siege moves it both ways.** Per-exchange in `hold`, the outcome in
-      `settle`, after the siege's own sentence. Both directions read the whole
-      `Round` — `dealt` and `sortied` up, `taken` **and `spent`** down; the four
-      are deliberately separate and folding them shipped a defect once.
-      **See it:** `ORBS_BOOT=0 ORBS_GRID=120x45 ORBS_DUMP="attend bailey; defend;
-      status; hold; status"`.
+- [x] **The siege moves it both ways** (`0.11.11`). Per-exchange in `hold`, the
+      outcome in `settle`, after the siege's own sentence.
+      - **Five fields, not four.** The box named `dealt` and `sortied` up,
+        `taken` and `spent` down — and `mended` is the fifth. `taken` and
+        `spent` are vigour lost and `mended` is vigour put back, so charging
+        the first two without the third **bills a player twice for damage they
+        repaired**, and the play it punishes is quaffing a `mending` or
+        pledging the `succour`. `(taken + spent) − mended` is net vigour lost.
+      - **Rounds move it quietly; the fight speaks once, on settling.** A round
+        is elected by typing `hold` and has just narrated itself, so a sentence
+        per exchange is the same news twice over, six to thirteen times. But
+        silence *and* no summary would leave the gauge as the only signal —
+        and the gauges yield on a short pane, and §14's stream carries records
+        rather than gauges. One record a siege, and it is what gives a
+        mid-siege rank loss its explanation.
+      - **The sentence measures from when the enemy arrived.** `Siege::standing`
+        is an opening snapshot, so the number is the *fight's* — a reading taken
+        at `settle` reports the stake and silently omits what the rounds cost.
+      - **A fall costs a stake scaled by how far short it fell**, `div_ceil` so
+        that losing at ninety-nine percent costs *less* rather than *nothing*:
+        at 5..=9 foes, plain division truncates every near miss to nought.
+      - **`RENOWN_PER_FOE` is `ESCROW_PER_FOE / RENOWN_PER` = 7**, derived so a
+        siege's standing is priced at the rate a making's is. A first pass read
+        `arrived` as 21 — that is `arrived × VIGOUR`, the enemy's *vigour* — and
+        at one per foe a defeat could never cost even the first rank, which is
+        the whole point of the box. §19.
+      **See it:** a round moves it, and says nothing —
+      `ORBS_BOOT=0 ORBS_GRID=120x45 ORBS_DUMP="attend bailey; defend; status; pledge d20 to buckler; hold; status" cargo run -p orbs`
+      → `renown 0` then `you lose 1 and take 3` then `renown 2`, with no line
+      between. **It must pledge**: an unpledged round trades about evenly and
+      nets nought, which is why the box's original line showed `renown 0` twice
+      and demonstrated nothing.
+      Then the fight speaking — `debug_siege` in place of the first `status`
+      gives `they are singing about it: 37 renown, 37 in all` under
+      `the wall holds`. And a loss, in the log where a spell's records go:
+      `ORBS_BOOT=0 ORBS_DUMP="debug_renown 200; attend bailey" ORBS_THEN="invoke besieging; meditate 900; peruse bailey.log" cargo run -p orbs`
+      → `word gets about: the wall cost 31 renown, 169 left`
 - [x] **Ten ranks, and a gauge for each standing** (`0.11.2`). Two bracketed
       bars at the top of every pane — the Ley Line toward its next station and
       renown toward its next title — and the ten names the tower is called.
@@ -4185,15 +4235,37 @@ spends on something the arsenal cannot sell.
       attend laboratory"` — `renown [||||...] 100/800  magister` under the ley
       gauge; then `debug_renown 900; debug_renown 100; debug_renown 0` for the
       three sentences in order.
-- [ ] **Renown sets the siege, and `petition` turns it down.**
-      **This breaks every recorded seed and the plan says so up front.** The
-      enemy's size decides how many rolls a round draws, so changing it diverges
-      every intent and every roll after round one. §19 already accepts that shape
-      — *"old replays diverge, and that is a property of the game rather than of
-      the format"* — but the pinned transcripts, the bailey's dumps and the
-      `besieging` rate all move, and the curve needs a **written ceiling**: the
-      garrison is a constant six and `outnumbered` fires at twelve, a rung every
-      shipped solver branches on.
+- [x] **Renown sets the siege, and `petition` turns it down** (`0.11.12`).
+      Fame lengthens the tail of what comes up the road; `petition` spends
+      standing to shorten it again. **The first thing renown buys.**
+      - **The floor never moves.** `5` at every standing, with the ceiling
+        climbing `9 → 12` over ten ranks. A famous tower can still draw a quiet
+        night and an unknown one never meets the worst, which is what keeps
+        variance meaningful at both ends instead of squeezing it against the top.
+      - **Twelve is a written ceiling, not a drawn one.** The garrison is six and
+        `outnumbered` is a *ratio* — `enemy >= garrison * 2` — so twelve is
+        exactly where that reading turns over at the opening. Past it the rung
+        three shipped solvers branch on would be true in every fight; short of it
+        the reading is unreachable until the garrison is thinned.
+      - **`petition` lowers the ceiling; it does not subtract after the draw.**
+        At the moment the word is typed there is no siege and no draw, so *"the
+        enemy is already as small as it goes"* is only answerable against the
+        ceiling. Subtracting afterwards would let a player pay four times, draw
+        the floor anyway, and lose the lot in silence.
+      - **Self-limiting without a second rule**, and it is visible: paying drops
+        a rank, and a lower rank draws a shorter tail on its own. Three petitions
+        at 9,000 renown take the ceiling `11 → 9 → 8`, not `11 → 10 → 9`.
+      - **`begin` took a parameter back**, and §19 records why it is not the one
+        that was removed: this one is consumed *inside* the first draw rather
+        than sitting before it, so it cannot reorder either draw. `begin(rngs)`
+        is still the whole of the old behaviour, so **every existing seed is
+        untouched** — renown is nought in every existing siege fixture.
+      **See it:** the tail lengthens —
+      `ORBS_BOOT=0 ORBS_DUMP="attend bailey; defend" cargo run -p orbs` draws
+      `5 come up the road`, and the same line after `debug_renown 9000` draws
+      `6`. Then buying it down:
+      `ORBS_BOOT=0 ORBS_DUMP="debug_renown 9000; attend bailey; petition; petition; petition; defend" cargo run -p orbs`
+      — `word goes out. at most 11 will come, for 7 renown`, then `9`, then `8`.
 - [x] **The gauges warm as they fill** (`0.11.4`). Red through yellow to green,
       six steps, so a bar's colour says how close the next tier is before the
       numbers are read.
@@ -4230,22 +4302,104 @@ spends on something the arsenal cannot sell.
       **See it:** `ORBS_BOOT=0 ORBS_GRID=120x45 ORBS_DUMP="attend laboratory"` —
       six boxes on the rail and no grimoire; `ORBS_SEALED=1 ORBS_DUMP="attend
       grimoire"` still refuses in voice, and two clarities still open it.
-- [ ] **The arsenal will not hold everything.** A cap on how much of one name it
-      takes, refused in voice at the door.
-      **This replaces a perishable arsenal, which was designed and withdrawn.**
-      The plan wanted stock to go stale on a timer; the review found it
-      unbuildable on the tower's inventory primitive — `Stock::Counted(u32)` is
-      *"one node per kind, with a count — not one node per unit"* and `give`
-      merges into the existing pile, so a timer either keeps a thousand potions
-      fresh off one restock or makes new stock unusable. Per-unit batches would be
-      a rewrite of `Stock` touching every reader, a save migration, and a new
-      published reading before a spell could even see it. A cap is one `if`, it is
-      legible, it is announceable, and it answers the same hoarding problem.
-      Perishability can return as its own phase if a real player is seen banking a
-      thousand potions — which nobody has been.
-- [ ] **Docs.** §19 for the three supersessions, the `CAPACITY = 1` answer, the
-      fourth renumber and the withdrawn arsenal; §11.5's four-column resource
-      table gains a row; SEEING-IT gains a *Renown* section.
+- [x] **The arsenal is worth what your industry is worth** (`0.11.13`). How much
+      help a thing gives is matched to the **rate** you make it at: `fresh`,
+      `thin` at half, `spent` and refused in voice.
+      **This replaces the cap, which replaced a perishable arsenal.** ~~A cap on
+      how much of one name the arsenal takes~~ — **struck**, and §19 carries the
+      argument. Its own text admitted the problem was hypothetical (*"which
+      nobody has been"*), renown now answers *"why keep making things"*, and a
+      cap is a **wall rather than a bottleneck**: a ceiling you hit and stop at,
+      which is the opposite of the *"production must be continuous and varied"*
+      intent it inherited.
+      - **A rate, not a timestamp — and the difference is the whole feature.** A
+        first pass keyed this to *when one was last made*, which is the exact
+        hole §19 recorded withdrawing perishability for: *"a timer either keeps a
+        thousand potions fresh off one restock — cheaper than playing normally"*.
+        One making refreshing an unbounded pile **is** that. A rate cannot be
+        gamed that way: one restock is a rate of one, which is thin at best.
+      - **Total stock never enters the arithmetic**, which is what makes it
+        buildable on `Stock::Counted(u32)` untouched — no per-unit batches, no
+        rewrite of every reader, no save migration. The thing that was impossible
+        is the thing this does not need.
+      - **Surplus sells.** Making something already `fresh` mints its renown
+        twice — so nothing is ever refused at the *door*, and there is no point
+        at which producing stops being worth it. It also dissolves the cap's one
+        unanswerable case: a chant gives up to four troops *after* the figure has
+        closed, with nowhere to refuse. Under this it simply sells.
+      - **A boolean effect has no half.** `advantage` is draw-twice and `upgrade`
+        is a bigger die; two shipped spendables are one. A thin store loses them
+        outright rather than being spent for nothing, and the rule is authored on
+        `Effect::scales` rather than guessed at the call site.
+      - **It does not decay while the game is closed, and that needed no code** —
+        a tick is *"one real second while the window is open"*. **And it will
+        decay across an absence the day Phase 13a's offline catch-up advances the
+        tick**, with the same expression. Correct now, correct later.
+      - **`debug_spawn` stamps a *full store*, not one making** — and it took
+        three failing tests to get that right. Without any stamp every spawned
+        thing arrives `spent`; with one stamp it arrives `thin`, which halved a
+        spawned troop's bodies and made a test of the **Ley Line's garrison
+        grant** fail on the arsenal's freshness rule instead. Its own sentence is
+        *"the shelf finds it had it all along"*, and the industry behind the
+        shelf is part of *all along*.
+      - **The balance driver learned to keep its arsenal rather than fill it** —
+        a top-up rung, not a trip to the laboratory, which would have made the
+        pinned rate a blend of two domains.
+      **See it:** stock it, then watch it go —
+      `ORBS_BOOT=0 ORBS_DUMP="debug_spawn warding 5; survey arsenal; meditate 1200; survey arsenal; meditate 1800; survey arsenal" cargo run -p orbs`
+      → `state: fresh`, `fresh`, then `spent`, with **`qty: 5` throughout**,
+      which is the proof stock is not what is being measured. Then the refusal,
+      which keeps the potion:
+      `ORBS_BOOT=0 ORBS_DUMP="debug_spawn warding 1; meditate 3000; attend bailey; defend; quaff warding; survey arsenal" cargo run -p orbs`
+      → `your warding stores are out. make one and come back`, and `qty: 1` still
+      on the shelf after it.
+- [x] **A spell can ask what has gone thin** (`0.11.14`). The other half of the
+      mechanic above: stores run down with time, and a player who cannot ask
+      *which* can only guess. `for each store` walks the arsenal and
+      `if the store has thin` answers — so the reply to a thinning arsenal is a
+      spell that keeps making things, which is pillar 3 landing as a mechanic
+      rather than a promise.
+      - **Two Cwd-scoped lookups had to learn about the arsenal**, and neither
+        was optional. `group_at` walks the room a spell stands in, and
+        `watch::find` resolves a `has` against that room's children — so
+        `for each store` found nothing from the bailey, and once it did, the very
+        next line could not ask the cursor a question. §19's arsenal exemption is
+        *"the one room reachable from every other"* and `scene` already folds its
+        contents into the naming scope; this is that decision finished rather
+        than extended.
+      - **A store's word is republished by a system, because nothing else can.**
+        Every other reading is rewritten by the thing that changed it; a store
+        changes because *time passed*. It writes only when the word changes, so
+        an idle tick issues no `NodeId` and §19's *insertion order is the parse*
+        holds between a watched hour and a `meditate`-collapsed one.
+      - **The first version of its test passed vacuously**, and that is why the
+        test now asserts the loop *body ran* rather than only that the spell
+        compiled clean. A `for each` over an empty set complains about nothing
+        and does nothing — which is the exact silent defect `scene.rs` says the
+        registration loop exists to prevent.
+      **See it:** `cargo test -p orbs-sim --test scripting_the_siege a_spell_can_walk`
+      — a spell that walks the arsenal, finds what is thin, and acts on it.
+- [x] **Docs** (`0.11.14`). Audited item by item rather than assumed, and **three
+      of the six were already done** by the steps that earned them — the three
+      supersessions, the `CAPACITY = 1` answer and the withdrawn arsenal are all
+      in §19's Renown entry, and SEEING-IT gained its *Renown* section at
+      `0.11.11`. What was actually missing:
+      - **The fourth renumber had no §19 entry**, while ROADMAP's own preamble
+        asserted *"§19 records that the scheme has now been bent four times"* —
+        and it recorded three. Renown's insertion at 11 pushed
+        tower-as-one-machine → 12, breadth/remote/engine → 13a/b/c, onboarding →
+        14, ship → 15. Written now, highest-first, with the historical tables
+        left on their own numbers.
+      - **§11.5's resource table was two rows short**, not one: **Renown**, and
+        **Stores** — the arsenal's rate, which is a resource consumed by *time*
+        and by nothing else.
+      - **§19 said the arsenal cap had shipped, and it never did.** `stock::give`
+        is a bare `saturating_add` and always was. A wrong tense in a decisions
+        log cost an independent reviewer a false defect report; it is struck, and
+        the cap is now superseded rather than pending.
+      **See it:** `grep -c "bent four times" docs/ROADMAP.md` and
+      `grep -n "moved a fourth time" docs/DESIGN.md` now agree; §11.5's table has
+      nine rows; and the struck cap says what replaced it.
 
 ---
 
@@ -4334,7 +4488,191 @@ tube strike cut twice.
 
 ---
 
-## Phase 12 — The tower as one machine
+## The orb's menu
+
+**Exit:** a player can leave a game, start another at a different length, and
+come back to the first, unharmed.
+
+**The curve was calibrated to one loop, not a tower.** The Ley Line tops out at
+10,000 experience — roughly five thousand hand-played commands, which is
+genuinely reachable by typing. That makes playing manually barely worse than
+automating, and undercuts pillar 3: *automation is progression*. A tower you can
+finish by hand is a tower that never has to teach you to write a spell.
+
+So **a game has a length, chosen once when it begins** — and the place to choose
+it is a screen the orb has never had.
+
+> **The head is anchored and the tail is stretched.** A flat multiplier would
+> break the thing this exists to serve: `progression.toml` says of the first
+> station that *"the player does the whole loop by hand once, and the reward is
+> not having to do it again"*, and ×6 makes that six hand-brewed clarities before
+> the first spell slot. The stretch ramps quadratically from nothing at a line's
+> first station to its full factor at the last, which also dissolves the
+> room-reveal problem **without a list of exemptions** — a first draft named five
+> stations to protect and three of the five were wrong.
+
+> **The tiers are the curve, not the clock.** Each is defined by what the last
+> station reads, which is a fact; what that costs in hours is for `orbs-balance`
+> to measure. §19 records the tower's automated rate as an open question —
+> *"either the line's top or additivity is wrong"* — and `bound` currently
+> measures **0.0910 against `grind`'s 0.1000**, so automation *costs* 9%
+> throughput and its win is running unattended rather than running faster. A tier
+> defined in hours would be a guess wearing a fact's clothes. **Nothing here
+> settles that question.**
+
+| Tier | Last ley station |
+|---|---|
+| Short | 30,000 |
+| **Medium** (default) | **60,000** |
+| Long | 250,000 |
+
+- [x] **A game has a length** (`0.12.0`) — `Length`, the anchored quadratic ramp,
+      and `Progression::stretched` applied before `check` so the load gate sees
+      the stretched curve. **`earns` is never scaled** — those are the rates, and
+      scaling them cancels the feature exactly while every rate pin still passes,
+      which is the one failure that would go entirely silent. Fifteen prose keys
+      that spelled their counts out in English (*"five potions brewed"*) now
+      interpolate `{count}`, because they are drawn beside a live `3 of 5`
+      counter and at any other length the sentence contradicted the number next
+      to it
+      **See it:** ✅ `ORBS_LENGTH=long ORBS_SEALED=1 ORBS_SAVE=off ORBS_DUMP="weave" cargo run -p orbs`
+      reads 250,000 where baseline reads 10,000; and
+      `ORBS_LENGTH=medium … ORBS_DUMP="debug_reach laboratory_1; attend laboratory"`
+      says *"6 potions brewed"* where baseline says five
+- [x] **The length threads the tower** (`0.12.1`) — the private constructor
+      funnel, `Sim::measured` and `Sim::begun`, `WorldSave.length` and `FORMAT`
+      10 → 11, `ORBS_LENGTH`, and `--length` on `orbs-balance`. **`Sim::restored`
+      is the one that would have shipped broken**: it calls `bare`, which
+      installs the *unpaced* curve, and `save::restore` never touches
+      `Progression` — every save would have loaded back at ×1. **No lint would
+      have caught it**: `persistence.rs`'s completeness check does cover
+      resources, and it did fire for `Length` — but what it asserts is that a
+      resource is *declared* in the document, never that `restore` puts it back,
+      so a `restored` world rebuilt at the wrong length passes it green. **The
+      default splits like
+      `ORBS_SEALED` does**: the game is medium, the dump is baseline, or all 138
+      `dumps.sh` captures move
+      **See it:** ✅ `cargo run -p orbs-balance -- sweep --hours 1 --length long --why`,
+      and a save round-tripped at a length reads the same curve back
+- [x] **The weave reads six figures** (`0.12.2`) — at long the last station is
+      250,000, and the pane drew `121766250000`: two totals run together into a
+      number nobody authored, which is the exact failure the `index % 2` stagger
+      was added to fix one scale earlier. Two rows buy `2 * GAP` = **six cells**,
+      which is five figures and no more, so a **six-figure total abbreviates**
+      (`250k`) rather than staggering a third time. It rounds **up** — a
+      threshold labelled lower than it is would say a station is nearer than it
+      is — and the details pane, `weave_locked` and `weave_bar`'s spoken form all
+      keep the number exact. **Nothing below six figures moves**, so baseline,
+      short and medium draw precisely what they drew and the 138 dump captures
+      hold. The bar and the track now take one `gauge()` rather than two
+      `format!`s that could drift apart and desync the fill from the stations.
+
+      **`along()` needed no length of its own, and the plan had its direction
+      backwards.** `scale` is the denominator, so a longer game moves every
+      station *left*, not right: the first sits at `ln(17)/ln(10001)` = 0.31 of
+      the run at baseline and 0.23 at long. `pack`'s two passes already hold the
+      spacing whatever `along` wants, so the picture was never the problem — the
+      label was. The correction is in `along`'s docs, and it was settled by
+      looking at the pane rather than by arguing
+      **See it:** ✅ `ORBS_LENGTH=long ORBS_SEALED=1 ORBS_SAVE=off ORBS_BOOT=0 ORBS_DUMP="weave" cargo run -p orbs`
+      — every total clear of its neighbour, `0 of 250k` in the gauge; the same
+      line at `baseline` and `medium` is unchanged, cell for cell
+- [x] **`menu` opens the screen, and `quit` asks before it leaves** (`0.12.3`,
+      corrected at `0.12.7`) — **`quit` opened the menu for one iteration and
+      that was wrong.** The argument was `quit`'s own doc: *"the word means leave
+      the thing you are in, whichever thing that is."* What it cost was making
+      **stopping a two-step operation through a screen the player had not asked
+      for**, which is the opposite of what a way out is for. Superseded (§19).
+
+      So `menu` is its own verb — `Verb::ALL` is 46, and its own `Menuing`
+      handshake sits beside the other five — and `quit` leaves. **It asks once
+      first**: `quit` puts the question, another `quit` answers it, and any other
+      command answers *no*. That is the guard the word needs and nothing else in
+      the game does, because it is the only one that cannot be undone, waited out
+      or repeated away, and the tower is written on the way. **A word, not a
+      screen**: a confirmation surface would be one more thing that takes the
+      keyboard, and the one below is why that matters.
+
+      `Focus::Menu` is **first** in the ordering — the way out wins any tie — and
+      takes the pane; the 11.5 crossing came free, because `Showing::of` picks up
+      any pane-taking focus as `Passage::Gather`. **`F10`, `Ctrl-C` and the
+      window's close button still leave outright**, without asking: a key that
+      says *close this window* should.
+      **See it:** ✅ `ORBS_BOOT=0 ORBS_DUMP="menu" cargo run -q -p orbs`, with
+      `ORBS_MENU="resume"` and `ORBS_MENU="zorb"`; and
+      `ORBS_DUMP="quit" ORBS_THEN="quit"` against
+      `ORBS_THEN="status; quit"` — the second leaves, the third asks again. Seven
+      latches in `scripts/dumps.sh`
+- [x] **The menu does not eat the word that opened it** (`0.12.7`) — **a shipped
+      defect, reported by a player and reproduced before it was fixed.** Typing
+      the word appeared to exit the game outright. `type_into_menu` was gated on
+      the menu being open, and **a gated reader keeps its cursor** — so the first
+      time it ran it read whatever `Messages` still held, which on the frame the
+      menu opened was the word that opened it. Typed straight back in, that word
+      reached the menu's own `quit` and wrote an `AppExit`.
+
+      `focus.rs` already states the rule it broke: *"a surface that grabs the
+      keyboard on open eats the player's first keystroke."* The fix is
+      `type_into_line`'s shape — **run always, decline, and clear** — plus an
+      ordering edge putting it *before* `open_requested`, so the opening frame is
+      one the reader has already emptied.
+
+      **The instrument was blind to it and looked stable.** `ORBS_DUMP` builds no
+      `App` and presses no key, so it drew a perfect menu throughout; the four
+      `dumps.sh` latches were green. The gate a keyboard-owning surface actually
+      needs is a test that fires a real `KeyboardInput` at the real plugin stack
+      **See it:** ✅ `cargo test -p orbs --bins opening_the_menu` — it fails on
+      the old ordering and passes on the new
+- [x] **More than one save** (`0.12.4`) — `read_from`/`write_to` beneath the
+      current pair, a `saves()` listing and `free_slot()`. **No `FORMAT` bump**:
+      wizard, seed, tick, length and `away.unix` were all already in the
+      document and only ever read by one caller. Slot 1 **is** `orbs-save.toml`,
+      so nothing migrates; 2–6 sit beside it. Three constraints held —
+      `saves()` reads through a private `load` that **cannot** reach
+      `keep_aside`, so a listing can never rename the files it lists;
+      `ORBS_SAVE=off` and `=<file>` mean exactly what they meant; and there is
+      **no process-global current path**
+      **See it:** ✅ `ORBS_SAVE=/tmp/t/orbs-save.toml ORBS_BOOT=0 ORBS_DUMP="quit" ORBS_MENU="saves" cargo run -q -p orbs`
+      — the towers listed with wizard, length and experience
+- [x] **Swapping the tower safely** (`0.12.5`) — **the dangerous part, and it
+      is one line in one position.** Autosave fires every 60 ticks and on
+      `AppExit` against whatever path it holds, so a swap that replaced the path
+      first would write the tower being *left* into the file of the tower being
+      *opened*. `Kept` makes the path travel **with** the `Sim` and they are
+      replaced together; the outgoing tower is written before anything else
+      moves.
+
+      **The eighteen resources are now one list read twice.** A hand-written
+      reset list would drift, and what it drifts into is invisible: nothing
+      crashes, the screen just describes the wrong tower. `shell_resources!` is
+      registered from and reset from, so adding one does both in the same edit —
+      and the two that survive a swap (`Screen`, the window; `Standing`, the menu
+      doing the asking) are lifted out and put back rather than left off the
+      list. `SimPlugin::build`'s three-way branch was extracted to `raise` rather
+      than written a fourth time, prose is re-applied, and the incoming save is
+      **read before anything is torn down** so one that will not open leaves the
+      player where they were. The terminal build takes the tidier shape the plan
+      wanted: a restart loop rebuilding `Session`, which resets every derived
+      field by construction
+      **See it:** ✅ `cargo test -p orbs --bins menuing` — four tests, and
+      `loading_a_second_tower_writes_the_first_to_its_own_file` is the exit
+      criterion: load a second tower, and the first is still in its own file with
+      its own seed. **That is exactly what autosave would have broken**
+- [x] **A new game, and its length chosen** (`0.12.6`) — the three tiers, offered
+      by prefix. `baseline` is deliberately not among them: it is the numbers we
+      happened to author first rather than a difficulty. Refused *before* the
+      length is asked for when the orb is full, rather than after — asking a
+      question and then discarding the answer is the dead end §15 names
+      **See it:** ✅ `ORBS_SAVE=/tmp/t/orbs-save.toml ORBS_BOOT=0 ORBS_DUMP="quit" ORBS_MENU="new" cargo run -q -p orbs`
+      offers them, and `a_new_game_is_begun_at_the_length_that_was_chosen` reads
+      the length back off the new world's save
+
+---
+
+## The tower as one machine
+
+*Was **Phase 12**, and the prose below still calls it that — as a name, not a
+position. It is not next; nothing is.*
 
 **Exit:** the player leaves, comes back, and the tower ran itself — *across*
 rooms, not in one.
@@ -4343,20 +4681,85 @@ Six rooms is not a series. This is the phase that makes the puzzles compose, and
 it collects two things that are **currently parked in the siege phase and would
 be stranded there** by a mechanical renumber.
 
-- [ ] **A reagent crosses a domain.** It cannot today: `move`'s destination wants
-      a fixture where the player is standing, and the arsenal takes finished work
-      only. §19 parks this with *"Phase 8's pane addressing"* — which is *after*
-      the five domains that need it
-      **See it:** carry a ground-sage from the laboratory to the forge
+> **The web is what this phase is for, and §19 records the research behind it.**
+> The tower counts *runs*, not things, so no bottleneck in the game is denominated
+> in goods and nothing a player makes is ever what they run out of. The order
+> below is not the old order: **pane addressing and slot reservation come first**,
+> because a web that must be routed by hand is an elaborate to-do list, which is
+> the documented way players fall off this genre. And the crossing itself turned
+> out to be **most of the way built** — `keep::admits` already takes
+> `Essence | Scroll` by kind from any room, so potions and scrolls cross today.
+
+- [ ] **The calm layer stops poisoning logs** — §5.1 says the idle layer touches
+      *"environmental only, never scripts, schedules, or logs"* and
+      `sabotage::drift` targets `With<Log>` unguarded in the tick schedule. It
+      does not heal, either: the settling path only restores `Substituted` nodes,
+      so a poisoned log stays poisoned, and `drift`'s own comment records
+      saturation at ~1500 unattended ticks.
+      **This phase's exit is "leave, come back, and the tower ran itself"**, and a
+      tower that lies in every log after twenty-five minutes away fails it by
+      construction. Guard it to the siege, or give it the decay `substitution`
+      already has. §19 has the five tests and which two fail
+      **See it:** `ORBS_BOOT=0 ORBS_DUMP="meditate 1800; peruse laboratory.log"` —
+      a fresh tower, half an hour alone, and nothing in the log is a lie
+- [ ] **`stillness` and `vigour` can be spent** — two rows in `siege.toml` and the
+      lint that stops it recurring. Both are real potions, gated and prosed, with
+      **out-degree zero**: `defend::spending` refuses any name it has no entry
+      for, and no other system in the game reads a potion at all. Phase 9 noted
+      they *"have no sink at all and say so"*; what it did not say is that nothing
+      else could ever spend them
+      **See it:** `debug_spawn stillness 1; attend bailey; defend; quaff stillness`
+      — and `every_potion_the_alembic_makes_can_be_spent`, which is
+      `every_scroll_the_lectern_makes_can_be_spent` one file over and is why the
+      scrolls never had this problem
+- [ ] Pane addressing — acting on a domain you are not standing in. **First, not
+      fourth** (§19)
+      **See it:** start a grind from the archive
 - [ ] **Focus-slot reservation**, which is the *same* roadmap item as pane
       addressing and moves with it. `CAPACITY = 1` is tower-wide, so this phase's
       exit is unreachable by construction until it rises
       **See it:** two rooms working at once, and the sidebar accounting for both
-- [ ] Pane addressing — acting on a domain you are not standing in
-      **See it:** start a grind from the archive
+- [ ] **A made good crosses and another room consumes it.** No new `NounKind`, no
+      content file and no save migration — a `warding` essence already reaches the
+      sanctum through the arsenal; what is new is the `pylon` having a recipe that
+      takes it (Phase 9). A ward set in one **holds** after the course ends
+      **See it:** carry a `warding` to the sanctum and set a ward that outlives
+      its course
+- [ ] **The player can see a bottleneck.** No surface in the game shows a rate or
+      a blocker — but the limiting factor is **already computed and discarded**:
+      `Blocked::{Instrument, Slot}` carries the blocker's name and state and is
+      emitted once as a log line, and `State::Gathering` already knows its missing
+      input. One defect rides with it: `brief::busiest` is
+      `.find(is_busy).or_else(first)` over `Working | Scouring | Burning`, so a
+      laboratory with a fouled alembic and a cold athanor draws as
+      `laboratory / idle` — **the rail is most silent exactly when a room is
+      stalled**
+      **See it:** `status rates` — every room's goods a tick, and a stalled room
+      names what it is waiting on. *(Bare, not `--rates`: the parser has no flag
+      syntax, which already forced `verify --all` to be respelled.)*
+- [ ] **One good, two consumers, three answers — the phase's real exit.** A
+      `warding` potion is worth a siege round *or* a ward that holds, never both,
+      and the shortage is answerable three ways: brew more (spend the slot), a
+      `fruitful` alembic (spend quintessence), or garrison the wall with a troop
+      (spend a chant). Quintessence spent on the charm is quintessence not pledged
+      to dice, so **the new bottleneck plugs into the one the game already has**
+      rather than standing beside it
+      **See it:** `orbs-balance` reads a policy that routes potions by which of
+      the two is lower
 - [ ] **The edges between domains, authored deliberately** — laboratory → lens,
       archive → grimoire, forge → laboratory, menagerie → sanctum
       **See it:** `recall` a domain and read what feeds it and what it feeds
+- [ ] **The web and §9's pane synergies are reconciled** — a §19 entry, not code.
+      §9 authors standing cross-domain effects from co-presence and this phase
+      defers all 21 pairs; *"forge beside the sanctum auto-repairs wards"* is an
+      edge the web also draws. **A pair must not be paid twice**
+      **See it:** the §19 entry names which mechanism owns which pair
+- [ ] **A domain's floor is still free** — the reachability test. Rate is the
+      wrong instrument: only nine of eleven policies pin, `TOLERANCE` is 10%,
+      `drive::run` uses the *open* tower, and a Mastery station that comes to
+      require a bought ceiling gates progression while every rate holds still
+      **See it:** `cargo test -p orbs-sim --test floors` — every Mastery line
+      walked to its last station with no good ever crossing a room
 - [ ] One spell that runs the whole tower
       **See it:** bind it, walk away for an hour, come back to work done in four
       rooms
@@ -4364,6 +4767,13 @@ be stranded there** by a mechanical renumber.
 **Scarcity: the slot, finally contested.** Every domain has been spending one
 slot alone; this is the phase where they compete for it, which is what §5.0 means
 by *"the economy and the focus system are the same system"*.
+
+> **Reagent crossing is deliberately *not* here.** Two drafts made `ground-salt`
+> the contested good and this phase's exit; `rock-salt` is `Holding::endless`, so
+> the shortage cannot exist, and the relief route costs two more grinds than it
+> saves. It returns as texture once made goods have proved the shape, and its rule
+> is **derived** — a good is a material another domain's recipe consumes — never a
+> list of names in a file, which is the judgement `keep::admits` refuses (§19).
 
 ---
 
@@ -4575,7 +4985,9 @@ the table is.
 store nothing drew from; this is the phase where six rooms' output becomes a
 decision under known risk.
 
-## Phase 13a — Breadth
+## Breadth
+
+*Was **Phase 13a**.*
 
 - [ ] All 7 domains
       **See it:** run a tower where every branch of the tree does something
@@ -4597,12 +5009,58 @@ decision under known risk.
       **See it:** return after a long absence to scripts that have gone subtly wrong
 - [ ] Offline progression + its unlock
       **See it:** quit, come back tomorrow, and read what happened while you were out
-- [ ] Shared-engine extraction (deferred here deliberately — the generalisation
-      axis is only knowable from the second consumer)
-      **See it:** the game plays identically before and after — this one is a
-      refactor, and its gate is that nothing changes
+> **~~Shared-engine extraction~~ — moved to Phase 9, not done.** It was written
+> *twice*, here and there, with contradictory gates: Phase 9's asked for *"one
+> recipe table drives two domains"* — new behaviour — and this one for *"the game
+> plays identically before and after."* Phase 9 now carries both halves as two
+> boxes, a refactor whose gate is that nothing changes and a behaviour box beside
+> it, because merging them makes the refactor unverifiable. No box is ticked by
+> this move; the work is open, one phase earlier. §19
 
-## Phase 13b — Remote hosts
+- [ ] **The arsenal is typed on more than one axis.** Every item resolves to a
+      global scalar today, so the only question is which number is largest —
+      which is how `clarity` became *"strictly the best thing in the arsenal…
+      which collapses the decision this whole file exists to create."* An optional
+      `area` on an arsenal row scopes it to the wall the siege already types:
+      `warding` to the buckler, `mending` to the succour, a troop to the line or
+      sortie. **Repricing cannot fix a one-axis system** — some number is always
+      largest — and this is the fix that does not nerf anything (§19)
+      **See it:** `defend` until the telegraph reads `volley`, then spend a
+      `Line`-scoped item — refused, because *"a volley cannot be answered."* Not
+      `warding`: the buckler is *"the only area that is never wasted"*
+- [ ] **A settled siege drops a `sigil`, and the lens reads it.** The one new
+      material in the whole web. Reading it writes trait knowledge to
+      `lens/observed/`, which §5.2 already designs, and that names the next
+      siege's telegraph before it lands — so fighting compounds rather than merely
+      paying, and **the laboratory stops being a cut vertex**
+      **See it:** fight one to a settlement, then `peruse lens/observed/<name>` —
+      `peruse`, not `cat`; there is no `cat` verb
+- [ ] **Garrison upkeep, and the driver change it cannot ship without.** A troop
+      spent per round is what gives the menagerie's *rate* a reason to exist.
+      It answers the perishable arsenal's first objection — a decrement is not a
+      timestamp, and `Stock::Counted` supports it — and **inherits the fourth
+      verbatim**: *"it would have starved the `besieging` balance policy, which
+      stocks once at setup."* That pin is the most fragile number in the table.
+      The penalty is escrow fraction and garrison strength, **never integrity**,
+      per §11.5 invariant 5
+      **See it:** `orbs-balance -- sweep --policy besieging --why` still additive
+- [ ] **The durations spread.** §11.5 authors four classes across 0–600 ticks and
+      the shipped recipes run 6–56 — this document already calls that *"the number
+      to attack."* Domains on different clocks is what lets the ten-minute player
+      and the overnight player optimise different rooms rather than the same room
+      more slowly. A tuning pass, not a design change
+      **See it:** `orbs-balance -- sweep --hours 1 --why` across every policy, with
+      the archive's loop and the laboratory's an order of magnitude apart
+- [ ] **The Ley Line keeps offering choices past its last station.** The forks
+      stop at `at = 10000` and the weave then draws a full bar and a climbing
+      number. Twenty-five Mastery stations sit outside the cap so the plateau is
+      real rather than a wall — what ends is *choice*. Repeating the three lanes
+      at widening intervals answers it with no new system
+      **See it:** pass the last authored station and be offered a fork anyway
+
+## Remote hosts
+
+*Was **Phase 13b**.*
 
 - [ ] Host filesystems, verbs, infiltration
       **See it:** `connect` somewhere hostile and navigate a tree that is not yours
@@ -4611,7 +5069,9 @@ decision under known risk.
 - [ ] Ship-quality `orbs-tui` *if the schedule allows* — **cut-line item 3**
       **See it:** play a full session in a terminal and miss only the tube
 
-## Phase 13c — Engine upgrade
+## Engine upgrade
+
+*Was **Phase 13c**.*
 
 - [ ] Bevy version window, isolated from new-system work
       **See it:** the game boots, draws, and plays identically on the new version
@@ -4620,7 +5080,9 @@ decision under known risk.
 
 ---
 
-## Phase 14 — Onboarding + demo
+## Onboarding + demo
+
+*Was **Phase 14**, and much of the file defers to it by that name.*
 
 - [ ] Diegetic apprenticeship, polished
       **See it:** a non-terminal player reaches hour two unaided, watched
@@ -4634,7 +5096,9 @@ decision under known risk.
 - [ ] Wishlist target set; revisit the $4 price against actual content volume
       **See it:** a real session's length checked against the price
 
-## Phase 15 — Ship
+## Ship
+
+*Was **Phase 15**, and much of the file defers to it by that name.*
 
 - [ ] **Colour-vision filters and a real monochrome mode** — ⚠ **this item now
       carries a promise that used to be carried by a theme.** §4's monochrome
@@ -4755,6 +5219,25 @@ content item, never all of it true — move it here.
       *curve* rather than a value, and a curve is swept rather than felt.
       **See it:** produce hard for an hour and watch the nuisance rate climb,
       then stop and watch it settle — the dial moving in both directions
+
+- [ ] **`orbs-balance` learns to see goods, one edge at a time.** The harness
+      measures **experience a tick** and the whole of §19's dependency web moves
+      **goods** — so the instrument is currently blind to the economy the web
+      builds, and the blindness looks exactly like stability, which is the failure
+      CLAUDE.md already records for a domain shipped without a block in
+      `scripts/dumps.sh`.
+
+      It belongs here rather than in Phase 12 because it accretes: a goods-a-tick
+      readout is one change, but *a policy per edge* is not a thing that finishes
+      — every edge that ships brings one, and there is no state in which the last
+      edge has shipped. The same argument the upgrade tree makes above.
+
+      **The two are different questions and both are needed.** A rate says whether
+      a room produces; a *balance* says whether the room downstream is starving.
+      §19's exit for Phase 12 — one good, two consumers, three answers — cannot be
+      read off an experience rate at all.
+      **See it:** `cargo run -p orbs-balance -- sweep --why` with a goods column
+      beside the experience one, and a consumer that runs dry named in it
 
 - [ ] **Scrappy `orbs-tui` is a little more true with each frontend change.**
       Moved here when Phase 1 closed. It is a **dev tool, not a product** — §15

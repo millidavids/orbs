@@ -210,6 +210,39 @@ pub(super) fn settle(world: &mut World, rampart: Entity, outcome: Outcome) {
         })
         .finish();
 
+    // **What the whole fight did to the tower's standing** (§11.5, §19), said
+    // once and after the siege's own sentence.
+    //
+    // **Once, rather than per round.** The rounds moved renown quietly — a
+    // round is elected and narrates itself, so `renown::lose`'s sentence would
+    // be a second telling thirteen times over. But silence *and* no summary
+    // would leave the gauge as the only signal, and `gauges::split` drops both
+    // gauge rows on a short or narrow pane — so a player in a small terminal,
+    // and anyone reading §14's linear stream, would watch standing move with
+    // nothing said at all. This is the one record that answers *what did that
+    // fight cost me*, and it is what `peruse bailey.log` finds afterwards.
+    //
+    // **Measured from what the tower was worth when the enemy arrived**, not
+    // from what it was worth a line ago — `Siege::standing` is the opening
+    // snapshot, so this reports the rounds *and* the outcome as one number. A
+    // reading taken here would say only what the stake did and quietly omit
+    // everything the exchanges cost, which is exactly the half a player wants
+    // explained when a title has just gone.
+    let before = world.get::<Siege>(rampart).and_then(|siege| siege.standing);
+    let stake = siege::renown_stake(arrived, completion, outcome);
+    match outcome {
+        Outcome::Held => tower::renown::earn(world, stake),
+        Outcome::Fallen => tower::renown::slip(world, stake),
+    }
+    // **No snapshot, nothing said.** A siege carried over from a save written
+    // before the snapshot existed has nothing to measure from, and nought is not
+    // a safe stand-in: `now - 0` is the tower's *whole total*, so a lost fight
+    // would be announced as having won every renown the player has, in the
+    // winning voice. Silence is the honest answer to a question with no data.
+    if let Some(before) = before {
+        standing(world, before);
+    }
+
     // **After the sentence about the siege, never before it**, which is the
     // order every other seam keeps and `done` documents: the wall holds, *and
     // then* the sanctum's line advances and the forge learns a charm. Counted
@@ -229,4 +262,46 @@ pub(super) fn settle(world: &mut World, rampart: Entity, outcome: Outcome) {
     // is where a postmortem is read anyway. **A finished siege also leaves the
     // board up**, deliberately: the last thing that happened is what a player
     // wants to see, and `defend` clears it.
+}
+
+/// Say what the whole fight did to the tower's standing, measured from `before`.
+///
+/// **One record for the siege, not one per round.** The rounds move renown
+/// quietly — see `renown::slip` — so this is the only thing that says the
+/// movement happened, which is what §6 needs and what a screen reader gets.
+///
+/// **Measured rather than accumulated**, because a total read at both ends
+/// cannot fall out of step with what the rounds actually did: no running sum to
+/// carry on the `Siege`, nothing to save, and the saturating floor is included
+/// for free — a tower that could only fall to nought reports the fall it took,
+/// not the one it was owed.
+///
+/// **Silent when nothing moved**, which is a real case: an unpledged fight that
+/// trades evenly every round and is then lost at a completion the stake rounds
+/// away comes to nought, and `a_move_of_nought_says_nothing` is the rule one
+/// file over.
+fn standing(world: &mut World, before: u64) {
+    let now = world.resource::<tower::Renown>().get();
+    let (key, moved, role) = match now.cmp(&before) {
+        std::cmp::Ordering::Greater => ("siege_standing_won", now - before, Role::Success),
+        std::cmp::Ordering::Less => ("siege_standing_lost", before - now, Role::Danger),
+        std::cmp::Ordering::Equal => return,
+    };
+    let message = world.resource::<Prose>().line(
+        key,
+        &[
+            ("quantity", &moved.to_string()),
+            ("count", &now.to_string()),
+        ],
+    );
+    world
+        .resource_mut::<Scrollback>()
+        .records_mut()
+        .push(RecordKind::Completion)
+        .text(FieldName::Name, "renown")
+        .text(FieldName::Source, RAMPART)
+        .count(FieldName::Quantity, moved)
+        .text(FieldName::Message, &message)
+        .role(role)
+        .finish();
 }

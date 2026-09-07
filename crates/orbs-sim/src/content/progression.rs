@@ -186,6 +186,84 @@ impl Default for Progression {
 }
 
 impl Progression {
+    /// This curve, stretched to `length`.
+    ///
+    /// # What moves and what does not
+    ///
+    /// **Thresholds move; rates do not.** `ley_line`'s and `renown`'s `at`, and
+    /// the counts inside each mastery `done`, are stretched by their index on
+    /// their own line. [`earns`](Self::earns) is left **exactly** as authored —
+    /// it is what a run is *worth*, so stretching it alongside the thresholds
+    /// would multiply both sides of the same fraction and cancel the whole
+    /// feature, while every rate `orbs-balance` pins would still pass. That is
+    /// the failure this method is most likely to be broken by, so a test asserts
+    /// `earns` is identical before and after.
+    ///
+    /// # Each line is indexed on its own
+    ///
+    /// Mastery is seven lines, not one, and a station's ramp is its position on
+    /// **its own room's line** — so every room's first station is unchanged and
+    /// every room opens on the schedule it opens on now. Indexing the flat file
+    /// order instead would put the menagerie's first deed a third of the way up
+    /// the ramp for no reason a player could see.
+    ///
+    /// Applied before `check`, whose `ascends` gate every length survives: a
+    /// strictly increasing sequence times a non-decreasing positive one is
+    /// strictly increasing.
+    #[must_use]
+    pub fn stretched(self, length: crate::content::Length) -> Self {
+        let ley = self.ley_line.len();
+        let ranks = self.renown.len();
+        // How many stations each room's line holds, so a milestone can be ramped
+        // against its own line rather than against the file.
+        let mut lines: BTreeMap<&str, usize> = BTreeMap::new();
+        for stone in &self.mastery {
+            *lines.entry(stone.domain.as_str()).or_default() += 1;
+        }
+        let mut seen: BTreeMap<&str, usize> = BTreeMap::new();
+        let mastery = self
+            .mastery
+            .iter()
+            .map(|stone| {
+                let count = lines.get(stone.domain.as_str()).copied().unwrap_or(1);
+                let index = seen.entry(stone.domain.as_str()).or_default();
+                let stretched = Milestone {
+                    domain: stone.domain.clone(),
+                    id: stone.id.clone(),
+                    done: stone.done.stretched(length, *index, count),
+                    opens: stone.opens.clone(),
+                };
+                *index += 1;
+                stretched
+            })
+            .collect();
+
+        Self {
+            earns: self.earns,
+            ley_line: self
+                .ley_line
+                .iter()
+                .enumerate()
+                .map(|(index, station)| Station {
+                    at: length.stretch(station.at, index, ley),
+                    grants: station.grants.clone(),
+                    nodes: station.nodes.clone(),
+                    opens: station.opens.clone(),
+                })
+                .collect(),
+            mastery,
+            renown: self
+                .renown
+                .iter()
+                .enumerate()
+                .map(|(index, rank)| Rank {
+                    at: length.stretch(rank.at, index, ranks),
+                    id: rank.id.clone(),
+                })
+                .collect(),
+        }
+    }
+
     /// The curve compiled into the binary.
     ///
     /// # Panics

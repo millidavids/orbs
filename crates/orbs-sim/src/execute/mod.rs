@@ -103,7 +103,7 @@ pub use sing::{Chorusing, Patient, TROOP};
 // ask the same question `wield` asks, or a scripted spend is charged a
 // production slot the typed one is not.
 pub use audit::land_sweep;
-pub use quit::Quitting;
+pub use quit::{Menuing, Quitting};
 pub(crate) use scroll::spending;
 pub use scry::land as land_probe;
 pub use unfurl::Unfurling;

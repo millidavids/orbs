@@ -129,8 +129,18 @@ impl Run {
 /// `every` is the sampling interval. A row is always emitted for tick 0 and for
 /// the final tick, so a curve is never empty and its ends are always exact.
 #[must_use]
-pub fn run(policy: Policy, seed: u64, ticks: u64, every: u64) -> Run {
-    let mut sim = Sim::new(seed);
+pub fn run(
+    policy: Policy,
+    seed: u64,
+    ticks: u64,
+    every: u64,
+    length: orbs_sim::content::Length,
+) -> Run {
+    // **An open tower at the asked-for length.** `Sim::begun` is a *game* and is
+    // sealed, which would shut every room a policy needs; what the harness wants
+    // is the open tower it has always measured, with the curve a player would
+    // actually be climbing.
+    let mut sim = Sim::measured(seed, length);
     let mut samples = vec![sample(&sim)];
 
     for line in policy.setup {
@@ -455,6 +465,14 @@ const OPENING: [&str; 4] = ["nitre", "alum", "borax", "quartz"];
 struct Fighting {
     /// The round a spend has already been made on, so the ladder runs once.
     spent_on: usize,
+    /// The round the arsenal was last topped up on.
+    ///
+    /// **Separate from [`spent_on`](Self::spent_on), and it has to be.** A
+    /// restock sharing the spend marker *consumes* the round's one command, so
+    /// the ladder never evaluated on a restock round — with a cadence of four
+    /// and two names to buy, that was over half of all rounds spent shopping
+    /// instead of fighting, in the policy whose whole job is to measure fighting.
+    restocked_on: usize,
     /// Ticks spent waiting for the road, between sieges.
     idle: usize,
 }
@@ -535,6 +553,17 @@ fn press_one(sim: &mut Sim, sweep: &mut Sweep) {
 /// vocabulary would still compile against `tower::pylon::STATIONS` — the same
 /// reason `SOCKETS` above is written out.
 const STATIONS: [&str; 3] = ["wellspring", "conduit", "barrier"];
+
+/// How often the besieging driver puts more in the arsenal, in rounds.
+///
+/// **Stores are a rate, so an arsenal has to be kept rather than filled.** One
+/// restock every four rounds, alternating between the two names it spends, so
+/// each is bought every eight — well inside `tower::WINDOW` at a siege's pace,
+/// and one extra tick per four rather than one per two.
+///
+/// A player automating this would bind a brewing spell; this is the cheapest
+/// thing that models one without dragging the laboratory into a bailey number.
+const RESTOCK_EVERY: usize = 4;
 
 /// One turn of the cyclic solution, or a fresh course when none is drawn.
 ///
@@ -682,6 +711,37 @@ fn fight_one(sim: &mut Sim, state: &mut Fighting) {
     // policy that silently stopped using its arsenal is the exact failure the
     // counter was added to prevent.
     let round = usize::try_from(board.turns).unwrap_or(0) + 1;
+
+    // **The top-up, and it is deliberately *outside* the spend budget** (§19).
+    // Stores are a rate now, so an arsenal stocked once at setup goes thin and
+    // then out, and this policy would spend the rest of its 7,200 ticks being
+    // refused — the rate-of-nought collapse the setup comment above records.
+    //
+    // **It does not mark `spent_on`**, because a restock is not the round's
+    // move: sharing the marker meant the ladder never evaluated on a restock
+    // round, and at this cadence that was more than half of all rounds spent
+    // shopping in the policy whose whole job is to measure fighting.
+    //
+    // **`debug_spawn` rather than learning to brew**, which is the point rather
+    // than a shortcut: this column measures *"the bailey, fought as the shipped
+    // decision tree fights it"*, and `debug_spawn` is deliberately *"the arsenal
+    // a player would have brewed"*. A rung that left for the laboratory would
+    // make the number a blend of two domains and the pinned rate meaningless.
+    if state.restocked_on != round && round.is_multiple_of(RESTOCK_EVERY) {
+        state.restocked_on = round;
+        // **Alternating, because the driver issues one command a tick.** Both
+        // names have to stay inside `tower::WINDOW`, and buying them on
+        // consecutive rounds would take two turns out of every cadence instead
+        // of one.
+        let name = if (round / RESTOCK_EVERY).is_multiple_of(2) {
+            "debug_spawn troop 2"
+        } else {
+            "debug_spawn warding 2"
+        };
+        issue(sim, name);
+        return;
+    }
+
     if state.spent_on == round {
         issue(sim, "hold");
         return;

@@ -54,6 +54,23 @@ pub(crate) struct ContentWatch {
     prose: PathBuf,
 }
 
+/// Put `ORBS_CONTENT`'s prose into a tower that has just been built.
+///
+/// **Called again whenever a tower is**, which is the whole reason it is a
+/// function. `install` loads the file once at App-build time and the *watcher*
+/// keeps that tower current — but a `Sim` swapped in from the menu is a new
+/// world holding the built-in text, and without this a writer with `ORBS_CONTENT`
+/// set would load a save and silently get the shipped prose back until they next
+/// touched the file.
+pub(crate) fn apply(tower: &mut Tower) {
+    let Some(dir) = std::env::var_os(CONTENT_DIR).map(PathBuf::from) else {
+        return;
+    };
+    if let Some(loaded) = read(&dir.join(PROSE)) {
+        tower.set_prose(loaded);
+    }
+}
+
 /// Install the watcher, if `ORBS_CONTENT` names a readable directory.
 ///
 /// Failure is always a warning and never fatal — a missing or unreadable

@@ -107,7 +107,7 @@ pub fn paint(painter: &mut Painter<'_>, area: Rect, line: &Line, prose: &Prose) 
     });
     let sentence = line
         .next()
-        .map(|next| prose.line(&format!("mastery_{}", next.id), &[]));
+        .map(|next| prose.counted(&format!("mastery_{}", next.id), next.needed));
     let candidates: [Option<String>; 3] = [
         match (&sentence, &count) {
             (Some(sentence), Some(count)) => Some(format!("{sentence}{SEP}{count}")),

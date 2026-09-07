@@ -12,10 +12,11 @@ enemy attacks the automation.
 Artless by design. No sprites, no characters, no illustrations. A single curved
 CRT glowing in the dark.
 
-**Status: Phases 0, 0.5, 1, 2, 4, 5 and 8 closed; Phase 3 met on its exit with
-three boxes deliberately left. Phase 9 (Enchanting) is met on three of its four
-boxes — the shared-engine extraction is the one left. Phase 10 (Progression)
-closed at `0.10.6`; Phase 11 (the tower as one machine) remains.** The determinism spine, the Frame boundary, the parser, the
+**Status: Phases 0, 0.5, 1, 2, 4, 5, 8, 10, 11 and 11.5 closed; Phase 3 met on
+its exit with three boxes deliberately left. Phase 9 (Enchanting) is met on three
+of its five boxes — the shared-engine extraction, split into a refactor and a
+behaviour box, is what is left. Renown closed at `0.11.14` and the interlude at
+`0.11.10`. `0.12` — the orb's menu — is in hand.** The determinism spine, the Frame boundary, the parser, the
 cell renderer, brewing, the archive, the lens, the sanctum, the menagerie, the
 bailey, the forge, the tower rail, the balance harness, the spell engine and its
 scripting language are built and the game plays.
@@ -27,21 +28,25 @@ the mastery lines — so the rail's dark boxes are back for exactly the rooms
 §11.5's breadth track always promised. `ORBS_SEALED=1` shows a dump the sealed
 start.
 
-**The phases were renumbered so the version could keep climbing** (§19), four
-times now. Enchanting was Phase 6 and is **Phase 9**; **Progression is 10** (the
-Ley Line, Mastery, and the tower that opens as you work); **Renown is 11** (the
-second number, and a reason to keep making things after the Ley Line stops
-buying); the tower-as-one-machine is **12**, breadth/remote/engine are
-**13a/13b/13c**, onboarding is **14** and ship is **15**. Phases 0–5, 8, 9 and
-10 did not move — they are closed or tagged and their tags mean what they meant.
+**The phases stopped being an order, and the version stopped naming them** (§19).
+ROADMAP.md is a **list of items**: an item is open, or it is done and carries the
+phase name it was done under. Nothing in it claims to come next.
 
-**The scheme has now been bent four times for this.** `0.<phase>.<step>` assumes
-phases are built in order and four times they have not been. §19 records the
-alternative — a minor that counts phases *closed* rather than naming the phase —
-and that it is **still undecided and now overdue**: the third renumber's own note
-said a fourth phase out of turn should settle the scheme instead, and the fourth
-renumbered anyway. Each has been cheap only because none of the moved phases
-carried a tag, and that luck is not a plan.
+> **The minor names the large feature in hand. The patch is an iteration within
+> it. `1.0` is the release on Steam.**
+
+**Only the referent changed.** The numbers were already doing this — Renown was
+minor `11` and its steps were patches `0`–`14` — so no tag moved and no history
+was rewritten. What the minor stopped being is a *phase index*, which is the part
+that could not survive work taken out of turn: `0.<phase>.<step>` assumed phases
+were built in sequence, four times they were not, and each renumber cost a
+document-wide pass to keep a promise the numbers could not keep. **`0.12` is the
+orb's menu**, not "Phase 12".
+
+**Phase numbers survive as names**, not as positions. *"Waits on Breadth's
+offline catch-up"* says which body of work and nothing about what comes first.
+The historical renumber tables in §19 are never edited — a replace-all corrupted
+two of them once, and there is no fifth pass to run.
 
 **A renumber is done highest-first, always.** A mechanical pass that moved a
 lower number first collided two phases into one, and a replace-all once corrupted
@@ -69,10 +74,11 @@ from Phase 2 down, and then moved again for Enchanting and everything above it;
 DESIGN.md §19 records both shifts.
 
 **Defense and Enchanting swapped** (§19), and then Enchanting moved again.
-Nothing in defense depended on either derived domain, and the version is
-`0.<phase>.<step>` and drawn on the POST card — so building the later phase first
-would have made a tester's version number go backwards. It did anyway, when the
-siege shipped ahead of the forge, which is what the second renumber above fixes.
+Nothing in defense depended on either derived domain, and the version was
+`0.<phase>.<step>` and is drawn on the POST card — so building the later phase
+first would have made a tester's version number go backwards. It did anyway, when
+the siege shipped ahead of the forge, which is what the second renumber fixed.
+**That whole hazard is retired**: a minor that names a feature never has to move.
 
 **The design is authoritative and lives in [docs/DESIGN.md](docs/DESIGN.md)** —
 ~2,000 lines, eight drafts, four independent staff-level reviews. Read it before
@@ -91,7 +97,8 @@ such.
 ## Technology Stack
 
 - **Rust**, edition 2024, pinned toolchain
-- **Bevy `=0.19.0`** — exact pin, upgraded deliberately (one window in Phase 12c)
+- **Bevy `=0.19.0`** — exact pin, upgraded deliberately (one window, in *Engine
+  upgrade*)
 - `serde` + `toml` (readable saves), `rand` 0.9 (seeded), `thiserror`, `tracing`,
   `clap` (harness), `bevy-steamworks`
 - **No `bevy_text` / `bevy_ui`.** Every screen is terminal content rendered by our
@@ -274,16 +281,18 @@ action rather than three:
 2. The workspace version in [Cargo.toml](Cargo.toml) is bumped.
 3. Anything decided along the way is in DESIGN.md §19.
 
-**The version is `0.<phase>.<step>` until release** — it tracks the roadmap, not
-a public API, because there is no public API: every crate here is consumed only
-by this workspace, so semver has nothing to describe yet. Completing a *step*
-bumps the patch; completing a *phase* bumps the minor and resets the patch to
-zero. DESIGN.md §19 records the rest, including that Phase 0.5 gets no minor of
-its own and that the switch to ordinary semver at 1.0 is one-way.
+**The version is `0.<feature>.<iteration>` until release** — it tracks the work,
+not a public API, because there is no public API: every crate here is consumed
+only by this workspace, so semver has nothing to describe yet. **The minor names
+the large feature in hand and is chosen when that work begins**, not derived from
+a count; **the patch is a box going from `[ ]` to `[x]` within it.** DESIGN.md
+§15 has the table and §19 the decision, including that historical minors `0.0`–
+`0.11` named phases and are never retagged, and that the switch to ordinary
+semver at 1.0 is one-way.
 
 ```toml
 [workspace.package]
-version = "0.1.8"     # phase 1, step 8
+version = "0.12.3"    # the orb's menu, third iteration
 ```
 
 All five crates inherit it (`version.workspace = true`), so there is exactly one
@@ -295,9 +304,9 @@ report — so a stale version is a bug report pointing at the wrong build.
 ORBS_DUMP=1 ORBS_BOOT=post cargo run -p orbs | grep 'v0\.'   # see it
 ```
 
-**A correction folded into a step does not advance it.** The `✅` entries under
-Phase 1 are items still being finished, not new steps; they bump nothing. What
-advances the number is a box going from `[ ]` to `[x]`.
+**A correction folded into an item does not advance it.** The `✅` entries under
+Phase 1 are items still being finished, not new iterations; they bump nothing.
+What advances the number is a box going from `[ ]` to `[x]`.
 
 **Nothing asserts the number**, deliberately — whether an item is *done* is the
 judgement the See-it gate exists to make, and a test pinning it would be pinning

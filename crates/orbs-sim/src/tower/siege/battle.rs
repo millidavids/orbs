@@ -8,8 +8,8 @@ use bevy_ecs::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use super::{
-    AGAINST, ASSIGNED, Area, Band, ENEMY, GARRISON, Intent, Outcome, POOL, Pledge, Round,
-    SORTIE_COST, SORTIE_DEALT, Strengths, THIN, VIGOUR,
+    AGAINST, ASSIGNED, Area, BASE_MOST, Band, ENEMY, FEWEST, GARRISON, Intent, MOST, Outcome, POOL,
+    Pledge, Round, SORTIE_COST, SORTIE_DEALT, Strengths, THIN, VIGOUR,
 };
 use crate::rng::{RngStream, Rngs};
 use crate::tower::dice::{Die, Effect, Landed, Modifier, Roll};
@@ -54,6 +54,33 @@ pub struct Siege {
     pub intent: Intent,
     /// What the enemy arrived with — for the completion fraction.
     pub arrived: u32,
+    /// What the tower's standing was when the enemy came up the road.
+    ///
+    /// **An opening snapshot, exactly as [`arrived`](Self::arrived) is**, and
+    /// for the same reason: the settling sentence has to say what the *fight*
+    /// did, and a fight moves renown in two places. The rounds move it quietly
+    /// as they resolve and the outcome moves it once at the end, so a total read
+    /// only at `settle` would report the stake and silently omit everything the
+    /// exchanges cost — which is the half a player most wants explained when a
+    /// title has just been lost.
+    ///
+    /// Measured against rather than accumulated into, so there is no running sum
+    /// to keep in step with what the rounds actually did, and the saturating
+    /// floor is included for nothing: a tower that could only fall to nought
+    /// reports the fall it took rather than the one it was owed.
+    ///
+    /// **`Option`, and a bare `u64` was actively wrong.** A siege already in
+    /// flight in an older save has no snapshot, and nought is not a safe stand-in
+    /// for one: `settle` measures `now - standing`, so a missing snapshot read as
+    /// nought reports the tower's **entire renown total** as the fight's winnings
+    /// — *"they are singing about it: 400 renown"* for a siege that was **lost**,
+    /// at `Role::Success`.
+    ///
+    /// `None` is *this siege predates the snapshot*, and `settle` says nothing
+    /// about standing rather than saying something false. `#[serde(default)]`
+    /// still, so no `FORMAT` bump.
+    #[serde(default)]
+    pub standing: Option<u64>,
     /// What the garrison has ever had, counting reinforcements.
     ///
     /// **The denominator, and without it `hurt` was unreachable.** `Band::wound`
@@ -132,10 +159,30 @@ impl Siege {
     /// is gone with the parameter, and the draws are untouched.
     #[must_use]
     pub fn begin(rngs: &mut Rngs) -> Self {
+        Self::begin_against(rngs, BASE_MOST)
+    }
+
+    /// Open a siege whose enemy may be drawn as large as `most`.
+    ///
+    /// # The parameter that came back, and why it is not the one that left
+    ///
+    /// [`begin`](Self::begin) once took a *pool*, and it was removed so the
+    /// number *"arrived before the two draws below and could not reorder them."*
+    /// This one is different in the way that matters: it is consumed **inside**
+    /// the first draw rather than sitting before it, so it cannot move either
+    /// draw's position in the stream. `begin(rngs)` is still the whole of the
+    /// old behaviour — `BASE_MOST` is nine — so every existing seed is untouched
+    /// and every existing caller is unchanged. §19.
+    ///
+    /// `most` is clamped into [`FEWEST`]..=[`MOST`], so no caller can hand this a
+    /// range that is empty or one that runs past the written ceiling.
+    #[must_use]
+    pub fn begin_against(rngs: &mut Rngs, most: u32) -> Self {
         use rand::Rng;
+        let most = most.clamp(FEWEST, MOST);
         // **Drawn before the intent, and unconditionally.** Order is part of the
         // replay contract: swapping these two would change every existing seed.
-        let enemy = rngs.stream(RngStream::Siege).random_range(5..=9);
+        let enemy = rngs.stream(RngStream::Siege).random_range(FEWEST..=most);
         let intent = Intent::drawn(rngs);
         Self {
             turns: 0,
@@ -143,6 +190,9 @@ impl Siege {
             enemy: Band::new(enemy),
             intent,
             arrived: enemy,
+            // Filled by `defend` from the world, as `edge` is: `begin` is a pure
+            // function of the stream and the tower's standing is not in it.
+            standing: None,
             mustered: ASSIGNED,
             staged: Vec::new(),
             pledges: Vec::new(),

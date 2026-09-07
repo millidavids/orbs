@@ -2,6 +2,7 @@ mod chorusing;
 mod commanding;
 mod editing;
 mod input;
+mod menuing;
 mod motion;
 mod plugin;
 mod reading;
@@ -22,6 +23,7 @@ pub(crate) use orbs_shell::{
 
 pub(crate) use chorusing::Chorus;
 pub(crate) use editing::Editing;
+pub(crate) use menuing::Standing;
 pub use plugin::ShellPlugin;
 pub(crate) use plugin::ShellSystems;
 pub(crate) use wandering::Walk;

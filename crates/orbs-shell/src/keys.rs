@@ -21,6 +21,7 @@ use orbs_sim::Sim;
 use orbs_sim::tower::{Syllable, Way};
 
 use crate::editor::{Editor, Outcome as EditorOutcome};
+use crate::menu::{Menu, Outcome as MenuOutcome};
 use crate::tapestry::{Outcome as WeaveOutcome, Tapestry};
 
 use crate::line::Line;
@@ -214,6 +215,29 @@ fn apply_key(key: &Key, editor: &mut Editor) -> Option<EditorOutcome> {
         // Taken by `apply_to_editor`, which is the only caller — completion
         // needs the `Sim` this table deliberately does not have.
         Key::Tab => None,
+    }
+}
+
+/// One keystroke, to the orb's menu.
+///
+/// See [`apply_to_editor`] for why these live here.
+///
+/// **The arrows do nothing**, and that is the whole difference from
+/// [`apply_to_weave`]: there is nothing on this screen to walk. Every choice is
+/// a word, which is what the rest of the game is.
+pub fn apply_to_menu(key: &Key, menu: &mut Menu) -> Option<MenuOutcome> {
+    match key {
+        Key::Enter => menu.enter(),
+        Key::Escape => menu.escape(),
+        Key::Backspace => {
+            menu.backspace();
+            None
+        }
+        Key::Text(text) => {
+            menu.type_text(text);
+            None
+        }
+        Key::Up | Key::Down | Key::Left | Key::Right | Key::Home | Key::End | Key::Tab => None,
     }
 }
 

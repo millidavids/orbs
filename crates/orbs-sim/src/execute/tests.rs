@@ -171,6 +171,7 @@ fn sample(verb: Verb) -> (&'static str, &'static str) {
         Verb::Invoke => ("tower", "invoke first_light"),
         Verb::Unfurl => ("tower", "unfurl"),
         Verb::Quit => ("tower", "quit"),
+        Verb::Menu => ("tower", "menu"),
         Verb::Weave => ("tower", "weave"),
         Verb::Follow => ("archive", "follow north"),
         Verb::Wander => ("archive", "wander"),
@@ -199,6 +200,7 @@ fn sample(verb: Verb) -> (&'static str, &'static str) {
         // the other three before one has arrived refuse with *"defend first"*,
         // which is the world answering and is what this table asks for.
         Verb::Defend => ("bailey", "defend"),
+        Verb::Petition => ("bailey", "petition"),
         Verb::Deploy => ("bailey", "deploy troop"),
         // **`clarity`, not `mending`.** `mending` is a `secret = true` recipe,
         // so it is not in the vocabulary until the lens spills it — the argument

@@ -70,6 +70,19 @@ struct Span {
     /// not nought — a rate measured through refusals is not the loop you wrote.
     #[arg(long)]
     why: bool,
+    /// How long a game to measure: `baseline`, `short`, `medium` or `long`.
+    ///
+    /// **Baseline unless asked**, which is what every pinned rate in
+    /// `report::EXPECTED` was measured against. The rates themselves do not move
+    /// with length — thresholds are not in the numerator or the denominator — but
+    /// **`concentration` and `renown` do**, and `bound` moves most: it earns its
+    /// first slot by hand before it can bind anything, so a longer game is a
+    /// longer hand-played prefix inside the same tick budget.
+    ///
+    /// Without this flag the shipped game would run a curve the instrument never
+    /// measures, which is the divergence §13 exists to prevent.
+    #[arg(long, default_value = "baseline")]
+    length: String,
 }
 
 impl Span {
@@ -78,6 +91,16 @@ impl Span {
             Some(ticks) => ticks,
             None => self.hours * HOUR,
         }
+    }
+
+    /// The length to measure, or `None` if the word is not one.
+    ///
+    /// **Refused rather than defaulted.** `ORBS_LENGTH` falls through on a typo
+    /// because a player mid-boot has nowhere to be told; a harness has a stderr
+    /// and a person reading it, and a sweep that silently measured the wrong
+    /// curve is the one output nobody would question.
+    fn length(&self) -> Option<orbs_sim::content::Length> {
+        orbs_sim::content::Length::named(&self.length)
     }
 }
 
@@ -103,9 +126,16 @@ fn main() -> ExitCode {
 }
 
 fn sweep(policies: &[Policy], span: &Span) -> ExitCode {
+    let Some(length) = span.length() else {
+        eprintln!(
+            "no length called `{}` — try baseline, short, medium or long",
+            span.length,
+        );
+        return ExitCode::FAILURE;
+    };
     let runs: Vec<_> = policies
         .iter()
-        .map(|policy| drive::run(*policy, span.seed, span.ticks(), span.every))
+        .map(|policy| drive::run(*policy, span.seed, span.ticks(), span.every, length))
         .collect();
 
     print!("{}", report::table(&runs));
@@ -146,6 +176,7 @@ mod tests {
             every: EVERY,
             why: false,
             csv: None,
+            length: "baseline".to_owned(),
         };
         assert_eq!(span.ticks(), 2 * HOUR);
 

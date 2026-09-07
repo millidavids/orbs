@@ -12,7 +12,7 @@
 //! decides only which of them a key reaches.
 
 use crossterm::event::KeyCode;
-use orbs_shell::{Editor, EditorOutcome, Scroll, Tapestry};
+use orbs_shell::{Editor, EditorOutcome, Menu, MenuOutcome, Scroll, Tapestry};
 use orbs_sim::Sim;
 
 /// The surfaces that can hold the keyboard, in the order they take it.
@@ -37,6 +37,33 @@ pub(crate) struct Surfaces {
     pub(crate) walking: bool,
     /// Whether the arrow keys are answering a chant.
     pub(crate) chorusing: bool,
+    /// The orb's menu, if `quit` has opened it.
+    pub(crate) menuing: Option<Menu>,
+    /// Whether the menu asked for the orb to be put down.
+    ///
+    /// **A flag rather than a return value**, unlike every other surface here:
+    /// [`typed`](Self::typed)'s doc says *"nothing is returned because no
+    /// surface can end the session"*, and the menu is the one that can. Changing
+    /// that signature would put an `Option` on five arms that will never fill
+    /// it; `drive` reads this instead, next to the `Quitting` it already reads.
+    pub(crate) leaving: bool,
+    /// A tower the menu asked for, waiting for `drive::run` to build it.
+    ///
+    /// **Raised here and acted on there**, for `leaving`'s reason and one more:
+    /// putting a different `Sim` in front of the player means rebuilding the
+    /// whole `Session`, which is the terminal's answer to the Bevy build's
+    /// eighteen-resource reset — every derived field goes back to its default
+    /// because it is a *new struct*, and none of them can be forgotten.
+    pub(crate) swapping: Option<Swap>,
+}
+
+/// A tower the menu asked for.
+#[derive(Debug, Clone)]
+pub(crate) struct Swap {
+    /// Where it is kept, and where it will be written back.
+    pub(crate) path: std::path::PathBuf,
+    /// The length a *new* tower is to be, or `None` to load what is at `path`.
+    pub(crate) length: Option<orbs_sim::content::Length>,
 }
 
 impl Surfaces {
@@ -52,6 +79,7 @@ impl Surfaces {
             walking: self.walking,
             chorusing: self.chorusing,
             reading: scroll.is_reading(),
+            menuing: self.menuing.is_some(),
         })
     }
 
@@ -93,6 +121,12 @@ impl Surfaces {
         // never does that, which is why this line has no sibling above it.
         if self.chorusing && sim.figure().is_none() {
             self.chorusing = false;
+        }
+        // **`menu`, not `quit`.** The two were one word for an iteration; §19
+        // has why that was superseded. `quit`'s flag is `drive`'s, and it is
+        // only ever set by a *confirmed* one.
+        if self.menuing.is_none() && sim.menuing() {
+            self.menuing = Some(Menu::default());
         }
         if !scroll.is_reading() && sim.unfurling() {
             scroll.read();
@@ -150,9 +184,10 @@ impl Surfaces {
 
     /// Route one keystroke to the surface that owns it.
     ///
-    /// Nothing is returned because no surface can end the session: they all hand
-    /// the keyboard back instead, and leaving the game is the prompt's — which
-    /// is why `Owner::Prompt` is the one arm that does nothing here.
+    /// Nothing is returned because no surface can end the session *here*: five
+    /// of the six hand the keyboard back instead. The menu is the exception and
+    /// it raises [`leaving`](Self::leaving) rather than returning, so five arms
+    /// are not made to carry an `Option` only one of them can ever fill.
     pub(crate) fn typed(
         &mut self,
         owner: Owner,
@@ -164,6 +199,7 @@ impl Surfaces {
             // The prompt is the caller's; it needs the shared key table and the
             // line, neither of which belongs to a surface.
             Owner::Prompt => {}
+            Owner::Menu => self.menu_took(code),
             Owner::Editor => self.editing_took(code, sim),
             Owner::Weave => self.weaving_took(code, sim),
             Owner::Maze => self.maze_took(code, sim),
@@ -172,6 +208,38 @@ impl Surfaces {
             // surface dispatch now, so the only stepping left in here is the
             // arrows, which move one record.
             Owner::Reading => read(code, scroll, sim),
+        }
+    }
+
+    /// One keystroke, to the orb's menu.
+    ///
+    /// Takes no `Sim`: nothing the menu does reaches the world. That is the
+    /// whole of the difference from the four below it, and it is why the menu
+    /// survives a game being swapped out from under it.
+    fn menu_took(&mut self, code: KeyCode) {
+        let Some(menu) = &mut self.menuing else {
+            return;
+        };
+        let Some(key) = crate::drive::as_key(code) else {
+            return;
+        };
+        match orbs_shell::apply_to_menu(&key, menu) {
+            Some(MenuOutcome::Close) => self.menuing = None,
+            // **Raised, not acted on.** Putting the terminal back is `drive`'s —
+            // raw mode is its to undo, and a surface reaching for it would be
+            // the backend leaking into the shared half.
+            Some(MenuOutcome::PutDown) => self.leaving = true,
+            // ...and the same for a swap, which needs a whole new `Session`.
+            Some(MenuOutcome::Load(path)) => {
+                self.swapping = Some(Swap { path, length: None });
+            }
+            Some(MenuOutcome::Begin { path, length }) => {
+                self.swapping = Some(Swap {
+                    path,
+                    length: Some(length),
+                });
+            }
+            None => {}
         }
     }
 
@@ -310,23 +378,29 @@ fn read(code: KeyCode, scroll: &mut Scroll, sim: &Sim) {
 #[cfg(test)]
 mod tests {
     use super::{Owner, Surfaces};
-    use orbs_shell::{Editor, Scroll, Tapestry};
+    use crossterm::event::KeyCode;
+    use orbs_shell::{Editor, Menu, Scroll, Tapestry};
     use orbs_sim::Sim;
 
     /// Build the flags directly, so a state no verb can reach is still asked
     /// about. The point of the sweep below is the *ties*, and a tie is by
     /// definition a state the game is not supposed to be able to produce.
     ///
-    /// **`chorusing` is not a parameter**, and that is deliberate: the ordering
-    /// it takes part in is `orbs_shell::focus`'s and is tested there, against
-    /// every combination. What this file tests is the *dispatch* — that a key
-    /// reaches the surface the owner names — which the four below cover.
+    /// **`chorusing` and `menuing` are not parameters**, and that is deliberate:
+    /// the ordering they take part in is `orbs_shell::focus`'s and is tested
+    /// there, against every combination. What this file tests is the *dispatch*
+    /// — that a key reaches the surface the owner names — which the four below
+    /// cover, and which `the_menu_takes_the_keys_and_leaving_is_a_choice_on_it`
+    /// covers for the fifth.
     fn surfaces(editing: bool, weaving: bool, walking: bool) -> Surfaces {
         Surfaces {
             editing: editing.then(|| Editor::open("t", "laboratory", &[])),
             weaving: weaving.then(Tapestry::default),
             walking,
             chorusing: false,
+            menuing: None,
+            leaving: false,
+            swapping: None,
         }
     }
 
@@ -396,6 +470,43 @@ mod tests {
                 "editing={editing} weaving={weaving} walking={walking} reading={reading}",
             );
         }
+    }
+
+    #[test]
+    fn the_menu_takes_the_keys_and_leaving_is_a_choice_on_it() {
+        // **The one surface that can end the session**, and the one whose keys
+        // never touch the `Sim` — so this is the whole dispatch, with no world.
+        let mut surfaces = surfaces(false, false, false);
+        surfaces.menuing = Some(Menu::default());
+        assert_eq!(
+            surfaces.owner(&scroll(false)),
+            Owner::Menu,
+            "the menu did not take the keyboard from the prompt",
+        );
+
+        // It wins over everything, which is the tie `Focus::of` documents: the
+        // way out is what a player meant.
+        let mut over = self::surfaces(true, true, true);
+        over.menuing = Some(Menu::default());
+        assert_eq!(over.owner(&scroll(true)), Owner::Menu);
+
+        // `resume` gives the keyboard back and leaves nothing behind.
+        let mut scroll = scroll(false);
+        let mut sim = Sim::new(1);
+        for code in "resume".chars().map(KeyCode::Char) {
+            surfaces.typed(Owner::Menu, code, &mut sim, &mut scroll);
+        }
+        surfaces.typed(Owner::Menu, KeyCode::Enter, &mut sim, &mut scroll);
+        assert!(surfaces.menuing.is_none(), "resume did not close the menu");
+        assert!(!surfaces.leaving, "resume asked to leave the orb");
+
+        // ...and `quit` on the menu is what asks to leave, which `drive` reads.
+        surfaces.menuing = Some(Menu::default());
+        for code in "quit".chars().map(KeyCode::Char) {
+            surfaces.typed(Owner::Menu, code, &mut sim, &mut scroll);
+        }
+        surfaces.typed(Owner::Menu, KeyCode::Enter, &mut sim, &mut scroll);
+        assert!(surfaces.leaving, "quit on the menu did not ask to leave");
     }
 
     #[test]
