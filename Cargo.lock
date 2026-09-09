@@ -6209,7 +6209,7 @@ dependencies = [
 
 [[package]]
 name = "orbs"
-version = "0.13.17"
+version = "0.13.19"
 dependencies = [
  "bevy",
  "notify",
@@ -6220,7 +6220,7 @@ dependencies = [
 
 [[package]]
 name = "orbs-augury"
-version = "0.13.17"
+version = "0.13.19"
 dependencies = [
  "burn",
  "orbs-sim",
@@ -6230,7 +6230,7 @@ dependencies = [
 
 [[package]]
 name = "orbs-balance"
-version = "0.13.17"
+version = "0.13.19"
 dependencies = [
  "clap",
  "orbs-render",
@@ -6239,11 +6239,11 @@ dependencies = [
 
 [[package]]
 name = "orbs-render"
-version = "0.13.17"
+version = "0.13.19"
 
 [[package]]
 name = "orbs-shell"
-version = "0.13.17"
+version = "0.13.19"
 dependencies = [
  "bevy_ecs",
  "orbs-augury",
@@ -6256,7 +6256,7 @@ dependencies = [
 
 [[package]]
 name = "orbs-sim"
-version = "0.13.17"
+version = "0.13.19"
 dependencies = [
  "bevy_ecs",
  "orbs-render",
@@ -6269,7 +6269,7 @@ dependencies = [
 
 [[package]]
 name = "orbs-tui"
-version = "0.13.17"
+version = "0.13.19"
 dependencies = [
  "crossterm",
  "orbs-render",

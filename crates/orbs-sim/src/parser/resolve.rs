@@ -106,9 +106,21 @@ impl Analysis {
     #[must_use]
     pub fn reads_outright(&self) -> bool {
         match &self.resolution {
-            Resolution::Elsewhere { .. }
-            | Resolution::InSpell { .. }
-            | Resolution::Incomplete { .. } => true,
+            Resolution::Elsewhere { .. } | Resolution::InSpell { .. } => true,
+            // **Two different `Incomplete`s, and only one is an outright
+            // reading.** A bare `sift` carries no candidates at all — the verb
+            // matched and its free-text slot cannot be enumerated — and the orb
+            // wanting one more thing is not a failure to understand. But a verb
+            // followed by words it could not use is now `Incomplete` too (§19),
+            // and that is a sentence: `take the husks out and throw them away`
+            // must reach a reader rather than be answered *"take what?"*.
+            //
+            // The leftover count is what separates them, and it is the same
+            // question the arm below asks.
+            Resolution::Incomplete { .. } => self
+                .candidates
+                .first()
+                .is_none_or(|best| best.leftover == 0),
             Resolution::Resolved { .. }
             | Resolution::Ambiguous { .. }
             | Resolution::Unresolved { .. } => self
@@ -236,6 +248,27 @@ pub fn analyse(input: &str, scene: &Scene, mode: Mode) -> Analysis {
         return settle_incomplete(candidates);
     }
 
+    // **A verb that explained none of what followed it does not run.** The sort
+    // above puts an exactly-typed verb first, which is what makes this safe:
+    // `grind gibberish` diverts here rather than falling to the `sift` reading
+    // sitting below it, and `settle_incomplete` answers *"grind what?"* instead
+    // of *"I do not know that word — perhaps grind"*.
+    //
+    // Bare commands are untouched: `survey` has no arguments **and** nothing
+    // left over. So is a reading that used part of what it was handed, which is
+    // how `attend laboratory and then start the mortar` still reads.
+    // **Tied to the `Incomplete` `collect` recorded**, rather than re-deriving
+    // the test here. That is what carries the exemption across: `light athanor`
+    // records none, so it resolves as bare `kindle` exactly as it always has.
+    if incomplete
+        .as_ref()
+        .is_some_and(|wanted| wanted.verb == candidates[0].intent.verb)
+        && candidates[0].intent.arguments.is_empty()
+        && candidates[0].leftover > 0
+    {
+        return settle_incomplete(candidates);
+    }
+
     // A tie is only a tie within one exactness tier: an approximate reading is
     // never "close enough" to argue with a verb the player actually named.
     let best_exact = named_exactly(&candidates[0]);
@@ -356,6 +389,50 @@ fn collect(
                 }
             }
             None => {
+                // **A verb whose argument explained nothing is `Incomplete`, not
+                // a bare verb.** An optional slot that cannot use the word it
+                // was handed sets no `missing` and consumes nothing, so `fill`
+                // scores it as though the player had typed the verb alone — and
+                // `score` weights the verb two thirds, so an exactly-typed one
+                // clears `MIN_SIMILARITY` by itself. `verify gibberish` audited
+                // the whole tower for twenty-one ticks and `digest husks` ran the
+                // balneum, both with the player's word discarded (§19).
+                //
+                // **`Incomplete` is what makes refusing safe**, and its own doc
+                // says why: dropping the candidate instead sends the line to
+                // `Unresolved`, which answers *"I do not know that word"* and
+                // then suggests the word just typed. It also lets a *fuzzy*
+                // reading of a different verb take the line — `grind gibberish`
+                // became `sift gibberish arsenal.log`, because `sift`'s free-text
+                // slot swallows anything. Both were measured on the first
+                // attempt at this and are why it was reverted.
+                //
+                // **The candidate is still pushed**, so `ParseLog` and `--tsv`
+                // keep the reading. §6 wants the near-misses recorded, and this
+                // is exactly the class that gets clustered.
+                //
+                // **Naming the instrument you are operating is not an
+                // unexplained word.** `light athanor` fills nothing — `kindle`
+                // takes fuel, and the athanor is a place — but bare `kindle` is
+                // the right reading, and `light_the_athanor_lights_it_rather_
+                // than_listing_it` pins it.
+                let explained = filled.slots.iter().any(Option::is_some);
+                if !explained
+                    && let Some(slot) = synonym.verb.signature().first()
+                    && !tail.is_empty()
+                {
+                    let folded: Vec<&str> = tail.iter().map(|word| word.matching).collect();
+                    let names_the_instrument = synonym.verb.is_operation()
+                        && scene.best_match(NounKind::Place, &folded).is_some();
+                    if !names_the_instrument {
+                        incomplete.get_or_insert_with(|| Incomplete {
+                            verb: synonym.verb,
+                            register: synonym.register,
+                            missing: slot.kind,
+                            filled: Vec::new(),
+                        });
+                    }
+                }
                 let intent = Intent {
                     verb: synonym.verb,
                     register: synonym.register,

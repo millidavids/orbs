@@ -4620,11 +4620,18 @@ incapable** of regressing a phrasing that works today.
       `ORBS_AUGURY=grammar ORBS_BOOT=0 ORBS_DUMP="attend laboratory; work the sage down" cargo run -p orbs`
       answers `≈ grind sage`
 
-- [ ] **Span binding** — a public entry taking `(Verb, spans)`.
-      `arguments::fill` is positional over a word list and `pub(super)`, and
-      model byte offsets do not line up with `normalise::Tokens`. Landed against
-      `Fixture` so it is verified before any model exists
-      **See it:** `ORBS_AUGURY=stub` dumps covering one, two and three arguments
+- [x] **Span binding — superseded, not built** (`0.13.18`) — it specified a
+      public entry taking `(Verb, spans)`, because the plan assumed the seam
+      would hand the sim byte offsets. It does not: `augur::Augur::read` returns
+      `Vec<String>` — canonical *text*, which `analyse` re-reads — and that is
+      precisely why a reader needs no `Scene` and cannot go stale between ticks.
+      `arguments::fill` stays `pub(super)` and positional.
+
+      ⚠ **Superseded for the prompt register, not void.** The alignment problem
+      did not vanish, it moved inside `orbs-augury`: `Trained::readings` still
+      turns BIO tags into slots over its own `split_whitespace`, which is not
+      `normalise::Tokens`. That is the model's business now
+      **See it:** the seam's signature — one line, `Vec<String>`
 
 - [x] **The GPU question, settled before anything was built on it** (`0.13.3`) —
       `crates/orbs-augury` with `burn 0.21` and `examples/device.rs`.
@@ -5078,28 +5085,101 @@ incapable** of regressing a phrasing that works today.
       — and in the terminal, `menu`, `options`, `plain`, `resume`, then type a
       sentence: it falls through to the matcher
 
-- [ ] **The model** — *(superseded by the items above; kept until they close)*
-      `orbs-augury`, trained with `Autodiff<Wgpu>` on Vulkan,
-      which is the backend the game ships on, so there is no train/inference gap
-      to find later. ~470k parameters, ~2 MB embedded via `BinBytesRecorder`.
-      **The output vocabulary is a consolidated action set, expanded back to the
-      46 canonical verbs inside the driver** — `grind`, `digest`, `mix` and
-      `distil` are one action wearing four names, and `Verb::anchor` already says
-      so. Derived from `anchor()`/`is_operation()`, never a second table
-      **See it:** `cargo run -p orbs-augury --bin augur -- "turn the sage into powder"`
+- [x] **A verb whose argument explained nothing asks, rather than running**
+      (`0.13.18`) — `verify gibberish` ran a twenty-one-tick audit of the whole
+      tower and `digest husks` ran the balneum, both with the player's word
+      discarded. An optional slot that cannot use what it was handed consumes
+      nothing and scores as though the verb were bare, and the verb carries two
+      thirds of the score — so an exactly-typed verb cleared the floor alone.
 
-- [ ] **Settings in the menu** — `Page::Settings` beside `Choices`, `Saves` and
-      `Lengths`, with the backend first. `menu.rs` is 756 lines and splits into a
-      module first. Delivers a first slice of *Ship*'s open options item
-      **See it:** `menu`, drill into settings, switch backend, watch `status`
+      **Reachable with `ORBS_AUGURY=off` and older than the augury.** The answer
+      is `Resolution::Incomplete`, which already existed for this and whose doc
+      names the trap: dropping the candidate instead makes the orb answer *"I do
+      not know that word"* and then suggest the word just typed — and lets a
+      *fuzzy* verb with a free-text slot take the line (`grind gibberish` →
+      `sift gibberish arsenal.log`). Both were measured on a first attempt that
+      was reverted; §19 has it.
 
-- [ ] **Live wiring** — the worker thread, boot warm-up behind the POST card,
-      **the deadline, and the ponder indicator**. Both moved here from the seam
-      deliberately: a deadline and a *"the orb ponders…"* state are about a
-      reader that takes time, and building a painter for a state that cannot
-      occur is §15's own correction — ~10,000 lines the binary called under 40%
-      of
-      **See it:** `cargo run -p orbs`, then type `turn the sage into powder`
+      **Naming the instrument you operate is exempt** — `light athanor` still
+      lights it. **154 captures, none moved; two added**, one of them with a
+      reader standing by, because a capture pinned to `ORBS_AUGURY=off` cannot
+      speak for the shipping default
+      **See it:** ✅ `ORBS_AUGURY=off ORBS_BOOT=0 ORBS_DUMP="attend laboratory; verify gibberish; move charcoal to athanor; light athanor; survey" cargo run -p orbs`
+      — the first asks, the second lights, the third lists
+
+- [x] **A reading that throws away what the tagger found** (`0.13.19`) — the
+      reader no longer offers a verb that cannot hold the spans it located.
+
+      **`digest husks` reverted the player's last command**, and only with the
+      trained reader on — which is why `0.13.18`'s captures could not see it.
+      `Trained::readings` trims each candidate to its verb's arity to keep it
+      well-formed, and a verb that takes *nothing* trims away every span. So a
+      sentence the tagger had read correctly also produced a bare `undo`, and
+      `undo` **cannot fail to resolve** — so it beat the correctly-ranked
+      `digest husks` above it. The free-text sink of `0.13.18`, one level up.
+
+      **Better as well as safer:** end-to-end **82.5%** (was 81.5%), all three
+      **83.7%** (was 83.4%), refusals unchanged at 89.0% / 1.8%
+      **See it:** ✅ `ORBS_BOOT=0 ORBS_DUMP="attend laboratory; digest husks" cargo run -p orbs`
+      — *"there is no husks within reach"*, not `undo`
+
+- [ ] **A verb that takes no argument still swallows one** — `status gibberish`
+      runs `status`; `undo gibberish` acknowledges, `undo` having no arm in
+      `execute` yet. The rule above cannot reach these: `Incomplete` names the
+      slot it is waiting for and a no-argument verb has none, so the honest
+      answer needs a refusal shape that does not exist. Sixteen verbs
+      **See it:** `ORBS_AUGURY=off ORBS_BOOT=0 ORBS_DUMP="status gibberish" cargo run -p orbs`
+
+- [ ] **The reading that explains the word should outrank the one that does
+      not** — `survey feed.log` resolves as bare `survey` and beats `peruse`,
+      because `Survey`'s optional `Place` slot leaves the file over and the verb
+      carries two thirds of the score. **3,146** corpus lines are still lost this
+      way, down from 3,554. `Candidate::leftover` already exists for this and
+      `Analysis::reads_outright` already gates on it one tier up; what is missing
+      is the same question asked when candidates are ranked
+      **See it:** `cargo run --release -p orbs-sim --example parse -- --bench` —
+      *"it read as another command"* falls
+
+- [x] **The model — shipped, and one plank of it dropped** (`0.13.18`).
+      `orbs-augury`, 465,335 parameters, trained with `Autodiff<Wgpu>` on Vulkan;
+      inference runs on `ndarray` at 436µs, which is what lets both frontends
+      hold it. 81.5% of phrasings nothing taught it, against the matcher's 3.5%.
+
+      **The consolidated action set was never built.** The box wanted the model
+      to emit ~39 actions expanded back to 46 verbs inside the driver; it emits
+      the 46 verbs directly. The consolidation's stated win was *"corpus, which
+      is the binding constraint"* — and `0.13.15` spent that lever a different
+      way, by writing templates for the seventeen verbs that had none. The
+      argument for it is not gone, but nothing now depends on it
+      **See it:** ✅ `cargo run --release -p orbs-augury --example measure --features train`
+      *(the box's old line named a `bin augur` that does not exist)*
+
+- [x] **Settings in the menu** — done at `0.13.17`, under the entry above.
+      `Page::Options` beside `Choices`, `Saves` and `Lengths`; the driver rather
+      than the backend, because a player chooses *how the orb reads them* and the
+      backend is a developer's question. `menu.rs` split into `state`/`words`/
+      `paint` first, as the box required
+      **See it:** ✅ `ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="menu" ORBS_MENU="options" cargo run -p orbs`
+
+- [x] **Live wiring — one quarter built, three quarters retired by measurement**
+      (`0.13.18`). The reader is wired and on by default in both frontends.
+      **The worker thread, the deadline and the ponder indicator were not built
+      and will not be**: one line takes 436µs on the CPU backend, so there is no
+      slow state to paint, and building a painter for a state that cannot occur
+      is §15's own correction.
+
+      ⚠ **Boot warm-up is a different number and stays open below.** 436µs is
+      *inference*; `Augury::from_environment` reads ~2 MB of weights inside
+      `SimPlugin::build`, and that has never been measured
+      **See it:** ✅ `cargo run -p orbs`, then type `turn the sage into powder`
+
+- [ ] **Boot warm-up, or a measurement saying it is not needed** — loading the
+      reader happens synchronously at `App` construction, before a window exists.
+      Either it is fast enough to ignore, in which case say so with a number the
+      way inference did, or it goes behind the POST card. **`augur/seam.rs` still
+      documents the worker thread and the deadline as the implementor's job**, so
+      it and the box above currently disagree
+      **See it:** time from process start to first frame, with and without weights
 
 ---
 

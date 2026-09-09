@@ -2940,6 +2940,121 @@ like, after the training run that was never seeded.
 a fourth page would have made it ~900 — `state` is what a keystroke does, `words`
 is the vocabulary and the prefix rule, `paint` is the picture.
 
+### A verb whose argument explained nothing asks, rather than running (`0.13.18`)
+
+**`verify gibberish` ran a twenty-one-tick audit of the whole tower.** `digest
+husks` ran the balneum, `grind gibberish` started the mortar — each with the
+player's word silently discarded. Reachable with `ORBS_AUGURY=off` and older than
+the augury: the reader did not cause it, it made it visible.
+
+**Why.** An optional slot that cannot use the word it was handed sets no
+`missing` and consumes nothing, so `arguments::fill` scores the fill `EXACT` —
+identical to a verb given nothing at all — and `resolve::score` weights the verb
+**two thirds**, so an exactly-typed verb reaches `(2000 + 0) / 3 = 666`, over
+`MIN_SIMILARITY`. **The argument can never outvote the verb.**
+
+**The answer is `Incomplete`, which already existed for exactly this.** Its own
+doc says so: *"a verb that matched at full score falling through to
+`Resolution::Unresolved` makes the orb answer 'I do not know that word' and then
+suggest the word just typed."* So `collect` records an `Incomplete` for the verb,
+`analyse` diverts to it when the best candidate filled no slot and left words
+over, and the orb asks *"verify what?"*.
+
+**The first attempt dropped the candidate instead, and was reverted.** Two
+defects came of it and both are the reason the shape above is what it is:
+
+- **A dropped candidate hands the line to a fuzzy *other* verb.** `grind
+  gibberish` began offering `sift gibberish arsenal.log` — `grind` is 750 from
+  `find`, which `sift` claims, and `sift`'s `Pattern` slot swallows free text, so
+  the *wrong* verb survived the guard the typed one did not. Under `Mode::Siege`
+  that is `Forced`, with no prompt. Diverting works because the sort puts an
+  exactly-typed verb first, so the reading that diverts is the one the player
+  meant.
+- **It suggested the word just typed**, which is the defect `Incomplete` was
+  built to prevent, arriving by the door left open.
+
+**Three things can be left over and they are not one case.** A word the orb has
+never heard (`gibberish`); a word better explained by another verb (`survey
+feed.log`, which should reach `peruse` — still open, a *ranking* question); and
+**the instrument the verb operates**. `light athanor` fills nothing, because
+`kindle` takes fuel and the athanor is a place, but bare `kindle` is the right
+reading and `light_the_athanor_lights_it_rather_than_listing_it` pins it. So the
+rule exempts an operation verb handed the name of a place, and the exemption
+travels by *not recording* the `Incomplete` — one fact, read twice, rather than
+the test written out in two places.
+
+**`reads_outright` had to learn the same distinction.** A bare `sift` is
+`Incomplete` with no candidates and *is* an outright reading — the orb wanting one
+more thing is not a failure to understand. A verb followed by words it could not
+use is `Incomplete` with a candidate that left them over, and that is a
+**sentence**: `take the husks out and throw them away` must reach a reader, not
+be answered *"take what?"*. The leftover count separates them.
+
+**Every regression it surfaced was a real problem it had been hiding:**
+
+- **`look around` only worked by dropping `around`.** A set phrase, written down
+  now, exactly as `look for` already is for `sift`.
+- **`digest husks` named a reagent the starting tower does not hold** — the
+  balneum takes `husks` and `ground-sage`, both byproducts of grinding.
+- **`naming.rs`'s fixture registered neither the `Command` nouns nor the
+  `knowing` set** that `tower::scene_at` does, though the comment above its own
+  `single_words` import promised both. `recall grind` never filled its `Subject`
+  slot and passed on the bare-verb fallback, and so did `decoct grind`, masking a
+  collision.
+
+**154 captures, none moved; two added.** `reading_asks` covers the deterministic
+path and `reading_asks_read` the same lines with a reader standing by, because a
+capture pinned to `ORBS_AUGURY=off` cannot speak for the shipping default.
+
+**And the bench moved: 3,554 corpus lines read as the wrong command, down to
+3,146.** Four hundred of them were a verb swallowing an argument it could not
+use and running anyway. The parser's own coverage is unchanged at 3.5% and 9.7%,
+which is right — this made no phrasing newly *readable*, it stopped a class of
+them being read **wrongly**. The reverted attempt reached 3,552 on the same
+measure, and the difference is entirely `Incomplete` diverting where a dropped
+candidate let the next-best verb through.
+
+⚠ **Two things this does not fix**, both recorded as boxes rather than hidden:
+a verb that takes *no* argument still swallows one (`status gibberish` → `status`;
+`undo` is unimplemented, so it acknowledges), because `Incomplete` names a slot
+and there is none to name. And with the trained reader on, `digest husks` reaches
+it and comes back `undo` — the reader's 81.5% rather than this rule, since
+`reads_outright` already required `leftover == 0` and those lines always bypassed
+tier one.
+
+### A reading that throws away what the tagger found (`0.13.19`)
+
+**`digest husks` reverted the player's last command.** With the trained reader
+on, and only then — which is why `0.13.18`'s captures could not see it.
+
+**The reader offered a reading that discarded its own work.**
+`Trained::readings` trims each candidate to its verb's arity, which is what keeps
+one well-formed: a three-span tagging handed to a one-slot verb would be refused
+for having too many arguments rather than judged on the argument that matters.
+But **a verb that takes *nothing* trims away every span**, so a sentence the
+tagger had read correctly — `husks` located, in a slot — also produced a bare
+`undo`.
+
+**And `undo` cannot fail to resolve.** `Sim::submit_reading` takes the first
+reading that resolves; a no-argument verb always does. So it beat the
+correctly-ranked `digest husks` sitting above it in the list. **The same shape as
+the free-text sink in `parser::resolve`, one level up: something that can never
+fail to resolve wins by never failing, not by being right.**
+
+The fix is one condition — a verb that cannot hold what the tagger found is not a
+reading of that sentence — and the `take(MAX_READINGS)` moved *after* the filter,
+so discarding a candidate does not cost the room a choice.
+
+**It reads better as well as more safely**: end-to-end **81.5% → 82.5%**, all
+three **83.4% → 83.7%**, refusals unchanged at 89.0% correct and 1.8% wrong.
+
+⚠ **`digest husks` is still not right, only honest.** It now answers *"there is
+no husks within reach"* — the reader's second choice, `purge husks`, because the
+first choice cannot resolve where no husks are. Naming the player's word and
+refusing beats reverting their last command; preferring a higher-ranked reading
+that *asks* over a lower-ranked one that *runs* is the open question, and it is
+the same ranking problem `survey feed.log` names one level down.
+
 ### The arsenal is worth what your industry is worth — supersedes the cap (Phase 11, `0.11.13`)
 
 **A per-name cap was the box, and it is struck.** Its own text admitted the

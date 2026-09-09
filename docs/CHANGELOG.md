@@ -15,6 +15,30 @@
   at 1.0 (DESIGN.md §19).
 -->
 
+## [v0.13.19] - 2026-09-09
+
+### Description
+In development — a dev log, not patch notes. The orb has stopped quietly
+ignoring words it cannot place. A command with a word it does not know now gets
+a question back, instead of running something you did not ask for.
+
+### Fixed
+- **A word the orb cannot place no longer just disappears.** `verify gibberish`
+  used to throw the odd word away and audit the entire tower — twenty-one ticks
+  of it. `digest husks` filled the water bath with nothing. In both cases the orb
+  knew the verb, could not place what followed it, and went ahead anyway. Now it
+  names the command and asks what you meant.
+- **A mistyped line will not undo your last one.** When the orb works out what
+  you meant and its best reading cannot be done where you are standing, it falls
+  through to the next one — and a command that takes no argument at all can
+  always be done, so `undo` kept winning. It now only considers readings that
+  keep the thing you actually named.
+
+### Changed
+- **`look around` is a phrase the orb knows properly.** It used to work by
+  accident, as `look` with a word left over; it is written down now, so it keeps
+  working for the right reason.
+
 ## [v0.13.17] - 2026-09-08
 
 ### Description

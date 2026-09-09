@@ -132,7 +132,13 @@ fn sample(verb: Verb) -> (&'static str, &'static str) {
         // and each only resolves where that tool stands, so the place matters
         // more here than for anything else in this table.
         Verb::Grind => ("laboratory", "grind sage"),
-        Verb::Digest => ("laboratory", "digest husks"),
+        // **`sage`, not `husks`.** The balneum digests `husks` and `ground-sage`
+        // and the starting tower holds neither — both are byproducts of grinding
+        // — so `digest husks` never named anything and only ran because a
+        // reading that explained nothing still resolved as the bare verb. That
+        // is `Incomplete` now (§19). `sage` is on the shelf, so the line reaches
+        // the world, which is all this test asks of it.
+        Verb::Digest => ("laboratory", "digest sage"),
         Verb::Mix => ("laboratory", "mix sage and rock-salt"),
         Verb::Distil => ("laboratory", "distil sage"),
         Verb::Kindle => ("laboratory", "kindle charcoal"),

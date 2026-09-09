@@ -59,6 +59,12 @@ pub const SYNONYMS: &[Synonym] = &[
     syn(Verb::Survey, Register::Shell, &["dir"]),
     syn(Verb::Survey, Register::Plain, &["what's", "here"]),
     syn(Verb::Survey, Register::Plain, &["look"]),
+    // **A set phrase, and it has to be one.** `look around` reached `survey`
+    // only because `around` was left over and a reading that explained nothing
+    // still resolved as the bare verb. That reading is `Incomplete` now (§19),
+    // so the phrase is written down — which is what `look for` already is for
+    // `sift`.
+    syn(Verb::Survey, Register::Plain, &["look", "around"]),
     syn(Verb::Survey, Register::Plain, &["list"]),
     // peruse — read a file
     syn(Verb::Peruse, Register::Arcane, &["peruse"]),

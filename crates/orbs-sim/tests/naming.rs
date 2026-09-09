@@ -29,7 +29,7 @@ fn scene() -> Scene {
     // — so a scene built from the latter left `research`, `follow` and `wander`
     // unresolvable and had this file measuring the scoping rule after all, which
     // is the one thing the paragraph above says it must not do.
-    Verb::ALL
+    let mut scene = Verb::ALL
         .into_iter()
         .filter_map(Verb::anchor)
         .fold(Scene::new(), Scene::offering)
@@ -43,7 +43,19 @@ fn scene() -> Scene {
         .with(NounKind::Vessel, "retort")
         .with(NounKind::Scroll, "gleaning-scroll")
         .with(NounKind::Script, "night_watch")
-        .with(NounKind::Any, "sludge")
+        .with(NounKind::Any, "sludge");
+
+    // **Every verb word, both ways, because `tower::scene_at` does both.** The
+    // doc above this file's `single_words` import already promised it — *"a word
+    // that is in a player's way here is in their way in the game for the same
+    // reason"* — and the fixture did neither, so `recall grind` never filled its
+    // `Subject` slot and passed only because a reading that explained nothing
+    // resolved as the bare verb. That is `Incomplete` now (§19), which is what
+    // made the gap visible.
+    for (word, _) in single_words() {
+        scene = scene.with(NounKind::Command, word);
+    }
+    scene.knowing(single_words().map(|(word, _)| word.to_owned()))
 }
 
 /// An argument that satisfies `verb`'s signature.
@@ -1025,6 +1037,7 @@ fn multi_word_plain_synonyms_are_pinned() {
         "go to",
         "how are things",
         "how do i",
+        "look around",
         "look for",
         // The menu, said the way someone who has never met a shell would say
         // it. `menu` alone is the arcane register's word for the same verb.

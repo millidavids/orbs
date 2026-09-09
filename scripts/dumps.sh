@@ -185,6 +185,21 @@ run swap        ORBS_BOOT=0 ORBS_DUMP="attend laboratory; debug_swap; survey dis
 run dev_shelf   ORBS_BOOT=0 ORBS_DUMP="survey grimoire"
 run dev_list    ORBS_BOOT=0 ORBS_DUMP="debug_spell"
 
+# **A verb whose argument explained nothing asks rather than running.** `verify
+# gibberish` used to audit the whole tower for twenty-one ticks and `digest
+# husks` used to run the balneum, both with the player's word discarded. They are
+# `Incomplete` now — the orb names the verb and asks what for. The last three
+# lines are the ones that must *not* change: `light athanor` names the instrument
+# `kindle` operates and still lights it, `look around` still lists the room, and
+# bare `survey` is the commonest thing anyone types.
+run reading_asks  ORBS_BOOT=0 ORBS_AUGURY=off ORBS_DUMP="attend laboratory; verify gibberish; digest husks; move charcoal to athanor; light athanor; look around; survey"
+# ...and the same lines **with a reader standing by**, which is the shipping
+# default and the configuration the `off` capture above cannot speak for. The
+# grammar is used rather than the trained model for `dumps.sh`'s standing reason:
+# weights are a gitignored build artefact and a capture made against them could
+# not be reproduced.
+run reading_asks_read ORBS_BOOT=0 ORBS_AUGURY=grammar ORBS_DUMP="attend laboratory; verify gibberish; digest husks; look around; survey"
+
 # --- the augury ------------------------------------------------------------
 # **Both halves, and the pair is the point.** `off` is every one of these lines
 # reaching `!` exactly as it did before the augury existed, which is the

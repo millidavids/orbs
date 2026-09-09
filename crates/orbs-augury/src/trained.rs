@@ -182,9 +182,23 @@ impl<B: Backend> Trained<B> {
 
         ranked
             .into_iter()
-            .take(MAX_READINGS)
             .filter_map(|at| {
                 let verb = Verb::ALL.get(at)?;
+                // **A verb that cannot hold what the tagger found is not a
+                // reading of this sentence.** The trim below is what makes each
+                // candidate well-formed, and for a verb that takes *nothing* it
+                // trims away every span — so `digest husks` offered a bare
+                // `undo`, which takes no argument and therefore always resolves.
+                // `Sim::submit_reading` takes the first reading that resolves,
+                // so that sink beat the correctly-ranked `digest husks` sitting
+                // above it and the orb reverted the player's last command.
+                //
+                // The same shape as the free-text sink in `parser::resolve`, one
+                // level up: **something that can never fail to resolve wins by
+                // never failing**, not by being right.
+                if verb.signature().len() < filled.len() {
+                    return None;
+                }
                 let mut command = String::from(verb.canonical());
                 for slot in filled.iter().take(verb.signature().len()) {
                     command.push(' ');
@@ -192,6 +206,9 @@ impl<B: Backend> Trained<B> {
                 }
                 Some(command)
             })
+            // **After the filter, not before.** Taking four and then discarding
+            // some would offer fewer than four readings for no reason.
+            .take(MAX_READINGS)
             .collect()
     }
 
