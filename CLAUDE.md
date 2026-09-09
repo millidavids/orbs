@@ -259,11 +259,19 @@ user-level `rust-skills` install.
 
 ```bash
 cargo fmt --all --check
-cargo clippy --workspace --all-targets -- -D warnings
+cargo clippy --workspace --all-targets --features orbs-augury/train -- -D warnings
 cargo test --workspace
 RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
 cargo build -p orbs            # ← the game itself must LINK, not just check
 ```
+
+**`--features orbs-augury/train` is not optional either, and for the same reason
+as the line below it.** The trainer and the two measurement examples need a GPU
+backend and gradients; a *reader* needs neither, so they sit behind that feature
+and `orbs-tui` can hold the same trained model without pulling `wgpu` into a
+terminal program. The cost is that `--all-targets` alone **silently stops
+compiling those three examples** — clippy passes, and the trainer is broken. Ask
+for the feature and they are back in the gate.
 
 **`cargo build -p orbs` is not optional and `cargo check` does not replace it.**
 `check` stops at metadata; it will happily pass while the binary fails to link.

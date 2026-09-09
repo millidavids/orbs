@@ -47,6 +47,15 @@ pub(super) struct Filled {
     pub score: u32,
     /// The first required slot that could not be filled, if any.
     pub missing: Option<Missing>,
+    /// Words the reading could not account for, once every slot was filled.
+    ///
+    /// **Separate from [`score`](Self::score), which folds it in.** A fuzzy noun
+    /// match and an unexplained word both pull the score down, and the augury
+    /// (§6) must route them oppositely: `brew clarty` is a typo the matcher
+    /// reaches `clarity` from and should keep, while `put the sage in the mortar
+    /// and grind it` is a sentence six words too long for any reading of it.
+    /// Score alone cannot tell those apart.
+    pub leftover: usize,
 }
 
 impl Filled {
@@ -66,6 +75,7 @@ pub(super) fn fill(verb: Verb, words: &[Word<'_>], scene: &Scene) -> Filled {
             slots: Vec::new(),
             score: penalise(EXACT, words.len()),
             missing: None,
+            leftover: words.len(),
         };
     }
 
@@ -73,6 +83,8 @@ pub(super) fn fill(verb: Verb, words: &[Word<'_>], scene: &Scene) -> Filled {
     let mut scores = Vec::with_capacity(signature.len());
     let mut missing = None;
     let mut remaining = words;
+    // Words handed to a slot that the slot could not account for.
+    let mut unused = 0usize;
 
     for (index, slot) in signature.iter().enumerate() {
         let is_last = index + 1 == signature.len();
@@ -100,9 +112,15 @@ pub(super) fn fill(verb: Verb, words: &[Word<'_>], scene: &Scene) -> Filled {
         let (head, tail) = remaining.split_at(take.min(remaining.len()));
 
         match fill_one(slot.kind, index, head, scene) {
-            Some((argument, score)) => {
-                slots[index] = Some(argument);
-                scores.push(score);
+            Some(fit) => {
+                // Words the slot was handed and did not account for. The last
+                // slot is handed everything, so this is where a sentence with a
+                // command at the front becomes visible: `attend laboratory and
+                // then start the mortar` fills `Place` from one word at full
+                // score and leaves four behind, while `remaining` is empty.
+                unused += head.len().saturating_sub(fit.used);
+                slots[index] = Some(fit.argument);
+                scores.push(fit.score);
                 remaining = tail;
             }
             None => {
@@ -131,18 +149,33 @@ pub(super) fn fill(verb: Verb, words: &[Word<'_>], scene: &Scene) -> Filled {
 
     Filled {
         slots,
+        // **`penalise` keeps counting only `remaining`, deliberately.** Changing
+        // what the score means would move every ranking in the parser and every
+        // number §19 records against it; `leftover` is a new fact carried
+        // beside it, not a correction to an old one.
         score: penalise(mean, remaining.len()),
         missing,
+        leftover: remaining.len() + unused,
     }
 }
 
+/// One slot, filled.
+struct Fit {
+    /// What went into the slot.
+    argument: Argument,
+    /// How well it fitted, on [`EXACT`]'s scale.
+    score: u32,
+    /// How many of the offered words it accounted for.
+    ///
+    /// The last slot is handed everything left, so a slot can be given four
+    /// words and explain one of them at full score — which is a sentence
+    /// wearing a command's shape, and the only place that difference is
+    /// visible. See [`Filled::leftover`].
+    used: usize,
+}
+
 /// Fill a single slot, or report that nothing here fits it.
-fn fill_one(
-    kind: NounKind,
-    slot: usize,
-    words: &[Word<'_>],
-    scene: &Scene,
-) -> Option<(Argument, u32)> {
+fn fill_one(kind: NounKind, slot: usize, words: &[Word<'_>], scene: &Scene) -> Option<Fit> {
     if words.is_empty() {
         return None;
     }
@@ -151,8 +184,8 @@ fn fill_one(
         // Free text: whatever was typed, in the case and punctuation they typed
         // it in. Folding it for matching and then storing the folded form made
         // `sift ERROR feed.log` search for `error`.
-        NounKind::Pattern => Some((
-            Argument {
+        NounKind::Pattern => Some(Fit {
+            argument: Argument {
                 kind,
                 slot,
                 value: words
@@ -161,42 +194,47 @@ fn fill_one(
                     .collect::<Vec<_>>()
                     .join(" "),
             },
-            EXACT,
-        )),
+            score: EXACT,
+            // A pattern is whatever was typed, so it explains all of it.
+            used: words.len(),
+        }),
         // A name the player is coining. **One word, and the raw one** — a spell
         // called `night_watch` must keep its underscore and its case, and taking
         // the whole tail the way `Pattern` does would make `scribe my new spell`
         // a file with spaces in it.
-        NounKind::Name => Some((
-            Argument {
+        NounKind::Name => Some(Fit {
+            argument: Argument {
                 kind,
                 slot,
                 value: words.first()?.raw.to_owned(),
             },
-            EXACT,
-        )),
+            score: EXACT,
+            used: 1,
+        }),
         NounKind::Count => {
             let value: u64 = words.first()?.matching.parse().ok()?;
-            Some((
-                Argument {
+            Some(Fit {
+                argument: Argument {
                     kind,
                     slot,
                     value: value.to_string(),
                 },
-                EXACT,
-            ))
+                score: EXACT,
+                used: 1,
+            })
         }
         _ => {
             let folded: Vec<&str> = words.iter().map(|word| word.matching).collect();
             let found = scene.best_match(kind, &folded)?;
-            Some((
-                Argument {
+            Some(Fit {
+                argument: Argument {
                     kind: found.kind,
                     slot,
                     value: found.name,
                 },
-                found.score,
-            ))
+                score: found.score,
+                used: found.words,
+            })
         }
     }
 }

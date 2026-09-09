@@ -6,6 +6,7 @@
 //!
 //! See `CLAUDE.md` for the architectural rules this crate exists to uphold.
 
+pub mod augur;
 pub mod content;
 pub mod parser;
 
@@ -19,6 +20,7 @@ mod schedule;
 mod sim;
 mod tick;
 
+pub use augur::{Augur, Fixture, Grammar};
 pub use content::{ContentError, Prose};
 pub use execute::{LOG, MAX_MEDITATE, Request, spell_expect, spell_vocabulary};
 pub use rng::{RngStream, Rngs};

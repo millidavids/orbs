@@ -1,0 +1,75 @@
+[package]
+name = "orbs-augury"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+# The trained reader behind §6's deterministic pipeline (DESIGN.md §19, *the
+# augury*). It implements `orbs_sim::Augur` and nothing else depends on it —
+# `orbs-sim` must never gain a dependency here, or the headless boundary
+# CLAUDE.md rule 1 protects would go with it.
+[dependencies]
+orbs-sim = { path = "../orbs-sim" }
+
+# **`default-features = false`, and the list is the whole point.** burn's default
+# pulls a dataset layer, sqlite, a network client and an audio decoder, none of
+# which a reader that maps a sentence to a command has any use for.
+#
+# `wgpu` shares the device Bevy already made (`burn_wgpu::init_device`), and
+# `ndarray` is the fallback for a machine where that fails. Both are here rather
+# than behind features because a backend chosen at runtime has to be compiled in
+# to be chosen.
+# **`burn-train` is deliberately absent.** Its `Learner` brings a TUI dashboard,
+# `sysinfo`, `systemstat` and an NVML wrapper for a training run that is one loop
+# over 11k short sentences. `autodiff` plus `burn::optim` is the whole of what
+# that loop needs, and it keeps the tree to what a reader actually uses.
+# **Inference by default; the GPU and gradients only behind `train`.** One line
+# takes 436µs on `ndarray` against 3.0ms on `wgpu` — a batch of one is almost
+# entirely kernel-launch overhead — so a *reader* never wants a GPU backend at
+# all. Splitting them is what lets `orbs-tui` hold the same trained reader the
+# Bevy build does without pulling a graphics stack into a terminal program.
+burn = { version = "0.21", default-features = false, features = [
+    "std",
+    "ndarray",
+] }
+
+# **Not a second graphics stack — the same one.** Bevy 0.19 and `cubecl-wgpu`
+# both want `wgpu 29`, and they unify: one `wgpu`, `wgpu-core`, `wgpu-hal`,
+# `wgpu-types` and `naga` in the lock. That is what makes it possible to hand
+# burn the device the renderer already made instead of letting it open a second
+# one, and `cargo tree -d | grep wgpu` staying empty is the check that it is
+# still true (DESIGN.md §19, *the augury*).
+wgpu = { version = "29", default-features = false, optional = true }
+
+[features]
+default = []
+# What the trainer needs and a reader never does. The three examples name it in
+# `required-features`, so `cargo build -p orbs-augury` stays an inference build
+# and `cargo run --example train` turns it on by itself.
+train = ["burn/wgpu", "burn/autodiff", "dep:wgpu"]
+
+[[example]]
+name = "train"
+required-features = ["train"]
+
+[[example]]
+name = "measure"
+required-features = ["train"]
+
+[[example]]
+name = "device"
+required-features = ["train"]
+
+# **A dev-dependency, and only the spike's.** `examples/device.rs` has to make a
+# wgpu device the way Bevy does, and `request_adapter` is `async`. Rule 8 bars
+# async from the sim and bars `tokio` outright; `pollster` is neither — it is a
+# four-function blocking shim with no runtime, no threads and no scheduler, and
+# it never reaches a shipped binary.
+[dev-dependencies]
+pollster = "0.4"
+
+[lints]
+workspace = true

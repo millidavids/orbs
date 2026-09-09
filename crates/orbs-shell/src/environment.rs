@@ -122,6 +122,118 @@ pub fn fresh(seed: u64, sealed: bool, length: orbs_sim::content::Length) -> orbs
     }
 }
 
+/// Which reader answers the lines the orb cannot read itself (§6).
+const AUGURY: &str = "ORBS_AUGURY";
+
+/// The augury named by `ORBS_AUGURY`, or the trained reader by default.
+///
+/// **On unless turned off, and that is the shipping default.** The reader is
+/// what a player gets now: it reads 81.5% of phrasings nothing taught it where
+/// the matcher alone reads 3.5%, it costs 436µs on the CPU, and it refuses
+/// rather than guessing when a line asks for nothing. §16 rates *"parser feels
+/// frustrating rather than magical"* Critical, and a feature nobody can reach
+/// answers none of it.
+///
+/// | | |
+/// |---|---|
+/// | unset | **the trained reader**, if this build has one; otherwise none, quietly |
+/// | `model` | the same, but says so when there are no weights to load |
+/// | `off`, `0`, `none` | no reader. [`Sim::submit`], exactly as it was |
+/// | `stub` | [`Fixture::worked`], a fixed table — what `dumps.sh` pins |
+/// | `grammar` | [`Grammar::builtin`](orbs_sim::Grammar::builtin), the authored templates in `content/phrasings.toml` |
+///
+/// # Why unset is silent and `model` is not
+///
+/// **Weights are a build artefact, not source** — gitignored, written by
+/// `orbs-augury --example train --features train`. A fresh clone has none, and the
+/// default must degrade to the game exactly as it was without complaining about
+/// it on every boot. Asking for `model` by name is different: you named a thing
+/// that is missing, and silence there would look like the reader working.
+///
+/// # What still turns it off
+///
+/// `scripts/dumps.sh` passes `off` from its `run` helper, so a capture stays
+/// reproducible from a clean checkout — weights change on every training run and
+/// a dump made against them could not be diffed. A block that wants a reader
+/// names one after it, and the later value wins.
+///
+/// **`grammar` is a real reader and not a demonstration.** Measured on
+/// phrasings it was never taught it reads 9.4% where the matcher alone reads
+/// 15.6%, and the two together reach 25.0% — they overlap on nothing, so it is
+/// additive in the plainest sense. `--bench` prints all three.
+///
+/// # Why a table is a first-class option and not a placeholder
+///
+/// `ORBS_DUMP` builds no app and presses no key, `scripts/dumps.sh` captures
+/// surfaces as text, and `scripts/play.sh` drives the terminal build under
+/// `tmux` — none of which can hold a GPU, a worker thread, or megabytes of
+/// weights. Without a reader they can reach, every divined surface would be
+/// gated on one person typing one sentence into one window, and CLAUDE.md
+/// records what that costs: *"a domain built without a block in it is one this
+/// instrument is blind to, and the blindness looks exactly like stability."*
+///
+/// So `stub` stays after a trained reader exists. It is what makes a divined
+/// screen diffable, and what a real reader gets measured against.
+///
+/// An unrecognised value is `off` **and says so**, which it did not have to
+/// before: with the reader off by default a typo cost you the feature you were
+/// already not getting, and now it costs you the one you were.
+///
+/// [`Sim::submit`]: orbs_sim::Sim::submit
+/// [`Fixture::worked`]: orbs_sim::Fixture::worked
+#[must_use]
+pub fn augury() -> Option<Box<dyn orbs_sim::Augur>> {
+    match std::env::var(AUGURY).unwrap_or_default().trim() {
+        // **Answered here so a headless dump can reach it.** `ORBS_DUMP` builds
+        // no `App`, so a reader chosen in a Bevy resource is one
+        // `scripts/dumps.sh` can never see — which is the blindness the stub
+        // exists to avoid, arriving by a different door.
+        "" => trained(false),
+        "model" => trained(true),
+        "off" | "0" | "none" => None,
+        "stub" => Some(Box::new(orbs_sim::Fixture::worked())),
+        "grammar" => Some(Box::new(orbs_sim::Grammar::builtin())),
+        other => {
+            tracing::warn!("augury: {other:?} names no reader; running without one");
+            None
+        }
+    }
+}
+
+/// The trained reader, if this build has one and this checkout has weights.
+///
+/// `asked` is whether the player named it, which is the whole difference between
+/// the two silences — see [`augury`].
+#[cfg(feature = "augury")]
+fn trained(asked: bool) -> Option<Box<dyn orbs_sim::Augur>> {
+    match orbs_augury::Reading::cpu() {
+        Ok(reader) => Some(Box::new(reader)),
+        Err(error) => {
+            if asked {
+                tracing::warn!("augury: no trained reader ({error}); running without one");
+            } else {
+                tracing::debug!("augury: no trained reader ({error})");
+            }
+            None
+        }
+    }
+}
+
+/// No reader at all, for a build with `burn` left out.
+///
+/// **Nothing in the workspace lands here now.** `orbs-tui` did, while the reader
+/// needed `wgpu` and a terminal program had no business pulling a graphics stack
+/// — but inference is `ndarray` and costs 436µs, so `orbs-augury` put the GPU
+/// behind its `train` feature and both frontends take the same reader. This arm
+/// stays for a build that turns the feature off on purpose.
+#[cfg(not(feature = "augury"))]
+fn trained(asked: bool) -> Option<Box<dyn orbs_sim::Augur>> {
+    if asked {
+        tracing::warn!("augury: this build has no trained reader compiled in");
+    }
+    None
+}
+
 /// The compiler that built this binary, captured by `build.rs`.
 ///
 /// `env!("CARGO_PKG_RUST_VERSION")` was the obvious choice and is **empty**

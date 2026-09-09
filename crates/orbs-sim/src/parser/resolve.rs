@@ -68,6 +68,57 @@ pub struct Analysis {
     pub candidates: Vec<Candidate>,
 }
 
+impl Analysis {
+    /// Whether the orb read the line outright, or is guessing at it.
+    ///
+    /// **The augury's router** (§6). A line this answers `true` for is answered
+    /// by the deterministic pipeline and the model never sees it; everything
+    /// else is a phrasing the model gets a chance at, and tier three is this
+    /// same analysis waiting behind it.
+    ///
+    /// # Two conditions, and both had to be found by building it
+    ///
+    /// **The verb was typed, not guessed.** [`fuzzy::EXACT`] or better — better,
+    /// because the domain bonus lifts an in-domain operation above the ceiling,
+    /// which is why this is the same `>=` the exactness tier-break already uses.
+    ///
+    /// **Nothing was left over.** A fuzzy *noun* is fine and must stay here:
+    /// `brew clarty` reaches `clarity` at 819 and the matcher is better at that
+    /// than any model trained on phrasings will be. An unexplained *word* is not
+    /// fine, because it means the reading did not account for what the player
+    /// said. [`Candidate::argument_score`] folds both into one number, which is
+    /// why [`Candidate::leftover`] is carried separately.
+    ///
+    /// # Three answers are outright even though none of them runs a command
+    ///
+    /// `Elsewhere`, `InSpell` and `Incomplete` are all *right*, and §19 records
+    /// each existing for the same reason: *"I do not know that word"* would lie
+    /// about a word the game taught the player — in the room next door, in the
+    /// editor, or in the very line they are typing. Handing one to a model
+    /// trades a good answer for a guess.
+    ///
+    /// **`Incomplete` is the one that had to be found by testing.** A bare
+    /// `sift` carries no candidates at all — the verb matched at full score and
+    /// its free-text slot cannot be enumerated — so a rule that only consulted
+    /// `candidates` sent it to a reader, and a reader that answers everything
+    /// answered. The orb knowing the verb and wanting one more thing is not a
+    /// failure to understand.
+    #[must_use]
+    pub fn reads_outright(&self) -> bool {
+        match &self.resolution {
+            Resolution::Elsewhere { .. }
+            | Resolution::InSpell { .. }
+            | Resolution::Incomplete { .. } => true,
+            Resolution::Resolved { .. }
+            | Resolution::Ambiguous { .. }
+            | Resolution::Unresolved { .. } => self
+                .candidates
+                .first()
+                .is_some_and(|best| best.verb_score >= fuzzy::EXACT && best.leftover == 0),
+        }
+    }
+}
+
 /// Resolve one line of player input.
 ///
 /// Never fails and never returns a bare error: the worst outcome is
@@ -287,7 +338,7 @@ fn collect(
                         register: synonym.register,
                         arguments: slots.iter().flatten().cloned().collect(),
                     };
-                    candidates.push(score(intent, verb_score, filled.score));
+                    candidates.push(score(intent, verb_score, filled.score, filled.leftover));
                 }
 
                 // `get_or_insert_with`, not `get_or_insert`: the eager form built
@@ -310,7 +361,7 @@ fn collect(
                     register: synonym.register,
                     arguments: filled.arguments(),
                 };
-                candidates.push(score(intent, verb_score, filled.score));
+                candidates.push(score(intent, verb_score, filled.score, filled.leftover));
             }
         }
     }
@@ -357,7 +408,7 @@ fn fillers(kind: NounKind, slot: usize, scene: &Scene) -> Vec<super::intent::Arg
 /// The verb is weighted double: a confident verb with a shaky argument is a
 /// better guess than a shaky verb with a confident argument, because the
 /// argument can be asked about and the verb cannot.
-fn score(intent: Intent, verb_score: u32, argument_score: u32) -> Candidate {
+fn score(intent: Intent, verb_score: u32, argument_score: u32, leftover: usize) -> Candidate {
     let combined = if intent.verb.signature().is_empty() {
         verb_score.min(argument_score)
     } else {
@@ -368,6 +419,7 @@ fn score(intent: Intent, verb_score: u32, argument_score: u32) -> Candidate {
         verb_score,
         argument_score,
         score: combined,
+        leftover,
     }
 }
 

@@ -60,9 +60,14 @@ use crate::content::Prose;
 pub fn report(input: &str, resolution: &Resolution, prose: &Prose, records: &mut Records) {
     match resolution {
         Resolution::Resolved { intent, confidence } => {
+            // **`Divined` draws as `Forced` does, on purpose.** Both mean *the
+            // orb acted on its best reading and invites correction*, which is
+            // one fact and deserves one marker — `Outcome` is a closed six with
+            // `markers_are_distinct` over it, and a seventh glyph would teach a
+            // player a second symbol for something they already understand.
             let outcome = match confidence {
                 Confidence::Clear => Outcome::Resolved,
-                Confidence::Forced => Outcome::Forced,
+                Confidence::Forced | Confidence::Divined => Outcome::Forced,
             };
             records
                 .push(RecordKind::Echo)

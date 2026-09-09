@@ -15,6 +15,52 @@
   at 1.0 (DESIGN.md §19).
 -->
 
+## [v0.13.17] - 2026-09-08
+
+### Description
+In development — a dev log, not patch notes. The orb learned to read plain
+English: "triturate the sage" works like "grind sage", from a model trained here
+on this game's own words. It knows when you are thinking aloud, and the menu can
+switch it off.
+
+### Added
+- **The orb reads what you meant, not just what it knows.** Type
+  `turn the sage into powder`, or `smash the sage`, or `the sage wants
+  crushing` — all of them reach the mortar. The orb still echoes back the short
+  command it settled on, so the arcane words are learned by seeing them rather
+  than by memorising a list.
+- **It knows when you are not asking for anything.** `what should i do next` and
+  `i wonder where the sage came from` are left alone, even though the second one
+  names a reagent. Nine times in ten it declines the sentences that ask for
+  nothing, and answers the ones that do.
+- **A settings page, and the first thing on it is how the orb reads you.**
+  `menu`, then `options`. **Augury** works out what you meant; **plain** answers
+  only the words it already knows and suggests when it cannot. The choice takes
+  effect on the next line you type and is remembered between sessions — kept with
+  your machine rather than inside a tower, so opening another save never changes
+  how your keyboard behaves.
+- **The terminal build is the whole game now.** It runs the same reader the
+  windowed one does. It had been going without, for no better reason than that
+  the model used to drag a graphics stack behind it.
+
+### Changed
+- **Every command the game has can now be spoken plainly.** Seventeen of the
+  forty-six had never been written down in the phrasebook — the whole menagerie,
+  bailey and forge among them — so a sentence meaning one of those was quietly
+  answered by whichever other command came closest. `send the wolves to the gate`
+  used to move a gate.
+- **The orb's guess is checked against the room before it acts.** It offers its
+  best few readings and the tower takes the first that means something where you
+  are standing, so a word that could be two commands is settled by what is
+  actually in front of you rather than by the guess alone.
+- **The phrasebook doubled**, and reaches for the older register too — `bray`,
+  `triturate`, `lixiviate`, `repair to the archive`, `belay that`.
+
+### Fixed
+- **A misread no longer costs you a turn silently.** When the orb cannot make
+  sense of a line at all it falls back to the way it always worked, suggestions
+  and all, instead of running its best guess anyway.
+
 ## [v0.12.7] - 2026-09-07
 
 ### Description

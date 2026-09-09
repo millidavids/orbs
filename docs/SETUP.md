@@ -104,7 +104,7 @@ scripts/tui.sh stop
 
 ```sh
 cargo fmt --all --check
-cargo clippy --workspace --all-targets -- -D warnings
+cargo clippy --workspace --all-targets --features orbs-augury/train -- -D warnings
 cargo test --workspace
 RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
 cargo build -p orbs              # must LINK, not merely check

@@ -32,6 +32,15 @@ pub struct NounMatch {
     pub kind: NounKind,
     /// Similarity, on [`fuzzy::EXACT`]'s scale.
     pub score: u32,
+    /// How many of the offered words the match actually used.
+    ///
+    /// A phrase is tried whole *and* word by word, so a match can explain all
+    /// of what it was given or one word of it, at the same score — `laboratory`
+    /// names the place exactly whether it arrived alone or trailing four more
+    /// words. [`score`](Self::score) cannot tell those apart, and the augury's
+    /// router has to: one is a command, the other is a sentence with a command
+    /// at the front. See `Analysis::reads_outright`.
+    pub words: usize,
 }
 
 /// The nameable surface of the world at the moment of a parse.
@@ -198,38 +207,44 @@ impl Scene {
             if !kind.accepts(noun.kind) {
                 continue;
             }
-            let Some(score) = phrases
-                .iter()
-                .zip(&known)
-                .map(|(phrase, known)| {
-                    let score = score_against(noun, phrase);
-                    // A word only ever matches itself. See `knowing`: fuzzing a
-                    // real substance into a *different* real substance is how
-                    // `digest ground-sage` came to digest ground-salt.
-                    //
-                    // **Unless it is abbreviating**, which is not fuzzing and is
-                    // the affordance `knowing`'s own note preserves. The rule was
-                    // written over substances, where no known word is a strict
-                    // prefix of another, so the distinction never came up. It
-                    // does the moment the known set holds every verb word:
-                    // `check` is `verify`'s, and a spell called `check.spell`
-                    // became unreachable by `invoke check` — a player's own file
-                    // name losing to a word they never typed.
-                    if score < fuzzy::EXACT && *known && !abbreviates(noun, phrase) {
-                        0
-                    } else {
-                        score
-                    }
-                })
-                .filter(|score| *score >= MIN_SIMILARITY)
-                .max()
-            else {
+            // **First-wins on a tie, which is what keeps `words` honest.** The
+            // joined phrase is `phrases[0]`, so preferring it means a match that
+            // explains everything it was given outranks one that explains a word
+            // of it at the same score. `max()` would have taken the last.
+            let mut best: Option<(u32, usize)> = None;
+            for (index, (phrase, known)) in phrases.iter().zip(&known).enumerate() {
+                let score = score_against(noun, phrase);
+                // A word only ever matches itself. See `knowing`: fuzzing a
+                // real substance into a *different* real substance is how
+                // `digest ground-sage` came to digest ground-salt.
+                //
+                // **Unless it is abbreviating**, which is not fuzzing and is
+                // the affordance `knowing`'s own note preserves. The rule was
+                // written over substances, where no known word is a strict
+                // prefix of another, so the distinction never came up. It
+                // does the moment the known set holds every verb word:
+                // `check` is `verify`'s, and a spell called `check.spell`
+                // became unreachable by `invoke check` — a player's own file
+                // name losing to a word they never typed.
+                let score = if score < fuzzy::EXACT && *known && !abbreviates(noun, phrase) {
+                    0
+                } else {
+                    score
+                };
+                if score >= MIN_SIMILARITY && best.is_none_or(|(found, _)| score > found) {
+                    best = Some((score, index));
+                }
+            }
+            let Some((score, index)) = best else {
                 continue;
             };
             found.push(NounMatch {
                 name: noun.name.clone(),
                 kind: noun.kind,
                 score,
+                // `phrases[0]` is every word joined; the rest are the words one
+                // at a time, so anything but the head explains exactly one.
+                words: if index == 0 { words.len() } else { 1 },
             });
         }
         // **Stable, so equal scores keep registration order** — the tie-break

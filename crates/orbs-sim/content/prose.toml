@@ -365,6 +365,7 @@ menu_lead = "the tower waits. what now?"
 menu_word_resume = "resume    go back to the tower"
 menu_word_saves = "saves     the towers the orb is keeping"
 menu_word_new = "new       raise another"
+menu_word_options = "options   how the orb reads you"
 menu_word_quit = "quit      put the orb down"
 menu_word_back = "back      the way you came"
 menu_too_small = "the pane is too small for the menu. press F4"
@@ -381,6 +382,17 @@ menu_new_lead = "how long a game?"
 menu_length_short = "short     a brisk one"
 menu_length_medium = "medium    the usual"
 menu_length_long = "long      the long haul"
+
+# How the orb reads a typed line. `augury` works out what you meant and echoes
+# the command it settled on, which is §6's mastery arc; `plain` answers only the
+# words it already knows and suggests when it cannot. The mark says which is on,
+# because a settings page that does not say what is currently true is a list of
+# things you might already have done.
+menu_options_lead = "how should the orb read you?"
+menu_driver_on = "  * {detail}"
+menu_driver_off = "    {detail}"
+menu_driver_augury = "augury    it works out what you meant"
+menu_driver_plain = "plain     only the words it knows"
 
 # Refusals. §6: never a bare error, and every one names what to do instead.
 menu_unknown = "the orb does not know '{detail}'"

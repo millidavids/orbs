@@ -247,6 +247,30 @@ impl Group {
 }
 
 impl NounKind {
+    /// The kinds a [`Noun`](super::Noun) in the scene can actually be.
+    ///
+    /// **Not every variant is one.** `Pattern`, `Count` and `Name` are free
+    /// text and never touch the world; `Readable`, `Portable`, `Workable`,
+    /// `Stoppable`, `Subject` and `Any` are *sets* a slot accepts, named by
+    /// [`accepts`](Self::accepts) and never carried by a noun. Asking for the
+    /// concrete list used to mean writing it out again, and
+    /// `content::Phrasings` would have been the second copy.
+    ///
+    /// `Command` is here because `tower::scene_at` registers every verb word as
+    /// one — `recall` takes a `Subject`, which is a topic *or* a command.
+    pub const NAMEABLE: [Self; 10] = [
+        Self::Place,
+        Self::File,
+        Self::Topic,
+        Self::Essence,
+        Self::Reagent,
+        Self::Vessel,
+        Self::Scroll,
+        Self::Script,
+        Self::Sense,
+        Self::Command,
+    ];
+
     /// The word for this category, as output names it.
     ///
     /// §6 forbids a bare error: when a slot is empty the orb has to say what

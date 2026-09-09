@@ -155,6 +155,22 @@ fn gone<Fd: std::os::fd::AsFd>(fd: &Fd) -> bool {
 /// Everything the loop keeps between frames.
 struct Session {
     sim: Sim,
+    /// The reader that answers lines the orb cannot read itself (§6), if any.
+    ///
+    /// **Built once with the session, not per keystroke**, because reading the
+    /// environment is not free and the answer cannot change mid-run.
+    ///
+    /// **The trained reader, same as the Bevy build.** This was empty on
+    /// principle while the reader dragged `wgpu` behind it; it does not —
+    /// inference is `ndarray` at 436µs — so the terminal frontend is the whole
+    /// game rather than a cut-down one. `scripts/play.sh` can still set `stub`
+    /// when a scenario is *about* a divined line and wants a fixed answer.
+    augury: Option<Box<dyn orbs_sim::Augur>>,
+    /// Whether the player wants that reader consulted.
+    ///
+    /// **Kept beside the reader rather than replacing it**, for the Bevy build's
+    /// reason: switching back must not cost a file read on a keystroke.
+    driver: orbs_shell::Driver,
     /// The file this tower is kept in, and where it is written back.
     ///
     /// **The path travels with the `Sim`**, which is what stops loading a second
@@ -259,6 +275,8 @@ impl Session {
             held_over: None,
             engine,
             sim,
+            augury: orbs_shell::augury(),
+            driver: orbs_shell::settings::driver(),
             kept,
             save_failed: false,
             line: Line::default(),
@@ -318,8 +336,15 @@ impl Session {
         // closed from under the player by a spell. `menu`'s handshake is taken
         // in here, by `Surfaces::open`.
         self.surfaces
-            .open(&mut self.sim, &mut self.scroll, self.page);
+            .open(&mut self.sim, &mut self.scroll, self.page, self.driver);
         self.surfaces.tick(&self.sim);
+        // **Taken here rather than in the surface**, for the reason
+        // `Surfaces::driving` gives: the reader belongs to the session. Unlike
+        // leaving and swapping this does not end the loop — it changes how the
+        // next line is read and nothing else.
+        if let Some(driver) = self.surfaces.driving.take() {
+            self.driver = driver;
+        }
         // The menu's own `quit` leaves the loop the same way, and so does a
         // swap; `run` decides which of the three it was.
         if self.surfaces.leaving || self.surfaces.swapping.is_some() {
@@ -497,7 +522,7 @@ impl Session {
             // screen cannot happen, but a save can close the editor and hand
             // the prompt back on the same keystroke.
             self.surfaces
-                .open(&mut self.sim, &mut self.scroll, self.page);
+                .open(&mut self.sim, &mut self.scroll, self.page, self.driver);
             return true;
         }
 
@@ -510,12 +535,21 @@ impl Session {
             // **Not a tick.** `submit` echoes immediately and queues the command
             // for the next `step`, which is what keeps the echo instant while
             // effects stay tick-aligned (§19).
-            self.sim.submit(&finished);
+            // `plain` leaves the reader loaded and simply does not ask it —
+            // see `Session::driver`.
+            let reader = match self.driver {
+                orbs_shell::Driver::Plain => None,
+                orbs_shell::Driver::Augury => self.augury.as_deref(),
+            };
+            match reader {
+                Some(augur) => self.sim.submit_reading(&finished, augur),
+                None => self.sim.submit(&finished),
+            }
             self.scroll.rewind();
             // `unfurl` and `wander` answer on the tick they are typed, so the
             // surface they ask for must be taken before the next keystroke.
             self.surfaces
-                .open(&mut self.sim, &mut self.scroll, self.page);
+                .open(&mut self.sim, &mut self.scroll, self.page, self.driver);
         }
         self.ghost = self
             .line
@@ -814,7 +848,13 @@ pub(crate) fn run(sim: Sim, engine: String) -> std::io::Result<()> {
                 }
                 orbs_shell::Opened::Unreadable => {
                     tracing::error!("the tower in {} could not be read", asked.path.display());
-                    session.surfaces.menuing = Some(orbs_shell::Menu::default());
+                    session.surfaces.menuing = Some({
+                        // The options page marks what is *in effect*, which the
+                        // session holds — see `Menu::show_driver`.
+                        let mut menu = orbs_shell::Menu::default();
+                        menu.show_driver(session.driver);
+                        menu
+                    });
                     continue;
                 }
                 orbs_shell::Opened::New => {

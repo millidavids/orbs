@@ -1,68 +1,51 @@
-//! The orb's menu: the screen `quit` opens (DESIGN.md §15, §19).
+//! What a keystroke does to the menu.
 //!
-//! # `quit` opens it, and that spends no verb
-//!
-//! `execute::quit`'s own doc already argued the shape: *"`quit` closes the spell
-//! editor, `quit` closes the weave screen, and now `quit` closes the orb: the
-//! word means **leave the thing you are in**, whichever thing that is."* From a
-//! room, the thing you are in is the game — so `quit` steps out of it and puts
-//! this in front of you, and the menu's own `quit` steps out of the orb.
-//!
-//! **Discoverability was already solved.** `quit` is `is_live` in every room and
-//! has a manual page; a menu reached by a key nobody can find would be the exact
-//! defect `execute::quit` exists to fix, arriving one level up.
-//!
-//! **The sim's `Quitting` handshake is unchanged.** It still means *the player
-//! asked to leave*, and what leaving does was always the frontend's business —
-//! that is why the sim never wrote an `AppExit` itself. So this needed no new
-//! verb, no new resource and no save migration.
-//!
-//! # Rule 2, and why it holds no `Sim`
-//!
-//! Everything drawn is authored prose or something the shell handed in.
-//! [`Menu`] holds what is *typed* and what was refused, exactly as [`Tapestry`]
-//! does; the frontend owns the rest.
-//!
-//! [`Tapestry`]: crate::Tapestry
+//! The pages, the words they answer to, and what the shell is asked to do about
+//! it. Nothing here draws — see [`paint`](super::paint) — and nothing here ends
+//! a process.
 
 use std::path::PathBuf;
 
-use orbs_render::{Frame, Painter, Pos, Rect, Span, Style};
-use orbs_sim::Prose;
 use orbs_sim::content::Length;
 
+use super::words::{BACK, Word, word};
 use crate::save::Slot;
 
 /// The menu, while it is up.
 ///
 /// **A page, a line and a complaint.** Its choices are authored, its state is
-/// what is half-typed and which of three pages is showing, and the screen it
-/// sits over is the frontend's. `Tapestry` is the precedent and this is smaller:
-/// there is no cursor, because there is nothing here to walk — every choice is a
-/// word, which is what the rest of the game is.
+/// what is half-typed and which page is showing, and the screen it sits over is
+/// the frontend's. `Tapestry` is the precedent and this is smaller: there is no
+/// cursor, because there is nothing here to walk — every choice is a word, which
+/// is what the rest of the game is.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Menu {
     /// Which page is showing.
-    page: Page,
+    pub(super) page: Page,
     /// What is being typed at it.
-    command: String,
+    pub(super) command: String,
     /// What it would not do, and why.
-    complaint: Option<Complaint>,
+    pub(super) complaint: Option<Complaint>,
     /// The towers the orb is keeping, as of the last time [`Word::Saves`] was
     /// asked for. **Read once when the page opens** rather than every frame: a
     /// listing is six file reads, and the directory does not change while a
     /// player is looking at it.
-    saves: Vec<Slot>,
+    pub(super) saves: Vec<Slot>,
     /// The lowest slot with no tower in it, or `None` when the orb is full.
-    free: Option<usize>,
+    pub(super) free: Option<usize>,
+    /// Which driver the options page last read, so it can show what is chosen.
+    ///
+    /// Read when the page opens, for `saves`' reason: it is a file read, and it
+    /// does not change while a player is looking at it.
+    pub(super) driver: Driver,
 }
 
-/// Which of the menu's three pages is showing.
+/// Which of the menu's four pages is showing.
 ///
-/// **Pages rather than three surfaces**, because they share the line, the
+/// **Pages rather than four surfaces**, because they share the line, the
 /// complaint and the way out: `back` and Escape step one level, and from the top
-/// Escape is `resume`. Three `Focus` variants would be three of everything for
-/// one screen a player never sees more than one page of.
+/// Escape is `resume`. Four `Focus` variants would be four of everything for one
+/// screen a player never sees more than one page of.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Page {
     /// The words.
@@ -72,42 +55,59 @@ pub enum Page {
     Saves,
     /// How long a new game should be.
     Lengths,
+    /// What the orb does with a line you type at it.
+    Options,
 }
 
-/// A word the menu answers to.
+/// How the orb reads what you type.
 ///
-/// **Prefix-matched, and no two share a first letter** — the rule the editor's
-/// and the weave's vocabularies both follow, so `r`, `s`, `n` and `q` all work
-/// and the property is [a test](tests::no_two_words_share_a_first_letter) rather
-/// than a convention. It holds across the other two pages as well: `back` on
-/// both, `short`/`medium`/`long` on one, and a bare number on the other.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Word {
-    /// Go back to the tower.
-    Resume,
-    /// List the towers the orb is keeping.
-    Saves,
-    /// Begin one.
-    New,
-    /// Put the orb down.
-    Quit,
+/// **The player's choice between the two drivers**, which until now was an
+/// environment variable and therefore nobody's. §6's mastery arc rests on the
+/// player seeing the canonical form echoed back; this decides whether the orb
+/// works one out from a sentence, or answers only the words it already knows.
+///
+/// # The same in both builds
+///
+/// [`Augury`](Self::Augury) means the same thing in the terminal as in the
+/// window: **the terminal frontend is the whole game, not a cut-down one.** It
+/// had no reader while the reader needed `wgpu`; inference is `ndarray` and
+/// costs 436µs, so the GPU went behind `orbs-augury`'s `train` feature and this
+/// setting stopped being a Bevy-only promise.
+///
+/// It is still a *preference* rather than a claim about the build — a checkout
+/// with no trained weights has nothing to consult and falls through to the
+/// matcher, which is what a fresh clone does and is exactly right.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Driver {
+    /// The orb works out what you meant, then echoes the command it settled on.
+    #[default]
+    Augury,
+    /// The orb answers only the words it knows, and suggests when it cannot.
+    Plain,
 }
 
-/// How many words the menu offers.
-///
-/// **A `u16` the array's length is written in terms of**, rather than a cast of
-/// `WORDS.len()`: [`MIN_ROWS`] needs the count in cells, and a cast there is one
-/// clippy will not take on faith. Adding a word means changing this, and the
-/// array literal will not compile until it is.
-const COUNT: u16 = 4;
+impl Driver {
+    /// Both of them, in the order the page offers them.
+    pub const ALL: [Self; 2] = [Self::Augury, Self::Plain];
 
-/// Every word, in the order the menu offers them.
-pub const WORDS: [(&str, Word); COUNT as usize] = [
-    ("resume", Word::Resume),
-    ("saves", Word::Saves),
-    ("new", Word::New),
-    ("quit", Word::Quit),
-];
+    /// The word a player types for it.
+    ///
+    /// No two share a first letter, and neither collides with `back` — held by
+    /// `the_inner_pages_have_no_collisions_either`.
+    #[must_use]
+    pub const fn word(self) -> &'static str {
+        match self {
+            Self::Augury => "augury",
+            Self::Plain => "plain",
+        }
+    }
+
+    /// The driver a word names, whole.
+    #[must_use]
+    pub fn named(word: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|driver| driver.word() == word)
+    }
+}
 
 /// What the menu would like the shell to do.
 ///
@@ -136,6 +136,13 @@ pub enum Outcome {
         /// How long it is to be.
         length: Length,
     },
+    /// Read lines this way from now on.
+    ///
+    /// **Already written down by the time this is returned.** The menu persists
+    /// the choice itself, the way `saves` reads the directory itself; this is
+    /// what tells the running frontend to stop consulting a reader *now* rather
+    /// than at the next launch.
+    Drive(Driver),
 }
 
 /// Something the menu would not do.
@@ -169,6 +176,23 @@ impl Menu {
     #[must_use]
     pub fn saves(&self) -> &[Slot] {
         &self.saves
+    }
+
+    /// Which driver is in effect, as the frontend last said.
+    #[must_use]
+    pub const fn driver(&self) -> Driver {
+        self.driver
+    }
+
+    /// Tell the menu what is currently in effect.
+    ///
+    /// **The frontend is the source of truth, not the settings file.** A session
+    /// with nowhere to write one still has a driver, and a page that read the
+    /// file would show that session the choice it did not make. Called when the
+    /// menu opens, which is the only moment the answer can have changed without
+    /// this page being the one that changed it.
+    pub const fn show_driver(&mut self, driver: Driver) {
+        self.driver = driver;
     }
 
     /// What is typed at it.
@@ -211,6 +235,7 @@ impl Menu {
             Page::Choices => self.chose(&typed),
             Page::Saves => self.picked(&typed),
             Page::Lengths => self.measured(&typed),
+            Page::Options => self.drove(&typed),
         }
     }
 
@@ -225,6 +250,10 @@ impl Menu {
             }
             Some(Word::New) => {
                 self.open_lengths();
+                None
+            }
+            Some(Word::Options) => {
+                self.open_options();
                 None
             }
             None => {
@@ -263,6 +292,17 @@ impl Menu {
             return;
         }
         self.page = Page::Lengths;
+    }
+
+    /// Show the drivers.
+    ///
+    /// **No `Unkept` here, unlike the two pages above.** A session that keeps no
+    /// save can still be told how to read a line — the choice simply lasts as
+    /// long as the session does, which is better than refusing to offer it. And
+    /// no file read either: what is *in effect* is [`driver`](Self::driver), set
+    /// by the frontend when the menu opened.
+    const fn open_options(&mut self) {
+        self.page = Page::Options;
     }
 
     /// A slot number on the saves page.
@@ -313,6 +353,29 @@ impl Menu {
         })
     }
 
+    /// A driver on the options page.
+    fn drove(&mut self, typed: &str) -> Option<Outcome> {
+        if typed.starts_with(BACK) || BACK.starts_with(typed) {
+            self.page = Page::Choices;
+            return None;
+        }
+        let Some(driver) = Driver::ALL
+            .into_iter()
+            .find(|driver| driver.word().starts_with(typed))
+        else {
+            self.complaint = Some(Complaint::Unknown(typed.to_owned()));
+            return None;
+        };
+        // **Written down here, and best-effort.** A session with nowhere to keep
+        // a setting still gets to change it for as long as it lasts; refusing
+        // the choice because it cannot be remembered would be the dead end §15
+        // weighs heaviest, over a preference rather than over a tower.
+        crate::settings::set_driver(driver);
+        self.driver = driver;
+        self.page = Page::Choices;
+        Some(Outcome::Drive(driver))
+    }
+
     /// Escape: one page back, and from the top page back to the tower.
     ///
     /// **From the top it is `resume`**, because the menu is a place you stepped
@@ -325,7 +388,7 @@ impl Menu {
         self.command.clear();
         match self.page {
             Page::Choices => Some(Outcome::Close),
-            Page::Saves | Page::Lengths => {
+            Page::Saves | Page::Lengths | Page::Options => {
                 self.page = Page::Choices;
                 None
             }
@@ -333,255 +396,9 @@ impl Menu {
     }
 }
 
-/// The word that steps one page back, on both inner pages.
-///
-/// Not in [`WORDS`], which is the top page's list. It shares no first letter
-/// with the lengths (`short`, `medium`, `long`) and cannot collide with a slot
-/// number, which is the whole of what it has to avoid.
-const BACK: &str = "back";
-
-/// The word `typed` names, by unambiguous prefix.
-fn word(typed: &str) -> Option<Word> {
-    WORDS
-        .iter()
-        .find(|(name, _)| name.starts_with(typed))
-        .map(|(_, word)| *word)
-}
-
-/// [`crate::save::SLOTS`] as rows.
-///
-/// Written out rather than cast, and asserted equal in
-/// `the_floor_fits_the_tallest_page` — `as` from `usize` is a truncation clippy
-/// will not take on faith, and this is the one number the floor below depends
-/// on.
-const SLOT_ROWS: u16 = 6;
-
-/// Rows the tallest page needs: the saves listing, which is one row per slot,
-/// then a blank and the way back.
-const TALLEST: u16 = SLOT_ROWS + 2;
-
-/// The smallest pane this can honestly be drawn in.
-///
-/// Two borders, the lead, a blank, the page, a blank, the line, and a row under
-/// it for a complaint. Below this it says the pane is too small rather than
-/// drawing a menu with a choice missing from it — the answer the weave already
-/// gives, and the same reason: **a choice you cannot see is one you do not
-/// have**, and one of these choices is how you get out.
-///
-/// **Sized for the tallest page rather than the one showing**, so the menu does
-/// not fit when you open it and stop fitting when you ask for the listing.
-const MIN_ROWS: u16 = 7 + TALLEST;
-const MIN_COLS: u16 = 34;
-
-/// The caret's lead-in, and what the typed line is indented by.
-const LEAD: &str = "> ";
-
-/// Draw the menu into `pane`.
-///
-/// **The caret is set after the painter is done**, the way `sheet::paint` hands
-/// one back: a `Painter` holds the `Frame`, so the two cannot be reached at
-/// once.
-pub fn paint(frame: &mut Frame, menu: &Menu, pane: Rect, prose: &Prose) {
-    if pane.is_empty() {
-        return;
-    }
-    let caret = {
-        let mut painter = frame.painter(pane);
-        let area = painter.area();
-        painter.border(area, Some(&prose.line("menu_title", &[])), Style::DIM);
-        let inner = area.inset(1);
-        if inner.is_empty() {
-            return;
-        }
-        if area.rows < MIN_ROWS || area.cols < MIN_COLS {
-            painter.paragraph(inner, &Span::new(&prose.line("menu_too_small", &[])));
-            None
-        } else {
-            Some(body(&mut painter, menu, inner, prose))
-        }
-    };
-    // `None` when the pane is too small to type into: a caret is the game's one
-    // promise about where a keystroke lands, and drawing it over a message that
-    // says there is no room would be a lie about exactly that.
-    frame.set_cursor(caret);
-}
-
-/// The menu's rows, and where the caret ends up.
-fn body(painter: &mut Painter<'_>, menu: &Menu, inner: Rect, prose: &Prose) -> Pos {
-    let lead = match menu.page() {
-        Page::Choices => "menu_lead",
-        Page::Saves => "menu_saves_lead",
-        Page::Lengths => "menu_new_lead",
-    };
-    let mut y = inner.row;
-    painter.span(
-        Pos::new(inner.col, y),
-        &Span::new(&prose.line(lead, &[])).with_style(Style::DIM),
-    );
-    y = y.saturating_add(2);
-
-    y = match menu.page() {
-        Page::Choices => choices(painter, inner, y, prose),
-        Page::Saves => listing(painter, menu, inner, y, prose),
-        Page::Lengths => lengths(painter, inner, y, prose),
-    };
-    y = y.saturating_add(1);
-
-    // The line, with a caret. Unlike the weave — which has a browsing mode and
-    // draws none — there is exactly one thing to do here and it is typing, so
-    // the caret is always honest.
-    painter.span(
-        Pos::new(inner.col, y),
-        &Span::new(&format!("{LEAD}{}", menu.command())),
-    );
-
-    if let Some(complaint) = menu.complaint() {
-        painter.span(
-            Pos::new(inner.col, y.saturating_add(1)),
-            &Span::new(&said(complaint, prose)).with_style(Style::DIM),
-        );
-    }
-
-    let typed = LEAD
-        .chars()
-        .count()
-        .saturating_add(menu.command().chars().count());
-    Pos::new(
-        inner
-            .col
-            .saturating_add(u16::try_from(typed).unwrap_or(u16::MAX)),
-        y,
-    )
-}
-
-/// The top page's words.
-fn choices(painter: &mut Painter<'_>, inner: Rect, mut y: u16, prose: &Prose) -> u16 {
-    for (name, _) in WORDS {
-        painter.span(
-            Pos::new(inner.col.saturating_add(2), y),
-            &Span::new(&prose.line(&format!("menu_word_{name}"), &[])),
-        );
-        y = y.saturating_add(1);
-    }
-    y
-}
-
-/// The towers the orb is keeping, one row each.
-fn listing(painter: &mut Painter<'_>, menu: &Menu, inner: Rect, mut y: u16, prose: &Prose) -> u16 {
-    if menu.saves().is_empty() {
-        painter.span(
-            Pos::new(inner.col.saturating_add(2), y),
-            &Span::new(&prose.line("menu_saves_none", &[])),
-        );
-        y = y.saturating_add(1);
-    }
-    for save in menu.saves() {
-        painter.span(
-            Pos::new(inner.col.saturating_add(2), y),
-            &Span::new(&prose.line(
-                "menu_saves_row",
-                &[
-                    ("count", &save.slot.to_string()),
-                    ("name", &save.wizard),
-                    ("detail", save.length.word()),
-                    ("quantity", &save.experience.to_string()),
-                ],
-            )),
-        );
-        y = y.saturating_add(1);
-    }
-    y = y.saturating_add(1);
-    painter.span(
-        Pos::new(inner.col.saturating_add(2), y),
-        &Span::new(&prose.line("menu_word_back", &[])).with_style(Style::DIM),
-    );
-    y.saturating_add(1)
-}
-
-/// How long a new game should be.
-fn lengths(painter: &mut Painter<'_>, inner: Rect, mut y: u16, prose: &Prose) -> u16 {
-    for length in Length::OFFERED {
-        painter.span(
-            Pos::new(inner.col.saturating_add(2), y),
-            &Span::new(&prose.line(&format!("menu_length_{}", length.word()), &[])),
-        );
-        y = y.saturating_add(1);
-    }
-    y = y.saturating_add(1);
-    painter.span(
-        Pos::new(inner.col.saturating_add(2), y),
-        &Span::new(&prose.line("menu_word_back", &[])).with_style(Style::DIM),
-    );
-    y.saturating_add(1)
-}
-
-/// A refusal, as a sentence. §6: never a bare error.
-fn said(complaint: &Complaint, prose: &Prose) -> String {
-    match complaint {
-        Complaint::Unknown(word) => prose.line("menu_unknown", &[("detail", word)]),
-        Complaint::Empty(slot) => prose.line("menu_empty", &[("count", &slot.to_string())]),
-        Complaint::Full => prose.line("menu_full", &[]),
-        Complaint::Unkept => prose.line("menu_unkept", &[]),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn no_two_words_share_a_first_letter() {
-        // The prefix rule the editor and the weave both keep, so `r`, `s`, `n`
-        // and `q` are all unambiguous.
-        let mut firsts: Vec<char> = WORDS
-            .iter()
-            .filter_map(|(name, _)| name.chars().next())
-            .collect();
-        firsts.sort_unstable();
-        let before = firsts.len();
-        firsts.dedup();
-        assert_eq!(before, firsts.len(), "two words share a first letter");
-    }
-
-    #[test]
-    fn the_inner_pages_have_no_collisions_either() {
-        // `back` sits on both inner pages beside the lengths and the slot
-        // numbers, and it must not prefix-match any of them — `b` has to mean
-        // one thing wherever it is typed.
-        for length in Length::OFFERED {
-            assert!(
-                !length.word().starts_with(&BACK[..1]),
-                "`b` is ambiguous between back and {}",
-                length.word(),
-            );
-        }
-        assert!(BACK.parse::<usize>().is_err(), "back reads as a slot");
-
-        let mut firsts: Vec<char> = Length::OFFERED
-            .iter()
-            .filter_map(|length| length.word().chars().next())
-            .collect();
-        firsts.sort_unstable();
-        let before = firsts.len();
-        firsts.dedup();
-        assert_eq!(before, firsts.len(), "two lengths share a first letter");
-    }
-
-    #[test]
-    fn the_floor_fits_the_tallest_page() {
-        // `SLOT_ROWS` is `save::SLOTS` written as a `u16`; if they drift, the
-        // listing grows a row the floor did not reserve and the last tower falls
-        // off the bottom of a short pane.
-        assert_eq!(usize::from(SLOT_ROWS), crate::save::SLOTS);
-        const {
-            assert!(
-                TALLEST >= COUNT,
-                "the top page is taller than the floor was sized for",
-            );
-        }
-        let lengths = u16::try_from(Length::OFFERED.len()).expect("three of them");
-        assert!(TALLEST >= lengths + 2, "the lengths page does not fit");
-    }
 
     #[test]
     fn a_word_runs_by_its_shortest_unambiguous_prefix() {
@@ -623,7 +440,7 @@ mod tests {
         let mut menu = Menu::default();
         assert_eq!(menu.escape(), Some(Outcome::Close));
 
-        for page in [Page::Saves, Page::Lengths] {
+        for page in [Page::Saves, Page::Lengths, Page::Options] {
             let mut menu = Menu {
                 page,
                 ..Menu::default()
@@ -638,21 +455,23 @@ mod tests {
 
     #[test]
     fn back_steps_a_page_by_its_prefix_and_a_slot_number_does_not() {
-        let mut menu = Menu {
-            page: Page::Saves,
-            ..Menu::default()
-        };
-        menu.type_text("b");
-        assert_eq!(menu.enter(), None);
-        assert_eq!(menu.page(), Page::Choices);
+        for page in [Page::Saves, Page::Lengths, Page::Options] {
+            let mut menu = Menu {
+                page,
+                ..Menu::default()
+            };
+            menu.type_text("b");
+            assert_eq!(menu.enter(), None);
+            assert_eq!(menu.page(), Page::Choices, "`b` did not step back");
 
-        let mut menu = Menu {
-            page: Page::Lengths,
-            ..Menu::default()
-        };
-        menu.type_text("back");
-        assert_eq!(menu.enter(), None);
-        assert_eq!(menu.page(), Page::Choices);
+            let mut menu = Menu {
+                page,
+                ..Menu::default()
+            };
+            menu.type_text("back");
+            assert_eq!(menu.enter(), None);
+            assert_eq!(menu.page(), Page::Choices);
+        }
     }
 
     #[test]
@@ -726,6 +545,39 @@ mod tests {
             menu.complaint(),
             Some(&Complaint::Unknown("baseline".into())),
         );
+    }
+
+    #[test]
+    fn a_driver_is_chosen_by_prefix_and_steps_back_to_the_top() {
+        // **The whole point of the page**, and the shape it shares with the
+        // lengths: prefix-matched, and the choice is what closes the page.
+        for (typed, want) in [("a", Driver::Augury), ("plain", Driver::Plain)] {
+            let mut menu = Menu {
+                page: Page::Options,
+                ..Menu::default()
+            };
+            menu.type_text(typed);
+            assert_eq!(menu.enter(), Some(Outcome::Drive(want)), "`{typed}`");
+            assert_eq!(menu.page(), Page::Choices, "the page stayed open");
+            assert_eq!(menu.driver(), want, "the page did not show the new choice");
+        }
+    }
+
+    #[test]
+    fn an_unknown_driver_is_said_rather_than_guessed() {
+        // §6 again: the page names what it does not know instead of picking one.
+        let mut menu = Menu {
+            page: Page::Options,
+            ..Menu::default()
+        };
+        menu.type_text("magic");
+        assert_eq!(menu.enter(), None);
+        assert_eq!(
+            menu.complaint(),
+            Some(&Complaint::Unknown("magic".into())),
+            "an unknown driver silently chose one",
+        );
+        assert_eq!(menu.page(), Page::Options, "it left the page anyway");
     }
 
     #[test]

@@ -61,6 +61,7 @@ mod road;
 mod save;
 mod screen;
 mod scrollback;
+pub mod settings;
 mod sheet;
 mod shortcuts;
 mod stacks;
@@ -75,7 +76,7 @@ pub use dump::{
     PASSAGE as PASSAGE_VAR, requested as dump_requested, run as dump, run_script as dump_script,
 };
 pub use editor::{Editor, Mode as EditorMode, Outcome as EditorOutcome};
-pub use environment::{LENGTH, RUSTC, SEALED, SEED, fresh, seed, wizard};
+pub use environment::{LENGTH, RUSTC, SEALED, SEED, augury, fresh, seed, wizard};
 pub use focus::{Focus, Open};
 pub use glance::Panel;
 pub use guide::{Entry, Guide, guide};
@@ -84,7 +85,7 @@ pub use keys::{
 };
 pub use line::Line;
 pub use linear::{Linear, toggle as toggle_linear};
-pub use menu::{Menu, Outcome as MenuOutcome, WORDS as MENU_WORDS};
+pub use menu::{Driver, Menu, Outcome as MenuOutcome, WORDS as MENU_WORDS};
 pub use offering::{Ghost, Offered};
 pub use passing::{Passing, Showing};
 pub use prompt::{View, paint, paint_booting, paint_too_small};

@@ -135,6 +135,31 @@ pub enum Confidence {
     /// Candidates were close, and a siege forbade a blocking prompt (§6), so the
     /// best-scoring one was taken. The echo must offer correction.
     Forced,
+    /// The orb worked the line out rather than reading it — the augury (§6).
+    ///
+    /// **Renders as [`Forced`](Self::Forced) does**, and that is deliberate
+    /// rather than lazy. `Outcome` is a closed set of six with a test asserting
+    /// every marker differs, and a seventh glyph would be a second thing for a
+    /// player to learn about the same fact: *the orb acted on its best reading
+    /// and invites correction*. One `≈` for both.
+    ///
+    /// What it carries that `Forced` does not is **why**, and two things read
+    /// it: the trace, so a session can be sifted for what the model decided,
+    /// and the destructive guard, so `purge` confirms when it was inferred and
+    /// not when it was typed.
+    Divined,
+}
+
+impl Confidence {
+    /// Whether the orb worked this out rather than reading it outright.
+    ///
+    /// The one question the rest of the game asks of this enum. A predicate
+    /// rather than a bare `==` because the destructive guard and the trace must
+    /// not drift apart on it.
+    #[must_use]
+    pub const fn is_divined(self) -> bool {
+        matches!(self, Self::Divined)
+    }
 }
 
 /// A scored interpretation of the input.
@@ -148,6 +173,12 @@ pub struct Candidate {
     pub argument_score: u32,
     /// The combined score candidates are ranked by.
     pub score: u32,
+    /// Words this reading could not account for.
+    ///
+    /// Carried beside [`argument_score`](Self::argument_score) rather than
+    /// folded into it, because the two route differently: see
+    /// [`Analysis::reads_outright`](super::Analysis::reads_outright).
+    pub leftover: usize,
 }
 
 /// Whether a blocking disambiguation prompt is permitted.

@@ -10,7 +10,13 @@ authors.workspace = true
 [dependencies]
 orbs-sim = { path = "../orbs-sim" }
 orbs-render = { path = "../orbs-render" }
-orbs-shell = { path = "../orbs-shell" }
+# **`augury` on, because this is the whole game and not a cut-down one.** The
+# reader was left out while it needed `wgpu`; it does not — inference is
+# `ndarray` and costs 436µs — so the only thing keeping it out of a terminal was
+# a feature split `orbs-augury` had not made yet. A player who prefers the
+# terminal gets the same orb, and the driver setting means the same thing in
+# both builds.
+orbs-shell = { path = "../orbs-shell", features = ["augury"] }
 
 # The whole of this frontend's backend. `orbs-shell` decides what a screen is and
 # hands back a `Frame`; crossterm puts the cells on a terminal and reads keys off

@@ -67,6 +67,14 @@ pub struct ParseRecord {
     pub mode: Mode,
     /// What became of it.
     pub outcome: Outcome,
+    /// Whether the augury worked this reading out rather than the orb reading it.
+    ///
+    /// **A column of its own, because [`outcome`](Self::outcome) cannot carry
+    /// it.** `Divined` and `Forced` share the `≈` marker deliberately — one
+    /// fact, one glyph, for the player — but *which readings the model decided*
+    /// is the whole question a session gets sifted for, and it would be
+    /// invisible in the export otherwise.
+    pub divined: bool,
     /// The canonical echo, if a command was chosen.
     pub echo: Option<String>,
     /// Which dialect the player reached for, if one was identified.
@@ -88,9 +96,14 @@ impl ParseRecord {
     pub fn new(tick: u64, input: &str, mode: Mode, analysis: &Analysis) -> Self {
         let (outcome, echo, register, suggestions) = match &analysis.resolution {
             Resolution::Resolved { intent, confidence } => (
+                // One marker for two confidences — see `report`. The trace keeps
+                // them apart in its own column instead, because *which readings
+                // the augury decided* is exactly what a session is sifted for.
                 match confidence {
                     super::intent::Confidence::Clear => Outcome::Resolved,
-                    super::intent::Confidence::Forced => Outcome::Forced,
+                    super::intent::Confidence::Forced | super::intent::Confidence::Divined => {
+                        Outcome::Forced
+                    }
                 },
                 Some(intent.echo()),
                 Some(intent.register),
@@ -141,12 +154,20 @@ impl ParseRecord {
             }
         };
         let candidates = analysis.candidates.clone();
+        let divined = matches!(
+            analysis.resolution,
+            Resolution::Resolved {
+                confidence: super::intent::Confidence::Divined,
+                ..
+            }
+        );
 
         Self {
             tick,
             input: input.to_owned(),
             mode,
             outcome,
+            divined,
             echo,
             register,
             candidates,
@@ -239,7 +260,7 @@ impl ParseLog {
     #[must_use]
     pub fn to_tsv(&self) -> String {
         let mut out = String::from(
-            "tick\tinput\tmode\toutcome\techo\tregister\trank\tcandidate\tscore\tverb_score\targ_score\tsuggestions\n",
+            "tick\tinput\tmode\toutcome\tdivined\techo\tregister\trank\tcandidate\tscore\tverb_score\targ_score\tleftover\tsuggestions\n",
         );
 
         for record in &self.records {
@@ -247,6 +268,9 @@ impl ParseLog {
                 Mode::Calm => "calm",
                 Mode::Siege => "siege",
             };
+            // Spelled out rather than `true`/`false`: this column is read in a
+            // spreadsheet beside `outcome`, which is a word.
+            let divined = if record.divined { "divined" } else { "" };
             // Escaped like every other field: argument values come from scene
             // noun names, which from Phase 1 are player-authored script and file
             // names. One tab in one of those would add a column to the row.
@@ -262,7 +286,7 @@ impl ParseLog {
             if record.candidates.is_empty() {
                 let _ = writeln!(
                     out,
-                    "{}\t{}\t{mode}\t{}\t{echo}\t{register}\t\t\t\t\t\t{suggestions}",
+                    "{}\t{}\t{mode}\t{}\t{divined}\t{echo}\t{register}\t\t\t\t\t\t\t{suggestions}",
                     record.tick,
                     escape(&record.input),
                     record.outcome.label(),
@@ -273,7 +297,7 @@ impl ParseLog {
             for (rank, candidate) in record.candidates.iter().enumerate() {
                 let _ = writeln!(
                     out,
-                    "{}\t{}\t{mode}\t{}\t{echo}\t{register}\t{rank}\t{}\t{}\t{}\t{}\t{suggestions}",
+                    "{}\t{}\t{mode}\t{}\t{divined}\t{echo}\t{register}\t{rank}\t{}\t{}\t{}\t{}\t{}\t{suggestions}",
                     record.tick,
                     escape(&record.input),
                     record.outcome.label(),
@@ -281,6 +305,7 @@ impl ParseLog {
                     candidate.score,
                     candidate.verb_score,
                     candidate.argument_score,
+                    candidate.leftover,
                 );
             }
         }
@@ -398,5 +423,72 @@ mod tests {
                 "a row broke the shape: {line:?}",
             );
         }
+    }
+
+    /// A reading the augury worked out, built by hand.
+    ///
+    /// There is no augury yet to produce one, so the record is assembled from
+    /// the pieces — which is the point: the trace's contract is testable before
+    /// the model exists, and it is what the stub will be measured against.
+    fn divined_record() -> ParseRecord {
+        let analysis = analyse("recall clarity", &tower(), Mode::Calm);
+        let Resolution::Resolved { intent, .. } = analysis.resolution else {
+            panic!("the fixture stopped resolving");
+        };
+        ParseRecord::new(
+            7,
+            "tell me about clarity",
+            Mode::Calm,
+            &Analysis {
+                resolution: Resolution::Resolved {
+                    intent,
+                    confidence: super::super::intent::Confidence::Divined,
+                },
+                candidates: analysis.candidates,
+            },
+        )
+    }
+
+    #[test]
+    fn a_divined_reading_draws_as_a_forced_one() {
+        // One `≈` for two confidences. `Outcome` is a closed six with
+        // `markers_are_distinct` over it, and the player is being told one
+        // thing: the orb acted on its best reading and invites correction.
+        assert_eq!(divined_record().outcome, Outcome::Forced);
+    }
+
+    #[test]
+    fn the_trace_keeps_divined_apart_from_forced() {
+        // ...and the export does not lose the distinction the marker gives up.
+        // *Which readings the model decided* is what a session is sifted for.
+        let record = divined_record();
+        assert!(record.divined);
+
+        let mut log = ParseLog::new();
+        log.push(record);
+        let tsv = log.to_tsv();
+
+        assert!(
+            tsv.lines()
+                .next()
+                .expect("no header")
+                .contains("\tdivined\t")
+        );
+        assert!(
+            tsv.lines().nth(1).expect("no row").contains("\tdivined\t"),
+            "the row does not say which readings were divined: {tsv}"
+        );
+
+        // A reading the orb read outright must not claim to have been divined.
+        let plain = log_of(&["recall clarity"], Mode::Calm);
+        assert!(!plain.records()[0].divined);
+    }
+
+    #[test]
+    fn the_export_carries_the_leftover_count() {
+        // The router's second condition (`Analysis::reads_outright`), so a
+        // session can be sifted for the sentences the augury was handed and why.
+        let log = log_of(&["clarity"], Mode::Calm);
+        assert!(log.to_tsv().contains("\tleftover\t"));
     }
 }

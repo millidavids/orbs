@@ -55,6 +55,14 @@ pub(crate) struct Surfaces {
     /// eighteen-resource reset — every derived field goes back to its default
     /// because it is a *new struct*, and none of them can be forgotten.
     pub(crate) swapping: Option<Swap>,
+    /// A driver the options page chose, waiting for `drive::run` to honour it.
+    ///
+    /// **Raised here and acted on there**, for `swapping`'s reason: the reader
+    /// belongs to the `Session` and a surface reaching into it would be the
+    /// shared half reaching for the backend's. The choice is already written
+    /// down by the time this is set — this only makes it true for the session
+    /// already running.
+    pub(crate) driving: Option<orbs_shell::Driver>,
 }
 
 /// A tower the menu asked for.
@@ -90,7 +98,13 @@ impl Surfaces {
     /// peek-then-take pair because `&mut` through a `ResMut` stamps a change tick
     /// and defeats its own `resource_changed` guards; a loop with no change
     /// detection just takes.
-    pub(crate) fn open(&mut self, sim: &mut Sim, scroll: &mut Scroll, page: usize) {
+    pub(crate) fn open(
+        &mut self,
+        sim: &mut Sim,
+        scroll: &mut Scroll,
+        page: usize,
+        driver: orbs_shell::Driver,
+    ) {
         if self.editing.is_none()
             && let Some(request) = sim.opening()
         {
@@ -126,7 +140,11 @@ impl Surfaces {
         // has why that was superseded. `quit`'s flag is `drive`'s, and it is
         // only ever set by a *confirmed* one.
         if self.menuing.is_none() && sim.menuing() {
-            self.menuing = Some(Menu::default());
+            // The options page marks what is *in effect*, which the session
+            // holds — see `Menu::show_driver`.
+            let mut menu = Menu::default();
+            menu.show_driver(driver);
+            self.menuing = Some(menu);
         }
         if !scroll.is_reading() && sim.unfurling() {
             scroll.read();
@@ -239,6 +257,7 @@ impl Surfaces {
                     length: Some(length),
                 });
             }
+            Some(MenuOutcome::Drive(driver)) => self.driving = Some(driver),
             None => {}
         }
     }
@@ -401,6 +420,7 @@ mod tests {
             menuing: None,
             leaving: false,
             swapping: None,
+            driving: None,
         }
     }
 
@@ -525,7 +545,7 @@ mod tests {
 
         let mut surfaces = Surfaces::default();
         let mut scroll = Scroll::default();
-        surfaces.open(&mut sim, &mut scroll, 1);
+        surfaces.open(&mut sim, &mut scroll, 1, orbs_shell::Driver::default());
         assert_eq!(
             surfaces.owner(&scroll),
             Owner::Maze,
@@ -533,7 +553,7 @@ mod tests {
         );
 
         surfaces.walking = false;
-        surfaces.open(&mut sim, &mut scroll, 1);
+        surfaces.open(&mut sim, &mut scroll, 1, orbs_shell::Driver::default());
         assert_eq!(
             surfaces.owner(&scroll),
             Owner::Prompt,
@@ -552,7 +572,7 @@ mod tests {
         }
         let mut surfaces = Surfaces::default();
         let mut scroll = Scroll::default();
-        surfaces.open(&mut sim, &mut scroll, 1);
+        surfaces.open(&mut sim, &mut scroll, 1, orbs_shell::Driver::default());
         assert_eq!(surfaces.owner(&scroll), Owner::Maze);
 
         sim.submit("stop stacks");

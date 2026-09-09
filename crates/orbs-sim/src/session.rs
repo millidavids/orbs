@@ -296,6 +296,32 @@ impl Skip {
 pub enum Submission {
     /// A line typed at the prompt.
     Typed(String),
+    /// A line the augury worked out rather than the orb reading it (§6).
+    ///
+    /// # Why the canonical form travels, when [`Wrote`](Self::Wrote)'s does not
+    ///
+    /// `Wrote` records the buffer *before* canonicalisation on the explicit
+    /// ground that replaying should re-derive the canonical form rather than
+    /// trust one recorded beside it. That is right there and wrong here, and the
+    /// difference is the whole reason this variant exists.
+    ///
+    /// Re-deriving is safe when the derivation is `analyse`, which is pure,
+    /// integer-scored and has no RNG. It is **not** safe when a trained model
+    /// did the reading: the same line on a different GPU, a different driver or
+    /// a different backend need not produce the same spans, so a replay that
+    /// re-read the line could diverge from the session it claims to reproduce —
+    /// silently, and only on someone else's machine.
+    ///
+    /// So the model runs exactly once, at the moment the player was there to see
+    /// the echo, and what replays is what they saw. **The augury is outside the
+    /// determinism boundary; the echo is the boundary.**
+    Divined {
+        /// Exactly what the player typed. Kept for the transcript and the trace,
+        /// never re-read.
+        line: String,
+        /// The canonical command the augury settled on — what actually replays.
+        echo: String,
+    },
     /// A spell saved out of the editor.
     ///
     /// # Why the whole text, and not the keystrokes
@@ -371,6 +397,17 @@ impl Submissions {
     /// Note that `line` was submitted during `tick`.
     pub fn push(&mut self, tick: Tick, line: &str) {
         self.0.push((tick, Submission::Typed(line.to_owned())));
+    }
+
+    /// Note that the augury read `line` as `echo` during `tick`.
+    pub fn divined(&mut self, tick: Tick, line: &str, echo: &str) {
+        self.0.push((
+            tick,
+            Submission::Divined {
+                line: line.to_owned(),
+                echo: echo.to_owned(),
+            },
+        ));
     }
 
     /// Note that a spell was saved during `tick`.

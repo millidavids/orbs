@@ -60,8 +60,13 @@ impl Standing {
     }
 
     /// Put it up, replacing whatever was there.
-    pub(crate) fn open(&mut self) {
-        self.0 = Some(Menu::default());
+    ///
+    /// `driver` is what is in effect right now, so the options page can mark it
+    /// — the frontend holds that, not the settings file.
+    pub(crate) fn open(&mut self, driver: orbs_shell::Driver) {
+        let mut menu = Menu::default();
+        menu.show_driver(driver);
+        self.0 = Some(menu);
     }
 
     /// Take it down.
@@ -85,14 +90,20 @@ impl Standing {
 /// run condition, re-arms it for ever and drags the panel and the suggestions
 /// back to frame rate. `commanding::quit_requested` records that defect
 /// happening once already.
-pub(crate) fn open_requested(mut tower: ResMut<crate::sim::Tower>, mut standing: ResMut<Standing>) {
+pub(crate) fn open_requested(
+    mut tower: ResMut<crate::sim::Tower>,
+    mut standing: ResMut<Standing>,
+    // `Option` for `commanding::submit`'s reason; absent means nothing is
+    // reading lines any other way, which is exactly `Driver::default`.
+    augury: Option<Res<crate::sim::Augury>>,
+) {
     if !tower.has_menuing() {
         return;
     }
     if !tower.menuing() {
         return;
     }
-    standing.open();
+    standing.open(augury.map_or_else(Default::default, |augury| augury.driver()));
 }
 
 /// A tower the menu asked for, waiting for the swap.
@@ -118,6 +129,9 @@ pub(crate) fn type_into_menu(
     mut standing: ResMut<Standing>,
     mut exit: MessageWriter<AppExit>,
     mut swapping: MessageWriter<SwapMessage>,
+    // `Option`, for `commanding::submit`'s reason: half the tests here build the
+    // shell alone, and a bare `Res` fails parameter validation in one.
+    augury: Option<ResMut<crate::sim::Augury>>,
 ) {
     // **A held chord is skipped; a *stale* one is not** — see `type_into_loom`,
     // whose comment records the swallowed keystroke that comes of reading this
@@ -172,6 +186,14 @@ pub(crate) fn type_into_menu(
                 path,
                 length: Some(length),
             });
+        }
+        // **Takes effect on the next line typed, not on the next launch.** The
+        // menu has already written the choice down; this is the running session
+        // catching up with it, which is the whole reason the outcome exists.
+        Some(MenuOutcome::Drive(driver)) => {
+            if let Some(mut augury) = augury {
+                augury.drive(driver);
+            }
         }
         None => {}
     }
@@ -269,7 +291,7 @@ mod tests {
         assert!(!standing.is_open());
         assert!(standing.get().is_none());
 
-        standing.open();
+        standing.open(orbs_shell::Driver::default());
         assert!(standing.is_open(), "the menu did not take the keyboard");
 
         standing.close();
@@ -354,7 +376,9 @@ mod tests {
         app.world_mut()
             .resource_mut::<crate::shell::Loom>()
             .open(orbs_shell::Tapestry::default());
-        app.world_mut().resource_mut::<Standing>().open();
+        app.world_mut()
+            .resource_mut::<Standing>()
+            .open(orbs_shell::Driver::default());
         assert!(app.world().resource::<crate::shell::Loom>().is_open());
 
         app.world_mut().write_message(SwapMessage {
@@ -411,7 +435,9 @@ mod tests {
         std::fs::write(&two, "this is not a save").expect("a file");
 
         let mut app = app(77, one);
-        app.world_mut().resource_mut::<Standing>().open();
+        app.world_mut()
+            .resource_mut::<Standing>()
+            .open(orbs_shell::Driver::default());
         app.world_mut().write_message(SwapMessage {
             path: two,
             length: None,

@@ -929,12 +929,20 @@ fn scrolled(sim: &mut orbs_sim::Sim) -> super::scrollback::Scroll {
 /// ones after it are driven identically — a second copy would be a second answer
 /// to what a dump command *is*.
 fn drive(sim: &mut Sim, script: &str) {
+    // **Read once, for the whole script.** `ORBS_AUGURY` is off unless asked
+    // for, so a dump written before the augury existed drives exactly as it
+    // always did — and one with `stub` set can reach a divined line, which is
+    // the only way `scripts/dumps.sh` can see that surface at all.
+    let augury = super::environment::augury();
     for line in script
         .split(SEPARATOR)
         .map(str::trim)
         .filter(|line| !line.is_empty())
     {
-        sim.submit(line);
+        match augury.as_deref() {
+            Some(augur) => sim.submit_reading(line, augur),
+            None => sim.submit(line),
+        }
         sim.step();
     }
 }
@@ -1162,10 +1170,16 @@ fn menued(sim: &mut orbs_sim::Sim) -> Option<super::Menu> {
                     // leave the menu on screen as the last thing the player saw.
                     // The *pages* are what a dump can show, and they are what it
                     // is for — `ORBS_MENU="saves"` is the listing's See-it line.
+                    // **`Drive` included, and it is the one that already
+                    // happened.** The menu writes the setting itself, so what
+                    // this carries is only *tell the running frontend now* — and
+                    // a dump is not running one. The page it steps back to is
+                    // what a capture shows.
                     Some(
                         super::MenuOutcome::PutDown
                         | super::MenuOutcome::Load(_)
-                        | super::MenuOutcome::Begin { .. },
+                        | super::MenuOutcome::Begin { .. }
+                        | super::MenuOutcome::Drive(_),
                     )
                     | None => {}
                 }

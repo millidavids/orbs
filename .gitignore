@@ -49,4 +49,14 @@ orbs-save.toml.writing
 orbs-save-*.toml
 orbs-save-*.toml.writing
 orbs-save*.toml.unreadable
+# ...and what the player chose about the orb itself, which is kept beside the
+# saves and is per-machine for the same reason they are: it is not a tower, and
+# nobody else's copy of it means anything.
+orbs-settings.toml
 assets/online/
+
+# Trained weights are a build artefact of `orbs-augury --example train`, not
+# source. 1.4 MB of floats that change on every run would make a diff useless
+# and a history heavy; the trainer is deterministic, so the recipe is what is
+# kept. Shipping will embed a chosen artefact deliberately (DESIGN.md §19).
+crates/orbs-augury/weights/

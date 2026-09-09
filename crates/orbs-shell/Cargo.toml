@@ -24,5 +24,27 @@ orbs-render = { path = "../orbs-render" }
 bevy_ecs.workspace = true
 tracing.workspace = true
 
+# For `settings.rs` — what the player chose about the orb, kept beside the saves
+# rather than inside one. Both are already in the tree via `orbs-sim`, which
+# reads every content table with them, so this adds no build time and no new
+# licence row (§19's audited table).
+#
+# **A one-key file did not need a format**, and gets one because the roadmap's
+# open `Options, remapping, all toggles` is the rest of that file: a bespoke
+# `driver=augury` line is a thing to migrate the first time a second key lands.
+serde.workspace = true
+toml.workspace = true
+
+# **Optional, and `orbs-tui` deliberately does not turn it on.** The trained
+# reader brings `burn` — 150 crates — and the terminal build is kept as the
+# no-GPU, instant-startup target. The Bevy build enables `augury`; everything
+# else gets a shell that answers `ORBS_AUGURY=model` with "no reader", which is
+# the game exactly as it was.
+orbs-augury = { path = "../orbs-augury", optional = true }
+
+[features]
+default = []
+augury = ["dep:orbs-augury"]
+
 [lints]
 workspace = true

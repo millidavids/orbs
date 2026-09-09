@@ -28,10 +28,17 @@ use orbs_shell::TRACE_PATH;
 pub(super) fn submit(
     mut lines: MessageReader<SubmittedMessage>,
     mut tower: ResMut<Tower>,
+    // **`Option`, because a shell can exist without a sim plugin.** Half the
+    // tests in this file build the shell alone to fire a real `KeyboardInput` at
+    // it, and a bare `Res` fails parameter validation there — which would make
+    // installing a reader break every test that never wanted one. Absent is the
+    // same as empty: no reader, and `submit` unchanged.
+    augury: Option<Res<crate::sim::Augury>>,
     mut scroll: ResMut<orbs_shell::Scroll>,
 ) {
+    let reader = augury.as_deref().and_then(crate::sim::Augury::reader);
     for submitted in lines.read() {
-        tower.submit(&submitted.line);
+        tower.submit_with(&submitted.line, reader);
         // Back to the newest output. The player acted; what they want to see is
         // what it did, and leaving them in history to watch their own command
         // scroll past off screen is the one place terminal convention is wrong
@@ -105,5 +112,75 @@ pub(super) fn quit_requested(mut tower: ResMut<Tower>, mut exit: MessageWriter<A
     }
     if tower.quitting() {
         exit.write(AppExit::Success);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::sim::Augury;
+
+    /// **The seam a dump cannot reach.** `ORBS_DUMP` builds no `App`, so
+    /// everything `scripts/dumps.sh` proves about the reader it proves about
+    /// `Sim::submit_reading` — never about the message that carries a typed line
+    /// to it. The terminal build covers the other half by pressing real keys;
+    /// this is the Bevy half, and between them the chain from a keystroke to a
+    /// divined echo has no untested link.
+    #[test]
+    fn a_submitted_line_reaches_the_reader() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .add_message::<SubmittedMessage>()
+            .init_resource::<orbs_shell::Scroll>()
+            .insert_resource(Tower::new(0))
+            .insert_resource(Augury::holding(Box::new(orbs_sim::Fixture::worked())))
+            .add_systems(Update, submit);
+
+        app.world_mut().write_message(SubmittedMessage {
+            // A phrasing the deterministic pipeline genuinely cannot read, so
+            // reaching `attend` at all is the reader having been consulted.
+            line: String::from("go and have a look at the laboratory"),
+        });
+        app.update();
+
+        let tower = app.world().resource::<Tower>();
+        let record = tower
+            .sim()
+            .parse_log()
+            .records()
+            .last()
+            .expect("the line was submitted, so it was parsed");
+        assert!(
+            record.divined,
+            "the reader was installed and never asked: {record:?}"
+        );
+        // The reader's own canonical, which is what §6's mastery arc teaches —
+        // not the resolved path the matcher would have echoed.
+        assert_eq!(record.echo.as_deref(), Some("attend laboratory"));
+    }
+
+    /// And with no reader installed, the same message is the game as it was.
+    #[test]
+    fn without_a_reader_the_same_line_is_left_to_the_matcher() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .add_message::<SubmittedMessage>()
+            .init_resource::<orbs_shell::Scroll>()
+            .insert_resource(Tower::new(0))
+            .add_systems(Update, submit);
+
+        app.world_mut().write_message(SubmittedMessage {
+            line: String::from("go and have a look at the laboratory"),
+        });
+        app.update();
+
+        let tower = app.world().resource::<Tower>();
+        let record = tower
+            .sim()
+            .parse_log()
+            .records()
+            .last()
+            .expect("the line was submitted, so it was parsed");
+        assert!(!record.divined, "no reader was installed");
     }
 }

@@ -10,7 +10,8 @@ authors.workspace = true
 [dependencies]
 orbs-sim = { path = "../orbs-sim" }
 orbs-render = { path = "../orbs-render" }
-orbs-shell = { path = "../orbs-shell" }
+orbs-shell = { path = "../orbs-shell", features = ["augury"] }
+
 
 # Content hot-reload (CLAUDE.md rule 6). The watcher lives *here*, not in
 # orbs-sim: rule 8 forbids async in the sim, rule 3 makes a frontend a caller

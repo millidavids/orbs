@@ -17,6 +17,95 @@ use orbs_sim::Sim;
 #[derive(Resource)]
 pub(crate) struct Tower(Sim);
 
+/// The reader that answers lines the orb cannot read itself (§6), if any.
+///
+/// **Empty unless `ORBS_AUGURY` names one**, which is the shipping default
+/// until a trained reader exists: an absent augury is the game exactly as it
+/// was, because `Sim::submit_reading` with nothing to consult *is* `submit`.
+///
+/// `orbs_shell::augury` is the single reader of the switch, so this build and
+/// the terminal one cannot disagree about what it means.
+#[derive(Resource, Default)]
+pub(crate) struct Augury {
+    /// The reader this build could consult, if the player wants one.
+    ///
+    /// **Loaded once and kept even while `plain` is chosen.** Switching drivers
+    /// is a menu choice and must take effect on the next line typed; rebuilding
+    /// a reader on the way out of a settings page would put a file read on a
+    /// keystroke, and dropping it would make turning the setting back on cost
+    /// one.
+    reader: Option<Box<dyn orbs_sim::Augur>>,
+    /// Whether the player wants it consulted.
+    driver: orbs_shell::Driver,
+}
+
+impl Augury {
+    /// Whatever `ORBS_AUGURY` asked for.
+    ///
+    /// **Every reader is chosen in `orbs_shell::augury`, including the trained
+    /// one.** Answering `model` here instead put it somewhere `ORBS_DUMP` could
+    /// never reach — a dump builds no `App`, so a reader living in a Bevy
+    /// resource is invisible to `scripts/dumps.sh`, which is exactly the
+    /// blindness the fixture augur exists to prevent. The shell takes an
+    /// optional `orbs-augury` behind a feature instead, and `orbs-tui` leaves it
+    /// off.
+    pub(crate) fn from_environment() -> Self {
+        // **Never under `cargo test`, now that a reader is the default.** Weights
+        // are a gitignored build artefact, so a reader installed here would make
+        // every test that adds `SimPlugin` behave one way on a machine that has
+        // trained and another on a fresh clone — a suite that passes or fails on
+        // whether someone ran the trainer is worse than no suite. A test that
+        // wants one installs it with [`Augury::holding`].
+        if cfg!(test) {
+            return Self::default();
+        }
+        Self {
+            reader: orbs_shell::augury(),
+            driver: orbs_shell::settings::driver(),
+        }
+    }
+
+    /// The reader, for handing to the sim — or nothing, if `plain` is chosen.
+    ///
+    /// **Two switches, and they answer different questions.** `ORBS_AUGURY` says
+    /// what this *build* has to offer and is a developer's override; the driver
+    /// is the player's, and it decides whether what is on offer gets consulted.
+    /// `off` leaves nothing to gate, so the setting is simply moot there.
+    pub(crate) fn reader(&self) -> Option<&dyn orbs_sim::Augur> {
+        match self.driver {
+            orbs_shell::Driver::Plain => None,
+            orbs_shell::Driver::Augury => self.reader.as_deref(),
+        }
+    }
+
+    /// Read lines this way from now on.
+    ///
+    /// The menu has already written the choice down; this is what makes it true
+    /// for the session already running.
+    pub(crate) const fn drive(&mut self, driver: orbs_shell::Driver) {
+        self.driver = driver;
+    }
+
+    /// Which driver is in effect, for the menu to mark.
+    pub(crate) const fn driver(&self) -> orbs_shell::Driver {
+        self.driver
+    }
+
+    /// A reader chosen directly rather than from the environment.
+    ///
+    /// **For the one seam a dump cannot reach.** `ORBS_DUMP` builds no `App`, so
+    /// everything `scripts/dumps.sh` proves about a reader it proves about
+    /// `Sim::submit_reading` — never about the Bevy message that carries a typed
+    /// line to it.
+    #[cfg(test)]
+    pub(crate) fn holding(reader: Box<dyn orbs_sim::Augur>) -> Self {
+        Self {
+            reader: Some(reader),
+            driver: orbs_shell::Driver::Augury,
+        }
+    }
+}
+
 impl Tower {
     /// An open tower from a master seed — every room, for the tests that need
     /// one and never for a player.
@@ -93,6 +182,25 @@ impl Tower {
     /// for the next `step()`. See `orbs_sim::session`.
     pub(crate) fn submit(&mut self, line: &str) {
         self.0.submit(line);
+    }
+
+    /// Hand a finished line to the sim, letting `augur` read it if the orb cannot.
+    ///
+    /// **A separate method rather than a field on `Tower`**, and a separate
+    /// resource rather than a constructor argument, because a reader is not
+    /// part of what a tower *is*: all four constructors build the same world
+    /// whether or not one is installed, and threading an `Option` through each
+    /// of them would say otherwise.
+    ///
+    /// `None` is [`submit`](Self::submit) exactly — see
+    /// [`Sim::submit_reading`](orbs_sim::Sim::submit_reading) for the tiers.
+    pub(crate) fn submit_with(&mut self, line: &str, augur: Option<&dyn orbs_sim::Augur>) {
+        match augur {
+            Some(augur) => self.0.submit_reading(line, augur),
+            // Through [`submit`](Self::submit) rather than past it, so there is
+            // one place this façade reaches the world with a typed line.
+            None => self.submit(line),
+        }
     }
 
     /// Take a mastery node the weave screen chose.

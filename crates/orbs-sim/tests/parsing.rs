@@ -4,7 +4,9 @@
 //! exit gate measures this system and nothing else, so these tests are written as
 //! claims about player experience rather than about functions.
 
-use orbs_sim::parser::{Confidence, Mode, NounKind, Register, Resolution, Scene, Verb, resolve};
+use orbs_sim::parser::{
+    Confidence, Mode, NounKind, Register, Resolution, Scene, Verb, analyse, resolve,
+};
 
 /// The slice's world: two starting domains, thin (DESIGN.md §15).
 /// A scene standing **nowhere in particular**, offering no fixture's verb.
@@ -386,6 +388,118 @@ fn resolution_is_deterministic() {
             assert_eq!(resolve(input, &tower(), Mode::Calm), first, "{input:?}");
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// The augury's router — which lines the deterministic pipeline keeps (§6).
+//
+// `Analysis::reads_outright` decides what a trained model never sees. It is
+// written as claims about phrasing rather than about scores, because the thing
+// it must get right is *"did the orb understand the sentence"* and the scores
+// are only how that is measured.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn a_command_typed_properly_is_read_outright() {
+    // The mastery arc (§6) is players graduating to the canonical form. It
+    // cannot depend on a model, so none of these may reach one.
+    for input in [
+        "survey",
+        "attend laboratory",
+        "sift march feed.log",
+        "peruse feed.log",
+        "recall brewing",
+        "ls",
+        "go to the laboratory",
+        "please rm sludge",
+    ] {
+        assert!(
+            analyse(input, &anywhere(), Mode::Calm).reads_outright(),
+            "{input:?} would be handed to the augury"
+        );
+    }
+}
+
+#[test]
+fn a_typo_in_an_argument_is_still_read_outright() {
+    // `clarty` reaches `clarity` at 819, and the matcher is better at that than
+    // any model trained on phrasings will be. Routing typos away from it would
+    // hand the augury work the deterministic path already does well — and
+    // §19's *"the player this game is built for"* types exactly this.
+    for input in ["recall clarty", "attend labratory", "sift march fed.log"] {
+        assert!(
+            analyse(input, &anywhere(), Mode::Calm).reads_outright(),
+            "{input:?} would be handed to the augury"
+        );
+    }
+}
+
+#[test]
+fn a_sentence_is_not_read_outright_even_when_it_opens_on_a_verb() {
+    // **The defect this router exists to avoid.** `put` is a plain-register
+    // `dial` synonym, `take` and `make` are claimed too — so a rule that asked
+    // only whether the head named a verb would answer "yes" to all of these and
+    // send a sentence into a one-word command with the rest left over.
+    for input in [
+        "put the sage in the mortar and grind it",
+        "take the husks out and throw them away",
+        "make the sage into a powder for me",
+    ] {
+        assert!(
+            !analyse(input, &anywhere(), Mode::Calm).reads_outright(),
+            "{input:?} was read outright"
+        );
+    }
+}
+
+#[test]
+fn the_phrasings_the_augury_exists_for_reach_it() {
+    for input in [
+        "turn the sage into powder",
+        "smash the sage",
+        "i need some powdered sage",
+        "what should i be doing",
+    ] {
+        assert!(
+            !analyse(input, &anywhere(), Mode::Calm).reads_outright(),
+            "{input:?} was read outright"
+        );
+    }
+}
+
+#[test]
+fn a_deliberate_refusal_is_read_outright() {
+    // `Elsewhere` and `InSpell` both exist because *"I do not know that word"*
+    // would lie about a word the game taught the player — in the room next door,
+    // or in the editor (§19). Handing either to a model trades a good refusal
+    // for a guess.
+    let elsewhere = analyse("mix", &tower(), Mode::Calm);
+    assert!(matches!(elsewhere.resolution, Resolution::Elsewhere { .. }));
+    assert!(elsewhere.reads_outright());
+
+    let in_spell = analyse("repeat 3", &tower(), Mode::Calm);
+    assert!(matches!(in_spell.resolution, Resolution::InSpell { .. }));
+    assert!(in_spell.reads_outright());
+}
+
+#[test]
+fn a_leftover_word_is_what_separates_a_sentence_from_a_command() {
+    // The two halves of the rule, pinned apart. Same verb, same exactness; only
+    // the unexplained words differ, and only they change the answer.
+    let command = analyse("attend laboratory", &anywhere(), Mode::Calm);
+    let sentence = analyse(
+        "attend laboratory and then start the mortar",
+        &anywhere(),
+        Mode::Calm,
+    );
+
+    let best = |analysis: &orbs_sim::parser::Analysis| {
+        analysis.candidates.first().expect("a reading").clone()
+    };
+    assert_eq!(best(&command).leftover, 0);
+    assert!(best(&sentence).leftover > 0);
+    assert!(command.reads_outright());
+    assert!(!sentence.reads_outright());
 }
 
 #[test]

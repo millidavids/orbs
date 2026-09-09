@@ -10,7 +10,9 @@ use orbs_render::{Outcome, Presentation, RecordKind};
 
 use crate::content::{Fuels, Prose, Recipes, Spells};
 use crate::execute::run_pending;
-use crate::parser::{Mode, ParseLog, ParseRecord, Resolution, Scene, analyse, report};
+use crate::parser::{
+    Analysis, Confidence, Mode, ParseLog, ParseRecord, Resolution, Scene, analyse, report,
+};
 use crate::rng::Rngs;
 use crate::schedule::new_sim_schedule;
 use crate::session::{Choices, Pending, Scrollback, Skip, Submission, Submissions, Wizard};
@@ -811,6 +813,189 @@ impl Sim {
         }
     }
 
+    /// Submit a line, letting `augur` read it if the orb cannot (§6).
+    ///
+    /// **The three tiers, in one place.** A frontend calls this instead of
+    /// [`submit`](Self::submit) when it has a reader; everything without one —
+    /// the balance harness, a headless dump, every test that predates this —
+    /// keeps calling `submit` and behaves exactly as it always has.
+    ///
+    /// 1. **The orb reads it.** [`is_literal`](crate::parser::is_literal) covers
+    ///    what text alone settles — a digit answering a numbered prompt, a
+    ///    tester's door, a spell word — and
+    ///    [`Analysis::reads_outright`](crate::parser::Analysis::reads_outright)
+    ///    covers the rest: the verb was typed rather than guessed at, and the
+    ///    reading accounted for every word. Either way the line goes to
+    ///    `submit` untouched, so `Elsewhere`, `InSpell`, `Incomplete` and the
+    ///    numbered prompt all survive.
+    /// 2. **The augury reads it**, and [`submit_divined`](Self::submit_divined)
+    ///    runs what it decided.
+    /// 3. **Nobody reads it**, and `submit` answers with §6's suggestions —
+    ///    which is what the game did before any of this existed.
+    ///
+    /// # It cannot regress a line that works today
+    ///
+    /// Tier one is decided before a reader is consulted and is a strict
+    /// property of the deterministic pipeline, so every phrasing that resolves
+    /// now still resolves now, by the same route, to the same command.
+    /// `scripts/dumps.sh` is the proof and it is a `diff`, not an argument.
+    ///
+    /// # The double `analyse` is deliberate
+    ///
+    /// Tier one analyses to decide, and `submit` analyses again to act. It is
+    /// pure, integer-scored and measured under a millisecond, and the
+    /// alternative — threading a half-finished analysis through the entry point
+    /// every other caller uses — would make `submit` mean two things.
+    pub fn submit_reading(&mut self, line: &str, augur: &dyn crate::Augur) {
+        if crate::parser::is_literal(line) {
+            self.submit(line);
+            return;
+        }
+        let analysis = analyse(line, self.world.resource::<Scene>(), Mode::Calm);
+        if analysis.reads_outright() {
+            self.submit(line);
+            return;
+        }
+        // **The first reading that resolves, and the room decides which.** A
+        // reader offers candidates because it cannot see the world — `run
+        // night_watch` is `invoke` or `wield` depending on what `night_watch`
+        // *is*, and only the scene knows. Trying them here keeps that judgement
+        // with `analyse`, which is the deterministic, explainable half.
+        let scene = self.world.resource::<Scene>().clone();
+        let readings: Vec<String> = augur
+            .read(line)
+            .into_iter()
+            .take(crate::augur::MAX_READINGS)
+            .collect();
+
+        // A command that runs, if any of them does.
+        let runs = readings
+            .iter()
+            .find(|echo| analyse(echo, &scene, Mode::Calm).resolution.is_resolved())
+            .cloned();
+        if let Some(echo) = runs {
+            self.submit_divined(line, &echo);
+            return;
+        }
+
+        // **Failing that, a deliberate refusal still beats a shrug.** `grind
+        // sage`, read correctly in a room with no mortar, is `Elsewhere` —
+        // *"there is nothing here to grind with"* — which §19 records as worth
+        // having precisely because *"I do not know that word"* would lie about
+        // a word the game taught next door. Requiring a reading to *run* threw
+        // that away, and `the_trace_records_a_consultation_even_when_the_command
+        // _does_not_land` is what caught it.
+        let answers = readings
+            .iter()
+            .find(|echo| {
+                matches!(
+                    analyse(echo, &scene, Mode::Calm).resolution,
+                    Resolution::Elsewhere { .. } | Resolution::Incomplete { .. }
+                )
+            })
+            .cloned();
+        if let Some(echo) = answers {
+            self.submit_divined(line, &echo);
+            return;
+        }
+
+        // Nothing the reader offered means anything here, in any sense. §6's
+        // suggestions are a better answer than a command that cannot run.
+        self.submit(line);
+    }
+
+    /// Run a line the augury read, rather than one the orb read (§6).
+    ///
+    /// **The fifth entry point, and the augury's only one.** The caller has
+    /// already established that [`crate::parser::is_literal`] is false and that
+    /// [`Analysis::reads_outright`] said no, asked a model what the line meant,
+    /// and expanded the answer into a canonical command. That command arrives
+    /// here as `echo`.
+    ///
+    /// # The model runs once, here, and never again
+    ///
+    /// `echo` is what is analysed, recorded and replayed; `line` is kept for the
+    /// transcript and the trace and is never re-read. That is the determinism
+    /// boundary: [`analyse`] is pure and integer-scored, so re-deriving from a
+    /// canonical command is safe on any machine, while re-deriving from the
+    /// player's own words would mean running a model whose spans need not match
+    /// across a GPU, a driver or a backend. See [`Submission::Divined`].
+    ///
+    /// # Why it does not simply call [`submit`](Self::submit)
+    ///
+    /// Three things differ and each matters. The transcript must show what the
+    /// *player* wrote rather than the canonical form they did not type; the echo
+    /// must carry [`Confidence::Divined`] so it draws `≈` and the destructive
+    /// guard can tell an inferred `purge` from a typed one; and the journal must
+    /// record both halves. None of that is expressible by handing `submit` a
+    /// string.
+    ///
+    /// A canonical command that fails to resolve — because the world moved, or
+    /// because the augury expanded to something this room does not answer to —
+    /// falls through exactly as a typed one would. §6 forbids a bare error and
+    /// this is not a way around it.
+    pub fn submit_divined(&mut self, line: &str, echo: &str) {
+        if line.trim().is_empty() || echo.trim().is_empty() {
+            return;
+        }
+        // A sentence walks away from an open question, the same as any other
+        // line that is not the digit answering it.
+        self.world.resource_mut::<Choices>().clear();
+
+        let tick = *self.world.resource::<Tick>();
+        let analysis = analyse(echo, self.world.resource::<Scene>(), Mode::Calm);
+
+        // **Traced against what the player typed**, because a session sifted for
+        // what the augury was asked is a session sifted for their words. The
+        // canonical form is in the `echo` column beside it.
+        let resolution = match analysis.resolution {
+            Resolution::Resolved { intent, .. } => Resolution::Resolved {
+                intent,
+                confidence: Confidence::Divined,
+            },
+            other => other,
+        };
+        let traced = Analysis {
+            resolution: resolution.clone(),
+            candidates: analysis.candidates,
+        };
+        let mut record = ParseRecord::new(tick.get(), line, Mode::Calm, &traced);
+        // **Stamped here, not derived from the confidence.** Only a `Resolved`
+        // reading carries `Divined`, so deriving it would mark the augury's
+        // successes and silently drop its failures — and a canonical command
+        // that came back `Elsewhere` or `Unresolved` is the most interesting row
+        // in the export, because it is where the model was wrong or the room
+        // was. The consultation is the fact worth recording, not its outcome.
+        record.divined = true;
+        self.world.resource_mut::<ParseLog>().push(record);
+
+        let prose = self.world.resource::<Prose>().clone();
+        let mut scrollback = self.world.resource_mut::<Scrollback>();
+        let records = scrollback.records_mut();
+        records
+            .push(RecordKind::Input)
+            .text(orbs_render::FieldName::Message, line)
+            .finish();
+        report(line, &resolution, &prose, records);
+
+        self.world
+            .resource_mut::<Submissions>()
+            .divined(tick, line, echo);
+        match resolution {
+            Resolution::Resolved { intent, .. } => {
+                self.world.resource_mut::<Pending>().push(intent);
+            }
+            // **No numbered prompt from a divined reading** (§6). The augury
+            // acts on its best reading and offers correction; stopping to ask is
+            // the interrogation it exists to remove.
+            Resolution::Ambiguous { .. }
+            | Resolution::Incomplete { .. }
+            | Resolution::Elsewhere { .. }
+            | Resolution::InSpell { .. }
+            | Resolution::Unresolved { .. } => {}
+        }
+    }
+
     /// Save a spell out of the editor.
     ///
     /// **The third entry point, and the last one.** [`submit`](Self::submit)
@@ -1387,6 +1572,11 @@ impl Sim {
     pub fn replay(&mut self, submission: Submission) {
         match submission {
             Submission::Typed(line) => self.submit(&line),
+            // **The model does not run again.** The canonical form it settled on
+            // is what was recorded and what replays, which is what keeps a
+            // session reproducible on a machine whose GPU would have read the
+            // player's words differently. See `Sim::submit_divined`.
+            Submission::Divined { line, echo } => self.submit_divined(&line, &echo),
             Submission::Wrote { name, lines } => self.write_spell(&name, &lines),
             Submission::Took(id) => self.take(&id),
             Submission::Sang(word) => {

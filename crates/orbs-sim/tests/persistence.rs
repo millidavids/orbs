@@ -395,6 +395,68 @@ fn two_routes_to_one_world_write_the_same_save() {
     }
 }
 
+/// A line the augury read replays from what it decided, not from what was typed.
+///
+/// **The property the whole augury rests on.** A trained model is not part of
+/// the determinism contract — the same sentence on a different GPU, driver or
+/// backend need not produce the same spans — so the model runs exactly once,
+/// while the player is there to see the echo, and the canonical command it
+/// settled on is what the journal carries.
+///
+/// This replays with **no augury in the process at all**, which is the point: if
+/// `Submission::Divined` re-read the player's words, this test could only be
+/// written by constructing a model, and it would pass or fail by hardware.
+#[test]
+fn a_divined_line_replays_from_the_echo_and_never_from_the_words() {
+    for seed in SEEDS {
+        let mut played = Sim::new(seed);
+        played.step_n(2);
+        // What the augury would have done: a sentence in, a canonical command
+        // out. `attend laboratory` is not what was typed and is what runs.
+        played.submit_divined("go and have a look at the laboratory", "attend laboratory");
+        played.step_n(3);
+
+        let mut replayed = Sim::new(seed);
+        for (tick, submission) in played.submissions().all().to_vec() {
+            while replayed.tick() < tick {
+                replayed.step();
+            }
+            replayed.replay(submission);
+        }
+        while replayed.tick() < played.tick() {
+            replayed.step();
+        }
+
+        same(
+            &replayed,
+            &played,
+            &format!("seed {seed}: replaying a divined line reached a different world"),
+        );
+    }
+}
+
+/// The journal keeps both halves, and they are not the same string.
+#[test]
+fn the_journal_records_the_words_and_the_command_apart() {
+    let mut sim = Sim::new(0);
+    sim.step();
+    sim.submit_divined("go and have a look at the laboratory", "attend laboratory");
+
+    let journal = sim.submissions().all().to_vec();
+    let divined = journal
+        .iter()
+        .find_map(|(_, submission)| match submission {
+            orbs_sim::session::Submission::Divined { line, echo } => Some((line, echo)),
+            _ => None,
+        })
+        .expect("the journal did not record a divined line");
+
+    // The player's words survive for the transcript and the trace...
+    assert_eq!(divined.0, "go and have a look at the laboratory");
+    // ...and the canonical command is what replay re-derives from.
+    assert_eq!(divined.1, "attend laboratory");
+}
+
 /// A save is TOML, and it is TOML a person can read.
 #[test]
 fn the_document_is_text_and_it_reads_back() {

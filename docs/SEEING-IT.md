@@ -3786,6 +3786,193 @@ It is also what caught the first draft's demo glyphs: `◇` and `◆` are outsid
 CP437, so the arriving half printed `???` and nothing else in the project would
 have shown it.
 
+### The GPU — and the way it fails without saying so
+
+```bash
+cargo run -p orbs-augury --example device --features train   # needs a GPU
+cargo tree -d | grep -E '^(wgpu|naga)'          # must print nothing
+```
+
+**`grep wgpu` is the wrong check and looks right.** `cargo tree -d` prints every
+duplicated package *and its dependents*, so `wgpu` shows up sixty-odd times as
+something that depends on a duplicated `hashbrown`. Anchoring to the start of
+the line is what asks the actual question — *is `wgpu` itself duplicated* — and
+the answer today is no.
+
+**The example computes twice and then shows the trap**, which is the reason it
+exists rather than a test. A wgpu device built with `DeviceDescriptor::default()`
+is accepted by `burn_wgpu::init_device` and then returns **all zeros** — no
+error, no warning, no panic. The difference is `required_limits`: the default is
+the downlevel set, and cubecl's kernels need what the adapter actually has.
+
+**It will not look like a device problem.** It looks like a reader that maps
+every sentence to the same command. So a device is verified before it is
+trusted — a known matmul with a known answer, at startup, falling back to the
+CPU backend — and this example is what that check is written against.
+
+Asking for `adapter.features()` wholesale fails *loudly* instead, because this
+driver offers six `EXPERIMENTAL_*` flags that need their own opt-in. **The
+working recipe is the adapter's limits with the default features.**
+
+`cargo tree -d | grep wgpu` is the standing check that Bevy and `cubecl-wgpu`
+still resolve to one `wgpu 29`. If they ever diverge the game builds two Vulkan
+stacks and two shader compilers, and nothing else will say so.
+
+### `--bench` — how much of what people say the orb reads
+
+```bash
+cargo run -p orbs-sim --example parse -- --bench
+```
+
+**Two rates and every miss printed under the command it should have reached.**
+The percentage alone cannot be acted on; §15 acts on the *clustering* of
+failures, so the misses are the output and the number is the headline.
+
+| | |
+|---|---|
+| **holdout** | phrasings taught to nothing. The only honest measurement, and where a grammar or a model gets compared |
+| **corpus** | the `say` templates. What a reader would never have to learn, because the matcher already reads it |
+
+**It is a coverage lint and not §15's gate**, and the top of
+`content/phrasings.toml` says so. Every line was written by whoever wrote the
+synonym table, so it measures memory as much as phrasing — ROADMAP's rule that
+an in-house gate number *"would be worse than no number"* still stands. What it
+is good for is finding the misses, each of which is either one row of
+`vocabulary.rs` or a phrasing no table can hold.
+
+**Adding to the corpus is adding to `content/phrasings.toml`**, and the shape is
+enforced: every entry must `say` something *and* `holdout` something, no line may
+appear in both, and a `{marker}` must name a real `NounKind`. A template whose
+own canonical form does not resolve is flagged at the bottom of the report,
+because its whole row is measuring nothing.
+
+### The augury — a sentence the orb could not read, read
+
+**The trained reader is on by default, and that is the shipping default too.**
+Boot the game and type a sentence; there is no switch to find first.
+
+| | |
+|---|---|
+| unset | **the trained reader**, if this checkout has weights; otherwise none, quietly |
+| `model` | the same, but warns when there are no weights to load |
+| `off`, `0`, `none` | no reader. `Sim::submit`, unchanged |
+| `stub` | `Fixture::worked` — a fixed table, which is what `dumps.sh` pins |
+| `grammar` | `Grammar::builtin` — the authored templates in `content/phrasings.toml` |
+| anything else | no reader, **and a warning** — a typo now costs you a feature you were getting |
+
+```bash
+# The shipping default, with nothing set. This is what a player gets.
+ORBS_BOOT=0 ORBS_DUMP="attend laboratory; triturate the sage" cargo run -p orbs
+```
+
+⚠ **`scripts/dumps.sh` runs with `ORBS_AUGURY=off`, so its captures no longer
+show the shipping default.** Its `run` helper supplies `off` before every block's
+own arguments. That is deliberate and it is a real cost: weights are a gitignored
+build artefact that changes on every training run, so a capture made against them
+could not be reproduced on another machine and `diff -r` would report a change
+that means nothing. **The trained reader's behaviour is gated by
+`orbs-augury --example measure` and the augury tests instead**; `dumps.sh` gates
+the deterministic pipeline and the two readers that need no weights. Four
+captures — `lab_flask`, `augury_off`, `chant_refuse`, `forge_refuse` — move
+without that guard, so it is load-bearing rather than tidy.
+
+```bash
+# ...the trained reader. Needs weights: they are a build artefact, not source.
+cargo run --release -p orbs-augury --example train --features train
+ORBS_AUGURY=model ORBS_BOOT=0 \
+  ORBS_DUMP="attend laboratory; smash the sage" cargo run -p orbs
+
+# ...and the half of the job that is refusing. The question falls through to the
+# deterministic path and comes back with suggestions; the command does not.
+ORBS_AUGURY=model ORBS_BOOT=0 \
+  ORBS_DUMP="attend laboratory; what should i do next; triturate the sage" \
+  cargo run -p orbs
+```
+
+**Watch the refusals as closely as the readings.** The reader answers *whether*
+there is a command before *which* one it is, and those are two heads with two
+scores; a build that reads well and refuses nothing is worse than one that reads
+less, because §15 weighs the dead end heaviest. Both heads' losses are weighted
+from the corpus rather than from a constant — see DESIGN.md §19, *the augury*.
+
+**A verb with no templates cannot be read, and the reader will not say so.** It
+answers with the nearest of the ones it *has* been taught, confidently, because
+the refusal head is trained on sentences that ask for nothing rather than on
+sentences that ask for something unteachable. Seventeen verbs were in that state
+until `0.13.15`. `every_verb_has_a_template` is the guard; the See-it is that
+`send the wolves to the gate` reaches `haul` and is told there is no wellspring
+here, instead of quietly becoming `move gate`.
+
+```bash
+# ...a corpus that grew. Both numbers are printed, and the cap is what keeps one
+# verb from owning the corpus the way `move` owned 47% of it.
+cargo test -p orbs-sim --lib content::phrasing -- --nocapture | grep widest
+```
+
+**`model` is deliberately absent from `scripts/dumps.sh`.** Weights are
+gitignored — 1.4 MB of floats that change on every run — so a capture made with
+them could not be reproduced from a clean checkout, and `diff -r` would report a
+difference that means nothing. The **stub** is what `dumps.sh` pins, for exactly
+that reason.
+
+**Inference runs on the CPU, and that is measured.** One 32-token sentence takes
+**348µs** on `ndarray` against **2.71ms** on `wgpu` — a batch of one is almost
+entirely kernel-launch overhead, so the GPU belongs to the training run and not
+to the prompt. 348µs is also why there is no worker thread, no deadline and no
+*"the orb ponders"* indicator: §6 asks for sub-millisecond and this is a third
+of one.
+
+```bash
+# ...the grammar, reading a phrasing the matcher cannot.
+ORBS_AUGURY=grammar ORBS_BOOT=0 \
+  ORBS_DUMP="attend laboratory; work the sage down" cargo run -p orbs
+```
+
+**Pick the example carefully or it proves nothing.** `crush the sage` looks like
+a good demonstration and is not — `crush` is already a `grind` synonym, so the
+matcher reads it outright, the echo is `→` rather than `≈`, and no reader is
+consulted. `--bench` says a quarter of the authored corpus is like that.
+
+```bash
+# ...the feature. `≈` is the orb acting on its best reading.
+ORBS_AUGURY=stub ORBS_BOOT=0 \
+  ORBS_DUMP="attend laboratory; turn the sage into powder" cargo run -p orbs
+
+# ...and the same line without a reader, which is `!` exactly as before.
+ORBS_BOOT=0 ORBS_DUMP="attend laboratory; turn the sage into powder" cargo run -p orbs
+```
+
+**The pair is the gate, not either half.** The first says the augury works; the
+second says it changed nothing else. `dumps.sh` captures both, plus
+`augury_typed` — a properly-typed command with a reader standing by, which is
+**byte-identical** to the same dump with no reader, because a reader is never
+consulted for a line the orb read outright.
+
+**A reader is a table here, and stays one after a model exists.** `ORBS_DUMP`
+builds no app, `dumps.sh` captures text, and `play.sh` drives the terminal build
+under `tmux` — none can hold a GPU or two megabytes of weights, so a fixture is
+the only thing those instruments can reach. Set `ORBS_AUGURY=stub` on a
+`play.sh` scenario that is *about* a divined line.
+
+**The `≈` is `Outcome::Forced`'s, deliberately.** A divined reading and a siege's
+forced one mean the same thing to a player — *the orb acted on its best reading,
+correct it if it is wrong* — so they share a marker. What tells them apart is the
+trace: `divined` is its own column in `--tsv`, stamped on the *consultation*
+rather than on whether the command landed, so a reading the augury got right and
+the room refused is still in the export.
+
+```bash
+# ...what the reader was asked, and what it decided.
+ORBS_AUGURY=stub ORBS_BOOT=0 \
+  ORBS_DUMP="attend laboratory; smash the sage" cargo run -p orbs 2>&1 | grep -i echo
+```
+
+**Standing in the right room matters and the dump will not tell you.**
+`grind` is anchored to the mortar (§7), so a reader that correctly answers
+`grind sage` from anywhere else produces `Elsewhere` — *"there is nothing here to
+grind with"*. That is right, and it looks exactly like the augury failing.
+`augury_elsewhere` in `dumps.sh` is that case pinned on purpose.
+
 ### The output style — a heading is ruled, a slot is `<bracketed>`
 
 **Three rules, all in `record/view.rs`, and all of them the *view's*** — records

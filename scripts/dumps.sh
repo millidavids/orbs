@@ -33,7 +33,13 @@ export ORBS_SAVE=off
 # name=env-assignments...  — one capture per line, `%` separating name from env.
 run() {
   local name="$1"; shift
-  env "$@" "$orbs" > "$out/$name.txt" 2>"$out/$name.err" || true
+  # **`ORBS_AUGURY=off` first, so every capture is reproducible from a clean
+  # checkout.** The trained reader is the shipping default now, and weights are a
+  # gitignored build artefact that changes on every training run — so a dump made
+  # against them would differ from one made on another machine, and `diff -r`
+  # would report a change that means nothing. A block wanting a reader names one
+  # in its own arguments, which come after these and win.
+  env ORBS_AUGURY=off "$@" "$orbs" > "$out/$name.txt" 2>"$out/$name.err" || true
   # A dump prints nothing to stderr in the ordinary case; keep the file only if
   # it has content, so `diff -r` is not full of empty noise.
   [ -s "$out/$name.err" ] || rm -f "$out/$name.err"
@@ -121,6 +127,15 @@ run menu         ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="menu"
 run menu_unknown ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="menu" ORBS_MENU="zorb"
 run menu_resume  ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="menu" ORBS_MENU="resume"
 run menu_narrow  ORBS_BOOT=0 ORBS_GRID=80x22 ORBS_DUMP="menu"
+# **The options page, which is where a player chooses a driver.** The mark on
+# the chosen row is the point of the capture: a settings screen that lists what
+# you *could* pick without saying what is picked is a list of things you might
+# already have done. `ORBS_SAVE=off` is exported above, so this writes no
+# settings file and the capture is the default every time.
+run menu_options ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="menu" ORBS_MENU="options"
+# ...and the choice made, which steps back to the top page. What it cannot show
+# is the choice being *remembered*, because a dump keeps nothing.
+run menu_plain   ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="menu" ORBS_MENU='options\nplain'
 # ...and the question `quit` asks, which is the whole of what it now does before
 # the second one.
 run quit_asks    ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="quit"
@@ -169,6 +184,31 @@ run spawn_places ORBS_BOOT=0 ORBS_DUMP="debug_spawn fragment 4 lectern; debug_sp
 run swap        ORBS_BOOT=0 ORBS_DUMP="attend laboratory; debug_swap; survey dispensary; verify dispensary; verify laboratory"
 run dev_shelf   ORBS_BOOT=0 ORBS_DUMP="survey grimoire"
 run dev_list    ORBS_BOOT=0 ORBS_DUMP="debug_spell"
+
+# --- the augury ------------------------------------------------------------
+# **Both halves, and the pair is the point.** `off` is every one of these lines
+# reaching `!` exactly as it did before the augury existed, which is the
+# additive claim as a diff rather than an argument; `stub` is the same lines
+# read, echoed `≈`, and run. A change that quietly routed a literal command
+# through a reader would move the first file and nothing else would notice.
+#
+# **`off` is written out here even though `run` already supplies it**, because
+# this is the block whose whole subject is the reader being absent. Inheriting
+# that from a helper would make the one capture that documents the off case the
+# one capture that does not say what it is testing.
+run augury_off  ORBS_BOOT=0 ORBS_AUGURY=off ORBS_DUMP="attend laboratory; turn the sage into powder; smash the sage; what is in here"
+run augury_stub ORBS_BOOT=0 ORBS_AUGURY=stub ORBS_DUMP="attend laboratory; turn the sage into powder; smash the sage; what is in here"
+# A command typed properly, with a reader standing by. It must read identically
+# to the same dump without one — the reader is never consulted for these.
+run augury_typed ORBS_BOOT=0 ORBS_AUGURY=stub ORBS_DUMP="attend laboratory; grind sage; survey; recall brewing"
+# ...and the reader's answer refused, because `grind` is the mortar's word and
+# nobody is standing at the mortar. The echo still shows what it heard.
+run augury_elsewhere ORBS_BOOT=0 ORBS_AUGURY=stub ORBS_DUMP="turn the sage into powder"
+# The grammar, reading the authored templates rather than a fixed table.
+# `work the sage down` is a `say` template the matcher genuinely cannot read —
+# unlike `crush the sage`, which is already a `grind` synonym and would capture
+# a `→` and prove nothing.
+run augury_grammar ORBS_BOOT=0 ORBS_AUGURY=grammar ORBS_DUMP="attend laboratory; work the sage down; let me read the feed.log"
 
 # --- the arsenal -----------------------------------------------------------
 run arsenal ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="attend laboratory; kindle charcoal; debug_spawn clarified-draught; distil clarified-draught; meditate 60; empty alembic; move clarity to arsenal; attend archive; survey arsenal"

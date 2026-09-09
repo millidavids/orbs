@@ -232,11 +232,17 @@ happened.
 
 ```bash
 cargo fmt --all --check
-cargo clippy --workspace --all-targets -- -D warnings
+cargo clippy --workspace --all-targets --features orbs-augury/train -- -D warnings
 cargo test --workspace
 RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
 cargo build -p orbs
 ```
+
+`--features orbs-augury/train` is not optional: the trainer and the two
+measurement examples sit behind that feature so a terminal build need not carry
+`wgpu`, and `--all-targets` **silently stops compiling a target whose
+`required-features` are off**. Without it clippy passes while the trainer is
+broken.
 
 ### A5. Commit and push to `dev`
 

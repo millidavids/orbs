@@ -471,10 +471,21 @@ the enemy attacks the automation → diagnose, repair, harden → automate deepe
 
 **The most important system in the game.**
 
-### Approach: deterministic NLU
+### Approach: a deterministic pipeline, and a trained reader behind it
 
-No LLM, local or remote. Intent resolved by a hand-authored pipeline over the
-live world model:
+**The orb reads what it can and works out the rest.** Intent is resolved by a
+hand-authored pipeline over the live world model, and a small model trained here
+— on this game's own content, never pulled from the internet — reads the
+phrasings that pipeline cannot. See §19, *the augury*, which retires this
+section's original *"No LLM, local or remote"*.
+
+**The deterministic pipeline answers first and its answer wins whenever it has
+one**, so the reader is structurally incapable of changing a phrasing that
+resolves today. It is consulted only where the orb would otherwise say *"I do
+not know that word"* — and where it is, it acts on its best reading and offers
+correction rather than stopping to ask.
+
+The pipeline:
 
 1. **Normalise** — lowercase, strip filler.
 2. **Fuzzy match** against known vocabulary and *entities that currently exist*.
@@ -483,9 +494,11 @@ live world model:
 5. **Disambiguate** with a numbered prompt on ties.
 6. **Suggest** if nothing scores — never a bare error.
 
-Instant, offline, deterministic, unit-testable, tiny. Its limitation — only
-anticipated phrasings resolve — is acceptable because vocabulary is authored and
-finite, and disambiguation degrades gracefully.
+Instant, offline, deterministic, unit-testable, tiny. **Its limitation is that
+only anticipated phrasings resolve**, and a table of words cannot hold a
+reordering: `grind sage` resolves and *"turn the sage into powder"* cannot. That
+limitation is what the augury addresses, and §16 rates the risk it belongs to —
+*"parser feels frustrating rather than magical"* — Critical.
 
 ### Mastery arc: echo, with optional strict mode
 
@@ -526,12 +539,18 @@ rather than prose.
 **The canonical form — what the echo shows — is arcane.** Because echo is the
 teaching mechanism, whichever register is canonical is the one players absorb.
 Making it arcane means the mastery arc is literally learning to speak as a wizard:
-you type "grind the sage", the orb answers `wield mortar_and_pestle`, and months
-later you are typing `wield` by reflex. The interface teaches magic.
+you type "put the sage in the mortar", the orb answers `grind sage`, and months
+later you are typing `grind` by reflex. The interface teaches magic.
+
+*(These two examples read `grind the sage` → `wield mortar_and_pestle` until
+`0.13.0`. They predated the domains coining a verb per instrument — `grind` is
+canonical now, not a synonym for `wield` — so the echo they showed was one the
+parser would not produce. The consolidation they described survives where it is
+still true: it is the augury's **output** vocabulary, and §19 records why.)*
 
 ```
-orbs:~$ grind the sage
-  → wield mortar_and_pestle
+orbs:~$ put the sage in the mortar
+  → grind sage
 
 orbs:~$ grep march feed.log
   → sift march feed.log
@@ -2425,6 +2444,501 @@ they are re-pointed at the phases that now need them rather than quietly dropped
    price-shop — Exapunks is $19.99.
 
 ## 19. Decisions log
+
+### The augury — §6's *"No LLM, local or remote"* is retired (`0.13.0`)
+
+**The new rule first.** The orb interprets natural language with a trained
+model. Anything the player did not type literally goes through it, it acts on
+what it read, and it never stops to ask.
+
+**Superseded:** §6's *"Approach: deterministic NLU. No LLM, local or remote."*
+That was a section-body premise and was never logged here, so retiring it is a
+decision rather than an amendment. §6's body is rewritten to match.
+
+**Retained, all of it load-bearing:** the echo is still the teaching mechanism
+and still immediate; still never a bare error; the parser still explains itself,
+with every reading in `ParseLog` and `--tsv` still exporting it; and scoring is
+still integer-only, because *"a tie broken by the last bit of an `f32`"* is
+neither reproducible nor explainable.
+
+| Question | Decision |
+|---|---|
+| What may a model see | **Only what the orb could not read itself.** `parser::is_literal` settles what text alone can — a bare digit, a `debug_*` door, a spell word — and `Analysis::reads_outright` settles the rest: the verb was typed rather than guessed at, and the reading accounted for every word. Either way the line goes to `submit` untouched |
+| Can it regress a phrasing that works today | **No, structurally.** Tier one is decided before a reader is consulted and is a property of the deterministic pipeline alone. `dumps.sh`'s `augury_typed` is byte-identical to the same dump with no reader |
+| Does it ask when unsure | **Never**, except a destructive verb it inferred rather than read. §6 already ships *act, echo, offer correction* for sieges; this promotes it to the default for divined input, and `Divined` draws as `Forced` does so players learn one marker rather than two |
+| What replays | **The canonical echo, never the words.** `Submission::Divined` carries both; the model runs exactly once, while the player is there to see the echo. `Submission::Wrote` deliberately does the opposite — it stores the buffer *before* canonicalisation so replay re-derives — and the difference is the whole point: re-deriving is safe when the derivation is `analyse`, and unsafe when a GPU did the reading |
+| Where the model lives | Outside `orbs-sim`, which keeps its `bevy_ecs`-only, headless, synchronous boundary. The `Augur` trait is `&str` in and `Option<String>` out, so the seam itself costs no dependency and sits beside the two questions asked before it |
+| Provenance | **Nothing is pulled from the internet** — no pretrained weights, embeddings or tokenizer, and no distillation: no training against another model's outputs, logits or embeddings, and no shipped weight that is another model's weight in any form. An ethical constraint, and load-bearing twice over: the repo is GPL-3.0-or-later with an audited dependency-licence table and shipped weights are a distributed artefact, and a from-scratch model has no general English to lean on, so the corpus is the *only* source of capability and the model stays small |
+| Who may write the corpus | **Anyone working on the game**, drafting in a session included. The rule above is about the *artefact's* provenance, not about whose fingers typed a phrasing — an earlier draft read *"no LLM-generated training data"*, which is a far wider claim than the one intended and would have quietly stopped the corpus growing. Corrected at `0.13.5` |
+
+**Four things were found by building it rather than by reasoning about it**, and
+each is the kind a later session would reintroduce:
+
+- **`put` is a plain-register `dial` synonym**, and so are `take`, `make`,
+  `find`, `set`, `hold` and `show`. *"The head is a word the game knows"* is
+  therefore not a router: it sends `put the sage in the mortar and grind it` to
+  a lens command with eight words left over. The question is *did the parser
+  explain the whole line*, which needs the candidate scores and cannot be
+  answered from the text.
+- **`NounMatch` could not answer it either.** A phrase is scored whole *and*
+  word by word, so `laboratory` matches identically whether it arrived alone or
+  trailing four more words — and since the last slot takes the rest, nothing was
+  ever "remaining". `NounMatch::words` and `Candidate::leftover` are the missing
+  fact. **`penalise` still counts only `remaining`**: changing what
+  `argument_score` means would move every ranking this section records a number
+  against, so the new fact is carried beside the score rather than folded in.
+- **A bare `sift` carries no candidates at all** — the verb matched at full
+  score and a free-text slot cannot be enumerated — so a rule that consulted
+  `candidates` handed it to a reader. `Incomplete` joined `Elsewhere` and
+  `InSpell` as an outright answer: the orb knowing the verb and wanting one more
+  thing is not a failure to understand.
+- **The trace recorded only the augury's successes.** `divined` was derived from
+  the confidence and only `Resolved` carries one, so a reading that was correct
+  and then refused — `grind` is the mortar's word, and nobody was at the mortar
+  — logged as never consulted. Those are the most interesting rows in an export,
+  so the flag is stamped on the consultation rather than on its outcome.
+
+**A fuzzy *argument* stays with the matcher, and that is a rule rather than an
+accident.** `recall clarty` reaches `clarity` at 819 and the matcher is better at
+typos than a model trained on phrasings will be. A fuzzy *verb* does not: bare
+`edit` reaches `verify` only because it is two edits from `audit` and scores
+exactly `MIN_SIMILARITY`, and a 600 is a guess a reader is allowed to improve on.
+Nothing is lost either way — a reader that abstains falls through to the same
+`verify`, so the naming pass's *"a released word does not stop resolving"* holds.
+
+**`Fixture` is not scaffolding and does not go when a model lands.** `ORBS_DUMP`
+builds no app, `dumps.sh` captures text, `play.sh` drives the terminal build
+under `tmux`; none can hold a GPU or two megabytes of weights. Without a reader
+those instruments can reach, every divined surface would be gated on one person
+typing one sentence into one window — which is the blindness §15 records the
+bailey shipping under, and it *"looks exactly like stability"*.
+
+**The deadline and the ponder indicator are not part of the seam.** Both are
+about a reader that takes time; with a table there is no pending state that can
+occur, and a painter for a state that cannot occur is §15's own correction. They
+belong with the worker thread.
+
+**The parser reads 15.6% of natural phrasing, and now that is a measured number
+rather than an intuition** (`0.13.1`). On a holdout of phrasings taught to
+nothing, 5 of 32 land — and **three of the five only because the sentence begins
+with the canonical verb**, so the rate for genuinely reordered input is nearer
+6%. On the corpus it is 26.8%. This is a **coverage lint and not §15's gate**:
+every line was written by the person who wrote the synonym table, and ROADMAP's
+rule that an in-house gate number *"would be worse than no number"* is untouched.
+What it is good for is exactly what it says — which authored phrasings the parser
+misses, each of which is either one row of `vocabulary.rs` or a phrasing no table
+can hold.
+
+**The holdout is the experiment, not a formality.** `say` is what a grammar or a
+model is built from and matches by construction; measuring on it says only that
+the building worked. So `holdout` is taught to nothing, tests assert the two
+never overlap, and every entry must hold something back — a template that teaches
+without being measurable looks like work and is not.
+
+**Slot spans fall out of generation, which is what makes the corpus tractable.**
+The expander substitutes the nouns, so it knows where each one landed; a corpus
+of any size carries its own argument labels and nobody annotates by hand. Without
+that, a from-scratch model's training data would be the project rather than a
+part of it.
+
+**`NounKind::NAMEABLE` was needed and is worth having anyway.** `label()` is
+many-to-one — `Readable`, `Stoppable` and `Workable` each print a word that is
+already some other kind's label — so a `{marker}` could not be mapped back to a
+kind unambiguously. The list of kinds a scene noun can actually carry now lives
+once, in the parser, rather than being written out a second time by the corpus.
+
+**A grammar over the same templates reads 9.4%, the matcher 15.6%, and together
+25.0%** (`0.13.2`). The sum is exact: **they overlap on nothing.** The matcher
+reads lines opening on a near-miss of a verb; a grammar reads reorderings of
+phrasings it was given. So a grammar is additive in the plainest sense and
+`ORBS_AUGURY=grammar` ships as a real reader — but it scores *below* the matcher
+on unseen phrasing, because it cannot read a word it was never given. **That is
+the space a trained reader has to earn, and it is 75% of the holdout.**
+
+**A reader never sees the world, and the grammar is where that stopped being
+theory.** It answers with the player's own word in the slot — `grind sage`, not
+`grind /tower/laboratory/sage` — and `parser::resolve` binds it. So no reader
+needs a `Scene`, none can go stale between ticks, and none can disagree with the
+matcher about what a name means. The trained reader works under the same
+division of labour, which is what keeps its non-determinism confined to *which
+verb, which spans*.
+
+**The first grammar scored 0.0%, and that was a bug rather than a finding.** A
+slot took exactly the next word, so *"can you take me over to the laboratory"*
+captured `over`. Worth recording because a strawman baseline scoring zero would
+have justified building the model on an implementation mistake — the check that
+caught it is the grammar reading its own templates back at 100%.
+
+**The GPU spike, and the thing it found that reasoning would not have**
+(`0.13.3`). Both questions answered on an RX 9070 XT under RADV/Vulkan:
+
+| | |
+|---|---|
+| Does the graphics stack unify | **Yes.** One `wgpu`, `wgpu-core`, `wgpu-hal`, `wgpu-types` and `naga` — `cubecl-wgpu` and Bevy 0.19 both want `wgpu 29` and resolve to the same `29.0.4`. The standing check is `cargo tree -d \| grep -E '^(wgpu\|naga)'`, **anchored**: unanchored it matches 62 lines and means nothing, because `tree -d` prints each duplicate *with its dependents* and `wgpu` depends on a duplicated `hashbrown` |
+| Does `tokio` arrive with it | **No.** It is in `Cargo.lock` and is never compiled: `reqwest`/`hyper`/`tokio` hang off `tracel-llvm-bundler`, a build-time fetcher for cubecl's LLVM backend, which our feature selection does not enable. `cargo tree -i tokio --target all` finds no path, and a real build compiles none of them. **A lockfile entry is not a dependency** |
+| What does it cost | 150 crates and ~80s from cold, against Bevy's ~126. `default-features = false` is doing the work — burn's default pulls a dataset layer, sqlite, a network client and an audio decoder, none of which a sentence reader wants |
+| Can burn use a device somebody else made | **Yes**, and this is what makes it affordable: `init_device` takes a `WgpuSetup` of Bevy's own instance, adapter, device and queue, so the game keeps one Vulkan stack |
+
+**A device built with `DeviceDescriptor::default()` is accepted and then computes
+zeros.** No error, no warning, no panic — `request_device` succeeds, `init_device`
+takes the setup, the tensor round-trips, and every number in it is `0.0`. The
+difference is `required_limits`: the default is the *downlevel* set and cubecl's
+kernels need what the adapter actually has. Asking for `adapter.features()`
+wholesale fails differently and loudly, because on this driver that set includes
+six `EXPERIMENTAL_*` flags needing their own opt-in — so the working recipe is
+**the adapter's limits and the default features**.
+
+**This is the finding, not the unification.** Bevy configures its own device, so
+whether the augury works at all will turn on limits chosen elsewhere in the
+frontend for reasons having nothing to do with it — and the failure will present
+as *a reader that maps every sentence to the same command*, not as anything
+resembling a device problem. **So adopting a device is checked rather than
+assumed**: a known matmul with a known answer, once, at startup, and fall back to
+the `ndarray` backend when it fails. `examples/device.rs` demonstrates the trap
+deliberately so the check has something to be written against.
+
+**The game speaks 318 words, and that re-sizes everything** (`0.13.4`).
+`Vocabulary` is assembled from the synonym table, `Verb::ALL`, the spell words,
+`Recipes::vocabulary`, `Materials::names` and the templates' own words — which
+is where *"no downloaded tokenizer"* stops being a rule and becomes the code
+that would have to be replaced to break it. Against the ~1500 types this
+section's first draft guessed, the model falls from ~470k parameters to **322k
+(1.29 MB f32)**, and **81% of that is the transformer body** rather than the
+embedding table.
+
+**The useful number is the ratio of parameters to training examples, and it took
+three tries to measure honestly.** It read 3,935 at first, then 1,196, and is
+**30** (`0.13.7`) — the first two were artefacts of the *measuring scene* rather
+than facts about the corpus. The bench inherited a slice scene holding one
+reagent, so every `{reagent}` template expanded once where the content names
+thirty-three; `content::corpus_scene` expands over everything the tables name and
+the corpus is **11,243 examples**, not 285.
+
+**A corpus is not a session**, and that is the rule the mistake came from
+missing. `{reagent}` should become every reagent the game has a *word* for, not
+the one that happens to be on the shelf — a reader trained on `grind sage` and
+nothing else has learned the sage rather than the grinding.
+
+**Unknown words are hashed by character trigram rather than collapsed into one
+`<unk>`.** With no pretrained embeddings underneath, a word the reader has not
+seen is ordinary rather than exotic; keeping `powdered` in the same buckets as
+`powder` is the cheapest available substitute for the subword vocabulary the
+provenance rule rules out.
+
+**Measured on 4,712 holdout phrasings, the parser reads 4.8%, the grammar 2.2%,
+and the two together 7.0%** (`0.13.7`). The 15.6% this section first recorded was
+an artefact of a thirty-two-line holdout, several of whose lines happened to open
+on a canonical verb. **93% is missed by both**, and that is the augury's
+territory measured rather than assumed.
+
+**The grammar keeps function words, and dropping them cost 4,516 misreadings.**
+`strip_filler` discards `in`, `the` and `to` because they say nothing about
+*which noun* an argument names — and for a grammar they are the whole evidence,
+because they are what tells one phrasing from another. Without them *"what is in
+the {place}"* and *"what is {topic}"* are the same pattern, so `survey` and
+`recall` collided and `what is brewing` answered `survey brewing`. Correctness on
+its own corpus went **59.0% → 99.1%**, and the holdout rate fell with it: a
+grammar that is right about what it was taught loses the accidental hits. That
+sharpens the case for a trained reader rather than weakening it.
+
+**A reader that cannot see the world cannot choose between slot kinds, and that
+is the next thing to fix.** `run {script}` and `run the {place}` are the same
+sentence to a grammar — nothing in *"run night_watch"* says `night_watch` is a
+script — so it answers `wield night_watch` and the parser refuses it. Every one
+of the corpus's fifteen misses is this shape.
+
+The rule stays: a reader keeps the player's words and `parser::resolve` binds
+them, because the alternative gives every reader a `Scene` that can go stale.
+**What changed is the seam's arity** (`0.13.6`). `Augur::read` returns several
+readings, best first, capped at four; `submit_reading` takes the first the scene
+can make sense of. The grammar went from 11.8% to **15.7%** on the holdout and
+the pair from 13.4% to **17.3%**, with no change to the corpus — and corpus
+misreadings fell from 15 to 12. Done before the model rather than after: a
+scored model emits candidates for free, and changing a trained interface later
+would not have been free.
+
+**It takes two passes, and requiring one was a regression a test caught.**
+Insisting a reading *run* threw away `Elsewhere`: `grind sage`, read correctly in
+a room with no mortar, is *"there is nothing here to grind with"* — the answer
+this section elsewhere argues is worth having, because *"I do not know that
+word"* would lie about a word the game taught next door. So the order is: the
+first reading that resolves; failing that the first that gives a **deliberate**
+answer (`Elsewhere` or `Incomplete`); failing that §6's suggestions.
+
+**The reader is trained and reads 44.1% of the holdout, against the matcher's
+4.8%** (`0.13.9`). 343,862 parameters, 1.4 MB, trained on the RX 9070 XT over
+Vulkan in about a minute: verb classification 54.5%, slot tagging 92.9%, and
+44.1% end-to-end on the same phrasings and the same rule the matcher and the
+grammar are scored by. All three together read 47.7%.
+
+**The ratio that mattered was not the one being quoted.** `31 parameters per
+example` counted *generated* examples; the corpus holds 11,243 of them but only
+**234 distinct phrasings**, because noun substitution multiplies the count
+without adding linguistic variety. The real figure is **1,469 per phrasing** —
+and the split shows exactly where it bites. Tagging feeds on the noun expansion
+and reaches 93%; the verb head is bounded by how many ways a command has been
+written down and reaches 54%. **Templates raise the verb rate; nouns do not.**
+
+**The reject class refuses 94.0%, and getting there cost nothing** (`0.13.10`).
+It refused **0.0%** on twenty hand-written negatives; `[[refusal]]` templates in
+`phrasings.toml` make it 682, expanded over the same nouns as the commands, and
+the reader now correctly refuses 94.0% of sentences that ask for nothing while
+wrongly refusing 3.7% of ones that do. Reading *improved* alongside it — 44.1%
+to 45.6% — because the negatives are not noise: they name reagents and rooms and
+still ask for nothing, so they teach the shape of a request rather than the mere
+presence of game words.
+
+**And the instrument had been reporting one number for two populations.** *"It
+refused 0.0%"* was written up here as a failure when, on the **command** holdout,
+nought is exactly right — a refusal there is a miss. The missing score was on
+sentences that ask for nothing, where a refusal is the answer. Both are reported
+now, with the direction each is read in spelled out beside it, because the pair
+is meaningless otherwise.
+
+**Two defects, each caught by an instrument put there to catch it.** Tagging
+accuracy read a flat 0.0% for twelve epochs: `into_vec` is typed, the type was
+wrong for `argmax`'s output, and an `unwrap_or_default()` turned the error into
+an empty vector — it is counted on the device now, where there is nothing to
+mistype. And the trainer saved the *final* epoch's weights, which on a corpus
+whose holdout swings thirty points between passes would have shipped 24% where an
+earlier pass reached 55%; it keeps the best pass instead.
+
+**Inference runs on the CPU, and the GPU is eight times slower at it**
+(`0.13.11`). One 32-token sentence takes **348µs** on `ndarray` against
+**2.71ms** on `wgpu`: a batch of one is almost entirely kernel-launch overhead.
+The GPU earns its place in the *training* run — minutes to seconds — and has no
+business at the prompt.
+
+**Three planned pieces are retired rather than built.** The worker thread, the
+deadline and the *"the orb ponders your request"* indicator were all budgeted
+for a reader slow enough to need them. §6 asks for sub-millisecond; 348µs is a
+third of one, so `Sim::submit_reading` stays synchronous, a divined line is
+pinned to the tick it was typed in for free, and the siege cliff the deadline was
+invented to avoid never arises. It also means every machine gets a reader — no
+device init, no shader compilation, no adapter to share, and `ndarray` works
+where there is no GPU at all.
+
+**The reader is chosen in `orbs-shell`, behind a feature.** Choosing it in a Bevy
+resource put it somewhere `ORBS_DUMP` could never reach, since a dump builds no
+`App` — the same blindness the fixture augur exists to prevent, arriving by a
+different door. An optional `orbs-augury` dependency that the Bevy build enables
+and `orbs-tui` does not keeps the terminal build free of `burn` entirely, which
+is what it is kept for.
+
+**Five times the phrasings bought eighteen points of verb accuracy**
+(`0.13.12`), which is the clearest confirmation this section has of its own
+claim. 234 say-lines became **1,009** across the same thirty commands; verb
+classification went **54.5% → 72.3%**, tagging 92.9% → 97.1%, and end-to-end
+reading **45.6% → 60.4%** — against a matcher that reads 3.9%. Nothing else was
+changed. *"Templates raise the verb rate; nouns do not"* was written on the
+strength of a ratio and is now written on the strength of a result.
+
+**The corpus went deliberately archaic, and that is a design decision rather
+than flavour.** Alchemy has a real technical vocabulary and this game is set
+inside it, so the mortar answers to `triturate`, `levigate`, `comminute` and
+`bray`; the still to `cohobate`, `rectify` and `sublimate`; the bath to
+`lixiviate` and `macerate`; and going somewhere to `repair to`, `betake`, `hie`
+and `wend`. A reader that has only seen *"smash the sage"* has learned one
+register, and §6 promises three. The vocabulary grew from 530 rows to **896** on
+the strength of it — which is also the first time the embedding table has grown
+for a reason other than more nouns.
+
+**The trainer was never seeded, and that invalidates every comparison this
+section made before `0.13.13`.** Two runs of one architecture reached 72.5% and
+84.7% verb accuracy; the run-to-run spread was wider than any effect being
+measured, and the trainer's own comment claimed reproducibility while leaving
+initialisation to chance. `B::seed` fixed it in one line and two runs are now
+byte-identical. **In a project whose central claim is bit-identical
+reproducibility, this is the one place it should never have been missing** — and
+it went unnoticed because every reported figure was plausible.
+
+So: slot-to-verb conditioning — the verb head reading a per-tag pooled summary
+beside `<cls>`, which is the intent/slot literature's slot-gating pattern — is
+**neither credited nor dismissed here.** Seeded and canonical it reads 65.9%
+end-to-end against 60.4%, which is inside the noise the unseeded numbers carried.
+
+**What the experiment did establish is that verbs and refusals are
+anti-correlated.** One epoch reads verb 65.2% and refusal 38.6%; the next reads
+63.4% and 93.2%. Keeping checkpoints on verb accuracy alone had hidden it; the
+criterion averages both now.
+
+**The cause proposed for it was wrong — ⚠ superseded by the entry below.** The
+reading was that `REJECT` is the forty-seventh class in the same softmax as the
+verbs, competing for one distribution's mass, so every point of confidence about
+*which* command costs confidence about *whether there is one*; and that the fix
+is therefore a separate binary head rather than a class. It is a tidy account and
+it is not what was happening; the head at the end of this entry is what refuted
+it.
+
+**The model classifies actions, not verbs**, and the expansion back to the 46
+canonical names happens in the driver. `grind`, `digest`, `mix` and `distil` are
+one action wearing four names, and `Verb::anchor` already says so — they are
+`Some(self)`, *"declared by a fixture"*, while `wield` is deliberately unanchored
+because it *"names its target explicitly… which is what a script writes when the
+instrument is the variable."* Derived from `anchor()`/`is_operation()`, never a
+second table. **The win is not the output layer** — ~47 classes to ~39, against a
+verb head of ~6k parameters. It is the corpus, which is written per action with
+the tool substituted from content; and growth, because a domain adding an
+instrument that fits an existing shape becomes a content change rather than a
+retrain. **Not everything collapses**: `Deploy`, `Quaff`, `Hold`, `Pledge` and
+`Petition` share the rampart and are not one action, so the rule is narrow —
+self-anchored *operation* verbs only.
+
+**The separate refusal head was built, it competes with nothing, and the two
+accuracies traded exactly as before** (`0.13.14`). Epoch 2 read verb 79.4% and
+refusal 40.0%; epoch 4 read 58.7% and 81.3%. The combined mean was *worse* than
+the shared softmax's — 75.7% against 80.2%. Whatever couples the two answers, it
+was never one distribution's mass.
+
+**It is the class balance: 46,837 commands against 1,378 refusals, 34:1.** A head
+that answers "command" every time scores 97.1% on that distribution. The loss
+therefore barely registers a refusal error, the boundary between the two classes
+is essentially unconstrained, and it drifts epoch to epoch wherever the verb and
+tag gradients happen to leave it — which is exactly what two anti-correlated
+accuracies look like. Weighting the command loss 34:1 constrains it: end-to-end
+**71.0%**, all three **74.2%**, correctly refused **98.8%**, wrongly refused
+**1.9%**, against 65.9% / 71.2% / 81.1% / 2.6%.
+
+**The head is kept, and not for the reason it was built.** The verb head no
+longer carries a row that is not a verb, and inference reads *whether* before
+*which* rather than inferring refusal from a rank — both are better structure,
+and neither is worth a point of accuracy on its own. **The lesson is the
+ordering.** The architectural story was plausible enough to build without first
+computing a class balance that takes one line, and the balance is where the whole
+effect lived. **Measure the data before redesigning the model** — counting the
+unseeded comparisons above, this section has now made that mistake twice.
+
+**Three times, as it turns out** (`0.13.15`). Counting the corpus properly found
+two faults that every architectural change so far had been working around.
+
+**Seventeen of the forty-six verbs had no templates at all** — the whole
+menagerie, bailey and forge, plus `dial` and `unfurl`. A verb with no examples
+cannot be predicted, and **the refusal head cannot cover for it**: it is trained
+on sentences that ask for *nothing*, so a sentence that asks for something
+unteachable is not a refusal to it. `send the wolves to the gate` was answered by
+whichever of the other twenty-nine scored highest, confidently.
+`every_verb_has_a_template` fails the build now, because a domain that coins a
+verb and writes no phrasing for it reopens this silently.
+
+**And the corpus was 47% `move`.** A template's expansion is the *product* of its
+slot cardinalities, so the three-slot signature is quadratic where a one-slot
+shape is linear and a bare one is a single example — 47% is arithmetic about
+`Verb::ALL`, not about what anyone says. The reader learns it as a prior, which
+is exactly the `move lectern` / `attend lectern` confusion the slot-to-verb
+conditioning above was built to fix. `Phrasings::corpus_capped` bounds what one
+template contributes and **strides** the cross-product rather than truncating it,
+because taking the first *n* keeps every expansion of one noun and none of the
+rest. The widest share is `grind` at 9%.
+
+**Both losses are weighted from the corpus now, and neither weight is written
+down.** A constant would be a second expression of a fact the corpus already
+states, which is the defect §19 keeps paying for. Verb weights are inverse
+frequency clamped to `0.25..=4.0` — unclamped, the rarest verb's weight is in the
+hundreds and one such sentence dominates every gradient it appears in.
+
+With the corpus doubled on top of that: **end-to-end 71.0% → 81.5%**, all three
+74.2% → **83.4%**. **The holdout changed underneath those numbers** — 189
+authored lines to 8,684 expanded phrasings — so they are not strictly comparable,
+and the honest check is that the deterministic parser reads 3.5% of the new
+holdout against 3.9% of the old. Refusals read 89.0%/1.8% against 98.8%/1.9% on a
+refusal holdout that also doubled; that is a harder measurement, not a worse
+reader, and it is not claimed as an improvement either.
+
+### The reader answers with a list, and a free-text verb shadows it (`0.13.15`)
+
+**The tagger reads 97% and the verb head 85%, so the usual failure is a
+correctly-found argument under the wrong verb** — and that is precisely the error
+a scene can settle. `Trained::readings` returns the verb head's top
+`MAX_READINGS`, each trimmed to its own verb's arity; `Sim::submit_reading`
+already walked a list and took the first that resolved, so nothing in the sim
+changed. A second choice costs one sort when the first was right.
+
+**It does not rescue every case, and the reason is worth recording.** `can you
+take me over to the lectern` now reads `verify lectern` where it used to read
+`move lectern` — still wrong, and top-k does not save it because **`verify` takes
+free text**, so `verify <anything>` always resolves and shadows every candidate
+ranked below it. *First that resolves* is the right rule against verbs that
+refuse a bad argument; against a verb that refuses nothing it is a sink. Ranking
+a candidate whose slot count matches its signature above one that merely accepts
+is the obvious next move, and is not built.
+
+### The reader is on by default, and the dumps are not (`0.13.16`)
+
+**`ORBS_AUGURY` unset now means the trained reader**, where it meant no reader
+before. A feature nobody can reach answers none of §16's *"parser feels
+frustrating rather than magical"*, which that section rates Critical, and the
+numbers had stopped arguing for caution: 81.5% of phrasings nothing taught it
+against the matcher's 3.5%, 436µs on the CPU, and a refusal head that declines
+rather than guessing when a line asks for nothing.
+
+**Two silences, deliberately.** Weights are a gitignored build artefact, so a
+fresh clone has none and the default degrades to the game exactly as it was
+without saying so on every boot. Naming `model` explicitly warns instead — you
+asked for a thing that is missing, and silence there looks like it working. An
+unrecognised value now warns too, which it did not need to before: with the
+reader off by default a typo cost you a feature you were already not getting.
+
+**The cost is paid by `scripts/dumps.sh`, and it is a real one.** Its `run`
+helper passes `off` before every block's own arguments, so **the captures no
+longer show the shipping default**. The alternative is worse: weights change on
+every training run, so a capture made against them is not reproducible from a
+clean checkout and `diff -r` — the whole point of the instrument — would report
+changes that mean nothing. Four captures move without the guard (`lab_flask`,
+`augury_off`, `chant_refuse`, `forge_refuse`), so it is load-bearing rather than
+tidy. What gates the trained reader instead is `orbs-augury --example measure`
+and the augury tests; `dumps.sh` keeps the deterministic pipeline and the two
+readers that need no weights.
+
+**And `SimPlugin` installs no reader under `cargo test`.** A suite that passes or
+fails on whether someone has run the trainer is worse than no suite, and that is
+what a gitignored artefact reachable from `from_environment` would have made. A
+test that wants a reader installs one with `Augury::holding`.
+
+**`orbs-tui` had no reader at this point** — it did not depend on `orbs-augury`
+at all — so the two frontends disagreed about the default. That divergence was
+named here rather than discovered, and it is **superseded by the entry below**,
+which removed it.
+
+### The player picks the driver, and the terminal is the whole game (`0.13.17`)
+
+**The driver was an environment variable, which means it belonged to nobody.**
+`ORBS_AUGURY` is a developer's override; a player never sees one. So the choice
+is a menu word now — `options` off the top page, `augury` or `plain` — and it is
+the first entry under the roadmap's open *"Options, remapping, all toggles"*.
+
+**The chosen one is marked.** A settings page that lists what you could pick
+without saying what is picked is a list of things you might already have done,
+which is §15's dead end in miniature. What is *in effect* comes from the
+frontend rather than from the settings file, because a session that cannot
+persist one still has a driver, and a page that read the file would show that
+session a choice it did not make.
+
+**Settings live beside the saves and never inside one.** A save is a tower; a
+setting is about the machine in front of you. Putting one in the other would
+carry a preference between slots and let loading somebody else's tower change how
+your keyboard behaves. `orbs-settings.toml`, per-machine, and **nothing in
+`orbs-sim` can see it** — the sim takes a reader or does not, and how that was
+decided is the shell's business.
+
+**`orbs-tui` is no longer a cut-down game, and the reason it was one had
+expired.** It carried no reader because `orbs-augury` pulled `wgpu`, and a
+terminal program has no business carrying a graphics stack. But the GPU was only
+ever the *training* backend: inference is `ndarray` at 436µs against 3.0ms on
+`wgpu`, because a batch of one is almost entirely kernel-launch overhead. So
+`wgpu` and `autodiff` went behind a `train` feature, both frontends take the same
+reader, and `cargo tree -p orbs-tui` names no `wgpu` and no `naga`. Rule 7 still
+stands — the Bevy build never *waits* for the terminal one — but "second-class"
+was never meant to mean "missing the feature the parser exists for".
+
+⚠ **The gate command changed, and quietly.** `--all-targets` stops compiling a
+target whose `required-features` are off, so clippy went green while the trainer
+would not build. CLAUDE.md's gate asks for `--features orbs-augury/train`; this
+is the second time in this section a green gate has meant less than it looked
+like, after the training run that was never seeded.
+
+**`menu.rs` split on the way in.** It was 756 lines against CLAUDE.md's ~300 and
+a fourth page would have made it ~900 — `state` is what a keystroke does, `words`
+is the vocabulary and the prefix rule, `paint` is the picture.
 
 ### The arsenal is worth what your industry is worth — supersedes the cap (Phase 11, `0.11.13`)
 
