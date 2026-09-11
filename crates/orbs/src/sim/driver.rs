@@ -17,17 +17,19 @@ use orbs_sim::Sim;
 #[derive(Resource)]
 pub(crate) struct Tower(Sim);
 
-/// The reader that answers lines the orb cannot read itself (§6), if any.
+/// The readers that answer lines the orb cannot read itself (§6), if any.
 ///
-/// **Empty unless `ORBS_AUGURY` names one**, which is the shipping default
-/// until a trained reader exists: an absent augury is the game exactly as it
-/// was, because `Sim::submit_reading` with nothing to consult *is* `submit`.
+/// **Both registers, under one setting.** The prompt's reader and the spell's
+/// are two models over two answer spaces, and a player who has said *"read what
+/// I mean"* has said it about their whole session — a second toggle for spells
+/// would be one nobody finds and one that can disagree with the first.
 ///
-/// `orbs_shell::augury` is the single reader of the switch, so this build and
-/// the terminal one cannot disagree about what it means.
+/// `orbs_shell::augury` and `orbs_shell::scrivener` are the single readers of
+/// the two switches, so this build and the terminal one cannot disagree about
+/// what either means.
 #[derive(Resource, Default)]
-pub(crate) struct Augury {
-    /// The reader this build could consult, if the player wants one.
+pub(crate) struct Readers {
+    /// The prompt's reader, if the player wants one.
     ///
     /// **Loaded once and kept even while `plain` is chosen.** Switching drivers
     /// is a menu choice and must take effect on the next line typed; rebuilding
@@ -35,11 +37,13 @@ pub(crate) struct Augury {
     /// keystroke, and dropping it would make turning the setting back on cost
     /// one.
     reader: Option<Box<dyn orbs_sim::Augur>>,
-    /// Whether the player wants it consulted.
+    /// The spell reader, on the same terms.
+    scribe: Option<Box<dyn orbs_sim::Scrivener>>,
+    /// Whether the player wants them consulted.
     driver: orbs_shell::Driver,
 }
 
-impl Augury {
+impl Readers {
     /// Whatever `ORBS_AUGURY` asked for.
     ///
     /// **Every reader is chosen in `orbs_shell::augury`, including the trained
@@ -55,12 +59,13 @@ impl Augury {
         // every test that adds `SimPlugin` behave one way on a machine that has
         // trained and another on a fresh clone — a suite that passes or fails on
         // whether someone ran the trainer is worse than no suite. A test that
-        // wants one installs it with [`Augury::holding`].
+        // wants one installs it with [`Readers::holding`].
         if cfg!(test) {
             return Self::default();
         }
         Self {
             reader: orbs_shell::augury(),
+            scribe: orbs_shell::scrivener(),
             driver: orbs_shell::settings::driver(),
         }
     }
@@ -75,6 +80,14 @@ impl Augury {
         match self.driver {
             orbs_shell::Driver::Plain => None,
             orbs_shell::Driver::Augury => self.reader.as_deref(),
+        }
+    }
+
+    /// The spell reader, on exactly the same terms.
+    pub(crate) fn scrivener(&self) -> Option<&dyn orbs_sim::Scrivener> {
+        match self.driver {
+            orbs_shell::Driver::Plain => None,
+            orbs_shell::Driver::Augury => self.scribe.as_deref(),
         }
     }
 
@@ -101,6 +114,17 @@ impl Augury {
     pub(crate) fn holding(reader: Box<dyn orbs_sim::Augur>) -> Self {
         Self {
             reader: Some(reader),
+            scribe: None,
+            driver: orbs_shell::Driver::Augury,
+        }
+    }
+
+    /// A spell reader chosen directly rather than from the environment.
+    #[cfg(test)]
+    pub(crate) fn copying(scribe: Box<dyn orbs_sim::Scrivener>) -> Self {
+        Self {
+            reader: None,
+            scribe: Some(scribe),
             driver: orbs_shell::Driver::Augury,
         }
     }
@@ -337,8 +361,43 @@ impl Tower {
     /// The editor's whole contribution to the world. Keystrokes never reach the
     /// sim — see `shell::editor` — so this is the one call that makes an edit
     /// real, and it is a submission like any typed line.
+    #[cfg(test)]
     pub(crate) fn write_spell(&mut self, name: &str, lines: &[String]) {
-        self.0.write_spell(name, lines);
+        self.write_spell_with(name, lines, None);
+    }
+
+    /// ...with the reader that answers the lines the orb cannot read itself.
+    ///
+    /// **The reading is derived here and stored beside the text, never over
+    /// it.** `Held` is byte-exact whatever a reader says; `Read` is what
+    /// `spell::compile` compiles. A `None` reader is the identity — the two are
+    /// then the same lines — so a build with no weights is the game exactly as
+    /// it was.
+    pub(crate) fn write_spell_with(
+        &mut self,
+        name: &str,
+        lines: &[String],
+        scrivener: Option<&dyn orbs_sim::Scrivener>,
+    ) {
+        self.0
+            .write_spell_reading(name, lines, scrivener.unwrap_or(&orbs_sim::Verbatim));
+    }
+
+    /// Read the buffer of the spell called `name` the way the editor draws it,
+    /// with a reader if there is one.
+    pub(crate) fn read_spell_with(
+        &self,
+        name: &str,
+        domain: &str,
+        lines: &[String],
+        scrivener: Option<&dyn orbs_sim::Scrivener>,
+    ) -> Vec<orbs_sim::tower::spell::Reading> {
+        self.0.read_spell_with(
+            name,
+            domain,
+            lines,
+            scrivener.unwrap_or(&orbs_sim::Verbatim),
+        )
     }
 
     /// Replace the orb's authored voice (CLAUDE.md rule 6).

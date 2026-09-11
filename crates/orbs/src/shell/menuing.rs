@@ -95,7 +95,7 @@ pub(crate) fn open_requested(
     mut standing: ResMut<Standing>,
     // `Option` for `commanding::submit`'s reason; absent means nothing is
     // reading lines any other way, which is exactly `Driver::default`.
-    augury: Option<Res<crate::sim::Augury>>,
+    readers: Option<Res<crate::sim::Readers>>,
 ) {
     if !tower.has_menuing() {
         return;
@@ -103,7 +103,7 @@ pub(crate) fn open_requested(
     if !tower.menuing() {
         return;
     }
-    standing.open(augury.map_or_else(Default::default, |augury| augury.driver()));
+    standing.open(readers.map_or_else(Default::default, |readers| readers.driver()));
 }
 
 /// A tower the menu asked for, waiting for the swap.
@@ -131,7 +131,7 @@ pub(crate) fn type_into_menu(
     mut swapping: MessageWriter<SwapMessage>,
     // `Option`, for `commanding::submit`'s reason: half the tests here build the
     // shell alone, and a bare `Res` fails parameter validation in one.
-    augury: Option<ResMut<crate::sim::Augury>>,
+    readers: Option<ResMut<crate::sim::Readers>>,
 ) {
     // **A held chord is skipped; a *stale* one is not** — see `type_into_loom`,
     // whose comment records the swallowed keystroke that comes of reading this
@@ -191,8 +191,13 @@ pub(crate) fn type_into_menu(
         // menu has already written the choice down; this is the running session
         // catching up with it, which is the whole reason the outcome exists.
         Some(MenuOutcome::Drive(driver)) => {
-            if let Some(mut augury) = augury {
-                augury.drive(driver);
+            // **Both registers**, because both hang off the one driver — see
+            // `Readers`. A spell saved after the switch is read the new way on
+            // the next settle beat, every line of it: a kept reading belongs to
+            // the reader that made it (`tower::Read::by`), so none survives a
+            // change of reader.
+            if let Some(mut readers) = readers {
+                readers.drive(driver);
             }
         }
         None => {}

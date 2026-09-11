@@ -76,7 +76,7 @@ pub use dump::{
     PASSAGE as PASSAGE_VAR, requested as dump_requested, run as dump, run_script as dump_script,
 };
 pub use editor::{Editor, Mode as EditorMode, Outcome as EditorOutcome};
-pub use environment::{LENGTH, RUSTC, SEALED, SEED, augury, fresh, seed, wizard};
+pub use environment::{LENGTH, RUSTC, SEALED, SEED, augury, fresh, scrivener, seed, wizard};
 pub use focus::{Focus, Open};
 pub use glance::Panel;
 pub use guide::{Entry, Guide, guide};

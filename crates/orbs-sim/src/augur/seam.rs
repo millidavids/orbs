@@ -67,6 +67,80 @@ pub trait Augur: Send + Sync {
     fn read(&self, line: &str) -> Vec<String>;
 }
 
+/// Something that can read one **line of a spell** the orb could not read.
+///
+/// [`Augur`]'s sibling, and deliberately not the same trait. Three differences,
+/// each of which would be a defect if the two were merged:
+///
+/// - **The output space is the spell language, not the verb vocabulary.** A
+///   spell line can be `if the mortar is idle` or `bide 10`, which mean nothing
+///   at the prompt — `parser::analyse` answers `InSpell` for a leading spell
+///   word precisely to keep them apart (§19).
+/// - **One answer, not a list.** `Augur` offers several because only the room
+///   can tell `run {script}` from `run the {place}`. A spell line is read with
+///   no room to consult — it is read at *write* time, not at cast — so there is
+///   nothing to try them against. Abstaining is the only other answer.
+/// - **Nobody is watching.** The prompt echoes what it heard and the player is
+///   standing there; a spell is read once and run for hours. §19's *The orb
+///   accepts an abbreviation, never a typo, and never a coin flip* is explicit
+///   that this is why a spell resolves stricter than the prompt — *"a spell
+///   resolves with nobody watching, so it takes the stricter half"* — and it is
+///   why an implementor must leave a line alone unless its reading **accounts
+///   for every word in it**.
+///
+/// # Answer `None` far more often than not
+///
+/// A line that is already canonical, a comment, a blank line, and anything whose
+/// reading does not fully parse must all come back [`None`]. The caller keeps
+/// the player's text either way — see `Sim::write_spell_reading` — so an
+/// abstention costs nothing and a wrong answer costs a spell that runs for
+/// hours doing the wrong thing.
+pub trait Scrivener: Send + Sync {
+    /// The canonical form of `line`, or [`None`] to leave it exactly as written.
+    fn read(&self, line: &str) -> Option<String>;
+
+    /// Which reader this is: a number two readers share only if they would
+    /// answer every line alike.
+    ///
+    /// # What a kept reading is keyed by, beside the text
+    ///
+    /// `Sim::write_spell_reading` keeps a line's reading while its text does not
+    /// change, which is what makes an autosave on every pause affordable. Keyed
+    /// by the text alone, a reading outlived the reader that made it: switching
+    /// the driver to `plain` left every line compiling what the model had made
+    /// of it, and a verbatim copy — a restored save, a repaired sabotage — stood
+    /// in for a reading no reader ever took. A reading is kept now only for the
+    /// reader that made it; see `tower::Read::by`.
+    ///
+    /// **Required, not defaulted.** A default every implementor shared would be
+    /// that defect again, for whichever reader forgot to override it.
+    fn identity(&self) -> u64;
+}
+
+/// A [`Scrivener`] that leaves every line exactly as written.
+///
+/// **What a build with no reader uses**, so `Sim::write_spell` is
+/// `write_spell_reading` with this rather than a second code path — and the
+/// identity case is the one the whole cache rests on: with nothing reading, the
+/// lines that compile are the lines the player typed.
+pub struct Verbatim;
+
+impl Verbatim {
+    /// Its [`Scrivener::identity`]. Nothing it answers depends on anything, so a
+    /// constant is the whole truth of it.
+    pub const IDENTITY: u64 = 0;
+}
+
+impl Scrivener for Verbatim {
+    fn read(&self, _line: &str) -> Option<String> {
+        None
+    }
+
+    fn identity(&self) -> u64 {
+        Self::IDENTITY
+    }
+}
+
 /// How many readings a caller will try before giving up.
 ///
 /// Sized like the numbered prompt's `MAX_PROMPT` and for the same reason: past

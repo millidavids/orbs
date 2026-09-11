@@ -1020,14 +1020,106 @@ impl Sim {
     /// canonicaliser cannot silently make an old session replay into a different
     /// world.
     pub fn write_spell(&mut self, name: &str, lines: &[String]) {
+        self.write_spell_reading(name, lines, &crate::augur::Verbatim);
+    }
+
+    /// Write a spell out, with a reader for the lines the orb cannot read.
+    ///
+    /// [`write_spell`](Self::write_spell) is this with a reader that abstains on
+    /// everything, so a build with none is the game exactly as it was.
+    ///
+    /// # What the player typed is never touched
+    ///
+    /// `lines` goes to [`Held`](crate::tower::Held) byte-exact, because §19
+    /// deleted the last thing that rewrote a player's file. The reading lands in
+    /// [`Read`](crate::tower::Read) beside it and is what `spell::compile`
+    /// compiles — derived, discardable, and rebuilt whenever a line changes.
+    ///
+    /// # Read once, on the way in
+    ///
+    /// **Not at cast, and not in `step`.** `orbs-sim` cannot depend on a model
+    /// (rule 1) and a model on the tick spine would break replay (rule 3), so
+    /// the reader is the frontend's and is consulted here — the same shape as
+    /// [`submit_reading`](Self::submit_reading). A line whose text has not
+    /// changed keeps its reading rather than paying for it again, which matters
+    /// because the editor writes the buffer out after every pause in the typing.
+    pub fn write_spell_reading(
+        &mut self,
+        name: &str,
+        lines: &[String],
+        scrivener: &dyn crate::Scrivener,
+    ) {
         let filename = crate::content::with_extension(name);
+        let read = self.reading_of(&filename, lines, scrivener);
+        self.queue_write(&filename, lines, read, scrivener.identity());
+    }
+
+    /// Record the save and queue it, with the reading already settled.
+    ///
+    /// Split out so replay can reach it: a replayed `Wrote` carries its reading
+    /// and must not derive a new one.
+    fn queue_write(&mut self, filename: &str, lines: &[String], read: Vec<String>, by: u64) {
         let tick = *self.world.resource::<Tick>();
         self.world
             .resource_mut::<Submissions>()
-            .wrote(tick, &filename, lines);
+            .wrote(tick, filename, lines, &read, by);
         self.world
             .resource_mut::<Pending>()
-            .write(filename, lines.to_vec());
+            .write(filename.to_owned(), lines.to_vec(), read, by);
+    }
+
+    /// Each line as the orb reads it, reusing what this reader already read.
+    ///
+    /// # The newest reading of the file, queued or landed
+    ///
+    /// A write lands on the next tick, so on the beat the editor saves and then
+    /// reads its buffer the node still holds the reading from before. Asking the
+    /// queue first is what reads a changed line **once** on that beat rather
+    /// than twice — and the save's reading and the editor's are one answer,
+    /// because they are one lookup.
+    fn reading_of(
+        &self,
+        filename: &str,
+        lines: &[String],
+        scrivener: &dyn crate::Scrivener,
+    ) -> Vec<String> {
+        let by = scrivener.identity();
+        let newest = self
+            .world
+            .resource::<Pending>()
+            .written(filename)
+            .or_else(|| {
+                // The same walk `spell` does, for the reading rather than the text.
+                self.world
+                    .iter_entities()
+                    .find(|entity| {
+                        entity.get::<tower::Nameable>().map(|kind| kind.0)
+                            == Some(crate::parser::NounKind::Script)
+                            && entity
+                                .get::<tower::Name>()
+                                .is_some_and(|node| node.0 == filename)
+                    })
+                    .and_then(|entity| entity.get::<tower::Read>().cloned())
+            });
+        lines
+            .iter()
+            .map(|line| {
+                // A blank line and a comment are not statements and there is
+                // nothing for a reader to say about them.
+                let trimmed = line.trim();
+                if trimmed.is_empty() || trimmed.starts_with('#') {
+                    return line.clone();
+                }
+                // **Unchanged text keeps its reading — this reader's**, which is
+                // what makes an autosave on every keystroke pause affordable, and
+                // what makes switching the reader reach every line. See
+                // `tower::Read::by`.
+                if let Some(read) = newest.as_ref().and_then(|newest| newest.kept(line, by)) {
+                    return read.to_owned();
+                }
+                scrivener.read(line).unwrap_or_else(|| line.clone())
+            })
+            .collect()
     }
 
     /// Take a mastery node, on the next tick.
@@ -1392,7 +1484,32 @@ impl Sim {
     /// tracks what is on screen rather than what was last written.
     #[must_use]
     pub fn read_spell(&self, domain: &str, lines: &[String]) -> Vec<crate::tower::spell::Reading> {
-        crate::tower::spell::interpret(&self.world, domain, lines)
+        crate::tower::spell::interpret(&self.world, domain, lines, lines)
+    }
+
+    /// The same, with a reader for the lines the orb cannot read itself.
+    ///
+    /// [`read_spell`](Self::read_spell) is this with none, so a build without a
+    /// reader shows exactly what it always did.
+    ///
+    /// # The save's reading, not a second one
+    ///
+    /// `name` is the spell the buffer belongs to, and each line's reading comes
+    /// from the lookup [`write_spell_reading`](Self::write_spell_reading) makes —
+    /// the queued write, then the node's `Read`. So a line the save already read
+    /// is not read again here, and the editor and the runner cannot differ about
+    /// what a line means: it is one reading, looked up twice. A line edited since
+    /// is read now, exactly as the next save would read it.
+    #[must_use]
+    pub fn read_spell_with(
+        &self,
+        name: &str,
+        domain: &str,
+        lines: &[String],
+        scrivener: &dyn crate::Scrivener,
+    ) -> Vec<crate::tower::spell::Reading> {
+        let read = self.reading_of(&crate::content::with_extension(name), lines, scrivener);
+        crate::tower::spell::interpret(&self.world, domain, lines, &read)
     }
 
     /// Which line of `name` a running invocation is on, if one is running.
@@ -1577,7 +1694,16 @@ impl Sim {
             // session reproducible on a machine whose GPU would have read the
             // player's words differently. See `Sim::submit_divined`.
             Submission::Divined { line, echo } => self.submit_divined(&line, &echo),
-            Submission::Wrote { name, lines } => self.write_spell(&name, &lines),
+            // **The reading is applied, never re-derived.** Re-running the
+            // reader here would make a replay depend on a model being present
+            // and identical — the thing `Submission::Divined` carries its echo
+            // to avoid. `read` equals `lines` for every session nothing read.
+            Submission::Wrote {
+                name,
+                lines,
+                read,
+                by,
+            } => self.queue_write(&name, &lines, read, by),
             Submission::Took(id) => self.take(&id),
             Submission::Sang(word) => {
                 if let Some(syllable) = tower::Syllable::from_word(&word) {

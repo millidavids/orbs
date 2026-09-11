@@ -2,23 +2,34 @@
     clippy::cast_precision_loss,
     reason = "epoch and batch counts are small integers; these are report figures"
 )]
-//! Train the reader, on this machine's GPU, from this game's own content.
+//! Train a reader, on this machine's GPU, from this game's own content.
 //!
 //! ```text
 //! cargo run --release -p orbs-augury --example train --features train
+//! cargo run --release -p orbs-augury --example train --features train -- --spells
 //! cargo run --release -p orbs-augury --example train --features train -- --epochs 40 --cpu
 //! ```
 //!
 //! **An example rather than a test**, because it needs a GPU and minutes, and
 //! `cargo test --workspace` must run on a machine with neither.
 //!
+//! # Two registers, one trainer
+//!
+//! `--spells` trains the reader for `.spell` files instead of the one for the
+//! prompt. Everything below is shared — the loop, the weighting, the selection
+//! rule, the scoring — because the two ask the identical question of an
+//! identical sentence over a different set of answers. What differs is gathered
+//! in [`Corpus`], and a second trainer would be the two-expressions-of-one-rule
+//! defect §19 records more often than any other.
+//!
 //! # What it learns from
 //!
-//! `content/phrasings.toml`, expanded over everything the content tables name —
-//! and nothing else. No pretrained weights, no pretrained embeddings, no
-//! downloaded tokenizer, no other model's outputs (DESIGN.md §19, *the
-//! augury*). The vocabulary is assembled from the game's own tables, so there
-//! is no artefact here whose provenance is anywhere but this repository.
+//! `content/phrasings.toml` and `content/spellings.toml`, expanded over
+//! everything the content tables name — and nothing else. No pretrained weights,
+//! no pretrained embeddings, no downloaded tokenizer, no other model's outputs
+//! (DESIGN.md §19, *the augury*). The vocabulary is assembled from the game's
+//! own tables, so there is no artefact here whose provenance is anywhere but
+//! this repository.
 //!
 //! # What the numbers mean
 //!
@@ -37,81 +48,46 @@ use burn::optim::{AdamConfig, GradientsParams, Optimizer};
 use burn::prelude::*;
 use burn::record::{BinFileRecorder, FullPrecisionSettings};
 
-use orbs_augury::{Batch, Reader, ReaderConfig, Sample, VERBS, Vocabulary};
-use orbs_sim::content::{CORPUS_CAP, Phrasings, corpus_scene};
+use orbs_augury::{Batch, Corpus, Reader, ReaderConfig, Register, Sample, Vocabulary};
 
 /// How many sentences the reader sees at once.
 const BATCH: usize = 64;
 
-/// Where the trained weights land.
-const WEIGHTS: &str = "crates/orbs-augury/weights/reader";
-
 fn main() {
     let epochs = numbered("--epochs").unwrap_or(30);
     let cpu = std::env::args().any(|arg| arg == "--cpu");
-
-    println!("\nO.R.B.S. — teaching the orb to read\n");
-
-    let vocabulary = Vocabulary::builtin();
-    let scene = corpus_scene();
-    let phrasings = Phrasings::builtin();
-
-    // **Capped, because the expansion was a product.** `move {reagent} {place}`
-    // is the widest signature in `Verb::ALL` and its cross-product made it 47%
-    // of the corpus — a prior strong enough that `take me over to the lectern`
-    // came back `move lectern`. See `Phrasings::corpus_capped`.
-    let mut corpus: Vec<Sample> = phrasings
-        .corpus_capped(&scene, CORPUS_CAP)
-        .iter()
-        .filter_map(|example| Sample::encode(example, &vocabulary))
-        .collect();
-    // **Refusals come from the content file now, not a `const` here.** Twenty
-    // hand-written negatives against eleven thousand commands is not a class,
-    // it is a rounding error — the reader refused 0.0% of everything. They
-    // expand over the same nouns as the commands do, deliberately: a refusal
-    // must not be learnable as *"a sentence with no game words in it"*.
-    let refusals = phrasings.refused(&scene);
-    corpus.extend(
-        refusals
-            .iter()
-            .filter_map(|line| Sample::reject(line, &vocabulary)),
-    );
-    let holdout: Vec<Sample> = phrasings
-        .holdout(&scene)
-        .iter()
-        .filter_map(|example| Sample::encode(example, &vocabulary))
-        .collect();
-    // **Kept apart from the command holdout, and scored the opposite way.** A
-    // refusal here is the right answer; on the commands above it is a miss.
-    let refused: Vec<Sample> = phrasings
-        .refused_holdout(&scene)
-        .iter()
-        .filter_map(|line| Sample::reject(line, &vocabulary))
-        .collect();
+    let register = Register::asked();
 
     println!(
-        "  {} rows, {} to learn from ({} of them refusals), {} held back\n",
+        "\nO.R.B.S. — teaching the orb to read {}\n",
+        register.name()
+    );
+
+    let vocabulary = Vocabulary::builtin();
+    let corpus = register.corpus(&vocabulary);
+
+    println!(
+        "  {} rows, {} answers, {} to learn from ({} of them refusals), {} held back\n",
         vocabulary.rows(),
-        corpus.len(),
-        refusals.len(),
-        holdout.len(),
+        register.classes(),
+        corpus.learn.len(),
+        corpus.refusals,
+        corpus.holdout.len(),
     );
 
     if cpu {
         run::<Autodiff<NdArray<f32>>>(
             &burn::backend::ndarray::NdArrayDevice::default(),
+            register,
             &corpus,
-            &holdout,
-            &refused,
             &vocabulary,
             epochs,
         );
     } else {
         run::<Autodiff<Wgpu>>(
             &burn::backend::wgpu::WgpuDevice::default(),
+            register,
             &corpus,
-            &holdout,
-            &refused,
             &vocabulary,
             epochs,
         );
@@ -126,9 +102,9 @@ fn main() {
 /// — the loss stops being about reading and starts being about that verb.
 const WEIGHT: std::ops::RangeInclusive<f32> = 0.25..=4.0;
 
-/// How much each verb's mistakes count, by how rare the verb is.
-fn verb_weights(corpus: &[Sample]) -> Vec<f32> {
-    let mut count = vec![0usize; VERBS];
+/// How much each class's mistakes count, by how rare the class is.
+fn verb_weights(corpus: &[Sample], classes: usize) -> Vec<f32> {
+    let mut count = vec![0usize; classes];
     for sample in corpus.iter().filter(|sample| sample.is_command()) {
         if let Some(seen) = count.get_mut(sample.verb as usize) {
             *seen += 1;
@@ -176,12 +152,13 @@ fn numbered(flag: &str) -> Option<usize> {
 /// Train, reporting the holdout after every pass.
 fn run<B: burn::tensor::backend::AutodiffBackend>(
     device: &B::Device,
-    corpus: &[Sample],
-    holdout: &[Sample],
-    refused: &[Sample],
+    register: Register,
+    all: &Corpus,
     vocabulary: &Vocabulary,
     epochs: usize,
 ) {
+    let (corpus, holdout, refused) = (&all.learn, &all.holdout, &all.refused);
+    let classes = register.classes();
     // **Seeded, and it was not.** The comment below claimed two runs produce the
     // same weights while the *initialisation* was left to chance, so two runs of
     // the same architecture reached 72.5% and 84.7% and there was no way to tell
@@ -189,14 +166,17 @@ fn run<B: burn::tensor::backend::AutodiffBackend>(
     // bit-identical reproducibility that is the one place it should never have
     // been missing.
     B::seed(device, 0x0B5);
-    let mut reader: Reader<B> = ReaderConfig::new(vocabulary.rows()).init(device);
+    let mut reader: Reader<B> = ReaderConfig::new(vocabulary.rows())
+        .with_classes(classes)
+        .with_dropout(register.dropout())
+        .init(device);
     let mut optimiser = AdamConfig::new().init();
 
     // **Both heads are weighted against what the corpus actually holds**, and
     // both numbers are computed rather than written down — a constant here would
     // be a second expression of a fact the corpus already states, which is the
     // defect §19 keeps paying for.
-    let verbs = verb_weights(corpus);
+    let verbs = verb_weights(corpus, classes);
     let refusing = refusal_weight(corpus);
     println!(
         "  command loss weighted {refusing:.1}:1 · verb weights {:.2}–{:.2}\n",
@@ -268,7 +248,7 @@ fn run<B: burn::tensor::backend::AutodiffBackend>(
             if commands > 0 {
                 loss = loss
                     + verb_loss.forward(
-                        reading.verb.slice([0..commands, 0..VERBS]),
+                        reading.verb.slice([0..commands, 0..classes]),
                         batch.verbs.clone().slice(0..commands),
                     );
             }
@@ -292,13 +272,17 @@ fn run<B: burn::tensor::backend::AutodiffBackend>(
         // agreed there was nothing being asked for.
         let refusals = score(&valid, refused, &device.clone()).commands;
 
-        // **Both, because keeping on verbs alone was an incomplete criterion and
-        // it showed.** Slot-to-verb conditioning left verb accuracy flat and
-        // dropped refusals 91.1% → 82.5%, and nothing in the selection could see
-        // that happen — the pass it kept was simply a bad one at saying *"I do
-        // not know"*. §15 weighs the dead-end rate above the raw resolution
-        // rate, so the two are averaged rather than one preferred.
-        let together = f32::midpoint(verbs, refusals);
+        // **All three, because any two of them was an incomplete criterion and
+        // each time it showed.** Keeping on verbs alone missed that
+        // slot-to-verb conditioning dropped refusals 91.1% → 82.5%; keeping on
+        // verbs and refusals missed that the spell register's *tagging* swings
+        // 88–94% between passes, and a spell reading is assembled out of the
+        // spans, so a pass that names the right statement and mis-tags one word
+        // of it produces `let tool be refer alembic` and counts as a win here.
+        //
+        // §15 weighs the dead-end rate above the raw resolution rate, so they
+        // are averaged rather than one preferred.
+        let together = (verbs + tags + refusals) / 3.0;
         let best_yet = together > best;
         if best_yet {
             best = together;
@@ -311,14 +295,15 @@ fn run<B: burn::tensor::backend::AutodiffBackend>(
         );
     }
     let reader = kept;
-    println!("\n  best holdout verb-and-refusal mean: {best:.1}%");
+    println!("\n  best holdout class, tag and refusal mean: {best:.1}%");
 
-    let path = std::path::Path::new(WEIGHTS);
+    let weights = register.weights();
+    let path = std::path::Path::new(weights);
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
     match reader.save_file(path, &BinFileRecorder::<FullPrecisionSettings>::new()) {
-        Ok(()) => println!("\n  weights written to {WEIGHTS}.bin\n"),
+        Ok(()) => println!("\n  weights written to {weights}.bin\n"),
         Err(error) => println!("\n  could not write weights: {error}\n"),
     }
 }

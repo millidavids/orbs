@@ -104,11 +104,22 @@ impl Surfaces {
         scroll: &mut Scroll,
         page: usize,
         driver: orbs_shell::Driver,
+        scrivener: &dyn orbs_sim::Scrivener,
     ) {
         if self.editing.is_none()
             && let Some(request) = sim.opening()
         {
             let mut editor = Editor::open(&request.name, &request.domain, &request.lines);
+            // **Read before the first keystroke**, so a spell opened with a
+            // fault in it says so on the way in. The Bevy build does the same
+            // thing in `open_requested`, and it is the pair to the read on the
+            // settle beat below.
+            editor.set_reading(sim.read_spell_with(
+                &request.name,
+                &request.domain,
+                &request.lines,
+                scrivener,
+            ));
             // Opened on the vocabulary rather than blank until the first key.
             editor.refresh(sim);
             self.editing = Some(editor);
@@ -170,7 +181,6 @@ impl Surfaces {
     pub(crate) fn tick(&mut self, sim: &Sim) {
         if let Some(editor) = &mut self.editing {
             editor.set_running_line(sim.running_line(editor.name()));
-            editor.set_reading(sim.read_spell(editor.domain(), editor.lines()));
         }
         if let Some(screen) = &mut self.weaving {
             screen.refresh(
@@ -191,12 +201,18 @@ impl Surfaces {
     /// §19: there is no `save` word in the editor's vocabulary. `quit` flushes
     /// and closes, `w` writes and stays — and if the player simply stops typing,
     /// this is what notices.
-    pub(crate) fn settle(&mut self, delta: f32, sim: &mut Sim) {
+    pub(crate) fn settle(
+        &mut self,
+        delta: f32,
+        sim: &mut Sim,
+        scrivener: &dyn orbs_sim::Scrivener,
+    ) {
         let Some(editor) = &mut self.editing else {
             return;
         };
         if editor.settle(delta) {
-            save(editor, sim);
+            // The save reads the buffer again on its way out — see `save`.
+            save(editor, sim, scrivener);
         }
     }
 
@@ -212,13 +228,14 @@ impl Surfaces {
         code: KeyCode,
         sim: &mut Sim,
         scroll: &mut Scroll,
+        scrivener: &dyn orbs_sim::Scrivener,
     ) {
         match owner {
             // The prompt is the caller's; it needs the shared key table and the
             // line, neither of which belongs to a surface.
             Owner::Prompt => {}
             Owner::Menu => self.menu_took(code),
-            Owner::Editor => self.editing_took(code, sim),
+            Owner::Editor => self.editing_took(code, sim, scrivener),
             Owner::Weave => self.weaving_took(code, sim),
             Owner::Maze => self.maze_took(code, sim),
             Owner::Chant => self.chant_took(code, sim),
@@ -262,7 +279,7 @@ impl Surfaces {
         }
     }
 
-    fn editing_took(&mut self, code: KeyCode, sim: &mut Sim) {
+    fn editing_took(&mut self, code: KeyCode, sim: &mut Sim, scrivener: &dyn orbs_sim::Scrivener) {
         let Some(editor) = &mut self.editing else {
             return;
         };
@@ -282,9 +299,9 @@ impl Surfaces {
         let outcome = orbs_shell::apply_to_editor(&key, editor, sim);
 
         match outcome {
-            Some(EditorOutcome::Save) => save(editor, sim),
+            Some(EditorOutcome::Save) => save(editor, sim, scrivener),
             Some(EditorOutcome::SaveAndClose) => {
-                save(editor, sim);
+                save(editor, sim, scrivener);
                 self.editing = None;
             }
             None => {}
@@ -361,10 +378,25 @@ impl Surfaces {
 ///
 /// `Sim::write_spell` records the submission now and queues the write for the
 /// next tick, because effects land on tick boundaries.
-fn save(editor: &mut Editor, sim: &mut Sim) {
-    let (name, lines) = (editor.name().to_owned(), editor.lines().to_vec());
+///
+/// # And the reading, on the same beat and after the write
+///
+/// **On every save, not only the pause's.** The reading was refreshed on the
+/// settle beat alone, so a `w` typed before the pause fired left the marks on
+/// the buffer from a few keystrokes earlier — and the settle beat then had
+/// nothing to save. Reading a buffer means parsing it and resolving every name
+/// in it against the room, which is why it happens here rather than on every
+/// tick; and after the write, so a line that changed is read once —
+/// `Sim::read_spell_with` finds the queued write's reading.
+fn save(editor: &mut Editor, sim: &mut Sim, scrivener: &dyn orbs_sim::Scrivener) {
+    let (name, domain, lines) = (
+        editor.name().to_owned(),
+        editor.domain().to_owned(),
+        editor.lines().to_vec(),
+    );
     editor.saved();
-    sim.write_spell(&name, &lines);
+    sim.write_spell_reading(&name, &lines, scrivener);
+    editor.set_reading(sim.read_spell_with(&name, &domain, &lines, scrivener));
 }
 
 /// The transcript, while `unfurl` has the keyboard.
@@ -514,18 +546,42 @@ mod tests {
         let mut scroll = scroll(false);
         let mut sim = Sim::new(1);
         for code in "resume".chars().map(KeyCode::Char) {
-            surfaces.typed(Owner::Menu, code, &mut sim, &mut scroll);
+            surfaces.typed(
+                Owner::Menu,
+                code,
+                &mut sim,
+                &mut scroll,
+                &orbs_sim::Verbatim,
+            );
         }
-        surfaces.typed(Owner::Menu, KeyCode::Enter, &mut sim, &mut scroll);
+        surfaces.typed(
+            Owner::Menu,
+            KeyCode::Enter,
+            &mut sim,
+            &mut scroll,
+            &orbs_sim::Verbatim,
+        );
         assert!(surfaces.menuing.is_none(), "resume did not close the menu");
         assert!(!surfaces.leaving, "resume asked to leave the orb");
 
         // ...and `quit` on the menu is what asks to leave, which `drive` reads.
         surfaces.menuing = Some(Menu::default());
         for code in "quit".chars().map(KeyCode::Char) {
-            surfaces.typed(Owner::Menu, code, &mut sim, &mut scroll);
+            surfaces.typed(
+                Owner::Menu,
+                code,
+                &mut sim,
+                &mut scroll,
+                &orbs_sim::Verbatim,
+            );
         }
-        surfaces.typed(Owner::Menu, KeyCode::Enter, &mut sim, &mut scroll);
+        surfaces.typed(
+            Owner::Menu,
+            KeyCode::Enter,
+            &mut sim,
+            &mut scroll,
+            &orbs_sim::Verbatim,
+        );
         assert!(surfaces.leaving, "quit on the menu did not ask to leave");
     }
 
@@ -545,7 +601,13 @@ mod tests {
 
         let mut surfaces = Surfaces::default();
         let mut scroll = Scroll::default();
-        surfaces.open(&mut sim, &mut scroll, 1, orbs_shell::Driver::default());
+        surfaces.open(
+            &mut sim,
+            &mut scroll,
+            1,
+            orbs_shell::Driver::default(),
+            &orbs_sim::Verbatim,
+        );
         assert_eq!(
             surfaces.owner(&scroll),
             Owner::Maze,
@@ -553,7 +615,13 @@ mod tests {
         );
 
         surfaces.walking = false;
-        surfaces.open(&mut sim, &mut scroll, 1, orbs_shell::Driver::default());
+        surfaces.open(
+            &mut sim,
+            &mut scroll,
+            1,
+            orbs_shell::Driver::default(),
+            &orbs_sim::Verbatim,
+        );
         assert_eq!(
             surfaces.owner(&scroll),
             Owner::Prompt,
@@ -572,7 +640,13 @@ mod tests {
         }
         let mut surfaces = Surfaces::default();
         let mut scroll = Scroll::default();
-        surfaces.open(&mut sim, &mut scroll, 1, orbs_shell::Driver::default());
+        surfaces.open(
+            &mut sim,
+            &mut scroll,
+            1,
+            orbs_shell::Driver::default(),
+            &orbs_sim::Verbatim,
+        );
         assert_eq!(surfaces.owner(&scroll), Owner::Maze);
 
         sim.submit("stop stacks");

@@ -79,6 +79,9 @@ pub struct Retimed {
 pub struct Rewritten {
     /// What the player actually wrote.
     pub was: Vec<String>,
+    /// How the orb read it — what ran before the strike, and what a repair puts
+    /// back beside [`was`](Self::was).
+    pub read: super::Read,
 }
 
 /// Which of the two adversarial surfaces a round reached, if either.
@@ -213,8 +216,42 @@ fn rewrite(world: &mut World, node: Entity) {
     // §5.1 keeps scrying for.
     lines[at] = corrupt(&lines[at]);
 
-    world.entity_mut(node).insert(Rewritten { was: held.0 });
+    // **Both, and the corrupted line copied verbatim into the reading.**
+    // `spell::compile` reads `Read`, so corrupting only `Held` would leave the
+    // sabotage visible to `peruse` and invisible to the runner — the player
+    // would see a broken line while the orb ran the clean one, and `purge` would
+    // repair nothing. That is CLAUDE.md's premise clause switched off: *sieges
+    // test everything you automated because the enemy attacks the automation.*
+    //
+    // Copied rather than re-read, because there is no reader here and could not
+    // be: this runs inside `step`, where rule 1 bars the model and rule 3 bars
+    // anything that would make a replay depend on it. A verbatim copy is exactly
+    // what the game did before readings existed, when `Held` was what compiled.
+    //
+    // **That one line of the reading, and no other.** The first version wrote
+    // the whole corrupted text into `Read`, which threw away the orb's reading
+    // of every line the enemy never touched: a spell the reader had made
+    // runnable went back to its player's loose words, most of which the orb
+    // cannot run. The reading from before the strike is what `Rewritten` keeps,
+    // so a repair puts back what ran rather than only what was typed.
+    //
+    // The reader's name stays on it. The struck line is keyed by its corrupted
+    // text, so a later save by that reader keeps the lie exactly as a save kept
+    // it before readings existed — and a reader that re-reads it still meets
+    // the sigil, which the resolver was built never to fold back.
+    let reading = world.get::<super::Read>(node).map_or_else(
+        || super::Read::verbatim(&held.0),
+        |read| read.aligned(&held.0),
+    );
+    let mut read = reading.lines.clone();
+    read[at] = lines[at].clone();
+    let corrupted = super::Read::new(&lines, read, reading.by);
+    world.entity_mut(node).insert(Rewritten {
+        was: held.0,
+        read: reading,
+    });
     world.entity_mut(node).insert(Held(lines));
+    world.entity_mut(node).insert(corrupted);
     super::poison(world, node);
 }
 
@@ -304,10 +341,19 @@ fn corruptible(line: &str) -> bool {
 /// The mirror of `sabotage::restore`, and it is what makes notice → `verify` →
 /// `purge` a repair loop here as well.
 pub fn unwrite(world: &mut World, node: Entity) -> bool {
-    let Some(was) = world.get::<Rewritten>(node).map(|r| r.was.clone()) else {
+    let Some(Rewritten { was, read }) = world.get::<Rewritten>(node).cloned() else {
         return false;
     };
+    // **The reading goes back with the text, and it is the one that ran.**
+    // `rewrite` corrupted both, so restoring one would leave the tower running
+    // the enemy's line for ever while `peruse` showed the player their own.
+    //
+    // It went back verbatim, with a note that a repaired spell compiled its
+    // player's words *"until the next save re-reads them"* — and no save did,
+    // because every line's text matched what the verbatim copy was keyed by.
+    // The reading from before the strike needs no reader to put back.
     world.entity_mut(node).insert(Held(was));
+    world.entity_mut(node).insert(read);
     world.entity_mut(node).remove::<Rewritten>();
     true
 }
@@ -453,11 +499,81 @@ mod tests {
             "the player's own words were not kept",
         );
 
+        // **The sabotage must reach the program, not only the file.**
+        // `spell::compile` reads `Read`, so a rewrite that touched `Held` alone
+        // would leave the player seeing a broken line while the orb ran the
+        // clean one — the premise clause switched off, and `purge` repairing
+        // nothing. This is the assertion that keeps the two together.
+        assert_eq!(
+            crate::tower::spell::source(sim.world(), node),
+            after,
+            "the enemy corrupted the file and not what runs",
+        );
+
         assert!(unwrite(sim.world_mut(), node));
         assert_eq!(
             sim.world().get::<Held>(node).cloned().expect("held").0,
             before,
             "a repaired spell did not read as it was written",
+        );
+        assert_eq!(
+            crate::tower::spell::source(sim.world(), node),
+            before,
+            "a repaired spell still runs the enemy's line",
+        );
+    }
+
+    #[test]
+    fn a_strike_corrupts_one_line_of_the_reading_and_a_repair_restores_all_of_it() {
+        // **The orb's reading of every other line survives the strike.** The
+        // first version wrote the whole corrupted text into `Read`, so a spell
+        // the reader had made runnable went back to its player's loose words —
+        // and the repair put back the words, not what had run.
+        let mut sim = Sim::new(11);
+        let typed: Vec<String> = ["work the sage down", "hang on ten ticks", "grind sage"]
+            .into_iter()
+            .map(str::to_owned)
+            .collect();
+        sim.write_spell_reading("morning", &typed, &crate::Copyist::worked());
+        sim.step();
+        let node = sim
+            .world()
+            .iter_entities()
+            .find(|entity| {
+                entity
+                    .get::<Name>()
+                    .is_some_and(|name| name.0 == "morning.spell")
+            })
+            .map(|entity| entity.id())
+            .expect("the spell was written");
+        let before = crate::tower::spell::source(sim.world(), node);
+        assert_eq!(
+            before,
+            ["grind sage", "bide 10", "grind sage"],
+            "the fixture did not read the spell",
+        );
+
+        rewrite(sim.world_mut(), node);
+        let held = sim.world().get::<Held>(node).cloned().expect("held").0;
+        let after = crate::tower::spell::source(sim.world(), node);
+        let struck: Vec<usize> = (0..typed.len())
+            .filter(|at| held[*at] != typed[*at])
+            .collect();
+        assert_eq!(struck.len(), 1, "one line is struck: {held:?}");
+        for at in 0..typed.len() {
+            let wanted = if struck.contains(&at) {
+                &held[at]
+            } else {
+                &before[at]
+            };
+            assert_eq!(&after[at], wanted, "line {at} runs the wrong thing");
+        }
+
+        assert!(unwrite(sim.world_mut(), node));
+        assert_eq!(
+            crate::tower::spell::source(sim.world(), node),
+            before,
+            "the repair put back the text and not what ran",
         );
     }
 

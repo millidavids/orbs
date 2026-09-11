@@ -46,10 +46,12 @@
 //! [`Sim::submit_divined`]: crate::Sim::submit_divined
 //! [`Sim::submit`]: crate::Sim::submit
 
+mod copyist;
 mod fixture;
 mod grammar;
 mod seam;
 
+pub use copyist::Copyist;
 pub use fixture::Fixture;
 pub use grammar::Grammar;
-pub use seam::{Augur, MAX_READINGS};
+pub use seam::{Augur, MAX_READINGS, Scrivener, Verbatim};

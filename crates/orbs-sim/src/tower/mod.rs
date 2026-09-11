@@ -65,8 +65,8 @@ pub use mastery::{Line, Progress, Stop, Walk, advance, mastery, progress};
 pub use maze::{Maze, Sense, Square, Way};
 pub use node::{
     Cwd, Domain, Fixture, Grouped, HeatSource, Held, Keep, Name, Nameable, NodeId, NodeIds,
-    Operation, Protected, Reading, Store, children_of, domain_of, filesystem_root, find_by_path,
-    group_at, groups_at, path_of, path_of_id, readings_at, root, where_at,
+    Operation, Protected, Read, Reading, Store, children_of, domain_of, filesystem_root,
+    find_by_path, group_at, groups_at, path_of, path_of_id, readings_at, root, where_at,
 };
 pub use opened::{
     Key as OpenKey, Known, Opened, Sealed, Sealing, charm_key, domain_key, known, open, recipe_key,

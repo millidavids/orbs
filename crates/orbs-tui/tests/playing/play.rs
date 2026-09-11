@@ -251,6 +251,19 @@ impl Game {
             // should not be *this* file's job to notice when that changes.
             // `ORBS_FIRE=0` is the same call for the same reason.
             "ORBS_PASSAGE=0".to_owned(),
+            // **Both readers off, so a scenario cannot pass or fail on whether
+            // somebody ran the trainer.** Weights are a gitignored build
+            // artefact: a fresh clone has none, so a suite that ran with them
+            // would behave one way here and another on CI, and the difference
+            // would show up as an unrelated scenario failing. `dumps.sh` turns
+            // them off in its `run` helper for the same reason, and
+            // `Readers::from_environment` refuses to install one under
+            // `cargo test` for it too.
+            //
+            // A scenario that is *about* a reader names one — `stub` is a fixed
+            // table and is what such a scenario should pin.
+            "ORBS_AUGURY=off".to_owned(),
+            "ORBS_SCRIVENER=off".to_owned(),
         ] {
             args.push("-e".to_owned());
             args.push(pair);
@@ -704,6 +717,19 @@ fn transcript(screen: &str) -> String {
         // outside the pane, which is correct: it holds a half-typed line and a
         // ghost completion, neither of which the game has been told yet.
         if let Some(cell) = row.split('│').nth(1) {
+            // **Cut at a corner, because a pane beside the transcript has two
+            // edges with no `│` in them.** The archive's inline map splits off
+            // cleanly on every row but two: its top and bottom borders are
+            // `┌───┐` and `└───┘`, so they stay in this cell, glued to whatever
+            // the transcript says on that row. `research`'s answer wraps to
+            // `…a way out` / `is in them`, and once the map's bottom edge came
+            // to share the first of those rows the flattened block read `a way
+            // out └───┘ is in them` — twelve scenarios waited on that sentence
+            // and all twelve gave up, from `v0.13.19` at the latest.
+            //
+            // Safe because nothing the game *says* is spelled with a box
+            // corner: `Painter::border` is the only thing that draws one.
+            let cell = cell.find(['┌', '└']).map_or(cell, |at| &cell[..at]);
             out.push_str(cell.trim_end());
             out.push('\n');
         }
@@ -837,6 +863,35 @@ fn parse_tick(screen: &str) -> Option<u64> {
         .next()?
         .parse()
         .ok()
+}
+
+/// A pane beside the transcript never becomes part of what the transcript says.
+///
+/// **Pure, and not `#[ignore]`d**, because the helper it holds is what every
+/// scenario reads the game through, and it had no test at all — which is how a
+/// defect in it arrived as twelve unrelated-looking scenario failures in the
+/// archive and the maze rather than as one failure here.
+///
+/// The rows are the ones `research` answered on when those twelve failed, cut
+/// narrower: the map's top edge beside an instrument row, its side beside the
+/// echo, and its bottom edge sharing the first row of a sentence that wraps.
+#[test]
+fn a_pane_beside_the_transcript_does_not_leak_into_it() {
+    let screen = "\
+│  orb 0 181 cold start      ┌ stacks ──────────┐│le st ││
+│→ research                  │██████████████████││   ░░ ││
+│√ the page opens into shelves that do not end. a way out  └──────────────────┘│   ░░ ││
+│    is in them                                                                │   ░░ ││";
+    let read = flatten(&transcript(screen));
+    assert!(
+        read.contains("a way out is in them"),
+        "the map's edge split the sentence: {read:?}",
+    );
+    assert!(
+        !read.contains("stacks"),
+        "the map's title was read as transcript: {read:?}",
+    );
+    assert!(read.contains("orb 0 181 cold start"), "{read:?}");
 }
 
 /// A game whose terminal is destroyed exits instead of spinning.

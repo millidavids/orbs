@@ -21,6 +21,7 @@ pub use bind::{Bound, bind, held, stand};
 pub use block::{Blocked, would_block};
 pub use compile::{
     Fault, Reading, SPELL_MARGIN, SPELL_SIMILARITY, candidates, compile, interpret, read,
+    reads_cleanly, source,
 };
 pub use invoke::{invoke, stop_spell};
 pub use program::{Block, Complaint, Draft, Kind, Loop, Program, Step};

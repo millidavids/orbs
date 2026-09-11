@@ -93,6 +93,82 @@ pub const SPELL_SIMILARITY: u32 = 850;
 /// from a test rather than from a spell quietly doing the wrong thing.
 pub const SPELL_MARGIN: u32 = 50;
 
+/// Whether one line stands on its own as a spell **statement**.
+///
+/// **The check a reader's output has to pass before it may replace a line**, and
+/// the reason it is a function rather than a `program::read` call at each site:
+/// three complaints are earned by a line *purely for being on its own*, and a
+/// caller comparing `complaints.is_empty()` would refuse most of the control
+/// flow the scrivener exists for.
+///
+/// - `spell_unclosed` — a lone `if`, `repeat`, `for` or `part` opens a block
+///   nothing closes inside one line. Six of the twelve spell words.
+/// - `spell_stray_end` and `spell_stray_else` — the mirror image: `end` and
+///   `else` are perfectly sound statements that mean nothing without the block
+///   above them, which one line does not have.
+///
+/// A command line answers `false`: it is a statement the *prompt's* reader owns,
+/// and this is the question about the spell language.
+///
+/// ⚠ **Parsing is not understanding.** `if the alembic has finished` passes this
+/// — as *"holds a thing called finished"* — and means something else entirely.
+/// That is why a reader's output must also account for every word the player
+/// wrote, and why this check alone is not the rule.
+#[must_use]
+pub fn reads_cleanly(line: &str) -> bool {
+    /// What a line earns for having no block around it.
+    const ALONE: [&str; 3] = ["spell_unclosed", "spell_stray_end", "spell_stray_else"];
+
+    let draft = super::program::read(std::slice::from_ref(&line.to_owned()));
+    if !draft
+        .complaints
+        .iter()
+        .all(|complaint| ALONE.contains(&complaint.key))
+    {
+        return false;
+    }
+    // **Two ways to be a statement, because `end` and `else` produce no step.**
+    // They are recognised and then complained about for having no block above
+    // them, so a body check alone would call the two commonest words in the
+    // language unreadable. A *call* takes the other route: `morning()` opens on
+    // no spell word and is a statement all the same.
+    crate::parser::spell_word(line).is_some()
+        || draft
+            .body
+            .first()
+            .is_some_and(|step| !matches!(step.kind, super::program::Kind::Command(_)))
+}
+
+/// The lines a spell compiles from: its reading, or its text if it has none.
+///
+/// **One place, because two would disagree.** Every route to a [`Program`] asks
+/// this — casting, the mid-flight reload, and restoring a save — so there is no
+/// way for one of them to compile the player's text while another compiles the
+/// orb's reading of it.
+///
+/// [`Read`](crate::tower::Read) is derived and byte-equal to
+/// [`Held`](crate::tower::Held) unless something read the file, so this is the
+/// identity in every build without a reader. It falls back when the component is
+/// absent, and **line by line** where a reading was not read from the text now
+/// at its place — see `Read::compiled`. Only the line counts were compared, so a
+/// save with one line of `held` edited by hand compiled the reading of the line
+/// that used to be there.
+#[must_use]
+pub fn source(world: &World, node: Entity) -> Vec<String> {
+    let held = world
+        .get::<crate::tower::Held>(node)
+        .map(|held| held.0.clone())
+        .unwrap_or_default();
+    match world.get::<crate::tower::Read>(node) {
+        Some(read) => held
+            .iter()
+            .enumerate()
+            .map(|(at, line)| read.compiled(at, line).to_owned())
+            .collect(),
+        None => held,
+    }
+}
+
 /// Read `lines` as a program, with every name resolved against the domain at
 /// `from`.
 ///
@@ -649,6 +725,15 @@ pub struct Reading {
     /// What the orb hears: the canonical command, the resolved question, or the
     /// line itself where it is the player's own (a comment, a blank).
     pub heard: String,
+    /// What the player wrote, when a reader turned it into something else.
+    ///
+    /// **The third state, and the one the audit surface exists for.** Without it
+    /// a line the orb read *correctly* and a line it read *wrongly* look
+    /// identical in the editor — both show a plausible canonical command — and
+    /// the player has no way to tell that a reading happened at all. `None`
+    /// where [`heard`](Self::heard) came from the line as typed, which is every
+    /// line in a build with no reader.
+    pub was: Option<String>,
     /// Why the orb cannot read it, if it cannot.
     pub fault: Option<Fault>,
 }
@@ -674,8 +759,24 @@ pub struct Fault {
 /// A line the orb understands reads back as what it heard; one it does not is
 /// returned as typed, with the fault beside it. Nothing here changes the buffer:
 /// that is the difference between this and the rewriter it is descended from.
+///
+/// # The reading comes in beside the buffer, and the file is judged on it
+///
+/// `read` is each line as it would compile. The caller looks it up where the
+/// save does — `Sim::read_spell_with` — so a line the save already read is not
+/// read again here, and the two cannot differ about it. A line the reader
+/// changed carries the player's own text in [`Reading::was`], which is what
+/// makes a misreading visible rather than merely plausible.
+///
+/// **Everything file-shaped is asked of the reading, not the text.** Blocks,
+/// calls and bindings were found in the buffer while each line was judged on
+/// its reading, and the two disagreed exactly where a reader had helped: `that
+/// is all` read as `end` and its `if` still complained that nothing closed it,
+/// and `let hammer be alembic` bound nothing, so a `wield hammer` below it was
+/// marked wrong in the editor and ran at cast. The runner compiles the reading;
+/// this surface reads the same lines.
 #[must_use]
-pub fn interpret(world: &World, domain: &str, lines: &[String]) -> Vec<Reading> {
+pub fn interpret(world: &World, domain: &str, lines: &[String], read: &[String]) -> Vec<Reading> {
     let Some(at) = crate::execute::find_domain(world, domain) else {
         return lines
             .iter()
@@ -683,6 +784,7 @@ pub fn interpret(world: &World, domain: &str, lines: &[String]) -> Vec<Reading> 
             .map(|(index, line)| Reading {
                 line: index + 1,
                 heard: line.trim().to_owned(),
+                was: None,
                 fault: Some(Fault {
                     key: "spell_homeless",
                     detail: Some(domain.to_owned()),
@@ -693,9 +795,16 @@ pub fn interpret(world: &World, domain: &str, lines: &[String]) -> Vec<Reading> 
     let scene = crate::tower::scene_at(world, at);
     let known = world.resource::<crate::content::Recipes>().vocabulary();
 
+    // What would compile: each line's reading, or the line where it has none.
+    let compiled: Vec<String> = lines
+        .iter()
+        .enumerate()
+        .map(|(at, line)| read.get(at).unwrap_or(line).clone())
+        .collect();
+
     // Faults about the *shape* of the file — a block nothing closed, a stray
     // `end` — belong to a line but are found by reading the whole thing.
-    let draft = super::program::read(lines);
+    let draft = super::program::read(&compiled);
     let mut structural = draft.complaints;
     // **The same check the cast makes, on the same tree.** `interpret` and the
     // runner disagreeing about a line is §19's recurring defect in this file;
@@ -714,10 +823,13 @@ pub fn interpret(world: &World, domain: &str, lines: &[String]) -> Vec<Reading> 
 
     lines
         .iter()
+        .zip(&compiled)
         .enumerate()
-        .map(|(index, line)| {
+        .map(|(index, (line, heard))| {
             let at = index + 1;
-            let mut reading = one(line, &scene, &known, &bound);
+            // **What the orb would compile, then what it makes of that.**
+            let mut reading = one(heard, &scene, &known, &bound);
+            reading.was = (heard != line).then(|| line.clone());
             reading.line = at;
             if reading.fault.is_none() {
                 reading.fault = structural
@@ -739,6 +851,7 @@ fn one(line: &str, scene: &Scene, known: &[&str], bound: &[String]) -> Reading {
     let verbatim = |fault: Option<Fault>| Reading {
         line: 0,
         heard: trimmed.to_owned(),
+        was: None,
         fault,
     };
     // The orb's reading where it differs from the text — a call written
@@ -747,6 +860,7 @@ fn one(line: &str, scene: &Scene, known: &[&str], bound: &[String]) -> Reading {
     let verbatim_as = |heard: &str, fault: Option<Fault>| Reading {
         line: 0,
         heard: heard.to_owned(),
+        was: None,
         fault,
     };
 
@@ -833,6 +947,7 @@ fn one(line: &str, scene: &Scene, known: &[&str], bound: &[String]) -> Reading {
         return Reading {
             line: 0,
             heard: format!("{lead} {}", crate::parser::write_condition(&question)),
+            was: None,
             fault,
         };
     }
@@ -895,6 +1010,7 @@ fn one(line: &str, scene: &Scene, known: &[&str], bound: &[String]) -> Reading {
     Reading {
         line: 0,
         heard,
+        was: None,
         fault: None,
     }
 }

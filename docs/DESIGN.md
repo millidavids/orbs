@@ -3055,6 +3055,676 @@ refusing beats reverting their last command; preferring a higher-ranked reading
 that *asks* over a lower-ranked one that *runs* is the open question, and it is
 the same ranking problem `survey feed.log` names one level down.
 
+### The spell divergence, and a reading that is not a rewrite (`0.14.0`)
+
+**The defect, as a player meets it.** You type `crush the sage` at the prompt,
+the orb reads it, it works. You put the same line in a `.spell` and get §8's
+*Referent missing*. In a game whose thesis is *you progress by writing scripts*,
+the line that taught you the orb is forgiving is the line that teaches you it is
+not.
+
+**§19 already records the strictness as deliberate** — *"At the prompt the player
+sees the echo; a spell resolves with nobody watching, so it takes the stricter
+half"* — and this does not overturn it. That argument is about **resolution**: a
+spell still resolves at 850 where the prompt takes 600, still refuses a tie, still
+runs neither branch of an unanswerable `if`. What changes is that a line can be
+**read once, by the player, at the moment they save it**, and resolve as strictly
+as it ever did afterwards.
+
+**The obvious design is a decision this document already reversed.** `:9937`
+deleted `scribe::canonicalise` because save-time rewriting *"destroyed the
+player's words whenever it understood only part of one — four times, each fixed
+by another special case in the rewriter"*. So `Held` stays byte-exact and is
+still what `peruse` shows; `Read` sits beside it, is what `spell::compile`
+compiles, and is **derived** — discardable and rebuildable, which the rewriter
+never was. `spell::source` is the single place any route to a `Program` asks
+which to use, because two would eventually disagree.
+
+**With no reader the reading is the text**, so the identity case is the default
+and a build without one is the game exactly as it was. 156 captures, none moved.
+
+#### Two findings that would have sunk it, and how each is answered
+
+An independent review found both; both were checked in the code rather than
+taken on trust.
+
+**Siege sabotage writes `Held` from inside `step`** (`assault.rs`), with no
+frontend and no reader in reach — a model on the tick spine would break replay.
+If `compile` read only `Read`, the enemy's corruption would never reach the
+program: the player would *see* a broken line through `peruse` while the orb ran
+the clean one, and `purge` would repair nothing. **That is CLAUDE.md's premise
+clause switched off** — *sieges test everything you automated because the enemy
+attacks the automation*. So sabotage writes both, and the corrupted line is
+copied into the reading **verbatim**, which is exactly what the game did when
+`Held` was what compiled. `unwrite` restores both; the honest cost is that a
+repaired spell compiles the player's words until the next save re-reads them.
+**Superseded** (*The review*, below): no save re-read them — the copy was keyed by
+the very text it copied — so sabotage corrupts one line of the reading now, and
+`Rewritten` keeps the reading from before the strike for the repair to put back.
+
+**Replay re-derived, and `:2469` is the argument against this feature rather than
+for it**: `Submission::Wrote` stores the pre-canonical buffer *"safe when the
+derivation is `analyse`, and unsafe when a GPU did the reading"*. Once a model
+reads a spell, that stops being true — a replay on a machine with no weights
+would build a different program from the same submissions. So `Wrote` carries the
+reading, the way `Divined` carries its echo. **The existing replay test could
+never have caught this**: it compares `Sim::spell`, which returns `Held`, which is
+byte-identical across a replay by construction. It now compares what the spell
+compiles from.
+
+#### Fingerprinted per line
+
+The editor writes the buffer out after every pause in the typing, so a whole-file
+hash would re-read every line for one keystroke — at 436µs a line for the trained
+reader. One hash per line, and an unchanged line keeps its reading for free —
+**for the reader that made it**, since *The review*: keyed by the text alone, a
+reading outlived its reader (`Read::by`).
+`save::adopt::fingerprint` is reused rather than reimplemented: a second hash is
+the two-expressions defect this section records more often than any other.
+
+### `interpret` marks what it read, because a plausible reading is the danger (`0.14.1`)
+
+**A line read wrongly and a line read correctly look identical.** Both come back
+as a canonical command that parses. So an editor that showed only the reading
+would give the player no way to know a reading had happened, let alone that it
+was wrong — and §19 records four rewriter defects that survived for exactly that
+reason: *"it worked whenever the orb understood a whole line and destroyed the
+player's words whenever it understood only part of one."*
+
+`Reading::was` carries the player's line wherever a reader changed it, and the
+editor draws **`≈`** on that row — the same glyph a divined command wears at the
+prompt, and meaning the same thing. **A glyph rather than a colour**, because §14
+will not have colour carry information: take every hue away and the row still
+says it. The player's own words are one keystroke away in the buffer view, which
+is what the editor's two views are for.
+
+#### It derives over the buffer, and that is a decision
+
+`Read` lives on the node and is the *saved* reading; `interpret` must track what
+is on screen, and `read_spell` runs **before** the write that would refresh it —
+so showing the stored reading would show the previous buffer, one autosave stale
+and absent entirely for a new spell. It reads over the buffer instead.
+
+The cost is that a line edited since the last save is read twice per typing
+pause, once here and once by the write behind it. One line at a time, and the
+per-line fingerprint means everything else is free.
+
+**Superseded** (*The review*): the fingerprint was the save's alone, so this read
+*every* line on every pause — and it found blocks, calls and bindings in the text
+while judging each line on its reading, so the two disagreed exactly where a reader
+had helped. It takes each line's reading from the lookup the save makes now,
+the queued write first, and judges the whole file on those lines.
+
+#### The fixture reader, and what it deliberately does not claim
+
+`Copyist` is `Fixture`'s sibling and exists for its reason: a capture cannot pin
+a trained reader, because weights are a gitignored build artefact that changes on
+every training run. **`crush the sage` is deliberately not in its table** —
+`crush` is already a `grind` synonym, so the matcher reads it without help, and a
+fixture claiming it would take credit for work this feature did not do. The
+captures use `work the sage down` and `hang on ten ticks`, which nothing could read
+before. **`wait ten ticks` was the second of them for one version and had to go
+the same way as `crush the sage`**: `wait` is a spell word, so that line already
+parses as a `wait` statement and `spell::reads_cleanly` keeps it away from any
+reader at all.
+
+### Parsing is not understanding — the spell corpus, and the check it needed (`0.14.2`)
+
+**941 of 19,050 loose lines already parse, and mean the wrong thing.**
+`if the alembic has finished` is read by the language today — as *"holds a thing
+called finished"* — so it compiles, runs, and quietly branches on nothing. That
+is the class the whole feature is aimed at, and **the class a re-parse can never
+catch**: the reader's output must also account for every word the player wrote,
+which is `:9983`'s premise rather than its mechanism.
+
+**`spellings.toml` reuses `Phrasings` whole.** A spell phrasing and a prompt
+phrasing ask the identical question — a canonical form, the ways people write it,
+a holdout taught to nothing — and two formats would be two expansions, two span
+derivations and two holdout rules, free to drift.
+
+**Control flow only.** A spell's command lines are the prompt's vocabulary and
+are already written down; a reader for spells trains its command class from
+`phrasings.toml`. Copying two thousand say-lines would be one corpus in two files.
+
+⚠ **This corpus cannot be grown by adding nouns**, and that is the honest scope.
+`phrasings.toml` gets its size from expansion, and `0.13.9` measured that noun
+substitution *"multiplies the count without adding a single new sentence shape"* —
+so 19,050 lines from 11 templates flatters it. `end` takes no argument at all.
+**Every phrasing here is authored one-for-one**, and the template count is the
+corpus.
+
+#### `reads_cleanly`, and the two things writing it found
+
+A reader's output has to be checked before it may replace a line, and
+`complaints.is_empty()` is the wrong check — **three complaints are earned by a
+line purely for being on its own**:
+
+- `spell_unclosed` — a lone `if`, `repeat`, `for` or `part` opens a block nothing
+  closes inside one line. Six of the twelve spell words.
+- `spell_stray_end` and `spell_stray_else` — the mirror image, and worse: `end`
+  and `else` are *recognised and then complained about*, producing **no step at
+  all**, so a body check called the two commonest words in the language
+  unreadable.
+
+The second only surfaced because the bench asserted that every refusal is already
+a sound statement and fourteen were not. A `Call` takes the other route — a bare
+`morning()` opens on no spell word and is a statement all the same — so the check
+asks both questions.
+
+### The scrivener's model — a class is a template, and a span belongs to the canonical (`0.14.3`)
+
+**One architecture, one vocabulary, one trainer, two registers.** The prompt asks
+*which verb, and which words are its argument*; a spell line asks *which
+statement, and which words are its argument*. Everything between those two
+sentences is identical, so `ReaderConfig` gained a `classes` width, `Corpus`
+gathers what differs, and `examples/train.rs` takes `--spells`. A second trainer
+would have been the two-expressions-of-one-rule defect this log records more often
+than any other.
+
+**Measured, on a holdout taught to nothing: 79.2% of the average shape, 67.4% of
+command lines, and 100% / 97.1% of the two populations that must come back
+untouched.** *Average shape* is the number to read: a holdout expands over the
+noun tables, so `if {place} has {reagent}` is 86% of the lines for the same
+arithmetic reason `move` was 47% of the prompt's corpus.
+
+#### A class is a **template**, not a spell word
+
+A canonical command names its own class — the head of `grind sage` is `grind`. A
+spell statement does not. `if {place} is idle`, `if {place} is empty` and `if
+{place} has {reagent}` are one word between them, and the first two carry the same
+number of slots, so **neither the word nor the tagging says which shape to
+build**. The eleven entries of `spellings.toml` are the classes, in file order,
+plus one for *this line is a command* — which is handed to the prompt's own
+reader, because that is the reader trained on forty-six verbs.
+
+#### ⚠ A span is numbered by the canonical, not by the phrasing
+
+**The defect that made `if {place} has {reagent}` read 0.0%**, and it was wrong
+for the prompt's two-slot verbs too. A span's index *is* the argument's position:
+the tagger writes `Tag::Begin(n)` for `spans[n]` and the assembler puts slot `n`
+where the canonical's `n`th argument goes. `fill` recursed on the **phrasing's**
+first slot, so `if there is {reagent} in the {place}` made the reagent span 0 —
+exactly backwards. Half the phrasings of a two-slot shape are written that way, so
+the tagger was taught both orders for one shape.
+
+Substitution still walks left to right, because a span records a byte range into
+the sentence being built and filling a later slot first leaves every earlier offset
+pointing at the pre-substitution string. The spans are **permuted once at the
+end**.
+
+#### Nothing is invented: a count, and a name
+
+*"A count must be in the line"* was the plan's rule and it generalises. `bide 10`
+is offered only for a line that says ten, as a digit or one of twenty-one number
+words. **A name is the same rule** and was not foreseen: `let tool be {place}`
+carries `tool`, which is the player's word rather than the orb's, so answering
+*"name the alembic hammer"* with `let tool be alembic` would bind a name every
+later line would fault on. A literal that is neither grammar nor a spell word has
+to appear in the line, or the shape is not offered.
+
+*The name half is superseded* — see **Every name is a slot** below. Refusing kept
+the orb from inventing a name, and it also meant `tool`, `note` and `way` were the
+only names those three shapes could ever offer.
+
+#### The gate is a re-parse, and the plan's fault-based one is wrong both ways
+
+The plan asked that only lines `interpret` reports a `Fault` on reach the reader.
+Both halves of that are wrong, in opposite directions, and
+`what_a_reader_may_be_shown_is_decided_by_a_re_parse_and_not_by_a_fault` holds
+both:
+
+- **A statement that parses is already a statement.** `if the alembic is not busy`
+  is heard as `if not alembic is working`, which means what it says — and it
+  faults all the same, because a lone `if` opens a block nothing closes. A fault
+  gate would hand a working line to a model.
+- **A command line never faults at all.** `parser::resolve` answers `stop there`
+  with `stop third` at full confidence, which is precisely the misread this
+  feature exists to fix — so a fault gate would hand the model nothing.
+
+`spell::reads_cleanly` gets both right, and `parser::is_literal` — tried first —
+gets the first one catastrophically wrong: it answers *true* for any line whose
+first word is a spell word, and half the loose phrasings a spell reader exists for
+begin with one.
+
+**The corpus follows from the gate.** A phrasing the language already reads is one
+the model will never be shown, so teaching it is the same waste as teaching it to
+rewrite a working line — and the bench counts every one as a miss. Fourteen
+templates were authored that way and are reworded to open on something that is not
+a spell word; `a_spelling_is_never_a_line_the_language_already_reads` is what holds
+it now. The same filter applies to the refusals: with the already-canonical ones
+removed the refusal holdout went from **40% to 85%**, because the trainer had been
+selecting epochs on a question nobody asks. **`spellings.toml`'s own refusals were
+all canonical**, though, so the filter dropped every one and that section trained
+nothing — which *The review* found, and left as the gate's population rather than
+the reader's.
+
+#### Balance, and the ceiling on repeating yourself
+
+Five of the eleven shapes have nothing to expand over — `end`, `else`, `repeat 3`,
+`bide 10` and `for each way` take no argument — so their twenty authored phrasings
+*are* their class, against `if {place} has {reagent}`'s hundreds. Forty-to-one is
+well past what the trainer's 4× weight clamp can answer, and raising the clamp
+would reintroduce the gradient spikes it exists to stop. **Repetition spreads the
+same correction across batches instead of concentrating it in one**, capped at
+twelve copies; the weighting then sees a nearly flat distribution and the two
+compose rather than compounding.
+
+Two figures moved with it. The spell cap is twice the prompt's, because there is
+exactly one two-slot shape and it is the shape that needs the pairs — at 24 it read
+30.3% where every one-slot shape read 70–100%. And the kept epoch is now chosen on
+**class, tags and refusals together**: a spell reading is assembled out of the
+spans, so a pass that names the right statement and mis-tags one word of it
+produces `let tool be refer alembic` and would otherwise have counted as a win.
+
+### One driver, two registers — the scrivener reaches a keystroke (`0.14.4`)
+
+**A player who has said *"read what I mean"* has said it about their whole
+session.** The options page's driver setting was the prompt's; it is both
+registers' now, because a second toggle for spells would be one nobody finds and
+one that can disagree with the first. `Readers` in the Bevy build holds an
+`Augur` and a `Scrivener` behind one `Driver`, and the terminal build's `Session`
+holds the same pair.
+
+**Until this, only `orbs-shell/src/dump.rs` ever passed a scrivener.** Everything
+the first three items proved was proved about `ORBS_DUMP` — never about a
+player's keystroke, which is exactly the gap `commanding`'s
+*"the seam a dump cannot reach"* test exists to close for the prompt. Both
+editors read on **open** and on the **settle beat**, and the Bevy half now has
+that test.
+
+⚠ **The terminal build was reading the whole buffer on every tick.** Harmless
+while `interpret` was the only cost; at 400µs a line it is a spell's length in
+milliseconds every second, and the Bevy build had always read on the two beats
+where the answer can have changed. It does now too.
+
+`ORBS_SCRIVENER` takes `ORBS_AUGURY`'s values and defaults the same way — the
+trained reader if there are weights, quietly nothing if not, and `model` when you
+want to be told. `scripts/dumps.sh` turns **both** off in its `run` helper, for
+the reason it always turned the augury off: weights are a gitignored build
+artefact and a capture made against them could not be diffed from a clean
+checkout.
+
+### The play harness read a border as a sentence, and a model's weights as the game (`0.14.4`)
+
+**Eighteen `scripts/play.sh` scenarios failed, and neither cause was in the game.**
+Both were in how the harness reads it, which is the one part of the third layer no
+test covered.
+
+- **Twelve, all in the archive and the maze, from `v0.13.19` at the latest** —
+  verified in a worktree at that tag. Every one opens with `does("research", "a way
+  out is in them")`. The game draws that correctly: the transcript wraps inside the
+  column the inline map leaves it, so `…a way out` / `is in them` sit on two rows.
+  `transcript()` took the whole session-pane cell between the first two `│`, which
+  splits the map off cleanly on every row except its top and bottom edges —
+  `┌───┐` and `└───┘` have no `│` in them. Once the map's bottom edge came to
+  share the first row of that sentence, the flattened block read `a way out └───┘
+  is in them`. The cell is now cut at the first box corner, which is safe because
+  `Painter::border` is the only thing that draws one; nothing the game *says* is
+  spelled with it. `a_pane_beside_the_transcript_does_not_leak_into_it` is pure and
+  runs in the gate, so the next defect in that helper is one failure rather than
+  twelve.
+- **Six, scattered, because the harness ran whatever reader the machine had.**
+  With the augury and the scrivener on by default, a spawned game loaded whatever
+  gitignored weights this checkout held, so the suite passed or failed on whether
+  somebody had run the trainer. The tmux environment pins `ORBS_AUGURY=off` and
+  `ORBS_SCRIVENER=off` beside `ORBS_SAVE=off`, for the reason `dumps.sh` and
+  `Readers::from_environment` already give; a scenario about a reader names `stub`.
+
+**140 of 140** after both.
+
+### Every name is a slot — `let`, `pull` and `for each` read the player's word (`0.14.5`)
+
+**Three shapes carried their name as a literal**, and could offer no other. `let
+tool be {place}`, `pull note from {place}` and `for each way` put `tool`, `note`
+and `way` in the canonical, so the rule that a name must be in the line refused
+*"name the alembic hammer"* rather than invent `let tool be alembic`. Correct, and
+useless: `let` read 75% of a holdout that only ever said `tool`, and nothing else
+at all. (`pull`'s source was a `{place}` besides, which a satchel is not — every
+line it taught faulted at cast.)
+
+**The name is a `{name}` slot and the set a `{group}` slot now**, free-text markers
+filled from the phrasings file's own `names`, `holdout_names` and `groups`:
+
+- **Names are kept out of the vocabulary**, because a name a player invents reaches
+  the reader as a hash bucket and the ones it learns from have to arrive the same
+  way. The holdout's names are its own, so a name the reader has never seen is what
+  it is measured on.
+- **Sets are closed**, and `the_sets_the_corpus_teaches_are_the_sets_the_tower_raises`
+  holds the list to the tower's `Grouped` fixtures in both directions. `{group}s` is
+  the plural and reads back as the set: `ways` is `way`, because `for each ways`
+  parses and walks nothing.
+- **A span covers whole words, from the marker's own position.** Searching for the
+  value found `way` inside `always`; ending at the value tagged `ways` as nothing.
+- **`satchel` is not supplied.** Every satchel is called that, so supplying the word
+  invents no name — but it removed the only evidence a line was about a satchel:
+  *"somebody left the clarity out"* came back `pull clarity from satchel`. Reverted
+  after one measurement.
+
+#### What measuring it found, in the order it was found
+
+Each is a defect of the reading, not of the templates, and none was visible until a
+shape could be filled with a word the reader had never seen.
+
+1. **`one` is not a count.** *"one at a time"*, *"for every one of the ways"* — with
+   `one` in the number table the rule demanded a `1` the right reading lacked, and
+   `bide 1` could pass where `for each way` could not. `for each` 40.9% → 79.5%.
+2. **Falling through to the command class is the sink again.** The prompt's reader
+   always finds *some* verb, so reaching it after a shape failed to build is
+   `0.13.18`'s and `0.13.19`'s defect one register along. Command is offered only as
+   the head's first choice.
+3. **The head preferred *command* for `let`, and a command drops names.** It ranked
+   command first on 299 of 576 `let` lines — 194 prompt phrasings open on *"let us"*
+   and *"let me"* — and every `let` it ranked second was built correctly and lost to
+   `stop`, `move bailey`. **A command reading that drops a word the game does not know
+   loses to a statement that keeps it** — arbitration, not a refusal: with no such
+   statement the command stands. A word the vocabulary lacks gave the reader nothing
+   to choose with, so it is almost always something the player named. 12.5% → 25.2%.
+   **Widened by *The review*:** a statement dropped names too, whenever the tagger
+   missed one, so every reading keeps every name now — and a typo may still be
+   spent, if it is one slip from a word the game has and the tagger did not mark it.
+4. **A span of two words is two things**, because every name the language takes is
+   one: `let` binds a word, a place is a leaf, a reagent is hyphenated. It had built
+   `repeat until nook lectern is idle`.
+5. **Slots are numbered by kind in the spell register.** By position, a place was
+   slot 0 in `if {place} is idle`, slot 1 in `let {name} be {place}` and slot 1 in
+   every `move` the command class learns from — and the tagger runs before, and
+   without, the class. It put both words of *"nook from now on is the alembic"* in
+   slot 0. No spell shape has two slots of one kind (a test holds it), so a place is
+   always 0, a reagent 1, and a word of the player's own 2. The prompt keeps position,
+   because `move` needs it. `let` 25.2% → 47.0%, `if {place} has {reagent}` 85.6% →
+   97.2%.
+6. **`else` and `end` are sinks too** — no slot and no count, so they assemble from any
+   line; offered only as a first choice, and since *The review* only where the line
+   says them. **A bare command verb** (`status`, `probe`,
+   `unfurl`) only when the line names it or a synonym: nothing from the line went
+   into it. **A closed set can be picked out of a longer span** — `one bands` holds
+   exactly one set — where a name, which could be any word, cannot.
+
+### The trials — a suite the scrivener was never taught (`0.14.5`)
+
+**The holdout was the wrong instrument for tuning against.** It is written beside
+the corpus it holds back from, by the same hand, from the same templates, expanded
+over the same nouns; `else` and `end` were measured on four lines each, where one
+line is twenty-five points. Tuning against it had the average shape at 78.6%.
+
+`content/spell_trials.toml` is the other instrument: **298 literal lines and 8 whole
+spells**, no `{slots}`, written to be unlike the corpus — contractions, capitals,
+punctuation, typos, the short names players use, names the reader has never seen,
+digits and number words, archaic and terse registers. Each has exactly one shape and
+any number of styles, so the report can say *"contractions read 30%"* where a shape
+figure hides it.
+
+| Held by | What |
+|---|---|
+| No model at all | the file parses; **no trial is a line either corpus teaches** (every expansion, holdouts and refusals included — nine were, on the first check); every expected reading parses; no trial expecting a reading is one the orb reads on its own, which the reader would never be shown; every shape tried ten times; tags from a closed list; every script's expected spell compiles in its room |
+| The trained reader | **no trial is read as its opposite** — a hard test, skipped without weights |
+| `examples/trials.rs` | by shape, by style, the betrayals apart, every miss with *why* (`Scribe::consider`), and the scripts written through `Sim::write_spell_reading` — the path a save takes |
+
+**A betrayal is scored apart, and zero is the only acceptable count.** A miss leaves a
+spell that faults where the player can see it; a betrayal runs one that means the
+opposite, with nobody watching. `never` names them per line.
+
+#### What it found on its first run
+
+**56.7%**, against the holdout's 78.6%, and **seven betrayals**:
+
+- *isn't*, *never* and *unless* were not negations, so *"when the alembic isn't free"*
+  became `if alembic is idle`.
+- A command was never checked for one: *"never grind the sage"* was `grind sage`.
+- `except` was not a join, and a join was only checked on a condition — *"grind the
+  sage and then wait ten ticks"* became `bide 10`, the wait with the grind gone.
+- **The antonym excuse itself was unsound.** It forgave any negation whose next word
+  the reading lacked, on the argument that the reading had answered with an antonym.
+  It answered with a synonym as often, and *"not free"* passed as `idle`.
+
+Fixed as rules rather than as training: a contraction unfolds, *n't* to `not`;
+`not`, `no`, `never` and `unless` must survive into every reading but `else`, which is
+a negation; a negation is excused only by a word listed in `OPPOSITES` as the opposite
+of the state read; `and`, `or`, `but` and `except` are checked on anything that carries
+an argument or a count; a command is held to negations and not to joins, because
+*"take the husks out and throw them away"* is one action. **Seven to none**, and a test
+keeps it there.
+
+**The reader never saw what the rules saw.** *"free."*, *"else,"* and *"alembic's"*
+were unknown words to the model — hashed, like a name nobody wrote — so a line one
+full stop away from the corpus read as a sentence about nothing. `Vocabulary::token`
+folds a word first: punctuation off, `'s` and its kin off, *n't* to `not`. **One word to
+one row**, because the tagger's rows are the sentence's words; the checks unfold *n't*
+to two words, since they count rather than tag, and share every other step.
+
+#### ⚠ The trainer scored 98.6%, and the reader refused every line
+
+**The first retrain after the fold is the reason this suite has to exist.** The fold
+trims non-alphanumeric characters off a word's ends, and `<cls>` is a reserved row
+spelled with brackets. A command or statement was encoded through
+`token("<cls>")`, which folded to `cls` — an unknown word, hashed; a refusal, and
+every line at inference, went through `Vocabulary::encode`, which writes row 1
+directly. So the opening row alone said whether a sentence asked for anything. The
+reader learned exactly that: the prompt's trainer reported 93.6% and the spell's
+98.6%, and in use both refused **every line** — the prompt reader's holdout read 0%.
+
+The trainer could not see it, and that is the general lesson rather than the
+specific one. **It scores through the same `Sample` constructors it trains through**,
+so a leak that separates two kinds of sentence *by construction* is invisible to it
+by construction. The trials go through `Scribe::reading`, the path a player's line
+takes, and read 24.5% — every shape near zero, every leave-alone line perfect.
+
+Fixed twice over: `token` looks a word up as written before folding it, which keeps
+`<cls>` and a synonym like `what's`; and `every_sample_opens_on_the_same_cls` holds
+every constructor to the one reserved row. **Two ways to write `<cls>` was the
+defect** — `encode` wrote the row and `encode_words` asked for it by name — and the
+test is what makes the second way answer to the first.
+
+#### Where it stands
+
+**66.4% of every line, and nothing read as its opposite.** Contractions 30% → 67%,
+punctuation 36% → 61%, questions 25% → 50%, negations 20% → 93%; hazards 96%. On
+the holdouts both readers are where they were before the fold — the spell reader
+78.5% of the average shape, the prompt reader 78.2% alone and 80.8% with the parser
+and the grammar beside it.
+
+What the report says is still wrong, recorded rather than fixed here:
+
+- **Short names read 11%.** *The mortar* and *the flask* are not words the game has —
+  the content names `mortar_and_pestle` — so the tagger never met them as places,
+  and a word it has not met looks like a name. Teaching them is a corpus and
+  vocabulary change, and it has to be decided with `parser::resolve`, which is what
+  would have to accept `if mortar is idle` at cast.
+- **The count shapes are taught one number each.** `repeat 3` only ever says *three*
+  and `bide 10` only *ten*, so *"run it seven times"* is a sentence the head has not
+  seen the shape of. The count is read from the line, so it is the class that fails;
+  a `{count}` slot in the corpus is the fix.
+- **Loose commands inside a spell read 32%**, and `let` and `pull` with a name the
+  reader has never seen 40% and 47% — the head still prefers *command* for phrasings
+  it has not met, and an unknown verb (*yank*, *pluck*) looks like an unknown name.
+
+### The review — a reading is its reader's, and every name is kept (`0.14.5`)
+
+A `/code-review` of the scrivener at `0.14.5` found fifteen defects and four smaller
+ones, and nearly every one was a way for what compiles to drift from what the player
+wrote or what the orb said. **A correction folded into the item**, so no box moves and
+the version does not.
+
+#### The cache kept readings it had no right to
+
+- **A reading outlived its reader.** A line kept its reading whenever its text was
+  unchanged, and nothing else was asked. A spell the model read and the player saved
+  again under `plain` went on compiling the model's words; saved under `augury`
+  again, it kept the verbatim copy the plain save left, as though the model had said
+  it — and the menu's own comment promised the opposite. **`Scrivener::identity`** is
+  required of every reader (a constant for `Verbatim`, the table for `Copyist`, the
+  weight files' bytes for `Scribe`), and **`Read::by`** says whose a reading is.
+  `None` is a spell no reader in this session read — authored, or restored from a
+  save — which compiles as stored and is read again on its first write.
+- **`interpret` judged each line on its reading and the file on its text.** Blocks,
+  calls and bindings were found in the buffer: *"that is all"* read as `end` and its
+  `if` still said nothing closed it, and `let hammer be alembic` bound nothing, so the
+  `wield hammer` beneath it was marked wrong in the editor and ran at cast. It also
+  asked the reader about every line on every beat. The reading comes in beside the
+  buffer now, from the lookup the save makes — **the queued write first**, so on the
+  beat the editor saves and then reads, a changed line is read once.
+- **Sabotage replaced the whole reading with the corrupted text**, which threw away
+  the orb's reading of every line the enemy never touched, and `unwrite` put back the
+  player's words rather than what had run. One line of the reading is struck now, and
+  `Rewritten` keeps the reading from before the strike.
+- **A save carried one reading per line, by position**, and a load fingerprinted it
+  against `held` — so a line of `held` edited by hand compiled the reading of whatever
+  had stood there, and `spell::source` compared only the line counts. A save carries
+  only the lines a reader changed, **each beside the text it was read from**
+  (`ReadSave`), and `source` falls back line by line. A spell no reader changed
+  writes no `read` at all.
+- **A `w` left the marks stale** in both frontends: they were redrawn on the settle
+  beat alone, so a `w` typed before the pause left them a few keystrokes behind.
+
+#### The rules let four kinds of misreading through
+
+- **A condition vanished into a reading that asks nothing.** *"whenever the alembic
+  has sage"* came back `distil sage`, and *"after the alembic has finished its work"*
+  `wield alembic`. A reading that is neither an `if` nor a `repeat until` — nor
+  `else`, which spends one — is refused on a line that asks. **Where the word stands
+  is the rule**: *"if you would"* is manners and *"a while"* a length of time, and
+  `once`, `after` and `should` ask only where they open a clause, because *"sample
+  once"*, *"one socket after another"* and *"the alembic should stop"* are commands
+  the corpus teaches.
+- **`else` and `end` needed no evidence** as a first choice: *"do it a few times"*
+  came back `else`. The line has to say one now — a stem from a short table, or for
+  `end` nothing but filler — and a test holds every corpus phrasing of both to it.
+  **A count keeps its unit**: *"hang on 5 ticks"* was `repeat 5`.
+- **A name could be a word the checks count on** — *"unless the alembic is free"*
+  bound `unless` — and **a statement could drop one** whenever the tagger missed it:
+  *"name the alembic bertha"* came back `if alembic is empty`. The rule that kept a
+  command from dropping a name holds every reading with room for one now, and a
+  shape with none has to be *said* instead — an `if` needs a line that asks, which a
+  line naming something does not. **A typo is not a name**: a word one slip from a
+  word the game has may be spent — *"otherwsie"* as `else` — unless the tagger marked
+  it, because *"nook"* is one slip from *"look"* and is the name the tagger found.
+- **A canonical command was read as another.** `kindle charcoal`, whose first reading
+  was itself, came back `grind charcoal`, because the equal reading was skipped rather
+  than taken as an answer. A line the reader counts among its readings is left alone.
+  `till` and `til` count as `until`. A slot sheds the sentence's punctuation —
+  *"grind the sage, please"* was `grind sage,` — and keeps a trailing `-`, **which is
+  the sabotage sigil**: a reader that folded it would repair every struck spell the
+  next time it read one, which after a load is the next save.
+
+#### Two things in the table and the corpus, measured and left as they were
+
+- **The vocabulary stores its template words as written** — `times,`, `master's`
+  and `there)` are rows of their own, where every other punctuated word folds on
+  lookup. Three rows, and a lookup reaches each the same way in training and in use.
+- **`spellings.toml`'s refusals never train.** They are canonical statements, every
+  one of which reads cleanly, so the gate keeps them from the reader and
+  `Corpus::spells` drops them. That is right — the reader is never shown one — and
+  what was wrong was the section's comment and `the_spellings_file_parses`' reason.
+  They are the population `measure --spells` holds to 100%, the claim that a working
+  line comes back untouched, and the test now fails on one that would reach the
+  reader instead.
+
+Both were changed, retrained and measured before they were left, and the next
+section is why.
+
+#### ⚠ Two retrains, and why the table did not change
+
+**The first changed the table and the spell corpus.** It folded the template words,
+and replaced the spell refusals with sentences about the tower that a reader *would*
+be shown — *"the alembic is older than it looks"*. It read **60.0%** of the trials,
+where the suite had read 66.4%, and read **two lines as their opposite**; the
+prompt's reader fell from 78.2% to 74.2% and its refusals from 84.8% to 67.5%, with
+nothing in its own corpus changed.
+
+The report's *why* lines found real causes, and the rules that answer them are kept:
+
+- **The new rules refused what they should have let through.** `whenever` is in no
+  template, so it was unknown and therefore a name; `areas` reaches the table only as
+  `{group}s`, so `for each area` dropped a "name" and `for each` fell to 27% of its
+  holdout. A word spent on meaning, a plural of the game's own word and an untagged
+  two-letter word are none of them names now.
+- **A retrained reader finds the gaps the old one hid.** Its head ranked `if` first on
+  *"when the alembic is idle, grind the sage"*, and nothing stopped a statement
+  leaving a command behind; it read *"loop while the alembic is busy"* as `if alembic
+  is idle`, an opposite with no negation to drop; and *"the moment the alembic is
+  empty"* as `empty alembic`, because a phrase can ask where no one word does. So a
+  loop is said, never supplied; a statement leaves no verb behind unless it is taught
+  with it (`hold` is how `bide` is taught) or it is a noun (*"come to a stop"*); an
+  opposite said outright refuses the reading, except a loop's `while`; and a
+  statement drops no substance the content names.
+
+**One cause went deeper than the review.** The vocabulary harvests the holdout
+templates as well, so **77 words only a holdout says are rows nothing trains** —
+noise the reader meets in exactly the lines it is measured on, where an unknown word
+would land in a hash bucket every unseen word has trained. *"the instant the
+balneum_mariae is free"* came back `empty balneum_mariae`, and *"pound that sage"*
+`purge sage`, each through such a row. The new refusals added more, and 25 words the
+prompt's reader never trains on.
+
+**The second retrain took all of it**: a table of taught words only, both readers
+trained on both files' refusals, and the rules above. Nothing was read as its
+opposite — hazards and two-at-once lines 100% — and the holdouts fell further: the
+prompt's reader to **64.6%**, the spell reader's average shape to **56.7%**.
+
+**Why the table went back: any change to its size re-seeds every row.** The trainer
+is seeded, but it draws the embedding table first, so one row more or fewer moves
+every weight's starting value. Each retrain was a new seed on new data, and one run
+of each cannot tell the two apart. So the table and both corpora are exactly what
+trained the readers measured at `0.14.5`, the rules and the cache stay, and the
+three table-level changes — the fold, the untrained rows, refusals a reader is
+shown — are recorded here for a run that can afford several seeds of each.
+
+**Every rule is held to the corpus now.**
+`every_phrasing_the_corpus_teaches_is_accounted_for_by_its_own_reading` asks each rule
+of every taught and held-back phrasing, and on its first run it found three of the
+rules above wrong — *"nothing running"*, *"come to a stop"*, *"get hold of"* — before
+any trial did.
+
+#### ...and on the reproduced reader, the rules that still over-reached
+
+The report on the reader measured at `0.14.5` found the rules above going too far,
+each in a line it quoted:
+
+- **Names asked of every reading** refused correct ones: *"nickname the alembic
+  nib"* for dropping `nickname`, *"once the alembic stops bubbling"* for dropping
+  `bubbling`. A name is asked only of a reading with room for one — a command,
+  `let`, `pull`, `for each` — and a word the tagger passed over counts as one only
+  while the tagger's own name slot holds none. A three-letter word is a typo only as
+  a swap: *"pip"* is one changed letter from *"tip"*, and it is a name.
+- **An `if` is said, never supplied** — *"pull out ozzy from the satchel"* came back
+  `if ozzy is empty` — and a question about the tower asks: *"does the alembic have
+  sage? then"* had been `distil sage`.
+- **`else` and `end` are held to the tower's things and to verbs as well.** `stop
+  alembic`, a canonical command, came back `end`; places join substances as things
+  no statement may drop.
+
+The corpus test found the rest before a trial could: *"provided"*, *"supposing"* and
+*"in the event"* open a condition, *"have nook be the alembic"* is an order and not a
+question, and *"stopped working"* is not working.
+
+#### Where it stands
+
+**72.3% of the trials, and nothing read as its opposite**, against 66.4% when the
+review began. Every hazard, every two-at-once line and every negation is read
+correctly or left alone, and every misreading the review named is now one or the
+other. The rules moved it, on a spell reader that if anything scores itself lower:
+`if … is idle` 68.8% → 78.1%, `repeat until` 60.0% → 86.7%, `for each` 65.0% →
+75.0%, loose commands 32% → 44%, plurals 50% → 75%, short names 11% → 33%.
+
+The prompt's reader is exactly where it was — 78.2% alone, 80.8% with the parser and
+the grammar, 84.8% of refusals — because its table and corpus are. **The spell reader
+is not quite.** Retrained on inputs identical to `0.14.5`'s, its trainer scored its
+own holdout 92.7% where it had scored 93.9%: a seeded run on `wgpu` is not bit for bit,
+and one register happened to land where it began. Its holdout reads 74.8% of the
+average shape against 78.5%, and the gap is almost all `let` (44.8% → 36.5%) and
+`pull` (45.8% → 31.2%), the two shapes that lean hardest on the tagger. The corpus
+test says no rule refuses a phrasing the corpus teaches, taught or held back; how much
+of the gap is the run is a question for a second one.
+
+Still wrong, and recorded rather than chased here:
+
+- **77 rows nothing trains**, which the holdout measurements meet in exactly the lines
+  they measure — above.
+- **A command keeps the name and drops the place**: *"let shard refer to the
+  alembic"* reads `stop shard`.
+- `let` and `pull` with a name the reader has never seen, and loose commands inside a
+  spell, are where most of the misses are.
+
 ### The arsenal is worth what your industry is worth — supersedes the cap (Phase 11, `0.11.13`)
 
 **A per-name cap was the box, and it is struck.** Its own text admitted the

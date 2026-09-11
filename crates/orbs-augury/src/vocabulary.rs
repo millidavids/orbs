@@ -10,7 +10,8 @@
 //! - every word of every synonym in `parser::SYNONYMS`, all three registers
 //! - every canonical verb, and every spell word
 //! - every substance and material the content tables name
-//! - every word the authored templates in `content/phrasings.toml` use
+//! - every word the authored templates in `content/phrasings.toml` and
+//!   `content/spellings.toml` use
 //!
 //! That is the whole of the language the game speaks. A word outside it is a
 //! word the player invented, and [`Token::Hashed`] is what happens to it.
@@ -118,8 +119,23 @@ impl Vocabulary {
         // The templates' own words — everything a phrasing says that is not a
         // slot. This is what makes the corpus and the vocabulary agree by
         // construction rather than by anyone remembering to keep them in step.
+        //
+        // **Both corpora, one table.** The spell register shares this
+        // vocabulary — a sentence is a sentence, and `mortar_and_pestle` means
+        // the same in a spell as at the prompt — so a word authored in
+        // `spellings.toml` and missing here would reach the reader as a hash
+        // bucket, which is the treatment reserved for words the game does not
+        // have.
+        //
+        // ⚠ **Left as written, and the holdouts harvested too — both measured
+        // and recorded rather than changed.** Folding `times,` into `times`, and
+        // leaving out the 77 words only a holdout says (rows nothing trains),
+        // are each right on paper; each also changes the table's size, which
+        // re-seeds every row, and one retrain cannot tell the fix from the new
+        // seed. DESIGN.md §19, *The review*, has the two runs.
         let phrasings = Phrasings::builtin();
-        for entry in phrasings.entries() {
+        let spellings = Phrasings::spellings();
+        for entry in phrasings.entries().iter().chain(spellings.entries()) {
             for line in entry
                 .say
                 .iter()
@@ -133,6 +149,22 @@ impl Vocabulary {
                 );
             }
         }
+        for refusal in phrasings.refusals().iter().chain(spellings.refusals()) {
+            for line in refusal.say.iter().chain(&refusal.holdout) {
+                words.extend(
+                    line.split_whitespace()
+                        .filter(|token| !token.starts_with('{'))
+                        .map(str::to_lowercase),
+                );
+            }
+        }
+
+        // **A set's name is a word the game has**, unlike a name a spell binds:
+        // `for each way` walks a fixture the tower raised, so its word gets a
+        // row. The `names` a `{name}` slot expands over are left out on purpose
+        // — a player's own name arrives as a hash bucket, and so must the ones
+        // the reader learns from.
+        words.extend(spellings.groups().iter().map(|group| group.to_lowercase()));
 
         words.sort();
         words.dedup();
@@ -169,9 +201,36 @@ impl Vocabulary {
     }
 
     /// The row `word` sits at, known or hashed.
+    ///
+    /// # A word is read without its punctuation or its contraction
+    ///
+    /// **One word in, one row out**, and the one it gets is the word a reader
+    /// should see. *"free."* and *"else,"* were rows of their own — unknown words,
+    /// hashed — so a line that differed from a corpus line by a full stop read as
+    /// a sentence about something the game had never heard of: punctuation read
+    /// 36% of the trials that carry it. Trailing and leading punctuation go;
+    /// `'s`, `'re`, `'ll`, `'ve`, `'d` and `'m` go; and a word ending *n't*
+    /// becomes `not`, because the negation is what that word is for.
+    ///
+    /// One row per word, still, because the tagger's rows are the sentence's
+    /// words: splitting *"isn't"* into two would move every span after it.
+    ///
+    /// # The word as the table has it, first
+    ///
+    /// **Folding first took the brackets off `<cls>`.** Every training sentence
+    /// was encoded through `token("<cls>")`, which folded to `cls`, an unknown
+    /// word — while refusals, and every line at inference, opened on the real
+    /// `<cls>` row. The reader learned that the opening row alone said whether
+    /// anything was being asked, scored 98.6% inside the trainer on exactly that,
+    /// and refused every line a player typed. A reserved row, and a synonym like
+    /// `what's`, is a word with punctuation *in* it; looking the word up as
+    /// written before folding it is what keeps both.
     #[must_use]
     pub fn token(&self, word: &str) -> Token {
-        let folded = word.to_lowercase();
+        if let Some(row) = self.index.get(&word.to_lowercase()) {
+            return Token::Known(*row);
+        }
+        let folded = fold_word(word);
         if let Some(row) = self.index.get(&folded) {
             return Token::Known(*row);
         }
@@ -186,6 +245,96 @@ impl Vocabulary {
             .chain(line.split_whitespace().map(|word| self.token(word)))
             .collect()
     }
+
+    /// Whether `word` is one slip from a word the table has — a letter
+    /// dropped, added or changed, or two side by side swapped.
+    ///
+    /// **What tells a typo from a name**, with the tagger's help. Both arrive as
+    /// hash buckets — *"teh"* and *"bertha"* alike — but a typo is a word the
+    /// game has with one thing wrong in it. `spelling::names_in` is the use.
+    ///
+    /// **Three letters, a swap only.** At three a changed letter makes another
+    /// word as often as a typo — *"pip"* is one from *"tip"*, and it is a name —
+    /// while two letters swapped is a slip of the hand: *"teh"*. At two almost
+    /// everything is one slip from something, so nothing is.
+    #[must_use]
+    pub fn near(&self, word: &str) -> bool {
+        let word: Vec<char> = fold_word(word).chars().collect();
+        if word.len() < 3 {
+            return false;
+        }
+        self.types.iter().skip(RESERVED.len()).any(|known| {
+            let known: Vec<char> = known.chars().collect();
+            if word.len() == 3 {
+                swapped(&word, &known)
+            } else {
+                one_slip(&word, &known)
+            }
+        })
+    }
+}
+
+/// Whether `a` and `b` differ by exactly one slip of the hand — see
+/// [`Vocabulary::near`].
+fn one_slip(a: &[char], b: &[char]) -> bool {
+    match a.len().cmp(&b.len()) {
+        core::cmp::Ordering::Equal => {
+            (0..a.len()).filter(|at| a[*at] != b[*at]).count() == 1 || swapped(a, b)
+        }
+        core::cmp::Ordering::Less => dropped_one(b, a),
+        core::cmp::Ordering::Greater => dropped_one(a, b),
+    }
+}
+
+/// Whether `a` is `b` with two letters side by side swapped.
+fn swapped(a: &[char], b: &[char]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let differ: Vec<usize> = (0..a.len()).filter(|at| a[*at] != b[*at]).collect();
+    matches!(differ.as_slice(), [first, second]
+        if *second == first + 1 && a[*first] == b[*second] && a[*second] == b[*first])
+}
+
+/// Whether `short` is `long` with one letter taken out.
+fn dropped_one(long: &[char], short: &[char]) -> bool {
+    long.len() == short.len() + 1
+        && (0..long.len()).any(|skip| {
+            long.iter()
+                .enumerate()
+                .filter(|(at, _)| *at != skip)
+                .map(|(_, letter)| letter)
+                .eq(short.iter())
+        })
+}
+
+/// Endings that say nothing a spell or a command can use.
+///
+/// Shared with `spelling::unfold`, which reads a line the same way for the
+/// checks a reading has to pass — the reader and the checks must agree on what
+/// a word is, or a line could be read one way and judged another.
+pub(crate) const CONTRACTIONS: [&str; 6] = ["'s", "'re", "'ll", "'ve", "'d", "'m"];
+
+/// A written word as the one word a reader should see.
+///
+/// See [`Vocabulary::token`]. `_` and `-` survive inside a word, because
+/// `mortar_and_pestle` and `rock-salt` are single names with them in.
+#[must_use]
+pub fn fold_word(word: &str) -> String {
+    let word = word
+        .replace('\u{2019}', "'")
+        .trim_matches(|ch: char| !ch.is_alphanumeric() && ch != '\'')
+        .trim_start_matches('\'')
+        .to_lowercase();
+    if word.ends_with("n't") {
+        return "not".to_owned();
+    }
+    CONTRACTIONS
+        .iter()
+        .find_map(|ending| word.strip_suffix(ending))
+        .unwrap_or(&word)
+        .trim_end_matches('\'')
+        .to_owned()
 }
 
 /// Which bucket a word's *shape* falls in.
@@ -278,6 +427,32 @@ mod tests {
         let second = Vocabulary::builtin();
         assert_eq!(first.types, second.types);
         assert_eq!(first.token("grind"), second.token("grind"));
+    }
+
+    #[test]
+    fn a_word_is_read_without_its_punctuation_or_its_contraction() {
+        // A full stop is not a new word, and *"isn't"* is a negation.
+        let vocabulary = Vocabulary::builtin();
+        assert_eq!(vocabulary.token("free."), vocabulary.token("free"));
+        assert_eq!(vocabulary.token("else,"), vocabulary.token("else"));
+        assert_eq!(vocabulary.token("Alembic's"), vocabulary.token("alembic"));
+        assert_eq!(vocabulary.token("isn't"), vocabulary.token("not"));
+        assert!(vocabulary.token("not").is_known());
+        // ...and a name with `_` or `-` inside it is still one name.
+        assert_eq!(fold_word("rock-salt,"), "rock-salt");
+        assert_eq!(fold_word("mortar_and_pestle."), "mortar_and_pestle");
+    }
+
+    #[test]
+    fn a_typo_is_near_a_word_the_game_has_and_a_name_is_not() {
+        let vocabulary = Vocabulary::builtin();
+        for typo in ["teh", "grnd", "otherwsie", "tiems", "pasue", "taht"] {
+            assert!(vocabulary.near(typo), "{typo:?} is no slip of anything");
+        }
+        // ...and a short name is not: *pip* is one changed letter from *tip*.
+        for name in ["bertha", "zeph", "pip", "cog"] {
+            assert!(!vocabulary.near(name), "{name:?} reads as a typo");
+        }
     }
 
     #[test]

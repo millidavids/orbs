@@ -56,10 +56,14 @@ mod node;
 mod restore;
 
 pub use document::{Away, FORMAT, MarkSave, ProgressSave, RecordSave, RngSave, Save, WorldSave};
+// **One hash, not two.** `adopt` already fingerprints a spell's lines to decide
+// whether a running one survives a load; `Read` needs the same question asked
+// per line, and a second implementation is the defect §19 records most often.
+pub(crate) use adopt::fingerprint;
 pub use error::SaveError;
 pub use node::{
-    ChantSave, CharmSave, CourseSave, DescentSave, HistorySave, MazeSave, NodeSave, RunningSave,
-    SpanSave, StrandSave, SubstitutedSave, WardSave, WorkingSave,
+    ChantSave, CharmSave, CourseSave, DescentSave, HistorySave, MazeSave, NodeSave, ReadSave,
+    RunningSave, SpanSave, StrandSave, SubstitutedSave, WardSave, WorkingSave,
 };
 
 pub(crate) use capture::capture;

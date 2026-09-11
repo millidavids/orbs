@@ -15,6 +15,44 @@
   at 1.0 (DESIGN.md §19).
 -->
 
+## [v0.14.5] - 2026-09-10
+
+### Description
+In development — a dev log, not patch notes. Spells read plain English now:
+"hang on ten ticks" runs as `bide 10`, and your file stays exactly as you wrote
+it. Where the orb is not sure what you meant, it leaves the line alone.
+
+### Added
+- **A spell can be written the way you would say it.** Lines like `hang on ten
+  ticks`, `do that three times` or `when the mortar_and_pestle is free` run as
+  the spell words they mean — `bide 10`, `repeat 3`, `if mortar_and_pestle is
+  idle` — and so do loose commands, like `work the sage down`. The orb reads a
+  line once, when the spell is saved, and not again while it stays the same.
+- **Your file is never rewritten.** What you typed is what `peruse` shows and
+  what the save keeps, word for word; the orb's reading is kept beside it. A line
+  changed by hand in a save file runs as written, and the rest keep theirs.
+- **The editor shows what the orb heard.** In `interpret`, a line the orb read
+  for you wears a `≈` — the mark a worked-out command gets at the prompt — so a
+  line read wrongly is as easy to spot as one read right, and your own words are
+  one keystroke away. The marks follow every save, a pause or a `w`, and judge
+  the spell as it will run: a loose `that is all` closes the `if` above it.
+- **A name can be a word of your own.** Binding a name, pulling from the satchel
+  and walking a set take whatever word you chose, rather than one the orb already
+  knew. It is the reading it misses most often — and when it is unsure, it leaves
+  the line as you wrote it.
+- **It would rather leave a line alone than guess.** A line that says *when*,
+  *unless* or *until* is never run as though it did not; `never grind the sage`
+  is never read as `grind sage`; a line already written properly is never
+  touched. Across three hundred test lines, none is read as its opposite.
+- **Sieges still reach your spells.** An enemy that tampers with a spell changes
+  one line of what runs, and repairing it gives back the orb's reading as well
+  as your words.
+
+### Changed
+- **One switch for both.** The reader choice on the `options` page now covers
+  spells as well as the prompt. Changing it reaches every line of a spell the
+  next time the spell is saved, and the terminal build reads spells too.
+
 ## [v0.13.19] - 2026-09-09
 
 ### Description

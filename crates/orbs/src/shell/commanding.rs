@@ -33,10 +33,10 @@ pub(super) fn submit(
     // it, and a bare `Res` fails parameter validation there — which would make
     // installing a reader break every test that never wanted one. Absent is the
     // same as empty: no reader, and `submit` unchanged.
-    augury: Option<Res<crate::sim::Augury>>,
+    readers: Option<Res<crate::sim::Readers>>,
     mut scroll: ResMut<orbs_shell::Scroll>,
 ) {
-    let reader = augury.as_deref().and_then(crate::sim::Augury::reader);
+    let reader = readers.as_deref().and_then(crate::sim::Readers::reader);
     for submitted in lines.read() {
         tower.submit_with(&submitted.line, reader);
         // Back to the newest output. The player acted; what they want to see is
@@ -118,7 +118,7 @@ pub(super) fn quit_requested(mut tower: ResMut<Tower>, mut exit: MessageWriter<A
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sim::Augury;
+    use crate::sim::Readers;
 
     /// **The seam a dump cannot reach.** `ORBS_DUMP` builds no `App`, so
     /// everything `scripts/dumps.sh` proves about the reader it proves about
@@ -133,7 +133,7 @@ mod tests {
             .add_message::<SubmittedMessage>()
             .init_resource::<orbs_shell::Scroll>()
             .insert_resource(Tower::new(0))
-            .insert_resource(Augury::holding(Box::new(orbs_sim::Fixture::worked())))
+            .insert_resource(Readers::holding(Box::new(orbs_sim::Fixture::worked())))
             .add_systems(Update, submit);
 
         app.world_mut().write_message(SubmittedMessage {

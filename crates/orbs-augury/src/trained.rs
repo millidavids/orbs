@@ -19,10 +19,14 @@ use burn::record::{BinFileRecorder, FullPrecisionSettings, Recorder as _};
 use orbs_sim::augur::{Augur, MAX_READINGS};
 use orbs_sim::parser::Verb;
 
-use crate::{Batch, MAX_SLOTS, Reader, ReaderConfig, Sample, Tag, VERBS, Vocabulary};
+use crate::decode::decode;
+use crate::{Reader, ReaderConfig, VERBS, Vocabulary};
 
-/// Where the trainer leaves its weights.
+/// Where the trainer leaves the prompt reader's weights.
 pub const WEIGHTS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/weights/reader");
+
+/// Where it leaves the spell reader's.
+pub const SCRIBE_WEIGHTS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/weights/scribe");
 
 /// The reader as a frontend should hold it.
 ///
@@ -69,28 +73,7 @@ impl<B: Backend> Trained<B> {
     /// nonsense rather than an obvious failure.
     pub fn load(device: B::Device) -> Result<Self, burn::record::RecorderError> {
         let vocabulary = Vocabulary::builtin();
-        let record: <Reader<B> as Module<B>>::Record =
-            BinFileRecorder::<FullPrecisionSettings>::new()
-                .load(std::path::PathBuf::from(WEIGHTS), &device)?;
-
-        // **The vocabulary is checked before the record is applied**, because
-        // `load_record` answers a table that has changed shape underneath it
-        // with a panic from inside `burn` rather than an error — which reaches
-        // a player as a crash on a line they typed. Growing the corpus grows
-        // the table, so this is the ordinary consequence of authoring, not a
-        // corrupt file.
-        let trained = record.words.weight.val().dims()[0];
-        if trained != vocabulary.rows() {
-            return Err(burn::record::RecorderError::Unknown(format!(
-                "these weights were trained for a vocabulary of {trained} rows and this \
-                 build has {}; retrain with `cargo run --release -p orbs-augury --example train --features train`",
-                vocabulary.rows()
-            )));
-        }
-
-        let reader = ReaderConfig::new(vocabulary.rows())
-            .init::<B>(&device)
-            .load_record(record);
+        let reader = weights(WEIGHTS, VERBS, &vocabulary, &device)?;
         Ok(Self {
             reader,
             vocabulary,
@@ -119,68 +102,15 @@ impl<B: Backend> Trained<B> {
     /// arguments rather than judged on the argument that matters.
     #[must_use]
     pub fn readings(&self, line: &str) -> Vec<String> {
-        let Some(sample) = Sample::reject(line, &self.vocabulary) else {
+        let Some(read) = decode(&self.reader, &self.vocabulary, &self.device, line, VERBS) else {
             return Vec::new();
         };
-        let batch = Batch::<B>::of(std::slice::from_ref(&sample), &self.device);
-        let reading = self.reader.forward(batch.tokens, batch.pad);
-
-        // **Whether, before which.** The verb head always names its best guess —
-        // it has no way not to — so the binary head is what decides there is
-        // anything to name. Row 1 is *"this is a command"*.
-        if scalar(reading.command.argmax(1).reshape([1])) == 0 {
+        if !read.answering {
             return Vec::new();
         }
+        let filled = read.slots;
 
-        let [rows, width, _] = reading.tags.dims();
-        let tags = reading.tags.argmax(2).reshape([rows * width]);
-        let tags: Vec<i64> = tags
-            .into_data()
-            .convert::<i64>()
-            .into_vec()
-            .unwrap_or_default();
-
-        // Words in the order the sentence had them, gathered per slot. The
-        // sample's rows are `<cls>` then one per word, so the tag at row `n + 1`
-        // belongs to word `n`.
-        let words: Vec<&str> = line.split_whitespace().collect();
-        let mut slots: Vec<Vec<&str>> = vec![Vec::new(); MAX_SLOTS];
-        for (at, word) in words.iter().enumerate() {
-            let Some(row) = tags.get(at + 1) else { break };
-            match Tag::from_row(u32::try_from(*row).unwrap_or(0)) {
-                Tag::Outside => {}
-                Tag::Begin(slot) | Tag::Inside(slot) => {
-                    if let Some(found) = slots.get_mut(slot) {
-                        found.push(word);
-                    }
-                }
-            }
-        }
-        let filled: Vec<String> = slots
-            .iter()
-            .filter(|slot| !slot.is_empty())
-            .map(|slot| slot.join(" "))
-            .collect();
-
-        // The verb head's whole ranking, not just its argmax. A batch of one, so
-        // this is 46 floats and an ordinary sort.
-        let scores: Vec<f32> = reading
-            .verb
-            .reshape([VERBS])
-            .into_data()
-            .convert::<f32>()
-            .into_vec()
-            .unwrap_or_default();
-        if scores.len() != VERBS {
-            // The one shape this can take is a silent `into_vec` type mismatch,
-            // which has cost this crate a day once already. An empty list falls
-            // through to the matcher rather than answering with row zero.
-            return Vec::new();
-        }
-        let mut ranked: Vec<usize> = (0..VERBS).collect();
-        ranked.sort_by(|a, b| scores[*b].total_cmp(&scores[*a]));
-
-        ranked
+        read.ranked
             .into_iter()
             .filter_map(|at| {
                 let verb = Verb::ALL.get(at)?;
@@ -225,9 +155,74 @@ impl<B: Backend> Augur for Trained<B> {
     }
 }
 
-/// One number off a summed or arg-maxed tensor.
-fn scalar<B: Backend>(tensor: Tensor<B, 1, Int>) -> i64 {
-    tensor.into_scalar().to_i64()
+/// Load one register's weights, checked against what this build holds.
+///
+/// **The two shapes are checked before the record is applied**, because
+/// `load_record` answers a table that has changed shape underneath it with a
+/// panic from inside `burn` rather than an error — which reaches a player as a
+/// crash on a line they typed. Growing the corpus grows the vocabulary and
+/// adding a template grows the head, so both are the ordinary consequence of
+/// authoring rather than a corrupt file.
+///
+/// # Errors
+///
+/// If the file is missing or unreadable, or was trained for a different
+/// vocabulary or a different number of classes.
+pub(crate) fn weights<B: Backend>(
+    path: &str,
+    classes: usize,
+    vocabulary: &Vocabulary,
+    device: &B::Device,
+) -> Result<Reader<B>, burn::record::RecorderError> {
+    let record: <Reader<B> as Module<B>>::Record = BinFileRecorder::<FullPrecisionSettings>::new()
+        .load(std::path::PathBuf::from(path), device)?;
+
+    // **The command that retrains *this* file.** The spell reader's is the same
+    // trainer with `--spells`, and naming the other one sends somebody to
+    // retrain the wrong model and meet the same error.
+    let retrain = if path == SCRIBE_WEIGHTS {
+        "cargo run --release -p orbs-augury --example train --features train -- --spells"
+    } else {
+        "cargo run --release -p orbs-augury --example train --features train"
+    };
+    let stale = |what: &str, was: usize, now: usize| {
+        burn::record::RecorderError::Unknown(format!(
+            "{path}.bin was trained for {was} {what} and this build has {now}; retrain with \
+             `{retrain}`",
+        ))
+    };
+    let rows = record.words.weight.val().dims()[0];
+    if rows != vocabulary.rows() {
+        return Err(stale("vocabulary rows", rows, vocabulary.rows()));
+    }
+    // `verb` is `Linear<width * (Tag::COUNT + 1), classes>`, so its output
+    // dimension is the width of the head.
+    let head = record.verb.weight.val().dims()[1];
+    if head != classes {
+        return Err(stale("classes", head, classes));
+    }
+
+    Ok(ReaderConfig::new(vocabulary.rows())
+        .with_classes(classes)
+        .init::<B>(device)
+        .load_record(record))
+}
+
+/// Which weights these are, as `Scrivener::identity` asks: FNV-1a over the
+/// bytes of each `.bin` file, in the order given.
+///
+/// **The bytes, not the path and not a timestamp.** A retrain writes the same
+/// path, so a path would call two readers one; a timestamp would call one
+/// reader two across a copy. Read once more at load, which is once a session.
+pub(crate) fn identity(paths: &[&str]) -> u64 {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for path in paths {
+        for byte in std::fs::read(format!("{path}.bin")).unwrap_or_default() {
+            hash ^= u64::from(byte);
+            hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+        }
+    }
+    hash
 }
 
 #[cfg(test)]

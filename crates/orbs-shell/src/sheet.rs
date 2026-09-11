@@ -157,8 +157,24 @@ pub fn paint(
             // Clipped through `arriving` like the buffer's own lines, which cuts
             // on a **character** boundary — a byte slice can split `é` into
             // something that is not a `str` and panic.
+            // **`≈` marks a line the orb read for you**, which is the same glyph
+            // the prompt draws on a divined command and means the same thing:
+            // *this is what I made of what you said*. Without it a line read
+            // **correctly** and a line read **wrongly** look identical here —
+            // both are plausible canonical commands — and the player has no way
+            // to know a reading happened at all.
+            //
+            // **A glyph rather than a colour**, because §14 will not have colour
+            // carry information: take every hue away and the row still says it.
+            // The player's own words are one keystroke away in the buffer view,
+            // which is what the two views are for.
             (Mode::Reading, Some(reading)) => {
-                orbs_render::arriving(&reading.heard, u32::from(width)).to_owned()
+                let heard = if reading.was.is_some() {
+                    format!("≈ {}", reading.heard)
+                } else {
+                    reading.heard.clone()
+                };
+                orbs_render::arriving(&heard, u32::from(width)).to_owned()
             }
             _ => editor.visible(index, width).to_owned(),
         };

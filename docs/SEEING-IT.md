@@ -3846,6 +3846,81 @@ appear in both, and a `{marker}` must name a real `NounKind`. A template whose
 own canonical form does not resolve is flagged at the bottom of the report,
 because its whole row is measuring nothing.
 
+### The scrivener — a loose line inside a `.spell`
+
+**`ORBS_SCRIVENER` takes the same values as `ORBS_AUGURY` and defaults the same
+way**: unset is the trained spell reader if this checkout has weights, and
+nothing if it does not. `model` says so when there are none; `off` is the game
+with no reader at all; `stub` is `Copyist::worked`, a fixed table — what the
+captures pin, for the reason `dumps.sh` never pins the trained model: weights are
+gitignored and change on every training run.
+
+```bash
+# The two views, and the pair is the point — one capture cannot show that a
+# reading changed anything.
+ORBS_SCRIVENER=stub ORBS_BOOT=0 ORBS_DUMP="attend laboratory; scribe loose" \
+  ORBS_EDIT=$'edit\nwork the sage down\nhang on ten ticks\n<esc>\ninterpret' cargo run -p orbs
+# ...and the same with no reader at all: both lines stay exactly as typed.
+ORBS_SCRIVENER=off ORBS_BOOT=0 ORBS_DUMP="attend laboratory; scribe loose" \
+  ORBS_EDIT=$'edit\nwork the sage down\nhang on ten ticks\n<esc>\ninterpret' cargo run -p orbs
+# ...and the real one, on lines nothing was written down for.
+ORBS_BOOT=0 ORBS_DUMP="attend laboratory; scribe loose" \
+  ORBS_EDIT=$'edit\nwhen the mortar_and_pestle is free\nthe sage wants crushing\nthat is all\n<esc>\ninterpret' cargo run -p orbs
+```
+
+**One setting governs both registers.** The options page's *driver* choice —
+`augury` or `plain` — is the player's, and it decides whether either reader is
+consulted; the two environment variables say what this *build* has to offer and
+are a developer's override. A second toggle for spells would be one nobody finds
+and one that can disagree with the first.
+
+**Switching it reaches every line on the next save.** A reading is kept only for
+the reader that made it, so a spell the model read and you save again under
+`plain` loses every `≈` in `interpret` and compiles what you typed — and saved
+under `augury` again, it is read again rather than keeping the plain copy. A `w`
+redraws the marks as the pause does; before, a `w` typed quickly left the marks
+from a few keystrokes earlier.
+
+#### The trials — lines the scrivener was never taught
+
+```bash
+cargo run --release -p orbs-augury --example trials
+```
+
+Reads every line in `content/spell_trials.toml`, then writes every whole script
+through a real tower's `write_spell_reading` and compiles what it stored. **Read it
+in this order:**
+
+- **`read as their opposite`** — must be `0`. A test holds it there, so a non-zero
+  count here means the test is failing too.
+- **by style**, not only by shape. A style is what a player has; a shape is what the
+  orb has. *"Short names read 22%"* is a finding that *"`if` reads 70%"* hides.
+- **where it goes wrong, and why** — for each miss, the head's first three choices
+  and the tagger's slots, from `Scribe::consider`. Every fix to this reader so far
+  came from that line rather than from a percentage: the head choosing *command*,
+  the tagger running two words into one slot, a shape with no slot winning by never
+  failing.
+
+**Adding a trial** is adding a line to `spell_trials.toml`, and the tests that need
+no model will refuse one that is a corpus line (it measures memory), one expecting
+a reading the language cannot parse, or one expecting the reader to change a line
+the orb already reads — it would never be shown it.
+
+**`≈` marks a line the orb read for you** — the same glyph a divined command
+wears at the prompt. Watch for it rather than for the canonical text: a line read
+*wrongly* also comes back as a plausible command, and the mark is the only thing
+that says a reading happened at all. Your own words are one keystroke away in the
+buffer view.
+
+**The file on disk is never rewritten.** `peruse` shows exactly what you typed;
+the reading lives beside it and is what the spell compiles. §19 deleted the last
+thing that rewrote a spell on save, and this is not it coming back — the reading
+is derived, per line, and thrown away whenever a line changes.
+
+⚠ **A siege corrupts both**, deliberately. `spell::compile` reads the reading, so
+sabotage that touched only the file would let you *see* a broken line while the
+orb ran the clean one — the premise clause switched off.
+
 ### The augury — a sentence the orb could not read, read
 
 **The trained reader is on by default, and that is the shipping default too.**

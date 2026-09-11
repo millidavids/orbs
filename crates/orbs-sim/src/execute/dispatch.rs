@@ -44,8 +44,13 @@ pub fn run_pending(world: &mut World) {
             Queued::Command(intent) => execute(&intent, world),
             // A save is not a command — no verb ran, and no `Intent` describes
             // it — but it lands on the same boundary and in the same order.
-            Queued::Write { name, lines } => {
-                scribe::write(world, &name, &lines);
+            Queued::Write {
+                name,
+                lines,
+                read,
+                by,
+            } => {
+                scribe::write(world, &name, &lines, &read, by);
             }
             Queued::Take(id) => super::weave::grant(world, &id),
             // A tester's door, absent from a release build entirely.

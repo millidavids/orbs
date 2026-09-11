@@ -327,6 +327,137 @@ fn readings_of(set: &str) -> Vec<&'static str> {
 #[derive(Component, Debug, Clone, PartialEq, Eq)]
 pub struct Held(pub Vec<String>);
 
+/// [`Held`], as the orb read it — the lines `spell::compile` actually compiles.
+///
+/// # Derived, and that is the whole of why this is allowed to exist
+///
+/// §19 deleted `scribe::canonicalise` because save-time rewriting *"destroyed
+/// the player's words whenever it understood only part of one — four times, each
+/// fixed by another special case in the rewriter"*. [`Held`] is still byte-exact
+/// and still what `peruse` shows. This sits **beside** it and can be thrown away
+/// and rebuilt, which the rewriter never could.
+///
+/// **With no reader it is a copy**, line for line, and the game is exactly what
+/// it was. That is the point: `compile` reads this and only this, so there is one
+/// source rather than two that can disagree — the defect §19 records more often
+/// than any other.
+///
+/// # Fingerprinted per line, not per file
+///
+/// The editor writes the buffer out after every pause in the typing, so a
+/// whole-file hash would re-read every line for one keystroke — at 436µs a line.
+/// [`of`](Self::of) holds one hash per line, so a line whose text has not moved
+/// keeps its reading for free.
+///
+/// # ...and kept only for the reader that made it
+///
+/// The text alone was the key, and a reading outlived its reader: a spell read
+/// by the model and saved again with the driver on `plain` kept compiling the
+/// model's words, and a verbatim copy — a restored save, a repaired sabotage —
+/// passed for a reading nobody took. [`by`](Self::by) says whose it is, and
+/// [`kept`](Self::kept) answers only the reader named there.
+///
+/// # It travels in the save, and it is never re-derived
+///
+/// `Submission::Wrote` deliberately stores the pre-canonical buffer so replay
+/// re-derives it, *"safe when the derivation is `analyse`, and unsafe when a GPU
+/// did the reading"* (§19). Once a model reads a spell, that stops being true —
+/// so the read lines travel with the submission and land in `NodeSave`, and a
+/// replay never constructs a reader.
+#[derive(Component, Debug, Clone, PartialEq, Eq)]
+pub struct Read {
+    /// One line per line of [`Held`], canonical where the orb could read it.
+    pub lines: Vec<String>,
+    /// The hash of the [`Held`] line each of those was read from.
+    pub of: Vec<u64>,
+    /// The [`Scrivener::identity`](crate::Scrivener::identity) of the reader
+    /// that made [`lines`](Self::lines), or [`None`] where no reader's answer
+    /// can be vouched for.
+    ///
+    /// **`None` is a spell no reader in this session read** — an authored one,
+    /// or one restored from a save. Its lines compile, and they are not taken
+    /// for what the reader in hand would say: the first write reads every line
+    /// of it again.
+    pub by: Option<u64>,
+}
+
+impl Read {
+    /// `lines` as the reading of `held`, line for line, made by `by`.
+    #[must_use]
+    pub fn new(held: &[String], lines: Vec<String>, by: Option<u64>) -> Self {
+        Self {
+            lines,
+            of: held.iter().map(|line| fingerprint_of(line)).collect(),
+            by,
+        }
+    }
+
+    /// `held` as its own reading — what a spell nobody read compiles.
+    #[must_use]
+    pub fn verbatim(held: &[String]) -> Self {
+        Self::new(held, held.to_vec(), None)
+    }
+
+    /// The line at `at` as it compiles: its reading, if that was read from
+    /// `held`, and `held` itself otherwise.
+    ///
+    /// **Line by line, never all or nothing.** Every write keeps the two in
+    /// step, so a mismatch is something outside the game — a save edited by
+    /// hand, most likely — and one edited line is no reason to throw away the
+    /// reading of every other.
+    #[must_use]
+    pub fn compiled<'a>(&'a self, at: usize, held: &'a str) -> &'a str {
+        match self.lines.get(at) {
+            Some(line) if self.of.get(at) == Some(&fingerprint_of(held)) => line,
+            _ => held,
+        }
+    }
+
+    /// This reading laid over `held`: every line kept that was read from the
+    /// text now at its place, and the rest as written.
+    ///
+    /// [`by`](Self::by) survives only if every line did, because a line put
+    /// back as written is not something that reader said.
+    #[must_use]
+    pub fn aligned(&self, held: &[String]) -> Self {
+        let lines: Vec<String> = held
+            .iter()
+            .enumerate()
+            .map(|(at, line)| self.compiled(at, line).to_owned())
+            .collect();
+        let whole = self.lines.len() == held.len()
+            && held
+                .iter()
+                .enumerate()
+                .all(|(at, line)| self.of.get(at) == Some(&fingerprint_of(line)));
+        Self::new(held, lines, if whole { self.by } else { None })
+    }
+
+    /// What the reader `by` made of `line`, if this holds that reading.
+    ///
+    /// **By text, not by position.** A reader is asked about one line at a time
+    /// and answers from nothing else, so a line's reading goes wherever the line
+    /// does — and a line typed above it no longer sends every line below back to
+    /// the reader.
+    #[must_use]
+    pub fn kept(&self, line: &str, by: u64) -> Option<&str> {
+        if self.by != Some(by) {
+            return None;
+        }
+        let hash = fingerprint_of(line);
+        self.of
+            .iter()
+            .position(|of| *of == hash)
+            .and_then(|at| self.lines.get(at))
+            .map(String::as_str)
+    }
+}
+
+/// One line's fingerprint — `save::fingerprint`, which is the one hash.
+fn fingerprint_of(line: &str) -> u64 {
+    crate::save::fingerprint(&[line.to_owned()])
+}
+
 /// The domain a spell is written for.
 ///
 /// # Data on the node, not a directory

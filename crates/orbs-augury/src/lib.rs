@@ -12,8 +12,12 @@
 //!
 //! # Trained here, from scratch, on data this project made
 //!
-//! No pretrained weights, no pretrained embeddings, no downloaded tokenizer, no
-//! distillation, no LLM-generated training data. An ethical constraint (§19),
+//! No pretrained weights, no pretrained embeddings, no downloaded tokenizer, and
+//! no distillation — nothing another model produced reaches the weights. The rule
+//! is about the artefact, not about who typed a phrasing: drafting corpus lines
+//! in a session is fine, and §19 records the correction of an earlier *"no
+//! LLM-generated training data"*, which said far more than was meant. An ethical
+//! constraint (§19),
 //! and load-bearing twice over: shipped weights are a distributed artefact and
 //! the repository is GPL-3.0-or-later, and a model with no general English
 //! underneath it has **the corpus as its only source of capability** — which is
@@ -24,13 +28,21 @@
 //! this repository already contains.
 
 pub mod batch;
+pub mod corpus;
+pub mod decode;
 pub mod model;
 pub mod sample;
+pub mod scribe;
+pub mod spelling;
 pub mod trained;
 pub mod vocabulary;
 
 pub use batch::Batch;
+pub use corpus::{Corpus, Register};
+pub use decode::{Decoded, decode};
 pub use model::{Reader, ReaderConfig, WIDTH};
 pub use sample::{MAX_LEN, MAX_SLOTS, REJECT, Sample, Tag, VERBS};
+pub use scribe::{Considered, Copying, Scribe};
+pub use spelling::{accounts_for, assemble, command, count_in, kinds, shapes};
 pub use trained::{Reading, Trained};
 pub use vocabulary::{BUCKETS, Token, Vocabulary};

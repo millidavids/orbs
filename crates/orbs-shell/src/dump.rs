@@ -517,7 +517,19 @@ pub fn run_script(seed: u64, wizard: Option<String>, engine: &str, request: &str
         // divergence `opened` exists to prevent.
         if let Some(editor) = editing.as_mut() {
             editor.set_running_line(sim.running_line(editor.name()));
-            editor.set_reading(sim.read_spell(editor.domain(), editor.lines()));
+            // **Through the scrivener, so a capture can show a read line.** The
+            // reading is what `interpret` draws, and a dump that never consulted
+            // one would be blind to the whole surface — CLAUDE.md's *"the
+            // blindness looks exactly like stability"*.
+            editor.set_reading(match super::scrivener() {
+                Some(reader) => sim.read_spell_with(
+                    editor.name(),
+                    editor.domain(),
+                    editor.lines(),
+                    reader.as_ref(),
+                ),
+                None => sim.read_spell(editor.domain(), editor.lines()),
+            });
             editor.refresh(&sim);
         }
         // A dump builds no `App`, so the two cached resources have nobody to
@@ -1018,11 +1030,11 @@ fn opened(sim: &mut orbs_sim::Sim) -> Option<super::Editor> {
         // Command state: `Enter` runs the word.
         match editor.enter() {
             Some(super::EditorOutcome::Save) => {
-                sim.write_spell(editor.name(), editor.lines());
+                wrote(sim, &editor);
                 editor.saved();
             }
             Some(super::EditorOutcome::SaveAndClose) => {
-                sim.write_spell(editor.name(), editor.lines());
+                wrote(sim, &editor);
                 sim.step();
                 return None;
             }
@@ -1128,6 +1140,18 @@ fn refresh(screen: &mut super::Tapestry, sim: &orbs_sim::Sim) {
         sim.ley_line(),
         sim.mastery(),
     );
+}
+
+/// Save the buffer, through whatever scrivener the environment named.
+///
+/// **One place, so the two save words cannot differ.** `w` and `wq` both reach
+/// this; a reader consulted by one and not the other would make the spell mean
+/// something different depending on how it was closed.
+fn wrote(sim: &mut orbs_sim::Sim, editor: &super::Editor) {
+    match super::scrivener() {
+        Some(reader) => sim.write_spell_reading(editor.name(), editor.lines(), reader.as_ref()),
+        None => sim.write_spell(editor.name(), editor.lines()),
+    }
 }
 
 /// The orb's menu, if a `quit` in the script opened it, with [`MENU`] typed in.

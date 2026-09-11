@@ -38,6 +38,16 @@ pub const WIDTH: usize = 128;
 pub struct ReaderConfig {
     /// Rows in the embedding table — the vocabulary plus its hash buckets.
     pub rows: usize,
+    /// How many things the classifying head chooses between.
+    ///
+    /// **A number rather than [`VERBS`], so a second reader costs no second
+    /// model.** The spell register asks the identical question of an identical
+    /// sentence — *which statement is this, and which words are its argument* —
+    /// over a different set of answers: twelve spell words and *this is a
+    /// command* instead of forty-six verbs. Everything else is the same, so what
+    /// differs is one width and one corpus.
+    #[config(default = "VERBS")]
+    pub classes: usize,
     /// Encoding width.
     #[config(default = "WIDTH")]
     pub width: usize,
@@ -98,7 +108,7 @@ impl ReaderConfig {
                 .with_norm_first(true)
                 .init(device),
             // `<cls>` plus one pooled summary per tag — see `Reader::forward`.
-            verb: LinearConfig::new(self.width * (Tag::COUNT + 1), VERBS).init(device),
+            verb: LinearConfig::new(self.width * (Tag::COUNT + 1), self.classes).init(device),
             command: LinearConfig::new(self.width * (Tag::COUNT + 1), 2).init(device),
             tag: LinearConfig::new(self.width, Tag::COUNT).init(device),
         }

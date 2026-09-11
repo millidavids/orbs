@@ -52,7 +52,7 @@ use super::navigate::find_script;
 /// (`spell_missing`, `spell_unreadable_if`, `spell_forbidden`), and marked in
 /// the editor while it is being written — which is more use than a tally,
 /// arrives where it can be acted on, and is said once.
-pub fn write(world: &mut World, name: &str, lines: &[String]) -> Entity {
+pub fn write(world: &mut World, name: &str, lines: &[String], read: &[String], by: u64) -> Entity {
     let filename = with_extension(name);
     let existing = find_script(world, &filename);
 
@@ -88,9 +88,17 @@ pub fn write(world: &mut World, name: &str, lines: &[String]) -> Entity {
 
     // **`lines`, exactly as given.** The one line in this module that the whole
     // rewrite was for.
-    world
-        .entity_mut(node)
-        .insert((Held(lines.to_vec()), Domain(domain_name)));
+    //
+    // `read` lands beside it and is what `compile` compiles. Equal to `lines`
+    // wherever nothing read them, which is every build without a reader and
+    // every line a reader abstained on — so this is the identity case by
+    // default and the game is what it was. `by` is whose reading it is, which
+    // is what the next write asks before it keeps any of it.
+    world.entity_mut(node).insert((
+        Held(lines.to_vec()),
+        tower::Read::new(lines, read.to_vec(), Some(by)),
+        Domain(domain_name),
+    ));
 
     // **A running spell takes the change now**, not on its next casting.
     //
@@ -120,7 +128,9 @@ pub fn write(world: &mut World, name: &str, lines: &[String]) -> Entity {
         // happens, and the editor marks the line and counts it on the status row
         // (`Sim::read_spell`); the runner still names a missing place every
         // casting, because `said` is cleared just below.
-        let program = crate::tower::spell::compile(world, from, lines);
+        // `read`, not `lines` — the reading is what a program is built from,
+        // and this reload must agree with the cast that will follow it.
+        let program = crate::tower::spell::compile(world, from, read);
         if let Some(mut running) = world.get_mut::<crate::tower::spell::Running>(node) {
             running.program = program;
             // The new text is a new set of lines, so what was reported about the

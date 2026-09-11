@@ -23,6 +23,29 @@ use crate::term;
 /// One world tick, which DESIGN.md §5.0 makes one real second.
 const TICK: Duration = Duration::from_secs(1);
 
+/// Nothing reading spells: `plain`, or a build with no weights.
+///
+/// A reader that abstains on every line, so `Read` is `Held` and the game is
+/// exactly what it was. It is the sim's own default and is named here rather
+/// than branched around, so there is one write path instead of two.
+static VERBATIM: orbs_sim::Verbatim = orbs_sim::Verbatim;
+
+/// The spell reader in effect: what this build offers, if the player wants it.
+///
+/// **Two switches, and they answer different questions** — the same pair
+/// `Readers::reader` documents in the Bevy build. `ORBS_SCRIVENER` says what
+/// this build has to offer and is a developer's override; the driver is the
+/// player's, and it decides whether what is on offer gets consulted.
+fn scribing(
+    driver: orbs_shell::Driver,
+    scribe: Option<&dyn orbs_sim::Scrivener>,
+) -> &dyn orbs_sim::Scrivener {
+    match driver {
+        orbs_shell::Driver::Plain => &VERBATIM,
+        orbs_shell::Driver::Augury => scribe.unwrap_or(&VERBATIM),
+    }
+}
+
 /// How often the screen is redrawn at most.
 ///
 /// Thirty rather than sixty: the animations are meters and a fire, none of which
@@ -166,10 +189,16 @@ struct Session {
     /// game rather than a cut-down one. `scripts/play.sh` can still set `stub`
     /// when a scenario is *about* a divined line and wants a fixed answer.
     augury: Option<Box<dyn orbs_sim::Augur>>,
-    /// Whether the player wants that reader consulted.
+    /// The spell reader, on exactly the same terms.
     ///
-    /// **Kept beside the reader rather than replacing it**, for the Bevy build's
-    /// reason: switching back must not cost a file read on a keystroke.
+    /// **Both registers under one setting**, because a player who has said *"read
+    /// what I mean"* has said it about their whole session — see
+    /// `crate::sim::Readers` in the Bevy build, which is the same decision.
+    scribe: Option<Box<dyn orbs_sim::Scrivener>>,
+    /// Whether the player wants those readers consulted.
+    ///
+    /// **Kept beside the readers rather than replacing them**, for the Bevy
+    /// build's reason: switching back must not cost a file read on a keystroke.
     driver: orbs_shell::Driver,
     /// The file this tower is kept in, and where it is written back.
     ///
@@ -276,6 +305,7 @@ impl Session {
             engine,
             sim,
             augury: orbs_shell::augury(),
+            scribe: orbs_shell::scrivener(),
             driver: orbs_shell::settings::driver(),
             kept,
             save_failed: false,
@@ -335,8 +365,13 @@ impl Session {
         // A verb may have asked for a surface, and an open one may have been
         // closed from under the player by a spell. `menu`'s handshake is taken
         // in here, by `Surfaces::open`.
-        self.surfaces
-            .open(&mut self.sim, &mut self.scroll, self.page, self.driver);
+        self.surfaces.open(
+            &mut self.sim,
+            &mut self.scroll,
+            self.page,
+            self.driver,
+            scribing(self.driver, self.scribe.as_deref()),
+        );
         self.surfaces.tick(&self.sim);
         // **Taken here rather than in the surface**, for the reason
         // `Surfaces::driving` gives: the reader belongs to the session. Unlike
@@ -491,8 +526,13 @@ impl Session {
             self.held_over = Some(Instant::now());
         }
         if owner != Owner::Prompt {
-            self.surfaces
-                .typed(owner, event.code, &mut self.sim, &mut self.scroll);
+            self.surfaces.typed(
+                owner,
+                event.code,
+                &mut self.sim,
+                &mut self.scroll,
+                scribing(self.driver, self.scribe.as_deref()),
+            );
             // **The one keystroke that reaches the world without a tick.**
             //
             // `Sim::walk` is the third entry point (§19): an arrow moves the
@@ -521,8 +561,13 @@ impl Session {
             // A surface may have opened another — `scribe` from the weave
             // screen cannot happen, but a save can close the editor and hand
             // the prompt back on the same keystroke.
-            self.surfaces
-                .open(&mut self.sim, &mut self.scroll, self.page, self.driver);
+            self.surfaces.open(
+                &mut self.sim,
+                &mut self.scroll,
+                self.page,
+                self.driver,
+                scribing(self.driver, self.scribe.as_deref()),
+            );
             return true;
         }
 
@@ -548,8 +593,13 @@ impl Session {
             self.scroll.rewind();
             // `unfurl` and `wander` answer on the tick they are typed, so the
             // surface they ask for must be taken before the next keystroke.
-            self.surfaces
-                .open(&mut self.sim, &mut self.scroll, self.page, self.driver);
+            self.surfaces.open(
+                &mut self.sim,
+                &mut self.scroll,
+                self.page,
+                self.driver,
+                scribing(self.driver, self.scribe.as_deref()),
+            );
         }
         self.ghost = self
             .line
@@ -1031,7 +1081,11 @@ fn play(session: &mut Session) -> std::io::Result<()> {
             // types on counts toward the pause they have not taken yet. This is
             // the beat §19 means by *"there is no `save`"*: stop typing and the
             // buffer writes itself out.
-            session.surfaces.settle(delta, &mut session.sim);
+            session.surfaces.settle(
+                delta,
+                &mut session.sim,
+                scribing(session.driver, session.scribe.as_deref()),
+            );
             painted = now;
             session.draw(&mut out)?;
         }

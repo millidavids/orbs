@@ -14,6 +14,7 @@ mod prose;
 mod recipe;
 mod siege;
 mod spell;
+mod trials;
 
 pub use deed::Deed;
 pub use forge::{Charm as CharmCost, Charms};
@@ -27,3 +28,4 @@ pub use prose::Prose;
 pub use recipe::{Recipe, Recipes};
 pub use siege::{Spendable, Spendables};
 pub use spell::{EXTENSION, Spell, Spells, with_extension, without_extension};
+pub use trials::{SHAPES as TRIAL_SHAPES, STYLES as TRIAL_STYLES, Script, Trial, Trials, fold};

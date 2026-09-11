@@ -83,6 +83,11 @@ fn main() {
         return;
     }
 
+    if std::env::args().any(|arg| arg == "--spells") {
+        spells(&orbs_sim::content::corpus_scene());
+        return;
+    }
+
     let scene = tower();
     let mut log = ParseLog::new();
     let mut tick = 0u64;
@@ -114,6 +119,65 @@ fn main() {
     if want_tsv {
         print!("{}", log.to_tsv());
     }
+}
+
+/// What the spell language accepts of `spellings.toml`, before any reader.
+///
+/// **The baseline, and it is expected to be near nought.** These are lines the
+/// language cannot read — that is the whole reason they were written down. A
+/// number climbing here means a phrasing was authored that already worked, which
+/// would teach a reader to rewrite what needed no rewriting.
+fn spells(scene: &Scene) {
+    let spellings = orbs_sim::content::Phrasings::spellings();
+    let corpus = spellings.corpus(scene);
+    let holdout = spellings.holdout(scene);
+    let refused = spellings.refused(scene);
+
+    println!("\nO.R.B.S. — how much of a loose spell the language already reads\n");
+    println!(
+        "  {} templates, expanded to {} corpus and {} holdout lines",
+        spellings.entries().len(),
+        corpus.len(),
+        holdout.len(),
+    );
+    println!("  {} lines that must come back untouched\n", refused.len());
+
+    // **Parsing is not understanding, and this is where the difference bites.**
+    // A loose line usually has no leading spell word and reads as a bare
+    // command. But `if the alembic has finished` *parses* — as "holds a thing
+    // called finished" — and means something else entirely. That is the class a
+    // reader has to fix and the class a re-parse can never catch, which is why
+    // the assembler's rule is span coverage rather than "does it parse".
+    let already = corpus
+        .iter()
+        .filter(|example| orbs_sim::tower::spell::reads_cleanly(&example.said))
+        .count();
+    println!(
+        "    parses into *something*      {already} of {}   <- and means the wrong thing",
+        corpus.len(),
+    );
+
+    // ...and the other side. Every refusal must already be a sound statement: a
+    // reader rewriting one would be breaking a line that worked, and a line here
+    // that does not parse is an authoring mistake in `spellings.toml` rather
+    // than anything about a reader.
+    let unsound: Vec<&String> = refused
+        .iter()
+        .filter(|line| !orbs_sim::tower::spell::reads_cleanly(line))
+        .collect();
+    println!(
+        "    sound already                {} of {}   <- must be all",
+        refused.len() - unsound.len(),
+        refused.len(),
+    );
+
+    if !unsound.is_empty() {
+        println!("\n  refusals that are not sound statements — fix the file:\n");
+        for line in unsound.iter().take(10) {
+            println!("    {line:?}");
+        }
+    }
+    println!();
 }
 
 /// Measure the parser against every authored phrasing (§19, *the augury*).

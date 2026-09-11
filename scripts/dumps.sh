@@ -33,13 +33,13 @@ export ORBS_SAVE=off
 # name=env-assignments...  — one capture per line, `%` separating name from env.
 run() {
   local name="$1"; shift
-  # **`ORBS_AUGURY=off` first, so every capture is reproducible from a clean
-  # checkout.** The trained reader is the shipping default now, and weights are a
-  # gitignored build artefact that changes on every training run — so a dump made
-  # against them would differ from one made on another machine, and `diff -r`
-  # would report a change that means nothing. A block wanting a reader names one
-  # in its own arguments, which come after these and win.
-  env ORBS_AUGURY=off "$@" "$orbs" > "$out/$name.txt" 2>"$out/$name.err" || true
+  # **Both readers off first, so every capture is reproducible from a clean
+  # checkout.** Both are the shipping default now, and weights are a gitignored
+  # build artefact that changes on every training run — so a dump made against
+  # them would differ from one made on another machine, and `diff -r` would
+  # report a change that means nothing. A block wanting a reader names one in its
+  # own arguments, which come after these and win.
+  env ORBS_AUGURY=off ORBS_SCRIVENER=off "$@" "$orbs" > "$out/$name.txt" 2>"$out/$name.err" || true
   # A dump prints nothing to stderr in the ordinary case; keep the file only if
   # it has content, so `diff -r` is not full of empty noise.
   [ -s "$out/$name.err" ] || rm -f "$out/$name.err"
@@ -84,6 +84,27 @@ run lab_flask  ORBS_BOOT=0 ORBS_DUMP="attend laboratory; kindle charcoal; grind 
 run lab_tint   ORBS_BOOT=0 ORBS_DUMP="attend laboratory; move sage to mortar_and_pestle"
 run lab_husks  ORBS_BOOT=0 ORBS_DUMP="attend laboratory; grind sage; meditate 9; move ground-sage to dispensary"
 run lab_clarity ORBS_BOOT=0 ORBS_GRID=100x36 ORBS_DUMP="attend laboratory; kindle charcoal; grind sage; meditate 9; empty mortar_and_pestle; digest ground-sage; meditate 14; grind rock-salt; meditate 9; empty mortar_and_pestle; mix sage-tincture with ground-salt; meditate 12; distil clarified-draught; meditate 60; status"
+
+# --- the scrivener ---------------------------------------------------------
+# **A loose spell, and the two views of it.** `work the sage down` and `wait ten
+# ticks` are lines the deterministic pipeline genuinely cannot read — unlike
+# `crush the sage`, where `crush` is already a `grind` synonym and the matcher
+# needs no help — so a capture using them exercises the reader rather than the
+# parser. `interpret` marks the
+# lines it read with `≈` — the same glyph a divined command carries at the
+# prompt — which is what makes a *misreading* visible rather than merely
+# plausible; the buffer view a keystroke away still holds the player's own words.
+#
+# `stub` rather than a trained reader, for `dumps.sh`'s standing reason: weights
+# are a gitignored build artefact and a capture made against them could not be
+# reproduced from a clean checkout.
+run scrivener_read ORBS_BOOT=0 ORBS_SCRIVENER=stub ORBS_DUMP="attend laboratory; scribe loose" \
+  ORBS_EDIT=$'edit\nwork the sage down\nhang on ten ticks\n<esc>\ninterpret'
+# ...and the same file with no reader, which must show the lines untouched and no
+# `≈` anywhere. The pair is the point: one capture cannot show that a reading
+# changed something.
+run scrivener_off  ORBS_BOOT=0 ORBS_DUMP="attend laboratory; scribe loose" \
+  ORBS_EDIT=$'edit\nwork the sage down\nhang on ten ticks\n<esc>\ninterpret'
 
 # --- the fault latch -------------------------------------------------------
 run fault_latched ORBS_BOOT=0 ORBS_DUMP="attend laboratory; scribe broken" \

@@ -1,0 +1,527 @@
+# Lines the scrivener is tested on, and never taught (DESIGN.md §19, *the scrivener*).
+#
+# See `content::Trials`. Every line here is literal — no `{slots}` — and a test
+# holds that none of them is a line either corpus teaches, because a trial the
+# reader has seen measures its memory, and its memory is excellent.
+#
+# # Reading a trial
+#
+#   said    what the player wrote
+#   reads   what the orb should hear. Absent: the line must come back exactly as
+#           written — a comment, a canonical line, a sentence asking for nothing
+#   lenient leaving the line alone also passes
+#   never   readings that must never come back, because they would run a spell
+#           meaning the opposite of what was written. Scored apart; zero is the
+#           only acceptable count
+#   tags    exactly one shape, and any number of styles
+#
+# # What the orb should hear keeps the player's words
+#
+# The scrivener never binds a name — `parser::resolve` does that at cast, in the
+# room. So *"when the mortar is free"* reads `if mortar is idle`, not `if
+# mortar_and_pestle is idle`, and a typo reads back as the typo.
+#
+# # Write it unlike the corpus
+#
+# Contractions, capitals, punctuation, typos, the short names players actually
+# use, names the reader has never seen, digits and number words, archaic and
+# terse registers, and phrasings nobody wrote into `spellings.toml`.
+
+trial = [
+    # -------------------------------------------------------------------------
+    # if {place} is idle
+    # -------------------------------------------------------------------------
+    { said = "whenever the alembic is free", reads = "if alembic is idle", tags = ["if-idle", "plain"] },
+    { said = "after the alembic has finished its work", reads = "if alembic is idle", never = ["wield alembic"], tags = ["if-idle", "plain"] },
+    { said = "when the alembic has stopped working", reads = "if alembic is idle", tags = ["if-idle", "plain"] },
+    { said = "once the alembic is finished with its batch", reads = "if alembic is idle", tags = ["if-idle", "plain"] },
+    { said = "when the alembic is quiet again", reads = "if alembic is idle", tags = ["if-idle", "plain"] },
+    { said = "the second the alembic is free", reads = "if alembic is idle", never = ["empty alembic"], tags = ["if-idle", "plain"] },
+    { said = "once the alembic stops bubbling", reads = "if alembic is idle", tags = ["if-idle", "plain"] },
+    { said = "whenever the flask_and_rod is free", reads = "if flask_and_rod is idle", tags = ["if-idle", "plain"] },
+    { said = "once the balneum_mariae is free", reads = "if balneum_mariae is idle", tags = ["if-idle", "plain"] },
+    { said = "once the lectern is free", reads = "if lectern is idle", tags = ["if-idle", "plain"] },
+    { said = "when the forge has nothing to do", reads = "if forge is idle", tags = ["if-idle", "plain"] },
+    { said = "when the alembic is not in use", reads = "if alembic is idle", tags = ["if-idle", "negation"] },
+    { said = "when the alembic is no longer at work", reads = "if alembic is idle", tags = ["if-idle", "negation"] },
+    { said = "when the mortar is free", reads = "if mortar is idle", tags = ["if-idle", "short-name"] },
+    { said = "once the flask has stopped", reads = "if flask is idle", tags = ["if-idle", "short-name"] },
+    { said = "when the mortar's done", reads = "if mortar is idle", tags = ["if-idle", "short-name", "contraction"] },
+    { said = "when the alembic's free", reads = "if alembic is idle", tags = ["if-idle", "contraction"] },
+    { said = "when the alembic ain't working", reads = "if alembic is idle", tags = ["if-idle", "casual", "contraction"] },
+    { said = "if the alembic's sitting there doing nothing", reads = "if alembic is idle", tags = ["if-idle", "casual", "contraction"] },
+    { said = "right after the alembic is done", reads = "if alembic is idle", tags = ["if-idle", "casual"] },
+    { said = "WHEN THE ALEMBIC HAS WOUND DOWN", reads = "if alembic is idle", tags = ["if-idle", "caps"] },
+    { said = "When The Alembic Is Quiet", reads = "if alembic is idle", tags = ["if-idle", "caps"] },
+    { said = "when the alembic is free.", reads = "if alembic is idle", tags = ["if-idle", "punctuation"] },
+    { said = "once the alembic is quiet, then", reads = "if alembic is idle", tags = ["if-idle", "punctuation"] },
+    { said = "is the alembic free? then", reads = "if alembic is idle", tags = ["if-idle", "question", "punctuation"] },
+    { said = "please, once the alembic is free", reads = "if alembic is idle", tags = ["if-idle", "polite", "punctuation"] },
+    { said = "when the alembc is free", reads = "if alembc is idle", tags = ["if-idle", "typo"] },
+    { said = "wehn the alembic is free", reads = "if alembic is idle", tags = ["if-idle", "typo"] },
+    { said = "should the alembic fall idle", reads = "if alembic is idle", tags = ["if-idle", "archaic"] },
+    { said = "whensoever the alembic resteth", reads = "if alembic is idle", tags = ["if-idle", "archaic"] },
+    { said = "when yon alembic is at leisure", reads = "if alembic is idle", tags = ["if-idle", "archaic"] },
+    { said = "alembic free?", reads = "if alembic is idle", lenient = true, tags = ["if-idle", "terse", "question"] },
+
+    # -------------------------------------------------------------------------
+    # if {place} is empty
+    # -------------------------------------------------------------------------
+    { said = "once the alembic is all empty", reads = "if alembic is empty", tags = ["if-empty", "plain"] },
+    { said = "when the alembic has been drained", reads = "if alembic is empty", tags = ["if-empty", "plain"] },
+    { said = "once the alembic runs dry", reads = "if alembic is empty", tags = ["if-empty", "plain"] },
+    { said = "once the alembic is emptied out", reads = "if alembic is empty", tags = ["if-empty", "plain"] },
+    { said = "when the alembic is empty again", reads = "if alembic is empty", tags = ["if-empty", "plain"] },
+    { said = "whenever the alembic stands empty", reads = "if alembic is empty", tags = ["if-empty", "plain"] },
+    { said = "the moment the alembic is empty", reads = "if alembic is empty", never = ["empty alembic"], tags = ["if-empty", "plain"] },
+    { said = "once everything is out of the alembic", reads = "if alembic is empty", tags = ["if-empty", "reordered"] },
+    { said = "when there's nothing in the alembic", reads = "if alembic is empty", tags = ["if-empty", "contraction"] },
+    { said = "when the alembic's empty", reads = "if alembic is empty", tags = ["if-empty", "contraction"] },
+    { said = "when the alembic's been emptied", reads = "if alembic is empty", tags = ["if-empty", "contraction"] },
+    { said = "ONCE THE ALEMBIC RUNS DRY", reads = "if alembic is empty", tags = ["if-empty", "caps"] },
+    { said = "when the mortar is empty", reads = "if mortar is empty", tags = ["if-empty", "short-name"] },
+    { said = "when the flask has nothing left in it", reads = "if flask is empty", tags = ["if-empty", "short-name"] },
+    { said = "when nought remains in the alembic", reads = "if alembic is empty", tags = ["if-empty", "archaic"] },
+    { said = "when the alembic be empty", reads = "if alembic is empty", tags = ["if-empty", "archaic"] },
+    { said = "should the alembic run out of everything", reads = "if alembic is empty", tags = ["if-empty", "archaic"] },
+    { said = "once the alembic has no more in it", reads = "if alembic is empty", lenient = true, tags = ["if-empty", "negation"] },
+    { said = "when the alembic is empty.", reads = "if alembic is empty", tags = ["if-empty", "punctuation"] },
+    { said = "is the alembic empty? then", reads = "if alembic is empty", tags = ["if-empty", "question", "punctuation"] },
+    { said = "when the alembec is empty", reads = "if alembec is empty", tags = ["if-empty", "typo"] },
+    { said = "alembic empty", reads = "if alembic is empty", lenient = true, tags = ["if-empty", "terse"] },
+
+    # -------------------------------------------------------------------------
+    # if {place} has {reagent}
+    # -------------------------------------------------------------------------
+    { said = "whenever the alembic has sage", reads = "if alembic has sage", never = ["distil sage"], tags = ["if-has", "plain"] },
+    { said = "once the alembic has sage inside", reads = "if alembic has sage", tags = ["if-has", "plain"] },
+    { said = "once the alembic is holding some ash", reads = "if alembic has ash", tags = ["if-has", "plain"] },
+    { said = "if sage is sitting in the alembic", reads = "if alembic has sage", tags = ["if-has", "reordered"] },
+    { said = "when sage is found in the alembic", reads = "if alembic has sage", tags = ["if-has", "reordered"] },
+    { said = "when there is charcoal inside the alembic", reads = "if alembic has charcoal", tags = ["if-has", "reordered"] },
+    { said = "whenever sage turns up at the mortar_and_pestle", reads = "if mortar_and_pestle has sage", never = ["grind sage"], tags = ["if-has", "reordered"] },
+    { said = "once ground-sage is in the alembic", reads = "if alembic has ground-sage", tags = ["if-has", "reordered"] },
+    { said = "once there's sage in the alembic", reads = "if alembic has sage", tags = ["if-has", "contraction"] },
+    { said = "when the alembic's got sage", reads = "if alembic has sage", tags = ["if-has", "contraction", "casual"] },
+    { said = "when the alembic has a bit of sage", reads = "if alembic has sage", tags = ["if-has", "casual"] },
+    { said = "when the mortar has sage", reads = "if mortar has sage", tags = ["if-has", "short-name"] },
+    { said = "when there be sage in the alembic", reads = "if alembic has sage", tags = ["if-has", "archaic"] },
+    { said = "should sage lie within the alembic", reads = "if alembic has sage", never = ["distil sage"], tags = ["if-has", "archaic"] },
+    { said = "WHENEVER THE ALEMBIC HAS AMBER", reads = "if alembic has amber", tags = ["if-has", "caps"] },
+    { said = "when the alembic has sage.", reads = "if alembic has sage", tags = ["if-has", "punctuation"] },
+    { said = "does the alembic have sage? then", reads = "if alembic has sage", tags = ["if-has", "question", "punctuation"] },
+    { said = "when the alembic has sgae", reads = "if alembic has sgae", tags = ["if-has", "typo"] },
+    { said = "once rock-salt has reached the flask_and_rod", reads = "if flask_and_rod has rock-salt", tags = ["if-has", "reordered"] },
+    { said = "alembic has sage", reads = "if alembic has sage", lenient = true, tags = ["if-has", "terse"] },
+
+    # -------------------------------------------------------------------------
+    # else
+    # -------------------------------------------------------------------------
+    { said = "else, then", reads = "else", tags = ["else", "punctuation"] },
+    { said = "otherwise then", reads = "else", tags = ["else", "plain"] },
+    { said = "but otherwise", reads = "else", tags = ["else", "plain"] },
+    { said = "failing which", reads = "else", tags = ["else", "plain"] },
+    { said = "in every other case", reads = "else", tags = ["else", "plain"] },
+    { said = "and if it isn't", reads = "else", tags = ["else", "contraction"] },
+    { said = "if it's not", reads = "else", tags = ["else", "contraction"] },
+    { said = "OTHERWISE THEN", reads = "else", tags = ["else", "caps"] },
+    { said = "otherwise:", reads = "else", tags = ["else", "punctuation"] },
+    { said = "if not, then", reads = "else", tags = ["else", "punctuation"] },
+    { said = "or, failing that", reads = "else", tags = ["else", "punctuation"] },
+    { said = "if it be not so", reads = "else", tags = ["else", "archaic"] },
+    { said = "elsewise", reads = "else", tags = ["else", "archaic"] },
+    { said = "other than that", reads = "else", tags = ["else", "casual"] },
+    { said = "otherwsie", reads = "else", tags = ["else", "typo"] },
+
+    # -------------------------------------------------------------------------
+    # end
+    # -------------------------------------------------------------------------
+    { said = "that's all", reads = "end", tags = ["end", "contraction"] },
+    { said = "that's it", reads = "end", tags = ["end", "contraction"] },
+    { said = "and that's that", reads = "end", tags = ["end", "contraction"] },
+    { said = "we're done here", reads = "end", tags = ["end", "contraction"] },
+    { said = "all done", reads = "end", tags = ["end", "terse"] },
+    { said = "the end", reads = "end", tags = ["end", "terse"] },
+    { said = "close up", reads = "end", tags = ["end", "plain"] },
+    { said = "leave it there", reads = "end", tags = ["end", "plain"] },
+    { said = "stop the block here", reads = "end", tags = ["end", "plain"] },
+    { said = "that is all for this bit", reads = "end", tags = ["end", "plain"] },
+    { said = "finished.", reads = "end", tags = ["end", "punctuation"] },
+    { said = "DONE NOW", reads = "end", tags = ["end", "caps"] },
+    { said = "here endeth the block", reads = "end", tags = ["end", "archaic"] },
+    { said = "taht is all", reads = "end", tags = ["end", "typo"] },
+
+    # -------------------------------------------------------------------------
+    # repeat N — a count in the line, as a digit or a word
+    # -------------------------------------------------------------------------
+    { said = "do this 5 times", reads = "repeat 5", tags = ["repeat", "digits"] },
+    { said = "do the whole thing 10 times", reads = "repeat 10", tags = ["repeat", "digits"] },
+    { said = "loop 4 times", reads = "repeat 4", tags = ["repeat", "digits", "terse"] },
+    { said = "let it run 9 times", reads = "repeat 9", tags = ["repeat", "digits"] },
+    { said = "do it again, 3 times", reads = "repeat 3", tags = ["repeat", "digits", "punctuation"] },
+    { said = "five times over", reads = "repeat 5", tags = ["repeat", "number-words"] },
+    { said = "do it four times", reads = "repeat 4", tags = ["repeat", "number-words"] },
+    { said = "run it seven times", reads = "repeat 7", tags = ["repeat", "number-words"] },
+    { said = "go around twelve times", reads = "repeat 12", tags = ["repeat", "number-words"] },
+    { said = "do this a dozen times", reads = "repeat 12", tags = ["repeat", "number-words"] },
+    { said = "twenty rounds", reads = "repeat 20", tags = ["repeat", "terse", "number-words"] },
+    { said = "ten times, please", reads = "repeat 10", tags = ["repeat", "polite", "punctuation"] },
+    { said = "six times, if you would", reads = "repeat 6", tags = ["repeat", "polite", "punctuation"] },
+    { said = "DO IT SIX TIMES", reads = "repeat 6", tags = ["repeat", "caps"] },
+    { said = "do that eight tiems", reads = "repeat 8", tags = ["repeat", "typo"] },
+
+    # -------------------------------------------------------------------------
+    # repeat until {place} is idle
+    # -------------------------------------------------------------------------
+    { said = "keep at it till the alembic is free", reads = "repeat until alembic is idle", tags = ["repeat-until", "plain"] },
+    { said = "carry on as long as the alembic is busy", reads = "repeat until alembic is idle", tags = ["repeat-until", "plain"] },
+    { said = "loop while the alembic is busy", reads = "repeat until alembic is idle", never = ["if alembic is idle"], tags = ["repeat-until", "terse"] },
+    { said = "keep it up until the alembic stops", reads = "repeat until alembic is idle", tags = ["repeat-until", "casual"] },
+    { said = "keep going 'til the alembic stops", reads = "repeat until alembic is idle", tags = ["repeat-until", "contraction"] },
+    { said = "until the alembic is free, keep going", reads = "repeat until alembic is idle", tags = ["repeat-until", "reordered", "punctuation"] },
+    { said = "continue till the flask is free", reads = "repeat until flask is idle", tags = ["repeat-until", "short-name"] },
+    { said = "keep going until the mortar's free", reads = "repeat until mortar is idle", tags = ["repeat-until", "short-name", "contraction"] },
+    { said = "persist until the alembic resteth", reads = "repeat until alembic is idle", tags = ["repeat-until", "archaic"] },
+    { said = "KEEP GOING TILL THE ALEMBIC IS FREE", reads = "repeat until alembic is idle", tags = ["repeat-until", "caps"] },
+    { said = "keep repeating till the alembic has stopped.", reads = "repeat until alembic is idle", tags = ["repeat-until", "punctuation"] },
+    { said = "keep goign until the alembic stops", reads = "repeat until alembic is idle", tags = ["repeat-until", "typo"] },
+    # `and` here joins nothing, and the join rule cannot tell — leaving these
+    # alone is as honest as reading them.
+    { said = "do it over and over until the alembic stops", reads = "repeat until alembic is idle", lenient = true, tags = ["repeat-until", "clause"] },
+    { said = "go round and round until the alembic is done", reads = "repeat until alembic is idle", lenient = true, tags = ["repeat-until", "clause"] },
+    { said = "over and over, till the alembic is idle", reads = "repeat until alembic is idle", lenient = true, tags = ["repeat-until", "clause", "punctuation"] },
+
+    # -------------------------------------------------------------------------
+    # bide N — a count in the line
+    # -------------------------------------------------------------------------
+    { said = "pause 5 ticks", reads = "bide 5", tags = ["bide", "digits"] },
+    { said = "hold for 20 ticks", reads = "bide 20", tags = ["bide", "digits"] },
+    { said = "sit tight for 15 ticks", reads = "bide 15", tags = ["bide", "digits", "casual"] },
+    { said = "take a breather for 10 ticks", reads = "bide 10", tags = ["bide", "digits", "casual"] },
+    { said = "nap 8 ticks", reads = "bide 8", tags = ["bide", "digits", "casual"] },
+    { said = "idle for 6 ticks", reads = "bide 6", tags = ["bide", "digits"] },
+    { said = "stay put for 3 ticks", reads = "bide 3", tags = ["bide", "digits", "casual"] },
+    { said = "pause 10.", reads = "bide 10", tags = ["bide", "digits", "punctuation", "terse"] },
+    { said = "hang on 12 ticks, please", reads = "bide 12", tags = ["bide", "digits", "polite", "punctuation"] },
+    { said = "give it thirty ticks", reads = "bide 30", tags = ["bide", "number-words"] },
+    { said = "let fifty ticks go by", reads = "bide 50", tags = ["bide", "number-words"] },
+    { said = "doze for five ticks", reads = "bide 5", tags = ["bide", "number-words"] },
+    { said = "rest for thirty ticks", reads = "bide 30", tags = ["bide", "number-words"] },
+    { said = "a ten tick pause", reads = "bide 10", tags = ["bide", "terse", "reordered"] },
+    { said = "PAUSE FOR TWELVE TICKS", reads = "bide 12", tags = ["bide", "caps"] },
+    { said = "tarry here for twenty ticks", reads = "bide 20", tags = ["bide", "archaic"] },
+    { said = "abide ye ten ticks", reads = "bide 10", tags = ["bide", "archaic"] },
+    { said = "pasue ten ticks", reads = "bide 10", tags = ["bide", "typo"] },
+    { said = "hang on 5 ticks", reads = "bide 5", never = ["repeat 5"], tags = ["bide", "digits"] },
+
+    # -------------------------------------------------------------------------
+    # let {name} be {place} — every name is one the reader has never seen
+    # -------------------------------------------------------------------------
+    { said = "name the alembic bertha", reads = "let bertha be alembic", never = ["if alembic is empty"], tags = ["let", "unseen-name"] },
+    { said = "bertha will be the alembic", reads = "let bertha be alembic", never = ["repeat until alembic is idle"], tags = ["let", "unseen-name"] },
+    { said = "nickname the alembic nib", reads = "let nib be alembic", tags = ["let", "unseen-name"] },
+    { said = "call the alembic zeph for short", reads = "let zeph be alembic", never = ["repeat until alembic is idle"], tags = ["let", "unseen-name"] },
+    { said = "use dot to mean the lectern", reads = "let dot be lectern", tags = ["let", "unseen-name"] },
+    { said = "let runt stand in for the alembic", reads = "let runt be alembic", tags = ["let", "unseen-name"] },
+    { said = "think of the alembic as nib", reads = "let nib be alembic", tags = ["let", "unseen-name"] },
+    { said = "from here on the alembic answers to fizz", reads = "let fizz be alembic", tags = ["let", "unseen-name"] },
+    { said = "the alembic shall be known as cog", reads = "let cog be alembic", tags = ["let", "unseen-name", "reordered"] },
+    { said = "the alembic is tally from here on", reads = "let tally be alembic", tags = ["let", "unseen-name", "reordered"] },
+    { said = "let's call the alembic pip", reads = "let pip be alembic", tags = ["let", "unseen-name", "contraction"] },
+    { said = "i'll call the flask_and_rod bix", reads = "let bix be flask_and_rod", tags = ["let", "unseen-name", "contraction"] },
+    { said = "we'll refer to the alembic as piper", reads = "let piper be alembic", tags = ["let", "unseen-name", "contraction"] },
+    { said = "the alembic's name is now cog", reads = "let cog be alembic", tags = ["let", "unseen-name", "contraction"] },
+    { said = "from now on, grub means the mortar_and_pestle", reads = "let grub be mortar_and_pestle", tags = ["let", "unseen-name", "punctuation"] },
+    { said = "the alembic, which we'll call pip", reads = "let pip be alembic", tags = ["let", "unseen-name", "punctuation", "reordered"] },
+    { said = "CALL THE ALEMBIC MARLOW", reads = "let marlow be alembic", tags = ["let", "unseen-name", "caps"] },
+    { said = "call the mortar ozzy", reads = "let ozzy be mortar", tags = ["let", "unseen-name", "short-name"] },
+    { said = "henceforth gizmo is the alembic", reads = "let gizmo be alembic", tags = ["let", "unseen-name", "archaic"] },
+    { said = "call teh alembic bertha", reads = "let bertha be alembic", tags = ["let", "unseen-name", "typo"] },
+
+    # -------------------------------------------------------------------------
+    # pull {name} from satchel
+    # -------------------------------------------------------------------------
+    { said = "grab bertha from the satchel", reads = "pull bertha from satchel", tags = ["pull", "unseen-name"] },
+    { said = "take the next pip out of the satchel", reads = "pull pip from satchel", tags = ["pull", "unseen-name"] },
+    { said = "fish nib out of the satchel", reads = "pull nib from satchel", tags = ["pull", "unseen-name"] },
+    { said = "pluck zeph out of the satchel", reads = "pull zeph from satchel", tags = ["pull", "unseen-name"] },
+    { said = "pull out ozzy from the satchel", reads = "pull ozzy from satchel", tags = ["pull", "unseen-name"] },
+    { said = "pop tally off the satchel", reads = "pull tally from satchel", tags = ["pull", "unseen-name", "casual"] },
+    { said = "yank dot from the satchel", reads = "pull dot from satchel", tags = ["pull", "unseen-name", "casual"] },
+    { said = "pip comes out of the satchel next", reads = "pull pip from satchel", tags = ["pull", "unseen-name", "reordered"] },
+    { said = "reach into the satchel for runt", reads = "pull runt from satchel", tags = ["pull", "unseen-name", "reordered"] },
+    { said = "whatever is next in the satchel, call it cog", reads = "pull cog from satchel", tags = ["pull", "unseen-name", "punctuation", "reordered"] },
+    { said = "i'll take bix from the satchel", reads = "pull bix from satchel", tags = ["pull", "unseen-name", "contraction"] },
+    { said = "take marlow from the satchel.", reads = "pull marlow from satchel", tags = ["pull", "unseen-name", "punctuation"] },
+    { said = "GRAB PIPER FROM THE SATCHEL", reads = "pull piper from satchel", tags = ["pull", "unseen-name", "caps"] },
+    { said = "draw forth gizmo from the satchel", reads = "pull gizmo from satchel", tags = ["pull", "unseen-name", "archaic"] },
+    { said = "get fizz out of the satchle", reads = "pull fizz from satchel", tags = ["pull", "unseen-name", "typo"] },
+
+    # -------------------------------------------------------------------------
+    # for each {group}
+    # -------------------------------------------------------------------------
+    { said = "go over every sigil", reads = "for each sigil", tags = ["for-each", "plain"] },
+    { said = "visit each station in turn", reads = "for each station", tags = ["for-each", "plain"] },
+    { said = "for any area", reads = "for each area", tags = ["for-each", "plain"] },
+    { said = "check each column", reads = "for each column", tags = ["for-each", "plain"] },
+    { said = "across every way", reads = "for each way", tags = ["for-each", "plain"] },
+    { said = "one socket after another", reads = "for each socket", tags = ["for-each", "plain"] },
+    { said = "for every last syllable", reads = "for each syllable", tags = ["for-each", "plain"] },
+    { said = "loop over the sockets", reads = "for each socket", tags = ["for-each", "plural"] },
+    { said = "iterate over the bands", reads = "for each band", tags = ["for-each", "plural"] },
+    { said = "sweep through the areas", reads = "for each area", tags = ["for-each", "plural"] },
+    { said = "through all the stations", reads = "for each station", tags = ["for-each", "plural"] },
+    { said = "cycle through the charms", reads = "for each charm", tags = ["for-each", "plural"] },
+    { said = "for every one of the columns there is", reads = "for each column", tags = ["for-each", "plural"] },
+    { said = "for ways", reads = "for each way", tags = ["for-each", "plural", "terse"] },
+    { said = "each sigil", reads = "for each sigil", tags = ["for-each", "terse"] },
+    { said = "every charm, one after the other", reads = "for each charm", tags = ["for-each", "punctuation"] },
+    { said = "all the syllables, one at a time", reads = "for each syllable", tags = ["for-each", "plural", "punctuation"] },
+    { said = "each die in turn, please", reads = "for each die", tags = ["for-each", "polite", "punctuation"] },
+    { said = "EVERY SINGLE STORE", reads = "for each store", tags = ["for-each", "caps"] },
+    { said = "for each and every way", reads = "for each way", lenient = true, tags = ["for-each", "clause"] },
+
+    # -------------------------------------------------------------------------
+    # A loose command inside a spell — the prompt's reader, reached through the
+    # scrivener. What it should hear is the command's own echo.
+    # -------------------------------------------------------------------------
+    { said = "that sage could do with a grind", reads = "grind sage", tags = ["command", "reordered"] },
+    { said = "give the sage a good grind", reads = "grind sage", tags = ["command", "casual"] },
+    { said = "grind up some sage", reads = "grind sage", tags = ["command", "plain"] },
+    { said = "pound that sage", reads = "grind sage", tags = ["command", "casual"] },
+    { said = "i want the sage ground", reads = "grind sage", tags = ["command", "casual"] },
+    { said = "sage, grind it", reads = "grind sage", tags = ["command", "reordered", "punctuation"] },
+    { said = "grind the sage, please", reads = "grind sage", tags = ["command", "polite", "punctuation"] },
+    { said = "could you grind the sage", reads = "grind sage", tags = ["command", "polite", "question"] },
+    { said = "grind the sage!", reads = "grind sage", tags = ["command", "punctuation"] },
+    { said = "GRIND SOME SAGE", reads = "grind sage", tags = ["command", "caps"] },
+    { said = "grnd sage", reads = "grind sage", tags = ["command", "typo", "terse"] },
+    { said = "grind thou the sage", reads = "grind sage", tags = ["command", "archaic"] },
+    { said = "tip out whatever the alembic holds", reads = "empty alembic", tags = ["command", "casual"] },
+    { said = "pour out what's in the alembic", reads = "empty alembic", tags = ["command", "contraction"] },
+    { said = "empty teh alembic", reads = "empty alembic", tags = ["command", "typo"] },
+    { said = "look about the room", reads = "survey", tags = ["command", "plain"] },
+    { said = "what's in this room", reads = "survey", tags = ["command", "contraction", "question"] },
+    { said = "take a look at the alembic", reads = "survey alembic", tags = ["command", "plain"] },
+    { said = "put a flame to the charcoal", reads = "kindle charcoal", tags = ["command", "plain"] },
+    { said = "let the ground-sage sit a while", reads = "digest ground-sage", tags = ["command", "plain"] },
+    { said = "the ground-sage wants a good steeping", reads = "digest ground-sage", tags = ["command", "reordered"] },
+    { said = "have a read of the feed.log", reads = "peruse feed.log", tags = ["command", "casual"] },
+    { said = "have the alembic knock off", reads = "stop alembic", tags = ["command", "casual"] },
+    { said = "shut off the alembic for now", reads = "stop alembic", tags = ["command", "plain"] },
+    { said = "off you pop to the forge", reads = "attend forge", tags = ["command", "casual"] },
+
+    # -------------------------------------------------------------------------
+    # Lines that must come back exactly as written
+    # -------------------------------------------------------------------------
+    { said = "if alembic is idle", tags = ["alone", "canonical"] },
+    { said = "if alembic has sage", tags = ["alone", "canonical"] },
+    { said = "    if alembic is idle", tags = ["alone", "canonical"] },
+    { said = "else", tags = ["alone", "canonical"] },
+    { said = "end", tags = ["alone", "canonical"] },
+    { said = "repeat 3", tags = ["alone", "canonical"] },
+    { said = "repeat until alembic is idle", tags = ["alone", "canonical"] },
+    { said = "bide 10", tags = ["alone", "canonical"] },
+    { said = "let best be alembic", tags = ["alone", "canonical"] },
+    { said = "pull herb from satchel", tags = ["alone", "canonical"] },
+    { said = "for each way", tags = ["alone", "canonical"] },
+    { said = "grind sage", tags = ["alone", "canonical"] },
+    { said = "kindle charcoal", never = ["grind charcoal"], tags = ["alone", "canonical"] },
+    { said = "survey", tags = ["alone", "canonical"] },
+    { said = "morning()", tags = ["alone", "canonical"] },
+    { said = "alongside morning()", tags = ["alone", "canonical"] },
+    # The language reads these itself — a spell word, then words it tolerates —
+    # so the reader must never be asked, however loose they look.
+    { said = "else do this", tags = ["alone", "canonical"] },
+    { said = "end here", tags = ["alone", "canonical"] },
+    { said = "# grind the sage later", tags = ["alone", "comment"] },
+    { said = "#if alembic is idle", tags = ["alone", "comment"] },
+    { said = "# wait ten ticks here", tags = ["alone", "comment"] },
+    { said = "", tags = ["alone", "blank"] },
+    { said = "    ", tags = ["alone", "blank"] },
+    { said = "hmm", tags = ["alone", "nothing"] },
+    { said = "note to self: buy more sage", tags = ["alone", "nothing", "punctuation"] },
+    { said = "this bit is still to do", tags = ["alone", "nothing"] },
+    { said = "who left the lid off", tags = ["alone", "nothing", "question"] },
+    { said = "the sage smells odd today", tags = ["alone", "nothing"] },
+    { said = "i am not sure what goes here", tags = ["alone", "nothing"] },
+    { said = "todo: sort this out later", tags = ["alone", "nothing", "punctuation"] },
+    { said = "lovely weather in the tower", tags = ["alone", "nothing"] },
+    { said = "why is the alembic so loud", tags = ["alone", "nothing", "question"] },
+    { said = "good morning, orb", tags = ["alone", "nothing", "punctuation"] },
+    { said = "blah blah", tags = ["alone", "nothing"] },
+    { said = "asdf", tags = ["alone", "nothing"] },
+    { said = "...", tags = ["alone", "nothing", "punctuation"] },
+    { said = "hang about a while", tags = ["alone", "no-count"] },
+    { said = "do it a few times", never = ["else", "end"], tags = ["alone", "no-count"] },
+    { said = "pause for a moment", tags = ["alone", "no-count"] },
+    { said = "rest a bit", tags = ["alone", "no-count"] },
+    { said = "hang on a sec", tags = ["alone", "no-count", "casual"] },
+    { said = "do this twice", tags = ["alone", "no-count"] },
+    { said = "thrice", tags = ["alone", "no-count", "archaic"] },
+
+    # -------------------------------------------------------------------------
+    # Hazards: a wrong reading here runs a spell that means the opposite
+    # -------------------------------------------------------------------------
+    { said = "when the alembic is not idle", never = ["if alembic is idle"], tags = ["hazard", "negation"] },
+    { said = "when the alembic isn't free", never = ["if alembic is idle"], tags = ["hazard", "negation", "contraction"] },
+    { said = "when the alembic is never free", never = ["if alembic is idle"], tags = ["hazard", "negation"] },
+    { said = "unless the alembic is free", never = ["if alembic is idle", "let unless be alembic"], tags = ["hazard", "negation"] },
+    { said = "when the alembic is not empty", never = ["if alembic is empty"], tags = ["hazard", "negation"] },
+    { said = "when the alembic isn't empty", never = ["if alembic is empty"], tags = ["hazard", "negation", "contraction"] },
+    { said = "when there's no sage in the alembic", never = ["if alembic has sage"], tags = ["hazard", "negation", "contraction"] },
+    { said = "when the alembic has no sage", never = ["if alembic has sage"], tags = ["hazard", "negation"] },
+    { said = "don't call the alembic pip", never = ["let pip be alembic"], tags = ["hazard", "negation", "contraction"] },
+    { said = "don't take pip from the satchel", never = ["pull pip from satchel"], tags = ["hazard", "negation", "contraction"] },
+    { said = "never grind the sage", never = ["grind sage"], tags = ["hazard", "negation"] },
+    { said = "do not empty the alembic", never = ["empty alembic"], tags = ["hazard", "negation"] },
+    { said = "when the alembic or the flask is free", never = ["if alembic is idle", "if flask is idle"], tags = ["hazard", "clause"] },
+    { said = "when both the alembic and the flask are free", never = ["if alembic is idle", "if flask is idle"], tags = ["hazard", "clause"] },
+    { said = "when the alembic is free but the flask isn't", never = ["if alembic is idle", "if flask is idle"], tags = ["hazard", "clause", "contraction"] },
+    { said = "when the alembic has sage and nothing else", never = ["if alembic has sage"], tags = ["hazard", "clause"] },
+    { said = "for each way except the north", never = ["for each way"], tags = ["hazard", "clause"] },
+    { said = "pause five or six ticks", never = ["bide 5", "bide 6"], tags = ["hazard", "clause"] },
+    { said = "when the alembic has more than 3 sage", never = ["if alembic has sage"], tags = ["hazard", "digits"] },
+    { said = "pause fifteen ticks", reads = "bide 15", never = ["bide 10", "bide 5", "bide 50"], tags = ["hazard", "number-words"] },
+    { said = "do it thirty times", reads = "repeat 30", never = ["repeat 3", "repeat 13"], tags = ["hazard", "number-words"] },
+    { said = "wait for the alembic to be free", never = ["if alembic is idle"], tags = ["hazard", "plain"] },
+    { said = "when the alembic is idle, grind the sage", never = ["if alembic is idle", "grind sage"], tags = ["hazard", "two-at-once", "punctuation"] },
+    { said = "if the alembic is free grind the sage", never = ["if alembic is idle", "grind sage"], tags = ["hazard", "two-at-once"] },
+    { said = "grind the sage and then wait ten ticks", never = ["grind sage", "bide 10"], tags = ["hazard", "two-at-once"] },
+]
+
+# ---------------------------------------------------------------------------
+# Whole spells. The scrivener reads a line at a time, so a script is not a
+# harder test of any one line; it tests the file — comments and blanks kept,
+# canonical lines untouched, and the whole thing something the room compiles.
+# ---------------------------------------------------------------------------
+
+[[script]]
+name = "a morning grind"
+domain = "laboratory"
+loose = [
+    "when the mortar_and_pestle is free",
+    "work the sage down",
+    "that's all",
+    "pause ten ticks",
+]
+reads = [
+    "if mortar_and_pestle is idle",
+    "grind sage",
+    "end",
+    "bide 10",
+]
+
+[[script]]
+name = "three grinds and a rest"
+domain = "laboratory"
+loose = [
+    "do this three times over",
+    "pound that sage",
+    "hang on 5 ticks",
+    "and that's the lot",
+]
+reads = [
+    "repeat 3",
+    "grind sage",
+    "bide 5",
+    "end",
+]
+
+[[script]]
+name = "until the still is quiet"
+domain = "laboratory"
+loose = [
+    "keep at it till the alembic is free",
+    "grind the sage",
+    "we're done here",
+]
+reads = [
+    "repeat until alembic is idle",
+    "grind sage",
+    "end",
+]
+
+[[script]]
+name = "a tool with a name"
+domain = "laboratory"
+loose = [
+    "call the mortar_and_pestle bertha",
+    "once bertha is free",
+    "pound that sage",
+    "otherwise then",
+    "doze for five ticks",
+    "that's it",
+]
+reads = [
+    "let bertha be mortar_and_pestle",
+    "if bertha is idle",
+    "grind sage",
+    "else",
+    "bide 5",
+    "end",
+]
+
+[[script]]
+name = "notes and blanks are the player's"
+domain = "laboratory"
+loose = [
+    "# the morning routine",
+    "",
+    "when the alembic's empty",
+    "grind sage",
+    "end",
+]
+reads = [
+    "# the morning routine",
+    "",
+    "if alembic is empty",
+    "grind sage",
+    "end",
+]
+
+[[script]]
+name = "a spell already written properly"
+domain = "laboratory"
+loose = [
+    "if alembic is idle",
+    "    grind sage",
+    "end",
+    "bide 10",
+]
+reads = [
+    "if alembic is idle",
+    "    grind sage",
+    "end",
+    "bide 10",
+]
+
+[[script]]
+name = "in the old tongue"
+domain = "laboratory"
+loose = [
+    "whensoever the alembic resteth",
+    "grind thou the sage",
+    "here endeth the block",
+    "tarry ten ticks",
+]
+reads = [
+    "if alembic is idle",
+    "grind sage",
+    "end",
+    "bide 10",
+]
+
+[[script]]
+name = "shouted in a hurry"
+domain = "laboratory"
+loose = [
+    "WHEN THE ALEMBIC IS QUIET",
+    "GRIND SOME SAGE",
+    "DONE NOW",
+]
+reads = [
+    "if alembic is idle",
+    "grind sage",
+    "end",
+]

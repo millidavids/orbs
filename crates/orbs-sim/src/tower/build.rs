@@ -1164,8 +1164,14 @@ fn shelve(
         &crate::content::with_extension(name),
         NounKind::Script,
     );
+    // **A reading beside the text from the moment a spell exists.** An authored
+    // spell is already canonical, so this is the identity — but `Read` being
+    // present wherever `Held` is means `spell::source` never has to fall back,
+    // and the save's component-completeness lint can see the component at all.
+    // Nobody read it, so no reader may keep it: see `Read::by`.
     world.entity_mut(node).insert((
         super::Held(spell.lines.clone()),
+        super::Read::verbatim(&spell.lines),
         super::Domain(spell.domain.clone()),
     ));
     node

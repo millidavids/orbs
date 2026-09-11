@@ -28,7 +28,7 @@
 //! it free to carry *"what kind of sentence is this"*.
 
 use orbs_sim::content::Example;
-use orbs_sim::parser::Verb;
+use orbs_sim::parser::{NounKind, Verb};
 
 use crate::Vocabulary;
 
@@ -150,7 +150,26 @@ impl Sample {
     #[must_use]
     pub fn encode(example: &Example, vocabulary: &Vocabulary) -> Option<Self> {
         let verb = verb_of(&example.canonical)?;
+        // By position: `move {reagent} {place}` has to know which of two spans
+        // is the thing and which the destination.
+        let mut sample = Self::encode_words(example, vocabulary, |index, _| index)?;
+        sample.verb = verb;
+        Some(sample)
+    }
 
+    /// The tokens, tags and spans of an example, with no class decided.
+    ///
+    /// **Shared by both registers**, because the encoding of a sentence has
+    /// nothing to do with what the answer space is: `smash the sage` and `when
+    /// the mortar is idle` become rows and BIO tags by the identical route. What
+    /// differs is the class, which each caller sets, and how a span is numbered,
+    /// which each caller passes as `slot_of` — from the span's position among
+    /// the example's spans and its kind.
+    fn encode_words(
+        example: &Example,
+        vocabulary: &Vocabulary,
+        slot_of: impl Fn(usize, NounKind) -> usize,
+    ) -> Option<Self> {
         let words: Vec<(usize, &str)> = example.said.split_whitespace().fold(
             Vec::new(),
             |mut found: Vec<(usize, &str)>, word| {
@@ -177,7 +196,7 @@ impl Sample {
 
         for (at, word) in &words {
             tokens.push(vocabulary.token(word).row());
-            tags.push(tag_for(*at, word.len(), example).row());
+            tags.push(tag_for(*at, word.len(), example, &slot_of).row());
         }
 
         let length = tokens.len();
@@ -187,9 +206,37 @@ impl Sample {
         Some(Self {
             tokens,
             length,
-            verb,
+            // Set by the caller — see the doc above.
+            verb: REJECT,
             tags,
         })
+    }
+
+    /// Encode a generated example as a **spell** line, in the class `class`.
+    ///
+    /// [`encode`](Self::encode)'s sibling, and the only difference is where the
+    /// class comes from: there it is read off the canonical's head, because a
+    /// command names its own verb; here it is the *template* the example was
+    /// expanded from, because `if {place} is idle` and `if {place} is empty` are
+    /// one word between them and nothing in the string separates them. See
+    /// [`crate::spelling`].
+    ///
+    /// `class` is [`spelling::command`](crate::spelling::command) for a line that
+    /// is an ordinary command and belongs to the prompt's reader.
+    ///
+    /// The tokens and the spans are derived identically, which is why the two
+    /// registers share an encoder and a trainer rather than each having their
+    /// own. **The tags are numbered by kind rather than by position** — a place
+    /// is slot 0 in every spell line, whatever shape it is in; see
+    /// [`spelling::slot_for`](crate::spelling::slot_for) for what numbering by
+    /// position cost `let`.
+    #[must_use]
+    pub fn spelling(example: &Example, class: usize, vocabulary: &Vocabulary) -> Option<Self> {
+        let mut sample = Self::encode_words(example, vocabulary, |_, kind| {
+            crate::spelling::slot_for(kind)
+        })?;
+        sample.verb = u32::try_from(class).ok()?;
+        Some(sample)
     }
 
     /// An example of a sentence that is not a command at all.
@@ -227,9 +274,22 @@ fn verb_of(canonical: &str) -> Option<u32> {
 }
 
 /// Which slot, if any, the word at `at` belongs to.
-fn tag_for(at: usize, len: usize, example: &Example) -> Tag {
-    for (slot, span) in example.spans.iter().enumerate().take(MAX_SLOTS) {
+///
+/// `slot_of` numbers a span from its position among the example's spans and its
+/// kind — the prompt by position, the spell register by kind. A number past
+/// [`MAX_SLOTS`] is a slot the head has no row for, and tags nothing.
+fn tag_for(
+    at: usize,
+    len: usize,
+    example: &Example,
+    slot_of: &impl Fn(usize, NounKind) -> usize,
+) -> Tag {
+    for (index, span) in example.spans.iter().enumerate() {
         if at >= span.at.start && at + len <= span.at.end {
+            let slot = slot_of(index, span.kind);
+            if slot >= MAX_SLOTS {
+                return Tag::Outside;
+            }
             return if at == span.at.start {
                 Tag::Begin(slot)
             } else {
@@ -299,6 +359,73 @@ mod tests {
             Verb::Grind,
             "the reader would learn the wrong command"
         );
+    }
+
+    #[test]
+    fn a_spell_line_numbers_its_slots_by_kind() {
+        // The prompt would tag `let`'s name 0 and its place 1, by where they sit
+        // in the canonical. The spell register tags a place 0 and a name 2
+        // wherever they sit, so a place means one thing to its tagger.
+        let scene = corpus_scene();
+        let (class, example) = Phrasings::spellings()
+            .corpus_by_entry(&scene, 0)
+            .into_iter()
+            .find(|(_, example)| example.said.starts_with("call the alembic "))
+            .expect("a `let` phrasing naming the alembic");
+        let sample = Sample::spelling(&example, class, &Vocabulary::builtin()).expect("encodes");
+        let tags: Vec<Tag> = sample.tags[..sample.length]
+            .iter()
+            .map(|row| Tag::from_row(*row))
+            .collect();
+        assert_eq!(
+            tags,
+            vec![
+                Tag::Outside,
+                Tag::Outside,
+                Tag::Outside,
+                Tag::Begin(0),
+                Tag::Begin(2),
+            ],
+            "<cls> call the alembic <name>",
+        );
+    }
+
+    #[test]
+    fn every_sample_opens_on_the_same_cls() {
+        // **The leak that let a reader score 98.6% and refuse everything.** A
+        // command was encoded through `token("<cls>")` and a refusal through
+        // `Vocabulary::encode`, and when folding took the brackets off the first
+        // those were two different rows — so the opening row alone told the
+        // reader which kind of sentence it was reading. Every constructor, and
+        // the inference path, must open on the one reserved row.
+        let vocabulary = Vocabulary::builtin();
+        let cls = vocabulary.token("<cls>");
+        assert_eq!(
+            cls,
+            crate::Token::Known(1),
+            "`<cls>` is not its reserved row"
+        );
+
+        let command = one("smash the sage");
+        let refusal = Sample::reject("what should i do next", &vocabulary).expect("encodes");
+        let scene = corpus_scene();
+        let (class, statement) = Phrasings::spellings()
+            .corpus_by_entry(&scene, 0)
+            .into_iter()
+            .next()
+            .expect("a spell phrasing");
+        let spelled = Sample::spelling(&statement, class, &vocabulary).expect("encodes");
+        for (what, sample) in [
+            ("a command", &command),
+            ("a refusal", &refusal),
+            ("a statement", &spelled),
+        ] {
+            assert_eq!(
+                sample.tokens[0],
+                cls.row(),
+                "{what} opens on a different row from every other sentence",
+            );
+        }
     }
 
     #[test]

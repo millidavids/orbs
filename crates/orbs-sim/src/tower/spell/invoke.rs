@@ -133,10 +133,7 @@ pub(super) fn cast(
     // hot-reload re-resolves only changed *lines*, and §8.1's sabotage surface
     // is *"a line reordered"* — so an enemy edits the text and the program is
     // whatever the text now means.
-    let lines = world
-        .get::<Held>(node)
-        .map(|held| held.0.clone())
-        .unwrap_or_default();
+    let lines = super::source(world, node);
     // **Compiled, not merely parsed.** This is where the loose phrasing in the
     // file becomes the tower's own names — the moment §8 asks for and the file
     // no longer provides, since it holds exactly what the player typed.

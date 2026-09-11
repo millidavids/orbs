@@ -51,6 +51,7 @@ pub(super) fn apply(world: &mut World, entity: Entity, node: &NodeSave) {
     at.remove::<tower::Operation>();
     at.remove::<Stock>();
     at.remove::<tower::Held>();
+    at.remove::<tower::Read>();
     at.remove::<tower::Domain>();
     at.remove::<tower::Banked>();
     at.remove::<tower::Ash>();
@@ -77,7 +78,32 @@ pub(super) fn apply(world: &mut World, entity: Entity, node: &NodeSave) {
             Stock::Counted(stock.parse().unwrap_or(1))
         });
     }
+    // **A reading goes back only on a line that still says what was read** —
+    // see `ReadSave` — and every other line is its own reading. So a save that
+    // predates readings, or had a line of `held` edited by hand, compiles that
+    // text as written rather than whatever used to stand in its place.
+    //
+    // **And nobody's, until a reader takes one** (`Read::by`). The lines compile
+    // exactly as they did before the save; the first write after a load reads
+    // them again with whatever reader is in hand now.
+    let readings = node.read.as_deref().unwrap_or_default();
+    let reading_of = |lines: &[String]| {
+        let read = lines
+            .iter()
+            .map(|line| {
+                readings
+                    .iter()
+                    .find(|pair| pair.written == *line)
+                    .map_or_else(|| line.clone(), |pair| pair.read.clone())
+            })
+            .collect();
+        tower::Read::new(lines, read, None)
+    };
     if let Some(lines) = node.held.clone() {
+        // Restoring the identity rather than leaving the component off keeps
+        // `Read` present wherever `Held` is, which is what stops `spell::source`
+        // needing a fallback in a world that has been loaded once.
+        at.insert(reading_of(&lines));
         at.insert(tower::Held(lines));
     }
     if let Some(domain) = node.domain.clone() {
@@ -188,7 +214,10 @@ pub(super) fn apply(world: &mut World, entity: Entity, node: &NodeSave) {
     // player repaired is clean in the save and must not come back corrupt.
     match node.rewritten.clone() {
         Some(was) => {
-            at.insert(tower::Rewritten { was });
+            at.insert(tower::Rewritten {
+                read: reading_of(&was),
+                was,
+            });
         }
         None => {
             at.remove::<tower::Rewritten>();
@@ -315,7 +344,11 @@ fn spell(world: &mut World, entity: Entity, node: &NodeSave) {
             return;
         };
 
-        let program = spell::compile(world, spell, &lines);
+        // **The fingerprint above asks about `Held`, this asks about the
+        // reading.** A save records what the player wrote, so a spell that has
+        // moved under a running cast is detected on their text; what it then
+        // compiles is what the orb read of that text.
+        let program = spell::compile(world, spell, &spell::source(world, spell));
         world.entity_mut(entity).insert(spell::Running {
             spell: spell_id,
             program,
@@ -448,7 +481,7 @@ fn loop_from(code: i64) -> spell::Loop {
 /// process, so a fingerprint taken today and compared tomorrow would never
 /// match — the check would fire on every load and quietly stop every running
 /// spell, which is the opposite of what it is for.
-pub(super) fn fingerprint(lines: &[String]) -> u64 {
+pub(crate) fn fingerprint(lines: &[String]) -> u64 {
     let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
     for line in lines {
         for byte in line.as_bytes() {

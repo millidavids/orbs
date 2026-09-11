@@ -87,7 +87,14 @@ pub(crate) fn reading(scroll: Res<orbs_shell::Scroll>) -> bool {
 /// The sim owns the *decision* — which spell, and what it holds — and the
 /// frontend owns the buffer. `Sim::opening` takes rather than reads, so this
 /// fires once per `scribe` rather than every frame.
-pub(crate) fn open_requested(mut tower: ResMut<Tower>, mut editing: ResMut<Editing>) {
+pub(crate) fn open_requested(
+    mut tower: ResMut<Tower>,
+    mut editing: ResMut<Editing>,
+    // `Option` for `commanding::submit`'s reason: half the tests here build the
+    // shell alone, and a bare `Res` fails parameter validation there. Absent is
+    // the same as empty — the reading is the text.
+    readers: Option<Res<crate::sim::Readers>>,
+) {
     // **Peeked before it is taken.** `opening` needs `&mut`, and reaching for it
     // stamps `Tower`'s change tick — so this system re-armed its own run
     // condition every frame and dragged `refresh_panel` and `suggest` back to
@@ -101,7 +108,13 @@ pub(crate) fn open_requested(mut tower: ResMut<Tower>, mut editing: ResMut<Editi
     let mut editor = Editor::open(&request.name, &request.domain, &request.lines);
     // **Read before the first keystroke**, so a spell opened with a fault in it
     // says so on the way in rather than after the first pause in the typing.
-    editor.set_reading(tower.sim().read_spell(&request.domain, &request.lines));
+    let scrivener = readers.as_deref().and_then(crate::sim::Readers::scrivener);
+    editor.set_reading(tower.read_spell_with(
+        &request.name,
+        &request.domain,
+        &request.lines,
+        scrivener,
+    ));
     // **And the guide, for the same reason**: it opens on the vocabulary, and a
     // pane that filled in only after the first keystroke would look broken to
     // exactly the player it is there for.
@@ -116,7 +129,12 @@ pub(crate) fn open_requested(mut tower: ResMut<Tower>, mut editing: ResMut<Editi
 /// rather than reactions: the settle timer has to run on the frames where
 /// nothing was typed — those are the only frames it can *finish* on — and a
 /// spell's marker moves on ticks the player is not touching the keyboard for.
-pub(crate) fn autosave(time: Res<Time>, mut editing: ResMut<Editing>, mut tower: ResMut<Tower>) {
+pub(crate) fn autosave(
+    time: Res<Time>,
+    mut editing: ResMut<Editing>,
+    mut tower: ResMut<Tower>,
+    readers: Option<Res<crate::sim::Readers>>,
+) {
     let Some(editor) = editing.get_mut() else {
         return;
     };
@@ -135,11 +153,16 @@ pub(crate) fn autosave(time: Res<Time>, mut editing: ResMut<Editing>, mut tower:
         // 60 Hz that is sixty parses a second to answer a question that can only
         // change when a key is pressed. The pause the save waits for is exactly
         // the moment the answer might have changed.
-        let reading = tower.sim().read_spell(&domain, &lines);
+        //
+        // **The write first, then the reading**, so a line that changed is read
+        // once on this beat: the write queues its reading, and the editor's
+        // finds it there rather than asking the reader a second time.
+        let scrivener = readers.as_deref().and_then(crate::sim::Readers::scrivener);
+        tower.write_spell_with(&name, &lines, scrivener);
+        let reading = tower.read_spell_with(&name, &domain, &lines, scrivener);
         if let Some(editor) = editing.get_mut() {
             editor.set_reading(reading);
         }
-        tower.write_spell(&name, &lines);
     }
 }
 
@@ -150,6 +173,7 @@ pub(crate) fn type_into_editor(
     mut editing: ResMut<Editing>,
     mut tower: ResMut<Tower>,
     quiet: Res<super::input::Quiet>,
+    readers: Option<Res<crate::sim::Readers>>,
 ) {
     // Set when a keystroke proves the held chord is a ghost — see
     // `input::chord_is_stale`. The editor needs this as much as the prompt does,
@@ -206,11 +230,17 @@ pub(crate) fn type_into_editor(
     if stale {
         held.reset_all();
     }
-    apply(outcome, &mut editing, &mut tower);
+    let scrivener = readers.as_deref().and_then(crate::sim::Readers::scrivener);
+    apply(outcome, &mut editing, &mut tower, scrivener);
 }
 
 /// Act on what the editor asked for.
-fn apply(outcome: Option<EditorOutcome>, editing: &mut Editing, tower: &mut Tower) {
+fn apply(
+    outcome: Option<EditorOutcome>,
+    editing: &mut Editing,
+    tower: &mut Tower,
+    scrivener: Option<&dyn orbs_sim::Scrivener>,
+) {
     let Some(outcome) = outcome else {
         return;
     };
@@ -226,9 +256,15 @@ fn apply(outcome: Option<EditorOutcome>, editing: &mut Editing, tower: &mut Towe
             // effects land on tick boundaries.
             let (name, lines) = (editor.name().to_owned(), editor.lines().to_vec());
             editor.saved();
-            tower.write_spell(&name, &lines);
+            tower.write_spell_with(&name, &lines, scrivener);
             if outcome == EditorOutcome::SaveAndClose {
                 editing.close();
+            } else {
+                // **And read again, as the autosave does.** A `w` typed before
+                // the pause fired leaves the settle beat nothing to save, so the
+                // marks stayed on the buffer from a few keystrokes earlier.
+                let domain = editor.domain().to_owned();
+                editor.set_reading(tower.read_spell_with(&name, &domain, &lines, scrivener));
             }
         }
     }
@@ -252,6 +288,15 @@ mod tests {
             .insert_resource(Editing::default())
             .insert_resource(Tower::new(1))
             .add_systems(Update, autosave.run_if(editing));
+        app
+    }
+
+    /// The same, with a fixed spell reader installed.
+    fn app_reading() -> App {
+        let mut app = app();
+        app.insert_resource(crate::sim::Readers::copying(Box::new(
+            orbs_sim::Copyist::worked(),
+        )));
         app
     }
 
@@ -315,6 +360,57 @@ mod tests {
             app.world().resource::<Tower>().sim().spell("morning"),
             Some(vec!["survey".to_owned()]),
             "the save never reached the sim",
+        );
+    }
+
+    #[test]
+    fn an_autosaved_buffer_reaches_the_scrivener_and_the_file_is_still_the_players() {
+        // **The seam a dump cannot reach.** `ORBS_DUMP` builds no `App`, so
+        // everything `scripts/dumps.sh` proves about the spell reader it proves
+        // about `Sim::write_spell_reading` — never about the settle beat that
+        // carries a buffer to it. `commanding` makes the same argument about the
+        // message that carries a typed line to the prompt's reader.
+        //
+        // Both halves are asserted, because they are the whole shape of this
+        // feature: the reading is what compiles, and the file is byte-exact.
+        let mut app = app_reading();
+        app.world_mut().resource_mut::<Editing>().open(Editor::open(
+            "morning.spell",
+            "laboratory",
+            &[],
+        ));
+        {
+            let mut editing = app.world_mut().resource_mut::<Editing>();
+            let editor = editing.get_mut().expect("the editor was just opened");
+            editor.type_text("edit");
+            editor.enter();
+            // A line `Copyist::worked` knows and the matcher cannot read.
+            editor.type_text("work the sage down");
+        }
+        tick(&mut app, 5.0);
+        app.world_mut().resource_mut::<Tower>().step();
+
+        let tower = app.world().resource::<Tower>();
+        assert_eq!(
+            tower.sim().spell("morning"),
+            Some(vec!["work the sage down".to_owned()]),
+            "the orb rewrote the player's file",
+        );
+        let node = tower
+            .sim()
+            .world()
+            .iter_entities()
+            .find(|entity| {
+                entity
+                    .get::<orbs_sim::tower::Name>()
+                    .is_some_and(|name| name.0 == "morning.spell")
+            })
+            .map(|entity| entity.id())
+            .expect("the spell was written");
+        assert_eq!(
+            orbs_sim::tower::spell::source(tower.sim().world(), node),
+            vec!["grind sage".to_owned()],
+            "the reading never reached the program",
         );
     }
 

@@ -1061,6 +1061,8 @@ mod tests {
         orbs_sim::Reading {
             line,
             heard: heard.to_owned(),
+            // Nothing read these fixtures, so the line is the player's own.
+            was: None,
             fault: fault.map(|key| orbs_sim::Fault { key, detail: None }),
         }
     }

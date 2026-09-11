@@ -125,6 +125,70 @@ pub fn fresh(seed: u64, sealed: bool, length: orbs_sim::content::Length) -> orbs
 /// Which reader answers the lines the orb cannot read itself (§6).
 const AUGURY: &str = "ORBS_AUGURY";
 
+/// Which reader answers the *spell* lines the orb cannot read itself.
+const SCRIVENER: &str = "ORBS_SCRIVENER";
+
+/// The scrivener named by `ORBS_SCRIVENER`, or the trained reader by default.
+///
+/// **On unless turned off, and the same shape as [`augury`] for the same
+/// reason.** The divergence this closes is a player typing `crush the sage` at
+/// the prompt, watching it work, putting it in a spell and getting *Referent
+/// missing* — so a reader nobody can reach answers none of it.
+///
+/// | | |
+/// |---|---|
+/// | unset | **the trained reader**, if this build has one; otherwise none, quietly |
+/// | `model` | the same, but says so when there are no weights to load |
+/// | `off`, `0`, `none` | no reader. The spell compiles exactly what was typed |
+/// | `stub` | [`Copyist::worked`](orbs_sim::Copyist::worked), a fixed table — what a capture pins |
+///
+/// A capture cannot pin a trained reader: weights are a gitignored build
+/// artefact that changes on every run, so a dump made against them could not be
+/// reproduced from a clean checkout. That is the same reason `dumps.sh` runs the
+/// prompt's reader as `stub` and `grammar` rather than `model`.
+#[must_use]
+pub fn scrivener() -> Option<Box<dyn orbs_sim::Scrivener>> {
+    match std::env::var(SCRIVENER).unwrap_or_default().trim() {
+        "" => copying(false),
+        "model" => copying(true),
+        "stub" => Some(Box::new(orbs_sim::Copyist::worked())),
+        "off" | "0" | "none" => None,
+        other => {
+            tracing::warn!("scrivener: {other:?} names no reader; running without one");
+            None
+        }
+    }
+}
+
+/// The trained spell reader, if this build has one and this checkout has
+/// weights.
+///
+/// [`trained`]'s sibling, and `asked` means the same thing: whether the player
+/// named it, which is the whole difference between the two silences.
+#[cfg(feature = "augury")]
+fn copying(asked: bool) -> Option<Box<dyn orbs_sim::Scrivener>> {
+    match orbs_augury::Copying::cpu() {
+        Ok(reader) => Some(Box::new(reader)),
+        Err(error) => {
+            if asked {
+                tracing::warn!("scrivener: no trained reader ({error}); running without one");
+            } else {
+                tracing::debug!("scrivener: no trained reader ({error})");
+            }
+            None
+        }
+    }
+}
+
+/// No spell reader at all, for a build with `burn` left out.
+#[cfg(not(feature = "augury"))]
+fn copying(asked: bool) -> Option<Box<dyn orbs_sim::Scrivener>> {
+    if asked {
+        tracing::warn!("scrivener: this build has no trained reader compiled in");
+    }
+    None
+}
+
 /// The augury named by `ORBS_AUGURY`, or the trained reader by default.
 ///
 /// **On unless turned off, and that is the shipping default.** The reader is

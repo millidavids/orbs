@@ -99,7 +99,7 @@ impl Plugin for SimPlugin {
         // One tick is one real second (DESIGN.md §5.0). FixedUpdate, not
         // Update, so world speed is independent of frame rate — see `clock`.
         app.insert_resource(tower)
-            .insert_resource(super::driver::Augury::from_environment())
+            .insert_resource(super::driver::Readers::from_environment())
             .insert_resource(kept)
             .insert_resource(Time::<Fixed>::from_hz(1.0))
             // Gated on the boot sequence being over. Not cosmetic: `tower::drift`

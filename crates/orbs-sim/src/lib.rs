@@ -20,7 +20,7 @@ mod schedule;
 mod sim;
 mod tick;
 
-pub use augur::{Augur, Fixture, Grammar};
+pub use augur::{Augur, Copyist, Fixture, Grammar, Scrivener, Verbatim};
 pub use content::{ContentError, Prose};
 pub use execute::{LOG, MAX_MEDITATE, Request, spell_expect, spell_vocabulary};
 pub use rng::{RngStream, Rngs};

@@ -1,0 +1,473 @@
+# How people write the things a spell does (DESIGN.md §8, §19 *the scrivener*).
+#
+# Same format as `phrasings.toml`, same loader, same expansion — see
+# `Phrasings::spellings`. What differs is the output space: these canonicals are
+# **spell statements**, not commands.
+#
+# # Control flow only
+#
+# A spell's *command* lines are the prompt's vocabulary and are already written
+# down next door. A reader for spells trains its command class from
+# `phrasings.toml`; copying two thousand lines here would be one corpus in two
+# files, free to drift apart.
+#
+# # This corpus cannot be grown by adding nouns
+#
+# `phrasings.toml` gets its size from expansion: one `grind {reagent}` template
+# becomes thirty-odd examples because the game names thirty-odd reagents, and
+# `0.13.9` measured that noun substitution *"multiplies the count without adding
+# a single new sentence shape"*. Control flow has almost nothing to expand over —
+# `end` takes no argument at all — so **every phrasing here is authored
+# one-for-one**, and the count in this file is the corpus.
+#
+# # A count must be in the line
+#
+# `bide 10` is only ever offered for a line that *says* ten, as a digit or a
+# number word. *"hang about a while"* has no number in it, and inventing one
+# would be generation — which nothing in this feature does. Such a line is left
+# exactly as the player wrote it.
+#
+# # Write the loose form, never the canonical one
+#
+# A `say` line that is already valid spell syntax teaches the reader to rewrite
+# what needed no rewriting, and the refusals at the bottom are the lines the gate
+# keeps from the reader and the measurement holds untouched. Vary the openers:
+# `when`, `once`, `while`, `as soon as` and `the moment` are all different
+# sentences and the reader has to tell them apart from `if` on very little
+# evidence.
+
+# ---------------------------------------------------------------------------
+# What a free-text slot is filled with. The world has no noun for either.
+#
+# `{name}` is a word the player chose — `let best be north`, `pull herb from
+# satchel`. These are kept **out of the reader's vocabulary** on purpose: a name
+# a player invents reaches the reader as a hash bucket, so the ones it learns from
+# arrive the same way. The holdout's names are its own, so what the reader is
+# measured on is a name it has never seen.
+#
+# `{group}` is a set `for each` walks, and the list is closed: it must be exactly
+# the sets the tower raises, which `tests/scrivener.rs` holds.
+# ---------------------------------------------------------------------------
+
+names = [
+    "best", "near", "far", "note", "herb", "hammer", "spot", "target",
+    "prize", "goal", "jar", "gem", "twig", "moth", "owl", "fox",
+    "lamp", "key", "coin", "bell", "knot", "rook", "wren", "sprig",
+    "acorn", "anvil", "arrow", "badge", "basket", "beacon", "berry", "blade",
+    "bloom", "bough", "bramble", "brook", "bucket", "candle", "cask", "cedar",
+    "clover", "comet", "crest", "crow", "crown", "dagger", "dawn", "dove",
+    "drum", "dusk", "eagle", "elm", "feather", "fern", "frost", "gale",
+    "gourd", "glade", "glint", "grove", "gull", "hare", "harp", "hawk",
+    "hazel", "heron", "hollow", "horn", "ivy", "jester", "kettle", "lantern",
+    "lark", "leaf", "lily", "lynx", "maple", "meadow", "mink", "mist",
+    "needle", "oak", "otter", "penny", "pine", "plume", "pond", "poppy",
+    "raven", "reed", "ridge", "robin", "shell", "sleeve", "saddle", "sparrow",
+    "spire", "stag", "stork", "swan", "thorn", "thrush", "tide", "turnip",
+    "vale", "vine", "violet", "wagon", "willow", "wisp", "wolf", "yew",
+]
+holdout_names = [
+    "nook", "quill", "ember", "shard", "vial", "crumb", "token", "pebble",
+    "whisk", "button", "thimble", "spool",
+]
+groups = [
+    "area", "band", "charm", "column", "die", "sigil", "socket", "station",
+    "store", "syllable", "way",
+]
+
+# ---------------------------------------------------------------------------
+# Branching. `if <question>` is the workhorse and its condition is a
+# sub-language — see `parser::condition`.
+# ---------------------------------------------------------------------------
+
+[[entry]]
+canonical = "if {place} is idle"
+say = [
+    "when the {place} is free",
+    "once the {place} has stopped",
+    "if the {place} is doing nothing",
+    "while the {place} sits idle",
+    "as soon as the {place} is free",
+    "the moment the {place} stops",
+    "when nothing is happening at the {place}",
+    "once the {place} has finished",
+    "once the {place} is quiet",
+    "when the {place} is not working",
+    "if the {place} is at rest",
+    "should the {place} be idle",
+    "in the event the {place} is free",
+    "provided the {place} is idle",
+    "while the {place} has nothing on",
+    "when the {place} comes free",
+    "once the {place} falls quiet",
+    "if the {place} is spare",
+    "when the {place} is available",
+    "if the {place} is unoccupied",
+    "supposing the {place} is idle",
+    "when the {place} is standing idle",
+    "if the {place} happens to be free",
+    "once the {place} is done",
+    "when work at the {place} has ended",
+    "if there is nothing running at the {place}",
+    "while the {place} has nothing to do",
+    "when the {place} is between jobs",
+    "if the {place} lies idle",
+    "once the {place} is no longer busy",
+]
+holdout = [
+    "when the {place} is not busy",
+    "when the {place} has come to a stop",
+    "the instant the {place} is free",
+    "if nothing is going on at the {place}",
+    "once there is no work at the {place}",
+]
+
+[[entry]]
+canonical = "if {place} is empty"
+say = [
+    "when the {place} is empty",
+    "if there is nothing in the {place}",
+    "once the {place} has been emptied",
+    "when the {place} holds nothing",
+    "while the {place} is bare",
+    "while the {place} is empty",
+    "as soon as the {place} is empty",
+    "if nothing is in the {place}",
+    "when the {place} runs out",
+    "when the {place} has been cleared",
+    "should the {place} be empty",
+    "when there is nothing left in the {place}",
+    "if the {place} is cleaned out",
+    "once the {place} is bare",
+    "when the {place} has nothing in it",
+    "if the {place} contains nothing",
+    "the moment the {place} empties",
+    "when the {place} is quite empty",
+    "if the {place} carries nothing",
+    "once nothing remains in the {place}",
+    "provided the {place} is empty",
+    "if the {place} is void",
+    "when the {place} has given up everything",
+    "if the {place} is spent",
+]
+holdout = [
+    "when nothing at all is in the {place}",
+    "when the {place} has been left empty",
+    "once the {place} holds not a thing",
+    "when the {place} is finally empty",
+]
+
+[[entry]]
+canonical = "if {place} has {reagent}"
+say = [
+    "when the {place} has {reagent} in it",
+    "if there is {reagent} in the {place}",
+    "once the {place} holds {reagent}",
+    "when {reagent} is in the {place}",
+    "if the {place} carries {reagent}",
+    "while the {place} has {reagent}",
+    "as soon as the {place} has {reagent}",
+    "if the {place} contains {reagent}",
+    "when there is {reagent} at the {place}",
+    "should the {place} hold {reagent}",
+    "if any {reagent} is in the {place}",
+    "when the {place} has got {reagent}",
+    "once {reagent} reaches the {place}",
+    "if the {place} is holding {reagent}",
+    "when {reagent} turns up in the {place}",
+    "provided the {place} has {reagent}",
+    "when the {place} has some {reagent}",
+    "when the {place} has {reagent} waiting",
+    "once there is {reagent} in the {place}",
+    "if {reagent} sits in the {place}",
+]
+holdout = [
+    "when some {reagent} has reached the {place}",
+    "once the {place} has any {reagent} at all",
+    "once {reagent} has arrived in the {place}",
+    "when {reagent} is waiting at the {place}",
+]
+
+[[entry]]
+canonical = "else"
+say = [
+    "otherwise",
+    "if not",
+    "or else",
+    "failing that",
+    "and if it is not",
+    "but if not",
+    "if that is not so",
+    "when it is not",
+    "if none of that holds",
+    "in any other case",
+    "if that fails",
+    "or if not",
+    "should that not be so",
+    "if it turns out otherwise",
+    "and if not",
+    "any other way",
+    "if instead it is not",
+    "when that does not hold",
+]
+holdout = [
+    "if that was not the case",
+    "in the other case",
+    "and otherwise",
+    "if none of the above",
+]
+
+[[entry]]
+canonical = "end"
+say = [
+    "that is all",
+    "close it",
+    "that is the end of it",
+    "finish",
+    "done",
+    "and that is that",
+    "stop there",
+    "close the block",
+    "that ends it",
+    "finish there",
+    "close",
+    "and we are done",
+    "that is enough of that",
+    "that is it",
+    "that closes it",
+    "and there it ends",
+    "that is the lot",
+    "wrap it up",
+    "that finishes it",
+    "and stop",
+]
+holdout = [
+    "that is where it ends",
+    "close that off",
+    "and that is the end",
+    "finish the block",
+]
+
+# ---------------------------------------------------------------------------
+# Repetition, and waiting.
+# ---------------------------------------------------------------------------
+
+[[entry]]
+canonical = "repeat 3"
+say = [
+    "do that three times",
+    "three times over",
+    "again three times",
+    "put it through three times",
+    "do this three times",
+    "three times through",
+    "run that three times",
+    "go round three times",
+    "three more times",
+    "do it over three times",
+    "three passes",
+    "three times please",
+    "carry that out three times",
+    "have another three goes",
+    "three rounds of that",
+    "do the same thing three times",
+    "loop three times",
+    "three times in a row",
+]
+holdout = [
+    "three times, one after another",
+    "do that lot three times",
+    "another three passes of it",
+    "go through it three times",
+]
+
+[[entry]]
+canonical = "repeat until {place} is idle"
+say = [
+    "keep going until the {place} stops",
+    "go on until the {place} is free",
+    "carry on until the {place} has finished",
+    "time after time until the {place} is idle",
+    "until the {place} is done keep at it",
+    "loop until the {place} falls quiet",
+    "repeat that until the {place} is free",
+    "keep at it while the {place} is busy",
+    "round after round until the {place} stops",
+    "do that until the {place} has nothing on",
+    "run it until the {place} is idle",
+    "keep going while the {place} works",
+    "until the {place} is quiet carry on",
+    "go round until the {place} rests",
+    "keep repeating until the {place} is free",
+    "do it repeatedly until the {place} finishes",
+]
+holdout = [
+    "keep on until the {place} has stopped",
+    "carry on round until the {place} is quiet",
+    "until the {place} comes free keep going",
+    "loop away until the {place} is done",
+]
+
+[[entry]]
+canonical = "bide 10"
+say = [
+    "hang on ten ticks",
+    "pause for ten ticks",
+    "hold for ten ticks",
+    "hold on for ten ticks",
+    "give it ten ticks",
+    "let ten ticks pass",
+    "rest ten ticks",
+    "sit for ten ticks",
+    "stand by for ten ticks",
+    "do nothing for ten ticks",
+    "ten ticks of waiting",
+    "bide for ten ticks",
+    "just ten ticks",
+    "hold off ten ticks",
+    "linger ten ticks",
+    "stay ten ticks",
+    "count ten ticks",
+    "let ten ticks go by",
+]
+holdout = [
+    "for a count of ten",
+    "hold there ten ticks",
+    "pause ten ticks before going on",
+    "give it ten ticks first",
+]
+
+# ---------------------------------------------------------------------------
+# Names, and walking a set.
+# ---------------------------------------------------------------------------
+
+[[entry]]
+canonical = "let {name} be {place}"
+say = [
+    "call the {place} {name}",
+    "let {name} mean the {place}",
+    "{name} is the {place}",
+    "name the {place} {name}",
+    "use {name} for the {place}",
+    "{name} stands for the {place}",
+    "have {name} be the {place}",
+    "take {name} to mean the {place}",
+    "set {name} to the {place}",
+    "let {name} stand for the {place}",
+    "from here {name} is the {place}",
+    "{name} means the {place}",
+    "say {name} for the {place}",
+    "give the {place} the name {name}",
+    "{name} shall be the {place}",
+    "refer to the {place} as {name}",
+]
+holdout = [
+    "let {name} refer to the {place}",
+    "call it {name}, meaning the {place}",
+    "{name} from now on is the {place}",
+    "treat {name} as the {place}",
+]
+
+# The satchel is not a slot — every one in the tower is called `satchel` — but it
+# is not supplied either. It is the only word that says a line is about a satchel
+# at all, so every phrasing here says it.
+[[entry]]
+canonical = "pull {name} from satchel"
+say = [
+    "take a {name} out of the satchel",
+    "get {name} from the satchel",
+    "draw {name} from the satchel",
+    "fetch {name} out of the satchel",
+    "pick {name} out of the satchel",
+    "lift {name} from the satchel",
+    "take {name} off the satchel",
+    "help yourself to {name} from the satchel",
+    "collect {name} from the satchel",
+    "have {name} out of the satchel",
+    "{name} comes from the satchel",
+    "retrieve {name} from the satchel",
+    "draw a {name} out of the satchel",
+    "pull a {name} off the satchel",
+]
+holdout = [
+    "take {name} away from the satchel",
+    "get hold of {name} from the satchel",
+    "fetch a {name} down from the satchel",
+    "{name} out of the satchel please",
+]
+
+# `{group}s` is the plural, and it reads back as the set: the assembler takes
+# `ways` to `way`, because `for each ways` would parse and then walk nothing.
+[[entry]]
+canonical = "for each {group}"
+say = [
+    "for every {group}",
+    "go through each {group}",
+    "take each {group} in turn",
+    "one {group} at a time",
+    "for all the {group}s",
+    "work through the {group}s",
+    "each {group} in turn",
+    "walk every {group}",
+    "run through the {group}s",
+    "do this for each {group}",
+    "with every {group}",
+    "over each of the {group}s",
+    "for each of the {group}s",
+    "handle each {group}",
+    "go by every {group}",
+    "{group} by {group}",
+]
+holdout = [
+    "for every one of the {group}s",
+    "take the {group}s one by one",
+    "through each {group} in turn",
+    "do it for all {group}s",
+]
+
+# ---------------------------------------------------------------------------
+# Not statements.
+#
+# **The half a corpus of loose lines cannot supply.** A reader shown only
+# phrasings that *should* be rewritten rewrites everything — including lines that
+# were already right, which is how §19's four rewriter defects went unnoticed.
+#
+# **The gate's population, not the reader's.** Nearly every one is a spell
+# statement already in canonical form, so `spell::reads_cleanly` keeps it from
+# the scrivener and `Corpus::spells` drops it before training: these are not
+# taught, by design — the reader is never shown one. What they are for is the
+# population `examples/measure.rs --spells` holds to 100%, which is the claim
+# that a working line is never touched. Sentences a reader *is* shown and must
+# refuse come from `phrasings.toml`.
+#
+# Replacing them with sentences about the tower that a reader would be shown was
+# tried in the review after `0.14.5`, and cost more than it bought — DESIGN.md
+# §19, *The review*.
+# ---------------------------------------------------------------------------
+
+[[refusal]]
+say = [
+    "if {place} is idle",
+    "if {place} is empty",
+    "repeat 3",
+    "repeat until {place} is idle",
+    "bide 10",
+    "let {name} be {place}",
+    "pull {name} from satchel",
+    "for each {group}",
+    "end",
+    "else",
+    "else if {place} is idle",
+    "part morning()",
+    "morning()",
+    "alongside morning()",
+    "wait {place}",
+    "if not {place} is idle",
+    "if {place} is idle and {place} is empty",
+]
+holdout = [
+    "if {place} has {reagent}",
+    "repeat 5",
+    "bide 30",
+    "pull {name} satchel",
+    "part gathering(here, there)",
+]

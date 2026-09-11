@@ -18,7 +18,9 @@ use orbs_render::{Presentation, Role, Value};
 
 use super::document::{Away, FORMAT, MarkSave, ProgressSave, RecordSave, RngSave, Save, WorldSave};
 use super::naming;
-use super::node::{CharmSave, NodeSave, RunningSave, SpanSave, SubstitutedSave, WorkingSave};
+use super::node::{
+    CharmSave, NodeSave, ReadSave, RunningSave, SpanSave, SubstitutedSave, WorkingSave,
+};
 use crate::rng::Rngs;
 use crate::session::{Scrollback, Wizard};
 use crate::tick::Tick;
@@ -166,6 +168,34 @@ fn nodes(world: &World) -> Vec<NodeSave> {
     found
 }
 
+/// Every line a reader made something else of, beside the text it read.
+///
+/// The spell's own reading and the one a rewritten spell keeps for its repair,
+/// in one list: both say *what this text compiles as*, and `adopt` looks both
+/// up by text. `None` when no reader changed a line, which is every spell in a
+/// build without one — so the file says nothing a load could work out alone.
+fn readings(at: bevy_ecs::world::EntityRef<'_>) -> Option<Vec<ReadSave>> {
+    let mut found: Vec<ReadSave> = Vec::new();
+    let mut note = |held: &[String], read: &tower::Read| {
+        for (index, line) in held.iter().enumerate() {
+            let compiled = read.compiled(index, line);
+            if compiled != line && !found.iter().any(|pair| pair.written == *line) {
+                found.push(ReadSave {
+                    written: line.clone(),
+                    read: compiled.to_owned(),
+                });
+            }
+        }
+    };
+    if let (Some(held), Some(read)) = (at.get::<tower::Held>(), at.get::<tower::Read>()) {
+        note(&held.0, read);
+    }
+    if let Some(rewritten) = at.get::<tower::Rewritten>() {
+        note(&rewritten.was, &rewritten.read);
+    }
+    (!found.is_empty()).then_some(found)
+}
+
 /// One node, and everything true of it.
 fn node(world: &World, entity: Entity) -> NodeSave {
     let at = world.entity(entity);
@@ -199,6 +229,7 @@ fn node(world: &World, entity: Entity) -> NodeSave {
             Stock::Counted(n) => n.to_string(),
         }),
         held: at.get::<tower::Held>().map(|held| held.0.clone()),
+        read: readings(at),
         domain: at.get::<tower::Domain>().map(|domain| domain.0.clone()),
         banked: at.get::<tower::Banked>().map(|banked| banked.0),
         ash: at.get::<tower::Ash>().map(|ash| ash.0.clone()),

@@ -726,6 +726,7 @@ fn every_component_the_world_holds_is_one_the_save_knows_about() {
         (TypeId::of::<orbs_sim::tower::Reading>(), "Reading"),
         (TypeId::of::<orbs_sim::tower::Grouped>(), "Grouped"),
         (TypeId::of::<orbs_sim::tower::Held>(), "Held"),
+        (TypeId::of::<orbs_sim::tower::Read>(), "Read"),
         (TypeId::of::<orbs_sim::tower::Domain>(), "Domain"),
         (TypeId::of::<orbs_sim::tower::Stock>(), "Stock"),
         (TypeId::of::<orbs_sim::tower::Working>(), "Working"),

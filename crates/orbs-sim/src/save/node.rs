@@ -17,6 +17,21 @@ use serde::{Deserialize, Serialize};
 
 use crate::tower;
 
+/// One line of a spell a reader made something else of, beside what it made.
+///
+/// **Keyed by the text, never by position.** A load puts a reading back only on
+/// a line that still says what was read — so a save with one line of `held`
+/// edited by hand compiles that line as written and keeps the reading of every
+/// other, where a list with one entry per line could not tell an edited line
+/// from a matching one.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReadSave {
+    /// The line as the player wrote it.
+    pub written: String,
+    /// What the orb reads it as, which is what compiles in its place.
+    pub read: String,
+}
+
 /// A node, by path, with whatever is true of it.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NodeSave {
@@ -92,6 +107,24 @@ pub struct NodeSave {
     /// rewrites a spell (§19), and a save is not the place to start.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub held: Option<Vec<String>>,
+    /// The lines a reader made something else of, each beside the text it read
+    /// — what compiles in their place.
+    ///
+    /// **Carried, not re-derived**, and that is the whole reason it is here.
+    /// `held` is re-read on load wherever the derivation is `analyse`, which is
+    /// deterministic; once a trained reader did part of it, a load on a machine
+    /// with no weights — or different ones — would build a different program
+    /// from the same file.
+    ///
+    /// **Only those lines, and found by their text.** It was every line, by
+    /// position: a spell no reader touched was written out twice, and a `held`
+    /// edited by hand compiled the reading of whatever line used to be there.
+    /// A line that no longer says what was read is its own reading again. A
+    /// rewritten spell's own reading travels here too, keyed the same way, so
+    /// its repair survives a load. Absent in a save written before readings
+    /// existed, which is a spell that is its own reading throughout.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub read: Option<Vec<ReadSave>>,
     /// Which domain a spell was written for.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub domain: Option<String>,

@@ -68,6 +68,13 @@ pub enum Queued {
         name: String,
         /// What the buffer held, before canonicalisation.
         lines: Vec<String>,
+        /// The same lines as the orb read them, which is what compiles.
+        ///
+        /// Equal to `lines` when no reader was consulted, which is every build
+        /// without one and every line a reader abstained on.
+        read: Vec<String>,
+        /// Which reader made `read` — see `tower::Read::by`.
+        by: u64,
     },
     /// A mastery node the player chose — see [`Sim::take`](crate::Sim::take).
     ///
@@ -101,8 +108,31 @@ impl Pending {
     }
 
     /// Queue a spell to be written on the next tick.
-    pub fn write(&mut self, name: String, lines: Vec<String>) {
-        self.0.push(Queued::Write { name, lines });
+    pub fn write(&mut self, name: String, lines: Vec<String>, read: Vec<String>, by: u64) {
+        self.0.push(Queued::Write {
+            name,
+            lines,
+            read,
+            by,
+        });
+    }
+
+    /// The reading the latest queued write of `name` carries, if one is waiting.
+    ///
+    /// **Newer than the node's.** A write lands on the next tick, so on the beat
+    /// the editor saves and then reads its buffer, this is the reading that is
+    /// about to compile and the node's is the one before it.
+    #[must_use]
+    pub fn written(&self, name: &str) -> Option<crate::tower::Read> {
+        self.0.iter().rev().find_map(|queued| match queued {
+            Queued::Write {
+                name: queued,
+                lines,
+                read,
+                by,
+            } if queued == name => Some(crate::tower::Read::new(lines, read.clone(), Some(*by))),
+            _ => None,
+        })
     }
 
     /// Queue a mastery node to be taken on the next tick.
@@ -342,6 +372,20 @@ pub enum Submission {
         /// canonicalisation, so replaying re-derives the same canonical form
         /// rather than trusting one recorded alongside it.
         lines: Vec<String>,
+        /// The same lines as the orb *read* them, carried rather than re-derived.
+        ///
+        /// **The exception the doc above describes, and the reason it is one.**
+        /// Re-deriving is safe while the derivation is `analyse`, which is
+        /// deterministic; it is not safe once a trained reader did part of it,
+        /// because a replay on a machine with no weights — or with different
+        /// ones — would build a different program from the same submissions.
+        /// `Submission::Divined` carries its echo for exactly this reason.
+        ///
+        /// Equal to `lines` when nothing read them.
+        read: Vec<String>,
+        /// Which reader made `read`, so a replayed spell is kept for exactly the
+        /// reader the live one was — see `tower::Read::by`.
+        by: u64,
     },
     /// One cell of the archive's stacks, walked by hand (§10, §19).
     ///
@@ -411,12 +455,14 @@ impl Submissions {
     }
 
     /// Note that a spell was saved during `tick`.
-    pub fn wrote(&mut self, tick: Tick, name: &str, lines: &[String]) {
+    pub fn wrote(&mut self, tick: Tick, name: &str, lines: &[String], read: &[String], by: u64) {
         self.0.push((
             tick,
             Submission::Wrote {
                 name: name.to_owned(),
                 lines: lines.to_vec(),
+                read: read.to_vec(),
+                by,
             },
         ));
     }
@@ -585,6 +631,11 @@ mod tests {
                 Submission::Wrote {
                     name: "morning.spell".to_owned(),
                     lines: vec!["make a potion of clarity".to_owned()],
+                    // **Equal to `lines`, and that is the assertion.** Nothing
+                    // read this spell, so the reading is the text — which is the
+                    // identity case every build without a reader is in.
+                    read: vec!["make a potion of clarity".to_owned()],
+                    by: crate::augur::Verbatim::IDENTITY,
                 },
             )],
         );
@@ -617,6 +668,30 @@ mod tests {
         let spell_of = |sim: &Sim| -> Option<Vec<String>> { sim.spell("morning") };
         assert_eq!(spell_of(&live), spell_of(&replayed));
         assert!(spell_of(&live).is_some(), "the spell was never written");
+
+        // **And what it *compiles* from, which is the half `spell` cannot see.**
+        // `Sim::spell` returns `Held`, and `Held` is byte-identical across a
+        // replay by construction — the submission carries those very lines. So
+        // this test could not have caught a reading that failed to travel, and a
+        // session a model had read would have replayed unread into a different
+        // program. `Submission::Wrote` carries the reading for that reason, and
+        // this is the assertion that says so.
+        let reading_of = |sim: &Sim| -> Option<Vec<String>> {
+            let world = sim.world();
+            world
+                .iter_entities()
+                .find(|entity| {
+                    entity
+                        .get::<crate::tower::Name>()
+                        .is_some_and(|name| name.0 == crate::content::with_extension("morning"))
+                })
+                .map(|entity| crate::tower::spell::source(world, entity.id()))
+        };
+        assert_eq!(
+            reading_of(&live),
+            reading_of(&replayed),
+            "the replayed spell compiles from different lines",
+        );
     }
 
     /// A way that is actually open from where the reading stands.
