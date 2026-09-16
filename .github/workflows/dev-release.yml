@@ -59,7 +59,11 @@ jobs:
         run: cargo fmt --all --check
 
       - name: Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        # **The feature is not optional** (CLAUDE.md): `--all-targets` alone
+        # silently stops compiling the trainer and the two measurement examples,
+        # so without it a release can be tagged with a broken trainer and every
+        # job still green.
+        run: cargo clippy --workspace --all-targets --features orbs-augury/train -- -D warnings
 
       - name: Test
         run: cargo test --workspace

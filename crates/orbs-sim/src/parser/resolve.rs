@@ -116,8 +116,10 @@ impl Analysis {
             // must reach a reader rather than be answered *"take what?"*.
             //
             // The leftover count is what separates them, and it is the same
-            // question the arm below asks.
-            Resolution::Incomplete { .. } => self
+            // question the arm below asks. `TakesNothing` always has a word
+            // over, so it is never outright: *"status report"* is a sentence a
+            // reader should see before the orb says `status` takes nothing.
+            Resolution::Incomplete { .. } | Resolution::TakesNothing { .. } => self
                 .candidates
                 .first()
                 .is_none_or(|best| best.leftover == 0),
@@ -140,6 +142,53 @@ impl Analysis {
 #[must_use]
 pub fn resolve(input: &str, scene: &Scene, mode: Mode) -> Resolution {
     analyse(input, scene, mode).resolution
+}
+
+/// The reading to run, of several a reader offered for one line: **the reader's
+/// first choice that resolves** — unless that one left words unused, and a later
+/// reading both uses every word it was handed and names something.
+///
+/// # The question `reads_outright` asks, asked of the readings too
+///
+/// A reader offers several because it cannot see the world, and the caller took
+/// the first that resolved. [`Analysis::reads_outright`] already refuses to call
+/// a *typed* line outright when a word is left over; nothing asked the same of
+/// a reader's readings, so one that resolved with a word unused beat one behind
+/// it that used them all — *"stir the alembic"* ran as `distil alembic`, the
+/// alembic named and then ignored. [`Candidate::leftover`] is the answer.
+///
+/// `Sim::submit_reading` and the parser bench both choose with this, so the
+/// bench measures the rule the game plays by rather than a looser one.
+#[must_use]
+pub fn reading_to_run<'a>(readings: &'a [String], scene: &Scene, mode: Mode) -> Option<&'a String> {
+    // The reader's first choice that resolves, once one has and left words over.
+    let mut first: Option<&'a String> = None;
+    for reading in readings {
+        let analysis = analyse(reading, scene, mode);
+        if !analysis.resolution.is_resolved() {
+            continue;
+        }
+        let best = analysis.candidates.first();
+        let uses_every_word = best.is_some_and(|best| best.leftover == 0);
+        let names_something = best.is_some_and(|best| !best.intent.arguments.is_empty());
+        match first {
+            // **The first choice runs when it used every word it was handed**,
+            // argument or none — there is nothing unused for a later reading to
+            // do better on. Refusing a bare verb this cost 33 corpus lines and
+            // 72 of five trained readers' holdout lines to a later reading that
+            // jumped it: `weave` for *"open the loom"* lost to `survey loom`.
+            None if uses_every_word => return Some(reading),
+            None => first = Some(reading),
+            // **A later reading replaces a first that left words unused only by
+            // using words itself.** A bare verb uses every word it was handed by
+            // being handed none, so letting it jump was a sink: `[grind sage
+            // now, quit]` ran `quit`. Every such jump was measured — none right
+            // on any population, six of them displacing a right reading.
+            Some(_) if uses_every_word && names_something => return Some(reading),
+            Some(_) => {}
+        }
+    }
+    first
 }
 
 /// Resolve, keeping every scored reading for instrumentation.
@@ -202,8 +251,17 @@ pub fn analyse(input: &str, scene: &Scene, mode: Mode) -> Analysis {
     // A verb matched but its slot takes free text or a number, so there is no
     // list to offer. Saying so beats falling through to Unresolved, which used
     // to answer "I do not know that word" and then suggest the word just typed.
+    // **The one belonging to the verb that won**, of however many `collect`
+    // recorded. One `Option` kept whichever synonym reached it first, so an
+    // earlier entry's fuzzy reading claimed the slot and the exactly-typed verb
+    // below it had none: `quit gibberish` ran `quit` with the word thrown away,
+    // because `verify`'s `audit` scores 600 against `quit` and sits above it.
     let settle_incomplete = |candidates: Vec<Candidate>| {
-        incomplete.as_ref().map_or_else(
+        let wanted = candidates
+            .first()
+            .and_then(|best| incomplete.iter().find(|held| held.verb == best.intent.verb))
+            .or_else(|| incomplete.first());
+        wanted.map_or_else(
             || Analysis {
                 // A verb the player knows, in a room that does not answer to it,
                 // beats suggesting three words they did not type.
@@ -216,11 +274,18 @@ pub fn analyse(input: &str, scene: &Scene, mode: Mode) -> Analysis {
                 candidates: candidates.clone(),
             },
             |incomplete| Analysis {
-                resolution: Resolution::Incomplete {
-                    verb: incomplete.verb,
-                    register: incomplete.register,
-                    missing: incomplete.missing,
-                    filled: incomplete.filled.clone(),
+                resolution: match incomplete.missing {
+                    Some(missing) => Resolution::Incomplete {
+                        verb: incomplete.verb,
+                        register: incomplete.register,
+                        missing,
+                        filled: incomplete.filled.clone(),
+                    },
+                    None => Resolution::TakesNothing {
+                        verb: incomplete.verb,
+                        register: incomplete.register,
+                        extra: incomplete.extra.clone(),
+                    },
                 },
                 candidates: candidates.clone(),
             },
@@ -252,7 +317,8 @@ pub fn analyse(input: &str, scene: &Scene, mode: Mode) -> Analysis {
     // above puts an exactly-typed verb first, which is what makes this safe:
     // `grind gibberish` diverts here rather than falling to the `sift` reading
     // sitting below it, and `settle_incomplete` answers *"grind what?"* instead
-    // of *"I do not know that word — perhaps grind"*.
+    // of *"I do not know that word — perhaps grind"*. `status gibberish` diverts
+    // the same way and is answered as `TakesNothing`, having no slot to ask for.
     //
     // Bare commands are untouched: `survey` has no arguments **and** nothing
     // left over. So is a reading that used part of what it was handed, which is
@@ -260,12 +326,18 @@ pub fn analyse(input: &str, scene: &Scene, mode: Mode) -> Analysis {
     // **Tied to the `Incomplete` `collect` recorded**, rather than re-deriving
     // the test here. That is what carries the exemption across: `light athanor`
     // records none, so it resolves as bare `kindle` exactly as it always has.
-    if incomplete
-        .as_ref()
-        .is_some_and(|wanted| wanted.verb == candidates[0].intent.verb)
-        && candidates[0].intent.arguments.is_empty()
-        && candidates[0].leftover > 0
-    {
+    //
+    // **A siege runs it rather than refusing it.** §6 gives the mode its own
+    // answer to ambiguity — *"a modal prompt would make ambiguous phrasing cost
+    // siege time"* — and a verb that takes nothing has the same shape: `muster
+    // the troops` and `hold fast` are what a player types with the wall coming
+    // down, and the words over cost them a turn to be told about. Only the
+    // no-slot refusal is waived; a verb still asks for a slot it needs.
+    let diverts = incomplete.iter().any(|wanted| {
+        wanted.verb == candidates[0].intent.verb
+            && !(wanted.missing.is_none() && mode == Mode::Siege)
+    });
+    if diverts && candidates[0].intent.arguments.is_empty() && candidates[0].leftover > 0 {
         return settle_incomplete(candidates);
     }
 
@@ -315,9 +387,11 @@ pub fn analyse(input: &str, scene: &Scene, mode: Mode) -> Analysis {
 fn collect(
     words: &[Word<'_>],
     scene: &Scene,
-) -> (Vec<Candidate>, Option<Incomplete>, Option<(u32, Verb)>) {
+) -> (Vec<Candidate>, Vec<Incomplete>, Option<(u32, Verb)>) {
     let mut candidates = Vec::new();
-    let mut incomplete = None;
+    // **One per verb, not one for the line.** Which verb wins is decided after
+    // this returns, and the winner's own reason is the one worth answering with.
+    let mut incomplete: Vec<Incomplete> = Vec::new();
     // The best-scoring verb that would have matched if its instrument were here.
     let mut elsewhere: Option<(u32, Verb)> = None;
 
@@ -374,17 +448,20 @@ fn collect(
                     candidates.push(score(intent, verb_score, filled.score, filled.leftover));
                 }
 
-                // `get_or_insert_with`, not `get_or_insert`: the eager form built
-                // the whole `Incomplete` — including `filled.arguments()`, which
-                // allocates a `Vec` — on **every** synonym past the first, then
-                // threw it away because the slot was already taken. This runs once
-                // per vocabulary entry per keystroke.
-                if fillers(missing.kind, missing.index, scene).is_empty() {
-                    incomplete.get_or_insert_with(|| Incomplete {
+                // **Built once per verb**, and only where it is wanted: the
+                // eager form built the whole `Incomplete` — including
+                // `filled.arguments()`, which allocates a `Vec` — on every
+                // synonym of every verb, then threw it away. This runs once per
+                // vocabulary entry per keystroke.
+                if fillers(missing.kind, missing.index, scene).is_empty()
+                    && !incomplete.iter().any(|held| held.verb == synonym.verb)
+                {
+                    incomplete.push(Incomplete {
                         verb: synonym.verb,
                         register: synonym.register,
-                        missing: missing.kind,
+                        missing: Some(missing.kind),
                         filled: filled.arguments(),
+                        extra: String::new(),
                     });
                 }
             }
@@ -416,21 +493,112 @@ fn collect(
                 // takes fuel, and the athanor is a place — but bare `kindle` is
                 // the right reading, and `light_the_athanor_lights_it_rather_
                 // than_listing_it` pins it.
+                //
+                // **A verb that takes nothing is the same case with no slot to
+                // name** (`Resolution::TakesNothing`): `status gibberish` ran
+                // `status` and `undo gibberish` acknowledged, each with the word
+                // thrown away.
+                //
+                // **Naming where it acts is exempt — where the verb acts
+                // somewhere.** `Verb::anchor` is that question already: a verb a
+                // fixture declares has a place to be named (`probe lens`,
+                // `wander stacks`, `research lectern`), and one the whole tower
+                // answers to has the tower and nothing narrower. Without it the
+                // exemption covered `status
+                // laboratory`, `quit laboratory` and `logout archive`, each of
+                // which ran with the word discarded — the defect this is here to
+                // end, wearing a place name.
+                //
+                // **And a plain-English *phrase* is not refused.** A sentence in
+                // the plain register is how a newcomer talks, and talk runs past
+                // the command: *"how are things going"* is the `status` synonym
+                // *"how are things"* with a word after it, and refusing it
+                // teaches nothing. The arcane and shell registers are exact, so
+                // a word over one of those is a mistake worth naming.
+                //
+                // **A phrase, not the register.** Exempting every plain synonym
+                // put the defect straight back: `decode` is one plain word for
+                // `research`, and `decode gibberish` ran it with the word thrown
+                // away. What carries the chatter is the sentence — so the
+                // exemption is for a synonym the matcher took more than one word
+                // of.
+                //
+                // **Filler is not a word handed over.** `strip_filler` never
+                // empties what it is given, so a tail of nothing but filler —
+                // *"status please"* — comes back whole, and asking only whether
+                // the tail was empty refused a polite line as a stray word.
+                // **Punctuation is not a word handed over either.** `fold` sheds
+                // a *trailing* stop but keeps a token that is nothing else whole
+                // — `?` and `./` are synonyms in their own right — so `status .`
+                // arrived carrying `.`, which is no filler, and a line that had
+                // always run was refused. A word says something when it has a
+                // letter or a digit in it.
                 let explained = filled.slots.iter().any(Option::is_some);
-                if !explained
-                    && let Some(slot) = synonym.verb.signature().first()
-                    && !tail.is_empty()
-                {
+                let said_something = tail.iter().any(|word| {
+                    word.matching.chars().any(char::is_alphanumeric)
+                        && !normalise::is_filler(word.matching)
+                });
+                if !explained && said_something {
                     let folded: Vec<&str> = tail.iter().map(|word| word.matching).collect();
-                    let names_the_instrument = synonym.verb.is_operation()
-                        && scene.best_match(NounKind::Place, &folded).is_some();
-                    if !names_the_instrument {
-                        incomplete.get_or_insert_with(|| Incomplete {
-                            verb: synonym.verb,
-                            register: synonym.register,
-                            missing: slot.kind,
-                            filled: Vec::new(),
-                        });
+                    // **The whole tail, not a word of it.** `best_match` tries
+                    // the joined phrase *and* each word, so `undo laboratory
+                    // move` found `laboratory` and called the line a place;
+                    // `NounMatch::words` is what tells those apart.
+                    let place = scene
+                        .best_match(NounKind::Place, &folded)
+                        .filter(|place| place.words == folded.len());
+                    let names_a_place = place.is_some();
+                    // The two exemptions, named so the guard below reads as the
+                    // rule: a verb naming where it acts — and a plain sentence
+                    // running past its command.
+                    //
+                    // **Where a verb acts is its anchor's, or the whole tower.**
+                    // One nothing anchors answers to every room at once, so the
+                    // tower is the one place it can name: *"overview of the
+                    // tower"* is `status` said about exactly what it reports on,
+                    // and was refused as a word thrown away.
+                    let acts_there = match synonym.verb.anchor() {
+                        Some(_) => names_a_place,
+                        None => place
+                            .as_ref()
+                            .is_some_and(|place| is_the_tower(&place.name)),
+                    };
+                    let a_sentence = synonym.register == Register::Plain && consumed > 1;
+                    let remember = |incomplete: &mut Vec<Incomplete>, held: Incomplete| {
+                        if !incomplete.iter().any(|kept| kept.verb == held.verb) {
+                            incomplete.push(held);
+                        }
+                    };
+                    match synonym.verb.signature().first() {
+                        Some(slot) if !(synonym.verb.is_operation() && names_a_place) => {
+                            remember(
+                                &mut incomplete,
+                                Incomplete {
+                                    verb: synonym.verb,
+                                    register: synonym.register,
+                                    missing: Some(slot.kind),
+                                    filled: Vec::new(),
+                                    extra: String::new(),
+                                },
+                            );
+                        }
+                        None if !(acts_there || a_sentence) => {
+                            remember(
+                                &mut incomplete,
+                                Incomplete {
+                                    verb: synonym.verb,
+                                    register: synonym.register,
+                                    missing: None,
+                                    filled: Vec::new(),
+                                    extra: tail
+                                        .iter()
+                                        .map(|word| word.raw)
+                                        .collect::<Vec<_>>()
+                                        .join(" "),
+                                },
+                            );
+                        }
+                        _ => {}
                     }
                 }
                 let intent = Intent {
@@ -446,12 +614,26 @@ fn collect(
     (dedupe(candidates), incomplete, elsewhere)
 }
 
-/// A verb that matched but whose empty slot cannot be offered as a list.
+/// A verb that matched but cannot run as it stands: its empty slot cannot be
+/// offered as a list, or it takes nothing and was handed words anyway.
 struct Incomplete {
     verb: Verb,
     register: Register,
-    missing: NounKind,
+    /// What the empty slot wants — [`None`] for a verb with no slot to name.
+    missing: Option<NounKind>,
     filled: Vec<super::intent::Argument>,
+    /// The words handed to a verb that takes nothing, as the player typed them.
+    extra: String,
+}
+
+/// Whether `path` names the place every other place is inside — `/tower`.
+///
+/// **By shape, not by spelling**: an absolute path of one segment. A bare leaf
+/// (`alembic`, as `corpus_scene` registers an instrument) has no leading slash
+/// and is not it.
+fn is_the_tower(path: &str) -> bool {
+    path.strip_prefix('/')
+        .is_some_and(|rest| !rest.is_empty() && !rest.contains('/'))
 }
 
 /// Everything in the scene that could fill a slot of `kind`.

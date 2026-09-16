@@ -28,6 +28,7 @@
 //! this repository already contains.
 
 pub mod batch;
+pub mod cli;
 pub mod corpus;
 pub mod decode;
 pub mod model;

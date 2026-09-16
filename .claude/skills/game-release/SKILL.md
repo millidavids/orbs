@@ -95,7 +95,8 @@ it; promotion never touches it.
   fmt, clippy, test, doc, `cargo build -p orbs`, and the `screens` example — and
   nothing else. Cheap, minutes, no artifacts.
 - **`release.yml` runs on push to `main`.** It reads the version, **requires a
-  matching changelog block or does nothing at all**, runs the gate again, tags,
+  matching changelog block or does nothing at all**, confirms `dev-release.yml`
+  passed on the same SHA (running the gate itself only if it did not), tags,
   publishes the GitHub Release from the block, then posts to Discord and Bluesky.
 
 Two consequences worth stating:
@@ -103,9 +104,12 @@ Two consequences worth stating:
 - **A version with no changelog block is never released.** The workflow ends
   green having skipped everything, and says so in its summary. This is what lets
   ordinary step bumps reach `main` without announcing.
-- **The gate runs twice.** court_wizard avoids that by reusing dev's artifacts;
-  with nothing to reuse, the second run is what stops a promotion shipping a
-  commit that only looked green. It comes out when Steam goes in.
+- **The gate runs once per commit.** A promotion is a fast-forward, so the SHA
+  on `main` is one `dev-release.yml` already gated; `release.yml`'s `dev-verdict`
+  job finds that run, waits for it if it is still going, and tags only on a
+  pass. With no passing dev run it runs the full gate itself, so nothing is ever
+  tagged on trust. It ran the gate a second time until `0.14.11` — twenty minutes
+  re-testing identical bytes.
 
 *Missing until Steam returns:* there is no build on a staging channel, so there
 is nothing to play-test between dev and main, and promotion is not gated on a
@@ -328,8 +332,9 @@ release instead.
    ```
    - **empty** → stop; nothing has gated this commit.
    - **failure/cancelled** → stop and surface it.
-   - **in_progress** → allowed, but say so: `release.yml` will re-run the gate
-     anyway, so a failure surfaces after `main` has already moved.
+   - **in_progress** → allowed, but say so: `release.yml` waits for that run and
+     tags only if it passes (running the full gate itself if it does not), so a
+     failure tags and announces nothing — but `main` has already moved.
    - **success** → ideal.
 
 ### B2. Fast-forward and push
@@ -350,8 +355,9 @@ release instead.
 ### B3. Report
 
 - the version now on `main`, and that promotion changed no files;
-- that `release.yml` is running — gate, tag, GitHub Release, Discord, Bluesky —
-  with the URL (`gh run list --workflow=release.yml --limit 1`);
+- that `release.yml` is running — the dev verdict (or the gate, if dev never
+  passed this SHA), tag, GitHub Release, Discord, Bluesky — with the URL
+  (`gh run list --workflow=release.yml --limit 1`);
 - **do not call it live until that run is green.** The tag is pushed several
   minutes before the announcements go out.
 

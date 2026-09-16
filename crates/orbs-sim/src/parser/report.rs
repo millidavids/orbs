@@ -25,6 +25,7 @@
 //! |---|---|---|
 //! | `Resolved` | one — what will run | [`Outcome::Resolved`], or [`Outcome::Forced`] under siege |
 //! | `Incomplete` | one — the command so far, plus the category of the empty slot | [`Outcome::Incomplete`] |
+//! | `TakesNothing` | one — the verb, and a sentence naming the words it could not use | [`Outcome::Unresolved`] |
 //! | `Ambiguous` | one per tied reading, best first | [`Outcome::Candidate`] |
 //! | `Unresolved` | one naming the input, then one per suggestion | [`Outcome::Unresolved`], then [`Outcome::Suggestion`] |
 //!
@@ -98,6 +99,22 @@ pub fn report(input: &str, resolution: &Resolution, prose: &Prose, records: &mut
                 .outcome(Outcome::Incomplete)
                 .text(FieldName::Message, &sofar)
                 .text(FieldName::Kind, missing.label())
+                .finish();
+        }
+        // A verb that takes nothing, handed words anyway. `Incomplete` names the
+        // slot it waits for and this verb has none, so the record carries the
+        // verb as a fact and the sentence naming the words is the content's
+        // (rule 6). Drawn as `Unresolved`, as `Elsewhere` is: nothing ran.
+        Resolution::TakesNothing { verb, extra, .. } => {
+            let message = prose.line(
+                "verb_takes_nothing",
+                &[("name", verb.canonical()), ("words", extra)],
+            );
+            records
+                .push(RecordKind::Echo)
+                .outcome(Outcome::Unresolved)
+                .text(FieldName::Name, verb.canonical())
+                .text(FieldName::Message, &message)
                 .finish();
         }
         Resolution::Ambiguous { candidates } if !candidates.is_empty() => {

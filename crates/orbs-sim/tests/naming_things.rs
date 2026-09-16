@@ -282,6 +282,22 @@ fn a_half_written_binding_refuses_the_line_rather_than_guessing() {
 }
 
 #[test]
+fn a_spell_line_whose_verb_takes_nothing_says_so_rather_than_naming_a_referent() {
+    // The prompt names the verb and the words it could not use. A spell answered
+    // §8's **Referent missing** — *"nothing here answers to …"* — which is the
+    // one thing that is not wrong with the line: `status report` names nothing
+    // that has gone, it hands a verb words it has no slot for.
+    let sim = Sim::new(3);
+    let readings = sim.read_spell("archive", &["status report".to_owned()]);
+    let fault = readings[0]
+        .fault
+        .as_ref()
+        .expect("`status report` was read as a command");
+    assert_eq!(fault.key, "spell_takes_nothing");
+    assert_eq!(fault.detail.as_deref(), Some("report"));
+}
+
+#[test]
 fn a_for_without_its_particle_opens_no_block() {
     // `for way` is missing the word that makes the sentence one, and **no block
     // is opened** — so the `end` below it is a stray one and says so too.

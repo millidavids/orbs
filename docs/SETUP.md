@@ -287,10 +287,12 @@ tried the build.
    means this is not a release** — the run ends green having done nothing. This
    is the opt-in, and it is what lets the per-step version bumps reach `main`
    without announcing every step of a phase.
-3. **Run the gate**, again. `court_wizard` reruns nothing because it reuses the
-   artifacts `dev-release.yml` already built for this exact SHA; with nothing to
-   reuse, this is what stops a promotion shipping a commit that only *looked*
-   green on `dev`. It comes out when Steam goes in.
+3. **Confirm the gate passed** on this exact SHA. `main` is a fast-forward of
+   `dev`, so `dev-release.yml` has already gated it: the `dev-verdict` job finds
+   that run, waits for it if it is still going, and only a pass skips the gate
+   here. Anything else — no run, a failure, a cancellation — runs the full gate
+   before tagging. It used to run the gate again unconditionally, twenty minutes
+   spent re-testing identical bytes.
 4. **Tag and release**, with the body taken from the changelog block.
 5. **Announce** to Discord and Bluesky.
 

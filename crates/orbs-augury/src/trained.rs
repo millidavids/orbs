@@ -20,7 +20,7 @@ use orbs_sim::augur::{Augur, MAX_READINGS};
 use orbs_sim::parser::Verb;
 
 use crate::decode::decode;
-use crate::{Reader, ReaderConfig, VERBS, Vocabulary};
+use crate::{Reader, ReaderConfig, Register, VERBS, Vocabulary};
 
 /// Where the trainer leaves the prompt reader's weights.
 pub const WEIGHTS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/weights/reader");
@@ -72,8 +72,21 @@ impl<B: Backend> Trained<B> {
     /// because a table that has shifted under trained weights produces confident
     /// nonsense rather than an obvious failure.
     pub fn load(device: B::Device) -> Result<Self, burn::record::RecorderError> {
+        Self::load_from(WEIGHTS, device)
+    }
+
+    /// Load weights from `path`, without its `.bin`, rather than the ones the
+    /// game ships.
+    ///
+    /// **For a run nobody has shipped yet**: `scripts/seeds.sh` trains several
+    /// and has to read each one back to learn which, if any, is worth keeping.
+    ///
+    /// # Errors
+    ///
+    /// As [`load`](Self::load).
+    pub fn load_from(path: &str, device: B::Device) -> Result<Self, burn::record::RecorderError> {
         let vocabulary = Vocabulary::builtin();
-        let reader = weights(WEIGHTS, VERBS, &vocabulary, &device)?;
+        let reader = weights(path, Register::Verbs, &vocabulary, &device)?;
         Ok(Self {
             reader,
             vocabulary,
@@ -170,20 +183,24 @@ impl<B: Backend> Augur for Trained<B> {
 /// vocabulary or a different number of classes.
 pub(crate) fn weights<B: Backend>(
     path: &str,
-    classes: usize,
+    register: Register,
     vocabulary: &Vocabulary,
     device: &B::Device,
 ) -> Result<Reader<B>, burn::record::RecorderError> {
     let record: <Reader<B> as Module<B>>::Record = BinFileRecorder::<FullPrecisionSettings>::new()
         .load(std::path::PathBuf::from(path), device)?;
 
-    // **The command that retrains *this* file.** The spell reader's is the same
-    // trainer with `--spells`, and naming the other one sends somebody to
+    // **The command that retrains *this* register**, and the register is told
+    // rather than guessed. The path cannot say it, now that `load_from` takes
+    // any path a run wrote — and the head's width says it only until the spell
+    // corpus has as many shapes as there are verbs, which would send somebody to
     // retrain the wrong model and meet the same error.
-    let retrain = if path == SCRIBE_WEIGHTS {
-        "cargo run --release -p orbs-augury --example train --features train -- --spells"
-    } else {
-        "cargo run --release -p orbs-augury --example train --features train"
+    let classes = register.classes();
+    let retrain = match register {
+        Register::Verbs => "cargo run --release -p orbs-augury --example train --features train",
+        Register::Spells => {
+            "cargo run --release -p orbs-augury --example train --features train -- --spells"
+        }
     };
     let stale = |what: &str, was: usize, now: usize| {
         burn::record::RecorderError::Unknown(format!(
@@ -250,6 +267,29 @@ mod tests {
         let read = reader.command("smash the sage");
         println!("smash the sage -> {read:?}");
         assert!(read.is_some(), "the reader refused a corpus phrasing");
+    }
+
+    #[test]
+    fn a_path_that_holds_nothing_is_an_error_rather_than_a_panic() {
+        // `load_from` takes whatever path a run wrote, and a seed that never
+        // finished wrote none.
+        let device = burn::backend::ndarray::NdArrayDevice::default();
+        assert!(Trained::<NdArray<f32>>::load_from("/nowhere/reader", device).is_err());
+    }
+
+    #[test]
+    fn a_stale_file_names_the_trainer_for_the_head_it_was_asked_for() {
+        // **By the head, not the path**, since a path can be anything `--out`
+        // wrote: the prompt's weights asked for as the spell register are the
+        // spell trainer's to replace.
+        if trained().is_none() {
+            return;
+        }
+        let device = burn::backend::ndarray::NdArrayDevice::default();
+        let error =
+            weights::<NdArray<f32>>(WEIGHTS, Register::Spells, &Vocabulary::builtin(), &device)
+                .expect_err("the spell head is not the prompt's width");
+        assert!(format!("{error:?}").contains("--spells"), "{error:?}");
     }
 
     #[test]

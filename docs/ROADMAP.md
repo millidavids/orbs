@@ -5312,22 +5312,25 @@ incapable** of regressing a phrasing that works today.
       **See it:** ✅ `ORBS_BOOT=0 ORBS_DUMP="attend laboratory; digest husks" cargo run -p orbs`
       — *"there is no husks within reach"*, not `undo`
 
-- [ ] **A verb that takes no argument still swallows one** — `status gibberish`
-      runs `status`; `undo gibberish` acknowledges, `undo` having no arm in
-      `execute` yet. The rule above cannot reach these: `Incomplete` names the
-      slot it is waiting for and a no-argument verb has none, so the honest
-      answer needs a refusal shape that does not exist. Sixteen verbs
-      **See it:** `ORBS_AUGURY=off ORBS_BOOT=0 ORBS_DUMP="status gibberish" cargo run -p orbs`
+- [x] **A verb that takes no argument no longer swallows one** (`0.14.6`) —
+      `status gibberish` ran `status` and `undo gibberish` acknowledged, the word
+      thrown away. It is `Resolution::TakesNothing` now, `Incomplete`'s other
+      half: the orb names the verb and the words it could not use, a reader sees
+      the line first, and a place (`wander archive`) or filler (`status please`)
+      is not a stray word
+      **See it:** ✅ `ORBS_AUGURY=off ORBS_BOOT=0 ORBS_DUMP="status gibberish" cargo run -p orbs`
+      — *"status takes nothing - 'gibberish' is not something it can use"*
 
-- [ ] **The reading that explains the word should outrank the one that does
-      not** — `survey feed.log` resolves as bare `survey` and beats `peruse`,
-      because `Survey`'s optional `Place` slot leaves the file over and the verb
-      carries two thirds of the score. **3,146** corpus lines are still lost this
-      way, down from 3,554. `Candidate::leftover` already exists for this and
-      `Analysis::reads_outright` already gates on it one tier up; what is missing
-      is the same question asked when candidates are ranked
-      **See it:** `cargo run --release -p orbs-sim --example parse -- --bench` —
-      *"it read as another command"* falls
+- [x] **The reading that uses every word runs first** (`0.14.7`) — and the
+      class was **24** corpus lines, not the 3,146 this box claimed. The bench
+      sorts its misreads by cause now: 3,119 were a wrong reading ahead of the
+      right one in the reader's own order, and the box's example, `survey
+      feed.log`, had been `Incomplete` since `0.13.18`. `parser::reading_to_run`
+      asks a reader's readings what `reads_outright` asks a typed line, and
+      `Sim::submit_reading` and the bench both choose with it. With `0.14.6`
+      beside it, 3,146 misreads became 2,822
+      **See it:** ✅ `cargo run --release -p orbs-sim --example parse -- --bench` —
+      *"the one that ran left words it could not use"* 24 → 12
 
 - [x] **The model — shipped, and one plank of it dropped** (`0.13.18`).
       `orbs-augury`, 465,335 parameters, trained with `Autodiff<Wgpu>` on Vulkan;
@@ -5362,13 +5365,82 @@ incapable** of regressing a phrasing that works today.
       `SimPlugin::build`, and that has never been measured
       **See it:** ✅ `cargo run -p orbs`, then type `turn the sage into powder`
 
-- [ ] **Boot warm-up, or a measurement saying it is not needed** — loading the
-      reader happens synchronously at `App` construction, before a window exists.
-      Either it is fast enough to ignore, in which case say so with a number the
-      way inference did, or it goes behind the POST card. **`augur/seam.rs` still
-      documents the worker thread and the deadline as the implementor's job**, so
-      it and the box above currently disagree
-      **See it:** time from process start to first frame, with and without weights
+- [x] **Boot warm-up — measured, and not needed** (`0.14.8`). Both readers load
+      in **8.4ms** warm in a release build and 21ms in the dev one — under a frame
+      at 60Hz — so nothing moves behind the POST card. `augur/seam.rs` no longer
+      tells an implementor to reach for a worker thread and a deadline; it says
+      what was measured
+      **See it:** ✅ `cargo test --release -p orbs-augury --test loading -- --ignored --nocapture`
+      *(drop `--release` for the dev profile, which is what `cargo run -p orbs` builds)*
+
+- [x] **An exact word before a near one, and each sentence taught once, to one
+      command** (`0.14.9`) — the 2,795 corpus lines the grammar read as another
+      command with the right one offered were three defects, not a reader's
+      taste. **A near word claimed another template's word**: `mill the
+      {reagent}` insists on as much as `still the {reagent}`, `still` is near
+      `mill`, and `grind` is written first — 2,407 lines, and the grammar now
+      prefers the exact match among the equally insistent. **The alembic is a
+      place**, so four `move` templates said `distil`'s sentences word for word:
+      154 sentences taught as two commands, now the template's that fixes more
+      words. **And every reagent sentence was made twice** — the recipes' words
+      are materials too — 47,628 of 109,328 examples. Misreads 2,822 → 65. The
+      grammar's holdout moved a tenth, 16.8% → 16.9%; counted once per sentence
+      it reads 18.5%, and the shipped prompt reader 76.4% where 78.2% was counted
+      double
+      **See it:** ✅ `cargo run --release -p orbs-sim --example parse -- --bench` —
+      *"0 sentences are taught as two commands"*, and under the outranked cause,
+      which command stood in front of which; in the game,
+      `ORBS_AUGURY=grammar ORBS_BOOT=0 ORBS_DUMP="attend laboratory; still the sage" cargo run -p orbs`
+      — *"≈ distil sage"*, which was grinding it
+
+- [x] **Several seeds, so a retrain can be told from its luck** (`0.14.10`) —
+      `scripts/seeds.sh` trains both readers over five seeds and measures every
+      run, and `--compare` says whether a change's range clears the baseline's.
+      The trainer takes `--seed` and `--out`, both readers `load_from` a path, and
+      `measure` and `trials` print `--scores`. **The first baseline says why it
+      was needed**: on one unchanged tree the spell reader's average shape ranges
+      **47.1%–77.0%** across five seeds and the prompt reader's holdout
+      69.8%–76.5%, and the single-run comparisons §19 made for the spell reader —
+      66.4% against 60.0% of the trials, 78.5% against 74.8% of its average shape
+      — all sit inside that. **Its first answer was about `0.14.9`**: the
+      corrected corpus trains within noise of the old one (no Welch t reaches 1.5
+      over five seeds apiece), though the old one's seeds are steadier
+      **See it:** ✅ `scripts/seeds.sh baseline`, then `cat target/seeds/baseline/summary.txt`
+      — half an hour on the GPU; after a change, `scripts/seeds.sh <label>` and
+      `scripts/seeds.sh --compare baseline <label>`
+
+- [x] **The reader's table holds what is taught, and both readers are
+      retrained** (`0.14.11`) — two of the three table changes `0.14.5` left for
+      a run that could afford seeds. The fold removes eight rows no lookup could
+      reach; the holdouts no longer lend the table 73 words nothing trains, so
+      `pound` lands in a bucket like any word a player was never taught. 1,621 →
+      1,541 rows, and five seeds find nothing against either — the fold, which
+      touches nothing, is the tool's own calibration. The old weights no longer
+      load, so a retrained pair ships, chosen by a rule fixed before the run was
+      read: the prompt reader 78.6% of its holdout (was 76.4%), the trials 73.3%
+      (was 72.3%), nothing read as its opposite
+      **See it:** ✅ `ORBS_BOOT=0 ORBS_DUMP="attend laboratory; triturate the sage" cargo run -p orbs`
+      — the shipping default reads it again; the numbers are
+      `cargo run --release -p orbs-augury --example measure --features train`
+      (and `-- --spells`) and `cargo run --release -p orbs-augury --example trials`
+
+- [ ] **Refusals the spell reader is shown** — the third table change. The
+      spell file's refusals are canonical statements the gate keeps from the
+      reader, and they are the population `measure --spells` holds to 100%
+      untouched, so the sentences about the tower a reader *would* meet need a
+      population of their own. `0.14.5` replaced the one with the other in a
+      single run and could not tell what it measured
+      **See it:** `scripts/seeds.sh refusals --spells <label>`, then
+      `scripts/seeds.sh --compare <label> refusals` — the *nothing* and
+      *hazard* trial styles, and *read as their opposite* at 0
+
+- [ ] **A `{count}` in the spell corpus** — `repeat 3` only ever says *three*
+      and `bide 10` only *ten*, so *"run it seven times"* is a shape the head has
+      never met. The count is read from the line, so it is the class that fails;
+      a slot has to carry a number word in the sentence and its digit in the
+      canonical, and teach the tagger nothing
+      **See it:** `cargo run --release -p orbs-augury --example trials` — the
+      *repeat*, *bide* and *no-count* rows, over seeds
 
 ---
 

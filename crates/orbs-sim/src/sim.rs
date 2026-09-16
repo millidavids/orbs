@@ -807,6 +807,7 @@ impl Sim {
                 self.world.resource_mut::<Choices>().offer(line, readings);
             }
             Resolution::Incomplete { .. }
+            | Resolution::TakesNothing { .. }
             | Resolution::Elsewhere { .. }
             | Resolution::InSpell { .. }
             | Resolution::Unresolved { .. } => {}
@@ -868,11 +869,10 @@ impl Sim {
             .take(crate::augur::MAX_READINGS)
             .collect();
 
-        // A command that runs, if any of them does.
-        let runs = readings
-            .iter()
-            .find(|echo| analyse(echo, &scene, Mode::Calm).resolution.is_resolved())
-            .cloned();
+        // A command that runs, if any of them does — and of those, one that
+        // uses every word it was handed before one that leaves some over. See
+        // `parser::reading_to_run`.
+        let runs = crate::parser::reading_to_run(&readings, &scene, Mode::Calm).cloned();
         if let Some(echo) = runs {
             self.submit_divined(line, &echo);
             return;
@@ -890,7 +890,9 @@ impl Sim {
             .find(|echo| {
                 matches!(
                     analyse(echo, &scene, Mode::Calm).resolution,
-                    Resolution::Elsewhere { .. } | Resolution::Incomplete { .. }
+                    Resolution::Elsewhere { .. }
+                        | Resolution::Incomplete { .. }
+                        | Resolution::TakesNothing { .. }
                 )
             })
             .cloned();
@@ -990,6 +992,7 @@ impl Sim {
             // the interrogation it exists to remove.
             Resolution::Ambiguous { .. }
             | Resolution::Incomplete { .. }
+            | Resolution::TakesNothing { .. }
             | Resolution::Elsewhere { .. }
             | Resolution::InSpell { .. }
             | Resolution::Unresolved { .. } => {}

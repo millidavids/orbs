@@ -15,6 +15,34 @@
   at 1.0 (DESIGN.md §19).
 -->
 
+## [v0.14.11] - 2026-09-16
+
+### Description
+In development — a dev log, not patch notes. The orb stopped quietly ignoring
+words it could not use and says so instead, chooses between its readings of a
+sentence more carefully, and both of its readers were retrained on cleaner lessons.
+
+### Changed
+- **The orb reads a little more of what you say.** Both of its readers — the one
+  at the prompt and the one for spells — were retrained from cleaner lessons:
+  every example sentence now appears once, and none is taught as meaning two
+  different commands. The prompt's reader understands more of the phrasings it
+  was never shown.
+- **When a sentence could mean several things, the orb picks more carefully.** It
+  prefers the reading that uses every word you typed, and a reading that ignores
+  your words can no longer win over one that uses them.
+
+### Fixed
+- **Words after a command that takes nothing no longer vanish.** `status
+  gibberish` used to run `status` and quietly drop the rest, and so did `quit
+  laboratory`; the orb now tells you what it could not use. Natural phrasings
+  still just work — `how are things going`, `overview of the tower`, a stray full
+  stop — naming where a command acts is fine (`wander archive`), and in the middle
+  of a siege it acts rather than stopping to tell you.
+- **A spell says why it skipped a line like that.** A spell line that hands words
+  to a command that takes none now says so, instead of claiming nothing answered
+  to it.
+
 ## [v0.14.5] - 2026-09-10
 
 ### Description

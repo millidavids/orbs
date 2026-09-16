@@ -227,6 +227,22 @@ pub enum Resolution {
         /// Slots that did resolve, in signature order.
         filled: Vec<Argument>,
     },
+    /// A verb that takes no argument, handed words it cannot use.
+    ///
+    /// [`Incomplete`](Self::Incomplete)'s other half. That one answers a verb
+    /// whose argument explained nothing by naming the slot it is waiting for —
+    /// *"verify what?"* — and a verb that takes nothing has no slot to name, so
+    /// `status gibberish` ran `status` with the word thrown away and `undo
+    /// gibberish` acknowledged. §6 forbids the silent discard as firmly as the
+    /// bare error, so the orb names the verb and the words it could not use.
+    TakesNothing {
+        /// The verb that matched.
+        verb: Verb,
+        /// Which dialect the player reached for.
+        register: Register,
+        /// The words it was handed, as the player typed them.
+        extra: String,
+    },
     /// A real verb, but not one this place answers to.
     ///
     /// §7 scopes an instrument's verb to where the instrument is, so `mix` in
@@ -271,6 +287,7 @@ impl Resolution {
             Self::Resolved { intent, .. } => Some(intent),
             Self::Ambiguous { .. }
             | Self::Incomplete { .. }
+            | Self::TakesNothing { .. }
             | Self::Elsewhere { .. }
             | Self::InSpell { .. }
             | Self::Unresolved { .. } => None,

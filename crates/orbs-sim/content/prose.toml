@@ -67,6 +67,14 @@ survey_bare = "the {name} holds nothing"
 # of the fixture has been told where to go. `tower::fixture_of` finds it.
 verb_needs_fixture = "there is no {source} here to {name} with"
 
+# A verb that takes nothing, handed words anyway (§19).
+#
+# `status gibberish` ran `status` with the word thrown away, and `undo
+# gibberish` acknowledged. A verb whose argument explained nothing asks "verify
+# what?" by naming the slot it is waiting for; a verb that takes nothing has no
+# slot to name, so the refusal names the verb and the words it could not use.
+verb_takes_nothing = "{name} takes nothing - '{words}' is not something it can use"
+
 # The commonest refusal in the game: the parser resolved a name on submit and by
 # the next tick it was gone, or the player named something that is not within
 # reach. It drew as two bare field values — `mix sage` — which says what was
@@ -777,6 +785,10 @@ spell_too_deep = "{name} is too many spells deep; the orb loses the thread"
 # §8's taxonomy: "scripts always log and never halt". Each of these skips the
 # line and carries on - none of them stops the spell.
 spell_missing = "{name} line {count}: nothing here answers to '{detail}'"
+# A verb that takes nothing, handed words anyway — the prompt's
+# `verb_takes_nothing` in a spell's voice. Saying "nothing here answers to it"
+# would name the one thing that is not wrong with the line.
+spell_takes_nothing = "{name} line {count}: that takes nothing - it cannot use '{detail}'"
 spell_forbidden = "{name} line {count}: the orb will not do '{detail}' from a spell"
 
 # Waiting is normal - it is what a recipe does. Said **once**, when the wait

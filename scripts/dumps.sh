@@ -212,8 +212,10 @@ run dev_list    ORBS_BOOT=0 ORBS_DUMP="debug_spell"
 # `Incomplete` now — the orb names the verb and asks what for. The last three
 # lines are the ones that must *not* change: `light athanor` names the instrument
 # `kindle` operates and still lights it, `look around` still lists the room, and
-# bare `survey` is the commonest thing anyone types.
-run reading_asks  ORBS_BOOT=0 ORBS_AUGURY=off ORBS_DUMP="attend laboratory; verify gibberish; digest husks; move charcoal to athanor; light athanor; look around; survey"
+# bare `survey` is the commonest thing anyone types. `status gibberish` is the
+# same refusal for a verb that takes nothing: no slot to ask for, so it names the
+# words it could not use rather than running `status` without them.
+run reading_asks  ORBS_BOOT=0 ORBS_AUGURY=off ORBS_DUMP="attend laboratory; verify gibberish; status gibberish; digest husks; move charcoal to athanor; light athanor; look around; survey"
 # ...and the same lines **with a reader standing by**, which is the shipping
 # default and the configuration the `off` capture above cannot speak for. The
 # grammar is used rather than the trained model for `dumps.sh`'s standing reason:

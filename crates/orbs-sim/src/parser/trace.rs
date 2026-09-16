@@ -143,6 +143,19 @@ impl ParseRecord {
                 None,
                 Vec::new(),
             ),
+            // Traced as unresolved for `Elsewhere`'s reason — it ran nothing —
+            // with the verb and the words it could not use in the echo, so a
+            // cluster reads as *"they kept talking after `status`"*.
+            Resolution::TakesNothing {
+                verb,
+                register,
+                extra,
+            } => (
+                Outcome::Unresolved,
+                Some(format!("{} <{extra}>", verb.canonical())),
+                Some(*register),
+                Vec::new(),
+            ),
             Resolution::InSpell { word } => (
                 Outcome::Unresolved,
                 Some(word.canonical().to_owned()),

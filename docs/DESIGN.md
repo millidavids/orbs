@@ -2002,12 +2002,23 @@ bevy = { version = "=0.19.0", default-features = false, features = ["x11", "wayl
 
 ### Build profiles
 
-Following court_wizard, which is proven across a shipped title:
+Started from court_wizard's, which is proven across a shipped title, and moved
+twice by measurement since — `Cargo.toml` carries both, and §19 *The gate was its
+tests running an unoptimised sim* the second:
 
 ```toml
 [profile.dev]
-opt-level = 1
+opt-level = 0
 debug = "line-tables-only"
+
+[profile.dev.package."*"]           # every dependency, all of Bevy
+opt-level = 3
+
+[profile.dev.package.orbs-sim]      # the sim the tests step for thousands of ticks
+opt-level = 1
+
+[profile.dev.package.orbs-balance]
+opt-level = 1
 
 [profile.release]
 opt-level = 3
@@ -2975,7 +2986,7 @@ defects came of it and both are the reason the shape above is what it is:
 
 **Three things can be left over and they are not one case.** A word the orb has
 never heard (`gibberish`); a word better explained by another verb (`survey
-feed.log`, which should reach `peruse` — still open, a *ranking* question); and
+feed.log`, which should reach `peruse` — still open, a *ranking* question; measured at `0.14.7`, the class was 24 lines); and
 **the instrument the verb operates**. `light athanor` fills nothing, because
 `kindle` takes fuel and the athanor is a place, but bare `kindle` is the right
 reading and `light_the_athanor_lights_it_rather_than_listing_it` pins it. So the
@@ -3017,7 +3028,8 @@ candidate let the next-best verb through.
 ⚠ **Two things this does not fix**, both recorded as boxes rather than hidden:
 a verb that takes *no* argument still swallows one (`status gibberish` → `status`;
 `undo` is unimplemented, so it acknowledges), because `Incomplete` names a slot
-and there is none to name. And with the trained reader on, `digest husks` reaches
+and there is none to name (**answered at `0.14.6`** — *A verb that takes nothing
+says so*). And with the trained reader on, `digest husks` reaches
 it and comes back `undo` — the reader's 81.5% rather than this rule, since
 `reads_outright` already required `leftover == 0` and those lines always bypassed
 tier one.
@@ -3724,6 +3736,476 @@ Still wrong, and recorded rather than chased here:
   alembic"* reads `stop shard`.
 - `let` and `pull` with a name the reader has never seen, and loose commands inside a
   spell, are where most of the misses are.
+
+### A verb that takes nothing says so, rather than running without the word (`0.14.6`)
+
+**`status gibberish` ran `status`, and `undo gibberish` acknowledged** — the word
+thrown away both times. `0.13.18` answered the same defect for a verb with a slot:
+one whose argument explained nothing became `Incomplete`, and the orb asked
+*"verify what?"*. A verb that takes nothing has no slot to name, so the honest
+answer needed a shape that did not exist.
+
+**`Resolution::TakesNothing`**, carrying the verb and the words it could not use,
+answered from `content/prose.toml` — *"status takes nothing - 'gibberish' is not
+something it can use"*. It is `Incomplete`'s other half in every way that matters:
+the same record in `collect`, the same diversion in `analyse` (the exactly-typed
+verb sorts first, so the reading that diverts is the one meant), and the same
+answer to `reads_outright` — **a word over is a sentence**, so *"status report"*
+reaches a reader before the orb refuses it.
+
+Two exemptions, each a line the refusal must not touch:
+
+- **Naming a place.** A verb with no slot names nothing but where it acts, and
+  there is one of each — `wander archive`, `research archive`, `probe lens`. The
+  slot rule exempts only an operation naming its instrument (`light athanor`);
+  with no slot at all, any place is where the verb was always going to act.
+- **Filler.** `strip_filler` never empties a tail — *"attend the"* keeps its `the`,
+  so a required slot says *"I could not find that"* rather than *"what?"* — and so
+  *"status please"* reached the refusal holding a word. A tail of nothing but
+  filler is nothing handed over, for this rule and for `Incomplete`'s alike:
+  *"survey the"* runs bare `survey` rather than asking what.
+
+The parser's own coverage moved by a tenth — corpus 9.7% → 9.6%, holdout 3.5% →
+3.4% — and that is the price and the point: phrasings where a bare verb was
+followed by a word it could not use had been reading correctly by throwing the
+word away. They reach a reader now instead.
+
+### The reading that uses every word runs first — and the box was 24 lines, not 3,146 (`0.14.7`)
+
+**The roadmap said 3,146 corpus lines were lost to a reading that left a word over
+outranking one that used it.** Nobody had measured it: the bench counted one
+number for every way a reader's reading can run as the wrong command, and a fix
+for one cause moved it by less than the others shifted underneath. So the bench
+sorts its misreads by cause now, because the causes need opposite fixes:
+
+| | before | with this and `0.14.6` |
+|---|---|---|
+| the right one was offered and would not run here | 0 | 0 |
+| **the right one was offered and a wrong one ran first** | 3,119 | 2,795 |
+| the one that ran left words it could not use | 24 | 12 |
+| the one that ran used every word, and is wrong | 3 | 15 |
+| **every misread** | **3,146** | **2,822** |
+
+**The class the box named is 24 lines**, and its own example had already gone —
+`survey feed.log` became `Incomplete` at `0.13.18`. What remains is overwhelmingly
+the reader's *order*: the right command offered, with a wrong one ahead of it that
+also runs.
+
+**`parser::reading_to_run`** asks a reader's readings the question
+`reads_outright` asks a typed line: the first that resolves **and accounts for
+every word it was handed**, else the first that resolves at all.
+`Sim::submit_reading` chooses with it and so does the bench, which is why the bench
+asks the function rather than restating the rule — it measures what the game plays
+by. The grammar's reading of its own templates went 96.9% → 97.2%.
+
+**It is the right order, not a cure.** *"stir the alembic"* went from `distil
+alembic`, which named the alembic and ignored it, to `empty alembic`, which uses it
+and is still wrong. The 2,795 are next, and they are the reader's to fix — a corpus
+teaching one phrasing to two commands, a template that drops its noun — not the
+parser's. (**`0.14.9`**: 2,407 of them were a tie in the grammar's own order, and
+the corpus was the rest.)
+
+### The readers load in 8ms, so nothing waits behind the POST card (`0.14.8`)
+
+**Inference was measured the day it shipped, and the load never was.** Both
+frontends load their readers before a window exists — the Bevy build inside
+`SimPlugin::build` — so if the load were slow, the fix was to move it behind the
+POST card, and nobody knew whether it was.
+
+`orbs-augury`'s `tests/loading.rs` times it, three times each, cold then warm:
+
+| warm | dev — what `cargo run -p orbs` builds | release — what a player gets |
+|---|---|---|
+| the prompt's reader | 4.3ms | 1.9ms |
+| the spell reader | 16.5ms | 6.5ms |
+| **both** | **20.8ms** | **8.4ms** |
+
+**Under a frame at 60Hz in release, and about one in dev**; the first load, off the
+disk, adds a millisecond or two. The spell reader costs three times the prompt's
+because it loads the prompt's weights again for its command lines and hashes both
+files for its identity — a megabyte-scale read `Scribe`'s own doc already judged
+cheaper than sharing. Neither is worth a thread.
+
+**`augur/seam.rs` said otherwise, and the box was right that the two disagreed**:
+the trait still told an implementor that a trained reader *"will hand work to a
+worker thread"* and owns the deadline. It says what was measured now — 436µs to
+read a line, 8ms to load — and keeps the requirement for a reader that could not
+promise it.
+
+### An exact word before a near one, and each sentence taught once, to one command — the 2,795 were three defects (`0.14.9`)
+
+**`0.14.7` left 2,795 corpus lines the grammar read as another command with the
+right one offered, and blamed the corpus** — *"a corpus teaching one phrasing to
+two commands, a template that drops its noun"*. The bench now says which command
+stood in front of which, and the largest collisions were neither: `distil` ←
+`grind` on 296 lines like *"still the amber"*, `kindle` ← `mix` on 222 like *"burn
+the amber"*, `purge` ← `mix` on 220 like *"purge the amber"*.
+
+**A near word was claiming another template's word.** `mill the {reagent}` and
+`still the {reagent}` insist on the same two words, `is_near` lets `still` stand
+for `mill`, and `grind` is written above `distil` — so the weight sort, which is
+stable, handed the tie to the file's order: the one thing it exists to stop.
+`churn` took `burn` and `merge` took `purge` the same way. `Grammar::read` collects
+every match now and orders by insistence, then by how many words matched only by
+being near. Typo tolerance is untouched — *"mil the sage"* still grinds — it just
+cannot outrank a template the player typed exactly. **2,407 lines.**
+
+**The roadmap had the rest right.** 370 of the 388 left were `move` ← `distil` at
+the alembic. The alembic is a place, so `put the {reagent} in the {place}` expands
+to `put the {reagent} in the alembic` word for word, which is `distil`'s sentence
+too; four `move` templates did it, and at the lens `survey`'s `peer into the
+{place}` and `verify`'s `test the {place}` each said one of `probe`'s. **154
+sentences taught as two commands** — a coin toss for a trained reader, and for the
+grammar a miss on whichever label it did not pick.
+
+**The template that fixes more words keeps the sentence** (`Phrasings::by_entry`).
+Whoever wrote `in the alembic` meant the alembic; whoever wrote `in the {place}`
+meant any room. It is the order `Grammar::read` tries templates in, so the corpus
+and the grammar cannot disagree about whose sentence it is. It is judged before
+thinning, so a cap cannot keep the loser by striding onto it, and two templates
+fixing equally many words both keep it and fail
+`no_sentence_is_taught_as_two_commands`, because that one is a writer's to settle.
+**A rule rather than two edits, because the collisions are waiting**: 140 template
+pairs across two commands, over 62 words — `menu`, `room`, `circle` among them —
+say each other's sentences the moment one of those words names something of the
+slot's kind. Two words do today.
+
+**Counting them found the larger defect.** 154 sentences, but 298 examples
+dropped: every reagent sentence was in the corpus twice. `corpus_scene` adds the
+recipes' words and then the materials', and every substance is a material — it has
+a colour — so every `{reagent}` slot offered every reagent twice. **47,628 of
+109,328 examples**, and every rate the bench and the trainer reported counted a
+reagent verb double. `Fillers::values` takes each word once — a leaf can repeat as
+well — and `no_example_is_made_twice` holds it.
+
+| | `0.14.8` | exact first | + one command | + once each |
+|---|---|---|---|---|
+| corpus / holdout examples | 100,942 / 8,684 | 100,942 / 8,684 | 100,644 / 8,684 | 56,688 / 5,012 |
+| sentences taught as two commands | 154 | 154 | 0 | 0 |
+| **offered, and a wrong one ran first** | **2,795** | 388 | 90 | **53** |
+| every misread | 2,822 | 400 | 102 | 65 |
+| the grammar on its own corpus | 97.2% | 99.6% | 99.9% | 99.9% |
+| the grammar on the holdout | 16.8% | 16.9% | 16.9% | 18.5% |
+
+**The holdout barely moved, and that is the honest reading.** The tie mattered
+where two templates both matched, which is the corpus; a phrasing nothing taught
+mostly matches no template at all. The last column's jump is the denominator —
+each sentence counted once — and not the grammar.
+
+**What is left.** 38 of the 53 are *"please put the {reagent} in the alembic"*:
+`move`'s by its label, but `distil`'s template says the same sentence without the
+*please*, and the grammar reads it the way the rule above would. The label is the
+odd one out, and the rule is not stretched to reach it — *"another template's
+sentence, less a word"* is a heuristic where the rule is not. The other 15 are
+single lines at the lens, the forge and `troop`.
+
+**Nothing was retrained, and the readers' numbers move anyway.** On the same
+weights, over holdouts that count each sentence once: the prompt's reader
+**76.4%** (78.2% counted double), 79.8% with the parser and the grammar (80.8%),
+and 81.5% of 496 refusals (84.8%); the spell reader's average shape 74.7% (74.8% —
+averaged over shapes, so the doubling barely reached it). Both trainers' corpora
+changed as well, thinned from lists that no longer repeat, and the next run is the
+first to learn from them.
+
+### Several seeds, so a retrain can be told from its luck (`0.14.10`)
+
+**Three changes to the reader's table have waited on this since `0.14.5`** — the
+fold, the untrained rows, and refusals a reader is shown — because one retrain
+could not tell a fix from a new seed. That was a sentence in *Two retrains*; this
+measures it.
+
+**The tool.** `train` takes `--seed` and `--out`. The seed moves the shuffle as well
+as the starting weights, because a run's luck is both, and a mistyped seed is
+refused rather than quietly becoming the default — three "different" seeds that
+were one seed three times would measure nothing but the hardware.
+`Trained::load_from` and `Scribe::load_from` read a run from any path; the scribe
+takes the prompt reader's path too, because its command lines are read by one and
+two spell readers can only be compared through the same one. The stale-weights
+message names the trainer by the head it was asked for rather than by the path,
+which can now be anything. `measure` and `trials` print `--scores`, a name and a
+number a line, and exit non-zero with nothing to measure, so an empty file cannot
+average in as a run that read nothing. `scripts/seeds.sh` trains both readers over
+five seeds, **copies the binaries it trains with** — a run is half an hour, and a
+build made meanwhile must not change the later seeds — and prints each score's
+mean and range. `--compare` sets two labels side by side and calls a score moved
+only when one range clears the other.
+
+**Five seeds, not three**: the range of five draws is wider than the range of three
+from the same luck, so a change that clears it has cleared more of what a seed can
+do alone. An epoch is eight seconds, which is what made five affordable — the plan
+had assumed twenty minutes a run.
+
+**The first baseline**, on the tree `0.14.9` left:
+
+| | mean | across five seeds |
+|---|---|---|
+| prompt reader, holdout | 73.7% | 69.8–76.5 |
+| all three together | 77.9% | 75.3–80.1 |
+| correctly refused | 83.3% | 74.6–87.7 |
+| spell reader, average shape | 68.1% | **47.1–77.0** |
+| `if {place} has {reagent}` | 64.4% | **14.0–82.4** |
+| trials, every line | 66.9% | 59.0–70.7 |
+| read as their opposite | 0 | 0 in every seed |
+
+**The spell reader's spread is thirty points**, and one seed in five read `if {place}
+has {reagent}` — 86% of its holdout — at 14%. The single-run comparisons made for it
+above — 66.4% against 60.0% of the trials, 78.5% against 74.8% of its average shape
+— all sit inside that range. Neither was evidence of anything, which is exactly why
+the table changes were left waiting rather than taken or refused on them.
+
+**The first question it answered was about `0.14.9`.** The shipped readers, trained
+once on the old corpus, measured near or above the top of the baseline's ranges —
+76.4% at the prompt against a best of 76.5, 72.3% of the trials against a best of
+70.7 — and `0.14.9` had changed exactly what they learn from. So five seeds were
+trained on the old corpus, the tree built with its two corpus changes undone, and
+measured with the baseline's own binaries — the corrected holdouts and the same
+table — so both were scored on one population:
+
+| | the corrected corpus | the old one |
+|---|---|---|
+| prompt reader, holdout | 73.7% (69.8–76.5) | 75.8% (73.7–77.1) |
+| spell reader, average shape | 68.1% (47.1–77.0) | 72.5% (68.2–76.3) |
+| `if {place} has {reagent}` | 64.4% (14.0–82.4) | 84.2% (65.6–98.5) |
+| trials, every line | 66.9% (59.0–70.7) | 69.9% (68.0–72.7) |
+
+**Every score lies within the other's range, and no Welch t over five seeds apiece
+reaches 1.5**: the old corpus trains no better that five seeds can resolve, and most
+of the gap is one seed. It does train *steadier* — the corrected corpus's seed 4
+collapsed to 14.0% on `if {place} has {reagent}`, and nothing in the old one came
+near. The likeliest reason is the refusals. They expand over the nouns too, so
+deduplicating nearly halved them — 2,756 → 1,604 at the prompt, 2,755 → 1,603 for
+spells — while the commands barely moved, and the trainer weighs refusals by their
+count, so their weight rose to keep their share of the loss: **7.8:1 → 13.5:1** at
+the prompt, **1.8:1 → 3.0:1** for spells. The same pull, in fewer and heavier steps.
+Recorded rather than chased: the corpus is right as it stands, and a seed that
+collapses is one `seeds.sh` now shows before anything ships.
+
+**Then the fold, which should do nothing — the tool's own calibration.** `token`
+folds a word before it looks it up, so the eight rows stored as written — `times,`,
+`master's`, `there)`, `morning()` and `gathering(here,` from the templates, `what's`,
+`?` and `./` from the synonyms — were rows no line could reach, in training or in
+play. Folding the table removed them and added `gathering(here`: 1,621 → 1,614
+rows. Nothing a reader can see changed; what changed is the table's size, which
+re-seeds every row:
+
+| | baseline | folded | Welch t |
+|---|---|---|---|
+| prompt reader, holdout | 73.7% (69.8–76.5) | 70.4% (64.0–78.3) | −1.26 |
+| correctly refused | 83.3% (74.6–87.7) | 89.9% (86.9–92.9) | +2.21 |
+| spell reader, average shape | 68.1% (47.1–77.0) | 71.9% (63.4–80.2) | +0.62 |
+| trials, every line | 66.9% (59.0–70.7) | 71.4% (67.7–76.0) | +1.71 |
+
+**A change that touches nothing moved one mean six and a half points, with a t past
+2.** Every range still overlaps, which is the rule doing its job — and one score in
+twenty past a t of 2 is what luck alone produces across twenty scores. So the
+verdict stays with the ranges and a t is a hint, never a finding; `--compare`
+prints it beside the verdict, where it can be read as one. The fold is kept:
+it is right by construction, and five seeds find nothing against it.
+
+### The reader's table holds only what is taught, and both readers are retrained (`0.14.11`)
+
+**The second of the table changes `0.14.5` left waiting.** The vocabulary harvested
+the holdouts as well as the templates that teach, so 73 words only a holdout says —
+`pound` among them — were rows nothing ever trained: starting values, met in exactly
+the lines the holdout measures, where a word the table does not hold lands in a
+bucket every unseen word has trained. The table holds what `say` lines, canonicals
+and taught refusals use now, 1,614 → 1,541 rows, measured on top of the fold:
+
+| | folded | taught only | Welch t |
+|---|---|---|---|
+| prompt reader, holdout | 70.4% (64.0–78.3) | 74.3% (67.0–78.6) | +1.28 |
+| all three together | 74.4% (68.7–80.9) | 77.8% (71.7–81.1) | +1.36 |
+| correctly refused | 89.9% (86.9–92.9) | 83.2% (77.6–93.8) | −2.18 |
+| wrongly refused | 6.0% (2.0–8.9) | 3.0% (1.9–3.9) | −2.18 |
+| spell reader, average shape | 71.9% (63.4–80.2) | 70.7% (64.4–82.2) | −0.27 |
+| trials, every line | 71.4% (67.7–76.0) | 70.1% (66.7–73.7) | −0.68 |
+
+**Nothing moved that the fold had not moved by luck** — the refusal head's shift runs
+straight back to where the baseline had it, and against the baseline no t reaches
+1.4. So it is kept on its principle, with five seeds finding nothing against it: a
+holdout measures phrasing nothing taught, and its words should arrive the way a
+player's untaught words do. `every_word_the_templates_teach_is_known` is narrowed to
+what is taught, and `a_word_only_a_holdout_says_is_one_the_reader_has_never_seen`
+holds `pound` to a bucket.
+
+**New weights, because the old ones no longer load.** They were trained against 1,621
+rows, the table has 1,541, and `weights` refuses a shape that does not match — so
+until something replaced them the game ran with no reader at all. The old pair is
+kept in `target/seeds/shipped-0.14.8/`. The new one was chosen by a rule fixed before
+the last run was read — the prompt reader with the best *all three together*, the
+spell reader with the best trials among seeds that read nothing as its opposite —
+which picked seeds 181 and 1 of the taught-only run, measured again as the pair they
+ship as, because the scribe's command lines go through the prompt reader beside it:
+
+| | shipped at `0.14.8` | shipped now | the five-seed mean |
+|---|---|---|---|
+| prompt reader, holdout | 76.4% | 78.6% | 74.3% |
+| all three together | 79.8% | 81.1% | 77.8% |
+| correctly refused | 81.5% | 82.9% | 83.2% |
+| wrongly refused | 2.2% | 1.9% | 3.0% |
+| spell reader, average shape | 74.7% | 72.7% | 70.7% |
+| command lines in a spell | 65.6% | 62.8% | 56.1% |
+| trials, every line | 72.3% | 73.3% | 70.1% |
+| read as their opposite | 0 | 0 | 0 |
+
+**Best of five overstates a retrain**, and the mean is what the next one should
+expect. Against the pair it replaces, the prompt reader is better on all four and the
+spell reader trades — a point more of the trials and three of its holdout's lines,
+two fewer of its average shape and three of the command lines in a spell. Measured
+rather than guessed either way, and the old pair is one copy away.
+
+**The third change is still open**: refusals the spell reader is shown. The spell
+file's refusals are the population `measure` holds to 100% untouched, so the tower
+sentences a reader would meet need a population of their own rather than taking
+those over, which is what the run at `0.14.5` did.
+
+### The gate was its tests running an unoptimised sim — and a release ran it twice (at `0.14.11`)
+
+**The gate took seven and a half minutes at the desk and twenty in CI, and a release
+paid for CI's twice.** Measured before anything changed:
+
+| | desk, 32 threads | CI, 2 cores |
+|---|---|---|
+| the whole gate | ~7.5 min | ~20 min |
+| `cargo test --workspace` | 417s — 412s of it running | 18.0 min |
+| rebuilding everything below `orbs-sim`, cold | 8.8s | under a minute, cached |
+
+**The cost was never building.** `.cargo/config.toml`'s note — 267s, of which 35s
+running — predates mold; with it, a cold rebuild of every workspace crate and all 54
+test binaries is 8.8s. What the gate paid for was eight suites stepping the sim for
+thousands of ticks: the balance harness's `agrees.rs` (four seeds × 7,200 ticks —
+183s here, 432s in CI), `gleaning`, `tampering`'s 20,000 ticks, `solvers`, `ward`,
+`solver`, `persistence`'s lockstep replays and `scripting_the_siege`. `cargo test`
+runs its binaries one after another, so every one of them sat on the critical path.
+
+**The sim ran at opt-level 0, and `"*"`'s 3 never reached it**: Bevy's generic ECS
+code is compiled in the crate that instantiates it, so every query `orbs-sim` runs
+was unoptimised. Zero was chosen, measured, when a sweep took 17.74s and everything
+at 1 was slower than ours at 0 with Bevy at 3. That comparison never had the third
+cell — ours at 1 *and* Bevy at 3 — and the sim is three and a half times heavier
+now (61.0s a sweep at 0). `orbs-sim` and `orbs-balance` at 1:
+
+| | opt-level 0 | 1 |
+|---|---|---|
+| `cargo test --workspace` | 417s | **132s** |
+| `agrees.rs` | 183s | 58s |
+| `sweep --ticks 7200` | 61.0s | **19.0s**, byte-identical |
+| cold rebuild, `orbs-sim` down | 8.8s | 13.6s |
+
+Every slow suite ran about three times faster and the sweep's table did not move by
+a byte. CI's test step should fall in proportion; the next dev run is the
+measurement.
+
+**A release gated twice.** `release.yml` reran the whole gate on `main` — twenty
+minutes — on a commit that is by construction a fast-forward of one
+`dev-release.yml` had just gated. It asks for that verdict now (`dev-verdict`),
+waits when the dev run is still going, and runs the gate itself only when there is
+no passing run for the SHA, so nothing is tagged on trust. `release` and `announce`
+spell their conditions out, because GitHub skips every job downstream of a skipped
+one: the fallback gate is skipped on every ordinary promotion, and without them the
+release and its announcement would be too.
+
+**Left as it was**: `agrees.rs` is still 58 of the 132 seconds, and `cargo test`
+still runs one binary at a time. Both are levers — a runner that spreads every test
+across the machine, or the balance harness's claims moved beside the sweep they
+check — and both are choices about what the gate is for rather than how fast it
+runs.
+
+### The review — a refusal that reached too far, and a number that flattered (at `0.14.11`)
+
+A `/code-review xhigh` over `0.14.6`–`0.14.11` found fifteen defects. **Corrections
+folded into their items**, so no box moves and the version does not.
+
+**Five were `0.14.6`'s refusal reaching lines it was never meant to.**
+
+- **One `Incomplete` was kept for the line, not one per verb.** `verify`'s `audit`
+  scores 600 against `quit` and sits above it in the table, so it claimed the answer
+  and the exactly-typed `quit` below it ran bare, with the word thrown away —
+  `quit gibberish`, and `decode gibberish` past `recall`'s `decoct` in the archive.
+  `collect` records one per verb now, and `analyse` answers with the winner's.
+- **The place exemption covered every verb, on any word of the tail.** `status
+  laboratory`, `quit laboratory` and `undo laboratory move` all ran with their words
+  discarded: `best_match` tries each word, so a place *inside* the tail passed as the
+  tail naming one. It asks `Verb::anchor` now — a verb a fixture declares has one
+  place to name and no slot to name it in — and `NounMatch::words`, so the tail has
+  to name that place whole.
+- **Punctuation read as a word said.** `fold` keeps a token that is nothing but
+  punctuation whole, because `?` and `./` are synonyms in their own right, so
+  `status .` arrived carrying `.` and was refused. A word says something when it has
+  a letter or a digit in it.
+- **Plain English was refused mid-sentence, and a siege spent a turn being told.**
+  *"how are things going"* is the `status` synonym *"how are things"* with a word
+  after it. The exemption is for a plain synonym the matcher took **more than one
+  word** of — one plain word is not a sentence, which is what `decode gibberish`
+  shows — and `Mode::Siege` runs the verb rather than refusing it, for the reason §6
+  gives the mode its own answer to ambiguity. **And *"overview of the tower"*
+  runs**: a verb nothing anchors answers to every room at once, so the tower is the
+  one place it can name. A room is narrower and still refused. The tower is found by
+  shape — an absolute path of one segment — not by spelling.
+- **A spell answered with the one thing that was not wrong.** A line whose verb takes
+  nothing came back as §8's *Referent missing* — *"nothing here answers to …"* —
+  when nothing was missing. `spell_takes_nothing` says what the prompt says.
+
+**`reading_to_run` had a sink of its own.** A reading with no argument accounts for
+every word it was handed by being handed none, so a reader offering `[move sage
+laboratory now, quit]` ran `quit` — the shape `Trained::readings` documents one level
+up.
+
+**The first fix was wrong in both directions, so the rule was chosen from data.**
+Stopping a bare reading from short-circuiting also stopped it *keeping* first place:
+a later reading with an argument jumped it, and *"open the loom"* ran `survey loom`
+over the `weave` the reader ranked first — 33 corpus lines. A second guess, exempting
+verbs that could have taken an argument, was worse. So every reading the grammar and
+five trained seeds offer was dumped once, and each rule scored offline against the
+same readings:
+
+| | `0.14.7` | first fix | first resolving | **chosen** |
+|---|---|---|---|---|
+| grammar, its own corpus | **56,611** | 56,578 | 56,587 | **56,611** |
+| grammar, holdout | 832 | 839 | **865** | 838 |
+| five trained seeds, the reading it runs | **16,621** | 16,549 | 16,575 | **16,621** |
+
+**The sink never happens with the trained reader** — no jump in five seeds, because
+`0.13.19`'s filter already drops a verb that cannot hold what the tagger found. With
+the grammar it does, on phrasings nothing taught, and **no jump was ever right**: 31
+on the holdout, 6 of them displacing a right reading (*"i have forgotten how brewing
+works"* ran `weave` over `recall brewing`). So the rule is **the reader's first choice
+that resolves, unless it left words unused and a later reading both uses every word
+and names something**. A bare verb never jumps, and nothing jumps a first choice that
+used every word. First-resolving reads 27 more of the grammar's holdout, through
+slots that swallowed a word (*"put amber on the fire"* → `kindle put amber`), and 46
+fewer of the trained readers' — and the trained reader is the one that ships.
+
+**The number that chooses which weights ship was the flattering one.** `measure`
+counted a hit when *any* of four readings reached the command, which is the rule
+`orbs-sim`'s own bench refuses to use — *"scoring against any reading would flatter a
+reader that offers four and means none of them"* — and `seeds.sh --compare` decided
+on it. It prints both now, and the gap is the finding: the shipped reader reads
+**78.6%** of its holdout by that rule and **69.9%** by the reading `submit_reading`
+would actually run. The bench's holdout had the same looseness and prints both too —
+the grammar 18.5% by any reading, **16.7%** by the one it runs.
+
+**Picked again on the honest number, the shipped pair stands.** Five seeds re-measured
+with the final parser, the prompt reader chosen on *the reading it runs* and every
+spell reader tried through it: seed 181 reads **69.9%** (60.8–69.9 across five), and
+seed 1's spell reader **73.3%** of the trials (67.0–73.3) with nothing read as its
+opposite. Both files are byte-identical to what ships — the loose number had happened
+to choose right.
+
+**And seven smaller ones.** The grammar compared unfolded words, so an exactly-typed
+`powder.` was a *near* miss of `powder` — `0.14.9`'s tie-break applied backwards —
+and it scanned all 2,900 templates on every line rather than stopping once nothing
+left could reach the list. `Scribe::load_from` swallowed a prompt reader that existed
+and did not fit, which would have reported a spell reader's command lines at 0% and
+compared it as a regression. `weights` guessed the register from the head's width,
+which reads right until the spell corpus has as many shapes as there are verbs.
+`seeds.sh` kept the score files of a longer earlier run and averaged them into a
+shorter one. CI's clippy ran without `--features orbs-augury/train`, so the trainer
+and both measurement examples were never compiled there at all. `release.yml`'s
+fallback gate had no `!cancelled()`, so a `dev-verdict` that *failed* would have
+skipped the gate and the release with it — a promotion that tagged nothing and
+announced nothing. And the three examples' shared command line moved into
+`orbs_augury::cli`, so `--reader` cannot come to mean two things.
 
 ### The arsenal is worth what your industry is worth — supersedes the cap (Phase 11, `0.11.13`)
 

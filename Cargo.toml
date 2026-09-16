@@ -10,7 +10,7 @@ members = ["crates/*"]
 #
 # It becomes ordinary semver at 1.0, and the switch is one-way: DESIGN.md §19
 # records it so the jump from `0.<phase>` to `1.<minor>` is not read as a phase.
-version = "0.14.5"
+version = "0.14.11"
 edition = "2024"
 # bevy_ecs 0.19 requires 1.95. Declaring it makes the resolver MSRV-aware and
 # turns "too old toolchain" into a clear error instead of a cryptic type failure.
@@ -156,6 +156,26 @@ debug = "line-tables-only"
 # while being developed.
 [profile.dev.package."*"]
 opt-level = 3
+
+# **The simulation, optimised even in a debug build — because the gate's time was
+# the tests running it.** `cargo test --workspace` was 417s here and eighteen
+# minutes in CI, and 412s of the 417 was tests *running*, not building: eight
+# suites stepping the sim for thousands of ticks — the balance harness's seed
+# sweeps, `tampering`'s 20,000 ticks, `persistence`'s lockstep replays. Bevy's
+# generic ECS code is compiled in whichever crate instantiates it, so `"*"` above
+# never reached the queries `orbs-sim` runs.
+#
+# At 1, with dependencies still at 3: the tests **417s → 132s**, every slow suite
+# about three times faster, and `sweep --ticks 7200` **61.0s → 19.0s** with
+# byte-identical output. It costs **8.8s → 13.6s** to rebuild `orbs-sim` and
+# everything downstream cold, and nothing measurable incrementally. The note
+# above measured the other direction when a sweep took 17.74s; the sim is three
+# and a half times that now. DESIGN.md §19 has both.
+[profile.dev.package.orbs-sim]
+opt-level = 1
+
+[profile.dev.package.orbs-balance]
+opt-level = 1
 
 [profile.release]
 opt-level = 3

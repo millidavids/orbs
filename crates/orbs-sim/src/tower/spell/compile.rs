@@ -990,11 +990,24 @@ fn one(line: &str, scene: &Scene, known: &[&str], bound: &[String]) -> Reading {
         return verbatim(None);
     }
 
-    let Resolution::Resolved { intent, .. } = resolution else {
-        return verbatim(Some(Fault {
-            key: "spell_missing",
-            detail: Some(trimmed.to_owned()),
-        }));
+    let intent = match resolution {
+        Resolution::Resolved { intent, .. } => intent,
+        // **A verb that takes nothing says so here too.** The prompt names the
+        // verb and the words it could not use; a spell answered *"nothing here
+        // answers to …"*, which is the one thing that is not wrong with the line
+        // — `muster the troops` names no missing referent.
+        Resolution::TakesNothing { extra, .. } => {
+            return verbatim(Some(Fault {
+                key: "spell_takes_nothing",
+                detail: Some(extra),
+            }));
+        }
+        _ => {
+            return verbatim(Some(Fault {
+                key: "spell_missing",
+                detail: Some(trimmed.to_owned()),
+            }));
+        }
     };
     if !super::run::may_issue(intent.verb) {
         return verbatim(Some(Fault {

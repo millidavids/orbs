@@ -21,7 +21,7 @@
 
 use super::{Augur, MAX_READINGS};
 use crate::content::Phrasings;
-use crate::parser::is_near;
+use crate::parser::{Tokens, is_near};
 
 /// One piece of a template.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -133,9 +133,19 @@ fn compile(template: &str) -> Vec<Piece> {
         .collect()
 }
 
+/// What one pattern made of a line.
+struct Capture {
+    /// What each slot took, by name, in the order the pattern names them.
+    slots: Vec<(String, String)>,
+    /// How many of the pattern's words were found only by being *near* one the
+    /// player typed — see [`Grammar::read`] for why that is counted.
+    near: usize,
+}
+
 /// Try one pattern against the words of a line.
 ///
-/// Returns what each slot captured, in order, or [`None`].
+/// Returns what each slot captured and how loosely the words matched, or
+/// [`None`].
 ///
 /// # A literal may skip; a slot runs to the next literal
 ///
@@ -150,14 +160,18 @@ fn compile(template: &str) -> Vec<Piece> {
 /// right rather than lax — a reader keeps the player's words and
 /// `parser::resolve` picks the name out of them, which is the same division of
 /// labour the trained reader will work under.
-fn capture(pattern: &Pattern, words: &[&str]) -> Option<Vec<(String, String)>> {
+fn capture(pattern: &Pattern, words: &[&str]) -> Option<Capture> {
     let mut slots: Vec<(String, String)> = Vec::new();
+    let mut near = 0usize;
     let mut at = 0usize;
 
     for (index, piece) in pattern.pieces.iter().enumerate() {
         match piece {
             Piece::Word(wanted) => {
                 let found = words[at..].iter().position(|word| is_near(word, wanted))?;
+                if words[at + found] != wanted {
+                    near += 1;
+                }
                 at += found + 1;
             }
             Piece::Slot(name) => {
@@ -185,15 +199,21 @@ fn capture(pattern: &Pattern, words: &[&str]) -> Option<Vec<(String, String)>> {
             }
         }
     }
-    Some(slots)
+    Some(Capture { slots, near })
 }
 
 impl Augur for Grammar {
     fn read(&self, line: &str) -> Vec<String> {
         // Whole, filler included — see `compile`. The pattern keeps its function
         // words, so the input has to keep them too or they could never match.
-        let lowered = line.to_lowercase();
-        let words: Vec<&str> = lowered.split_whitespace().collect();
+        //
+        // **Folded by the parser's own rule**, rather than lowercased and split.
+        // `fold` sheds the trailing punctuation the matcher sheds, and without
+        // it an exactly-typed `powder.` was a *near* miss of `powder`: the
+        // tie-break below applied backwards, with a template that matched every
+        // word exactly losing to one that did not.
+        let tokens = Tokens::split(line);
+        let words: Vec<&str> = tokens.words().iter().map(|word| word.matching).collect();
         if words.is_empty() {
             return Vec::new();
         }
@@ -202,12 +222,20 @@ impl Augur for Grammar {
         // cannot tell `run {script}` from `run the {place}` — nothing in the
         // sentence says which `night_watch` is — so it offers both and lets the
         // caller keep whichever resolves against the actual room.
-        let mut readings: Vec<String> = Vec::new();
+        let mut found: Vec<(usize, usize, String)> = Vec::new();
         for pattern in &self.patterns {
-            if readings.len() >= MAX_READINGS {
+            // **Stop when nothing left can reach the list.** These are in weight
+            // order, so once `MAX_READINGS` distinct readings are held at a
+            // higher weight, no lighter pattern can displace one — and scanning
+            // all 2,900 templates, fuzzily, against every line the player types
+            // is work whose answer is thrown away.
+            if found
+                .get(MAX_READINGS - 1)
+                .is_some_and(|(weight, _, _)| pattern.weight < *weight)
+            {
                 break;
             }
-            let Some(slots) = capture(pattern, &words) else {
+            let Some(Capture { slots, near }) = capture(pattern, &words) else {
                 continue;
             };
             // **Substituted by name, not by position**, because a phrasing may
@@ -231,13 +259,35 @@ impl Augur for Grammar {
                 continue;
             }
             // Several templates of one entry reach the same command — `smash the
-            // sage` and `crush the sage` are both `grind sage`. Offering it
-            // twice would spend a reading slot on nothing.
-            if !readings.contains(&out) {
-                readings.push(out);
+            // sage` and `crush the sage` are both `grind sage`. Held once, at
+            // its best match, so a second copy neither spends a reading slot nor
+            // makes the count above wrong.
+            match found.iter_mut().find(|(_, _, held)| *held == out) {
+                Some(held) if near < held.1 => held.1 = near,
+                Some(_) => {}
+                None => found.push((pattern.weight, near, out)),
             }
         }
-        readings
+
+        // **Among the equally insistent, the one that matched exactly.** A near
+        // word is there for the player's typing — `smsah the sage` — and was
+        // never meant to let one template claim another's word. It did: `mill
+        // the {reagent}` and `still the {reagent}` insist on the same two words,
+        // `still` is near enough to `mill`, and `grind` is written above
+        // `distil` — so `still the amber` answered `grind amber`, and the file's
+        // order decided it, which is the thing the weight sort exists to stop.
+        // `burn` found `churn`, `purge` found `merge`, `stir` found `still`:
+        // 2,407 of the corpus's 2,795 outranked readings were this one tie.
+        //
+        // A tie on both still falls to the file's order, and it is stable on
+        // purpose: two templates that match a line equally well are a question
+        // only the room can answer, which is why the caller is offered both.
+        found.sort_by_key(|(weight, near, _)| (core::cmp::Reverse(*weight), *near));
+        found
+            .into_iter()
+            .take(MAX_READINGS)
+            .map(|(_, _, out)| out)
+            .collect()
     }
 }
 
@@ -377,6 +427,106 @@ mod tests {
             "#,
         );
         assert!(grammar.patterns[0].weight >= grammar.patterns[1].weight);
+    }
+
+    #[test]
+    fn an_exact_word_outranks_a_near_one() {
+        // `still` is near enough to `mill` to match it, and `grind` is written
+        // first — so before this, the file's order read `still the sage` as
+        // grinding it.
+        let grammar = grammar(
+            r#"
+            [[entry]]
+            canonical = "grind {reagent}"
+            say = ["mill the {reagent}"]
+            holdout = ["pound the {reagent}"]
+
+            [[entry]]
+            canonical = "distil {reagent}"
+            say = ["still the {reagent}"]
+            holdout = ["boil the {reagent} away"]
+            "#,
+        );
+        assert_eq!(
+            grammar.read("still the sage").first().map(String::as_str),
+            Some("distil sage")
+        );
+        // ...and a typo still lands, which is what nearness is for.
+        assert_eq!(
+            grammar.read("mil the sage").first().map(String::as_str),
+            Some("grind sage")
+        );
+    }
+
+    #[test]
+    fn the_scan_stops_early_without_missing_a_better_match() {
+        // `read` stops once `MAX_READINGS` readings are held at a weight nothing
+        // left can beat — the 2,900 fuzzy template matches a line used to cost
+        // are what that saves. **A pattern of the same weight is still tried**,
+        // which is what keeps the exact one below five decoys from being missed.
+        let grammar = grammar(
+            r#"
+            [[entry]]
+            canonical = "mix {reagent}"
+            say = ["smesh the {reagent}"]
+
+            [[entry]]
+            canonical = "distil {reagent}"
+            say = ["smush the {reagent}"]
+
+            [[entry]]
+            canonical = "digest {reagent}"
+            say = ["smosh the {reagent}"]
+
+            [[entry]]
+            canonical = "kindle {reagent}"
+            say = ["smish the {reagent}"]
+
+            [[entry]]
+            canonical = "purge {reagent}"
+            say = ["smath the {reagent}"]
+
+            [[entry]]
+            canonical = "grind {reagent}"
+            say = ["smash the {reagent}"]
+            "#,
+        );
+        let readings = grammar.read("smash the sage");
+        assert_eq!(
+            readings.first().map(String::as_str),
+            Some("grind sage"),
+            "the exact template was scanned past: {readings:?}",
+        );
+        assert!(readings.len() <= MAX_READINGS);
+    }
+
+    #[test]
+    fn a_word_typed_exactly_is_exact_though_it_carries_a_stop() {
+        // The tie-break above reads the *folded* word, as the matcher does.
+        // Without that, `powder.` was a near miss of `powder` — so the template
+        // that matched every word exactly scored as loosely as the one that did
+        // not, and the file's order broke the tie, which is the thing the
+        // ordering exists to stop.
+        let grammar = grammar(
+            r#"
+            [[entry]]
+            canonical = "mix {reagent}"
+            say = ["turn the {reagent} into powdur"]
+            holdout = ["fold in the {reagent}"]
+
+            [[entry]]
+            canonical = "grind {reagent}"
+            say = ["turn the {reagent} into powder"]
+            holdout = ["pound the {reagent}"]
+            "#,
+        );
+        assert_eq!(
+            grammar
+                .read("turn the sage into powder.")
+                .first()
+                .map(String::as_str),
+            Some("grind sage"),
+        );
     }
 
     #[test]

@@ -39,7 +39,7 @@ use orbs_sim::augur::MAX_READINGS;
 
 use crate::decode::decode;
 use crate::trained::{SCRIBE_WEIGHTS, WEIGHTS, identity, weights};
-use crate::{Reader, Trained, Vocabulary, spelling};
+use crate::{Reader, Register, Trained, Vocabulary, spelling};
 
 /// The spell reader as a frontend should hold it.
 ///
@@ -97,20 +97,49 @@ impl<B: Backend> Scribe<B> {
     /// than a degradation, because a table that has shifted under trained
     /// weights produces confident nonsense rather than an obvious failure.
     pub fn load(device: B::Device) -> Result<Self, burn::record::RecorderError> {
+        Self::load_from(SCRIBE_WEIGHTS, WEIGHTS, device)
+    }
+
+    /// Load the spell register's weights from `spell`, and the prompt's — for
+    /// the command lines — from `prompt`, each without its `.bin`.
+    ///
+    /// **For runs nobody has shipped yet**, as [`Trained::load_from`]. Both
+    /// paths, because a spell reader's command lines are only as good as the
+    /// prompt reader it hands them to, and two spell readers can only be
+    /// compared through the same one.
+    ///
+    /// # Errors
+    ///
+    /// As [`load`](Self::load).
+    pub fn load_from(
+        spell: &str,
+        prompt: &str,
+        device: B::Device,
+    ) -> Result<Self, burn::record::RecorderError> {
         let vocabulary = Vocabulary::builtin();
-        let reader = weights(SCRIBE_WEIGHTS, spelling::kinds(), &vocabulary, &device)?;
-        let prompt = Trained::load(device.clone()).ok();
-        let weighed: &[&str] = if prompt.is_some() {
-            &[SCRIBE_WEIGHTS, WEIGHTS]
+        let reader = weights(spell, Register::Spells, &vocabulary, &device)?;
+        // **Absent is allowed; wrong is not.** A checkout with no prompt weights
+        // leaves command lines as written, by design — but weights that do not
+        // fit this vocabulary are exactly the error `weights` exists to raise,
+        // and swallowing it made `measure --spells --reader <stale>` report a
+        // spell reader whose command lines read 0% rather than saying the file
+        // it was handed could not be read. `seeds.sh` compares on those numbers.
+        let held = match Trained::load_from(prompt, device.clone()) {
+            Ok(reader) => Some(reader),
+            Err(_) if !std::path::Path::new(&format!("{prompt}.bin")).exists() => None,
+            Err(error) => return Err(error),
+        };
+        let weighed: Vec<&str> = if held.is_some() {
+            vec![spell, prompt]
         } else {
-            &[SCRIBE_WEIGHTS]
+            vec![spell]
         };
         Ok(Self {
             reader,
-            prompt,
+            prompt: held,
             vocabulary,
             device,
-            identity: identity(weighed),
+            identity: identity(&weighed),
         })
     }
 
@@ -331,6 +360,37 @@ mod tests {
     /// must pass on a machine that has never trained anything.
     fn scribe() -> Option<Scribe<NdArray<f32>>> {
         Scribe::load(burn::backend::ndarray::NdArrayDevice::default()).ok()
+    }
+
+    #[test]
+    fn a_prompt_reader_that_does_not_fit_is_an_error_rather_than_silence() {
+        // **Absent is allowed; wrong is not.** A checkout with no prompt weights
+        // leaves command lines as written, by design — but a file that cannot be
+        // read is the error `weights` exists to raise. Swallowed, it made
+        // `measure --spells --reader <stale>` report a spell reader whose
+        // command lines read 0%, which `seeds.sh` would have compared as a
+        // regression of the spell reader.
+        if scribe().is_none() {
+            return;
+        }
+        assert!(
+            Scribe::<NdArray<f32>>::load_from(
+                SCRIBE_WEIGHTS,
+                SCRIBE_WEIGHTS,
+                burn::backend::ndarray::NdArrayDevice::default(),
+            )
+            .is_err(),
+            "the spell weights were accepted as the prompt reader",
+        );
+        assert!(
+            Scribe::<NdArray<f32>>::load_from(
+                SCRIBE_WEIGHTS,
+                "/nowhere/reader",
+                burn::backend::ndarray::NdArrayDevice::default(),
+            )
+            .is_ok(),
+            "a checkout with no prompt weights should still read its spells",
+        );
     }
 
     #[test]

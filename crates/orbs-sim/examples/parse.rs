@@ -209,6 +209,35 @@ fn bench(scene: &Scene) {
         holdout.len(),
     );
 
+    // **A sentence taught as two commands is a label no reader can get right**,
+    // and no single template shows it: `put the {reagent} in the {place}` is
+    // `move`, `put the {reagent} in the alembic` is `distil`, and the first
+    // becomes the second the moment the alembic is a place. Counted over both
+    // populations, because a holdout line that is another command's taught
+    // sentence is scored a miss for being read exactly as it was taught.
+    let mut meant: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+    for example in corpus.iter().chain(&holdout) {
+        let commands = meant.entry(example.said.as_str()).or_default();
+        if !commands.contains(&example.canonical.as_str()) {
+            commands.push(example.canonical.as_str());
+        }
+    }
+    let mut twice: BTreeMap<(&str, &str), (usize, &str)> = BTreeMap::new();
+    for (said, commands) in &meant {
+        if let [first, second, ..] = commands.as_slice() {
+            twice
+                .entry((head(first), head(second)))
+                .or_insert((0, said))
+                .0 += 1;
+        }
+    }
+    let taught_twice: usize = twice.values().map(|(count, _)| count).sum();
+    println!("  {taught_twice} sentences are taught as two commands   <- must be 0");
+    for ((first, second), (count, said)) in &twice {
+        println!("    {count:>5}  {first} / {second}   e.g. {said:?}");
+    }
+    println!();
+
     let mut misses: Vec<&Example> = Vec::new();
     let mut read = 0usize;
     for example in &holdout {
@@ -231,6 +260,18 @@ fn bench(scene: &Scene) {
                 .any(|echo| reaches(echo, &example.canonical, scene))
         })
         .count();
+    // **And the reading the game would run**, which the corpus half below
+    // already scores by. The line above credits a hit when *any* of four
+    // readings reaches the command — the rule the corpus comment calls
+    // flattering — and `measure` prints the same pair for the trained reader.
+    let grammar_ran = holdout
+        .iter()
+        .filter(|example| {
+            let readings = grammar.read(&example.said);
+            orbs_sim::parser::reading_to_run(&readings, scene, Mode::Calm)
+                .is_some_and(|echo| reaches(echo, &example.canonical, scene))
+        })
+        .count();
 
     // **What shipping the grammar as a reader would actually buy**, which is
     // the only number that decides anything: `Sim::submit_reading` asks the
@@ -251,15 +292,24 @@ fn bench(scene: &Scene) {
     println!("  on the holdout — phrasings nothing has been taught:\n");
     println!("    today's parser      {:>6.1}%", percent(read, total));
     println!(
-        "    a grammar from `say`{:>6.1}%   ({} templates)",
+        "    a grammar from `say`{:>6.1}%   ({} templates) <- any of its readings reaches it",
         percent(grammar_read, total),
         grammar.len(),
+    );
+    println!(
+        "      the reading it runs {:>5.1}%   <- the one `submit_reading` would take",
+        percent(grammar_ran, total),
     );
     println!(
         "    the two together    {:>6.1}%   <- what shipping the grammar buys",
         percent(together, total),
     );
-    println!("    the augury             n/a   (not built — see ROADMAP)\n");
+    // **Not measured here, and it cannot be**: `orbs-sim` may never depend on
+    // `orbs-augury` (CLAUDE.md rule 1), so the trained reader's line is that
+    // crate's `measure` example, on these same holdouts.
+    println!(
+        "    the trained reader     cargo run --release -p orbs-augury --example measure --features train\n"
+    );
 
     // **The corpus rate is the lint half.** A `say` line the parser already
     // reads is one a reader need never see; one it misses is either a
@@ -280,22 +330,32 @@ fn bench(scene: &Scene) {
     // apart rather than left to look like a bug.
     let mut grammar_corpus = 0usize;
     let mut unmatched = 0usize;
-    let mut misread: Vec<String> = Vec::new();
+    let mut misread: Vec<(Misread, String)> = Vec::new();
+    // Outranked misreads by (the command wanted, the command that ran), with a
+    // count and the first line that did it.
+    let mut outranked: BTreeMap<(String, String), (usize, String)> = BTreeMap::new();
     let mut unresolvable: Vec<&str> = Vec::new();
     for example in &corpus {
         // **The caller's rule, not a looser one.** `Sim::submit_reading` takes
-        // the first reading that resolves, so that is what is measured here —
-        // scoring against *any* reading would flatter a reader that offers four
-        // and means none of them.
+        // the reading `parser::reading_to_run` chooses, so that is what is
+        // measured here — scoring against *any* reading would flatter a reader
+        // that offers four and means none of them.
         let readings = grammar.read(&example.said);
-        let taken = readings
-            .iter()
-            .find(|echo| resolve(echo, scene, Mode::Calm).is_resolved());
+        let taken = orbs_sim::parser::reading_to_run(&readings, scene, Mode::Calm);
         match (readings.is_empty(), taken) {
             (true, _) => unmatched += 1,
             (false, Some(echo)) if reaches(echo, &example.canonical, scene) => grammar_corpus += 1,
             // It offered something that runs, and it was the wrong command.
-            (false, Some(echo)) => misread.push(format!("{:?} -> {echo}", example.said)),
+            (false, Some(echo)) => {
+                let cause = Misread::of(&readings, echo, &example.canonical, scene);
+                if cause == Misread::Outranked {
+                    outranked
+                        .entry((head(&example.canonical).to_owned(), head(echo).to_owned()))
+                        .or_insert_with(|| (0, example.said.clone()))
+                        .0 += 1;
+                }
+                misread.push((cause, format!("{:?} -> {echo}", example.said)));
+            }
             // It offered readings and this thin scene resolves none of them.
             (false, None) => unresolvable.push(example.canonical.as_str()),
         }
@@ -314,8 +374,27 @@ fn bench(scene: &Scene) {
         "      {} this thin scene cannot resolve  <- the bench's world, not the reader",
         unresolvable.len(),
     );
-    for line in misread.iter().take(6) {
-        println!("        {line}");
+    // **By cause, because the causes need opposite fixes.** One count hid all
+    // four, and a fix for one moved the total by less than the other three
+    // shifted under it.
+    for cause in Misread::ALL {
+        let lines: Vec<&String> = misread
+            .iter()
+            .filter(|(of, _)| *of == cause)
+            .map(|(_, line)| line)
+            .collect();
+        println!("\n      {:>5} {}", lines.len(), cause.says());
+        for line in lines.iter().take(3) {
+            println!("              {line}");
+        }
+    }
+    // **Which command stood in front of which**, because the largest cause is
+    // one number over many different collisions, and each is its own fix.
+    let mut pairs: Vec<_> = outranked.into_iter().collect();
+    pairs.sort_by(|a, b| b.1.0.cmp(&a.1.0).then_with(|| a.0.cmp(&b.0)));
+    println!("\n      outranked, by the command wanted <- the one that ran first:\n");
+    for ((wanted, ran), (count, example)) in pairs.iter().take(15) {
+        println!("        {count:>5}  {wanted:<9} <- {ran:<9} e.g. {example:?}");
     }
     println!();
 
@@ -356,6 +435,66 @@ fn bench(scene: &Scene) {
         }
     }
     println!();
+}
+
+/// A command's first word — the verb, for grouping lines by what they do.
+fn head(line: &str) -> &str {
+    line.split_whitespace().next().unwrap_or("")
+}
+
+/// Why a reader's reading ran as the wrong command.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Misread {
+    /// The right command was among the readings, and the parser would not run
+    /// it here — a refusal, or a thin scene.
+    Refused,
+    /// The right command was among the readings and would have run, but a wrong
+    /// one earlier in the list ran first.
+    Outranked,
+    /// The command that ran left words over: a reading that did not account for
+    /// what it was handed, resolving anyway.
+    WordsOver,
+    /// A wrong command that accounted for everything — the reader's own choice.
+    AnotherVerb,
+}
+
+impl Misread {
+    const ALL: [Self; 4] = [
+        Self::Refused,
+        Self::Outranked,
+        Self::WordsOver,
+        Self::AnotherVerb,
+    ];
+
+    /// Which of the four `taken` was, of the `readings` offered for `meant`.
+    fn of(readings: &[String], taken: &str, meant: &str, scene: &Scene) -> Self {
+        if readings.iter().any(|reading| reading == meant) {
+            return if reaches(meant, meant, scene) {
+                Self::Outranked
+            } else {
+                Self::Refused
+            };
+        }
+        let left_over = analyse(taken, scene, Mode::Calm)
+            .candidates
+            .first()
+            .is_some_and(|best| best.leftover > 0);
+        if left_over {
+            Self::WordsOver
+        } else {
+            Self::AnotherVerb
+        }
+    }
+
+    /// What a line of the report says about it.
+    const fn says(self) -> &'static str {
+        match self {
+            Self::Refused => "the right one was offered and would not run here",
+            Self::Outranked => "the right one was offered and a wrong one ran first",
+            Self::WordsOver => "the one that ran left words it could not use",
+            Self::AnotherVerb => "the one that ran used every word, and is wrong",
+        }
+    }
 }
 
 /// Whether `said` resolves to the command `meant` names.
@@ -408,6 +547,12 @@ fn show(resolution: &Resolution, indent: &str) {
             println!("{indent}-> {} {}", verb.canonical(), so_far.join(" "));
             println!("{indent}{} what? ({missing:?})", verb.canonical());
         }
+        Resolution::TakesNothing { verb, extra, .. } => {
+            println!(
+                "{indent}{} takes nothing — '{extra}' is not something it can use",
+                verb.canonical()
+            );
+        }
         Resolution::Elsewhere { verb } => {
             println!(
                 "{indent}there is nothing here to {} with (§7)",
@@ -443,6 +588,9 @@ fn siege_contrast(scene: &Scene) {
             }
             Resolution::Incomplete { verb, missing, .. } => {
                 println!("  {label}  needs a {missing:?} for {}", verb.canonical());
+            }
+            Resolution::TakesNothing { verb, .. } => {
+                println!("  {label}  takes nothing: {}", verb.canonical());
             }
             Resolution::Elsewhere { verb } => {
                 println!("  {label}  not here: {}", verb.canonical());

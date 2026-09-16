@@ -503,6 +503,218 @@ fn a_leftover_word_is_what_separates_a_sentence_from_a_command() {
 }
 
 #[test]
+fn a_verb_that_takes_nothing_names_the_words_it_could_not_use() {
+    // **`Incomplete`'s other half** (§19). `status gibberish` ran `status` and
+    // `undo gibberish` acknowledged, each with the word thrown away: `Incomplete`
+    // names the slot it waits for, and these verbs have none to name.
+    for (input, verb) in [
+        ("status gibberish", Verb::Status),
+        ("undo gibberish", Verb::Undo),
+    ] {
+        let analysis = analyse(input, &anywhere(), Mode::Calm);
+        match &analysis.resolution {
+            Resolution::TakesNothing {
+                verb: named, extra, ..
+            } => {
+                assert_eq!(*named, verb, "{input:?}");
+                assert_eq!(extra, "gibberish", "{input:?}");
+            }
+            other => panic!("{input:?} ran, or refused the wrong way: {other:?}"),
+        }
+        // A sentence rather than a command, so a reader sees it first.
+        assert!(!analysis.reads_outright(), "{input:?} was read outright");
+    }
+    // ...and the verb alone, or with only filler after it, still runs.
+    assert_eq!(echo("status"), "status");
+    assert_eq!(echo("status please"), "status");
+}
+
+#[test]
+fn a_verb_that_takes_nothing_may_still_name_where_it_acts() {
+    // A verb with no slot names nothing but where it acts, and there is only
+    // one of each — so naming the place is not a word thrown away. The same
+    // exemption `light athanor` has, without its operation test.
+    for input in ["wander archive", "research archive"] {
+        assert!(
+            matches!(
+                analyse(input, &anywhere(), Mode::Calm).resolution,
+                Resolution::Resolved { .. }
+            ),
+            "{input:?} did not run",
+        );
+    }
+}
+
+#[test]
+fn a_reading_that_uses_every_word_runs_before_one_that_leaves_some() {
+    // **What `Sim::submit_reading` takes of a reader's readings.** It took the
+    // first that resolved, so one that left a word unused beat one behind it
+    // that used them all — *"stir the alembic"* ran as `distil alembic`.
+    let scene = orbs_sim::content::corpus_scene();
+    let readings = ["distil alembic".to_owned(), "survey alembic".to_owned()];
+    assert_eq!(
+        orbs_sim::parser::reading_to_run(&readings, &scene, Mode::Calm).map(String::as_str),
+        Some("survey alembic"),
+    );
+    // ...and with nothing cleaner behind it, the first that resolves still runs.
+    assert_eq!(
+        orbs_sim::parser::reading_to_run(&readings[..1], &scene, Mode::Calm).map(String::as_str),
+        Some("distil alembic"),
+    );
+}
+
+#[test]
+fn a_verb_that_takes_nothing_refuses_though_another_verb_answered_first() {
+    // **One `Incomplete` was kept for the line, not one per verb.** `verify`'s
+    // `audit` scores 600 against `quit` and sits above it in the table, so its
+    // answer claimed the only slot and the exactly-typed `quit` below it ran
+    // bare, with the word thrown away — the defect this refusal exists to end,
+    // wearing a fuzzy reading of another verb. `decode` reaches `research` past
+    // `recall`'s `decoct` the same way.
+    for (input, verb) in [
+        ("quit gibberish", Verb::Quit),
+        ("decode gibberish", Verb::Research),
+    ] {
+        match analyse(input, &anywhere(), Mode::Calm).resolution {
+            Resolution::TakesNothing {
+                verb: named, extra, ..
+            } => {
+                assert_eq!(named, verb, "{input:?}");
+                assert_eq!(extra, "gibberish", "{input:?}");
+            }
+            other => panic!("{input:?} ran, or refused the wrong way: {other:?}"),
+        }
+    }
+}
+
+#[test]
+fn only_a_verb_that_acts_somewhere_may_name_a_place() {
+    // The exemption above it is for a verb a fixture declares — `wander` at the
+    // stacks, `probe` at the lens — which has one place to name and no slot to
+    // name it in. The whole tower answers to `status`, `quit` and `undo`, so a
+    // place after one of those is a word discarded like any other. And a place
+    // found *inside* the tail is not the tail naming one: `best_match` tries
+    // each word, so `undo laboratory move` used to pass as a place.
+    for input in [
+        "status laboratory",
+        "quit laboratory",
+        "undo laboratory move",
+    ] {
+        assert!(
+            matches!(
+                analyse(input, &anywhere(), Mode::Calm).resolution,
+                Resolution::TakesNothing { .. }
+            ),
+            "{input:?} ran with its words thrown away",
+        );
+    }
+}
+
+#[test]
+fn a_verb_the_whole_tower_answers_to_may_name_the_tower() {
+    // `status` reports on every room at once, so the tower is the one place it
+    // can name: *"overview of the tower"* says exactly what it reports on, and
+    // was refused as a word thrown away. A room is narrower than that, and
+    // still refused.
+    let scene = anywhere().with(NounKind::Place, "/tower");
+    for input in ["overview of the tower", "status tower"] {
+        assert!(
+            matches!(
+                analyse(input, &scene, Mode::Calm).resolution,
+                Resolution::Resolved { .. }
+            ),
+            "{input:?} was refused",
+        );
+    }
+    assert!(matches!(
+        analyse("status laboratory", &scene, Mode::Calm).resolution,
+        Resolution::TakesNothing { .. }
+    ));
+}
+
+#[test]
+fn punctuation_is_not_a_word_a_verb_was_handed() {
+    // `fold` sheds a *trailing* stop but keeps a token that is nothing else
+    // whole, because `?` and `./` are synonyms in their own right — so the stop
+    // in `status .` arrived as a word said, and a line that had always run was
+    // refused.
+    for input in ["status .", "status ?", "undo !"] {
+        assert!(
+            matches!(
+                analyse(input, &anywhere(), Mode::Calm).resolution,
+                Resolution::Resolved { .. }
+            ),
+            "{input:?} was refused over its punctuation",
+        );
+    }
+}
+
+#[test]
+fn a_plain_phrase_may_run_past_its_command_and_one_plain_word_may_not() {
+    // *"how are things"* is the plain synonym and the word after it is how
+    // people talk; refusing that teaches nothing. One plain word is not a
+    // sentence, so `decode gibberish` above is still a word thrown away.
+    for input in ["how are things going", "how are things today"] {
+        assert!(
+            matches!(
+                analyse(input, &anywhere(), Mode::Calm).resolution,
+                Resolution::Resolved { .. }
+            ),
+            "{input:?} was refused",
+        );
+    }
+}
+
+#[test]
+fn a_siege_runs_a_verb_that_takes_nothing_rather_than_refusing_it() {
+    // §6 gives the mode its own answer to ambiguity — *"a modal prompt would
+    // make ambiguous phrasing cost siege time"* — and a refusal costs the same
+    // turn. `muster the troops` is what a player types with the wall coming
+    // down; calm, it is still told.
+    let scene = anywhere();
+    assert!(
+        matches!(
+            resolve("muster the troops", &scene, Mode::Siege),
+            Resolution::Resolved { .. }
+        ),
+        "a siege spent a turn refusing the words after a verb",
+    );
+    assert!(matches!(
+        resolve("muster the troops", &scene, Mode::Calm),
+        Resolution::TakesNothing { .. }
+    ));
+}
+
+#[test]
+fn a_reading_with_no_argument_does_not_win_by_having_nothing_left_over() {
+    // `quit`, `undo` and a bare verb account for every word they were handed by
+    // being handed none — so preferring the reading that leaves nothing over
+    // handed them the line. A reader offering `[grind sage now, quit]` ran
+    // `quit`: the sink `Trained::readings` documents, one level up.
+    let scene = orbs_sim::content::corpus_scene();
+    let readings = ["grind sage now".to_owned(), "quit".to_owned()];
+    assert_eq!(
+        orbs_sim::parser::reading_to_run(&readings, &scene, Mode::Calm).map(String::as_str),
+        Some("grind sage now"),
+    );
+}
+
+#[test]
+fn a_first_choice_that_used_every_word_is_not_jumped() {
+    // **The other half of the rule above, and the half a first fix broke.**
+    // Refusing a bare reading the shortcut also stopped it *keeping* first
+    // place, so a later reading with an argument ran instead: *"open the loom"*
+    // came back `survey loom` over the `weave` the reader ranked first. A first
+    // choice that used every word it was handed has nothing unused to lose on.
+    let scene = orbs_sim::content::corpus_scene();
+    let readings = ["status".to_owned(), "survey laboratory".to_owned()];
+    assert_eq!(
+        orbs_sim::parser::reading_to_run(&readings, &scene, Mode::Calm).map(String::as_str),
+        Some("status"),
+    );
+}
+
+#[test]
 fn resolution_is_comfortably_sub_millisecond() {
     // §6: "Never blocks the frame. Sub-millisecond."
     let scene = tower();

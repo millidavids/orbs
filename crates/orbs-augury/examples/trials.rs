@@ -2,6 +2,7 @@
 //!
 //! ```text
 //! cargo run --release -p orbs-augury --example trials
+//! cargo run --release -p orbs-augury --example trials -- --scribe target/seeds/try/scribe-7 --scores
 //! ```
 //!
 //! `content/spell_trials.toml` holds the lines — literal, written to be unlike
@@ -10,18 +11,33 @@
 //! with *why*, and the whole scripts written through a real tower.
 //!
 //! **Inference only**, so it needs no GPU and no `train` feature.
+//!
+//! `--scribe` and `--reader` put weights other than the shipped ones on trial,
+//! each a path without its `.bin`, and `--scores` prints only the numbers — one
+//! `name<TAB>value` a line — for `scripts/seeds.sh` to average across seeds.
 
 use burn::backend::NdArray;
 use orbs_augury::Scribe;
+use orbs_augury::cli::{missing, weights};
+use orbs_augury::trained::{SCRIBE_WEIGHTS, WEIGHTS};
 use orbs_sim::content::{TRIAL_SHAPES, TRIAL_STYLES, Trial, Trials, fold, with_extension};
 use orbs_sim::{Sim, tower};
 
 fn main() {
+    let scores = std::env::args().any(|arg| arg == "--scores");
     let trials = Trials::builtin();
-    println!("\nO.R.B.S. — the scrivener on trial\n");
-    let Ok(scribe) = Scribe::<NdArray<f32>>::load(Default::default()) else {
-        println!(
-            "  no spell weights yet — `cargo run --release -p orbs-augury --example train --features train -- --spells`\n"
+    if !scores {
+        println!("\nO.R.B.S. — the scrivener on trial\n");
+    }
+    let Ok(scribe) = Scribe::<NdArray<f32>>::load_from(
+        &weights("--scribe", SCRIBE_WEIGHTS),
+        &weights("--reader", WEIGHTS),
+        Default::default(),
+    ) else {
+        missing(
+            scores,
+            "spell weights",
+            "cargo run --release -p orbs-augury --example train --features train -- --spells",
         );
         return;
     };
@@ -31,29 +47,42 @@ fn main() {
         .iter()
         .map(|trial| (trial, scribe.reading(&trial.said)))
         .collect();
-    println!("  {} lines, taught to nothing\n", read.len());
-
-    println!("  by shape\n");
+    if !scores {
+        println!("  {} lines, taught to nothing\n", read.len());
+        println!("  by shape\n");
+    }
     for shape in TRIAL_SHAPES {
         let (passed, total) = tally(&read, |trial| trial.shape() == Some(shape));
-        println!(
-            "    {:>6.1}%   {shape:<14}{passed:>3} of {total}",
-            percent(passed, total)
-        );
+        if scores {
+            println!("{shape}\t{:.1}", percent(passed, total));
+        } else {
+            println!(
+                "    {:>6.1}%   {shape:<14}{passed:>3} of {total}",
+                percent(passed, total)
+            );
+        }
     }
     let (passed, total) = tally(&read, |_| true);
-    println!(
-        "\n    {:>6.1}%   every line    {passed:>4} of {total}",
-        percent(passed, total)
-    );
-
-    // **By style as well as by shape**, because a style is what a player has
-    // and a shape is what the orb has. *"Contractions read 40%"* is a finding;
-    // *"`if` reads 70%"* hides it.
-    println!("\n  by style\n");
+    if scores {
+        println!("every line\t{:.1}", percent(passed, total));
+    } else {
+        println!(
+            "\n    {:>6.1}%   every line    {passed:>4} of {total}",
+            percent(passed, total)
+        );
+        // **By style as well as by shape**, because a style is what a player
+        // has and a shape is what the orb has. *"Contractions read 40%"* is a
+        // finding; *"`if` reads 70%"* hides it.
+        println!("\n  by style\n");
+    }
     for style in TRIAL_STYLES {
         let (passed, total) = tally(&read, |trial| trial.tags.iter().any(|tag| tag == style));
-        if total > 0 {
+        if total == 0 {
+            continue;
+        }
+        if scores {
+            println!("style: {style}\t{:.1}", percent(passed, total));
+        } else {
             println!(
                 "    {:>6.1}%   {style:<14}{passed:>3} of {total}",
                 percent(passed, total)
@@ -68,6 +97,10 @@ fn main() {
         .iter()
         .filter(|(trial, got)| trial.betrayed_by(got.as_deref()))
         .collect();
+    if scores {
+        println!("read as their opposite\t{}", betrayed.len());
+        return;
+    }
     println!(
         "\n  read as their opposite: {}   <- zero is the only acceptable count",
         betrayed.len()

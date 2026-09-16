@@ -8,7 +8,16 @@
 //! cargo run --release -p orbs-augury --example train --features train
 //! cargo run --release -p orbs-augury --example train --features train -- --spells
 //! cargo run --release -p orbs-augury --example train --features train -- --epochs 40 --cpu
+//! cargo run --release -p orbs-augury --example train --features train -- --seed 7 --out target/seeds/try/reader-7
 //! ```
+//!
+//! # One seed, and a flag for the others
+//!
+//! A run is seeded, so it can be repeated; it is one run, so it cannot say
+//! whether a change beat the seed or the seed beat the change. `--seed` and
+//! `--out` are what `scripts/seeds.sh` drives to find out. A run given neither
+//! starts from seed 181 and writes over the shipped weights — which are chosen
+//! from a `seeds.sh` run and copied into place, not trained there.
 //!
 //! **An example rather than a test**, because it needs a GPU and minutes, and
 //! `cargo test --workspace` must run on a machine with neither.
@@ -48,18 +57,30 @@ use burn::optim::{AdamConfig, GradientsParams, Optimizer};
 use burn::prelude::*;
 use burn::record::{BinFileRecorder, FullPrecisionSettings};
 
+use orbs_augury::cli::argument;
 use orbs_augury::{Batch, Corpus, Reader, ReaderConfig, Register, Sample, Vocabulary};
 
 /// How many sentences the reader sees at once.
 const BATCH: usize = 64;
 
+/// The seed a run starts from unless `--seed` names another.
+const SEED: u64 = 0x0B5;
+
 fn main() {
     let epochs = numbered("--epochs").unwrap_or(30);
+    // **Refused rather than defaulted.** A mistyped seed that fell back to the
+    // default would make three "different" seeds one seed three times, and the
+    // spread they measured would be the hardware's alone.
+    let seed = match argument("--seed") {
+        Some(seed) => seed.parse().expect("--seed takes a whole number"),
+        None => SEED,
+    };
     let cpu = std::env::args().any(|arg| arg == "--cpu");
     let register = Register::asked();
+    let out = argument("--out").unwrap_or_else(|| register.weights().to_owned());
 
     println!(
-        "\nO.R.B.S. — teaching the orb to read {}\n",
+        "\nO.R.B.S. — teaching the orb to read {}, from seed {seed}\n",
         register.name()
     );
 
@@ -82,6 +103,8 @@ fn main() {
             &corpus,
             &vocabulary,
             epochs,
+            seed,
+            &out,
         );
     } else {
         run::<Autodiff<Wgpu>>(
@@ -90,6 +113,8 @@ fn main() {
             &corpus,
             &vocabulary,
             epochs,
+            seed,
+            &out,
         );
     }
 }
@@ -140,22 +165,19 @@ fn refusal_weight(corpus: &[Sample]) -> f32 {
 
 /// One number off the command line.
 fn numbered(flag: &str) -> Option<usize> {
-    let mut args = std::env::args();
-    while let Some(arg) = args.next() {
-        if arg == flag {
-            return args.next()?.parse().ok();
-        }
-    }
-    None
+    argument(flag)?.parse().ok()
 }
 
-/// Train, reporting the holdout after every pass.
+/// Train, reporting the holdout after every pass, and write the best pass to
+/// `out`.
 fn run<B: burn::tensor::backend::AutodiffBackend>(
     device: &B::Device,
     register: Register,
     all: &Corpus,
     vocabulary: &Vocabulary,
     epochs: usize,
+    seed: u64,
+    out: &str,
 ) {
     let (corpus, holdout, refused) = (&all.learn, &all.holdout, &all.refused);
     let classes = register.classes();
@@ -165,7 +187,7 @@ fn run<B: burn::tensor::backend::AutodiffBackend>(
     // an improvement from a lucky start. In a project whose central claim is
     // bit-identical reproducibility that is the one place it should never have
     // been missing.
-    B::seed(device, 0x0B5);
+    B::seed(device, seed);
     let mut reader: Reader<B> = ReaderConfig::new(vocabulary.rows())
         .with_classes(classes)
         .with_dropout(register.dropout())
@@ -209,6 +231,11 @@ fn run<B: burn::tensor::backend::AutodiffBackend>(
     // produce the same weights: the game's whole architecture rests on being
     // able to reproduce a result, and a trainer seeded from the time of day
     // would be the one place that stopped being true.
+    //
+    // **By the seed as well as the epoch**, because a run's luck is where its
+    // weights start *and* the order it meets the corpus in. A `--seed` that
+    // moved only the first would measure half the noise `scripts/seeds.sh` is
+    // there to measure.
     let mut order: Vec<usize> = (0..corpus.len()).collect();
 
     // **The best pass, not the last one.** Holdout accuracy on this corpus
@@ -220,7 +247,7 @@ fn run<B: burn::tensor::backend::AutodiffBackend>(
     let mut kept = reader.clone();
 
     for epoch in 1..=epochs {
-        shuffle(&mut order, epoch as u64);
+        shuffle(&mut order, seed.rotate_left(32) ^ epoch as u64);
         // Decayed, because a fixed 1e-3 is what makes the swing that large: the
         // steps stay long after there is anything left to cross.
         let rate = 1.0e-3 / (1.0 + 0.08 * (epoch - 1) as f64);
@@ -297,14 +324,18 @@ fn run<B: burn::tensor::backend::AutodiffBackend>(
     let reader = kept;
     println!("\n  best holdout class, tag and refusal mean: {best:.1}%");
 
-    let weights = register.weights();
-    let path = std::path::Path::new(weights);
+    let path = std::path::Path::new(out);
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
     match reader.save_file(path, &BinFileRecorder::<FullPrecisionSettings>::new()) {
-        Ok(()) => println!("\n  weights written to {weights}.bin\n"),
-        Err(error) => println!("\n  could not write weights: {error}\n"),
+        Ok(()) => println!("\n  weights written to {out}.bin\n"),
+        // A failure, not a report: `scripts/seeds.sh` would otherwise go on to
+        // measure whatever the path already held.
+        Err(error) => {
+            eprintln!("\n  could not write weights: {error}\n");
+            std::process::exit(1);
+        }
     }
 }
 

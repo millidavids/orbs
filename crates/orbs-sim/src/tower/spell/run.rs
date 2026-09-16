@@ -1184,12 +1184,22 @@ fn run_line(world: &mut World, entity: Entity, state: &Running, line: &str) -> P
     }
 
     let scene = tower::scene_at(world, world.resource::<Cwd>().0);
-    let Resolution::Resolved { intent, .. } = analyse(line, &scene, Mode::Calm).resolution else {
+    let intent = match analyse(line, &scene, Mode::Calm).resolution {
+        Resolution::Resolved { intent, .. } => intent,
+        // The prompt's answer in a spell's voice: nothing is missing, a verb was
+        // handed words it cannot use. See `compile::reading`.
+        Resolution::TakesNothing { extra, .. } => {
+            say_failure(world, state, "spell_takes_nothing", &extra, Role::Danger);
+            advance_pc(world, entity);
+            return Progress::Done;
+        }
         // §8's **Referent missing**: the line named something that is not there
         // any more, or is not there from here. Skips, logs, continues.
-        say_failure(world, state, "spell_missing", line, Role::Danger);
-        advance_pc(world, entity);
-        return Progress::Done;
+        _ => {
+            say_failure(world, state, "spell_missing", line, Role::Danger);
+            advance_pc(world, entity);
+            return Progress::Done;
+        }
     };
 
     if !may_issue(intent.verb) {

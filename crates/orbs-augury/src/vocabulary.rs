@@ -127,21 +127,15 @@ impl Vocabulary {
         // bucket, which is the treatment reserved for words the game does not
         // have.
         //
-        // ⚠ **Left as written, and the holdouts harvested too — both measured
-        // and recorded rather than changed.** Folding `times,` into `times`, and
-        // leaving out the 77 words only a holdout says (rows nothing trains),
-        // are each right on paper; each also changes the table's size, which
-        // re-seeds every row, and one retrain cannot tell the fix from the new
-        // seed. DESIGN.md §19, *The review*, has the two runs.
+        // **What is taught, and nothing only a holdout says.** A word no `say`
+        // line uses was a row nothing ever trained — its starting values, met
+        // in exactly the lines the holdout measures — where a word the table
+        // does not hold lands in a bucket every unseen word has trained.
+        // *"pound that sage"* came back `purge sage` through one such row.
         let phrasings = Phrasings::builtin();
         let spellings = Phrasings::spellings();
         for entry in phrasings.entries().iter().chain(spellings.entries()) {
-            for line in entry
-                .say
-                .iter()
-                .chain(&entry.holdout)
-                .chain(core::iter::once(&entry.canonical))
-            {
+            for line in entry.say.iter().chain(core::iter::once(&entry.canonical)) {
                 words.extend(
                     line.split_whitespace()
                         .filter(|token| !token.starts_with('{'))
@@ -150,7 +144,7 @@ impl Vocabulary {
             }
         }
         for refusal in phrasings.refusals().iter().chain(spellings.refusals()) {
-            for line in refusal.say.iter().chain(&refusal.holdout) {
+            for line in &refusal.say {
                 words.extend(
                     line.split_whitespace()
                         .filter(|token| !token.starts_with('{'))
@@ -166,6 +160,16 @@ impl Vocabulary {
         // the reader learns from.
         words.extend(spellings.groups().iter().map(|group| group.to_lowercase()));
 
+        // **Folded, as a lookup folds.** `token` folds a word before it looks
+        // it up, so a row stored as written — `times,`, `master's`, `there)` —
+        // was one no line could reach, in training or in play: a row nothing
+        // trains. Once, here, rather than at each of the sources above, so a
+        // new source cannot bring the unreachable rows back.
+        let mut words: Vec<String> = words
+            .iter()
+            .map(|word| fold_word(word))
+            .filter(|word| !word.is_empty())
+            .collect();
         words.sort();
         words.dedup();
 
@@ -391,12 +395,12 @@ mod tests {
     }
 
     #[test]
-    fn every_word_the_templates_use_is_known() {
+    fn every_word_the_templates_teach_is_known() {
         // The corpus and the vocabulary are built from each other, so a template
-        // can never introduce a word the reader has no row for.
+        // can never teach a word the reader has no row for.
         let vocabulary = Vocabulary::builtin();
         for entry in Phrasings::builtin().entries() {
-            for line in entry.say.iter().chain(&entry.holdout) {
+            for line in &entry.say {
                 for word in line.split_whitespace().filter(|w| !w.starts_with('{')) {
                     assert!(
                         vocabulary.token(&word.to_lowercase()).is_known(),
@@ -405,6 +409,35 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn a_word_only_a_holdout_says_is_one_the_reader_has_never_seen() {
+        // **The holdout measures unseen phrasing, so its words arrive unseen.**
+        // A row for one would never be trained, and the reader would meet its
+        // starting values in exactly the lines the measurement reads. `pound`
+        // is held back from `grind` and taught by nothing.
+        let vocabulary = Vocabulary::builtin();
+        let pound = vocabulary.token("pound");
+        assert!(!pound.is_known(), "a word only a holdout says has a row");
+        assert!(pound.row() >= u32::try_from(vocabulary.known()).expect("small"));
+    }
+
+    #[test]
+    fn every_row_is_a_word_a_lookup_can_reach() {
+        // `token` folds before it looks, so a row stored unfolded — `times,` —
+        // is one no line reaches, in training or in play.
+        let vocabulary = Vocabulary::builtin();
+        let unreachable: Vec<&String> = vocabulary
+            .types
+            .iter()
+            .filter(|word| !RESERVED.contains(&word.as_str()))
+            .filter(|word| fold_word(word) != **word)
+            .collect();
+        assert!(
+            unreachable.is_empty(),
+            "rows no lookup reaches: {unreachable:?}"
+        );
     }
 
     #[test]

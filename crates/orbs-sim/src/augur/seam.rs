@@ -23,10 +23,9 @@
 ///
 /// # `Send + Sync`, because a reader outlives the call
 ///
-/// The Bevy build keeps its reader in a `Resource`, which must be both, and a
-/// trained one will hand work to a worker thread and read the answer back
-/// (CLAUDE.md rule 8 — a thread and a channel, never an async runtime). Neither
-/// is a burden on a table or a grammar.
+/// The Bevy build keeps its reader in a `Resource`, which must be both. Neither
+/// is a burden on a table, a grammar or the trained reader — which answers on
+/// the calling thread, because it can: see [`read`](Self::read).
 pub trait Augur: Send + Sync {
     /// The canonical commands `line` might mean, best first. Empty to abstain.
     ///
@@ -58,10 +57,13 @@ pub trait Augur: Send + Sync {
     ///
     /// **Expected to return in the time a keystroke has**, because the echo is
     /// §6's teaching mechanism and *"a terminal that takes a second to answer
-    /// reads as broken"*. A reader that cannot promise that answers from a
-    /// worker thread and abstains when the answer is not back yet — the
-    /// deadline belongs to the implementor, which is the only place that knows
-    /// what it is waiting for.
+    /// reads as broken"*. The trained reader does, on the calling thread: 436µs
+    /// to read a line and 8ms to load in a release build (`orbs-augury`'s
+    /// `tests/loading.rs` times both profiles), so it needs no worker thread, no
+    /// deadline and no indicator. A reader that could *not* promise it — a much
+    /// larger model — would answer from a thread and a channel (CLAUDE.md rule
+    /// 8, never an async runtime) and abstain when the answer was late; that
+    /// deadline would be its own, because only it knows what it waits for.
     ///
     /// [`Sim::submit_reading`]: crate::Sim::submit_reading
     fn read(&self, line: &str) -> Vec<String>;

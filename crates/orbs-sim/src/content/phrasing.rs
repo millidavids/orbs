@@ -30,6 +30,8 @@
 //! thing worth measuring on: a grammar built from `say` matches `say` perfectly
 //! and has proved nothing.
 
+use std::collections::HashMap;
+
 use serde::Deserialize;
 
 use crate::parser::NounKind;
@@ -333,6 +335,27 @@ impl Phrasings {
 
     /// The shared walk: every template of every entry, expanded, thinned to
     /// `cap` (0 for no cap), tagged with the entry's index.
+    ///
+    /// # A sentence two templates say goes to the one that says more of it
+    ///
+    /// `put the {reagent} in the {place}` is `move`, `put the {reagent} in the
+    /// alembic` is `distil` — and the alembic is a place, so the first expands
+    /// to the second word for word. A reader taught one sentence as two
+    /// commands is being taught a coin toss. The bench found 154 of them — 152
+    /// at the alembic, two at the lens — and scored the grammar wrong for
+    /// reading each the way its more specific template said.
+    ///
+    /// **The template with more fixed words keeps it**, because a word the
+    /// writer chose is evidence and a slot is not: whoever wrote `in the
+    /// alembic` meant the alembic, and whoever wrote `in the {place}` meant any
+    /// room at all. It is the order `Grammar::read` already tries templates in,
+    /// so the corpus and the grammar cannot disagree about whose sentence it
+    /// is. Judged before thinning, so a cap cannot keep the loser by striding
+    /// past the winner.
+    ///
+    /// Two templates saying it with equally many fixed words both keep it, and
+    /// `no_sentence_is_taught_as_two_commands` fails: that is a writer's to
+    /// settle, not an ordering's.
     fn by_entry(
         &self,
         scene: &crate::parser::Scene,
@@ -341,8 +364,7 @@ impl Phrasings {
         held: bool,
     ) -> Vec<(usize, Example)> {
         let fillers = self.fillers(scene, held);
-        let mut out = Vec::new();
-        for (nth, (at, entry, template)) in self
+        let expanded: Vec<(usize, usize, Vec<Example>)> = self
             .entries
             .iter()
             .enumerate()
@@ -351,10 +373,41 @@ impl Phrasings {
                     .iter()
                     .map(move |template| (at, entry, template))
             })
-            .enumerate()
-        {
+            .map(|(at, entry, template)| {
+                (
+                    at,
+                    fixed_words(template),
+                    fill(template, &entry.canonical, &fillers),
+                )
+            })
+            .collect();
+
+        let mut most: HashMap<&str, usize> = HashMap::new();
+        for (_, fixed, examples) in &expanded {
+            for example in examples {
+                let claim = most.entry(example.said.as_str()).or_default();
+                *claim = (*claim).max(*fixed);
+            }
+        }
+        let keep: Vec<Vec<bool>> = expanded
+            .iter()
+            .map(|(_, fixed, examples)| {
+                examples
+                    .iter()
+                    .map(|example| most.get(example.said.as_str()).is_none_or(|n| fixed >= n))
+                    .collect()
+            })
+            .collect();
+
+        let mut out = Vec::new();
+        for (nth, ((at, _, examples), keep)) in expanded.into_iter().zip(keep).enumerate() {
+            let kept: Vec<Example> = examples
+                .into_iter()
+                .zip(keep)
+                .filter_map(|(example, keep)| keep.then_some(example))
+                .collect();
             out.extend(
-                thin(fill(template, &entry.canonical, &fillers), cap, nth)
+                thin(kept, cap, nth)
                     .into_iter()
                     .map(|example| (at, example)),
             );
@@ -373,20 +426,19 @@ impl Phrasings {
         self.expand(scene, |entry| &entry.holdout, true)
     }
 
+    /// [`by_entry`](Self::by_entry) uncapped, without the index — one walk, so
+    /// the corpus a bench measures and the one a trainer thins cannot differ
+    /// about which sentence belongs to which command.
     fn expand(
         &self,
         scene: &crate::parser::Scene,
         pick: impl Fn(&Phrasing) -> &Vec<String>,
         held: bool,
     ) -> Vec<Example> {
-        let fillers = self.fillers(scene, held);
-        let mut out = Vec::new();
-        for entry in &self.entries {
-            for template in pick(entry) {
-                out.extend(fill(template, &entry.canonical, &fillers));
-            }
-        }
-        out
+        self.by_entry(scene, 0, pick, held)
+            .into_iter()
+            .map(|(_, example)| example)
+            .collect()
     }
 
     /// Where this file's slots get their values: the scene for a noun, this
@@ -514,6 +566,14 @@ fn first_slot(template: &str) -> Option<(String, String)> {
     is_marker(label).then(|| (template[open..=close].to_owned(), label.to_lowercase()))
 }
 
+/// How many of `template`'s words the writer fixed rather than left to a slot.
+fn fixed_words(template: &str) -> usize {
+    template
+        .split_whitespace()
+        .filter(|word| first_slot(word).is_none())
+        .count()
+}
+
 /// Where every slot gets its values.
 #[derive(Clone, Copy)]
 struct Fillers<'a> {
@@ -534,13 +594,22 @@ impl Fillers<'_> {
                 };
                 // A place answers to its leaf (§7) — players say the room, not
                 // the path.
-                let values = self
-                    .scene
-                    .nouns()
-                    .iter()
-                    .filter(|noun| kind.accepts(noun.kind))
-                    .map(|noun| crate::parser::leaf(&noun.name).to_owned())
-                    .collect();
+                //
+                // **Each word once.** `corpus_scene` adds the recipes' words and
+                // then the materials', and every substance is a material too —
+                // it has a colour — so every `{reagent}` template made each of
+                // its sentences twice: 47,628 of 109,328 examples, and every
+                // reagent verb counted double in each rate the bench and the
+                // trainer reported. Kept to once here rather than in the
+                // scene, because two leaves can repeat as well: a room is its
+                // leaf, and two rooms may each hold an instrument of one name.
+                let mut values: Vec<String> = Vec::new();
+                for noun in self.scene.nouns() {
+                    let leaf = crate::parser::leaf(&noun.name);
+                    if kind.accepts(noun.kind) && !values.iter().any(|value| value == leaf) {
+                        values.push(leaf.to_owned());
+                    }
+                }
                 (kind, values)
             }
         }
@@ -1118,6 +1187,109 @@ mod tests {
             vec!["laboratory", "sage"],
             "the spans are in the phrasing's order, not the canonical's",
         );
+    }
+
+    #[test]
+    fn a_sentence_two_templates_say_goes_to_the_one_that_says_more_of_it() {
+        // The alembic is a place, so `put the {reagent} in the {place}` says
+        // `put the sage in the alembic` word for word — and whoever wrote `in
+        // the alembic` meant distilling it.
+        let phrasings = Phrasings::parse(
+            r#"
+            [[entry]]
+            canonical = "move {reagent} {place}"
+            say = ["put the {reagent} in the {place}"]
+            holdout = ["stow the {reagent} in the {place}"]
+
+            [[entry]]
+            canonical = "distil {reagent}"
+            say = ["put the {reagent} in the alembic"]
+            holdout = ["boil the {reagent} away"]
+            "#,
+        )
+        .expect("parses");
+        let scene = Scene::new()
+            .with(NounKind::Place, "/tower/laboratory")
+            .with(NounKind::Place, "/tower/laboratory/alembic")
+            .with(NounKind::Reagent, "sage");
+        let meant = |said: &str, capped: bool| -> Vec<String> {
+            let taught = if capped {
+                phrasings.corpus_capped(&scene, 1)
+            } else {
+                phrasings.corpus(&scene)
+            };
+            taught
+                .into_iter()
+                .filter(|example| example.said == said)
+                .map(|example| example.canonical)
+                .collect()
+        };
+        assert_eq!(meant("put the sage in the alembic", false), ["distil sage"]);
+        // ...every other room is still somewhere to move things...
+        assert_eq!(
+            meant("put the sage in the laboratory", false),
+            ["move sage laboratory"]
+        );
+        // ...and a cap cannot keep the loser by striding onto it.
+        assert_eq!(meant("put the sage in the alembic", true), ["distil sage"]);
+    }
+
+    #[test]
+    fn no_sentence_is_taught_as_two_commands() {
+        // **A label no reader can get right, and no single template shows it.**
+        // Each is a fine template alone; the collision is in the expansion,
+        // where a slot takes a name another template wrote down as a word. The
+        // ordering above settles every one where the templates differ in how
+        // much they fix — what reaches this is a tie, and a writer's to settle.
+        let scene = corpus_scene();
+        for phrasings in [Phrasings::builtin(), Phrasings::spellings()] {
+            let mut meant: HashMap<String, String> = HashMap::new();
+            let mut twice: Vec<String> = Vec::new();
+            for example in phrasings
+                .corpus(&scene)
+                .into_iter()
+                .chain(phrasings.holdout(&scene))
+            {
+                match meant.get(&example.said) {
+                    Some(canonical) if *canonical != example.canonical => twice.push(format!(
+                        "{:?}: {canonical} / {}",
+                        example.said, example.canonical
+                    )),
+                    Some(_) => {}
+                    None => {
+                        meant.insert(example.said, example.canonical);
+                    }
+                }
+            }
+            assert!(
+                twice.is_empty(),
+                "{} sentences are taught as two commands:\n{}",
+                twice.len(),
+                twice.join("\n"),
+            );
+        }
+    }
+
+    #[test]
+    fn no_example_is_made_twice() {
+        let scene = corpus_scene();
+        for phrasings in [Phrasings::builtin(), Phrasings::spellings()] {
+            let mut seen: std::collections::HashSet<(String, String)> =
+                std::collections::HashSet::new();
+            let twice: Vec<String> = phrasings
+                .corpus(&scene)
+                .into_iter()
+                .chain(phrasings.holdout(&scene))
+                .filter(|example| !seen.insert((example.said.clone(), example.canonical.clone())))
+                .map(|example| example.said)
+                .collect();
+            assert!(
+                twice.is_empty(),
+                "{} examples are made twice, among them {:?}",
+                twice.len(),
+                &twice[..twice.len().min(12)],
+            );
+        }
     }
 
     #[test]

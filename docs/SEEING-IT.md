@@ -3964,6 +3964,14 @@ ORBS_AUGURY=model ORBS_BOOT=0 \
   cargo run -p orbs
 ```
 
+**Two numbers for the reader, and the second is the one that decides.** `measure`
+prints *the trained reader* — any of its four readings reaching the command — and
+*the reading it runs*, which is what `Sim::submit_reading` takes. The shipped reader
+reads **78.6%** by the first and **69.9%** by the second; a reader that offers four
+and means none of them scores well on the first alone, and `seeds.sh --compare` used
+to choose weights on it. `--bench` prints the same pair for the grammar — 18.5% and
+**16.7%**. Choose on the second.
+
 **Watch the refusals as closely as the readings.** The reader answers *whether*
 there is a command before *which* one it is, and those are two heads with two
 scores; a build that reads well and refuses nothing is worse than one that reads
@@ -3996,6 +4004,66 @@ entirely kernel-launch overhead, so the GPU belongs to the training run and not
 to the prompt. 348µs is also why there is no worker thread, no deadline and no
 *"the orb ponders"* indicator: §6 asks for sub-millisecond and this is a third
 of one.
+
+**So is loading it, which was measured later (`0.14.8`).** Both readers load in
+8.4ms warm in a release build and 21ms in the dev one, under a frame at 60Hz,
+which is why nothing waits behind the POST card:
+
+```bash
+# Release is what a player gets; drop --release for what `cargo run -p orbs` builds.
+cargo test --release -p orbs-augury --test loading -- --ignored --nocapture
+```
+
+**Whether a retrain helped is measured over seeds, not one run (`0.14.10`).** Any
+change to the vocabulary's size re-seeds every row, and `wgpu` does not reproduce
+even the same seed bit for bit, so one retrain that moves a number four points may
+have moved it by luck — §19 has one that did, on a reader whose corpus it never
+touched. `scripts/seeds.sh` trains both readers once per seed into
+`target/seeds/<label>/`, measures every run with `measure --scores` and `trials
+--scores`, and prints each score's mean and range. **A change is real when its
+range clears the baseline's**; one run beating one run is not evidence. `--compare`
+prints a Welch t beside each verdict, and it is a hint only — the fold, which
+touches nothing a reader can see, reached 2.2 on one score of twenty:
+
+```bash
+scripts/seeds.sh baseline                   # both readers, five seeds, on the GPU
+scripts/seeds.sh counts --spells baseline   # a spell-only change, against baseline's prompt readers
+cat target/seeds/baseline/summary.txt
+```
+
+A spell-only change reads its command lines through the named label's prompt
+reader of the same seed, because two spell readers compared through two prompt
+readers would be measuring the prompt reader. **To ship a run, copy its `.bin`**
+over `crates/orbs-augury/weights/` — training it again is a new run.
+
+**A verb that takes nothing says so (`0.14.6`).** `status gibberish` ran `status`
+with the word thrown away; with no reader it names the verb and the words it could
+not use, and with a reader standing by the line goes to the reader first, because
+a word over is a sentence. `status please` and bare `status` still run:
+
+```bash
+ORBS_AUGURY=off ORBS_BOOT=0 ORBS_DUMP="status gibberish; status please; status" cargo run -p orbs
+```
+
+**`--bench` sorts its misreads by cause (`0.14.7`)** — offered and refused, offered
+and outranked, words left over, wrong outright — because the four need opposite
+fixes and one total hid all of them. Read the causes, not the sum:
+
+```bash
+cargo run --release -p orbs-sim --example parse -- --bench
+```
+
+**...and says which command stood in front of which (`0.14.9`).** The largest
+cause is one number over many collisions, each its own fix, so under it the bench
+lists them as *command wanted ← command that ran*, with a line that did it. Above
+everything it counts **sentences the corpus teaches as two commands**, and that
+must read 0: a label no reader can get right, which no single template shows.
+The largest collision reaches a player through the grammar reader — *"still the
+sage"* was `grind sage`, because `still` is near `mill`, and is `distil sage`:
+
+```bash
+ORBS_AUGURY=grammar ORBS_BOOT=0 ORBS_DUMP="attend laboratory; still the sage" cargo run -p orbs
+```
 
 ```bash
 # ...the grammar, reading a phrasing the matcher cannot.

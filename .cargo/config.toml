@@ -2,9 +2,11 @@
 #
 # **The gate links the Bevy binary at least twice** — `cargo test --workspace`
 # and `cargo build -p orbs` — and CLAUDE.md makes the second non-optional at
-# every step. Linking is most of what a warm rebuild costs: with a warm cache
-# `cargo fmt --check` is 8s and `cargo clippy` is 5s, while `cargo test
-# --workspace` is 267s, of which only ~35s is tests actually running.
+# every step. When this was written, linking was most of what a warm rebuild
+# cost: `cargo test --workspace` was 267s, of which only ~35s was tests running.
+# **With mold that inverted.** Measured at `0.14.11`, a cold rebuild of every
+# workspace crate and all 54 test binaries is 8.8s, and the tests' own running
+# time is what the gate pays for — `Cargo.toml`'s profile has that half.
 #
 # **No clang.** Bevy's docs give this as `-Clinker=clang -Clink-arg=-fuse-ld=mold`
 # because most distributions ship a gcc too old to drive mold. This one does not:

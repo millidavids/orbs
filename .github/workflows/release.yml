@@ -19,16 +19,20 @@ name: Release
 # What it does:
 #   1. read the version from Cargo.toml, and decide whether this is a release
 #      at all — a changelog block is the opt-in
-#   2. run the project's own gate, because a tag on a broken commit is worse
-#      than no tag
+#   2. confirm the project's own gate passed on this commit — on `dev`, where it
+#      already ran, or here if it did not — because a tag on a broken commit is
+#      worse than no tag
 #   3. tag + GitHub Release, with the body from docs/CHANGELOG.md
 #   4. post to Discord and Bluesky
 #
-# Step 2 is court_wizard's one real omission here: there, release.yml reruns
-# nothing because it reuses the artifacts dev-release.yml already built and
-# tested for this exact SHA. With no artifacts there is nothing to reuse, so the
-# gate runs again. It is ~10 minutes and it means a promotion cannot ship a
-# commit that only *looked* green on dev.
+# Step 2 used to run the whole gate again, on the reasoning that with no
+# artifacts to reuse there was nothing to trust. **It was re-testing identical
+# bytes**: `main` is only ever a fast-forward of `dev`, so the SHA here is one
+# `dev-release.yml` gated already, and the second run cost twenty minutes a
+# release — the test step alone is eighteen. It asks for that verdict instead
+# (`dev-verdict`), waiting when the dev run is still going. Anything but a pass
+# — no run, a failure, a cancellation — runs the full gate here, so a commit
+# nobody gated is still never tagged on trust.
 #
 # Secrets, all optional — a missing one skips its step rather than failing:
 #   DISCORD_WEBHOOK_URL
@@ -124,13 +128,59 @@ jobs:
             echo "Releasing v$VERSION"
           fi
 
-  gate:
-    # CLAUDE.md's gate, verbatim and in the same order. court_wizard has no
-    # equivalent step here because its release only ever *promotes* a build that
-    # dev-release.yml already built and tested. Nothing has built this commit, so
-    # the choice is to run the gate or to tag on trust.
+  dev-verdict:
+    # **The gate already ran on this commit, on `dev`.** Found by SHA and
+    # awaited if it is still going — `/game-release main` allows promoting while
+    # the dev run is in progress. `gated` is true only for a run that passed;
+    # everything else sends the full gate below.
     needs: check-version
     if: needs.check-version.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      actions: read
+    outputs:
+      gated: ${{ steps.find.outputs.gated }}
+    steps:
+      - name: Find the dev-release run for this commit, and await it
+        id: find
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          run=$(gh run list --repo "$REPO" --workflow dev-release.yml \
+            --commit "$GITHUB_SHA" --limit 1 --json databaseId \
+            --jq '.[0].databaseId // empty')
+          if [ -z "$run" ]; then
+            echo "No dev-release run for $GITHUB_SHA — the full gate runs here."
+            echo "gated=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Blocks until the run finishes, and fails unless it passed. The
+          # `play` job there is `continue-on-error`, so a red scenario does not
+          # fail the run — the same standing it has on `dev`.
+          if gh run watch "$run" --repo "$REPO" --exit-status --compact --interval 30 > /dev/null; then
+            echo "dev-release run $run passed on $GITHUB_SHA — not gating twice."
+            echo "gated=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "dev-release run $run did not pass — the full gate runs here."
+            echo "gated=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  gate:
+    # CLAUDE.md's gate, verbatim and in the same order — **the fallback**, for a
+    # commit `dev-release.yml` never passed. A fast-forward promotion never
+    # needs it; a `force` re-run of a commit dev never saw would.
+    needs: [check-version, dev-verdict]
+    # **`!cancelled()`, or the fallback is not one.** Without a status function
+    # this reads as `success() && …`, so a `dev-verdict` that *failed* — a `gh`
+    # error under `set -e`, or its wait timing out — would skip this job, and
+    # `release` with it: a promotion that tagged nothing and said nothing.
+    if: >-
+      !cancelled()
+      && needs.check-version.outputs.should_release == 'true'
+      && needs.dev-verdict.outputs.gated != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -163,7 +213,8 @@ jobs:
         run: cargo fmt --all --check
 
       - name: Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        # The feature is not optional — see `dev-release.yml`.
+        run: cargo clippy --workspace --all-targets --features orbs-augury/train -- -D warnings
 
       - name: Test
         run: cargo test --workspace
@@ -177,8 +228,16 @@ jobs:
         run: cargo build -p orbs
 
   release:
-    needs: [check-version, gate]
-    if: needs.check-version.outputs.should_release == 'true'
+    needs: [check-version, dev-verdict, gate]
+    # **Spelled out, because a skipped need skips everything after it.** `gate`
+    # is skipped whenever dev already passed, and GitHub skips every job further
+    # down a chain with a skipped job in it unless its own condition says
+    # otherwise. `!cancelled()` rather than `always()`, so a cancelled run still
+    # tags nothing.
+    if: >-
+      !cancelled()
+      && needs.check-version.outputs.should_release == 'true'
+      && (needs.dev-verdict.outputs.gated == 'true' || needs.gate.result == 'success')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -269,7 +328,12 @@ jobs:
     # between "tagged" and "anyone can have it". court_wizard waits because its
     # build is one untapped phone prompt away from the players.
     needs: [check-version, release]
-    if: needs.check-version.outputs.should_release == 'true'
+    # Two jobs down from `gate`, so its skip would reach here too — see
+    # `release`. `needs` holds direct dependencies only, hence `release`.
+    if: >-
+      !cancelled()
+      && needs.check-version.outputs.should_release == 'true'
+      && needs.release.result == 'success'
     runs-on: ubuntu-latest
     env:
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
