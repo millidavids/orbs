@@ -278,7 +278,8 @@ pub fn advance(world: &mut World) {
     }
 }
 
-/// Open what every station already reached opens, without saying so.
+/// Reach every station the tally already meets, and open what every reached
+/// station opens — without saying so.
 ///
 /// **[`advance`] reaches a station once, ever** — it skips anything already in
 /// [`Reached`] — so what a station opens is applied on exactly one tick in the
@@ -287,21 +288,63 @@ pub fn advance(world: &mut World) {
 /// the thing still shut and no deed able to open it: the tally is long past what
 /// the station asks, so `advance` walks straight past it for ever.
 ///
-/// [`ley::caught_up`](super::ley::caught_up)'s twin, and silent for its reason.
+/// **And a station whose count came down.** `advance` runs after a completion
+/// and never on load, so a document written when a station asked more — a
+/// medium tower seven holds into `menagerie_2`'s ramped eleven, loaded where the
+/// station asks a fixed five — met the station and would not reach it until some
+/// unrelated completion walked the lines. It is reached here, in line order and
+/// stopping at the first unmet station on each line, which is `advance`'s walk.
+///
+/// [`ley::caught_up`](super::ley::caught_up)'s twin, and silent for its reason
+/// about the *station*: a load does not congratulate anybody on yesterday's work.
+///
+/// **What a station reached only now opens is said, though** — that is news,
+/// not congratulation. A document short of the station was saved with the thing
+/// shut, so the player has never been told it opened, and for the whole circle
+/// the sentence is the only thing in the game that says what a `~` wire is: a
+/// medium tower seven holds into the old ramped eleven loaded straight into
+/// turned wires with no word about them. A station the document had *already*
+/// reached opens silently, since it was said when it was reached. `opening`
+/// says only what changed, so a document that disagrees with nothing changes
+/// and says nothing, and a restored world is still the saved world.
 pub(crate) fn caught_up(world: &mut World) {
-    let opens: Vec<String> = {
+    let (due, told, news): (Vec<String>, Vec<String>, Vec<String>) = {
         let curve = world.resource::<Progression>();
+        let tally = world.resource::<Tally>();
         let reached = world.resource::<Reached>();
-        super::DOMAINS
-            .into_iter()
-            .flat_map(|domain| curve.line(domain))
-            .filter(|milestone| reached.has(&milestone.id))
-            .flat_map(|milestone| milestone.opens.iter().cloned())
-            .collect()
+        let mut due = Vec::new();
+        for domain in super::DOMAINS {
+            for milestone in curve.line(domain) {
+                if reached.has(&milestone.id) {
+                    continue;
+                }
+                if tally.count(&milestone.done.key()) < milestone.done.times() {
+                    break;
+                }
+                due.push(milestone.id.clone());
+            }
+        }
+        let opens = |pick: &dyn Fn(&str) -> bool| -> Vec<String> {
+            super::DOMAINS
+                .into_iter()
+                .flat_map(|domain| curve.line(domain))
+                .filter(|milestone| pick(&milestone.id))
+                .flat_map(|milestone| milestone.opens.iter().cloned())
+                .collect()
+        };
+        let told = opens(&|id| reached.has(id));
+        let news = opens(&|id| due.iter().any(|due| due == id));
+        (due, told, news)
     };
-    for key in opens {
+    for id in due {
+        world.resource_mut::<Reached>().hold(&id);
+    }
+    // **Silent first**, so a key both an old station and a new one open counts
+    // as told and `opening` finds it open already.
+    for key in told {
         open(world, &key);
     }
+    opening(world, &news);
 }
 
 /// Mark `id` reached, say so, and open what it opens.

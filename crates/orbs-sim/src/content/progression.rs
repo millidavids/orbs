@@ -507,7 +507,7 @@ impl Progression {
                     return Err(super::ContentError::new(
                         FILE,
                         format!(
-                            "`{who}` opens `{key}`, which is not a room, a recipe, a charm or the wall"
+                            "`{who}` opens `{key}`, which is not a room, a recipe, a charm, the wall or the circle"
                         ),
                     ));
                 };
@@ -526,7 +526,9 @@ impl Progression {
                     crate::tower::opened::Key::Charm(name) => {
                         (catalogue.charms.contains(&name.as_str()), catalogue.charms)
                     }
-                    crate::tower::opened::Key::Siege => (true, &[]),
+                    crate::tower::opened::Key::Siege | crate::tower::opened::Key::Circle => {
+                        (true, &[])
+                    }
                 };
                 if !known {
                     return Err(super::ContentError::new(
@@ -652,7 +654,7 @@ mod tests {
     use super::*;
 
     /// The shipped tower's names, as `Sim::new` hands them in.
-    const INSTRUMENTS: [&str; 10] = [
+    const INSTRUMENTS: [&str; 11] = [
         "mortar_and_pestle",
         "balneum_mariae",
         "flask_and_rod",
@@ -663,6 +665,7 @@ mod tests {
         "prism",
         "pylon",
         "lattice",
+        "circle",
     ];
 
     fn catalogue<'a>(
@@ -1015,6 +1018,7 @@ mod tests {
             "a charm that does not exist"
         );
         assert!(check(&curve("siege")).is_ok());
+        assert!(check(&curve("circle")).is_ok());
         assert!(check(&curve("wall")).is_err(), "a key of no kind");
     }
 

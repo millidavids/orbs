@@ -6,6 +6,7 @@
 //! true, written so they hold with no model in the room.
 
 use orbs_sim::augur::{Augur, Fixture};
+use orbs_sim::content::Phrasings;
 use orbs_sim::{Sim, parser};
 
 /// A reader that answers everything, wrongly, and loudly.
@@ -285,4 +286,48 @@ fn a_divined_reading_never_raises_a_numbered_prompt() {
         sim.choices().asked().is_none(),
         "a divined reading opened a numbered prompt"
     );
+}
+
+/// **Every sentence the circle teaches is one a reader is shown** — or one the
+/// orb reads as the very command it teaches. The orb answers first, so a
+/// phrasing opening on another room's word taught a reader something it never
+/// sees: *"put heed on the keystone"* was `dial`'s, *"test the circle"*
+/// fuzzed to `rest`, and each answered in the menagerie with a reader standing
+/// by. Filled with the circle's own words, both ways round, since a humour may
+/// be named first.
+#[test]
+fn every_phrasing_the_circle_teaches_reaches_a_reader_or_its_own_command() {
+    let phrasings = Phrasings::builtin();
+    let mut sim = Sim::new(3);
+    sim.submit("attend menagerie");
+    sim.step();
+    sim.submit("summon");
+    sim.step();
+
+    let mut intercepted = Vec::new();
+    let mut asked = 0;
+    let circle = phrasings.entries().iter().filter(|entry| {
+        matches!(
+            entry.canonical.split_whitespace().next(),
+            Some("limn" | "summon")
+        )
+    });
+    for entry in circle {
+        for template in entry.say.iter().chain(&entry.holdout) {
+            for (first, second) in [("keystone", "heed"), ("heed", "keystone")] {
+                let fill = |text: &str| {
+                    text.replacen("{place}", first, 1)
+                        .replacen("{place}", second, 1)
+                };
+                let line = fill(template);
+                sim.submit_reading(&line, &Trap);
+                asked += 1;
+                if !divined(&sim) && echo(&sim) != Some(fill(&entry.canonical)) {
+                    intercepted.push(format!("{line:?} -> {:?}", echo(&sim)));
+                }
+            }
+        }
+    }
+    assert!(asked > 100, "only {asked} phrasings were tried");
+    assert!(intercepted.is_empty(), "{intercepted:#?}");
 }

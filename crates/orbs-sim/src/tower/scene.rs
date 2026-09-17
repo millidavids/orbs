@@ -333,15 +333,15 @@ pub fn scene_at(world: &World, at: Entity) -> Scene {
         scene = scene.with(NounKind::Sense, reading);
     }
 
-    // **And the menagerie's, for the fourth time and the same reason.** A chant
-    // is drawn and finished inside one solve, so at cast there is never one
-    // running — `next` and `remaining` would resolve against nothing and
-    // `spell::compile` would null the whole condition.
+    // **And the menagerie's, for the fourth time and the same reason.** A beast
+    // arrives and is held inside one solve, so at cast there is never one waiting
+    // — `fervour` and the humour a glyph carries would resolve against nothing
+    // and `spell::compile` would null the whole condition.
     //
-    // **Appended after the sanctum's**, which is the registration-order rule
-    // again: §6 resolves a tie to whichever noun came first, so every word an
-    // existing solver names keeps exactly the order it has always had.
-    for reading in super::chant::readings() {
+    // **In the chant's slot, after the sanctum's**, which is the
+    // registration-order rule again: §6 resolves a tie to whichever noun came
+    // first, so every word an existing solver names keeps the order it has.
+    for reading in super::circle::readings() {
         scene = scene.with(NounKind::Sense, reading);
     }
 

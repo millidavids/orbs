@@ -430,21 +430,10 @@ fn verb_for(instrument: &str) -> &'static str {
     }
 }
 
-/// What a solve pays, given how many presses it took.
-///
-/// **Full at or under par, less beyond it, and never nothing.** The halving
-/// curve a first draft proposed is withdrawn: measured, a blind ladder needs
-/// ~23 presses against a player's ~4, and halving would land it on the floor of
-/// 1 — while the ladder *already* pays 5.5× the ticks, so a yield penalty
-/// double-counts and drives automated scrying below the archive's maze. The tick
-/// cost does the real work; this only rewards playing well.
+/// What a solve pays, given how many presses it took — `tower::worth_within_par`,
+/// which the menagerie's circle shares.
 fn yield_of(world: &World, spent: u32) -> u64 {
-    let full = tower::worth(world, PRISM);
-    if spent <= ward::PAR {
-        full
-    } else {
-        full.saturating_mul(3) / 4
-    }
+    tower::worth_within_par(world, PRISM, spent, ward::PAR)
 }
 
 /// The prism's name, which is where a lens record is filed.

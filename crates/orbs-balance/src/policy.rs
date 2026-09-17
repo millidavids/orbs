@@ -64,8 +64,13 @@ pub enum Body {
     /// which of two stations carries the lesser ward. Both come out of
     /// `Sim::pylon`, which is the same view the board draws from.
     Warding,
-    /// The menagerie, sung correctly and in time.
-    Chanting,
+    /// Hold beasts at the menagerie's circle the way `taming` holds them.
+    ///
+    /// The fourth policy that must read the world, and it reads exactly what the
+    /// spell reads — whether a beast is waiting, and where each glyph has been
+    /// stepped to — because the point of the column is what the *search* is
+    /// worth, not what a person who reads the table might manage.
+    Taming,
     /// Fight a siege the way `besieging` fights one, then let the next arrive.
     ///
     /// The fifth policy that must read the world, and it reads exactly what the
@@ -120,7 +125,7 @@ impl Policy {
         Self::STACKS,
         Self::SCRYING,
         Self::WARDING,
-        Self::CHANTING,
+        Self::TAMING,
         Self::BESIEGING,
         Self::IMBUING,
         Self::BOUND,
@@ -334,32 +339,24 @@ impl Policy {
         body: Body::Imbuing,
     };
 
-    /// The menagerie, sung correctly and on the beat.
+    /// The menagerie, searched the way `taming` searches it.
     ///
-    /// **It measures the ceiling, not a player.** The driver reads the aperture
-    /// and waits for `until` to run out **off the model**, not off a reading —
-    /// the circle publishes no `until` to the language any more — so every
-    /// syllable is struck, which is what a policy is for. A person misses some
-    /// and a solver misses none once concentration is bought, and the number
-    /// here is the roof both are under.
-    ///
-    /// **The one policy that can make the tower *worse*.** Every other loop only
-    /// earns; a chant sung badly wears the barrier, so a regression that broke
-    /// the timing would show up here as a falling rate *and* as integrity
-    /// draining, which is the pair worth watching. ROADMAP's Phase 5 scarcity
-    /// note asks for exactly that: *"a sweep is part of the gate rather than an
-    /// afterthought"*.
+    /// **It does not deduce, so it is not a model of a player** — the lens's
+    /// rule for [`SCRYING`](Self::SCRYING), and it matters more here. A person
+    /// who reads the temper holds a beast in one call; this tries every circle
+    /// in the spell's order and averages 68. The rate it prints is what a bound
+    /// search is worth, which is what the economy actually sees, and the faster
+    /// of the two is the one absent from this file (§19).
     ///
     /// It issues its own commands, like [`WARDING`](Self::WARDING) and unlike
-    /// [`BOUND`](Self::BOUND), so it does not pay §8's per-step tick — and here
-    /// that gap is not a detail: a real bound `chanting` cannot keep up at all
-    /// until the weave grants a second step, which is the domain's whole
-    /// progression hook (§19).
-    const CHANTING: Self = Self {
-        name: "chanting",
-        gloss: "the menagerie, every syllable answered on the beat",
+    /// [`BOUND`](Self::BOUND), so it does not pay §8's per-step tick for the
+    /// spell's `if` guards and loop entries — the number here is the search's
+    /// ceiling at one command a tick, and a bound `taming` sits below it.
+    const TAMING: Self = Self {
+        name: "taming",
+        gloss: "the menagerie, every circle tried in order until one holds",
         setup: &["attend menagerie"],
-        body: Body::Chanting,
+        body: Body::Taming,
     };
 
     /// The bailey, fought the way the shipped decision tree fights it.

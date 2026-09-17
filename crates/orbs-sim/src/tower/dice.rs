@@ -49,7 +49,7 @@ use crate::rng::{RngStream, Rngs};
 
 /// One of D&D's seven, and the homage is the point.
 ///
-/// **A closed table**, the shape `Syllable::ALL` and the lens's `SIGILS` already
+/// **A closed table**, the shape `Humour::ALL` and the lens's `SIGILS` already
 /// have — so a new die is a variant and a row, and nothing derives one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum Die {

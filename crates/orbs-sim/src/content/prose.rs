@@ -120,13 +120,37 @@ impl Prose {
     /// authored sentences are what rule 6 asks for anyway.
     #[must_use]
     pub fn counted(&self, key: &str, count: u32) -> String {
-        let one = format!("{key}_one");
-        let key = if count == 1 && self.has(&one) {
-            &one
-        } else {
-            key
+        self.line(
+            &self.counted_key(key, u64::from(count)),
+            &[("count", &count.to_string())],
+        )
+    }
+
+    /// Which key a line about `count` things reads from: `{key}_one` for a
+    /// single one and `{key}_none` for nought, each when it is authored, and
+    /// `key` otherwise.
+    ///
+    /// **The singular rule, once.** [`counted`](Self::counted) fills `{count}`
+    /// and nothing else, and a line that names the things themselves — *"the
+    /// last call balked at row 4"* — needs only the choice of key. The circle's
+    /// painter chose it by hand, which was this rule's second copy.
+    ///
+    /// **`_none` for the line whose list would be empty**, which `_one` cannot
+    /// cover: *"the last call balked at rows "* with nothing after it, or *"0
+    /// rows balk"* over a circle that already holds. Only a key that authors it
+    /// changes; every other falls through as `_one` does.
+    #[must_use]
+    pub fn counted_key(&self, key: &str, count: u64) -> String {
+        let form = match count {
+            0 => format!("{key}_none"),
+            1 => format!("{key}_one"),
+            _ => return key.to_owned(),
         };
-        self.line(key, &[("count", &count.to_string())])
+        if self.has(&form) {
+            form
+        } else {
+            key.to_owned()
+        }
     }
 
     /// Every subject the manual can answer on, from the `recall_` keys.
@@ -229,6 +253,33 @@ mod tests {
         // A key with no singular form falls straight through, which is what
         // keeps the other nine as one authored line each.
         assert_eq!(prose.counted("mastery_laboratory_2", 1), "1 potions brewed");
+    }
+
+    /// **One rule for the key, whether or not the count is in the sentence.** A
+    /// line naming the rows themselves picks its key the same way, and a key that
+    /// authors `_none` says something true of an empty list instead of trailing
+    /// off after *"rows"*.
+    #[test]
+    fn a_key_is_chosen_for_none_one_and_many_and_falls_through_when_unauthored() {
+        let prose = Prose::builtin();
+        assert_eq!(
+            prose.counted_key("circle_balks_spoken", 0),
+            "circle_balks_spoken_none"
+        );
+        assert_eq!(
+            prose.counted_key("circle_balks_spoken", 1),
+            "circle_balks_spoken_one"
+        );
+        assert_eq!(
+            prose.counted_key("circle_balks_spoken", 3),
+            "circle_balks_spoken"
+        );
+        assert_eq!(prose.counted("circle_balks", 0), "every row agrees");
+        // Unauthored forms fall through to the key itself.
+        assert_eq!(
+            prose.counted_key("mastery_laboratory_2", 0),
+            "mastery_laboratory_2"
+        );
     }
 
     #[test]

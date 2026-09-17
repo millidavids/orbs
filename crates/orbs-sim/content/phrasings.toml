@@ -2108,48 +2108,60 @@ holdout = [
     "show me what i can learn next",
 ]
 
+# **Every line here reaches a reader in the menagerie** (§19). The orb answers a
+# line it can read before any reader is asked, so a phrasing that opens on
+# another verb's word — `start` and `get` are the laboratory's, `set` and `see`
+# fuzz to `dial`'s, `bring` to `grind`'s, `test` to `rest`, and `let` is the spell
+# language's — teaches a reader a sentence it is never shown. They were measured
+# out rather than guessed at.
 [[entry]]
 canonical = "summon"
 say = [
-    "start the circle",
     "call something up",
     "begin a summoning",
-    "get the circle going",
     "raise something",
     "summon",
     "work the circle",
-    "let the circle turn",
     "conjure",
     "evoke",
     "call forth",
     "invoke the circle",
-    "bring something through",
     "open the circle",
-    "set the circle working",
     "i would summon now",
     "open the summoning circle",
-    "get the summoning going",
-    "start a summoning",
     "call something into being",
     "raise a creature",
-    "bring something up",
     "draw something through",
-    "let something through",
     "work up a summoning",
-    "begin the circle",
     "turn the circle",
-    "set the summoning going",
     "i want to summon",
-    "let us call something up",
     "time to summon",
     "the circle please",
     "summon something",
+    "call the beast in",
+    "call up a beast",
+    "i want a beast",
+    "summon a beast",
+    "call a creature to the circle",
+    "whistle up a beast",
+    "beckon a beast",
+    "call the beast into the circle",
+    "will the circle hold",
+    "does the circle hold now",
+    "call it in",
+    "draw it into the circle",
+    "coax the beast in",
+    "lure the beast into the circle",
+    "invite the beast in",
+    "summon it in",
 ]
 holdout = [
-    "let us summon something",
-    "set the circle turning",
     "call something into the circle",
     "time to raise something",
+    "check whether the circle holds it",
+    "has the circle got it",
+    "go on then call it",
+    "bid the beast enter",
 ]
 
 [[entry]]
@@ -2627,95 +2639,70 @@ holdout = [
 ]
 
 # ---------------------------------------------------------------------------
-# The menagerie's chant.
+# The menagerie's circle. **Two shapes, as `dial` has one and `haul` the other**:
+# a glyph and the humour to limn it with, and a glyph alone to step. Plain English
+# names a glyph's humour however it likes, and none of these may lean on `and` or
+# `or` as the gate — both are words the spell grammar owns.
+#
+# **And none may open on a word the orb reads first**, the summoning's rule above:
+# `put` is `dial`'s, `try` is `probe`'s, `move` and `rotate` are `move`'s, `let`
+# is the spell language's, and `carve`, `etch`, `fix`, `switch`, `gate` and `wire`
+# each fuzzed to a verb of another room. Every one of those answered in the
+# menagerie without a reader being asked.
 # ---------------------------------------------------------------------------
 
 [[entry]]
-canonical = "chorus"
+canonical = "limn {place} {place}"
 say = [
-    "let me sing it",
-    "hand me the chant",
-    "give me the keys",
-    "i will take the singing",
-    "chorus",
-    "let me take over the chant",
-    "put me in the chorus",
-    "i want to sing this one",
-    "let me answer it myself",
-    "give the chant to me",
-    "i will do the singing",
-    "hand over the chant",
-    "let me lead the chorus",
-    "put the chant in my hands",
-    "i shall take the part",
-    "let me carry the tune",
-    "give me the chant to hold",
-    "i will answer the syllables",
-    "let me have the chant",
-    "pass me the singing",
-    "i take up the chorus",
-    "let me join in",
-    "i want to hold the chant",
-    "surrender the chant to me",
-    "let me run the chorus",
-    "the chant is mine",
-    "i will sing along",
-    "put me on the chant",
-    "let me take the melody",
-    "i shall bear the chorus",
-    "give the singing over to me",
+    "limn {place} {place}",
+    "make the {place} a {place}",
+    "turn the {place} into {place}",
+    "give the {place} {place}",
+    "i want the {place} to be {place}",
+    "the {place} should be {place}",
+    "inscribe {place} with {place}",
+    "mark the {place} as {place}",
+    "change the {place} to {place}",
+    "write {place} into the {place}",
+    "paint the {place} {place}",
+    "trace {place} into the {place}",
+    "sign the {place} with {place}",
+    "chalk {place} on the {place}",
+    "ink the {place} with {place}",
+    "dress the {place} in {place}",
+    "bless the {place} with {place}",
+    "the {place} ought to be a {place}",
+    "i think the {place} is {place}",
+    "{place} goes on the {place}",
 ]
 holdout = [
-    "let me be the one singing",
-    "hand the chant across to me",
-    "i would rather sing it myself",
-    "put the chorus under my hand",
-    "let me have a turn at the chant",
+    "have the {place} be a {place}",
+    "turn {place} to {place}",
+    "i would like {place} as the {place}",
+    "limn the {place} as {place}",
+    "make it {place} on the {place}",
 ]
 
 [[entry]]
-canonical = "sing {place}"
+canonical = "limn {place}"
 say = [
-    "sing {place}",
-    "answer {place}",
-    "give it {place}",
-    "the answer is {place}",
-    "say {place}",
-    "call {place}",
-    "sound {place}",
-    "reply {place}",
-    "let it be {place}",
-    "i sing {place}",
-    "try {place} on it",
-    "the syllable is {place}",
-    "come back with {place}",
-    "utter {place}",
-    "voice {place}",
-    "return {place}",
-    "meet it with {place}",
-    "counter with {place}",
-    "the note is {place}",
-    "strike it with {place}",
-    "i answer {place}",
-    "chant {place}",
-    "intone {place}",
-    "give the syllable {place}",
-    "match it with {place}",
-    "throw back {place}",
-    "answer the aperture with {place}",
-    "let {place} be the answer",
-    "i would sing {place}",
-    "{place} is what it wants",
-    "sound out {place}",
-    "carol {place}",
-    "warble {place}",
+    "limn {place}",
+    "step the {place}",
+    "another humour for the {place}",
+    "roll the {place} over",
+    "change the {place} to the next",
+    "give the {place} another humour",
+    "cycle the {place}",
+    "bump the {place}",
+    "turn the {place} over to the next",
+    "next humour for {place}",
+    "advance the {place} glyph",
+    "{place} to the next one",
 ]
 holdout = [
-    "i think the answer is {place}",
-    "come at it with {place}",
-    "let us answer that with {place}",
-    "give back {place} to it",
-    "the syllable it wants is {place}",
+    "give {place} a different one",
+    "tick the {place} over",
+    "the next gate on {place}",
 ]
 
 [[entry]]

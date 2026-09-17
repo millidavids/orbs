@@ -87,6 +87,28 @@ pub fn worth(world: &World, named: &str) -> u64 {
     world.resource::<Progression>().earns(named)
 }
 
+/// What a solve at `named` pays, given how many tries it took against `par`.
+///
+/// **Full at or under par, three quarters beyond it, and never nothing.** The
+/// halving curve a first draft proposed for the lens is withdrawn: measured, a
+/// blind ladder needs ~23 presses against a player's ~4, and halving would land
+/// it on the floor of 1 — while the ladder *already* pays 5.5× the ticks, so a
+/// yield penalty double-counts and drives an automated puzzle below the maze. The
+/// tick cost does the real work; this only rewards playing well.
+///
+/// **One rule for two rooms.** The lens priced a press this way and the
+/// menagerie prices a call the same way, for the same reason; two copies of a
+/// three-line rule are how one of them comes to be tuned and the other not.
+#[must_use]
+pub fn worth_within_par(world: &World, named: &str, spent: u32, par: u32) -> u64 {
+    let full = worth(world, named);
+    if spent <= par {
+        full
+    } else {
+        full.saturating_mul(3) / 4
+    }
+}
+
 /// Add what a completed run earned, and say so if it bought something.
 ///
 /// **Called where a run *succeeded*, never where one ended.** `finish` also runs

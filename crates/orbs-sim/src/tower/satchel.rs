@@ -18,7 +18,7 @@
 //! # A component, not children
 //!
 //! Every other counted thing in the tower is children plus [`Stock`], and this
-//! deliberately is not. A queue is an **ordered multiset**: `skyward` may be
+//! deliberately is not. A queue is an **ordered multiset**: `heed` may be
 //! queued twice and the order is the entire point, and `Stock` collapses
 //! duplicates into a count and despawns at nought. So the names ride a
 //! `VecDeque` on the node, and `spell::watch` answers `is empty` from here
@@ -53,9 +53,8 @@ pub const QUEUED: &str = "queued";
 /// makes the same argument for a descent, and a queued name is cheaper than a
 /// descent but arrives faster.
 ///
-/// Sixteen is well past any pipeline the game has: the menagerie's whole figure
-/// is twelve syllables, so a producer that ran the entire chart ahead of its
-/// consumer would still fit.
+/// Sixteen is well past any pipeline the game has: the sanctum's `coursing`
+/// queues two stations a haul, and a work list of reagents is a handful.
 pub const DEPTH: usize = 16;
 
 /// An ordered queue of names, on the node that is the satchel.
@@ -71,7 +70,7 @@ impl Satchel {
     ///
     /// **Refuses at [`DEPTH`] rather than dropping the oldest**, and the
     /// direction matters: a queue that silently forgot its front would hand the
-    /// consumer a syllable out of order, which looks exactly like a solver with
+    /// consumer a name out of order, which looks exactly like a solver with
     /// a timing bug. Refusing is visible — the caller says so, and the pipeline
     /// stalls where it actually went wrong.
     pub fn put(&mut self, name: &str) -> bool {
@@ -148,17 +147,17 @@ mod tests {
     fn it_is_a_queue_and_not_a_pile() {
         let mut satchel = Satchel::default();
         assert!(satchel.is_empty());
-        for name in ["skyward", "earthward", "skyward"] {
+        for name in ["heed", "yoke", "heed"] {
             assert!(satchel.put(name));
         }
         // **A name twice, in the order it was put.** This is the whole reason
-        // the queue is not children plus `Stock`: a count would say `skyward 2`
+        // the queue is not children plus `Stock`: a count would say `heed 2`
         // and lose which one comes first.
         assert_eq!(satchel.len(), 3);
-        assert_eq!(satchel.peek(), Some("skyward"));
-        assert_eq!(satchel.take().as_deref(), Some("skyward"));
-        assert_eq!(satchel.take().as_deref(), Some("earthward"));
-        assert_eq!(satchel.take().as_deref(), Some("skyward"));
+        assert_eq!(satchel.peek(), Some("heed"));
+        assert_eq!(satchel.take().as_deref(), Some("heed"));
+        assert_eq!(satchel.take().as_deref(), Some("yoke"));
+        assert_eq!(satchel.take().as_deref(), Some("heed"));
         assert_eq!(satchel.take(), None);
         assert!(satchel.is_empty());
     }

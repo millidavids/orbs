@@ -95,10 +95,10 @@ pub struct Showing {
     /// The surface that has taken the whole pane, if one has.
     ///
     /// [`Focus::takes_the_pane`], **not the whole `Focus`**. `Focus::Reading`
-    /// would fire a crossing on `PgUp` and `Focus::Chant` on `chorus` — and
-    /// `focus.rs` is explicit that a chant *"takes the keys and nothing else"*
-    /// and deliberately keeps the transcript on screen. Neither replaces the
-    /// pane, so neither is a screen change.
+    /// would fire a crossing on `PgUp`, and the transcript scrolling back
+    /// replaces nothing — so it is not a screen change. (A menagerie chant on the
+    /// arrow keys was the second case this guarded, until the menagerie stopped
+    /// being played on the keys at all — §19.)
     tool: Option<Focus>,
     /// The room. [`Panel::room`], which is the room and not the leaf.
     room: String,
@@ -599,25 +599,17 @@ mod tests {
     }
 
     #[test]
-    fn pgup_and_chorus_are_not_crossings() {
-        // Neither takes the pane. `focus.rs` is explicit that a chant "takes the
-        // keys and nothing else" and deliberately keeps the transcript, and the
-        // transcript scrolling back does not replace anything at all.
-        for open in [
-            Open {
-                reading: true,
-                ..Open::default()
-            },
-            Open {
-                chorusing: true,
-                ..Open::default()
-            },
-        ] {
-            let mut passing = ready();
-            passing.observe(&showing("archive"));
-            passing.observe(&Showing::of(open, &panel("archive"), false));
-            assert!(passing.is_settled(), "{open:?} started a crossing");
-        }
+    fn pgup_is_not_a_crossing() {
+        // It does not take the pane: the transcript scrolling back replaces
+        // nothing at all.
+        let open = Open {
+            reading: true,
+            ..Open::default()
+        };
+        let mut passing = ready();
+        passing.observe(&showing("archive"));
+        passing.observe(&Showing::of(open, &panel("archive"), false));
+        assert!(passing.is_settled(), "{open:?} started a crossing");
     }
 
     #[test]

@@ -1,7 +1,9 @@
-//! The three facts a frontend reads from the environment before the world
-//! exists: the seed, the wizard's name, and whether a fresh tower begins sealed.
+//! The facts a frontend reads from the environment before the world exists: the
+//! wizard's name, whether a fresh tower begins sealed, and which readers answer.
+//! The seed has a module of its own, `seed`, since a game and an instrument want
+//! different ones.
 //!
-//! All three are read *outside* the sim, deliberately: the environment is not
+//! All of them are read *outside* the sim, deliberately: the environment is not
 //! deterministic, and reaching for it from inside a world that must replay
 //! identically from a seed is a habit worth not starting.
 //!
@@ -10,31 +12,6 @@
 //! divergence this crate exists to stop — `orbs-tui` reaching for
 //! `std::env::var("USER")` on its own would agree with the Bevy build on a
 //! developer's machine and disagree on Windows, in CI, or with `USER` blank.
-
-/// The world's seed when nothing overrides it.
-///
-/// A hex word rather than a round number, so a seed that appears in a bug report
-/// is recognisable as *the default* rather than as something the reporter chose.
-pub const SEED: u64 = 0x0B5;
-
-/// The seed, or `ORBS_SEED`'s if it names a number.
-///
-/// **A See-it affordance, not a setting.** Anything the world *generates* — the
-/// archive's stacks first, sabotage and sieges later — is one seed's worth of
-/// evidence per run, and one sample cannot show a distribution. Three dumps of
-/// the same maze looked like proof that randomising it had failed; they were
-/// three copies of one seed.
-///
-/// Tests sweep seeds directly through `Sim::new` and always could. This is the
-/// same reach from outside the binary, so a person can look rather than trust a
-/// test — which is the whole of §15's gate.
-#[must_use]
-pub fn seed() -> u64 {
-    std::env::var("ORBS_SEED")
-        .ok()
-        .and_then(|value| value.trim().parse().ok())
-        .unwrap_or(SEED)
-}
 
 /// Who the wizard is, if anything on the machine says.
 ///

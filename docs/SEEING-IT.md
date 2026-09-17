@@ -752,7 +752,8 @@ noisy" is how a driver bug gets written into the docs as a property of the game.
 about three sections down and then committed twice in its own prose. They were reached only by See-it lines and by whichever
 integration test happened to `invoke` one — so a spell could stop compiling, spin
 for ever, or silently do nothing with the whole gate green. §19 records that
-twice: `chanting` stopped compiling and a person noticed, and `besieging` shipped
+twice: `chanting` — the menagerie's solver while it was a chant — stopped
+compiling and a person noticed, and `besieging` shipped
 with a `repeat until` guard that could never come true on a loss.
 
 Six claims, per solver: it **compiles clean**, **does its work**, **latches no
@@ -765,12 +766,13 @@ the player did, not what their spells did"*, so a test looking for a solver's
 output on screen finds nothing and looks broken.
 
 **Two solvers are *meant* to fall short**, and the table says so rather than the
-file assuming one budget: `chanting` collapses at one step a tick — that is the
-menagerie's whole progression hook — and `ordering` is a producer that stops
-after three queues.
+file assuming one outcome: `tending_blindly` anneals without reading the board,
+and `ordering` is a producer that stops after three queues. The menagerie's
+`taming` and `winnowing` are the opposite case — searches that always hold, given
+the ticks.
 
 ```bash
-cargo test -p orbs-sim --test solvers      # all thirteen, driven
+cargo test -p orbs-sim --test solvers      # every one in the table, driven
 ```
 
 **The bailey has the most solvers of any room, and the differences are the
@@ -1247,132 +1249,187 @@ so three and four both come out at an eighth. It is **under** clarity's 0.140
 where scrying's 0.268 is over, because a finished course also puts the barrier
 back and a domain paying twice should not also pay the best rate in the tower.
 
-### The menagerie — a figure sung against the tick, and the one clock in the tower
+### The menagerie — a beast's temper, and the circle of gates that holds it
 
-**Twelve syllables, one landing every four ticks, four lanes.** `summon` draws a
-figure; `sing <syllable>` answers the one at the rule; `chorus` hands the arrows
-over. A chant costs **nothing** to attempt — what it risks is the barrier, which
-loses 5 when a figure collapses, and that risk *is* the price.
+**A truth table and three logic gates.** `summon` draws a beast; its **temper**
+is eight rows, one for each way its three senses can be lit. The **circle** is
+three glyphs in drawn wiring — `sunwise` and `widdershins` each take two senses,
+the `keystone` takes what they answer — and `limn <glyph> [<humour>]` sets each to
+one of six gates: `yoke` AND, `spurn` NAND, `heed` OR, `eschew` NOR, `oppose` XOR,
+`mirror` XNOR. `summon` again calls the beast in; every row agreeing holds it and
+brings troops. **A balk costs the call and nothing else.** This replaced a rhythm
+game (§19), so the room is solved by choosing like every other, and there is no
+clock, no keyboard surface and no `F9`.
 
-**§10.1's *"timing means windows at 1 Hz — never a reflex"* is struck for this
-domain and this domain only** (§19). Five rooms are solved by choosing and this
-one by doing; the accommodation is `F9`, not an easier chant.
+**Each beast is generated from the seed** (`0.15.4`): a circuit is drawn —
+wiring, **turned wires** and a limning — and the temper is what it answers. A
+turned wire, drawn `~` before its sense, hands its glyph that sense turned over;
+at most one a glyph. 624 distinct boards and 192 tempers, against 330 and 107
+before turned wires.
 
 ```bash
-ORBS_BOOT=0 ORBS_DUMP="attend menagerie; summon" cargo run -p orbs
+ORBS_BOOT=0 ORBS_DUMP="attend menagerie; summon; limn keystone heed; limn sunwise oppose; summon" cargo run -p orbs
 ```
 ```text
-┌ figure ────────────────────────────────┐
-│ leftward  skyward  earthward rightward │   ← the words `sing` takes
-│────────────────────────────────────────│   ← the rule. syllables land here
-│                        ▼               │   ← next, and it is directly under
-│                                  ►     │
-│    ◄                                   │   ← ...and these are further off
-│           12 to come, 0 missed         │
-└────────────────────────────────────────┘
+┌ circle ────────────────────────────────────┐
+│sunwise     oppose ← blood, ~breath         │   ← which two senses, and which turned: drawn per beast
+│widdershins yoke   ← blood, ~bone           │
+│keystone    heed   ← sunwise, widdershins   │
+│────────────────────────────────────────────│
+│            1 2 3 4 5 6 7 8                 │   ← the row numbers
+│blood       · · · · ☼ ☼ ☼ ☼                 │
+│bone        · · ☼ ☼ · · ☼ ☼                 │
+│breath      · ☼ · ☼ · ☼ · ☼                 │
+│temper      · ☼ ☼ · ☼ · ☼ ·                 │   ← what every row must answer
+│answer      ☼ · ☼ · ☼ ☼ · ☼                 │   ← what the circle answered
+│            ▲ ▲       ▲ ▲ ▲                 │   ← where it balked
+│1 call, 5 rows balk                         │
+└────────────────────────────────────────────┘
 ```
+→ *"the beast balks at 5 rows, on call 1"*, and the rail's box reads `ci 5` —
+the rows still balking, counting down as the circle comes right.
 
-**They rise, and that is the one picture in the game that moves.** A rule at the
-top with notes climbing to it is what every rhythm game does, and the reason is
-that the line stays put while the eye tracks approach. It was drawn downward
-first and looked wrong immediately. **It fits the 80×22 floor**, which the maze
-and the ward sheet do not — and it has to, because the domain is unplayable by
-hand without it: the aperture moves every four ticks and `survey` costs one.
-
-**Singing early is not a strike**, and that is the whole mechanic. A syllable is
-struck only inside a two-tick window at the rule; the right word too soon costs
-it exactly as a wrong word does. Without that a solver would answer the moment it
-identified the lane and `bide` would have nothing to count.
-
-**`PACE` was one and the domain was unsolvable by a spell.** A question costs a
-tick and the figure advanced whenever nothing was sung, so read-then-sing missed
-by exactly one, for ever — twelve figures collapsed with no strike at all. It is
-four now, which is *shorter* than a four-lane ladder, and that is deliberate:
+**A truth table written sideways**, so eight columns of two cells fit beside the
+transcript at the 80×22 floor, where eight rows would not fit under the wiring.
+**A lit cell and a dark one differ in glyph, and a balk is a shape under its
+column**, so the board reads in greyscale and in a dump. **The spoken line is the
+whole puzzle in words** — *"sunwise is limned oppose, over blood and turned
+breath … the temper is lit on rows 2 (breath), 3 (bone), 5 (blood), 7 (blood
+bone)"* — each lit row naming its senses, because the painted sense rows are
+silent; `orbs-shell`'s `circle::tests` holds two hundred beasts by that sentence
+alone. **The answer row and the marks are the half that can go wrong** — a mark
+one column off sends a player to the wrong row — which is why `circle_balk` is the
+capture that matters; `circle_open` is the one that shows the `~`.
 
 ```bash
-# The shipped solver. **It is meant to fail at the shipped budget.**
-ORBS_BOOT=0 ORBS_DUMP="attend menagerie; peruse chanting.spell" cargo run -p orbs
-```
-→ **12 of 12 struck at two instructions a tick, collapses at one.** The
-menagerie is the domain that rewards concentration: unautomatable until the
-weave grants a second step, solved outright once it does.
+# A hold, and what it brings. `debug_circle` limns a solution without reading the table.
+ORBS_BOOT=0 ORBS_DUMP="attend menagerie; summon; debug_circle; summon; survey arsenal" cargo run -p orbs
+# → "the circle holds. 4 troops answer, on call 1", and `troop = 4` on the shelf
 
-**`bide until` is gone, and the `until` *reading* went with it** (§19). The
-delay used to be read off the circle, so the solver computed nothing — which is
-the blocking-wait shape the domain was designed to refuse, rebuilt under another
-name. Removing the word alone would not have fixed it: with the reading still
-answerable, `repeat until the circle has 1 until` / `end` is the same cheat
-spelled as a one-tick spin. `Chant::until` still answers for the board and for
-`orbs-balance`; the *language* cannot ask.
+# What a spell can read: each glyph's humour, and the temper's fervour. Nothing about a call.
+ORBS_BOOT=0 ORBS_DUMP="attend menagerie; summon; limn keystone heed; survey keystone; survey circle" cargo run -p orbs
 
-**So the spell has to keep its own time, and the shape is the puzzle.** Three
-things, all measured rather than reasoned about:
+# The refusals, each naming the way forward, and letting a beast go.
+ORBS_BOOT=0 ORBS_DUMP="attend menagerie; limn keystone heed; summon; limn keystone sunwise; stop circle" cargo run -p orbs
 
-- **`for each syllable`, never an `else if` ladder.** A ladder short-circuits, so
-  the lane found on the first rung is reached three ticks before the one found on
-  the fourth, and a `sing` arriving at a different offset each lap cannot sit in
-  a two-tick window. At two steps a tick the ladder strikes **nought of twelve**.
-- **`let`, and the `sing` *outside* the loop.** Binding the answer and singing
-  after the loop closes is what puts the strike at a fixed offset. Singing where
-  the lane is found is variable again — 6 of 12.
-- **No `bide` at all.** The pass comes out level with `PACE` on its own; `bide 2`
-  breaks it. The arithmetic is *"what does my loop already cost"*.
+# A call is never spent on a guess: plain English draws a beast, but calling one in takes the typed word.
+ORBS_SEED=3 ORBS_BOOT=0 ORBS_DUMP="attend menagerie; summon; call the beast in; summon" cargo run -p orbs
+# → "≈ summon", "the orb will not call the beast in on a guess. type summon to call it", then "on call 1"
 
-**Nothing tested `bide` before `0.5.8` — not the word, not the count, not the
-reading form the whole domain rested on.** That is why the shipped `.spell` could
-stop compiling with the gate green, and why the test is the *pair*: collapse at
-one step, close at two. Either half alone passes against a spell that never works.
+# A word the orb cannot place is asked about, never dropped — bare `limn keystone` would step the glyph.
+ORBS_AUGURY=off ORBS_BOOT=0 ORBS_DUMP="attend menagerie; summon; limn keystone xyzzy" cargo run -p orbs
+# → "¿ limn keystone", and the keystone still at yoke on the board
 
-```bash
-cargo test -p orbs-sim --test chanting the_shipped_solver   # the hook, asserted
-cargo test -p orbs-sim --lib tower::spell::program::tests::bide_takes_a_count
+# The six gates, the glyphs, and the one reading.
+ORBS_BOOT=0 ORBS_DUMP="recall yoke; recall oppose; recall keystone; recall fervour; recall limn" cargo run -p orbs
 ```
 
-**`repeat until the circle is empty`, never `is idle`.** A circle is idle whether
-or not a chant runs, so `is idle` is satisfied before the first pass, the loop
-runs zero times and the spell does nothing — silently. That cost four
-experiments. A running chant publishes readings, so `is empty` is the question
-that separates them.
-
-**Two diagnostics that cost more than the bugs**, both worth knowing:
-
-- **`survey` emits `TableRow`s, not `Message`s**, so `peruse <log>` cannot see
-  its answer. Three experiments concluded `for each` was broken while it worked
-  perfectly. Prove a loop with a verb that *speaks*.
-- **`invoke d6` is ambiguous** against the shelved dev spells, so a spell that
-  never ran looks exactly like one that ran and did nothing. Name a scratch spell
-  distinctly.
+**A sealed tower's first beasts are lesser** — the keystone alone over two senses,
+four rows, *which humour is this?* — until `menagerie_2`, five holds, opens the
+whole circle with *"the circle opens whole"*. Every `ORBS_DUMP` above is the open
+tower, which never draws one; `ORBS_SEALED=1` is how to see it.
 
 ```bash
-# The arrows. `chorus` takes only the keys — the board already draws beside the
-# transcript, so unlike `wander` this surface does not take the pane.
-ORBS_BOOT=0 ORBS_DUMP="attend menagerie; summon; chorus" \
-  ORBS_CHANT="<up>\n<left>" cargo run -p orbs        # ...both read `too soon`
+ORBS_SEALED=1 ORBS_BOOT=0 ORBS_DUMP="debug_reach lens_1; attend menagerie; summon; limn sunwise heed; limn keystone mirror; summon" cargo run -p orbs
+```
+```text
+┌ circle ────────────────────────────────────┐
+│keystone    mirror ← blood, bone            │   ← one line: the keystone, given the senses
+│────────────────────────────────────────────│
+│            1 2 3 4                         │
+│blood       · · ☼ ☼                         │
+│bone        · ☼ · ☼                         │
+│temper      · ☼ ☼ ☼                         │   ← heed's table: lit when either is
+│answer      ☼ · · ☼                         │
+│            ▲ ▲ ▲                           │
+│1 call, 3 rows balk                         │
+│                                            │   ← the same footprint, the foot left
+│                                            │     blank, so the transcript does not
+│                                            │     move when the circle opens
+└────────────────────────────────────────────┘
+```
+→ *"a lesser beast gathers, lit on 3 rows. which humour is it?"*, then *"sunwise is
+dark in a lesser circle. only the keystone answers"* — a dark glyph is refused as
+a cost and carries no reading, so `survey sunwise` is empty. A lesser hold brings
+*"1 troop answers"* and a quarter of the price, with a par of one call.
 
-# §14's accommodation, and the only way to see it as text. A dump has no clock,
-# so without this every press lands on one tick and reads `too soon` — which is
-# the played mode working and the patient one being invisible.
-ORBS_BOOT=0 ORBS_PATIENT=1 ORBS_DUMP="attend menagerie; summon; chorus" \
-  ORBS_CHANT="<up>\n<left>" cargo run -p orbs        # ...they land
+```bash
+# Five holds, the station, and the sixth beast whole — the lesser circle's whole arc.
+cargo test -p orbs-sim --test lesser
 ```
 
-**`F9` is the key and it reaches the same ceiling.** A patient chant and a played
-one yield exactly what was sung correctly, so the setting removes the dimension
-reflex cannot serve and nothing else — never a difficulty. Bound in **both**
-frontends, and not inert in the terminal: it changes what a strike is worth,
-which is world state.
+**Four within par, three past it**, and experience at the lens's tier: 8 for a
+hold in three calls or fewer, three quarters after. A person who reads the table
+needs one call, so par leaves room for two that check a guess.
 
-**`chorus`, because `per` reaches `peruse`.** `perform` scores nothing against
-anything and an abbreviation collision is invisible to a score; its synonym
-`conduct` fell to `conjure` the same way. **`left` and `right` are not syllables**
-either — 750 against the spell language's `let` and 800 against `light` — which
-is why the four are `-ward`. Three of the words this domain wanted were taken by
-something a similarity sweep could not see. **Sweep similarity *and* prefixes.**
+**The shipped spell searches, and it always holds.** A spell has no variables to
+reason with, but a bare `limn <glyph>` steps round the six — so three literal
+`repeat 6` loops around it try every circle there is, 68 calls on average as
+beasts are drawn and 174 at worst. **`for each humour` cannot do it**: it binds the
+set's own word, so a second one inside the first shadows it.
 
 ```bash
-cargo test -p orbs-sim --test chanting     # the game: verbs, readings, parity
-cargo test -p orbs-sim --lib tower::chant  # the model: the pace and window arithmetic
-cargo test -p orbs-sim --test progression  # `steps_1`, its refusals, and the replay
+ORBS_BOOT=0 ORBS_DUMP="attend menagerie; peruse taming.spell" cargo run -p orbs
+ORBS_BOOT=0 ORBS_DUMP="attend menagerie; invoke taming" ORBS_THEN="meditate 900; peruse menagerie.log" cargo run -p orbs
+```
+→ *"the circle holds"* in the log, never on the pane — a spell's records go to the
+log (§19). **Every step is guarded by `if the circle is working`**, at every
+level of the loop, so a hold leaves no refusals behind it. **Against a lesser
+beast it logs one per dark `limn` while it searches** — `widdershins is dark in a
+lesser circle` — and still holds, stepping the keystone every thirty-six calls:
+the log saying the circle is not whole yet is the right signal.
+
+**Why nothing about a call is published.** The lens publishes *closer / level /
+further* and a spell climbs a socket at a time; here the same climb on *rows
+agreeing* **stalls on 37% of beasts**, because one glyph can mask another. A
+reading that invited that solver would invite one that never ends. What a player
+who knows the gates writes instead is faster: `fervour` narrows the keystone
+(a temper lit on one row is a `yoke` or an `eschew` there), and De Morgan halves
+sunwise.
+
+**`winnowing` is that spell, shipped** — a ladder on `fervour` whose rungs name
+every keystone that many lit rows allows and no other, and a sweep that tries
+sunwise at `yoke`, `heed` and `oppose` only. A mean of 38 calls against 68, and a
+worst of 90 against 174; in ticks, 164 against 299 over a hundred seeds. Turned
+wires change none of it: the ladder's rungs are the same, proven over every
+circuit.
+
+```bash
+# The same beast, both searches. Seed 181's is lit on four rows, the rung with every keystone.
+ORBS_BOOT=0 ORBS_DUMP="attend menagerie; invoke winnowing" ORBS_THEN="meditate 400; peruse menagerie.log" cargo run -p orbs
+# → "the circle holds. 3 troops answer, on call 86"
+ORBS_BOOT=0 ORBS_DUMP="attend menagerie; invoke taming" ORBS_THEN="meditate 900; peruse menagerie.log" cargo run -p orbs
+# → "... on call 170"
+
+# Bound, from the laboratory: two holds earn the slot, and the log fills while you are elsewhere.
+ORBS_BOOT=0 ORBS_DUMP="attend menagerie; summon; debug_circle; summon; summon; debug_circle; summon" \
+  ORBS_THEN="bind winnowing; attend laboratory; meditate 800; attend menagerie; peruse menagerie.log" cargo run -p orbs
+# → "keystone is limned yoke" after each "a beast gathers", a hold every few dozen lines, and no refusals
+
+# The theorem it is built on, as the game teaches it.
+ORBS_BOOT=0 ORBS_DUMP="recall sunwise; recall fervour" cargo run -p orbs
+```
+
+**The ladder is proven exact, both ways**, over every beast: a keystone missing
+from a rung is a beast the spell never holds, and one too many is calls wasted.
+`peruse`, never the pane — `peruse` from the laboratory does not take a path, so
+the bound line attends the menagerie before it reads.
+
+**`choler` passed a scrape of the crate and failed the sweep** at 667 against the
+lens's `closer`; `lit` is the forge's and 750 against `list`; `hand` and `kind`
+lost to `band` and `bind`; and the logician's own names cannot be the gates,
+because `and`, `or`, `not`, `either` and `both` are the question grammar's words.
+**Sweep with `tests/naming.rs`, never with a script's guess at the vocabulary.**
+
+```bash
+cargo test -p orbs-sim --lib tower::circle   # the model: every circuit, the draw, the tables, both searches, the board's data
+cargo test -p orbs-sim --test circle         # the board alone holds every beast; a fuzz of random commands; replay through a save; variety
+cargo test -p orbs-sim --test taming         # the game: verbs, readings, a bound search elsewhere, both searches under every mask
+cargo test -p orbs-sim --test lesser         # a sealed tower's lesser circle, and the station that opens the whole one
+cargo test -p orbs-sim --test augury circle  # every sentence the circle teaches a reader is one a reader is shown
+cargo test -p orbs-shell --lib circle        # a reader holds two hundred beasts from the spoken summary alone
+cargo run -p orbs-balance -- run taming --ticks 7200   # ~0.04 a tick — the search, not a player
+scripts/play.sh menagerie::                  # the board, the `~` and the words, on a real keyboard
 ```
 
 ### The tower rail — every domain at a glance, and no telemetry pane
@@ -2389,13 +2446,34 @@ because the harness's own `press` stamps every key `KeyA`.
 **`ORBS_SEED` is how you see a *second* maze.** The reading starts in a random
 corner and the way out is drawn against a weighting that leans on the opposing
 one (§19), so one dump is one sample and proves nothing about either. Without
-this the binary is seed `0x0B5` for ever: three dumps taken to check the
+this every instrument is seed `0x0B5` for ever: three dumps taken to check the
 randomisation came back identical and read as a failure, and they were three
 copies of the same seed.
 
 ```bash
 ORBS_SEED=3  ORBS_BOOT=0 ORBS_DUMP="attend archive; research; wander" cargo run -p orbs
 ORBS_SEED=11 ORBS_BOOT=0 ORBS_DUMP="attend archive; research; wander" cargo run -p orbs
+```
+
+**A game a player starts has a seed of its own** (`0.15.5`); only the instruments
+stay on `0x0B5`. `orbs_shell::seed` is what `ORBS_DUMP`, `--dump`, `screens`,
+`scripts/dumps.sh` and the play harness read — `ORBS_SEED`, else `0x0B5`.
+`orbs_shell::new_game_seed` is what the first tower on a machine and a new game
+from the menu read — `ORBS_SEED`, else `0x0B5` under `ORBS_CAPTURE`, else six
+digits from the wall clock. The POST card prints it, so a report carries the
+world it came from, and `ORBS_SEED=<that number>` goes back to it.
+
+```bash
+# Two games started a moment apart, no ORBS_SEED: two seeds in the condition report, two worlds.
+cargo build -p orbs-tui
+for run in 1 2; do
+  tmux -L seen new-session -d -s seen -x 120 -y 45 -e ORBS_SAVE=off -e ORBS_BOOT=0 target/debug/orbs-tui
+  sleep 3; tmux -L seen capture-pane -p -t seen | grep -o "orb 0 [0-9]* cold start"; tmux -L seen kill-server
+done
+# → e.g. "orb 0 82177 cold start" then "orb 0 211335 cold start"; with -e ORBS_SEED=181, 181 both times
+
+cargo test -p orbs-shell --lib seed        # the clock's seed: short, spread, and pure
+cargo test -p orbs --bin orbs menuing      # a menu's new game is built from the seed it was asked for
 ```
 
 It applies to the whole world, not just the archive — everything generated is
@@ -2660,12 +2738,12 @@ satchel is it.
 
 ```bash
 # A queue loaded by hand and read back. A name twice, in the order it went in.
-ORBS_BOOT=0 ORBS_DUMP="attend menagerie; debug_take satchel_1; queue skyward; \
-  queue earthward; queue skyward; survey satchel" cargo run -p orbs
+ORBS_BOOT=0 ORBS_DUMP="attend menagerie; debug_take satchel_1; queue heed; \
+  queue yoke; queue heed; survey satchel" cargo run -p orbs
 ```
 ```text
 queued ───────────────────────────
-  skyward    earthward  skyward     ← a count would say `skyward 2` and lose the order
+  heed  yoke  heed     ← a count would say `heed 2` and lose the order
 ```
 
 **`queue` is a verb and `pull` is a control word, and the asymmetry is load-
@@ -2697,7 +2775,7 @@ light useless in the room most likely to show it.
 # an empty satchel until the forked producer fills it.
 ORBS_BOOT=0 ORBS_GRID=110x40 \
   ORBS_DUMP="attend menagerie; debug_take satchel_1; debug_take cursors_1; scribe both" \
-  ORBS_EDIT=$'edit\npart filling()\nqueue skyward\nqueue earthward\nend\nalongside filling()\nrepeat 2\npull note from satchel\nsurvey note\nend\n<esc>\nquit' \
+  ORBS_EDIT=$'edit\npart filling()\nqueue heed\nqueue yoke\nend\nalongside filling()\nrepeat 2\npull note from satchel\nsurvey note\nend\n<esc>\nquit' \
   ORBS_THEN="invoke both; meditate 12; peruse menagerie.log" cargo run -p orbs
 ```
 
@@ -2727,13 +2805,13 @@ one level down and is what kept ~110 call sites untouched. The cost: those field
 mean *the cursor currently stepping*, so `Sim::running_line` and the editor's
 gutter get whichever was put back last.
 
-**The menagerie is not this feature's use case, and it was measured.**
-Identifying one of four lanes costs six to ten steps against a `PACE` of four, so
-a producer queues **4 of 12 at one step a tick and 6 at two**, with duplicates. No
-queue depth fixes it — the cost is *identifying*, not seeing far enough — and
-that is `the_pace_is_shorter_than_a_four_lane_ladder` working. A version letting
-`queue` take a **reading** solved it at budget 1 and is withdrawn as `bide until`
-in a new hat (§19).
+**The menagerie was not this feature's use case while it was a chant, and it was
+measured then.** Identifying one of four lanes cost six to ten steps against a
+`PACE` of four, so a producer queued **4 of 12 at one step a tick and 6 at two**,
+with duplicates, and no queue depth fixed it. A version letting `queue` take a
+**reading** solved it at budget 1 and is withdrawn as `bide until` in a new hat
+(§19). The chant, its lanes and the test that measured them are gone with the
+rhythm game (`0.15.0`); the circle has no clock for a queue to race.
 
 **Three dev spells are the worked examples, and both forms are shipped.**
 `ordering` + `milling` are the *two-spell* channel; `coursing` is the
@@ -2782,8 +2860,8 @@ ORBS_BOOT=0 ORBS_DUMP="attend sanctum; debug_take satchel_1; debug_take cursors_
 could begin. It grants the real node and refuses a marker. Bare, it lists.
 
 ```bash
-ORBS_BOOT=0 ORBS_DUMP="attend menagerie; queue skyward; debug_take; \
-  debug_take satchel_1; queue skyward" cargo run -p orbs
+ORBS_BOOT=0 ORBS_DUMP="attend menagerie; queue heed; debug_take; \
+  debug_take satchel_1; queue heed" cargo run -p orbs
 cargo test -p orbs-sim --test satchel --test strands   # nineteen claims
 scripts/play.sh satchel::                              # five, on a real keyboard
 ```
@@ -3422,7 +3500,6 @@ live in `orbs_shell::shortcuts` where a second copy cannot go missing.
 | `F5` | §14's linear stream | the pane describes itself instead of drawing — the accessibility route, and this is the build §14 calls the cheapest one |
 | `F6` | writes `orbs-parse.tsv` | silent on success in both builds; the file appearing is the confirmation |
 | `F7` | cycles the tonal register | **visibly inert** — `Presentation` picks a glyph-atlas *face* and a terminal has the user's. The world still moves, and `F6`'s `register` column shows it |
-| `F9` | §14's patient chant | **not inert**, unlike `F7` and `F8`: it changes what a strike is worth, which is world state, so a chant sung patiently in a terminal reaches the same troops as one under Bevy |
 | `F10` | leaves | as it does under Bevy. `Ctrl-C` and `Ctrl-D` also do, because raw mode makes them ours to answer |
 
 **`F5` is inert over the editor, the loom and the maze, and that is a known
@@ -3948,7 +4025,7 @@ could not be reproduced on another machine and `diff -r` would report a change
 that means nothing. **The trained reader's behaviour is gated by
 `orbs-augury --example measure` and the augury tests instead**; `dumps.sh` gates
 the deterministic pipeline and the two readers that need no weights. Four
-captures — `lab_flask`, `augury_off`, `chant_refuse`, `forge_refuse` — move
+captures — `lab_flask`, `augury_off`, `forge_refuse`, and the chant's `chant_refuse` before the circle replaced it — moved
 without that guard, so it is load-bearing rather than tidy.
 
 ```bash

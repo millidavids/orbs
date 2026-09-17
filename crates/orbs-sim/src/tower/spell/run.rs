@@ -1260,7 +1260,7 @@ fn bide(world: &mut World, entity: Entity, state: &Running, delay: u32) -> Progr
     // runs `allowance` steps and every `continue` costs one, so a bide that
     // finished on the tick its count ran out put the *next* instruction a tick
     // later than the author asked for. `bide n` means "the next line runs n ticks
-    // from here", which is what somebody timing a chant is counting.
+    // from here", which is what somebody timing a delay is counting.
     //
     // A consequence worth stating: `bide 0` and `bide 1` are the same line. The
     // next instruction can never run in the same tick at one step a tick, so
@@ -1357,19 +1357,10 @@ pub const fn may_issue(verb: Verb) -> bool {
             // whole point of automating the archive; what a spell may not do is
             // decide who is holding the keyboard.
             //
-            // **`summon` and `sing` are not here either, and for the same
-            // reason** — the split matters more in the menagerie than anywhere,
-            // so it is worth stating. `summon` is `research`'s shape: it opens
-            // the puzzle and draws a board, and it takes no keys. `sing` is
-            // `follow`'s: it is the act, and automating it is the entire point
-            // of the domain, because a spell has no dexterity and must solve the
-            // figure by arithmetic instead.
-            //
-            // **`chorus` is the word that hands the arrows over, and it is on
-            // this list.** That is `wander`'s objection exactly: the prompt goes
-            // dead, Escape is the only way out, and a spell retaking the keys
-            // every lap would race the player for it.
-            | Verb::Chorus
+            // **`summon` and `limn` are not here either, and for the same
+            // reason.** `summon` is `research`'s shape: it opens the puzzle and
+            // draws a board, and it takes no keys. `limn` is `follow`'s: it is
+            // the act, and automating it is the entire point of the domain.
             | Verb::Wander
             // **And it may not end the session.** `quit` was added to the
             // vocabulary, to `Verb::ALL`, to `dispatch::execute` and to the

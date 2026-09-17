@@ -731,6 +731,15 @@ fn readings() -> Vec<&'static str> {
     // A domain that adds readings and not a line here is a domain whose
     // vocabulary is unswept, and the lint reads exactly as green as if it were.
     out.extend(orbs_sim::tower::siege::readings());
+    // **The menagerie's, and the chant's were never here** — three words a
+    // whole phase shipped unswept. The circle's six humours and its count joined
+    // before a single node carried them, which is the order this list is for —
+    // and the count was `choler` until this sweep found it 667 against `closer`.
+    out.extend(orbs_sim::tower::circle::readings());
+    // **The forge's, missed the same way** — found while choosing the circle's
+    // count, whose first name was the forge's `lit` and would have collided
+    // with it here had the forge's words been here to collide with.
+    out.extend(orbs_sim::tower::charm::readings());
     out
 }
 
@@ -875,6 +884,14 @@ fn the_readings_that_score_against_a_typed_word_are_pinned() {
             // `edit` (scribe) vs the maze's way out, at 750. `recall edit` used
             // to answer with the way out of a maze.
             ("exit", "edit"),
+            // **The forge's column bit, which shipped unswept** — its readings
+            // were missing from this list until the menagerie's count went
+            // looking for a word and nearly took this one. `light` (kindle) at
+            // 600 and `list` (survey) at 750; both verb words, so the resolver
+            // answers them as it answers the three below, and
+            // `a_verb_word_never_fuzzes_into_a_noun` drives both from the forge.
+            ("lit", "light"),
+            ("lit", "list"),
             // `make` (recall) vs a way's walk count, at 600.
             ("marks", "make"),
             // `walk` (follow) vs a way with no way through, at 750 — the worst
@@ -911,6 +928,26 @@ fn a_verb_word_never_fuzzes_into_a_noun() {
         assert!(
             !offered(&sim).iter().any(|line| line.contains(was)),
             "`purge {typed}` still reaches `{was}`: {:?}",
+            offered(&sim),
+        );
+    }
+
+    // The forge's `lit`, from the room whose columns carry it, with a lattice
+    // open so there is a lit column to reach.
+    sim.submit("attend forge");
+    sim.step();
+    sim.submit("imbue mortar_and_pestle hurried");
+    sim.step();
+    for typed in ["light", "list"] {
+        sim.submit(&format!("purge {typed}"));
+        sim.step();
+        assert!(
+            !offered(&sim).is_empty(),
+            "`purge {typed}` did not ask which",
+        );
+        assert!(
+            !offered(&sim).iter().any(|line| line.contains("lit")),
+            "`purge {typed}` reaches `lit`: {:?}",
             offered(&sim),
         );
     }

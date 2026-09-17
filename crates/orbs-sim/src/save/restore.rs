@@ -72,7 +72,8 @@ pub(crate) fn restore(world: &mut World, save: &Save) {
     // would ever open it, because both tracks apply an `opens` exactly once:
     // `credit` crosses an edge now in the past, and `advance` skips a station
     // already in `Reached`. Said nothing about, for `Experience::restore`'s
-    // reason.
+    // reason — except what a mastery station reached only by this load opens,
+    // which the player has never been told (`mastery::caught_up`).
     tower::ley::caught_up(world);
     tower::mastery::caught_up(world);
     // **After the tree, the progress and the catching up**, because the markers

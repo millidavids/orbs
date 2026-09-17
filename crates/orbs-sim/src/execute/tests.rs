@@ -191,17 +191,14 @@ fn sample(verb: Verb) -> (&'static str, &'static str) {
         // the world answering and is what this table asks for.
         Verb::Muster => ("sanctum", "muster"),
         Verb::Haul => ("sanctum", "haul wellspring barrier"),
-        // The menagerie (§10). `summon` draws a figure up and needs no setup;
-        // `sing` before one is running refuses with *"summon first"*, which is
+        // The menagerie (§10). `summon` draws a beast up and needs no setup;
+        // `limn` before one is waiting refuses with *"summon first"*, which is
         // the world answering and is what this table asks for.
         Verb::Summon => ("menagerie", "summon"),
-        Verb::Sing => ("menagerie", "sing skyward"),
-        // `chorus` before a figure is summoned refuses with *"summon first"*,
-        // which is the world answering and is what this table asks for.
-        Verb::Chorus => ("menagerie", "chorus"),
+        Verb::Limn => ("menagerie", "limn keystone heed"),
         // The satchel (§8). Every domain has one, so any room would do; the
         // menagerie is where the pipeline this exists for is written.
-        Verb::Queue => ("menagerie", "queue skyward"),
+        Verb::Queue => ("menagerie", "queue heed"),
         // The bailey (§5.1). `defend` lets the enemy arrive and needs no setup;
         // the other three before one has arrived refuse with *"defend first"*,
         // which is the world answering and is what this table asks for.

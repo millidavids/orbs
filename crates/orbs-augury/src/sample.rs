@@ -106,7 +106,7 @@ impl Tag {
 /// as belonging to it.
 #[expect(
     clippy::cast_possible_truncation,
-    reason = "`Verb::ALL` is a const array of 46; the cast is evaluated at compile time"
+    reason = "`Verb::ALL` is a const array of 45; the cast is evaluated at compile time"
 )]
 pub const REJECT: u32 = Verb::ALL.len() as u32;
 

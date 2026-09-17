@@ -29,7 +29,7 @@
 //!
 //! `grind sage` is not control flow and the spell head says so — that is what
 //! [`spelling::command`] is for. The line then belongs to the *prompt's* reader,
-//! which is the one trained on forty-six verbs, so this holds one of those too
+//! which is the one trained on the verbs, so this holds one of those too
 //! and hands the line over. A build with no prompt weights simply leaves command
 //! lines alone.
 

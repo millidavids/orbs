@@ -45,11 +45,9 @@ pub struct Open {
     pub walking: bool,
     /// The transcript is scrolled back — `unfurl`, or `PgUp`.
     pub reading: bool,
-    /// The arrows are answering a chant — `chorus`.
-    pub chorusing: bool,
     /// The orb's menu is up — `quit`.
     ///
-    /// **The sixth, and the first that is not about the tower.** Everything
+    /// **The first that is not about the tower.** Everything
     /// above it is a surface *inside* a game; this one is the way out of one, so
     /// it wins the keyboard over all of them — see [`Focus::of`].
     pub menuing: bool,
@@ -69,7 +67,7 @@ pub enum Focus {
     /// The orb's menu, opened by `quit`.
     ///
     /// **First in the order, and the only one that is not a surface of the
-    /// tower.** The five below it are places inside a game and cannot coexist;
+    /// tower.** The four below it are places inside a game and cannot coexist;
     /// this is the way out of the game, and it is reached by a word typed at the
     /// prompt — so in principle it opens over nothing. It is ordered first
     /// anyway, because if it ever did tie, the way *out* is the answer a player
@@ -81,14 +79,13 @@ pub enum Focus {
     Weave,
     /// The archive's stacks, opened by `wander`.
     Maze,
-    /// The menagerie's figure, opened by `chorus`.
-    ///
-    /// **The fifth, and the one this module was built for.** `shell/input.rs`
-    /// pre-committed to a `Focus` owner *before* a fifth surface arrived, and
-    /// this is it — added as one variant and one field rather than a fifth term
-    /// in a predicate nobody would remember to update.
-    Chant,
     /// The transcript, opened by `unfurl`.
+    ///
+    /// **There was a `Chant` above this**, the menagerie's figure on the arrow
+    /// keys, and it was the fifth surface this module was built for. The
+    /// menagerie is a logic puzzle now and is typed like every other room (§19),
+    /// so the variant went — and the module stays, because the reason for it was
+    /// never the chant: each surface is a term in a predicate somebody forgets.
     Reading,
 }
 
@@ -109,8 +106,6 @@ impl Focus {
             Self::Weave
         } else if open.walking {
             Self::Maze
-        } else if open.chorusing {
-            Self::Chant
         } else if open.reading {
             Self::Reading
         } else {
@@ -143,12 +138,6 @@ impl Focus {
     /// fixed), and a `play.sh` scenario must wait on a *screen* rather than on a
     /// command block, because the answer to the word has painted over the block.
     #[must_use]
-    /// **The chant is not one of them, and that is the interesting case.**
-    /// `wander` hides the transcript because the maze is too big to sit beside
-    /// it; a figure is 42 columns and already draws beside one, so `chorus`
-    /// takes the *keys* and nothing else. A player answering syllables can still
-    /// read what the orb is saying about them, which is the thing `wander` gives
-    /// up and would rather not.
     pub const fn takes_the_pane(self) -> bool {
         matches!(self, Self::Menu | Self::Editor | Self::Weave | Self::Maze)
     }
@@ -197,13 +186,6 @@ mod tests {
             ),
             (
                 Open {
-                    chorusing: true,
-                    ..Open::default()
-                },
-                Focus::Chant,
-            ),
-            (
-                Open {
                     reading: true,
                     ..Open::default()
                 },
@@ -228,7 +210,6 @@ mod tests {
             editing: true,
             weaving: true,
             walking: true,
-            chorusing: true,
             reading: true,
             menuing: true,
         };
@@ -262,7 +243,7 @@ mod tests {
                 walking: false,
                 ..all
             }),
-            Focus::Chant
+            Focus::Reading
         );
     }
 
@@ -275,8 +256,5 @@ mod tests {
         assert!(Focus::Maze.takes_the_pane());
         assert!(!Focus::Reading.takes_the_pane());
         assert!(!Focus::Prompt.takes_the_pane());
-        // The chant keeps the transcript, unlike the other three modes.
-        assert!(!Focus::Chant.takes_the_pane());
-        assert!(Focus::Chant.is_elsewhere(), "it still owns the keyboard");
     }
 }

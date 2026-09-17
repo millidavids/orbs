@@ -333,11 +333,19 @@ pub fn analyse(input: &str, scene: &Scene, mode: Mode) -> Analysis {
     // the troops` and `hold fast` are what a player types with the wall coming
     // down, and the words over cost them a turn to be told about. Only the
     // no-slot refusal is waived; a verb still asks for a slot it needs.
+    //
+    // **A reading that filled something diverts only to its own `Incomplete`.**
+    // `limn keystone xyzzy` fills `keystone` and its last slot refuses `xyzzy`,
+    // and the `Incomplete` recorded for it kept `keystone` — so the reading that
+    // would step the glyph asks instead. A reading of the same verb that filled
+    // something else is a different reading and is left to run.
     let diverts = incomplete.iter().any(|wanted| {
         wanted.verb == candidates[0].intent.verb
+            && (candidates[0].intent.arguments.is_empty()
+                || wanted.filled == candidates[0].intent.arguments)
             && !(wanted.missing.is_none() && mode == Mode::Siege)
     });
-    if diverts && candidates[0].intent.arguments.is_empty() && candidates[0].leftover > 0 {
+    if diverts && candidates[0].leftover > 0 {
         return settle_incomplete(candidates);
     }
 
@@ -600,6 +608,23 @@ fn collect(
                         }
                         _ => {}
                     }
+                }
+                // **A word the last slot could not use is asked about, not
+                // dropped** — where the verb bare is a different act. `limn
+                // keystone xyzzy` ran `limn keystone`, which steps the glyph to a
+                // humour nobody named, and `dial first qqqq` turned the socket
+                // (§19). The slots that did fill are kept, so the prompt shows
+                // the player their own command back.
+                if let Some(refused) = filled.refused
+                    && !incomplete.iter().any(|kept| kept.verb == synonym.verb)
+                {
+                    incomplete.push(Incomplete {
+                        verb: synonym.verb,
+                        register: synonym.register,
+                        missing: Some(refused.kind),
+                        filled: filled.arguments(),
+                        extra: String::new(),
+                    });
                 }
                 let intent = Intent {
                     verb: synonym.verb,

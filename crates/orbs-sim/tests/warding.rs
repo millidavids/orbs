@@ -105,6 +105,43 @@ fn a_course_goes_up_and_publishes_what_a_spell_can_ask() {
     );
 }
 
+/// **A course refused on load takes its readings with it** — the circle's
+/// defect, one room over. The course travels as a component and `potency` as
+/// nodes, so a document whose course `Course::from_save` refuses restored the
+/// readings alone: a spell's `if the wellspring has 3 potency` answered about
+/// wards that were not there.
+#[test]
+fn a_course_refused_on_load_leaves_no_potency_behind() {
+    let mut sim = in_the_sanctum(3);
+    run(&mut sim, "muster");
+    let mut save = sim.snapshot();
+    // The whole save first, so what follows is about the refusal.
+    let whole = Sim::restored(&save);
+    assert!(
+        STATIONS
+            .iter()
+            .any(|station| whole.holds_reading("sanctum", station, "potency")),
+        "a whole course lost its potency on load",
+    );
+    for node in &mut save.nodes {
+        if let Some(course) = node.course.as_mut() {
+            course.height += 1;
+        }
+    }
+
+    let restored = Sim::restored(&save);
+    for station in STATIONS {
+        assert!(
+            !restored.holds_reading("sanctum", station, "potency"),
+            "the refused course's potency survived on the {station}",
+        );
+    }
+    assert!(
+        restored.holds_reading("sanctum", "pylon", "integrity"),
+        "the barrier's reading went with the course",
+    );
+}
+
 #[test]
 fn the_barrier_says_how_it_stands_before_anything_has_happened() {
     // **The defect this is here for, and it was the worse of the two.** The

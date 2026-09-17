@@ -57,12 +57,12 @@ pub struct Panel {
     /// ever be present, because they belong to three different rooms and the
     /// player stands in one.
     pub pylon: Option<orbs_render::Pylon>,
-    /// The figure being sung, if one is running.
+    /// The beast waiting at the menagerie's circle, if there is one.
     ///
     /// Beside the other three and on the same clock. Only one of the four can
     /// ever be present, because they belong to four different rooms and the
     /// player stands in one.
-    pub figure: Option<orbs_render::Figure>,
+    pub circle: Option<orbs_render::Circle>,
     /// The siege being fought, if one is.
     ///
     /// Beside the other four and on the same clock. Only one of the five can
@@ -116,7 +116,7 @@ impl Panel {
         self.stacks = sim.stacks();
         self.ward = sim.ward();
         self.pylon = sim.pylon();
-        self.figure = sim.figure();
+        self.circle = sim.circle();
         self.rampart = sim.rampart();
         self.lattice = sim.lattice();
         self.briefs = sim.briefs();

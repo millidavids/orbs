@@ -1,12 +1,13 @@
 //! What the tower has opened: rooms, recipes, charms, and the wall (DESIGN.md
 //! §11.5, §19).
 //!
-//! # One set, four kinds of key
+//! # One set, five kinds of key
 //!
-//! `domain:archive`, `recipe:warding`, `charm:whetted`, `siege`. A station on
-//! either track may `opens` any of them, and every question of the form *"may
-//! the player do this yet"* is answered here — `attend` for a room, a recipe
-//! firing for a product, `imbue` for a charm, `defend` for the wall. One holder
+//! `domain:archive`, `recipe:warding`, `charm:whetted`, `siege`, `circle`. A
+//! station on either track may `opens` any of them, and every question of the
+//! form *"may the player do this yet"* is answered here — `attend` for a room, a
+//! recipe firing for a product, `imbue` for a charm, `defend` for the wall,
+//! `summon` for which circle a beast is drawn to. One holder
 //! rather than one per kind, so a save carries one list and a restore cannot
 //! open a room and forget a recipe.
 //!
@@ -50,6 +51,13 @@ use super::node::{Name, children_of};
 /// The key that arms the wall.
 pub const SIEGE: &str = "siege";
 
+/// The key that opens the menagerie's whole circle.
+///
+/// **Bare, as the wall's is**, because there is one of it: until a tower holds
+/// it, `summon` draws lesser beasts — the keystone alone, over two senses — and
+/// after, the three glyphs in their wiring (`tower::circle::Shape`).
+pub const CIRCLE: &str = "circle";
+
 /// One thing that can be opened, parsed from its authored key.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Key {
@@ -61,6 +69,8 @@ pub enum Key {
     Charm(String),
     /// The wall: `siege`.
     Siege,
+    /// The menagerie's whole circle: `circle`.
+    Circle,
 }
 
 impl Key {
@@ -70,8 +80,10 @@ impl Key {
     /// failure — a key nothing reads would open nothing and look authored.
     #[must_use]
     pub fn parse(text: &str) -> Option<Self> {
-        if text == SIEGE {
-            return Some(Self::Siege);
+        match text {
+            SIEGE => return Some(Self::Siege),
+            CIRCLE => return Some(Self::Circle),
+            _ => {}
         }
         let (kind, name) = text.split_once(':')?;
         if name.is_empty() {
@@ -91,6 +103,7 @@ impl Key {
         match self {
             Self::Domain(name) | Self::Recipe(name) | Self::Charm(name) => name,
             Self::Siege => SIEGE,
+            Self::Circle => CIRCLE,
         }
     }
 
@@ -102,6 +115,7 @@ impl Key {
             Self::Recipe(_) => "recipe",
             Self::Charm(_) => "charm",
             Self::Siege => SIEGE,
+            Self::Circle => CIRCLE,
         }
     }
 }
@@ -110,6 +124,7 @@ impl fmt::Display for Key {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Siege => f.write_str(SIEGE),
+            Self::Circle => f.write_str(CIRCLE),
             other => write!(f, "{}:{}", other.kind(), other.name()),
         }
     }
@@ -173,7 +188,8 @@ pub fn charm_key(kind: &str) -> String {
 pub struct Opened(BTreeSet<String>);
 
 impl Opened {
-    /// Every room, every gated product, every charm, and the wall.
+    /// Every room, every gated product, every charm, the wall, and the whole
+    /// circle.
     ///
     /// The tower `Sim::new` builds, and the one a save from before sealing
     /// existed restores to — see the module header.
@@ -188,6 +204,7 @@ impl Opened {
         keys.extend(recipes.gated().into_iter().map(recipe_key));
         keys.extend(charms.names().map(charm_key));
         keys.insert(SIEGE.to_owned());
+        keys.insert(CIRCLE.to_owned());
         Self(keys)
     }
 
@@ -423,7 +440,13 @@ mod tests {
 
     #[test]
     fn a_key_reads_back_as_itself() {
-        for text in ["domain:archive", "recipe:warding", "charm:whetted", "siege"] {
+        for text in [
+            "domain:archive",
+            "recipe:warding",
+            "charm:whetted",
+            "siege",
+            "circle",
+        ] {
             let key = Key::parse(text).unwrap_or_else(|| panic!("{text} did not parse"));
             assert_eq!(key.to_string(), text);
         }
@@ -452,6 +475,7 @@ mod tests {
             assert!(opened.has(&charm_key(charm)), "{charm} is shut");
         }
         assert!(opened.has(SIEGE));
+        assert!(opened.has(CIRCLE), "an open tower draws lesser beasts");
     }
 
     #[test]
@@ -476,6 +500,7 @@ mod tests {
             "the bailey is open"
         );
         assert!(!start.has(SIEGE), "the wall is armed at the start");
+        assert!(!start.has(CIRCLE), "the whole circle is open at the start");
         assert!(
             start.has(&charm_key("hurried")),
             "the flagship charm is shut"

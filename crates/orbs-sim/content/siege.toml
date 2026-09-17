@@ -27,8 +27,8 @@
 #
 # The one thing `deploy` takes, and the answer to the decision tree's first
 # rung — *if base troops low, send out menagerie demons*. Two, because one
-# would make a chant's whole twelve syllables worth a single body and the
-# domain is meant to feed this one.
+# would make a whole beast held worth a single body and the domain is meant to
+# feed this one.
 [troop]
 verb = "deploy"
 kind = "troops"

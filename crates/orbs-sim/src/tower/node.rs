@@ -287,7 +287,12 @@ fn readings_of(set: &str) -> Vec<&'static str> {
         "way" => super::maze::readings(),
         "socket" | "sigil" => super::ward::readings(),
         "station" => super::pylon::readings(),
-        "syllable" => super::chant::readings(),
+        // A glyph answers with the humour it is limned with, and a humour with
+        // nothing — it is a word to name, not a thing that holds a reading.
+        super::circle::GLYPHS => super::circle::Humour::ALL
+            .into_iter()
+            .map(super::circle::Humour::word)
+            .collect(),
         // The forge's two sets. A column answers with `lit` and nothing else —
         // absence is what "dark" means here — and a charm answers with how long
         // it has and whether that is nearly out.

@@ -112,7 +112,7 @@ pub(crate) fn charms(world: &mut World, room: Entity) {
         }
 
         // **A charm ending says so**, which every other expiring thing in the
-        // tower does — the fire gutters, a chant lapses — and this did not.
+        // tower does — the fire gutters, a course sinks back — and this did not.
         // ROADMAP's exit for the phase is *"the buff decays"*, and a row that
         // simply stopped draining with no line was the whole of how a player
         // found out. `forge_charm_gone` had been authored for this and was
@@ -151,7 +151,7 @@ pub(crate) fn charms(world: &mut World, room: Entity) {
 /// Keep the charm words true as time passes.
 ///
 /// **Appended to the schedule and drawing nothing**, which is the licence
-/// `settling`, `erode`, `lapse_chant` and `regenerate` already hold: a system
+/// `settling`, `erode` and `regenerate` already hold: a system
 /// that only reads the clock cannot perturb any `RngStream`.
 ///
 /// Without it the words are only true when a forge verb happens to run — so a

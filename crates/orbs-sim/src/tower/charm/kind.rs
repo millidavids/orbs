@@ -1,6 +1,6 @@
 //! What an enchantment does, as a closed table.
 //!
-//! **A closed table**, the shape `Die::ALL`, `Syllable::ALL` and the lens's
+//! **A closed table**, the shape `Die::ALL`, `Humour::ALL` and the lens's
 //! `SIGILS` already have — so a new charm is a variant and a row, and nothing
 //! derives one. The forge authors *cost* and *duration* in `content/forge.toml`
 //! (rule 6, so a tuning pass is a content edit); what a charm **means** is code,

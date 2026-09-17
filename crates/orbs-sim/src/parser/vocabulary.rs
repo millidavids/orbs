@@ -446,40 +446,33 @@ pub const SYNONYMS: &[Synonym] = &[
     syn(Verb::Haul, Register::Plain, &["carry"]),
     syn(Verb::Haul, Register::Plain, &["bear"]),
     // The menagerie (§10). **No shell register for either**, as the sanctum's
-    // and the lens's have none: a shell user has no word for opening a chant.
+    // and the lens's have none: a shell user has no word for calling a beast.
     //
     // `evoke` and `intone` both score 667 against `invoke`, which is the one
     // collision this domain could least afford — a player reaching for a spell
-    // and getting a chant. `call` is 750 against `wall`. `summon`, `conjure` and
+    // and getting a beast. `call` is 750 against `wall`. `summon`, `conjure` and
     // `raise` are clean.
     syn(Verb::Summon, Register::Arcane, &["summon"]),
     syn(Verb::Summon, Register::Arcane, &["conjure"]),
     syn(Verb::Summon, Register::Plain, &["raise"]),
-    // `chant` scores 600 three ways — `cast`, `halt`, `cat` — so it is the
-    // domain's noun and never a word you type; §19 records the sweep. `croon` is
-    // 800 against `cron`, `utter` 667 against `muster`, `recite` 625 against
-    // `relocate`. `sing`, `voice`, `hymn` and `reply` are clean.
-    syn(Verb::Sing, Register::Arcane, &["sing"]),
-    syn(Verb::Sing, Register::Arcane, &["hymn"]),
-    syn(Verb::Sing, Register::Plain, &["voice"]),
-    // `chorus` hands over the arrows. **No shell register**, like the other
-    // surface words: a shell has no verb for *give me the keyboard*.
+    // `limn` sets a glyph of the circle. **`fashion` is the plain word, and the
+    // obvious ones were all spoken for**: `draw`, `sketch`, `pick` and `choose`
+    // are words other verbs' phrasings already use, so a synonym would pull
+    // `let me choose a node` away from `weave`; `set` is `dial`'s; `assign` is
+    // `pledge`'s and prefixes `assembling`; `etch` is 750 against the spell word
+    // `each`, `carve` 600 against `carry` below, `wire` 750 against `fire`,
+    // `paint` 600 against `part`. `fashion` scores nothing against anything and
+    // appears in no phrasing.
     //
-    // **`perform` was the name and `conduct` its synonym, and a *prefix* took
-    // both.** Each scores nothing against anything, and `per` reaches `peruse`
-    // while `con` reaches `conjure` — an abbreviation collision is invisible to
-    // a similarity score, which is the second time this phase (`reply` against
-    // `repair` was the first). `enact` is 600 against `east`, and `render` 667
-    // against `wander`, which is the other verb that hands over the arrows.
-    //
-    // `chorus` and `play` are clean and `cho`/`pla` are free.
-    syn(Verb::Chorus, Register::Arcane, &["chorus"]),
-    syn(Verb::Chorus, Register::Plain, &["play"]),
-    // **`reply` was here and `ambiguous_synonym_prefixes_are_known` took it
-    // out.** It scores nothing against anything, which is what the similarity
-    // sweep asks — and `rep` prefixes both it and `repair`, which is `muster`'s.
-    // A *prefix* collision between two domains' plain words is invisible to a
-    // score and is exactly what that test is for.
+    // It replaced `sing`, `hymn`, `voice`, `chorus` and `play` when the
+    // menagerie stopped being a rhythm game (§19).
+    syn(Verb::Limn, Register::Arcane, &["limn"]),
+    syn(Verb::Limn, Register::Plain, &["fashion"]),
+    // **`reply` was once a `sing` synonym and `ambiguous_synonym_prefixes_are_known`
+    // took it out.** It scores nothing against anything, which is what the
+    // similarity sweep asks — and `rep` prefixes both it and `repair`, which is
+    // `muster`'s. A *prefix* collision between two domains' plain words is
+    // invisible to a score and is exactly what that test is for.
     //
     // The satchel's push (§8, `tower::satchel`). **`que` reaches `quench`**, a
     // live `stop` synonym above — accepted, and pinned in
@@ -500,9 +493,10 @@ pub const SYNONYMS: &[Synonym] = &[
     // the sanctum's and the menagerie's have none: a shell user has no word for
     // standing to a siege.
     //
-    // **`siege` itself cannot be a verb — 600 against `sing`.** The domain keeps
-    // the name and the word the player types is `defend`, which is the same
-    // split `chant` took one room over (§19).
+    // **`siege` itself was not made a verb — 600 against `sing`**, while the
+    // menagerie was a chant. The domain keeps the name and the word the player
+    // types is `defend`, which is the split the chant took and the circle keeps
+    // one room over (§19).
     syn(Verb::Defend, Register::Arcane, &["defend"]),
     syn(Verb::Defend, Register::Arcane, &["engage"]),
     syn(Verb::Defend, Register::Plain, &["guard"]),

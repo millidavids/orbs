@@ -111,20 +111,20 @@ pub(crate) fn watch_focus(
     over.keys.retain(|key| held.pressed(*key));
 }
 
-/// The five surfaces that can hold the keyboard, as one parameter.
+/// The surfaces that can hold the keyboard, as one parameter.
 ///
-/// **A `SystemParam` rather than five more parameters**, which is
+/// **A `SystemParam` rather than one parameter each**, which is
 /// `render::plugin`'s precedent one crate over — and here it is not tidiness:
-/// the fifth surface took `type_into_line` to thirteen arguments and clippy
+/// a fifth surface took `type_into_line` to thirteen arguments and clippy
 /// refuses at twelve. That limit is the same pressure `orbs_shell::focus`
 /// answered one level down, arriving at the call site instead, so the fix is the
 /// same shape: the *set* of surfaces is one thing, and it should be named once.
+/// (That fifth was the menagerie's chant, which is typed now — §19.)
 #[derive(bevy::ecs::system::SystemParam)]
 pub(crate) struct Surfaces<'w> {
     editing: Res<'w, super::editing::Editing>,
     loom: Res<'w, super::Loom>,
     walk: Res<'w, super::Walk>,
-    chorus: Res<'w, super::Chorus>,
     scroll: Res<'w, Scroll>,
     standing: Res<'w, super::Standing>,
 }
@@ -140,15 +140,13 @@ impl Surfaces<'_> {
     /// [`focus`](Self::focus) is the question the keyboard asks; this is the one
     /// [`Showing`](orbs_shell::Showing) asks, and they are not the same. A
     /// crossing cares which surface *replaced the pane*, not which surface would
-    /// receive the next keystroke — `chorus` takes the keys and leaves the pane
-    /// alone, and the transcript scrolled back takes them without changing
-    /// anything at all.
+    /// receive the next keystroke — the transcript scrolled back takes the keys
+    /// without changing anything at all.
     pub(crate) fn open(&self) -> Open {
         opened(
             &self.editing,
             &self.loom,
             &self.walk,
-            &self.chorus,
             &self.scroll,
             &self.standing,
         )
@@ -166,7 +164,6 @@ const fn opened(
     editing: &super::editing::Editing,
     loom: &super::Loom,
     walk: &super::Walk,
-    chorus: &super::Chorus,
     scroll: &Scroll,
     standing: &super::Standing,
 ) -> Open {
@@ -174,7 +171,6 @@ const fn opened(
         editing: editing.is_open(),
         weaving: loom.is_open(),
         walking: walk.is_open(),
-        chorusing: chorus.is_open(),
         reading: scroll.is_reading(),
         menuing: standing.is_open(),
     }

@@ -104,7 +104,7 @@ fn the_channel_is_bought_at_the_loom() {
     let mut sim = Sim::new(11);
     run(&mut sim, "attend menagerie");
 
-    run(&mut sim, "queue skyward");
+    run(&mut sim, "queue heed");
     assert!(
         ever_said(&sim, "not learned to carry a satchel"),
         "an unbought queue worked: {:?}",
@@ -122,7 +122,7 @@ fn the_channel_is_bought_at_the_loom() {
 
     // ...and once it is bought, the same two lines work.
     run(&mut sim, "debug_take satchel_1");
-    run(&mut sim, "queue skyward");
+    run(&mut sim, "queue heed");
     assert!(ever_said(&sim, "1 waiting"), "{:?}", last(&sim));
 }
 
@@ -130,14 +130,14 @@ fn the_channel_is_bought_at_the_loom() {
 #[test]
 fn a_queued_name_is_read_back_in_the_order_it_went_in() {
     let mut sim = in_room("menagerie");
-    for word in ["skyward", "earthward", "skyward"] {
+    for word in ["heed", "yoke", "heed"] {
         run(&mut sim, &format!("queue {word}"));
     }
     run(&mut sim, "survey satchel");
 
     // **A name twice, and the order kept.** This is the whole reason the queue
     // is a component rather than children plus `Stock`: a count would report
-    // `skyward 2` and lose which came first.
+    // `heed 2` and lose which came first.
     let rows = listed(&sim);
     let queued: Vec<&String> = rows
         .iter()
@@ -149,7 +149,7 @@ fn a_queued_name_is_read_back_in_the_order_it_went_in() {
         .collect();
     assert_eq!(
         queued,
-        ["skyward", "earthward", "skyward"],
+        ["heed", "yoke", "heed"],
         "the satchel did not read back as a queue: {rows:?}",
     );
 }
@@ -166,7 +166,7 @@ fn a_queued_name_is_read_back_in_the_order_it_went_in() {
 #[test]
 fn each_room_has_its_own_satchel() {
     let mut sim = in_room("menagerie");
-    run(&mut sim, "queue skyward");
+    run(&mut sim, "queue heed");
     assert!(ever_said(&sim, "1 waiting"), "{:?}", last(&sim));
 
     run(&mut sim, "attend laboratory");
@@ -182,7 +182,7 @@ fn each_room_has_its_own_satchel() {
     run(&mut sim, "survey satchel");
     let rows = listed(&sim);
     assert!(
-        rows.iter().any(|row| row == "skyward"),
+        rows.iter().any(|row| row == "heed"),
         "the menagerie lost what was queued in it: {rows:?}",
     );
     assert!(
@@ -204,8 +204,8 @@ fn the_arsenal_has_no_satchel_and_says_so() {
 #[test]
 fn a_spell_pulls_what_a_hand_queued_and_can_name_it() {
     let mut sim = in_room("menagerie");
-    run(&mut sim, "queue skyward");
-    run(&mut sim, "queue earthward");
+    run(&mut sim, "queue heed");
+    run(&mut sim, "queue yoke");
     write(
         &mut sim,
         "drain",
@@ -240,7 +240,7 @@ fn one_spell_hands_another_spell_a_name() {
     write(
         &mut sim,
         "filling",
-        &["queue skyward", "queue earthward", "queue leftward"],
+        &["queue heed", "queue yoke", "queue spurn"],
     );
     write(
         &mut sim,
@@ -270,7 +270,7 @@ fn one_spell_hands_another_spell_a_name() {
     // own verb there, so `listed` reports three `survey`s and never the word
     // they surveyed. That is `warding.rs`'s two-tests-passing-for-the-wrong-
     // reason again, and it is why this file keeps both readers.
-    for word in ["skyward", "earthward", "leftward"] {
+    for word in ["heed", "yoke", "spurn"] {
         assert!(
             ever_said(&sim, word),
             "{word} never reached the consumer: {:?}",
@@ -292,7 +292,7 @@ fn one_spell_hands_another_spell_a_name() {
 #[test]
 fn a_pull_on_an_empty_satchel_waits_without_latching_a_fault() {
     let mut sim = in_room("menagerie");
-    run(&mut sim, "queue skyward");
+    run(&mut sim, "queue heed");
     write(
         &mut sim,
         "drain",
@@ -390,7 +390,7 @@ fn the_shipped_pair_hands_a_work_list_between_two_spells() {
 #[test]
 fn a_satchel_full_of_names_survives_a_save() {
     let mut sim = in_room("menagerie");
-    for word in ["skyward", "earthward", "skyward"] {
+    for word in ["heed", "yoke", "heed"] {
         run(&mut sim, &format!("queue {word}"));
     }
 
@@ -410,7 +410,7 @@ fn a_satchel_full_of_names_survives_a_save() {
         .collect();
     assert_eq!(
         queued,
-        ["skyward", "earthward", "skyward"],
+        ["heed", "yoke", "heed"],
         "the queue did not come back in order: {rows:?}",
     );
 }

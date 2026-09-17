@@ -25,8 +25,8 @@
 //! §14 satisfied by construction rather than by exception: the screen-reader
 //! accommodation advances siege ticks *on player input*, so anything measured in
 //! ticks would mean **more typing produces more resource** for the players that
-//! mode exists to serve. A lump granted per round reads no clock, so a patient
-//! chant and a played one grant identically.
+//! mode exists to serve. A lump granted per round reads no clock, so a fight
+//! typed slowly and one typed fast grant identically.
 //!
 //! It also gets the shape the design wants for free: dawdling in a siege earns
 //! nothing, so the only way to more quintessence is to advance the fight and
@@ -194,7 +194,7 @@ fn besieged(world: &mut World) -> bool {
 /// The calm trickle.
 ///
 /// **Appended to the schedule and drawing nothing**, which is the licence
-/// `settling`, `erode` and `lapse_chant` already hold: a system that only reads
+/// `settling` and `erode` already hold: a system that only reads
 /// the clock cannot perturb any `RngStream`, so it can go on the end without
 /// touching a single existing replay.
 ///

@@ -96,13 +96,14 @@ numbers below are not consecutive.
 | **Phase 11. Renown** | `0.11.14` | ✅ every box ticked |
 | Phase 11.5. Interlude | `0.11.10` | ✅ every box ticked |
 | **The orb's menu** | `0.12.7` | ✅ every box ticked |
+| **The augury** | `0.13.19` | ✅ closed |
+| **The scrivener** | `0.14.11` | ✅ every box ticked |
+| [**The circle**](#the-circle) `menagerie/` | `0.15.7` | ✅ every box ticked · supersedes Phase 5's rhythm game |
 
 ### Open — and **this table is not a running order**
 
 | | Months | Words | |
 |---|---|---|---|
-| [**The scrivener**](#the-scrivener) | — | ~2k | `0.14.x` — **in hand.** The same forgiveness inside a `.spell`, so the line that taught you the orb is forgiving is not the line that teaches you it is not |
-| [The augury](#the-augury) | — | — | `0.13` — **closed at `0.13.19`.** A trained reader for the phrasings a synonym table cannot hold |
 | [The tower as one machine](#the-tower-as-one-machine) | 2 | ~3k | the dependency web, and two defects it cannot open on top of (§19) |
 | [Spellcraft's three](#phase-3--spellcraft) | — | ~1k | the terse register, a typed action at execution, hidden-directory authoring |
 | [Enchanting's two](#phase-9--enchanting) | — | ~1k | the shared-engine extraction, split into a refactor and a behaviour box |
@@ -2699,7 +2700,7 @@ until then. §19 records the placement argument in full.
       ```bash
       S=/tmp/tui.toml; rm -f "$S"
       tmux new-session -d -s orbs -x 120 -y 45 -e ORBS_SAVE=$S -e ORBS_BOOT=0 \
-        target/debug/orbs-tui
+        -e ORBS_SEED=181 target/debug/orbs-tui   # a game's seed is its own since 0.15.5
       # attend laboratory; kindle charcoal; grind sage — then `quit`
       # reopen: the transcript and the lit athanor are both still there
       # leave by F10, and again by Ctrl-C: `tick` climbs 7 → 42 → 67
@@ -3594,6 +3595,10 @@ with making things, so idle buff-time is waste exactly as idle lit time is.
 
 ## Phase 5 — Summoning ✅
 
+> **The chant below was replaced at `0.15.0`** — the menagerie is a circle of
+> logic gates now; see [The circle](#the-circle) and DESIGN.md §19. This section
+> is the record of what was built and why, and is kept as written.
+
 **Exit:** a chant performed by hand or by a spell yields troops, and a botched
 one leaves the tower worse. **Met** at `0.5.6`: a figure is summoned, sung on the
 arrows or by a spell, yields troops into the arsenal, and wears the barrier when
@@ -4487,6 +4492,169 @@ tower rail and the prompt.** History did not change when you walked to the forge
 and blanking it would say the session went away; a box that came apart would read
 as the *machine* breaking rather than the screen changing, which is what got the
 tube strike cut twice.
+
+---
+
+## The circle
+
+**Exit:** the menagerie is solved by choosing — a beast's temper is read off the
+board and the circle limned to hold it, by hand or by a spell — and the chant,
+its keyboard surface and its clock are gone.
+
+**The new rule first, and DESIGN.md §19 has it whole:** a beast's **temper** is a
+truth table over three senses, and the **circle** is three glyphs in drawn
+wiring, each limned with one of six **humours** — the six symmetric logic gates.
+`summon` draws a beast and calls it in; `limn <glyph> <humour>` sets a gate, and
+bare it steps round the six. A hold brings troops; a balk costs the call. This
+**supersedes Phase 5's rhythm game** (§19 `0.5.0`), restores §10.1's *never a
+reflex* for every room, and makes summoning's scarcity *time*.
+
+**Researched before built.** Logic-gate games build from scratch (NandGame,
+Turing Complete, MHRD), fill missing gates (the puzzle apps, the textbook
+exercise) or set switches (Circuit Scramble); this is the second, chosen with the
+player alongside *time only* for failure and *typed verbs only* for hand play.
+
+- [x] **The circle replaces the chant** (`0.15.0`). The model in `tower::circle`:
+      330 puzzles drawn from what some circle answers, never one solution (De
+      Morgan), proved exhaustively. `summon` and `limn` in `execute::summon`,
+      publishing each glyph's humour and the temper's `fervour` — and **nothing
+      about a call**, because a climb on rows agreeing stalls on 44% of circles
+      where the lens's sockets never stall. The board in `orbs-render::Circle`,
+      a truth table written sideways with `▲` under the rows that balk. The shipped
+      `taming` spell is an odometer over every circle — three `repeat 6` around a
+      bare `limn` — and holds every beast, 64 calls on average.
+      **Gone:** `sing`, `chorus`, `Focus::Chant`, `F9`, `ORBS_CHANT`,
+      `ORBS_PATIENT`, the chant's tick system and `Submission::Sang`. **`FORMAT`
+      12**, migrating the chant's nodes away by prefix. Two extractions on the way:
+      the fixed boards' `split` (dumps byte-identical) and the lens's par pricing.
+      **Named twice**: the real sweep overruled the scrape on `choler` (667
+      against `closer`), and the forge's readings joined it for the first time.
+      **See it:** `ORBS_BOOT=0 ORBS_DUMP="attend menagerie; summon; limn keystone
+      heed; limn sunwise oppose; summon" cargo run -p orbs` — the board beside the
+      transcript, the answer row under the temper, and `▲` under the rows that
+      balk (seed 181, re-measured at `0.15.4` when beasts became generated
+      circuits: rows 1, 2, 6, 7 and 8, *"the beast balks at 5 rows, on call 1"*).
+      `ORBS_BOOT=0 ORBS_DUMP="attend menagerie; summon; debug_circle; summon;
+      survey arsenal" cargo run -p orbs` — *"the circle holds. 4 troops answer"*.
+      `cargo test -p orbs-sim --test taming` is the domain through real verbs,
+      including a bound search holding beasts while the player is in the
+      laboratory; `cargo run -p orbs-balance -- run taming --ticks 7200` reads
+      **0.0378** on seed 0 against a pin of 0.042 — ten seeds' mean — inside
+      `taming`'s own thirty-five-percent band, which those seeds measured at
+      0.0319 to 0.0550
+- [x] **A spell that knows the logic** (`0.15.1`) — `winnowing`: the keystone
+      narrowed by a ladder on `fervour`, proven exact both ways over all 330
+      beasts, and sunwise halved by De Morgan, which `recall sunwise` now names.
+      Mean 38 calls against `taming`'s 64, worst 90 against 174; through the
+      engine, 161 ticks against 229 over a hundred seeds (at `0.15.4`'s
+      generated circuits: 38 against 68 calls, 164 against 299 ticks). `taming`
+      stays the pinned floor — the room is priced on the shipped search, and a
+      better spell earns more for having understood the gates.
+      **See it:** `ORBS_BOOT=0 ORBS_DUMP="attend menagerie; invoke winnowing"
+      ORBS_THEN="meditate 400; peruse menagerie.log" cargo run -p orbs` — *"the
+      circle holds. 3 troops answer, on call 86"*, where the same line with
+      `taming` and `meditate 900` holds seed 181's beast on call 170.
+      `cargo test -p orbs-sim --test taming` casts both over 24 seeds and every
+      rung
+- [x] **The lesser circle** (`0.15.2`) — in a sealed tower the first beasts are
+      the keystone alone over two senses, *which humour is this?*, until
+      `menagerie_2` opens the whole circle: composition, as the genre teaches it.
+      `tower::circle::Shape` is `Lesser` or `Whole`, and a temper carries its
+      senses, so the verbs, readings, board and save are one set. Five tempers,
+      each held by one humour; the dark glyphs refused as a cost and silent to a
+      spell; one troop and a quarter of the price at a par of one call. A bare
+      `circle` key, which `Opened::all` holds so `Sim::new` never draws one, and
+      **`FORMAT` 13** giving an open tower's older document the key. Singular
+      counts on the way: *"1 troop answers"*.
+      **See it:** `ORBS_SEALED=1 ORBS_BOOT=0 ORBS_DUMP="debug_reach lens_1;
+      attend menagerie; summon; limn sunwise heed; limn keystone mirror; summon"
+      cargo run -p orbs` — *"a lesser beast gathers, lit on 3 rows. which humour
+      is it?"*, *"sunwise is dark in a lesser circle"*, and a board of one line
+      and four columns with `▲` under rows 1, 2 and 3.
+      `cargo test -p orbs-sim --test lesser` holds five and finds the sixth whole
+- [x] **Reviewed** (`0.15.3`) — an adversarial read over the three boxes by a
+      context-free reviewer: no blocker, and one major — the lesser circle's five
+      holds were eleven at the default length, because a second station is
+      ramped by it. An event deed may be **`fixed`** now, a lesson's size at
+      every length. With it: a beast refused on load no longer leaves its
+      readings, `limn` takes the humour first too, the
+      humours' pages limn the keystone a lesser circle has, and the spoken
+      summary says *row* for one. §19 lists what was left and why.
+      **See it:** `cargo test -p orbs-sim --test lesser
+      the_whole_circle_opens_after_five_lesser_beasts_at_every_length`;
+      `ORBS_BOOT=0 ORBS_DUMP="attend menagerie; summon; limn oppose sunwise"
+      cargo run -p orbs` — *"sunwise is limned oppose"*; `scripts/play.sh
+      menagerie::`, five scenarios on a real terminal
+- [x] **The seed builds the circuit** (`0.15.4`) — each beast is a circuit drawn
+      from the seed: wiring, **turned wires** (`~` on the board, *turned* in
+      speech, at most one a glyph) and a limning, and its temper is what that
+      circuit answers. `circuit::drawable` is every valid circuit, and a draw is
+      one stream value over it. 624 distinct boards and 192 tempers where there
+      were 330 and 107; the shipped searches, the ladder and De Morgan unchanged
+      and proven over all 11,664 circuits. The spoken summary names each lit
+      row's senses, so a reader can solve it. **`FORMAT` 14.**
+      **See it:** `ORBS_BOOT=0 ORBS_DUMP="attend menagerie; summon" cargo run -p
+      orbs` — *"sunwise yoke ← blood, ~breath"* and *"over blood and turned
+      breath … lit on rows 2 (breath), 3 (bone), 5 (blood), 7 (blood bone)"*;
+      `ORBS_SEED=3` for another beast. `cargo test -p orbs-sim --lib
+      tower::circle` pins the space against an outside count; `cargo test -p
+      orbs-shell --lib circle` holds two hundred beasts from the words alone
+- [x] **Every new game its own seed** (`0.15.5`) — every player's tower was seed
+      `0x0B5`: the same stacks, beasts and sieges. `orbs_shell::new_game_seed`
+      gives the first tower on a machine and a new game from the menu six digits
+      from the wall clock, unless `ORBS_SEED` names one or `ORBS_CAPTURE` is
+      taking a screenshot; `orbs_shell::seed` stays the instruments' — dumps,
+      `screens`, `dumps.sh`, the play harness — and the dump entry points read
+      it themselves, so a frontend cannot hand one a game's seed. The Bevy
+      menu's swap carries the seed it chose. Nothing in the sim reads the clock.
+      **See it:** two `orbs-tui` launches under tmux with no `ORBS_SEED` print
+      two seeds in the condition report — *"orb 0 82177 cold start"*, *"orb 0
+      211335 cold start"* — the loop in SEEING-IT's *`ORBS_SEED`* section.
+      `cargo test -p orbs-shell --lib seed`; `cargo test -p orbs --bin orbs
+      menuing` builds a new game from the seed it was asked for
+- [x] **The circle, tested as a whole domain** (`0.15.6`) — 108 tests across the
+      model, the game, the board, the speech and a real terminal, organised by
+      what each holds:
+      *exhaustive* — every circuit, every temper of both sizes, every mask, the
+      humours against the logician's tables, the searches and the ladder, pinned
+      to counts measured outside the code;
+      *sufficient* — a solver reading only the board, and another reading only
+      the spoken summary, each hold two hundred generated beasts in one call;
+      *consistent* — a seeded fuzz of 18,000 random commands over sixty towers,
+      open and sealed, asserting after every one that readings, the rail, the
+      answer row, calls and holds agree with the beast;
+      *deterministic* — one seed and one list of commands is one world, through a
+      save and load half way; a draw moves one stream by one value and no other
+      room's maze;
+      *varied* — thirty beasts in one tower, a hundred towers' first beasts, and a
+      hundred thousand draws reaching every one of the 2,994 puzzles.
+      **See it:** `cargo test -p orbs-sim --test circle -- --nocapture` —
+      *"214 holds, 2102 answer rows, 2102 calls, 5623 steps away"* from the fuzz
+      in a debug build;
+      `cargo test -p orbs-sim --lib tower::circle`; `scripts/play.sh
+      menagerie::`, seven scenarios
+- [x] **Reviewed a second time** (`0.15.7`) — a second adversarial read over
+      `0.15.4`–`0.15.6`, and fourteen corrections; §19 has each with its reason.
+      Three are rules rather than repairs: **a call against par is never spent on
+      a guess** — a `summon` the reader worked out draws a beast but will not call
+      one in, and says the word to type; **a word an optional last slot cannot use
+      is asked about rather than dropped**, so `limn keystone xyzzy` no longer
+      steps the glyph and neither does the lens's `dial first qqqq`; and **every
+      sentence the circle teaches a reader is one a reader is shown** — a third of
+      them were answered by the orb first, as `dial`, `set` or `rest`, and were
+      measured out and rewritten, **readers retrained** over five seeds with seed
+      1 shipped and every score inside the last run's range. With them: a load
+      that first reaches `menagerie_2` says what a `~` is, one pass tidies every
+      puzzle a load can refuse rather than one per puzzle, a limn republishes only
+      its glyph, and a pinned mean is held to a band narrowed by the worlds
+      averaged.
+      **See it:** `ORBS_SEED=3 ORBS_BOOT=0 ORBS_DUMP="attend menagerie; summon;
+      call the beast in; summon" cargo run -p orbs` — *"≈ summon"*, *"the orb will
+      not call the beast in on a guess. type summon to call it"*, then *"the beast
+      balks at 4 rows, on call 1"*; `ORBS_AUGURY=off ORBS_BOOT=0
+      ORBS_DUMP="attend menagerie; summon; limn keystone xyzzy" cargo run -p orbs`
+      — *"¿ limn keystone"*, and the keystone still at `yoke`;
+      `cargo test -p orbs-sim --test augury circle`
 
 ---
 

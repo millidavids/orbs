@@ -256,7 +256,7 @@ mod tests {
         // pins still passes, so nothing anywhere goes red.
         // Every instrument `[earns]` prices, so a name added there is covered by
         // the same assertion rather than by a second list nobody updates.
-        const PRICED: [&str; 9] = [
+        const PRICED: [&str; 10] = [
             "mortar_and_pestle",
             "balneum_mariae",
             "flask_and_rod",
@@ -266,6 +266,7 @@ mod tests {
             "prism",
             "pylon",
             "lattice",
+            "circle",
         ];
         let authored = crate::content::Progression::builtin();
         for length in [Length::Short, Length::Medium, Length::Long] {

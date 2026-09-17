@@ -304,7 +304,11 @@ fn every_pinned_rate_is_one_a_sweep_still_reaches() {
             .collect();
         let cost: usize = runs.iter().map(|run| run.cost).sum();
         assert!(
-            !report::off_by(mean, want),
+            !report::off_by(
+                mean,
+                want,
+                report::tolerance_of_mean(policy.name, SEEDS.len())
+            ),
             "{} averaged {mean:.4} over {} worlds against its pinned {want:.4} — \
              either the game changed or the policy has. Per seed: {}. {cost} \
              commands cost something across all of them",

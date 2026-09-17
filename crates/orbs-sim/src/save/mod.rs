@@ -62,7 +62,7 @@ pub use document::{Away, FORMAT, MarkSave, ProgressSave, RecordSave, RngSave, Sa
 pub(crate) use adopt::fingerprint;
 pub use error::SaveError;
 pub use node::{
-    ChantSave, CharmSave, CourseSave, DescentSave, HistorySave, MazeSave, NodeSave, ReadSave,
+    BeastSave, CharmSave, CourseSave, DescentSave, HistorySave, MazeSave, NodeSave, ReadSave,
     RunningSave, SpanSave, StrandSave, SubstitutedSave, WardSave, WorkingSave,
 };
 

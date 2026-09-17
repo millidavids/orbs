@@ -225,9 +225,6 @@ impl Sim {
         world.init_resource::<Submissions>();
         world.init_resource::<Skip>();
         world.init_resource::<tower::Cooling>();
-        world.init_resource::<crate::execute::Answered>();
-        world.init_resource::<crate::execute::Chorusing>();
-        world.init_resource::<crate::execute::Patient>();
         world.init_resource::<ParseLog>();
         world.init_resource::<Wizard>();
         world.init_resource::<Choices>();
@@ -414,17 +411,11 @@ impl Sim {
                 // inside `muster` rather than in a system. So this is appended
                 // here without shifting a single existing replay.
                 tower::erode,
-                // **The same licence again, and this one is the clearest case
-                // of it.** A syllable landing unanswered is a clock reading and
-                // nothing else: the menagerie's one draw is `Chant::draw`, on
-                // `RngStream::Menagerie`, and it happens inside `summon` rather
-                // than in a system. So this is appended here without shifting a
-                // single existing replay.
+                // **The menagerie has no system here, and it had one.** A chant's
+                // syllables landed on the tick; a beast at the circle waits for
+                // ever, so there is nothing for a schedule to advance (§19). Its
+                // one draw is `Beast::draw`, inside `summon`.
                 //
-                // **After `erode`**, so a chant that collapses on the same tick
-                // the barrier wears sees the barrier the tick left it, not the
-                // one it started with.
-                crate::execute::lapse_chant,
                 // **The same licence, a fourth time.** Quintessence coming back
                 // is a modulo on the tick and nothing else — the forge's one
                 // draw is `Lattice::from_bits`, on `RngStream::Forge`, and it
@@ -531,6 +522,13 @@ impl Sim {
         tower::raise(&mut world);
         crate::save::restore(&mut world, save);
         tower::rebuild(&mut world);
+        // **Only a document that disagreed with itself changes here**: a puzzle
+        // refused on load leaves its readings behind, and nothing else would
+        // clear them until the next `summon` or `muster`. One pass over every
+        // `puzzle::Open` rather than one per puzzle a load can refuse today, so a
+        // restore that starts refusing is already covered — and a whole save is
+        // left exactly as saved.
+        crate::execute::settle_puzzles(&mut world);
 
         // **No `tower::report` here, unlike `with_schedule`**, and the round-trip
         // test is what settled it. `report` pushes §4's condition report onto the
@@ -735,6 +733,12 @@ impl Sim {
         #[cfg(debug_assertions)]
         if crate::execute::beleaguered(line) {
             self.debug_siege(line);
+            return;
+        }
+
+        #[cfg(debug_assertions)]
+        if crate::execute::beckoned(line) {
+            self.debug_circle(line);
             return;
         }
 
@@ -985,7 +989,7 @@ impl Sim {
             .divined(tick, line, echo);
         match resolution {
             Resolution::Resolved { intent, .. } => {
-                self.world.resource_mut::<Pending>().push(intent);
+                self.world.resource_mut::<Pending>().push_divined(intent);
             }
             // **No numbered prompt from a divined reading** (§6). The augury
             // acts on its best reading and offers correction; stopping to ask is
@@ -1192,11 +1196,11 @@ impl Sim {
     ///
     /// **The question a spell's `if` asks, asked directly.** Every other route
     /// to a published reading goes through `survey`, which costs a tick — and
-    /// the menagerie's aperture moves on every tick, so a test that surveyed
-    /// four syllables in turn would be looking at four different moments and
-    /// could miss the aperture entirely. It did: `next` shipped unpublished and
-    /// four surveys in a row all said *"holds nothing"*, which reads exactly
-    /// like the feature being absent and exactly like the feature working.
+    /// while the menagerie was a chant its aperture moved on every tick, so four
+    /// surveys in a row looked at four different moments: `next` shipped
+    /// unpublished and every survey said *"holds nothing"*, which reads exactly
+    /// like the feature being absent and exactly like it working. The circle
+    /// waits, but a reading asked without a tick is still the honest instrument.
     ///
     /// Walked from the root rather than from `Cwd`, so it answers about a room
     /// nobody is standing in — which is the case a bound solver is always in.
@@ -1366,63 +1370,27 @@ impl Sim {
         Some(siege.view(tally, self.world.resource::<tower::Quintessence>().get()))
     }
 
-    /// The figure being sung in the menagerie, if the player is looking at it.
+    /// The beast waiting at the menagerie's circle, if the player is looking at it.
+    ///
+    /// **[`course`](Self::course)'s reason, one room over**: a *view* is what a
+    /// painter needs and a *beast* is what a solver needs. `orbs-balance` reads
+    /// where two glyphs stand on every step of `taming`, and building the board —
+    /// three senses looked up in prose, a tally sentence, a row of cells a line —
+    /// three times a step to find two words was the harness's hot path.
+    #[must_use]
+    pub fn beast(&self) -> Option<&tower::circle::Beast> {
+        self.world
+            .get::<tower::circle::Beast>(self.here_with::<tower::circle::Beast>()?)
+    }
+
+    /// The board for the beast waiting at the menagerie's circle, if the player
+    /// is looking at it.
     ///
     /// Reads `Cwd` for the reason [`pylon`](Self::pylon) does: the picture cannot
     /// outrun the readings by following the player out of the room.
-    ///
-    /// **The lane names and glyphs travel with it**, which is what stops the
-    /// painter from having to know what a syllable is called — `orbs-render` may
-    /// never depend on `orbs-sim`, and §19 records the lens's sheet shipping
-    /// unlabelled because that was got the other way round.
     #[must_use]
-    pub fn figure(&self) -> Option<orbs_render::Figure> {
-        let circle = crate::execute::circle_at(&self.world)?;
-        let chant = self.world.get::<tower::Chant>(circle)?;
-        let lanes = tower::Syllable::ALL
-            .into_iter()
-            .map(|one| (one.glyph(), one.word()))
-            .collect::<Vec<_>>();
-        let lane_of = |wanted: tower::Syllable| {
-            tower::Syllable::ALL
-                .into_iter()
-                .position(|one| one == wanted)
-                .unwrap_or_default()
-        };
-        let coming = chant
-            .chart()
-            .iter()
-            .skip(chant.at())
-            .take(orbs_render::AHEAD)
-            .map(|one| lane_of(*one))
-            .collect();
-        let missed = chant.tally().1;
-        // **The board's own line, written here.** `orbs-render` holds no
-        // authored English (rule 6), so the sentence under the rule is composed
-        // from a prose key — one spelling, one place, hot-reloadable.
-        let tally = self.prose().line(
-            "chant_tally",
-            &[
-                ("quantity", &chant.remaining().to_string()),
-                ("name", &missed.to_string()),
-            ],
-        );
-        // Oldest first, so the pegs read left to right as the figure was sung —
-        // and taken from the sequence rather than rebuilt from counts, which
-        // would draw a run that never happened.
-        let sung = chant.sung().to_vec();
-        Some(orbs_render::Figure {
-            coming,
-            lanes,
-            sung,
-            // The same number the `until` reading publishes, so a hand player
-            // and a solver are reading one fact about one moment.
-            until: chant.until(),
-            // **The same number the tally above is written from**, so the board
-            // and the spoken line cannot disagree — which they did.
-            remaining: chant.remaining(),
-            tally,
-        })
+    pub fn circle(&self) -> Option<orbs_render::Circle> {
+        Some(tower::circle::view(self.beast()?, self.prose()))
     }
 
     /// Every domain at a glance — what §9's rail draws.
@@ -1708,78 +1676,12 @@ impl Sim {
                 by,
             } => self.queue_write(&name, &lines, read, by),
             Submission::Took(id) => self.take(&id),
-            Submission::Sang(word) => {
-                if let Some(syllable) = tower::Syllable::from_word(&word) {
-                    self.sing(syllable);
-                }
-            }
             Submission::Walked(word) => {
                 if let Some(way) = tower::Way::ALL.into_iter().find(|way| way.word() == word) {
                     self.walk(way);
                 }
             }
         }
-    }
-
-    /// Answer the syllable at the aperture by hand.
-    ///
-    /// **The fourth entry point**, and [`walk`](Self::walk)'s twin: it reaches
-    /// the world without waiting for a tick boundary, because a chant is played
-    /// on a key and a key that queued would arrive after the beat it was
-    /// answering. Going through `submit` was tried for the maze three times and
-    /// §19 records every version being some flavour of too slow; here it would
-    /// not merely be slow, it would be *always wrong*.
-    ///
-    /// **No sub-tick phase, and none is wanted.** The sim grades on the tick a
-    /// press arrives in — [`tower::chant::WINDOW`] is two ticks wide — so the
-    /// only thing that crosses this boundary is *which syllable*. That is what
-    /// keeps `orbs-sim` clockless (rules 1 and 3) and what makes the recorded
-    /// [`Submission::Sang`] exact rather than
-    /// a float somebody has to argue about.
-    ///
-    /// Returns whether there was a chant to answer at all.
-    pub fn sing(&mut self, syllable: tower::Syllable) -> bool {
-        let Some(circle) = crate::execute::circle_at(&self.world) else {
-            return false;
-        };
-        if self.world.get::<tower::Chant>(circle).is_none() {
-            return false;
-        }
-        let tick = *self.world.resource::<Tick>();
-        self.world
-            .resource_mut::<Submissions>()
-            .sang(tick, syllable.word());
-        // **The same body the typed path runs**, which is `Sim::walk`'s rule: a
-        // hand-sung chant and a scripted one cannot disagree about what a strike
-        // is worth.
-        crate::execute::strike_syllable(&mut self.world, circle, syllable);
-        true
-    }
-
-    /// Whether a chant waits for the singer rather than for the clock (§14).
-    #[must_use]
-    pub fn is_patient(&self) -> bool {
-        self.world.resource::<crate::execute::Patient>().is_set()
-    }
-
-    /// Flip that, and say what it became.
-    pub fn set_patient(&mut self) -> bool {
-        self.world
-            .resource_mut::<crate::execute::Patient>()
-            .toggle()
-    }
-
-    /// Whether `chorus` has asked for the arrow keys.
-    #[must_use]
-    pub fn has_chorusing(&self) -> bool {
-        self.world.resource::<crate::execute::Chorusing>().pending()
-    }
-
-    /// Take `chorus`'s pending request, if there is one.
-    pub fn chorusing(&mut self) -> bool {
-        self.world
-            .resource_mut::<crate::execute::Chorusing>()
-            .take()
     }
 
     /// Whether `wander` has asked for the arrow keys (§10, §19).
@@ -2227,6 +2129,41 @@ impl Sim {
             .records_mut()
             .push(RecordKind::Completion)
             .text(orbs_render::FieldName::Name, crate::execute::COURSE)
+            .text(orbs_render::FieldName::Message, &message)
+            .role(orbs_render::Role::Cost)
+            .finish();
+    }
+
+    /// Limn the circle to one of the waiting beast's solutions, so the next
+    /// `summon` holds it.
+    #[cfg(debug_assertions)]
+    fn debug_circle(&mut self, line: &str) {
+        if let Some(node) = self.debug_shortcut::<tower::circle::Beast>(line)
+            && let Some(mut beast) = self.world.get_mut::<tower::circle::Beast>(node)
+            && let Some(solution) = beast.solution()
+        {
+            for (glyph, humour) in tower::circle::Glyph::ALL.into_iter().zip(solution) {
+                beast.limn(glyph, humour);
+            }
+            // **Republished**, for `debug_course`'s reason: the glyphs' readings
+            // are what a spell reads next, and the next line of a dump would be
+            // calling a circle whose readings still named the opening.
+            crate::execute::refresh_circle(&mut self.world);
+            return;
+        }
+
+        // **A shortcut that finds nothing says so**, which is `debug_course`'s
+        // rule: silent, it would leave the next `summon` to *draw* a beast, and
+        // that reads as the shortcut having done nothing for a different reason.
+        let message = self
+            .world
+            .resource::<crate::content::Prose>()
+            .line("summon_nothing_to_give", &[]);
+        self.world
+            .resource_mut::<Scrollback>()
+            .records_mut()
+            .push(RecordKind::Completion)
+            .text(orbs_render::FieldName::Name, crate::execute::CIRCLE)
             .text(orbs_render::FieldName::Message, &message)
             .role(orbs_render::Role::Cost)
             .finish();

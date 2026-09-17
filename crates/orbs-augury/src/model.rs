@@ -44,7 +44,7 @@ pub struct ReaderConfig {
     /// model.** The spell register asks the identical question of an identical
     /// sentence — *which statement is this, and which words are its argument* —
     /// over a different set of answers: twelve spell words and *this is a
-    /// command* instead of forty-six verbs. Everything else is the same, so what
+    /// command* instead of the verbs. Everything else is the same, so what
     /// differs is one width and one corpus.
     #[config(default = "VERBS")]
     pub classes: usize,

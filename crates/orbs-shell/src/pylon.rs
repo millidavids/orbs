@@ -20,53 +20,21 @@
 use orbs_render::{Painter, Pos, Pylon, Rect, Role, Style, UtteranceKind, Wash};
 use orbs_sim::content::Prose;
 
-/// The gap between the board and the transcript.
-const GUTTER: u16 = 1;
-
-/// The fewest columns the transcript keeps before the board yields.
-///
-/// The same figure the map and the sheet use, and for the same reason: below it
-/// the board has won an argument it should lose.
-const TRANSCRIPT_FLOOR: u16 = 24;
-
-/// Where the board sits, and what is left for the transcript.
-#[derive(Debug, Clone, Copy)]
-pub struct Split {
-    /// The board's own rectangle, border included. Empty when there is none.
-    pub area: Rect,
-    /// What the transcript gets.
-    pub rest: Rect,
-}
+use crate::beside::{self, Split};
 
 /// The board's footprint, and what is left for the transcript.
 ///
-/// `const` because it can be: unlike the sheet's, this board is a fixed size
-/// whatever is standing on it, so the layout never has to look inside the course
-/// it was handed. That is the same property `Pylon::rows` exists for.
+/// Unlike the sheet's, this board is a fixed size whatever is standing on it, so
+/// the layout never has to look inside the course it was handed — which is the
+/// property `Pylon::rows` exists for, and what lets it share [`beside::split`].
 pub const fn split(area: Rect, course: Option<&Pylon>) -> Split {
-    let nothing = Split {
-        area: Rect::EMPTY,
-        rest: area,
-    };
-    if course.is_none() {
-        return nothing;
-    }
-
-    // Border on both sides, in both directions.
-    let (cols, rows) = Pylon::size();
-    let (block, tall) = (cols.saturating_add(2), rows.saturating_add(2));
-
-    if block.saturating_add(GUTTER + TRANSCRIPT_FLOOR) > area.cols || tall > area.rows {
-        return nothing;
-    }
-
-    // Anchored to the edge the instrument panel took, so the two sit together
-    // and the transcript keeps one uninterrupted run of columns.
-    let wanted = block.saturating_add(GUTTER);
-    Split {
-        area: Rect::new(area.col + area.cols - block, area.row, block, tall),
-        rest: Rect::new(area.col, area.row, area.cols - wanted, area.rows),
-    }
+    beside::split(
+        area,
+        match course {
+            Some(_) => Some(beside::bordered(Pylon::size())),
+            None => None,
+        },
+    )
 }
 
 /// Draw the board where [`split`] put it.
@@ -132,6 +100,7 @@ fn speak(painter: &mut Painter<'_>, course: &Pylon, prose: &Prose) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::beside::{GUTTER, TRANSCRIPT_FLOOR};
 
     /// A course to lay out. The contents do not matter — the board is a fixed
     /// size whatever is standing on it, which is the point of `Pylon::rows`.

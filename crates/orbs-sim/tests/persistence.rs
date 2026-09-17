@@ -122,16 +122,15 @@ fn commands() -> Vec<&'static str> {
         "muster",
         "haul wellspring barrier",
         "haul wellspring conduit",
-        // The menagerie: a figure drawn, part sung, and part-way through an
-        // approach. **All three halves matter and the last is the subtle one** —
-        // `travelled` is what says how near the syllable is to the rule, and a
-        // save that dropped it would come back a figure that lands on the wrong
-        // tick. `ChantSave` did not exist at all for one commit, so a reload
-        // mid-figure silently emptied the circle.
+        // The menagerie: a beast drawn, a glyph limned and one stepped, and one
+        // call answered. **The answer is the subtle half** — it is only the last
+        // call's row, and a save that dropped it would come back a board with
+        // no balking marks under a beast the player has already called.
         "attend menagerie",
         "summon",
-        "sing skyward",
-        "meditate 2",
+        "limn widdershins oppose",
+        "limn keystone",
+        "summon",
         // The archive: a maze open and part-walked.
         "attend archive",
         "research",
@@ -744,7 +743,7 @@ fn every_component_the_world_holds_is_one_the_save_knows_about() {
         (TypeId::of::<orbs_sim::tower::Maze>(), "Maze"),
         (TypeId::of::<orbs_sim::tower::Ward>(), "Ward"),
         (TypeId::of::<orbs_sim::tower::Course>(), "Course"),
-        (TypeId::of::<orbs_sim::tower::Chant>(), "Chant"),
+        (TypeId::of::<orbs_sim::tower::circle::Beast>(), "Beast"),
         (TypeId::of::<orbs_sim::tower::Satchel>(), "Satchel"),
         (TypeId::of::<orbs_sim::tower::spell::Running>(), "Running"),
         (TypeId::of::<orbs_sim::tower::spell::Bound>(), "Bound"),
@@ -1749,6 +1748,148 @@ fn a_save_that_names_the_old_besieging_army_still_opens() {
     assert!(
         restored.rampart().is_some(),
         "the migrated bailey has no board"
+    );
+}
+
+/// **A tower from the chant loses the chant's nodes**, and the circle comes back
+/// empty rather than haunted.
+///
+/// A format-11 document carries four syllables as `Role::Reading` places, and a
+/// figure saved mid-song carries readings under them and a `remaining` under the
+/// circle. `restore` re-spawns any path the tower lacks — a reading whose parent
+/// is gone lands at the filesystem root — and a leftover `remaining` would make
+/// `if the circle is empty` false for ever. The rows here are the four shapes
+/// that could survive: a syllable, a reading under one, a reading under a
+/// syllable that is itself absent, and a reading under the circle.
+///
+/// **Shaped like format 11, not like today with the version changed.** It was
+/// built from a current tower, which already held the circle's glyphs and
+/// humours and a waiting beast — so its last `summon` called that beast in
+/// rather than drawing one, and neither the glyphs being raised into an older
+/// tower nor its `chant` table being ignored was ever exercised. The document
+/// here has no glyph, no humour and no beast, and a figure mid-song on the
+/// circle in the shape `ChantSave` wrote.
+#[test]
+fn a_save_from_the_chant_drops_its_nodes_and_the_circle_is_empty() {
+    let mut sim = Sim::new(3);
+    sim.submit("attend menagerie");
+    sim.step();
+    let mut save = sim.snapshot();
+    let reading = save
+        .nodes
+        .iter()
+        .find(|node| node.path.ends_with("/integrity"))
+        .cloned()
+        .expect("the pylon publishes its integrity");
+    let place = save
+        .nodes
+        .iter()
+        .find(|node| node.path == "/tower/menagerie/keystone")
+        .cloned()
+        .expect("the circle has a keystone");
+    // Nothing format 11 had: the three glyphs, the six humours, and a beast.
+    let added = [
+        "keystone",
+        "sunwise",
+        "widdershins",
+        "yoke",
+        "spurn",
+        "heed",
+        "eschew",
+        "oppose",
+        "mirror",
+    ];
+    save.nodes.retain(|node| {
+        let Some(rest) = node.path.strip_prefix("/tower/menagerie/") else {
+            return true;
+        };
+        !added.contains(&rest.split('/').next().unwrap_or(rest))
+    });
+    for node in &mut save.nodes {
+        node.beast = None;
+    }
+    let mut id = save.nodes.iter().map(|node| node.id).max().unwrap_or(0);
+    for (like, path) in [
+        (&place, "/tower/menagerie/skyward"),
+        (&reading, "/tower/menagerie/skyward/next"),
+        (&reading, "/tower/menagerie/leftward/onward"),
+        (&reading, "/tower/menagerie/circle/remaining"),
+    ] {
+        id += 1;
+        let mut row = like.clone();
+        row.path = path.to_owned();
+        row.id = id;
+        save.nodes.push(row);
+    }
+    let rendered = save
+        .to_toml()
+        .expect("a save renders")
+        .replacen(&stamped(), "format = 11", 1);
+    // **The figure itself**, on the circle, as `ChantSave` wrote it: a chart, a
+    // place in it, what was sung and how far the syllable had travelled.
+    let separator = "\n[[node]]\n";
+    let chunks: Vec<String> = rendered
+        .split(separator)
+        .map(|chunk| {
+            if chunk.contains("path = \"/tower/menagerie/circle\"\n") {
+                format!(
+                    "{chunk}[node.chant]\nchart = [\"skyward\", \"leftward\"]\nat = 1\nsung = [true]\ntravelled = 2\n"
+                )
+            } else {
+                chunk.to_owned()
+            }
+        })
+        .collect();
+    let older = chunks.join(separator);
+    assert!(older.contains("[node.chant]"), "the figure was not written");
+
+    let migrated = Save::from_toml(&older).expect("a format-11 save migrates");
+    let chant: Vec<&str> = migrated
+        .nodes
+        .iter()
+        .map(|node| node.path.as_str())
+        .filter(|path| {
+            ["skyward", "leftward", "remaining", "next", "onward"]
+                .iter()
+                .any(|word| path.contains(word))
+        })
+        .collect();
+    assert!(chant.is_empty(), "the chant's nodes survived: {chant:?}");
+
+    let mut restored = Sim::restored(&migrated);
+    restored.submit("attend menagerie");
+    restored.step();
+    assert!(
+        !restored.holds_reading("menagerie", "circle", "remaining"),
+        "the circle still carries the chant's count",
+    );
+    assert!(
+        restored.circle().is_none(),
+        "a figure mid-song loaded as a beast"
+    );
+    assert!(
+        !restored.holds_reading("menagerie", "circle", "fervour"),
+        "the empty circle publishes a temper",
+    );
+
+    // **Drawn, not called**, and into glyphs the older tower never had — the
+    // circle's places were raised by this build and survived the load.
+    restored.submit("summon");
+    restored.step();
+    let Some(board) = restored.circle() else {
+        panic!("the migrated circle drew no beast");
+    };
+    assert!(board.answer.is_none(), "the summon called a beast in");
+    assert_eq!(board.lines.len(), 3, "the migrated circle is not whole");
+    assert!(
+        restored.holds_reading("menagerie", "circle", "fervour"),
+        "the migrated circle publishes nothing a spell can read",
+    );
+    restored.submit("limn keystone heed");
+    restored.step();
+    assert!(
+        restored.holds_reading("menagerie", "keystone", "heed"),
+        "the keystone this build raised cannot be limned in an older tower",
     );
 }
 

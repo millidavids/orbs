@@ -180,9 +180,14 @@ pub struct NodeSave {
     /// The sanctum's course.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub course: Option<CourseSave>,
-    /// The menagerie's figure.
+    /// The beast waiting at the menagerie's circle.
+    ///
+    /// **A format-11 document's `chant` is simply not read** — `NodeSave` does
+    /// not deny unknown fields, so a figure mid-song loads as a circle with no
+    /// beast, which is a `summon` away from fine. The chant's *nodes* are another
+    /// matter, and `document::migrate` removes them.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub chant: Option<ChantSave>,
+    pub beast: Option<BeastSave>,
     /// The bailey's siege.
     ///
     /// **The component itself, not a derived shape**, which is where this
@@ -226,7 +231,7 @@ pub struct NodeSave {
     ///
     /// **A list rather than a table, because it is a queue.** Every other
     /// counted thing here is children plus `Stock`, which collapses duplicates
-    /// and has no order; a satchel holding `skyward` twice with one of them
+    /// and has no order; a satchel holding `heed` twice with one of them
     /// first is the whole point of it. Empty is `None`, so a tower nobody has
     /// queued into writes no rows.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -414,37 +419,51 @@ pub struct CourseSave {
     pub hauls: u32,
 }
 
-/// A figure part-way through being sung.
+/// A beast waiting at the menagerie's circle, part-limned.
 ///
-/// **This was documented before it existed.** `save::document`'s `FORMAT` 3 → 4
-/// entry called `ChantSave` *"an ordinary addition"* and two fields of
-/// `tower::Chant` justify their representation by a save they never reached —
-/// `travelled` is held rather than derived from a start tick because *"a chant
-/// can be saved mid-approach"*, and `sung` is a sequence partly because *"it is
-/// what the save needs"*. Neither was true until now: reloading mid-figure
-/// dropped the component and the circle came back empty.
-///
-/// **The whole chart travels**, unlike the sanctum's course, which stores only
-/// where the wards are standing. A figure is drawn once from
+/// **The wiring, the turned wires and the temper travel, never an index into the
+/// circuits a draw picks from.** A beast is drawn once from
 /// `RngStream::Menagerie` and cannot be re-rolled on load without moving that
-/// stream — `Chant::restored` exists precisely so a restore reads the figure
-/// rather than drawing one, which is the ward's rule.
+/// stream — and an index would mean a different beast the day the list grew. So
+/// the document says what the beast *is*, and `Beast::restored` checks that some
+/// circuit could have made it.
+///
+/// **A lesser beast is four rows and no wiring** — the keystone alone has no
+/// outer glyphs to wire — and a whole one eight rows and both pairs. The length
+/// of `temper` is which circle it is, so there is no third field to disagree
+/// with the other two.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ChantSave {
-    /// The figure, in the order it lands, by syllable word.
+pub struct BeastSave {
+    /// The two senses the sunwise glyph is given, by index, lower first. Absent
+    /// for a lesser beast.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sunwise: Option<[usize; 2]>,
+    /// The two senses the widdershins glyph is given. Absent for a lesser beast.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub widdershins: Option<[usize; 2]>,
+    /// Which wires into the outer glyphs are turned, as four `0`s and `1`s —
+    /// sunwise's first and second, then widdershins's. **Absent when none is**,
+    /// which is every beast a format-13 document held, so such a document reads
+    /// exactly as it was written; `0000` is accepted and means the same.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub turned: Option<String>,
+    /// What every row must answer, row one first: `1` lit, `0` dark.
     ///
-    /// **Words, not indices.** A save is a file §15 invites a person to edit,
-    /// and `skyward` says what `0` does not — the same call `WardSave` makes for
-    /// its sigils. An unreadable word is dropped by `Chant::restored`'s caller
-    /// rather than panicking, which is that section's rule for a hand-edited
-    /// file.
-    pub chart: Vec<String>,
-    /// Which syllable is at the aperture.
-    pub at: usize,
-    /// How each answered syllable went, oldest first: `true` struck.
-    pub sung: Vec<bool>,
-    /// How far the syllable at the aperture has travelled, out of `PACE`.
-    pub travelled: u32,
+    /// **A string of rows rather than a number**, because a save is a file §15
+    /// invites a person to edit, and `01110110` reads as a truth table where
+    /// `110` does not.
+    pub temper: String,
+    /// How each glyph stands — keystone, sunwise, widdershins — by humour word.
+    ///
+    /// **Words, not indices**, the call `WardSave` makes for its sigils. An
+    /// unreadable word drops the beast rather than substituting one.
+    pub glyphs: Vec<String>,
+    /// How many times the beast has been called in.
+    pub calls: u32,
+    /// What the circle last answered, in `temper`'s shape. Absent before the
+    /// first call.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub answer: Option<String>,
 }
 
 /// A spell part-way through, which §8 requires a save to carry.

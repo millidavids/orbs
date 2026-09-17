@@ -90,7 +90,7 @@ pub mod record;
 mod bath;
 mod board;
 mod cell;
-mod chant;
+mod circle;
 mod fire;
 mod frame;
 mod geometry;
@@ -149,7 +149,9 @@ pub use pulse::{CYCLE_SECS, FLIP_HZ};
 // `tower::pylon::MOST` is that caller, and `GROUND`/`WARD` had no equivalent —
 // they were exported beside it out of symmetry and reached by nothing, where a
 // glyph is `row`'s business and a frontend is handed cells rather than chars.
-pub use chant::{AHEAD, Figure};
+// `Line` as `CircleLine`: a board's line of wiring, and `line` already means a
+// row of text everywhere else in this crate.
+pub use circle::{Circle, Given as CircleGiven, Line as CircleLine};
 pub use pylon::{Pylon, TALLEST};
 // `Side`, not `Band` — `mix::Band` already has that name and means a stripe of
 // one reagent in the flask. Two `Band`s in one crate's namespace is a rename

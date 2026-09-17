@@ -22,5 +22,6 @@ mod shared;
 mod verbs;
 
 pub(crate) use publish::lapse;
+pub(super) use publish::publish;
 pub(crate) use verbs::land;
 pub(super) use verbs::{anneal, imbue, snap};

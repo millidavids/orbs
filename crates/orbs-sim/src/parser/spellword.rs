@@ -138,13 +138,13 @@ pub enum SpellWord {
     Part,
     /// Do nothing for a number of ticks.
     ///
-    /// **The tenth word, and the menagerie is what earned it.** Nothing in the
-    /// language counted ticks: [`Wait`](Self::Wait) takes a *thing* and blocks by
-    /// scanning the record stream, which is the right shape for *"hold until the
-    /// mortar is free"* and the wrong one for a chant. A blocking wait would let
-    /// the world decide when to sing, and deciding when is the entire puzzle
-    /// (§19) — so the delay has to be a number the spell works out and writes
-    /// down.
+    /// **The tenth word, and the menagerie's chant is what earned it.** Nothing in
+    /// the language counted ticks: [`Wait`](Self::Wait) takes a *thing* and blocks
+    /// by scanning the record stream, which is the right shape for *"hold until
+    /// the mortar is free"* and was the wrong one for a chant, whose puzzle was
+    /// deciding *when* (§19). The chant is gone and the word stays: a delay a
+    /// spell works out and writes down is still the one count the world does not
+    /// hand it.
     ///
     /// # `rest` was the first name, and it is a `meditate` synonym
     ///
@@ -183,7 +183,8 @@ pub enum SpellWord {
     /// rail; this takes `bide`'s road instead — *"a spell waiting for ever is a
     /// fault; a spell counting to three is doing what it was written to do"* —
     /// and says nothing on the transcript. What bounds it is the work running
-    /// out: a chant ends, the loop's guard goes true, and the spell finishes.
+    /// out: the producer stops, the loop's guard goes true, and the spell
+    /// finishes.
     ///
     /// # The word
     ///
@@ -192,8 +193,8 @@ pub enum SpellWord {
     ///
     /// **`draw` was the first choice and is wrong in the prose**, not in the
     /// parser: the game already spends that word on producing a *new* random
-    /// thing three times over — `Chant::draw`, `muster` *"draws a course"*,
-    /// `summon` *"draw a fresh figure"*. A queue hands back something that was
+    /// thing three times over — `Beast::draw`, `muster` *"draws a course"*,
+    /// `summon` drawing a beast. A queue hands back something that was
     /// already there, which is the opposite. `take` is `weave`'s, `lift` scores
     /// 750 against both `sift` and `list`, and `pop` is clean and reads as
     /// jargon in a game whose other words are `muster` and `kindle`.

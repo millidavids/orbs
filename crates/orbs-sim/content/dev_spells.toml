@@ -428,65 +428,145 @@ lines = [
     "end",
 ]
 
-# **The one spell in the game that does not work at one step a tick, and that is
-# the design rather than a defect** (§19).
+# **The menagerie's search: every circle there is, in order, until one holds**
+# (§19).
 #
-# Identifying which of four lanes is next costs a tick per rung, and a syllable
-# is only four ticks from the rule - so at `SCRIPT_BUDGET` the orb can reach the
-# first two lanes in time and not the last two, and the figure collapses.
-# Measured at two steps a tick: **twelve of twelve struck, the figure closes.**
-# So the menagerie is the domain that *rewards concentration* - unautomatable
-# until the weave grants a second step, and solved outright once it does.
+# A spell cannot reason about a truth table - it has no variables to hold a row
+# in - but it can *try*, and a bare `limn <glyph>` steps a glyph round the six
+# without the spell having to name what comes next. Three `repeat 6` loops around
+# that are an odometer: widdershins turns every call, sunwise every six, the
+# keystone every thirty-six, and all 216 circles are tried.
 #
-# **The shape is the puzzle, and it took `bide until` going away to become one.**
-# This was an `else if` ladder with a `bide until` in every branch, and it read
-# the delay straight off the circle - so nothing was computed, and §19 records
-# the withdrawal. The reading went with the word: with `until` still answerable,
-# `repeat until the circle has 1 until` / `end` is the same cheat spelled as a
-# one-tick spin.
+# **It always holds**, because a beast is drawn from what some circuit answers,
+# and `tower::circle`'s proofs walk every circuit through exactly this order: a
+# mean of 68 calls as beasts are drawn, and a worst of 174. Turned wires change
+# none of it — the search limns glyphs, and a turn is part of the beast. A person
+# who reads the table needs one.
+# That gap is the domain - the orb earns here by running while you are
+# elsewhere, not by being quicker than you.
 #
-# What is left has to keep its own time, and three things follow from that. All
-# three were measured, not reasoned about:
+# **Every step is guarded by `if the circle is working`**, at every level, and
+# both halves of that were measured rather than argued:
 #
-# - **`for each syllable`, never an `else if` ladder.** A ladder short-circuits,
-#   so the lane it finds on the first rung is reached three ticks before the one
-#   it finds on the fourth - and a `sing` that arrives at a different offset
-#   every lap cannot sit in a two-tick window. The loop always walks all four,
-#   which makes the pass **constant length**. Measured at two steps a tick: the
-#   ladder strikes **nought of twelve**, this strikes twelve.
-# - **`let`, and the `sing` *outside* the loop.** Singing where the lane is found
-#   puts the strike at a variable offset again; binding the answer and singing
-#   after the loop closes puts it at a fixed one. This is what `let` is for and
-#   it is the only shape in the game that needs it this way.
-# - **No `bide` at all.** The pass comes out level with `PACE` on its own, and a
-#   `bide 2` breaks it - measured: two struck, then the figure comes apart. The
-#   arithmetic a player does here is *"what does my loop already cost"*, which is
-#   the honest question, rather than *"what number goes in the delay"*.
+# - **No `for each humour`.** It binds the set's own word, so nesting it three
+#   deep shadows itself; literal counts around a stepping verb are the shape the
+#   language can say.
+# - **No refusals after a hold.** The beast is gone the moment it is held, so an
+#   unguarded `limn sunwise` would be refused once per cycle and fill the log -
+#   and each guard costs a step, so guarding the outer loops too is what keeps
+#   the tail after a hold under twenty steps rather than two hundred.
+# - **Refusals before a hold, at a lesser circle.** A sealed tower's first beasts
+#   light the keystone alone, so every `limn widdershins` and `limn sunwise` is
+#   refused as dark while it searches. It still holds — the keystone steps every
+#   thirty-six calls — and the log saying the circle is not whole is the signal.
 #
-# **Still the one spell that does not work at one step a tick, and still by
-# design** (§19). At `SCRIPT_BUDGET` the pass runs long and the best any
-# arrangement reaches is three of twelve before the figure collapses; at two
-# steps a tick this closes the figure on every seed tried (0, 3, 11, 17, 42) for
-# four troops. The menagerie is the domain that *rewards concentration* -
-# unautomatable until the weave grants a second step, solved outright once it
-# does.
-#
-# **`repeat until the circle is empty`, never `is idle`.** A circle is idle
-# whether or not a chant is running - `is idle` was satisfied before the first
-# pass, the loop ran zero times, and the spell ended having done nothing. A
-# running chant publishes readings, so `is empty` is the question that separates
-# them. That cost four experiments to find.
-[chanting]
+# **Step, then call** - never call, then step. The opening is never a solution
+# (the table refuses a beast the unlimned circle already holds), so a call on it
+# would be wasted, and stepping first spends that call on a circle that can win.
+[taming]
 domain = "menagerie"
 lines = [
     "summon",
-    "repeat until the circle is empty",
-    "    for each syllable",
-    "        if syllable has next",
-    "            let note be syllable",
+    "repeat 6",
+    "    if the circle is working",
+    "        repeat 6",
+    "            if the circle is working",
+    "                repeat 6",
+    "                    if the circle is working",
+    "                        limn widdershins",
+    "                        summon",
+    "                    end",
+    "                end",
+    "                if the circle is working",
+    "                    limn sunwise",
+    "                end",
+    "            end",
+    "        end",
+    "        if the circle is working",
+    "            limn keystone",
     "        end",
     "    end",
-    "    sing note",
+    "end",
+]
+
+# **The same search, told what the logic already rules out** (§19) — a mean of 38
+# calls where `taming` takes 68, and a worst of 90 against 174.
+#
+# Two facts a player can learn from `recall`, and neither needs a variable:
+#
+# - **`fervour` narrows the keystone.** A temper lit on one row can only be a
+#   yoke or an eschew at the top — nothing else answers so rarely — and a temper
+#   lit on seven only a spurn or a heed. The ladder below is every rung's whole
+#   list, no more and no less, and `tower::circle`'s proofs check it both ways
+#   over every beast a circuit makes, turned wires and all: a keystone missing
+#   from a rung is a beast this never holds, and one too many is calls spent on
+#   nothing.
+# - **De Morgan halves sunwise.** Every hold has a twin with both outer glyphs
+#   negated and the keystone swapped for its dual, and every rung holds its own
+#   duals — so if sunwise at `spurn` would hold, sunwise at `yoke` holds too,
+#   under another keystone on the same rung. Two steps between sunwise's tries
+#   visit `yoke`, `heed` and `oppose` and nothing is lost.
+#
+# **It does not care where the circle stands when it starts**, which matters for
+# a bound spell that recasts onto a beast somebody limned by hand: the keystone
+# is named rather than stepped, six steps take widdershins round from anywhere,
+# and two steps at a time from any humour walk one of the two halves De Morgan
+# pairs — either will do.
+#
+# **`trying()` guards its own `limn`**, so a hold part-way down a rung costs one
+# step for each keystone left rather than a refusal in `menagerie.log`.
+[winnowing]
+domain = "menagerie"
+lines = [
+    "summon",
+    "part sweep()",
+    "    repeat 3",
+    "        repeat 6",
+    "            if the circle is working",
+    "                limn widdershins",
+    "                summon",
+    "            end",
+    "        end",
+    "        if the circle is working",
+    "            limn sunwise",
+    "            limn sunwise",
+    "        end",
+    "    end",
+    "end",
+    "part trying(guess)",
+    "    if the circle is working",
+    "        limn keystone guess",
+    "        sweep()",
+    "    end",
+    "end",
+    "if the circle has exactly 1 fervour",
+    "    trying(yoke)",
+    "    trying(eschew)",
+    "else if the circle has exactly 2 fervour",
+    "    trying(yoke)",
+    "    trying(eschew)",
+    "    trying(oppose)",
+    "    trying(mirror)",
+    "else if the circle has exactly 3 fervour or the circle has exactly 5 fervour",
+    "    trying(yoke)",
+    "    trying(spurn)",
+    "    trying(heed)",
+    "    trying(eschew)",
+    "else if the circle has exactly 6 fervour",
+    "    trying(spurn)",
+    "    trying(heed)",
+    "    trying(oppose)",
+    "    trying(mirror)",
+    "else if the circle has exactly 7 fervour",
+    "    trying(spurn)",
+    "    trying(heed)",
+    "else",
+    "    trying(yoke)",
+    "    trying(spurn)",
+    "    trying(heed)",
+    "    trying(eschew)",
+    "    trying(oppose)",
+    "    trying(mirror)",
     "end",
 ]
 
@@ -645,9 +725,9 @@ lines = [
 #   hurt         — standing but worn. Fight back into them
 #   outnumbered  — the ratio the language cannot express, published as a word
 #
-# **`hold` is outside the ladder and runs every lap**, which is the menagerie's
-# lesson one room over: a `sing` inside the loop that found it arrives at a
-# different offset each pass. Here the consequence is worse than an offset — a
+# **`hold` is outside the ladder and runs every lap**, which was the menagerie's
+# lesson while it was a chant (§19): a `sing` inside the loop that found it
+# arrived at a different offset each pass. Here the consequence is worse than an offset — a
 # `hold` inside a branch would end the turn only on rounds where something was
 # spent, and a siege where nothing is wrong would never advance at all.
 #
@@ -751,8 +831,8 @@ lines = [
 # **A part, `for each band`, and the one thing this domain has that no other
 # does: time to think.**
 #
-# Every other room charges for looking — a `survey` is a tick, and in the
-# menagerie a tick is a missed syllable. **A siege does not advance until you
+# Every other room charges for looking — a `survey` is a tick, and while the
+# menagerie was a chant a tick was a missed syllable. **A siege does not advance until you
 # `hold`**, so a spell can read the whole board, walk both bands and decide at
 # leisure, and it costs exactly nothing. That is §5.0's *"no per-command tick
 # cost"* turned into something a spell can actually spend.

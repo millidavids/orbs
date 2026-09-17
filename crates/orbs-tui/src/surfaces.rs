@@ -35,8 +35,6 @@ pub(crate) struct Surfaces {
     pub(crate) weaving: Option<Tapestry>,
     /// Whether the arrow keys are walking the stacks.
     pub(crate) walking: bool,
-    /// Whether the arrow keys are answering a chant.
-    pub(crate) chorusing: bool,
     /// The orb's menu, if `quit` has opened it.
     pub(crate) menuing: Option<Menu>,
     /// Whether the menu asked for the orb to be put down.
@@ -85,7 +83,6 @@ impl Surfaces {
             editing: self.editing.is_some(),
             weaving: self.weaving.is_some(),
             walking: self.walking,
-            chorusing: self.chorusing,
             reading: scroll.is_reading(),
             menuing: self.menuing.is_some(),
         })
@@ -137,15 +134,6 @@ impl Surfaces {
         }
         if !self.walking && sim.wandering() {
             self.walking = true;
-        }
-        if !self.chorusing && sim.chorusing() {
-            self.chorusing = true;
-        }
-        // **The figure can end without anybody pressing Escape** — it runs out,
-        // or it collapses — so the keys have to come back on their own. The maze
-        // never does that, which is why this line has no sibling above it.
-        if self.chorusing && sim.figure().is_none() {
-            self.chorusing = false;
         }
         // **`menu`, not `quit`.** The two were one word for an iteration; §19
         // has why that was superseded. `quit`'s flag is `drive`'s, and it is
@@ -238,7 +226,6 @@ impl Surfaces {
             Owner::Editor => self.editing_took(code, sim, scrivener),
             Owner::Weave => self.weaving_took(code, sim),
             Owner::Maze => self.maze_took(code, sim),
-            Owner::Chant => self.chant_took(code, sim),
             // **No `page` any more.** `PageUp`/`PageDown` are answered above the
             // surface dispatch now, so the only stepping left in here is the
             // arrows, which move one record.
@@ -330,26 +317,6 @@ impl Surfaces {
         }
     }
 
-    /// Answer a syllable on the arrows.
-    ///
-    /// The maze's shape below, and the same two rules: `orbs-shell` owns the
-    /// key-to-syllable table so the two builds cannot disagree, and the press
-    /// reaches the world **now** rather than through `submit` — a key that
-    /// queued would arrive after the beat it was answering.
-    fn chant_took(&mut self, code: KeyCode, sim: &mut Sim) {
-        if code == KeyCode::Esc {
-            self.chorusing = false;
-            return;
-        }
-        let Some(syllable) = crate::drive::as_key(code)
-            .as_ref()
-            .and_then(orbs_shell::apply_to_chant)
-        else {
-            return;
-        };
-        sim.sing(syllable);
-    }
-
     fn maze_took(&mut self, code: KeyCode, sim: &mut Sim) {
         if code == KeyCode::Esc {
             self.walking = false;
@@ -437,7 +404,7 @@ mod tests {
     /// about. The point of the sweep below is the *ties*, and a tie is by
     /// definition a state the game is not supposed to be able to produce.
     ///
-    /// **`chorusing` and `menuing` are not parameters**, and that is deliberate:
+    /// **`menuing` is not a parameter**, and that is deliberate:
     /// the ordering they take part in is `orbs_shell::focus`'s and is tested
     /// there, against every combination. What this file tests is the *dispatch*
     /// — that a key reaches the surface the owner names — which the four below
@@ -448,7 +415,6 @@ mod tests {
             editing: editing.then(|| Editor::open("t", "laboratory", &[])),
             weaving: weaving.then(Tapestry::default),
             walking,
-            chorusing: false,
             menuing: None,
             leaving: false,
             swapping: None,

@@ -16,44 +16,14 @@ use orbs_render::{Painter, Pos, Rect, Role, Style, UtteranceKind, Wash};
 
 use orbs_sim::content::Prose;
 
-/// Cells between the board and the transcript.
-const GUTTER: u16 = 1;
-
-/// The narrowest transcript worth leaving behind.
-///
-/// The same figure the map, the sheet, the pylon's board and the rampart use.
-const TRANSCRIPT_FLOOR: u16 = 24;
-
-/// What the board takes, and what is left.
-pub struct Split {
-    /// Where the board goes. Zero-width when it does not fit.
-    pub area: Rect,
-    /// What the transcript keeps.
-    pub rest: Rect,
-}
+use crate::beside::{self, Split};
 
 /// Take the board's columns off `area`, if there is a lattice and room for it.
+///
+/// `Lattice::cols` and `rows` already count the border, so nothing is added.
 #[must_use]
 pub fn split(area: Rect, lattice: Option<&Lattice>) -> Split {
-    let nothing = Split {
-        area: Rect::EMPTY,
-        rest: area,
-    };
-    let Some(lattice) = lattice else {
-        return nothing;
-    };
-    let block = lattice.cols();
-    let tall = lattice.rows();
-    if block.saturating_add(GUTTER + TRANSCRIPT_FLOOR) > area.cols || tall > area.rows {
-        return nothing;
-    }
-    // Anchored to the edge the other boards took, so they sit together and the
-    // transcript keeps one uninterrupted run of columns.
-    let wanted = block.saturating_add(GUTTER);
-    Split {
-        area: Rect::new(area.col + area.cols - block, area.row, block, tall),
-        rest: Rect::new(area.col, area.row, area.cols - wanted, area.rows),
-    }
+    beside::split(area, lattice.map(|open| (open.cols(), open.rows())))
 }
 
 /// Draw it.

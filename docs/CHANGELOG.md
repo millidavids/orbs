@@ -15,6 +15,59 @@
   at 1.0 (DESIGN.md §19).
 -->
 
+## [v0.15.7] - 2026-09-17
+
+### Description
+In development — a dev log, not patch notes. The menagerie stopped being a rhythm
+game: a summoned beast is a logic puzzle you solve by choosing, every new game
+draws its own beasts, and a spell can search them while you are elsewhere.
+
+### Added
+- **The circle — summoning is solved by choosing now.** A beast has a *temper*: a
+  table of what it answers for every way its three senses can be lit. The circle
+  that holds it is three glyphs wired to those senses, and `limn keystone heed`
+  sets one of them to one of six gates — bare, `limn keystone` steps it to the
+  next. `summon` again calls the beast in, and the board shows what the circle
+  answered row by row with a mark under every row that balked. Every row agreeing
+  holds the beast and brings troops to the arsenal; a balk costs the call and
+  nothing else.
+- **Each beast is drawn from your game's own seed** — its wiring, its gates, and
+  the odd wire turned over, with the temper being whatever that circuit answers.
+  624 different boards where there were 330, and a turned wire is drawn `~`
+  before the sense it hands over.
+- **A gentler first beast.** A new game starts at a lesser circle — one gate over
+  two senses, *which gate is this?* — and five holds open the whole circle.
+- **`winnowing`, a spell that knows the logic.** The `taming` spell tries every
+  circle in order; `winnowing` uses what the board says to skip most of them, 38
+  calls on average against 68. A player who understands the gates writes a faster
+  orb, which is the point of the room.
+
+### Changed
+- **Every new game gets its own seed.** Every tower anybody started was the same
+  world — the same stacks, the same beasts, the same sieges. A new game now takes
+  a six-digit seed of its own, drawn on the boot card so you can type it back.
+- **The summoning rhythm game is gone**, and with it the chorus, patient mode and
+  the `F9` that served them. Nothing in the tower is played against a clock now.
+- **A call is never spent on a guess.** When the orb works a sentence out rather
+  than reading it outright, and decides it meant `summon`, it will draw a beast
+  but not call one in — it tells you the word to type instead, because a call
+  counts against par.
+- **A word the orb cannot place is asked about rather than dropped.** `limn
+  keystone xyzzy` used to run `limn keystone`, which steps the glyph to a gate
+  nobody asked for; it now asks which gate you meant, and so does the lens's
+  `dial`.
+
+### Fixed
+- **The menagerie's plain-English phrasings reach the orb's reader.** Several were
+  answered as another room's command before the reader ever saw them — *"put heed
+  on the keystone"* was taken for the lens's dial — so they were measured,
+  rewritten, and both readers retrained.
+- **A save that opens the whole circle as it loads says what a `~` wire is.** The
+  one line in the game that explains a turned wire was skipped for a tower that
+  reached the milestone while it was away.
+- **A refusal names the word that is wrong.** Naming a gate first and then
+  something that is no glyph blamed the gate.
+
 ## [v0.14.11] - 2026-09-16
 
 ### Description

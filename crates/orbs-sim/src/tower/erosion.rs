@@ -197,9 +197,9 @@ pub fn mend_by(world: &mut World, points: u32) -> u32 {
 /// Take a number of points off the barrier, and say how many were actually
 /// taken.
 ///
-/// [`mend`]'s mirror, and it returns for the same reason: a chant that collapses
-/// against a barrier already down to two must not be told it cost five. The
-/// caller quotes the number.
+/// [`mend`]'s mirror, and it returns for the same reason: a siege lost against a
+/// barrier already down to two must not be told it cost more. The caller quotes
+/// the number.
 ///
 /// # This is the second thing that writes integrity, and the first was ambient
 ///
@@ -207,7 +207,8 @@ pub fn mend_by(world: &mut World, points: u32) -> u32 {
 /// which is why it is admissible where §19 deferred the *nuisance* coupling to
 /// Phase 8. That entry's objection was that raising `drift`'s odds from integrity
 /// would move every rate `orbs-balance` has pinned; a cost the player chooses to
-/// risk moves nothing until somebody chants.
+/// risk moves nothing until somebody fights. (The menagerie's chant wore it too,
+/// until the menagerie stopped having a way to fail — §19.)
 ///
 /// **It republishes**, and that is the whole of why it is not two lines at the
 /// call site. §19 records `erode` having to become an exclusive system for
@@ -220,7 +221,7 @@ pub fn wear_by(world: &mut World, points: u32) -> u32 {
     integrity.0 = integrity.0.saturating_sub(points);
     let after = integrity.get();
     // **`pylon::fixture`, never `refresh_pylon`.** The latter reads `Cwd`, and
-    // the caller that matters here is a chant collapsing in the *menagerie* — so
+    // the caller that mattered was a chant collapsing in the *menagerie* — so
     // it found no pylon and returned every single time, leaving `survey pylon`
     // and every `if the pylon has fewer than n integrity` reporting a whole
     // barrier while the rail counted down. That is the §19 defect this function's

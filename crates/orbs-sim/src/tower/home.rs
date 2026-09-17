@@ -51,9 +51,9 @@ pub fn home(world: &World, named: &str) -> Option<Entity> {
     //
     // **A troop is finished work that no recipe makes**, which is the one shape
     // rules 2 and 3 cannot see: `kind_of` derives a kind from the recipes that
-    // produce a name, and a chant is not a recipe — so a troop reads as a
+    // produce a name, and a held beast is not a recipe — so a troop reads as a
     // `Reagent`, nothing makes it, nothing yet consumes it, and the rule would
-    // answer `None` for a material the game produces every time somebody sings.
+    // answer `None` for a material the game produces every time a beast is held.
     //
     // It is named here rather than given a recipe, because inventing a recipe
     // nobody can fire to satisfy a lookup would put a lie in `recall troop`.

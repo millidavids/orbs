@@ -12,11 +12,9 @@
 //!
 //! # It takes no production slot
 //!
-//! The menagerie's argument, and the lens's before it. A `queue` that queued
-//! behind a brew would arrive after the syllable it was describing had landed,
-//! which is not a wait but a guaranteed miss — and a producer that has to hold
-//! the tower's one slot could never run beside the consumer it feeds, which is
-//! the entire point of the channel. `spell::block::begins_work` carries the
+//! The lens's argument, and the menagerie's. A producer that has to hold the
+//! tower's one slot could never run beside the consumer it feeds, which is the
+//! entire point of the channel. `spell::block::begins_work` carries the
 //! exemption.
 
 use bevy_ecs::prelude::*;
@@ -47,10 +45,10 @@ pub(super) fn queue(intent: &Intent, world: &mut World) {
         say(world, "queue_incomplete", &[], Role::Cost);
         return;
     };
-    // **The leaf, for the reason `sing` and `haul` both take one.** A resolved
+    // **The leaf, for the reason `limn` and `haul` both take one.** A resolved
     // place arrives as its full path, so a satchel loaded with
-    // `/tower/menagerie/skyward` would hand the consumer a word `sing` cannot
-    // read — and the echo would print the tower's internals at a player.
+    // `/tower/menagerie/heed` would hand the consumer a word `limn` cannot read
+    // — and the echo would print the tower's internals at a player.
     let name = crate::parser::leaf(named).to_owned();
 
     let Some(mut satchel) = world.get_mut::<Satchel>(at) else {
@@ -79,29 +77,16 @@ pub(super) fn queue(intent: &Intent, world: &mut World) {
 // # `queue` takes a name and never a reading, and that was built and withdrawn
 //
 // **The tempting version resolves a reading to whatever carries it** — `queue
-// onward` meaning *"put whatever is one behind the rule into the satchel"*. It
-// was written, it worked, and it is a cheat.
+// onward`, while the menagerie was a chant, meaning *"put whatever is one behind
+// the rule into the satchel"*. It was written, it worked, and it was a cheat:
+// resolving the reading moved the identification into the world, and the pair
+// of spells then did at one step a tick what the solver was meant not to. That
+// is `bide until` in a new hat — the world answering the question the spell is
+// supposed to — and it is refused for any reading, in any room.
 //
-// The case for it is real. A producer has to turn *which lane is coming* into a
-// name, and written out that is a four-way test — `for each syllable` / `if
-// syllable has onward` — costing six to ten steps a pass against a `PACE` of
-// four. Measured: **four of twelve queued at one step a tick, six at two**, with
-// duplicates. No queue depth fixes it, because the cost is in identifying rather
-// than in seeing far enough.
-//
-// **And that is the domain working, not failing.**
-// `the_pace_is_shorter_than_a_four_lane_ladder` asserts `PACE <= lanes`
-// *precisely so* a solver cannot keep up at one instruction a tick — §19 calls
-// it the room's whole progression hook. Resolving the reading here moved the
-// identification into the world, and the pair of spells then struck **eleven of
-// twelve at budget 1**, where the shipped solver strikes one. That is `bide
-// until` in a new hat: the world answering the question the spell is supposed
-// to.
-//
-// So the menagerie is **not** the satchel's use case, and the honest version of
-// this feature says so. What the satchel is for is the channel — a name one
-// spell puts down and another picks up — which nothing in §8 could do before and
-// which `tests/satchel.rs` proves on its own terms.
+// What the satchel is for is the channel — a name one spell puts down and
+// another picks up — which nothing in §8 could do before and which
+// `tests/satchel.rs` proves on its own terms.
 
 fn say(world: &mut World, key: &str, args: &[(&str, &str)], role: Role) {
     let message = world.resource::<Prose>().line(key, args);

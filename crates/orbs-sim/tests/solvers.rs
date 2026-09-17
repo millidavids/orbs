@@ -6,9 +6,9 @@
 //! of them.** They were reached only by See-it lines and by whichever integration
 //! test happened to `invoke` one — so a spell could stop compiling, spin for
 //! ever, or silently do nothing, with the whole gate green. §19 records exactly
-//! that happening twice: `chanting` stopped compiling and was noticed by a
-//! person, and `besieging` shipped with a `repeat until` guard that could never
-//! come true on a loss.
+//! that happening twice: `chanting` — the menagerie's solver while it was a
+//! rhythm game — stopped compiling and was noticed by a person, and `besieging`
+//! shipped with a `repeat until` guard that could never come true on a loss.
 //!
 //! # What a solver has to do to pass here
 //!
@@ -24,10 +24,9 @@
 //!
 //! # Why the budget matters here and nowhere else
 //!
-//! `SCRIPT_BUDGET` is 1 until the weave grants more, and two of these solvers are
-//! *meant* to fail at one step a tick — `chanting` is the menagerie's whole
-//! progression hook (§19). So each spell declares what it needs rather than the
-//! file assuming one number.
+//! `SCRIPT_BUDGET` is 1 until the weave grants more, and a solver may be *meant*
+//! to fall short at one step a tick — `tending_blindly` is — so each spell
+//! declares what it needs rather than the file assuming one number.
 
 #![cfg(debug_assertions)]
 
@@ -54,9 +53,8 @@ struct Solver {
     /// **A sentence the world emits, never one the spell contains.** Matching
     /// the spell's own text would pass for a spell that was merely cast.
     ///
-    /// `None` where the domain's success is not one sentence — a chant that
-    /// collapses has still *run*, and the menagerie's solver is meant to fall
-    /// short at one step a tick (§19).
+    /// `None` where the domain's success is not one sentence — the lens's sweep
+    /// breaks as many wards as the ticks allow, and no one line says *done*.
     did: Option<&'static str>,
 }
 
@@ -181,7 +179,7 @@ const SOLVERS: &[Solver] = &[
     // which is the work; whether that work pays is the whole argument for
     // writing the eight rungs.
     //
-    // `chanting` is the precedent: a shipped solver that collapses at the
+    // `chanting` was the precedent: a shipped solver that collapsed at the
     // shipped budget, driven anyway, because a spell nothing runs can stop
     // compiling with the gate green.
     Solver {
@@ -241,16 +239,27 @@ const SOLVERS: &[Solver] = &[
         log: "lens.log",
         did: None,
     },
-    // --- the menagerie. **`did: None`, and that is the domain working.** A
-    // chant at one step a tick collapses rather than finishing (§19) — it is the
-    // weave's progression hook — so what is asserted is that it *ran*, not that
-    // it won.
+    // --- the menagerie. **`did` is a hold**, which is the whole claim: the
+    // search tries every circle in order, so a spell that summoned and limned
+    // for ever without the circle holding passes everything else here. The worst
+    // beast takes 656 steps at one a tick, so 900 is room for the worst and the
+    // tail after it.
     Solver {
-        name: "chanting",
+        name: "taming",
         setup: &["attend menagerie"],
-        ticks: 400,
+        ticks: 900,
         log: "menagerie.log",
-        did: None,
+        did: Some("the circle holds"),
+    },
+    // `winnowing` is the same claim with the logic applied: a ladder of rungs and
+    // two parts, so the rung a seed's beast lands on is what is exercised. Its
+    // worst beast is 90 calls where `taming`'s is 174, and 900 is kept for both.
+    Solver {
+        name: "winnowing",
+        setup: &["attend menagerie"],
+        ticks: 900,
+        log: "menagerie.log",
+        did: Some("the circle holds"),
     },
     // --- the laboratory's two-spell channel. `ordering` is a producer that
     // stops after three queues; `milling` invokes it and grinds what it left.

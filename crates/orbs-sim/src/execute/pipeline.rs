@@ -685,53 +685,65 @@ pub(super) fn stop(intent: &Intent, world: &mut World) {
             // them — so stopping only the maze left the run going and made the
             // player type `stop lectern` a second time to reach it. One `stop`
             // ends what is happening here, whatever is happening.
-            if world.get::<tower::Maze>(at).is_some() {
-                world.entity_mut(at).remove::<tower::Maze>();
-                super::research::refresh(world);
-                let message = world
-                    .resource::<crate::content::Prose>()
-                    .line("research_abandoned", &[]);
-                world
-                    .resource_mut::<Scrollback>()
-                    .records_mut()
-                    .push(RecordKind::Completion)
-                    .text(FieldName::Name, Verb::Stop.canonical())
-                    .text(FieldName::Message, &message)
-                    .role(Role::Cost)
-                    .finish();
-                // Nothing else to stop unless a run is also under way.
-                if world.get::<tower::Working>(at).is_none() {
-                    return;
+            //
+            // **Through `puzzle::Open`, matched exhaustively**, so a puzzle added
+            // to the game is a compile error here until `stop` has decided what
+            // to do with it — the pylon's arm was forgotten once when these were
+            // `if let`s, and the panel kept a second list of its own.
+            let abandoned = match tower::puzzle::Open::on(world, at) {
+                Some(tower::puzzle::Open::Maze) => {
+                    world.entity_mut(at).remove::<tower::Maze>();
+                    super::research::refresh(world);
+                    abandoned(world, "research_abandoned");
+                    true
                 }
-            }
-            // **A course is abandoned the same way, and `muster_already` promises
-            // it.** *"a course is already drawn. haul it across, or stop the
-            // pylon"* is a refusal naming a way forward, which §6 requires — and
-            // without this arm the way forward answered *"the pylon is not
-            // working"*, because a `Course` inserts no `Working` any more than a
-            // `Maze` does. The refusal and the verb it named disagreed.
-            if world.get::<tower::Course>(at).is_some() {
-                world.entity_mut(at).remove::<tower::Course>();
-                super::muster::refresh(world);
-                let message = world
-                    .resource::<crate::content::Prose>()
-                    .line("muster_abandoned", &[]);
-                world
-                    .resource_mut::<Scrollback>()
-                    .records_mut()
-                    .push(RecordKind::Completion)
-                    .text(FieldName::Name, Verb::Stop.canonical())
-                    .text(FieldName::Message, &message)
-                    .role(Role::Cost)
-                    .finish();
-                if world.get::<tower::Working>(at).is_none() {
-                    return;
+                // **A course is abandoned the same way, and `muster_already`
+                // promises it.** *"a course is already drawn. haul it across, or
+                // stop the pylon"* is a refusal naming a way forward, which §6
+                // requires — and without this arm the way forward answered *"the
+                // pylon is not working"*, because a `Course` inserts no `Working`
+                // any more than a `Maze` does.
+                Some(tower::puzzle::Open::Course) => {
+                    world.entity_mut(at).remove::<tower::Course>();
+                    super::muster::refresh(world);
+                    abandoned(world, "muster_abandoned");
+                    true
                 }
+                // **And a beast is let go the same way**, for the course's
+                // reason: without this `stop circle` said the circle was not
+                // working while `if the circle is working` said it was.
+                Some(tower::puzzle::Open::Beast) => super::summon::release(world, at),
+                // **Not ended by `stop`, and that is a gap rather than a
+                // decision.** An open ward or a charm part-bound reads `working`
+                // on the panel, and `stop prism` or `stop lattice` answers *"not
+                // working"* — the disagreement every arm above was added to
+                // close. Whether either can be let go, and what letting it go
+                // costs, belongs to the lens and the forge, and is named open in
+                // §19 rather than decided here.
+                Some(tower::puzzle::Open::Ward | tower::puzzle::Open::Binding) | None => false,
+            };
+            // Nothing else to stop unless a run is also under way.
+            if abandoned && world.get::<tower::Working>(at).is_none() {
+                return;
             }
             tower::stop(world, at);
         }
         None => missing(Verb::Stop, &name, world),
     }
+}
+
+/// Say that `stop` let an open puzzle go, as a cost — the maze's and the
+/// course's sentence, which was the same eleven lines twice.
+fn abandoned(world: &mut World, key: &str) {
+    let message = world.resource::<crate::content::Prose>().line(key, &[]);
+    world
+        .resource_mut::<Scrollback>()
+        .records_mut()
+        .push(RecordKind::Completion)
+        .text(FieldName::Name, Verb::Stop.canonical())
+        .text(FieldName::Message, &message)
+        .role(Role::Cost)
+        .finish();
 }
 
 /// Destroy something where you stand.

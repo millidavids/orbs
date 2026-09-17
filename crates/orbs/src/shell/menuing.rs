@@ -119,6 +119,11 @@ pub(crate) struct SwapMessage {
     pub(crate) path: std::path::PathBuf,
     /// The length a *new* tower is to be, or `None` to load what is at `path`.
     pub(crate) length: Option<orbs_sim::content::Length>,
+    /// The seed a new tower is built from — asked for, or found in an empty slot.
+    ///
+    /// **Chosen where the player asks, carried here**, so `swap` builds exactly
+    /// the world the message names and a test can name one without the clock.
+    pub(crate) seed: u64,
 }
 
 /// Feed keys to the open menu.
@@ -179,12 +184,17 @@ pub(crate) fn type_into_menu(
         }
         // **Not done here.** A swap needs `&mut World`; `swap` below has it.
         Some(MenuOutcome::Load(path)) => {
-            swapping.write(SwapMessage { path, length: None });
+            swapping.write(SwapMessage {
+                path,
+                length: None,
+                seed: orbs_shell::new_game_seed(),
+            });
         }
         Some(MenuOutcome::Begin { path, length }) => {
             swapping.write(SwapMessage {
                 path,
                 length: Some(length),
+                seed: orbs_shell::new_game_seed(),
             });
         }
         // **Takes effect on the next line typed, not on the next launch.** The
@@ -267,7 +277,7 @@ pub(crate) fn swap(world: &mut World) {
         crate::sim::keep_now(world.resource::<crate::sim::Tower>(), &kept);
     }
 
-    let seed = orbs_shell::seed();
+    let seed = asked.seed;
     let wizard = orbs_shell::wizard();
     let mut tower = match asked.length {
         Some(length) => crate::sim::Tower::begun(seed, length, wizard.as_deref()),
@@ -343,6 +353,7 @@ mod tests {
         app.world_mut().write_message(SwapMessage {
             path: two.clone(),
             length: None,
+            seed: 1,
         });
         app.update();
 
@@ -389,6 +400,7 @@ mod tests {
         app.world_mut().write_message(SwapMessage {
             path: two,
             length: None,
+            seed: 1,
         });
         app.update();
 
@@ -414,6 +426,7 @@ mod tests {
         app.world_mut().write_message(SwapMessage {
             path: two,
             length: Some(orbs_sim::content::Length::Long),
+            seed: 482_913,
         });
         app.update();
 
@@ -422,6 +435,12 @@ mod tests {
             snapshot.world.length,
             orbs_sim::content::Length::Long,
             "the new game was not begun at the length the player chose",
+        );
+        // **A world of its own**, built from the seed the menu chose rather than
+        // the tower it replaced or the instruments' default.
+        assert_eq!(
+            snapshot.world.seed, 482_913,
+            "the new game was not built from the seed it was asked for",
         );
         // ...and the tower it replaced was still written out first.
         assert!(one.exists(), "the tower being left was not kept");
@@ -446,6 +465,7 @@ mod tests {
         app.world_mut().write_message(SwapMessage {
             path: two,
             length: None,
+            seed: 1,
         });
         app.update();
 

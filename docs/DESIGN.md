@@ -1267,7 +1267,7 @@ Seven at launch, with tiered depth to survive solo scale.
 | **Spellcraft** | `grimoire/` | Composition — build spells from components | Bespoke |
 | **Brewing** | `laboratory/` | Sequence/recipe puzzle with timing — **see §10.1** | Bespoke |
 | **Archive** | `archive/` | Decipherment; powers all discovery | Bespoke |
-| **Summoning** | `menagerie/` | ~~Resource allocation → autonomous siege units~~ → **a chant, performed or scripted** (§19) | ~~Derived~~ **Bespoke** |
+| **Summoning** | `menagerie/` | ~~Resource allocation → autonomous siege units~~ → ~~a chant, performed or scripted~~ → **a circle of logic gates, chosen** — a beast's temper is a truth table, and three glyphs are limned to answer it (§19) | ~~Derived~~ **Bespoke** |
 | **Enchanting** | `forge/` | Sequence + resource cost → persistent buffs | Derived |
 
 **These forms are a table, not a design.** Phase 0 built brewing and archive as
@@ -1307,7 +1307,7 @@ got it wrong twice: **brewing's scarcity is lit *time*, not fuel stock** — fue
 | **Scrying** | the production slot — a read is not a brew | which source to read first |
 | **Spellcraft** | Concentration, §11.5's shared pool | what is worth factoring out |
 | **Enchanting** | the buff's own lifetime, and the slot | which instrument, and when to re-buff |
-| **Summoning** | ~~allocation — a unit is spent stock~~ **withdrawn** (§19) — a chant spends nothing; what it risks is integrity | how cleanly the chant is performed, or how well it is timed in a spell |
+| **Summoning** | ~~allocation — a unit is spent stock~~ ~~integrity~~ **time** (§19) — a call spends nothing and a balk costs nothing; what a hold is worth falls past par | how the circle is limned from the table, or how well a spell searches it |
 | **Defense** | wards, made and consumed | where, given readable approach state |
 
 **Two things are ruled out and both were tried on paper.** A resource cost on
@@ -1382,14 +1382,15 @@ That was not designed. It fell out of the durations and was found when the fire
 died in the middle of the end-to-end test. It is the best argument yet that
 `stop athanor` is a real move rather than an end-of-script tidy, and it is
 exactly the shape of decision ROADMAP asked for in *"timing means windows at
-1 Hz — when to advance a stage against everything else wanting the slot, ~~never
-a reflex~~."*
+1 Hz — when to advance a stage against everything else wanting the slot, never
+a reflex."*
 
-**That last clause is struck as of Phase 5** (§19). It held for five domains and
-summoning is the sixth: a chant is a real-time dexterity surface, with a paused
-mode that reaches the same ceiling for anyone who does not want one. The rest of
-the sentence stands — brewing's timing is still a window and still not a reflex,
-and no *other* domain may become one without the same argument being made again.
+**That last clause was struck for Phase 5 and is restored** (§19, `0.15.0`).
+Summoning was a chant — a real-time dexterity surface, with a paused mode that
+reached the same ceiling — and it is a logic puzzle now, solved by choosing like
+every other room. So the rule holds for all seven domains again, and the
+sentence §19 left behind stands with more force: no domain may become a reflex
+without the argument being made again, and the one that did was taken back.
 
 **A charcoal outlasts a brew by a wide margin, deliberately.** The first pass
 made one barely cover a single brew, which turned that move from an optimisation
@@ -2248,7 +2249,7 @@ in the suite would have caught it, and none was ever written that could have.
 | **2. Scrying** | The `lens/` domain: deduction over sources that disagree. **World sabotage surface**, **`orbs-balance` sweeping §11.5's first-pass numbers** | ~6k | 3 mo | A player finds which of two accounts is lying, and a spell repeats it |
 | **3. Spellcraft** | The `grimoire/` domain: a spell factors into named parts, **within one `.spell` file** (§19 — cross-file sharing struck). **The language overhaul that composition needs** — values, variables, lists, `for each`, in-file parts, builtins over the domains. **Naming pass (~35 verbs)**, hidden-directory authoring | ~7k | 5 mo | A spell factors into named parts and still reads as one file |
 | **4. Defense** ✅ | The `sanctum/` domain: a course of wards, drawn and assembled. **Reflex-avoidance mechanism decided first** — it is the Tower of Hanoi, which has no clock in it, so the accessible-mode item moved to Phase 8 (§19) | ~5k | 3 mo | A pressure survived by choosing, not by reacting |
-| **5. Summoning** ✅ | The `menagerie/` domain (derived): allocation → a unit with a standing rule | ~4k | 2 mo | A summoned thing acts without being told to that tick |
+| **5. Summoning** ✅ | The `menagerie/` domain (derived): allocation → a unit with a standing rule. *Built as a chant (`0.5`); rebuilt as a circle of logic gates (`0.15`, §19)* | ~4k | 2 mo | A summoned thing acts without being told to that tick |
 | **9. Enchanting** | The `forge/` domain (derived): a **lattice** — Lights Out on three columns — plus a quintessence cost → a decaying charm on a tool. **Shared-engine extraction**, pulled forward from 12a | ~4k | 2 mo | A buffed instrument is visibly faster and the buff runs out |
 | **10. Progression** | The two tracks re-strung: **the Ley Line** with a choice at each fork, **Mastery** as seven per-domain lines of deeds, and rooms, recipes and charms opening along both. A sealed fresh tower, the rail's percentage, the domain's road, the line authored to the soft ending | ~4k | 2 mo | A fresh tower is a laboratory, and the rest is earned |
 | **11. One machine** | Reagents cross domains, **Focus-slot reservation**, pane addressing, the authored edges between domains | ~3k | 2 mo | The tower runs itself across rooms |
@@ -2455,6 +2456,628 @@ they are re-pointed at the phases that now need them rather than quietly dropped
    price-shop — Exapunks is $19.99.
 
 ## 19. Decisions log
+
+### The circle's second review — fourteen corrections (`0.15.7`)
+
+**The rules, first: a call against par is never spent on a guess; a word the orb
+cannot place is asked about rather than dropped; and every sentence the circle
+teaches a reader is one a reader is shown.** A second `/code-review` over
+`0.15.4`–`0.15.6` found fourteen things, and every one is fixed. They are
+corrections to boxes already ticked and would ordinarily advance nothing; this one
+carries its own box and patch because a review is work a reader should be able to
+find in the version, which is the judgement `0.15.3`'s review made too.
+
+- **A divined `summon` draws, and never calls.** `summon` takes no argument and
+  resolves anywhere in the menagerie, so it is what the trained reader falls back
+  to when a sentence defeats it: *"cycle the widdershins"* and *"limn widdershins
+  yoke extra"* came back `≈ summon` and spent a call with nothing limned. A reader
+  cannot be trained out of a fallback, so the guard is in the verb.
+  `Queued::Divined` carries the fact from `submit_divined` to dispatch (replay
+  comes back through the same door); with a beast waiting, a divined `summon`
+  answers *"the orb will not call the beast in on a guess. type summon to call
+  it"*. **The cost is stated rather than hidden:** plain English still draws a
+  beast, but calling one in takes the typed word — which is what the refusal
+  teaches, and the chant refused a stray `summon` mid-figure for the same reason.
+  §6's destructive guard is still unbuilt; this is the first verb to read a
+  divined confidence at execution, and it would sit beside it.
+- **An optional last slot handed a word it cannot use asks for it.** `limn
+  keystone xyzzy` dropped `xyzzy` and ran bare `limn keystone`, which *steps* the
+  glyph — a different command, not a worse reading of the same one — and `dial
+  first qqqq` turned the lens's socket the same way. `arguments::fill` now marks
+  such a slot `refused`, `resolve` records the `Incomplete` with the slots that did
+  fill, and a reading carrying exactly those arguments diverts to it: `¿ limn
+  keystone`. Only the *last* slot and only after one filled: the first-slot case
+  was already the older rule (`verify gibberish`), a middle optional slot steps
+  aside for `move`'s required one, and `recall brewing xyzzy` is unchanged because
+  its slot filled. `mix sage xyzzy` asks too.
+- **The circle's phrasings were measured, and a third of them never reached a
+  reader.** The orb answers a line it can read before any reader is asked, so
+  *"put heed on the keystone"* was `dial`'s, *"see if the circle holds"* fuzzed to
+  `set`, *"test the circle"* to `rest`, and `let`, `start`, `bring`, `try`,
+  `carve`, `etch`, `fix`, `switch`, `gate`, `wire` and `rotate` each opened on
+  another room's word — every one answered in the menagerie as something else.
+  Measured over the whole corpus, **tier one answers 5,014 of 21,680 training
+  examples as a different command in the verb's own room**: the property is the
+  game's, not the circle's, and is recorded rather than fixed here. The circle's
+  entries were 17 of 39, 96 of 228 and 48 of 144; they are rewritten from lines
+  measured to reach a reader, and `every_phrasing_the_circle_teaches_reaches_a_
+  reader_or_its_own_command` holds them there. The comment in `limn` that named
+  *"put heed on the keystone"* as its reason is gone with the line. **The readers
+  were retrained** over five seeds, since new words moved the vocabulary: against
+  the `circle` run every score stayed inside the other's range, and **seed 1
+  ships** — the best of the five on the prompt (79.0 read, 71.8 run, 2.9 wrongly
+  refused) and on a spell's lines (74.7). With it, *"cycle the widdershins"* reads
+  as `unfurl` rather than a call — still a miss, now a harmless one — and a line
+  the parser only half reads, `limn keystone xyzzy`, goes to the reader before it
+  is asked about, since tier one did not read it outright.
+- **A station first reached on load says what it opens.** `mastery::caught_up`
+  opened the whole circle with `open()`, so a medium tower seven holds into the
+  old ramped eleven loaded straight into `~` wires with *"the circle opens whole. a
+  ~ wire gives its glyph the sense turned over"* never said — the only sentence in
+  the game that explains a turned wire. A station the document had **not**
+  reached opens through `opening` now, because that is news to the player; one it
+  had already reached still opens silently, because it was said when it was
+  reached. The station itself is not congratulated, `ley::caught_up` is unchanged,
+  and a document that disagrees with nothing still loads saying nothing.
+- **A pinned mean is held tighter than a single seed.** `taming`'s thirty-five
+  percent was argued for one run's spread, and `agrees.rs` held the four-world mean
+  to it — a menagerie earning thirty percent less still averaged inside.
+  `report::tolerance_of_mean` divides a band by the square root of the worlds
+  averaged, never below the tenth every other pin already had: seventeen and a
+  half percent for `taming` over four worlds, unchanged for everything else.
+- **One load pass over every puzzle.** `settle_circle` and `settle_pylon` were
+  per-puzzle copies of one tidy — a refused component leaving its readings behind
+  — and a third restore that started refusing would have needed a third.
+  `execute::settle` walks `puzzle::Open::ALL`, finds each puzzle's fixture by
+  `Open::operation`, and republishes one with no puzzle that still says something,
+  with both *what it says* and *what publishes it* matched exhaustively. The
+  maze's publisher took `Cwd` and now takes the stacks, since a load tidies from
+  wherever the player saved.
+- **A limn republishes its own glyph.** Every limn cleared and re-raised the
+  circle's `fervour` and all three glyphs — the churn `call` had already been
+  changed to stop, arriving one command earlier.
+- **Smaller.** `tame_one` reads `circle::OPENING` rather than spelling `yoke`;
+  `Beast::solution` is `circuit::limnings().find`, so it and the proofs cannot
+  disagree on which solution is first; `Circle::lit_on` had no caller and is gone;
+  `limn heed laboratory` names `laboratory` as the word that is no glyph;
+  `Temper::from_rows` derives the lesser length from `LESSER_SENSES`;
+  `orbs-render`'s circle is `circle/{board,tests}.rs`; and ROADMAP's closed table
+  says `0.15.6`.
+
+### The circle, tested as a whole domain (`0.15.6`)
+
+**The rule: every claim the circle makes is held by a test that could fail for
+the reason the claim would be false** — not only that the code runs. Asked for by
+the player as *"a robust and extensive testing suite"*; 108 tests now, about
+seventy before, organised by the kind of claim rather than by the file they sit
+beside.
+
+- **Exhaustive where the space is small enough to walk.** `tower::circle::proofs`
+  is a directory now — `space`, `searches`, `draws`, `tables`, `beast`, `view`
+  over one `oracle` — and walks every circuit, every temper of both sizes, every
+  mask and every limning. **Its counts are pinned to a python enumeration run
+  outside the code** (9,756 / 2,994 / 624 / 192, the search totals, 1,104 climb
+  stalls, and 218 and 10 as the number of boolean functions depending on all
+  their inputs), so a test cannot pass by the code agreeing with itself — the
+  review's objection to an oracle that calls the function it checks.
+- **Sufficient: what a player is shown is enough to win.** Two solvers that see
+  one channel each — `tests/circle.rs` reads only the board's data, `orbs-shell`'s
+  `circle::tests` only the spoken sentence — find a limning, type it, and hold
+  two hundred generated beasts on the first call. Rule 2 and §14 made executable:
+  a fact missing from either channel is a beast that balks. The speech test is
+  what forced lit rows to name their senses.
+- **Consistent: nothing the world says can disagree with the beast.** A fuzz of
+  300 seeded random commands over fifty open towers and ten sealed ones — right
+  and wrong words, either order, leaving the room, letting beasts go, holding
+  them — asserts after **every** command that `fervour` and each glyph's humour
+  match the component, no `Working` is ever inserted, the rail says working
+  exactly while a beast waits, a call's answer row is the model's, calls never go
+  down, and a hold is counted once and only on a call. **It counts what it
+  reached** — 214 holds, 2,102 answer rows and calls in a debug build — and fails
+  if the counts fall, so it cannot pass by never getting there.
+- **Deterministic.** One seed and one list of commands is one world, twice, and a
+  third tower saved and loaded half way parts from neither; a draw moves the
+  menagerie's stream by one value and no other stream, checked on every stream's
+  position; ten beasts held leave the archive's maze exactly the one the seed
+  draws without them.
+- **Varied, as a player meets it.** Thirty beasts held in one tower are at least
+  twenty-five questions; a hundred towers' first beasts at least ninety, most with
+  a turned wire; a hundred thousand draws reach every one of the 2,994 puzzles,
+  with each wiring and mask arriving in the share its circuits give it.
+- **Both shipped spells under every turned mask**, cast through the engine, and
+  **every lesser temper** in a sealed tower with no fault latched.
+- **A real terminal** shows a turned wire's `~` and a sealed game's lesser board.
+
+`beast.rs`'s own tests moved into `proofs/beast.rs`, which put the file back under
+the size CLAUDE.md asks for.
+
+### Every new game its own seed (`0.15.5`)
+
+**The new rule: a game a player starts is built from a seed of its own; an
+instrument is built from `0x0B5`.** Until now every tower any player began was
+seed `0x0B5` unless they set `ORBS_SEED` — the same stacks, the same beasts, the
+same sieges — which made the generation every domain does invisible from one game
+to the next. Decided with the player alongside turned wires.
+
+- **Two readers, and the split is the whole decision.** `orbs_shell::seed` —
+  `ORBS_SEED`, else `0x0B5` — is every instrument's: `ORBS_DUMP`, `--dump`,
+  `screens`, `scripts/dumps.sh`, the play harness, and every See-it line, which
+  would be undiffable otherwise. `orbs_shell::new_game_seed` — `ORBS_SEED`, else
+  `0x0B5` under `ORBS_CAPTURE`, else a seed from the wall clock — is what the
+  first tower on a machine and a new game from the menu read.
+- **Structural rather than remembered.** The dump entry points take no seed and
+  read `seed()` themselves, so a frontend holding a game's seed cannot pass it to
+  one; the Bevy menu's `SwapMessage` carries the seed chosen where the player
+  asked, so `swap` builds exactly the world the message names and its tests name
+  their own. A staff review of the plan found `ORBS_CAPTURE` would otherwise have
+  taken a clock seed and printed it on a screenshot meant to be reproducible.
+- **The clock is read in the frontend, once.** Nothing in `orbs-sim` changed: the
+  sim is built from a number, the save carries it, and replay is exactly what it
+  was. A restored tower keeps its saved seed.
+- **Six digits**, below 1,000,000, through splitmix64 of the nanoseconds: short
+  enough to read off the condition report — *"orb 0 482913 cold start"* — and
+  type back as `ORBS_SEED`, and a million towers is variety no player exhausts.
+  An `ORBS_SEED` that names no number is treated as unset, so the game still gets
+  a seed of its own rather than silently the instruments'.
+
+### The seed builds the circuit — turned wires (`0.15.4`)
+
+**The new rule first: a beast is a circuit drawn from the seed, and its temper is
+what that circuit answers.** A circuit is the wiring (6), which wires into the
+outer glyphs are **turned** (9 masks — none, or one of each glyph's two) and a
+limning (216). A turned wire hands its glyph the sense turned over; the board
+draws it `~blood`, the spoken line says *turned blood*. The player still limns the
+same three glyphs with the same six humours, so every verb, reading and spell is
+unchanged. **Supersedes** `0.15.0`'s draw from a table of 330 puzzles.
+
+**Decided with the player**, from three: *circuits with turned wires* (not the same
+shape generated differently, not circuits that grow with mastery — §19 already
+records a four-sense circle outrunning the searches).
+
+#### Generated by construction, one value a draw
+
+`circuit::drawable` walks every circuit once, keeps the valid ones in a fixed
+order, and a draw is `pick` over that list — **one** `u64` from
+`RngStream::Menagerie`, the forge's rule, with no rejection loop to consume a
+variable number. The refusals are the three `0.15.0` had (constant, not turning on
+every sense, what the opening answers — now under the same wiring *and* the same
+turned wires) and happen when the list is built. A staff review of the plan
+replaced a private seeded generator with this: the same beasts, the same one
+value, and no fallback path no test could reach. **The distribution is by
+circuit**: a puzzle six limnings hold is three times as likely as one two hold.
+Uniform over puzzles was not a goal, and correcting for it would cost a count of
+holds per accepted draw.
+
+#### At most one turned wire a glyph
+
+**`h(~a, ~b)` is `dual(h)(a, b)`** — `yoke` over two turned senses is `eschew`
+over the plain ones — so a glyph with both wires turned is an unturned glyph
+wearing another humour: a `~` that changes nothing a player could not already
+meet. Measured both ways, the two-turn masks add no board and no temper; they are
+never drawn, and `Turned::from_wires` refuses them in a save.
+
+#### What was measured — in python, then pinned in `tower::circle::proofs`
+
+| | Table (`0.15.0`) | Circuits with turned wires |
+|---|---|---|
+| Circuits | 1,296 | 11,664 |
+| Valid, and so the draw's list | — | **9,756** |
+| Distinct puzzles (wiring, mask, temper) | 330 | **2,994** |
+| **Distinct boards a player can meet** (wiring, temper) | 330 | **624** |
+| Distinct tempers | 107 | **192** of 218 functions of three senses that depend on all three |
+| Solutions a puzzle | 2–6 | 2–6, every one with its De Morgan twin |
+| `winnowing`'s ladder | exact | **exact, identical rungs** |
+| `taming` calls, uniform / as drawn | 64 / — | 63.5 (total 190,254) / **68.1** (663,948) |
+| `winnowing` calls, uniform / as drawn | 38 / — | 37.6 (112,494) / **37.7** (367,860) |
+| Worst `taming` / `winnowing` | 174 / 90 | 174 / 90 |
+| A climb on rows agreeing stalls | 144 of 330, 44% | **1,104 of 2,994, 37%** |
+
+**Honest about variety**: turned wires make 624 boards where there were 330, and
+nearly twice the tempers — not the sixteen-fold the first sketch of any-mask
+circuits suggested, since a turn on both inputs mostly re-dresses a board a player
+already meets. In the engine over a hundred seeds, `winnowing` holds in 164 ticks
+and `taming` in 299, worst 367 and 655.
+
+#### The lesser circle is untouched
+
+A turned input to a lone keystone answers something none of the six humours does
+over the plain senses, so *which humour is this?* would stop having an answer. A
+lesser beast is never given a turned wire; its draw is still `pick` over five.
+
+#### Speech carries the whole puzzle
+
+The board's sense rows are painted silent, and the summary said *"lit on rows 2 3
+5 7"* — a number a listener could only use by knowing how rows are counted. **A lit
+row now names its senses**, *"2 (breath), 3 (bone), 5 (blood), 7 (blood bone)"*,
+and a turned input is *turned breath*. The review asked for this to be proven
+rather than claimed: `orbs-shell`'s `circle::tests` parses nothing but the spoken
+sentence for two hundred generated beasts — whole and lesser, every mask — finds a
+limning that answers it, types it, and holds each in one call.
+
+#### Save, balance and onboarding
+
+- **`FORMAT` 13 → 14**, no migration: `BeastSave.turned` is absent for none, which
+  is what every older beast was; the bump is the gate against a format-13 build
+  dropping it. `0000` is accepted; a mask on a lesser beast is no beast.
+- **`taming` re-pinned at 0.042** with **a band of 35%**: ten seeds read 0.0319 to
+  0.0550, because a two-hour run holds about forty beasts and one may take 1 call
+  or 174. A halved menagerie is 50% out and still flagged; `agrees.rs`'s four-world
+  mean is 0.0414. A *bound* `taming` holds 27 beasts in two hours over those four
+  worlds — about 80 troops against the ~27 `besieging` spends.
+- **The first `~` is explained where it is first met**: `opened_circle` — *"a ~ wire
+  gives its glyph the sense turned over"* — and `recall widdershins`.
+- **Every seed-181 quote was re-measured**: the board balks at rows 1, 2, 6, 7 and
+  8, `winnowing` holds on call 86 and `taming` on 170; ROADMAP's first two boxes
+  say so. `recall` pages and the naming sweep needed no new word, so no reader was
+  retrained.
+
+### The circle's review — a lesson that grew with the game (`0.15.3`)
+
+An adversarial read over `0.15.0`–`0.15.2` by a reviewer with no context found no
+blocker, one major defect and a tail of minor ones. Every finding was confirmed
+against the code before it was fixed; the ones not fixed are said so below.
+
+- **Major: the lesser circle's five was a Baseline number.** `menagerie_2` is the
+  second station on its line, and a line is ramped by the game's length — so a
+  medium game, the default, asked **eleven** lesser beasts before the whole
+  circle, a short one seven and a long one thirty-five. Every test ran
+  `Sim::sealed`, which is the curve as authored. **An event deed may be `fixed`
+  now**, the same count at every length, on `Made`'s reason for never stretching:
+  a lesson is not a grind. `menagerie_2` is `fixed`, and
+  `the_whole_circle_opens_after_five_lesser_beasts_at_every_length` runs all
+  three offered lengths.
+- **A beast refused on load left its readings behind.** The beast travels as a
+  component and its readings as nodes, so a hand-edited temper restored
+  `fervour` and the glyphs' humours with nothing waiting — `survey keystone`
+  named a humour and `is empty` was false until the next `summon`.
+  `summon::settle` republishes a circle that has readings and no beast, after
+  restore; a whole save is untouched, so a restored world is still the saved
+  world.
+- **`limn` takes either order.** A reader binds slots by position and five of
+  the plain phrasings put the humour first — *"put heed on the keystone"* —
+  which reached the verb as `limn heed keystone` and was refused. No glyph shares
+  a word with a humour, so the order is unambiguous and the verb accepts both;
+  two glyphs or two humours are still refused by name. **No retrain**: the
+  phrasings were never wrong, only the verb's reading of them. *(⚠ Superseded in
+  part by the second review above: that sentence never reached a reader — `put`
+  is `dial`'s — so the phrasing was wrong after all, and was replaced and
+  retrained. Either order stays.)*
+- **Prose that was wrong where every real game starts.** The humours' examples
+  limned sunwise and widdershins — a refusal at a lesser circle — and limn the
+  keystone now; `recall fervour` said *eight rows*; `recall keystone` said it is
+  given the other two. The spoken summary said *"balked at rows 4"*, which §19's
+  own *singular counts* claimed was fixed; `circle_spoken_one` and
+  `circle_balks_spoken_one` close it, and the senses' `and` moved into the
+  template.
+- **Leftovers of the chant** in comments and SEEING-IT — a satchel emptied by a
+  chant ending, `sing note` as an example line, `siege`'s rejection *against
+  `sing`* stated in the present tense, the four lanes and `PACE` — rewritten as
+  history or removed. The board diagram in SEEING-IT was a column narrower than
+  `Circle::COLS` and is the dump's now.
+- **Tests that claimed more than they held**: *every rung* of `winnowing` asserted
+  five of seven lit-row counts and now finds a seed for each; a sealed older
+  document past `menagerie_2` catching up on load is tested rather than argued.
+- **Not fixed, deliberately.** A whole beast hand-edited into a sealed tower that
+  has not opened the circle loads as whole and pays in full — reachable only by
+  editing a save, and it is the *"a waiting beast keeps its shape"* rule.
+  `orbs-render::circle` is ~310 lines without its tests, one cohesive painter.
+  `limn_incomplete` still names all three glyphs at a lesser circle, which is
+  true of the circle the player is working toward.
+
+`scripts/play.sh` plays all 140 scenarios, the menagerie's five among them.
+
+#### The second review — fifteen findings, all fixed
+
+A `/code-review xhigh` over the same work found no blocker and fifteen defects,
+and each was confirmed against the code before it was fixed. **No version moved**:
+these are corrections folded into the review box.
+
+- **A lowered station was never reached on load.** `mastery::advance` runs after a
+  completion, so a medium tower saved seven holds into `menagerie_2`'s old ramped
+  eleven met the fixed five and still drew lesser beasts until something unrelated
+  finished. `mastery::caught_up` now reaches every station the tally meets, in
+  line order and silently — `advance`'s walk, at load — beside opening what the
+  reached ones open.
+- **A long label moved its row's cells.** The senses and the two labels are
+  reloadable prose, padded to twelve cells and never clipped, so a name of twelve
+  put a row's cells under the wrong numbers. Clipped now, in one `label`.
+- **`taming`'s flag was always up.** Ten seeds read 0.0378 to 0.0494 against a
+  pin of 0.044, and at a tenth the sweep's default seed flagged it on every clean
+  run. `report::WIDER` holds it to fifteen percent — its worst seed measured, and
+  a halved menagerie still flagged — and `off_by` takes the band, so the table and
+  `agrees.rs` cannot hold one policy to two widths.
+- **The format-11 test never met format 11.** It was a current tower with the
+  version rewritten, holding the glyphs, the humours and a waiting beast. It is a
+  document with none of them now, and a figure mid-song in `ChantSave`'s shape;
+  the beast is drawn rather than called, and the keystone this build raised is
+  limned in the older tower.
+- **The sanctum kept a refused course's readings**, the circle's defect one room
+  over: `muster::settle` beside `summon::settle`, both run by `Sim::restored`.
+  They are the two puzzles a load can refuse; a maze, a ward, a lattice and a
+  siege come back as saved. *(⚠ Superseded by the second review above: one
+  `execute::settle` pass over every `puzzle::Open` replaced both.)*
+- **A balk republished readings a balk cannot change**, sixty-four times a beast
+  for a bound `taming`. It republishes nothing now.
+- **The balance driver built the board three times a step** to read two words.
+  `Sim::beast` hands it the beast, as `Sim::course` hands it the course.
+- **`recall limn` showed the humour as required**; it is `[<humour>]`, as
+  `dial`'s sigil is.
+- **No test cast either shipped search at a lesser circle**, which is every sealed
+  game's first menagerie. Both hold every lesser temper now, under test, with no
+  fault latched.
+- **The draw's pick had two copies**; `temper::pick` is the one.
+- **`stop` and the panel each kept a list of open puzzles**, and the pylon's arm
+  was once forgotten in one of them. `tower::puzzle::Open` is the list, matched
+  exhaustively in both, so the next puzzle is a compile error in each until it has
+  been decided.
+- **The singular rule had a second copy** in the circle's painter.
+  `Prose::counted_key` chooses `{key}_one` — and `{key}_none` for nought — for a
+  line that names its things instead of counting them.
+- **`beside` was `pub`** where CLAUDE.md asks `pub(crate)`.
+- **A hold with no arsenal announced its troops.** It says none came now; no tower
+  raised today lacks one.
+- **A call that balked at nothing said *"balked at rows "*** — reachable from a
+  hand-edited save. *"the last call agreed on every row"*, and *"every row agrees"*
+  on the board.
+
+**Found on the way and left open, for the lens and the forge to decide.** An open
+ward and a part-bound charm read `working` on the panel, and `stop prism` or `stop
+lattice` answers *"not working"* — the disagreement the course's and the beast's
+arms in `stop` were added to close. The exhaustive match names it rather than
+hiding it. Whether either can be let go, and what letting it go costs, is a
+design question about those rooms and not a fix to this one.
+
+### The lesser circle — one gate before a circuit (`0.15.2`)
+
+**The rule: a sealed tower's beasts are lesser until `menagerie_2` opens the whole
+circle.** A lesser beast has two senses and a four-row temper, and is held by the
+keystone alone — *which humour is this?* — which is how every logic-gate game in
+the genre teaches: one gate, then circuits (`0.15.0`'s research). Five holds open
+the circle, and five is each lesser temper once, give or take the draw.
+
+- **Five tempers, each held by exactly one humour.** Six humours over two senses
+  give six distinct tables; the opening keystone's own is refused for the reason
+  the whole table refuses the opening's, a beast held uncalled. One answer per
+  beast is what makes it a question about the gate rather than a search.
+- **The dark glyphs are refused as a cost and carry no reading.** Limning one
+  would change nothing the beast answers, so it says `sunwise is dark in a lesser
+  circle` rather than doing nothing. A shipped spell written for the whole circle
+  therefore logs a refusal per dark `limn` while it runs against a lesser beast —
+  `taming` still holds it, stepping the keystone every thirty-six calls — which
+  is the right signal: the circle is not whole yet.
+- **Priced as a lesson**: par is one call, a hold brings one troop, and it earns a
+  quarter of `worth("circle")` — 2 within par, 1 past. The siege is fed by the
+  whole circle, and a player on the lesser one is learning the six.
+- **A shape of beast, not a second circle.** `tower::circle::Shape` is `Lesser`
+  or `Whole`, and a `Temper` carries how many senses its rows are over; the verbs,
+  readings, board and save are one set that asks the shape. **The bits sort
+  first**, so the 330-puzzle table orders as it did and every seed draws the beast
+  it drew. The board keeps its footprint — one line and four columns, the foot
+  left blank — so the transcript does not move the day the circle opens.
+- **The key is bare, `circle`, as the wall's is**, and `Opened::all` holds it, so
+  `Sim::new` — every test, dump and balance policy — never draws a lesser beast.
+  **`FORMAT` 12 → 13**: an open tower's document lists every key it had and not
+  this one, so it gains it on load; a sealed one is left to `mastery::caught_up`,
+  which opens it for a tower past the station. `BeastSave`'s wiring is optional,
+  and the temper's length says which circle, so there is no third field to
+  disagree with the other two.
+- **Singular counts** came with it: *"1 troop answers"*, *"balks at 1 row"* —
+  the whole circle could balk at one row all along and said *"1 rows"*.
+
+### A spell that knows the logic — `winnowing` (`0.15.1`)
+
+**The rule: what the player knows about the gates makes the orb faster**, and it
+does so through two facts the spell language can already spend, with no variable
+added. `winnowing` is `taming` told what the logic rules out: a mean of **38
+calls** where the odometer takes 64, and a worst of **90** against 174.
+
+- **`fervour` narrows the keystone.** A temper lit on one row can only be a
+  `yoke` or an `eschew` at the top; on two, those or `oppose` and `mirror`; on
+  three or five, `yoke` `spurn` `heed` `eschew`; on six, `spurn` `heed` `oppose`
+  `mirror`; on seven, `spurn` or `heed`; on four, any. The ladder is proven
+  **exact both ways** over all 330 beasts
+  (`each_rung_of_the_winnowing_ladder_names_every_keystone…`): a keystone missing
+  from a rung is a beast the spell never holds, and one too many is calls spent
+  on nothing.
+- **De Morgan halves sunwise.** Every hold has a twin with both outer glyphs
+  turned over and the keystone swapped for its dual, and every rung holds its own
+  duals — so trying sunwise at `yoke`, `heed` and `oppose`, two steps apart, loses
+  no beast. `recall sunwise` names the theorem, because a player should be able
+  to learn from the game what the spell is built on.
+
+**Measured two ways, and they disagree by a little.** The Rust copy of the loop
+over every beast: mean 38, worst **90** — not the 88 the plan's python gave, since
+the shipped sweep steps widdershins *before* each call and so reaches `yoke`
+last. The real spell over 100 seeds at one step a tick: a mean of **161 ticks**
+and a worst of 367, against `taming`'s 229 and 655; at two steps, 80 and 183
+against 114 and 327. **Ticks fall by 30% where calls fall by 41%**, because the
+ladder's questions and the two parts cost steps that a bare odometer does not.
+On seed 181 the two meet the same beast, lit on four rows: `winnowing` holds it on
+call 82 and `taming` on call 160.
+
+**Parts, and a humour passed as a place.** The humours are nodes, so
+`trying(yoke)` hands a part a place name like `between(wellspring, near)` does —
+one part per rung-entry and one for the sweep, rather than eighteen copies of the
+sweep. **It does not care where the circle stands when it starts**: the keystone
+is named rather than stepped, six steps take widdershins round from anywhere, and
+two steps at a time from any humour walk one of De Morgan's two halves, either of
+which is enough. A bound spell recasting onto a beast somebody limned by hand
+still holds it.
+
+**Not a balance policy.** `taming` stays the harness's pinned floor: the economy
+is priced on what the shipped search does, and a player who writes something
+better earns more for having understood it. Pinning `winnowing` would be pinning
+the best spell rather than the room.
+
+### The menagerie is a circle of logic gates — supersedes the rhythm game (`0.15.0`)
+
+**The new rule first.** The menagerie is solved by *choosing*, like every other
+room. A summoned beast has a **temper** — a truth table over three senses — and
+the **circle** that holds it is three glyphs in drawn wiring: `sunwise` and
+`widdershins` each take two of the senses, and the `keystone` takes what they
+answer. Each glyph is limned with one of six **humours**, which are the six
+symmetric logic gates. `summon` draws a beast; `summon` again calls it in, and it
+is held when every row of the circle's answer agrees with the temper. A hold
+brings troops to the arsenal. A balk costs the call and nothing else.
+
+**Superseded, in full:** *"Summoning is a rhythm game, and §10.1's 'never a
+reflex' is amended"* (`0.5.0`), and with it the chant's mechanics recorded at
+`0.5.1`–`0.5.8` — the pace, the landing window, the fifth keyboard surface and
+`F9`'s patient mode. §10.1's *never a reflex* is restored for all seven rooms,
+§10's scarcity row for summoning is *time* rather than integrity, and Phase 5's
+exit clause *"a botched one leaves the tower worse"* no longer describes the
+room. Those entries are kept as they were written: the argument for the chant
+only reads beside what replaced it.
+
+**Decided with the player, from three forms each:** *fill the circle* (not
+build-from-scratch, not a minimisation array), *a failed attempt costs time only*
+(not a patience that wears the pylon), and *typed verbs only* (not a cursor
+surface).
+
+#### What the genre says, and what was taken from it
+
+Logic-gate games come in three families. **Build from scratch** — NandGame,
+Turing Complete, MHRD — places gates and wires to match a table; it is the
+deepest and needs a wiring vocabulary or a netlist editor, and a spell that
+builds a circuit is a strange kind of automation. **Fill the missing gates** —
+the logic-gate puzzle apps and the textbook exercise — fixes the wiring and asks
+which gate goes where. **Set the switches** — Circuit Scramble — fixes the
+circuit and asks for inputs, and is shallow. All three verify against a truth
+table, and all three teach **by composition**: one gate first, then small
+circuits. The circle is the second family.
+
+**Solvable by construction**, which is what the genre's authored levels
+guarantee by hand: `tower::circle::temper::puzzles` walks every wiring and every
+way of limning three glyphs, keeps what each answers, and a beast is drawn from
+that list. Three answers are refused as puzzles with a question missing — a
+temper that does not turn on every sense (which includes one lit on every row or
+none), and a temper the unlimned circle already answers.
+
+#### What was measured, and what pins it
+
+| | | Pinned by |
+|---|---|---|
+| Puzzles | **330** (6 wirings × 216 limnings, filtered), over 107 tempers | `the_table_holds_three_hundred_and_thirty_puzzles…` |
+| Solutions per puzzle | 2–6, never one — **De Morgan**: negate both outer glyphs and swap the keystone for its dual | `every_puzzle_can_be_held_at_least_two_ways…` |
+| A climb on rows agreeing, from the opening | **stalls on 144 of 330, 44%** | `a_climb_on_rows_agreeing_stalls…` |
+| The shipped `taming` search | holds every puzzle; mean **64** calls, worst **174** | `the_taming_search_holds_every_puzzle…` |
+| A person who reads the table | one call | — |
+| The next size — four senses, five glyphs | the search's mean ~475, worst 1,148 | not built; recorded here |
+
+#### Why the spell channel is weaker, and why there is no delta
+
+**The lens's rule, and the circle breaks the lens's solver.** The lens publishes
+*closer / level / further* and a spell hill-climbs a socket at a time, which
+terminates because sockets are independent. Glyphs are not: one can mask another,
+so the same climb on *rows agreeing* stalls on 44% of circles — and a reading
+that invited that solver would invite one that never ends. So nothing about a
+*call* is published: not how many rows balked, not which, not whether a change
+helped. A spell reads what each glyph is limned with and the temper's
+**`fervour`** — how many rows are lit — which is a fact the board shows and never
+a verdict on a glyph.
+
+**What a spell can therefore do is search**, and the language already says it:
+`for each humour` binds the set's own word and so cannot nest, but a bare
+`limn <glyph>` steps round the six — the lens's bare `dial` — and three literal
+`repeat 6` loops around it are an odometer over every circle. Every step is
+guarded by `if the circle is working`, at every level, so a hold leaves no
+refusals in the log and costs under twenty steps of tail; and it steps *before*
+it calls, because the opening is never a solution. A player who knows the gates
+writes something faster — `fervour` narrows the keystone, and De Morgan halves
+sunwise — which is this domain's automation depth: **the player's knowledge makes
+the orb faster**.
+
+#### The names, and the sweep that overruled the scrape
+
+Pre-swept in python against ~400 words scraped from the crate, then checked by
+`tests/naming.rs`, which **disagreed twice** — the scrape is not the sweep.
+
+| Word | For | What it beat |
+|---|---|---|
+| `limn` | set a glyph | `etch` 750 against `each`; `carve` 600 against `carry`; `inscribe` 750 against `scribe`; `trace` 667 against `graced`; `engrave` 715 against `engage` |
+| `fashion` | `limn`'s plain word | `draw`, `sketch`, `pick`, `choose` are other verbs' phrasing words, so a synonym would pull *"let me choose a node"* off `weave`; `assign` is `pledge`'s; `wire` 750 against `fire` |
+| `keystone`, `sunwise`, `widdershins` | the glyphs | `crown` 800 against `cron`; `dexter` 667 against `pewter` and `enter` |
+| `glyph`, `humour` | the two sets | `hand` 750 against `band` and `and`; `kind` 750 against `bind` and `find` |
+| `yoke` `spurn` `heed` `eschew` `oppose` `mirror` | AND NAND OR NOR XOR XNOR | `and`, `or`, `not`, `either`, `both` are the question grammar's own words; the logician's names collide with each other by one edit; `shun` 600 against `spurn`; `neither` 858 against `either`; `odd` is the sanctum's |
+| `fervour` | lit rows | `lit` is the forge's, and 750 against `list`; **`choler` passed the scrape and failed the sweep at 667 against the lens's `closer`** |
+
+**The forge's readings were never in the sweep**, and neither were the chant's.
+The circle's joined it before a node carried them; the forge's joined it on the
+way, which surfaced `lit` against `list` and `light` — both verb words, so the
+resolver answers them, and they are pinned with the forge standing in the test
+that proves it.
+
+#### What the swap took out, and what it kept
+
+- **No tick system.** A beast waits for ever, so `lapse_chant` left the schedule;
+  the domain's one draw is `Beast::draw`, inside `summon`, one value from
+  `RngStream::Menagerie` whatever the table's size — the forge's rule.
+- **No surface.** `Focus::Chant`, `chorus`, `F9`, `ORBS_CHANT`, `ORBS_PATIENT`,
+  `Sim::sing` and `Submission::Sang` are gone, and `F9` is left unbound rather
+  than reassigned. The `Focus` module stays: it was never about the chant.
+- **`FORMAT` 11 → 12.** A format-11 tower carries four syllable nodes and, mid
+  song, readings under them and a `remaining` under the circle; `restore`
+  re-spawns what the tower lacks and would root the orphans, and a leftover
+  `remaining` makes `if the circle is empty` false for ever. `migrate` drops them
+  by prefix. A saved spell naming `sing` still loads and reads as a line the orb
+  cannot read — the `4 → 5` caveat.
+- **`figure` kept as the tally key**, so a tower's reached menagerie stations
+  survive the load; only the prose says *beasts held*.
+- **Two extractions the work was owed.** The four fixed-size boards' `split`
+  became one (`orbs-shell::beside`), proven by `scripts/dumps.sh` byte-identical
+  before and after; the lens's `yield_of` became `tower::worth_within_par`,
+  which the circle prices with.
+- **`steps_1` stops being this room's reason.** The chant could not be sung at one
+  step a tick; the search works at one and takes fewer ticks at two, which
+  `the_search_holds_at_one_step_and_sooner_at_two` pins as a pair.
+
+#### What it is worth, and the number that fell
+
+**`taming` reads 0.044 a tick, 0.038–0.049 a seed**, where `chanting` read 0.243
+— among the lowest rates in the table, and said openly rather than hidden in a
+price. The chant's solver was a perfect player at two steps a tick; the circle's
+search is ~64 calls a beast against a reader's one, so the orb earns here through
+concurrency and not speed, which is §8's argument arriving undiluted. `[earns]
+circle = 8` is the lens's tier, full within `PAR = 3` and three quarters past it.
+Raising the price to reach the chant's rate would make a hand-played beast — a
+minute of reading — worth several times any other room.
+
+**Troops**: four a hold within par, three past it. A bound search supplies ~105
+in two hours at one step a tick against the ~27 `besieging` spends, so the
+arsenal is not short. **A person** holds a beast at roughly the chant's own pace
+— a minute of reading against its forty-nine ticks — so renown minted per making
+moves little. **If play shows beasts held much faster than that**, a gathering
+window before the first call is the lever, and it is a clock that waits rather
+than one that punishes.
+
+**Retrained readers, because the old ones no longer load.** The swap took
+`sing`, `chorus` and their synonyms out of the vocabulary and put `limn` and
+`fashion` in, so the table changed shape and `weights` refuses the old pair —
+which fails silently, so `loading -- --ignored` is the check. Both readers, five
+seeds, against `baseline-0.14.11`: **every score within the baseline's spread**,
+none clearing it either way; the largest t is +2.45 on a trial style of thirteen
+lines. The pair was chosen by `0.14.11`'s rule, fixed before this run was read —
+the prompt reader with the best *all three together*, the spell reader with the
+best trials among seeds that read nothing as its opposite — which picked seeds 2
+and 4, measured again as the pair they ship as:
+
+| | shipped at `0.14.11` | shipped now | the five-seed mean |
+|---|---|---|---|
+| prompt reader, holdout | 78.6% | 78.7% | 71.2% |
+| all three together | 81.1% | 80.3% | 74.7% |
+| correctly refused | 82.9% | **66.5%** | 76.9% |
+| wrongly refused | 1.9% | 1.7% | 4.1% |
+| spell reader, average shape | 72.7% | 79.5% | 70.0% |
+| command lines in a spell | 62.8% | 65.7% | 55.9% |
+| trials, every line | 73.3% | 74.0% | 69.3% |
+| read as their opposite | 0 | 0 | 0 |
+
+**The trade is the refusal head**, and it is said rather than chosen around: seed
+2 reads a third of the sentences that ask for nothing as a command, where the
+pair it replaces read a sixth. The rule picked it for the best joint reading and
+the fewest wrong refusals, and a rule re-drawn after the scores are read is not a
+rule. Seed 3 refuses 94% and reads 75.8% together, one copy away if play finds
+the prompt too eager. The old pair is kept in `target/seeds/shipped-0.14.11/`.
 
 ### The augury — §6's *"No LLM, local or remote"* is retired (`0.13.0`)
 
@@ -5874,6 +6497,11 @@ here was using the first as an argument against looking at the second.
 
 ### Summoning is a rhythm game, and §10.1's "never a reflex" is amended (Phase 5, `0.5.0`)
 
+> **Superseded at `0.15.0`** — the menagerie is a circle of logic gates, solved by
+> choosing, and §10.1's clause is restored. See *"The menagerie is a circle of
+> logic gates"* at the head of this log. Kept whole: the reversal's reasoning is
+> what the second reversal answers.
+
 **This reverses the decision two phases above it**, and it is written as a
 reversal rather than as a compatible reading, because the first draft tried the
 second and it did not survive review.
@@ -6443,6 +7071,10 @@ earns.
 
 ### `bide until` withdrawn, and the reading with it (Phase 5, `0.5.8`)
 
+> **The chant this solved is gone (`0.15.0`); the lesson is not.** A spell that
+> reads its delay off the world computes nothing, and a stored spell that still
+> loads and no longer reads is a format change — both still hold.
+
 **Supersedes the `bide until` bullet under *"A tick was a syllable"* (`0.5.2`),
 which called it *"the first count in the language that comes from a reading
 rather than a literal"*.** It was, and that was the defect. A spell that reads
@@ -6512,6 +7144,10 @@ now rather than a clamp.
   format change** — and content is most of what this game saves.
 
 ### What a review of the menagerie found (Phase 5, `0.5.7`)
+
+> **Reviewed the chant, which `0.15.0` replaced.** Its pattern — code whose own
+> comment cites the rule it breaks — is the part worth keeping, and the circle's
+> tests were written against three of its findings by name.
 
 Fifteen findings on a phase that shipped with a green gate, 113 tmux scenarios,
 every balance pin held and a See-it line on every box. **The pattern is worth
@@ -6595,6 +7231,9 @@ and a chant is not the laboratory's work.
 
 ### The fifth surface, and the accommodation that made it fair (Phase 5, `0.5.5`)
 
+> **Superseded at `0.15.0`**: `chorus`, `Focus::Chant` and `F9` are gone with
+> the chant, and the menagerie is typed like every other room.
+
 **`chorus` hands the arrow keys to a running figure**, and `F9` makes one wait
 for the singer instead of the clock. Both frontends bind both.
 
@@ -6673,6 +7312,9 @@ whenever one is opened up.
 
 ### A tick was a syllable, and the domain had no puzzle in it (Phase 5, `0.5.2`)
 
+> **Superseded at `0.15.0`**: the pace, the window and the *"domain that rewards
+> concentration"* went with the chant. `bide n` costing exactly n ticks stands.
+
 **The board, the pace, and a scripted solver that is still not expressible.**
 
 `PACE` was one: a syllable landed on every tick. That made the *scripted* half —
@@ -6748,6 +7390,10 @@ like a spell that ran and did nothing. Name a scratch spell distinctly and prove
 a loop with a verb that speaks.
 
 ### The menagerie, built — and three things the lints caught (Phase 5, `0.5.1`)
+
+> **The chant this built was replaced at `0.15.0`.** The sweep lessons — `left`
+> against `let`, a prefix collision invisible to a score — are why the circle's
+> names were swept twice.
 
 The domain, the figure and both verbs. What is worth recording is not the build
 but what stopped it being wrong, because in every case the instrument that

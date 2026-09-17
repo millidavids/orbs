@@ -205,30 +205,6 @@ const MENU: &str = "ORBS_MENU";
 /// ```
 const WALK: &str = "ORBS_WALK";
 
-/// Arrow presses for a chant a `chorus` in `ORBS_DUMP` handed the keys to.
-///
-/// `ORBS_WALK`'s shape, four tokens and newline-separated:
-///
-/// ```text
-/// ORBS_DUMP="attend menagerie; summon; chorus" ORBS_CHANT="<up>\n<left>"
-/// ```
-///
-/// **It cannot show timing, and that is not a gap this switch can close.** A
-/// dump writes no key events and advances no clock, so every press lands on the
-/// tick the dump is standing on — what this gates is *which syllable an arrow
-/// answers*, which is the half a wrong mapping would break. The timing is
-/// eyes-on-a-window, or `scripts/play.sh` with a real keyboard.
-const CHANT: &str = "ORBS_CHANT";
-
-/// §14's accommodation, on before the first command runs.
-///
-/// `F9` is the key and this is how a dump reaches it — the same relationship
-/// `ORBS_CRT` has to `F3`. **It is the only way to see the patient mode as
-/// text**, because a dump has no clock: without it every arrow lands on one
-/// tick and reads `too soon`, which is the played mode working and the patient
-/// one being invisible.
-const PATIENT: &str = "ORBS_PATIENT";
-
 /// Commands are separated by this, so one shell word can drive a session.
 const SEPARATOR: char = ';';
 
@@ -250,12 +226,16 @@ const DEFAULT_GRID: GridSize = orbs_render::GRID;
 ///
 /// `engine` is the POST card's third line — the one fact only the caller knows.
 /// See the POST card's own module for why it cannot be a constant.
+///
+/// **No seed parameter**: a dump is an instrument and always draws
+/// `crate::seed()`'s world, so a frontend holding a new game's seed cannot hand
+/// it one by mistake.
 #[must_use]
-pub fn run(seed: u64, wizard: Option<String>, engine: &str) -> bool {
+pub fn run(wizard: Option<String>, engine: &str) -> bool {
     let Some(request) = requested() else {
         return false;
     };
-    run_script(seed, wizard, engine, &request);
+    run_script(wizard, engine, &request);
     true
 }
 
@@ -274,7 +254,9 @@ pub fn requested() -> Option<String> {
 /// **This is the boundary proof.** Both binaries reach it, through the same
 /// painters, from the same `Sim` — so `orbs-tui --dump X` and `ORBS_DUMP=X orbs`
 /// print the same bytes or the shell has grown a frontend-shaped hole in it.
-pub fn run_script(seed: u64, wizard: Option<String>, engine: &str, request: &str) {
+pub fn run_script(wizard: Option<String>, engine: &str, request: &str) {
+    // **The instrument's seed, never a game's** — see `crate::seed`.
+    let seed = crate::seed();
     // **A dump neither loads nor saves unless `ORBS_SAVE` names a path.**
     //
     // Not a convenience — the alternative breaks the instruments. A dump that
@@ -327,13 +309,6 @@ pub fn run_script(seed: u64, wizard: Option<String>, engine: &str, request: &str
             fresh
         }
     };
-    // **Before the first command**, so a `summon` in `ORBS_DUMP` opens a figure
-    // that is already waiting. Set afterwards it would flip a chant halfway
-    // through, which is a state the game itself can reach and not the one this
-    // switch exists to show.
-    if std::env::var_os(PATIENT).is_some() {
-        sim.set_patient();
-    }
     // Authored content, if `ORBS_CONTENT` names a directory (rule 6). A dump
     // builds no `App` and so has no watcher, but it must still read what is on
     // disk — otherwise the one tool CLAUDE.md says to reach for first is the one
@@ -446,11 +421,6 @@ pub fn run_script(seed: u64, wizard: Option<String>, engine: &str, request: &str
         // ...and the same for a `menu`. Taken here so one in `ORBS_DUMP` and one
         // in `ORBS_THEN` both reach it.
         let mut menuing = menued(&mut sim);
-        // ...and the menagerie's, which owns no surface *and* no flag. The
-        // figure draws whenever a chant is running, and `chorus` does not take
-        // the pane — so unlike `wander` there is nothing for the drawing side to
-        // know, and this returns nothing. What it does is play `ORBS_CHANT` in.
-        choruses(&mut sim);
         // Commands to run *after* the editing session. A `:w` queues its write
         // for the next tick like every other effect, so a `peruse` typed in
         // `ORBS_DUMP` runs before the spell exists — it would offer the other
@@ -475,7 +445,6 @@ pub fn run_script(seed: u64, wizard: Option<String>, engine: &str, request: &str
             weaving = weaving.or_else(|| woven(&mut sim));
             walking |= walked(&mut sim);
             menuing = menuing.or_else(|| menued(&mut sim));
-            choruses(&mut sim);
         }
         // **And a maze can close from under the walker.** `walked` only ever
         // latches *on*; both frontends give the keyboard back when the maze goes
@@ -1081,39 +1050,6 @@ fn walked(sim: &mut orbs_sim::Sim) -> bool {
         }
     }
     true
-}
-
-/// The arrows a `chorus` in the dump asked for, with `ORBS_CHANT` played in.
-///
-/// [`walked`]'s twin, and `Sim::sing` is `Sim::walk`'s: a press reaches the
-/// world without a tick, so a dump of four syllables has not advanced the clock
-/// four seconds.
-///
-/// **Returns nothing, where `walked` returns a flag.** The maze takes the whole
-/// pane while somebody is walking it, so the drawing side has to be told; a
-/// figure draws whenever a chant is running and `chorus` takes only the keys, so
-/// there is nothing here for a painter to know.
-fn choruses(sim: &mut orbs_sim::Sim) {
-    if !sim.chorusing() {
-        return;
-    }
-    let Ok(script) = std::env::var(CHANT) else {
-        return;
-    };
-    for segment in script.replace("\\n", "\n").split('\n') {
-        let syllable = match segment.trim() {
-            "" => continue,
-            "<up>" => orbs_sim::tower::Syllable::Skyward,
-            "<down>" => orbs_sim::tower::Syllable::Earthward,
-            "<left>" => orbs_sim::tower::Syllable::Leftward,
-            "<right>" => orbs_sim::tower::Syllable::Rightward,
-            // Anything else ends it, which is what Escape does.
-            _ => return,
-        };
-        if !sim.sing(syllable) {
-            return;
-        }
-    }
 }
 
 /// The weave screen a `weave` in the dump asked for, with `ORBS_WEAVE` played

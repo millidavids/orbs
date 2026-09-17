@@ -62,6 +62,14 @@ pub enum Unit {
     Cells,
     /// Sigils in the right socket.
     Sigils,
+    /// Rows of a beast's temper the circle last answered rightly.
+    ///
+    /// **Out of the temper's rows — eight, or four at a lesser circle — and the
+    /// rail prints the remainder**, which is the rows still balking, so it
+    /// counts *down* as the circle comes right, as every work meter here does.
+    /// It reads every row before the first call, because nothing has been
+    /// answered yet.
+    Rows,
     /// How the tower's defences stand, out of [`STANDING`](super::STANDING).
     ///
     /// **The one unit that counts *up*.** Every other meter here measures work
@@ -456,76 +464,13 @@ fn read(world: &World, node: Entity, name: &str, now: Tick) -> (State, Option<Me
             }),
         );
     }
-    // **Walking the stacks is work, and says so** — even though it takes no
-    // production slot. `if stacks is working` is how a solver asks whether its
-    // maze is still open, and the meter is cells walked against cells there are:
-    // the only honest measure a maze has, because how long it takes is what the
-    // player's rule decides.
-    if let Some(maze) = world.get::<super::Maze>(node) {
-        let (done, total) = maze.explored();
-        return (
-            State::Working,
-            Some(Meter {
-                done,
-                total,
-                unit: Unit::Cells,
-            }),
-        );
-    }
-    // **An open ward is work, and says so** — the same answer the stacks gives
-    // for an open maze, and for the same two reasons.
-    //
-    // It is what a solver asks: `repeat until the prism is idle` is how a spell
-    // says *until the seal gives*, and `is empty` cannot do that job because
-    // `spell::watch` answers it by asking whether the node has **children** —
-    // the prism's children are its published readings, and there are none until
-    // the first press lands. A `breaking` bounded on `empty` ended on its first
-    // instruction, having pressed once.
-    //
-    // `Charged` was the first answer and is wrong for the same reason: it means
-    // *wield this and it runs*, which is not what a reading in progress is.
-    //
-    // The meter is sigils placed against sigils there are — the only honest
-    // measure a ward has, because how many presses it takes is what the player's
-    // deduction decides, exactly as a maze's length is what their rule decides.
-    if let Some(ward) = world.get::<super::Ward>(node) {
-        return (
-            State::Working,
-            // **The last press's answer, which now falls as well as rises.** It
-            // was `best()` while the ratchet held the aperture at the best figure
-            // ever sent — the meter was honest because the *aperture* was. With
-            // the ratchet gone (§19) a high-water mark would read `3 of 4` over
-            // an aperture holding one, which is the failure this note used to
-            // warn of pointing the other way.
-            Some(Meter {
-                done: u64::from(ward.last().0),
-                total: super::ward::WIDTH as u64,
-                unit: Unit::Sigils,
-            }),
-        );
-    }
-    // **An open lattice is `Working`**, which is the ward's arm and for the ward's
-    // reason: a fixture holding readings is not a fixture holding *stock*, and
-    // the fallthrough at the end of this function reads children it cannot make
-    // anything from as leavings. Without this the forge's panel row read
-    // `lattice fouled` from the moment a charm was opened — the panel telling a
-    // player that the thing they are in the middle of needs scouring.
-    //
-    // The meter is columns snapped against columns there are, which is the only
-    // honest measure a lattice has: how many falls it takes is what the player's
-    // reading of the residue decides, exactly as a ward's press count is.
-    if let Some(binding) = world.get::<super::lattice::Binding>(node) {
-        let snapped = (0..super::lattice::WIDTH)
-            .filter(|column| binding.lattice.snapped(*column))
-            .count();
-        return (
-            State::Working,
-            Some(Meter {
-                done: snapped as u64,
-                total: super::lattice::WIDTH as u64,
-                unit: Unit::Sigils,
-            }),
-        );
+    // **An open puzzle is work, and says so**, whichever puzzle it is — through
+    // `puzzle::Open`, matched exhaustively so a new one cannot be missed here
+    // (see its doc). Each arm's meter is the only honest measure that puzzle has.
+    if let Some(open) = super::puzzle::Open::on(world, node)
+        && let Some(meter) = puzzle_meter(world, node, open)
+    {
+        return (State::Working, Some(meter));
     }
     if let Some(triage) = world.get::<super::Triaging>(node) {
         let total = triage.ends.get().saturating_sub(triage.started.get());
@@ -670,6 +615,69 @@ fn read(world: &World, node: Entity, name: &str, now: Tick) -> (State, Option<Me
         return (State::Gathering, None);
     }
     (State::Fouled, None)
+}
+
+/// How far through an open puzzle is — the meter [`read`] draws while it is
+/// open, or `None` for a puzzle whose fixture's meter is about something else.
+///
+/// **Why each is `Working` at all**: it is what a solver asks. `repeat until the
+/// prism is idle` is how a spell says *until the seal gives*, and `is empty`
+/// cannot do that job, because `spell::watch` answers it by asking whether the
+/// node has **children** — a puzzle's children are its published readings, and
+/// a ward has none until the first press lands. A `breaking` bounded on `empty`
+/// ended on its first instruction, having pressed once. `Charged` was the first
+/// answer and is wrong for the same reason: it means *wield this and it runs*.
+///
+/// **And none of them may be a `Working` component.** `tower::busy` reads that
+/// component, and a spell's `summon` would then wait on the very beast it was
+/// calling — `would_block` answering *"the circle is working"* to the one
+/// command that finishes the work.
+fn puzzle_meter(world: &World, node: Entity, open: super::puzzle::Open) -> Option<Meter> {
+    use super::puzzle::Open;
+    match open {
+        // Cells walked against cells there are: how long a maze takes is what the
+        // player's rule decides.
+        Open::Maze => world.get::<super::Maze>(node).map(|maze| {
+            let (done, total) = maze.explored();
+            Meter {
+                done,
+                total,
+                unit: Unit::Cells,
+            }
+        }),
+        // Sigils placed against sigils there are, **by the last press's answer,
+        // which falls as well as rises.** It was `best()` while the ratchet held
+        // the aperture at the best figure ever sent; with the ratchet gone (§19) a
+        // high-water mark would read `3 of 4` over an aperture holding one.
+        Open::Ward => world.get::<super::Ward>(node).map(|ward| Meter {
+            done: u64::from(ward.last().0),
+            total: super::ward::WIDTH as u64,
+            unit: Unit::Sigils,
+        }),
+        // Columns snapped against columns there are. Without this arm the forge's
+        // row read `lattice fouled` from the moment a charm was opened — the
+        // fallthrough reading published residue as leavings to scour.
+        Open::Binding => world.get::<super::lattice::Binding>(node).map(|binding| {
+            let snapped = (0..super::lattice::WIDTH)
+                .filter(|column| binding.lattice.snapped(*column))
+                .count();
+            Meter {
+                done: snapped as u64,
+                total: super::lattice::WIDTH as u64,
+                unit: Unit::Sigils,
+            }
+        }),
+        // **The pylon's meter is always the barrier, drawn course or no**, and
+        // `read` gives it below — the one fixture whose meter is not a measure of
+        // its own puzzle.
+        Open::Course => None,
+        // Rows the last call agreed on, of the temper's rows.
+        Open::Beast => world.get::<super::circle::Beast>(node).map(|beast| Meter {
+            done: u64::from(beast.agreeing()),
+            total: u64::try_from(beast.rows()).unwrap_or(u64::MAX),
+            unit: Unit::Rows,
+        }),
+    }
 }
 
 #[cfg(test)]

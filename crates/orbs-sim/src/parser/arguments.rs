@@ -56,6 +56,16 @@ pub(super) struct Filled {
     /// and grind it` is a sentence six words too long for any reading of it.
     /// Score alone cannot tell those apart.
     pub leftover: usize,
+    /// An optional last slot that was handed a word and could use none of what
+    /// it was handed, after an earlier slot filled.
+    ///
+    /// **Not [`missing`](Self::missing), because the bare verb is legal** — and
+    /// that is exactly the trouble. `limn keystone` and `dial first` step round
+    /// to the next humour or sigil, so `limn keystone xyzzy` dropping `xyzzy`
+    /// did not run the command the player asked for less well: it ran a
+    /// *different* one, and changed the circle. `resolve` asks for the slot
+    /// instead (§19).
+    pub refused: Option<Missing>,
 }
 
 impl Filled {
@@ -76,12 +86,14 @@ pub(super) fn fill(verb: Verb, words: &[Word<'_>], scene: &Scene) -> Filled {
             score: penalise(EXACT, words.len()),
             missing: None,
             leftover: words.len(),
+            refused: None,
         };
     }
 
     let mut slots = vec![None; signature.len()];
     let mut scores = Vec::with_capacity(signature.len());
     let mut missing = None;
+    let mut refused = None;
     let mut remaining = words;
     // Words handed to a slot that the slot could not account for.
     let mut unused = 0usize;
@@ -130,6 +142,25 @@ pub(super) fn fill(verb: Verb, words: &[Word<'_>], scene: &Scene) -> Filled {
                         kind: slot.kind,
                     });
                 }
+                // **Only the last slot, and only after one filled.** A first
+                // optional slot that explains nothing is `resolve`'s older rule
+                // (`verify gibberish`), and a middle one steps aside for the
+                // required slot behind it, which is `move`'s whole design. Filler
+                // and bare punctuation are not a word handed over.
+                let said_something = head.iter().any(|word| {
+                    word.matching.chars().any(char::is_alphanumeric)
+                        && !super::normalise::is_filler(word.matching)
+                });
+                if !slot.required
+                    && is_last
+                    && said_something
+                    && slots[..index].iter().any(Option::is_some)
+                {
+                    refused = Some(Missing {
+                        index,
+                        kind: slot.kind,
+                    });
+                }
                 // Do not consume words a slot could not use — a later slot may
                 // still want them.
             }
@@ -156,6 +187,7 @@ pub(super) fn fill(verb: Verb, words: &[Word<'_>], scene: &Scene) -> Filled {
         score: penalise(mean, remaining.len()),
         missing,
         leftover: remaining.len() + unused,
+        refused,
     }
 }
 
@@ -377,5 +409,25 @@ mod tests {
         );
         assert!(filled.missing.is_none(), "{filled:?}");
         assert_eq!(filled.arguments().len(), 3);
+    }
+
+    /// **A word an optional last slot could not use is refused, not dropped** —
+    /// `dial first qqqq` turning the socket to its next sigil was a different
+    /// command from the one typed. Bare, and with filler after it, is still
+    /// the bare verb.
+    #[test]
+    fn an_optional_last_slot_handed_a_word_it_cannot_use_is_refused() {
+        let scene = tower().with(NounKind::Place, "/tower/lens/first");
+        let junk = fill(Verb::Dial, &words(&["first", "qqqq"]), &scene);
+        assert!(junk.missing.is_none(), "{junk:?}");
+        assert_eq!(junk.refused.map(|slot| slot.index), Some(1), "{junk:?}");
+
+        let bare = fill(Verb::Dial, &words(&["first"]), &scene);
+        assert!(bare.refused.is_none(), "{bare:?}");
+        let polite = fill(Verb::Dial, &words(&["first", "please"]), &scene);
+        assert!(polite.refused.is_none(), "{polite:?}");
+        // Nothing filled before it: the older rule's case, not this one's.
+        let nothing = fill(Verb::Survey, &words(&["qqqq"]), &scene);
+        assert!(nothing.refused.is_none(), "{nothing:?}");
     }
 }

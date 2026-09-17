@@ -173,13 +173,25 @@ pub(super) fn apply(world: &mut World, entity: Entity, node: &NodeSave) {
     // malformed one: the player walks into a sanctum they can `muster` in
     // rather than one jammed on a course that can never finish. See
     // `Course::from_save` for the four ways it says no.
-    // The menagerie's, on the same terms: an unreadable figure raises none, and
-    // a circle with no chant is a `summon` away from fine.
-    if let Some(chant) = node.chant.as_ref().and_then(tower::Chant::from_save) {
-        at.insert(chant);
-    }
     if let Some(course) = node.course.as_ref().and_then(tower::Course::from_save) {
         at.insert(course);
+    }
+    // **The menagerie's, both directions**, which is the siege's rule below: a
+    // save taken before a beast arrived must *remove* one that is waiting, or
+    // loading it reopens the circle onto a beast the document never heard of.
+    // An unreadable beast raises none, and a circle with no beast is a `summon`
+    // away from fine.
+    match node
+        .beast
+        .as_ref()
+        .and_then(tower::circle::Beast::from_save)
+    {
+        Some(beast) => {
+            at.insert(beast);
+        }
+        None => {
+            at.remove::<tower::circle::Beast>();
+        }
     }
     // **Straight back on**, with no `from_save` to validate through: a `Siege`
     // saves as itself, so there is no derived shape that could disagree with the

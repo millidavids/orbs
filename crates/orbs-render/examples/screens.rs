@@ -66,9 +66,19 @@ fn main() {
     show("Rampart — a siege, part fought (§5.1)", &wall);
     speak(&wall);
 
-    let figure = chant(GRID);
-    show("Figure — a chant, two ticks from the rule (§10)", &figure);
-    speak(&figure);
+    let waiting = circle(GRID, false);
+    show(
+        "Circle — a beast called in once, balking at one row (§10)",
+        &waiting,
+    );
+    speak(&waiting);
+
+    let lesser = circle(GRID, true);
+    show(
+        "Lesser circle — the keystone alone, a sealed tower's first beasts (§19)",
+        &lesser,
+    );
+    speak(&lesser);
 
     let glyphs = lattice(GRID);
     show("Lattice — a charm part-bound (§10's Enchanting)", &glyphs);
@@ -1925,37 +1935,66 @@ fn pylon(grid: GridSize) -> Frame {
     frame
 }
 
-/// A figure part-sung, two ticks from the rule (§10, `tower::chant`).
+/// A beast at the circle, called in once and balking at one row (§10,
+/// `tower::circle`).
 ///
-/// **The one surface where the timing can actually be judged.** Every other
-/// check on this board asserts a width; only a rendered frame shows whether the
-/// gap between the rule and the nearest syllable reads as *approach* — and that
-/// gap is the whole mechanic, because a press counts on the last two ticks of it
-/// and nowhere else.
+/// **Called, not fresh**, because the answer row and the marks under it are the
+/// half of this board that can go wrong: a mark one column off its number
+/// sends a player to the wrong row, and only a picture shows that as a picture.
 ///
-/// `until` is **2**, deliberately: at nought the nearest syllable sits on the
-/// rule and the board looks static again, which is exactly what it looked like
-/// for a whole approach when `Figure` carried no `until` at all. A screen drawn
-/// at the one value that hides the bug would be worse than no screen.
-fn chant(grid: GridSize) -> Frame {
-    let figure = orbs_render::Figure {
-        // Lane indices into `lanes` below, nearest first.
-        coming: vec![1, 3, 0, 2],
-        // `tower::chant`'s own words and glyphs. The sim hands these through
-        // `Sim::figure`; an example has no sim, so it repeats them — and this is
-        // the surface where a header wider than its column shows up as a picture
-        // rather than as a passing assertion.
-        lanes: vec![
-            ('\u{25C4}', "leftward"),
-            ('\u{25B2}', "skyward"),
-            ('\u{25BC}', "earthward"),
-            ('\u{25BA}', "rightward"),
-        ],
-        sung: vec![true, true, false, true],
-        until: 2,
-        remaining: 4,
-        // What `prose.toml`'s `chant_tally` renders to.
-        tally: "4 to come, 1 missed".to_owned(),
+/// `lesser` draws a sealed tower's first beasts instead — one line and four
+/// columns in the same footprint.
+fn circle(grid: GridSize, lesser: bool) -> Frame {
+    // A name with `~` in front is a turned wire, as the board draws it.
+    let line = |glyph: &str, humour: &str, given: [&str; 2]| orbs_render::CircleLine {
+        glyph: glyph.to_owned(),
+        humour: humour.to_owned(),
+        given: given
+            .iter()
+            .map(|one| orbs_render::CircleGiven {
+                name: one.trim_start_matches('~').to_owned(),
+                turned: one.starts_with('~'),
+            })
+            .collect(),
+    };
+    // `tower::circle`'s own words, and `prose.toml`'s senses. The sim hands these
+    // through `Sim::circle`; an example has no sim, so it repeats them.
+    let (board, spoken) = if lesser {
+        // **The same board with less on it**: the keystone over two senses,
+        // four columns, and the foot of the footprint left blank.
+        let lit = |sense: usize| (0..4).map(|row| (row >> (1 - sense)) & 1 == 1).collect();
+        let board = orbs_render::Circle {
+            lines: vec![line("keystone", "heed", ["blood", "bone"])],
+            senses: vec!["blood".into(), "bone".into()],
+            lit: vec![lit(0), lit(1)],
+            temper: vec![false, true, true, false],
+            answer: Some(vec![false, true, true, true]),
+            labels: ["temper".into(), "answer".into()],
+            tally: "1 call, 1 row balks".into(),
+        };
+        let spoken = "keystone is limned heed, over blood and bone. the temper is lit on rows 2 (bone), 3 (blood). the last call balked at row 4";
+        (board, spoken)
+    } else {
+        // **One turned wire**, on widdershins's breath: the answer row is what
+        // yoke, heed-over-turned-breath and oppose really answer, and the temper
+        // differs from it on row 7 alone.
+        let lit = |sense: usize| (0..8).map(|row| (row >> (2 - sense)) & 1 == 1).collect();
+        let board = orbs_render::Circle {
+            lines: vec![
+                line("sunwise", "yoke", ["blood", "bone"]),
+                line("widdershins", "heed", ["bone", "~breath"]),
+                line("keystone", "oppose", ["sunwise", "widdershins"]),
+            ],
+            senses: vec!["blood".into(), "bone".into(), "breath".into()],
+            lit: vec![lit(0), lit(1), lit(2)],
+            temper: vec![true, false, true, true, true, false, true, false],
+            answer: Some(vec![true, false, true, true, true, false, false, false]),
+            labels: ["temper".into(), "answer".into()],
+            // What `prose.toml`'s `circle_tally` renders to.
+            tally: "1 call, 1 row balks".into(),
+        };
+        let spoken = "sunwise is limned yoke, over blood and bone. widdershins is limned heed, over bone and turned breath. the keystone is limned oppose. the temper is lit on rows 1 (no sense lit), 3 (bone), 4 (bone breath), 5 (blood), 7 (blood bone). the last call balked at row 7";
+        (board, spoken)
     };
 
     let layout = ScreenLayout::compute(&ScreenRequest::single(grid));
@@ -1964,12 +2003,12 @@ fn chant(grid: GridSize) -> Frame {
     let mut painter = frame.painter(pane);
     painter.border(pane, Some("menagerie"), Style::DIM);
 
-    let (cols, rows) = orbs_render::Figure::size();
+    let (cols, rows) = orbs_render::Circle::size();
     let at = Rect::new(pane.col + 2, pane.row + 2, cols + 2, rows + 2);
-    painter.border(at, Some("figure"), Style::DIM);
+    painter.border(at, Some("circle"), Style::DIM);
     let inside = at.inset(1);
     for row in 0..inside.rows {
-        let Some(cells) = figure.row(usize::from(row)) else {
+        let Some(cells) = board.row(usize::from(row)) else {
             break;
         };
         for (col, (glyph, style, tint)) in cells.into_iter().enumerate() {
@@ -1984,14 +2023,7 @@ fn chant(grid: GridSize) -> Frame {
             }
         }
     }
-    // **`next` first**, which is what makes the room playable by ear: a reader
-    // has no rows, so a line leading with a tally would leave them nothing to
-    // act on.
-    painter.announce(
-        UtteranceKind::Progress,
-        Role::Normal,
-        "skyward next, 4 to come, 1 missed",
-    );
+    painter.announce(UtteranceKind::Progress, Role::Normal, spoken);
     frame
 }
 

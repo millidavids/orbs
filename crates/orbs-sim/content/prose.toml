@@ -593,9 +593,9 @@ mastery_sanctum_1 = "{count} courses mustered"
 mastery_sanctum_2 = "{count} courses mustered"
 mastery_sanctum_3 = "a siege survived"
 mastery_sanctum_4 = "{count} sieges won"
-mastery_menagerie_1 = "{count} figures closed"
-mastery_menagerie_2 = "{count} figures closed"
-mastery_menagerie_3 = "{count} figures closed"
+mastery_menagerie_1 = "{count} beasts held"
+mastery_menagerie_2 = "{count} beasts held"
+mastery_menagerie_3 = "{count} beasts held"
 mastery_forge_1 = "{count} charms laid"
 mastery_forge_2 = "{count} charms laid"
 mastery_forge_3 = "{count} charms laid"
@@ -618,7 +618,7 @@ mastery_archive_1_one = "the stacks walked"
 mastery_archive_2_one = "a scroll assembled"
 mastery_lens_1_one = "a ward broken"
 mastery_sanctum_1_one = "a course mustered"
-mastery_menagerie_1_one = "a figure closed"
+mastery_menagerie_1_one = "a beast held"
 mastery_forge_1_one = "a charm laid"
 
 # What a station opened, said once and only if it was shut - a tower restored
@@ -634,6 +634,9 @@ opened_domain = "the {name} is yours now. attend it"
 opened_recipe = "the orb knows {name} now. recall it"
 opened_charm = "the forge can lay {name} now"
 opened_siege = "the wall can be held now. defend it"
+# **The moment a player first meets a `~`**, so it is the moment to say what one
+# is: nearly every whole beast arrives with a turned wire.
+opened_circle = "the circle opens whole. a ~ wire gives its glyph the sense turned over"
 
 # The editor's own furniture. Terse: these sit on one row of a pane that may be
 # 80 cells wide, beside the filename and the position.
@@ -930,34 +933,88 @@ haul_bare = "nothing is resting at the {name}"
 haul_greater = "the greater ward will not rest upon the lesser"
 haul_moved = "ward {quantity} is drawn from the {name} into the {detail}"
 
-# The menagerie (§10). **A missed syllable is not a refusal** - it is the chant
-# going badly, which is the puzzle rather than a dead end, so it reads as a cost
-# and never as a fault on the rail.
-chant_title = "figure"
-# **`next` first, and that is the whole of what makes the room playable by ear.**
-# A sighted player reads the row resting on the rule; a reader has no rows, so a
-# spoken line that led with a tally would leave them nothing to act on.
-chant_spoken = "{name} next, {quantity} to come, {detail} missed"
-chant_tally = "{quantity} to come, {name} missed"
-
 # **`{name} line {count}`**, which is every sibling's shape — `invoke` binds
 # `name` to the spell and `count` to the line. This read `line {name}:` and so
 # printed the *filename* where the line number goes and no line number at all,
 # which makes two malformed bides in one spell indistinguishable.
 spell_unreadable_bide = "{name} line {count}: bide wants a number of ticks"
 
-summon_opens = "a figure of {quantity} syllables gathers at the circle"
-summon_already = "a figure is already gathered. sing it, or stop the circle"
+# The menagerie (§10). **A balked call is not a refusal** - it is the circle
+# answering wrongly, which is the puzzle rather than a dead end, so it reads as a
+# cost and never as a fault on the rail. Nothing is lost but the call.
+summon_opens = "a beast gathers at the circle. its temper is lit on {quantity}"
+# The same arrival at a lesser circle, which says what the player is looking at:
+# one glyph, two senses, and the question it asks.
+summon_opens_lesser = "a lesser beast gathers, lit on {quantity}. which humour is it?"
 summon_nowhere = "there is no circle here to summon at"
-sing_unopened = "there is no figure to answer. summon first"
-sing_incomplete = "sing which syllable? name one of the four"
-sing_not_a_syllable = "{name} is not a syllable of any chant"
-chorus_begins = "the figure is yours. the arrows answer it, escape gives them back"
-sing_struck = "{name} rings true"
-sing_missed = "{name} falls wide"
-sing_early = "{name}, but too soon. it had not landed"
-sing_collapsed = "the figure comes apart. the barrier loses {quantity}"
-sing_finished = "the figure closes. {count} true, and {quantity} troops answer"
+# **A call the orb only guessed at is not made** (§19). The line was read by the
+# augury rather than the orb, and a call spent on a misreading is gone against
+# par — so it says what to type, and the beast waits as it was.
+summon_divined = "the orb will not call the beast in on a guess. type summon to call it"
+summon_balks = "the beast balks at {quantity}, on call {count}"
+summon_rows = "{count} rows"
+summon_rows_one = "1 row"
+summon_holds = "the circle holds. {quantity}, on call {count}"
+# One troop is what a lesser hold brings, so the count is written both ways.
+summon_troops = "{count} troops answer"
+summon_troops_one = "1 troop answers"
+# A tower with no arsenal to keep them in. None is raised without one today, and
+# the hold still says what did not arrive rather than counting troops nowhere.
+summon_troops_unkept = "no troops come, for there is no arsenal to keep them"
+summon_released = "the beast slips away unheld"
+# `debug_circle` with no beast to hand a circle to. A tester's word, and it says
+# so rather than leaving the next `summon` to draw one.
+summon_nothing_to_give = "no beast waits here to limn the circle for"
+limn_unopened = "there is no beast to limn the circle for. summon first"
+limn_incomplete = "limn which glyph? name keystone, sunwise or widdershins"
+limn_not_a_glyph = "{name} is not a glyph. the three are keystone, sunwise and widdershins"
+limn_not_a_humour = "{name} is not a humour. recall yoke, and the five after it"
+# **A lesser circle is the keystone alone** (§19), and a player who read ahead to
+# the whole circle is told so rather than watching a limn change nothing.
+limn_dark = "{name} is dark in a lesser circle. only the keystone answers"
+limn_done = "{name} is limned {detail}"
+
+# The circle's board (§10). **The senses are named here and nowhere else** — they
+# are drawn and spoken, never typed and never read by a spell, so they are prose
+# rather than parser words, and none of them may be a material (`ash` was the
+# first thought and is the athanor's).
+circle_title = "circle"
+circle_sense_0 = "blood"
+circle_sense_1 = "bone"
+circle_sense_2 = "breath"
+circle_temper_label = "temper"
+circle_answer_label = "answer"
+circle_tally_uncalled = "not yet called in"
+circle_tally = "{name}, {detail}"
+circle_calls = "{count} calls"
+circle_calls_one = "1 call"
+circle_balks = "{count} rows balk"
+circle_balks_one = "1 row balks"
+# A call whose answer agreed everywhere is a hold, and removes the beast — so this
+# is only ever drawn over a hand-edited save, and it says what is true.
+circle_balks_none = "every row agrees"
+# **Words for a reader, never the drawn cells** — the lattice's `residue_spoken`
+# lesson. A reader hears which glyph takes what, what the temper is lit on, and
+# where the last call balked, by the row numbers the board draws over its columns.
+# Each row list is written both ways, since a temper can be lit on one row and
+# a call can balk at one.
+#
+# **A lit row names its senses** — *"4 (bone breath)"* — because the board's sense
+# rows are silent, and a number alone asks a listener to know how rows are
+# counted. With the senses named, the temper is the whole question in words.
+# **A turned wire is said as turned**, for the same reason: the `~` is drawn, and
+# nothing else would tell an ear.
+circle_spoken = "{name}. the temper is lit on rows {quantity}. {detail}"
+circle_spoken_one = "{name}. the temper is lit on row {quantity}. {detail}"
+circle_row_spoken = "{count} ({name})"
+circle_row_none_spoken = "{count} (no sense lit)"
+circle_turned_spoken = "turned {name}"
+circle_glyph_spoken = "{name} is limned {detail}, over {quantity} and {count}"
+circle_keystone_spoken = "the keystone is limned {detail}"
+circle_uncalled_spoken = "the beast has not been called in"
+circle_balks_spoken = "the last call balked at rows {quantity}"
+circle_balks_spoken_one = "the last call balked at row {quantity}"
+circle_balks_spoken_none = "the last call agreed on every row"
 
 # ---------------------------------------------------------------------------
 # The satchel: §8's channel between two spells, and the one queue in the tower.
@@ -1084,7 +1141,7 @@ recall_quiet-draught = "valerian cut with salt. it distils into stillness"
 # **The same honesty the potions carry**, and it has to be: a siege is what will
 # spend these, and Phase 8 owes two sinks now rather than one. Saying so is what
 # stops a player hoarding for a use that does not exist yet.
-recall_troop = "something the chant called up. it waits in the arsenal"
+recall_troop = "a beast the circle held. it waits in the arsenal"
 using_troop = "deploy it on the wall. two more bodies in the line"
 
 recall_clarity = "a potion of clear sight, and the laboratory's flagship work"
@@ -1257,8 +1314,8 @@ craft_then_forge = "anneal"
 craft_ask_forge = "if the apex has lit"
 
 craft_line_menagerie = "summon"
-craft_then_menagerie = "sing skyward"
-craft_ask_menagerie = "if the skyward has next"
+craft_then_menagerie = "limn keystone heed"
+craft_ask_menagerie = "if the keystone has heed"
 
 # The seven words a way can answer to. `recall marks` used to say "other rooms
 # have words of their own", which is a dead end *and* a wrong reason - it is not
@@ -1321,22 +1378,59 @@ using_odd = "if the pylon has odd, the least ward travels the other way"
 recall_integrity = "how the tower's barrier stands. it wears down on its own"
 using_integrity = "if the pylon has fewer than 60 integrity, muster"
 
-# The three words the menagerie answers to. **These shipped with no pages at
-# all** — `recall next` fell through to the room overview for a whole phase,
-# while §19 recorded that every reading has one. Two are on the syllables and
-# one is on the circle, which is the split the sanctum already makes: a reading
-# about the thing in hand sits on the thing, and a reading about the room sits
-# on the fixture.
-recall_next = "the syllable at the rule, and the one a sing must answer"
-using_next = "if the skyward has next, then sing skyward"
+# The menagerie's words. **The six humours are the circle's logic gates**, and
+# each page names the gate a logician would and its four rows - the two a glyph
+# is given, both dark, one lit, the other lit, both lit - because a player who
+# knows the gates by their real names should not have to learn them twice, and
+# one who does not can learn them here. Each second humour is the first turned
+# over. They are words a spell writes too: a glyph carries its humour as a
+# reading, so `if the keystone has heed` is how a spell asks what it limned.
+#
+# **Every example limns the keystone**, because it is the one glyph a new tower's
+# lesser circle has: a page teaching yoke by limning sunwise would teach a refusal
+# to a player who has not opened the whole circle yet.
+recall_yoke = "lit only when both are lit. a logician's and. dark dark dark lit"
+using_yoke = "limn keystone yoke. and turned over is spurn"
 
-# **The whole of why a satchel is worth having in this room.** Only the aperture
-# publishes `next`, so without this a producer has nothing to run ahead on.
-recall_onward = "the syllable behind the one at the rule. one deep, no further"
-using_onward = "if the skyward has onward, queue skyward for the other spell"
+recall_spurn = "lit unless both are lit. a logician's nand. lit lit lit dark"
+using_spurn = "limn keystone spurn. yoke turned over"
 
-recall_remaining = "how many syllables of the figure are still to come"
-using_remaining = "repeat until the circle is empty, and read this to see how far"
+recall_heed = "lit when either is lit. a logician's or. dark lit lit lit"
+using_heed = "limn keystone heed. or turned over is eschew"
+
+recall_eschew = "lit only when neither is lit. a logician's nor. lit dark dark dark"
+using_eschew = "limn keystone eschew. heed turned over"
+
+recall_oppose = "lit when the two differ. a logician's xor. dark lit lit dark"
+using_oppose = "limn keystone oppose. xor turned over is mirror"
+
+recall_mirror = "lit when the two agree. a logician's xnor. lit dark dark lit"
+using_mirror = "limn keystone mirror. oppose turned over"
+
+# The three glyphs. **The keystone is what the beast is held by**, and the other
+# two feed it - which two senses each is given, and whether a wire is turned, is
+# drawn with the beast, so it has to be read off the board every time.
+#
+# **Sunwise's page teaches De Morgan by name**, because it is the fact a spell can
+# spend: turn both outer glyphs over and swap the keystone for its dual, and every
+# row answers as before - so a search that tries sunwise at yoke, heed and oppose
+# misses no beast. `winnowing` is built on it.
+recall_keystone = "the glyph the beast is held by. given two senses, or the other two"
+using_keystone = "limn keystone heed, or limn keystone to step it round the six"
+
+recall_sunwise = "a glyph given two of three senses, dark until the circle is whole"
+using_sunwise = "limn sunwise yoke. by de morgan, trying yoke heed and oppose is enough"
+
+# A `~` on the board is a turned wire, and both outer glyphs can carry one — at
+# most one each, since turning both of a glyph's wires is only another humour.
+recall_widdershins = "the other glyph given two senses. a ~ wire gives it one turned over"
+using_widdershins = "limn widdershins, bare, to try the next humour"
+
+# **A fact about the temper, which the board also shows** - never a verdict on a
+# glyph. It is what lets a spell that knows the gates skip keystones that cannot
+# be: a temper lit on a single row is a yoke or an eschew at the keystone.
+recall_fervour = "how many rows of the beast's temper are lit. never none, never all"
+using_fervour = "if the circle has exactly 1 fervour, the keystone is yoke or eschew"
 
 man_scripting_words = "words"
 man_scripting_asking = "questions"
@@ -1380,10 +1474,10 @@ using_part = "part haul(from, to), the lines, end. call it as haul(a, b)"
 # when the world says so; a bide ends when the spell's own arithmetic says so,
 # which is what a room with a clock in it needs.
 recall_bide = "do nothing for a number of ticks, then carry on"
-using_bide = "bide 2, to let a syllable travel before you answer it"
+using_bide = "bide 60, to let the athanor burn a while before you look again"
 
 recall_pull = "take the oldest name out of a satchel and give it a name"
-using_pull = "pull note from satchel, then sing note. it waits if none is there"
+using_pull = "pull herb from satchel, then grind herb. it waits if none is there"
 
 recall_alongside = "set a part running on its own and carry on down the page"
 using_alongside = "alongside filling(). it keeps its own place and its own names"
@@ -1484,12 +1578,13 @@ man_here_sanctum = "where you ward the tower. the barrier fades while you work"
 man_start_sanctum = "muster draws a course of wards up out of the wellspring"
 man_solve_sanctum = "haul them all to the barrier, never a ward onto a lesser"
 
-# **The one room with a clock in it**, and the primer says so in the first line
-# rather than letting a player find out by failing one. Every other domain waits
-# for ever; a chant does not.
-man_here_menagerie = "where troops are called up. a figure sung against the tick"
-man_start_menagerie = "summon draws a figure. it costs nothing to try"
-man_solve_menagerie = "sing each syllable as it lands. miss four and it collapses"
+# **A beast waits for ever**, like every room's puzzle - the menagerie had the
+# tower's one clock while it was a chant, and has none now (§19). The primer
+# leads with what the board is, because a player who reads a truth table as a
+# truth table is most of the way to holding one.
+man_here_menagerie = "where troops are called up. a beast's temper is a truth table"
+man_start_menagerie = "summon draws a beast. limn its glyphs, then summon again"
+man_solve_menagerie = "when every row of the answer matches the temper, it is held"
 
 # **Not `scribe a name to write one`, which was the first draft and was wrong
 # twice.** `scribe` is *offered* here and refuses - "a spell is written for a
@@ -1775,31 +1870,22 @@ man_haul_eg1 = "haul wellspring conduit, if the conduit will take it"
 man_haul_also = "muster, survey, recall sanctum"
 
 man_summon_use = "summon"
-man_summon_gloss = "draw a figure up at the circle, to be sung"
-man_summon_1 = "twelve syllables, one landing on each tick. it costs"
-man_summon_2 = "nothing to summon and nothing to abandon"
-man_summon_3 = "what it risks is the barrier: a collapsed chant"
-man_summon_4 = "wears it, which is the whole price of this room"
-man_summon_eg1 = "summon, then sing each syllable as it comes"
-man_summon_also = "sing, survey, recall menagerie"
+man_summon_gloss = "draw a beast to the circle, or call the waiting one in"
+man_summon_1 = "a beast's temper has a row for each way its senses can be"
+man_summon_2 = "lit, and calling it in marks the rows that balk. a balk"
+man_summon_3 = "costs the call. three calls or fewer pay in full, one at"
+man_summon_4 = "a lesser circle, where the keystone stands alone"
+man_summon_eg1 = "summon, limn the glyphs, then summon again"
+man_summon_also = "limn, survey, recall menagerie"
 
-man_sing_use = "sing <syllable>"
-man_sing_gloss = "answer the syllable at the aperture"
-man_sing_1 = "the four are skyward, earthward, leftward and"
-man_sing_2 = "rightward. next is the one about to land"
-man_sing_3 = "the right one strikes, anything else misses, and"
-man_sing_4 = "four misses collapse the figure. three is survivable"
-man_sing_eg1 = "sing skyward, on the tick it lands"
-man_sing_also = "summon, survey, recall menagerie"
-
-man_chorus_use = "chorus"
-man_chorus_gloss = "answer a figure on the arrow keys"
-man_chorus_1 = "the same chant, played rather than typed. the arrows"
-man_chorus_2 = "are the four syllables and escape gives them back"
-man_chorus_3 = "a spell cannot chorus. singing is what a spell does,"
-man_chorus_4 = "and it works the timing out instead of feeling it"
-man_chorus_eg1 = "summon, then chorus, and answer what reaches the rule"
-man_chorus_also = "summon, sing, recall menagerie"
+man_limn_use = "limn <glyph> [<humour>]"
+man_limn_gloss = "limn one of the circle's three glyphs with a humour"
+man_limn_1 = "the glyphs are keystone, sunwise and widdershins. the"
+man_limn_2 = "humours are yoke, spurn, heed, eschew, oppose, mirror"
+man_limn_3 = "leave the humour off and the glyph steps to the next"
+man_limn_4 = "one, which is how a spell tries what it cannot name"
+man_limn_eg1 = "limn keystone heed, or limn keystone to step it"
+man_limn_also = "summon, recall yoke, recall keystone"
 
 man_queue_use = "queue <name>"
 man_queue_gloss = "put a name in the satchel, for another spell to take"
@@ -1807,7 +1893,7 @@ man_queue_1 = "every room has a satchel, and it is the one thing two"
 man_queue_2 = "spells can both reach. one puts names in, the other takes"
 man_queue_3 = "them out, oldest first. pull is that other half, and it"
 man_queue_4 = "is a spell word: only a spell can bind what it takes"
-man_queue_eg1 = "queue skyward, then survey satchel to see it waiting"
+man_queue_eg1 = "queue heed, then survey satchel to see it waiting"
 man_queue_also = "survey, recall scripting"
 
 man_research_use = "research"

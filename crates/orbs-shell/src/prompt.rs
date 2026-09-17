@@ -718,11 +718,11 @@ pub(super) fn session(
     // The menagerie's board, fourth and last, on exactly the same terms. Four
     // pictures, four rooms, one player — so the columns are claimed once
     // whichever domain is open, and never twice.
-    let figure = super::chant::split(body, panel.figure.as_ref());
-    if let Some(running) = panel.figure.as_ref() {
-        super::chant::paint(&mut painter, figure.area, running, sim.prose());
+    let circle = super::circle::split(body, panel.circle.as_ref());
+    if let Some(waiting) = panel.circle.as_ref() {
+        super::circle::paint(&mut painter, circle.area, waiting, sim.prose());
     }
-    body = figure.rest;
+    body = circle.rest;
 
     // The bailey's board, fifth and last, on exactly the same terms. Five
     // pictures, five rooms, one player — so the columns are claimed once

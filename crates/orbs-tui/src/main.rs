@@ -60,7 +60,7 @@ mod theme;
 use std::io::{IsTerminal, stdout};
 use std::process::ExitCode;
 
-use orbs_shell::{seed, wizard};
+use orbs_shell::wizard;
 use orbs_sim::Sim;
 
 /// The crossterm version this binary is built against.
@@ -79,16 +79,16 @@ fn engine() -> String {
 }
 
 fn main() -> ExitCode {
-    let seed = seed();
-
     // `--dump "attend laboratory; grind sage"` prints one frame as text and
     // exits, through the same painters the Bevy build's `ORBS_DUMP` uses. That
-    // agreement is the boundary proof: two binaries, one screen.
+    // agreement is the boundary proof: two binaries, one screen. **A dump chooses
+    // its own seed** — the instrument's, `orbs_shell::seed` — so nothing here can
+    // hand it a game's.
     let mut args = std::env::args().skip(1);
     if let Some(flag) = args.next() {
         if flag == "--dump" {
             let script = args.next().unwrap_or_else(|| "1".to_owned());
-            orbs_shell::dump_script(seed, wizard(), &engine(), &script);
+            orbs_shell::dump_script(wizard(), &engine(), &script);
             return ExitCode::SUCCESS;
         }
         eprintln!("usage: orbs-tui [--dump <commands>]");
@@ -96,7 +96,7 @@ fn main() -> ExitCode {
     }
     // ...and `ORBS_DUMP` works here too, so a See-it line written for one
     // frontend runs against the other unchanged.
-    if orbs_shell::dump(seed, wizard(), &engine()) {
+    if orbs_shell::dump(wizard(), &engine()) {
         return ExitCode::SUCCESS;
     }
 
@@ -105,7 +105,10 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     }
 
-    match play(seed) {
+    // **A game gets a seed of its own** unless `ORBS_SEED` names one — which the
+    // play harness always does, so its scenarios stay the worlds they were
+    // written against. A save on disk outranks it inside `play`.
+    match play(orbs_shell::new_game_seed()) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             // `play` restores the terminal before returning, so this lands on a

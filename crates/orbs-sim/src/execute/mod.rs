@@ -42,7 +42,8 @@ mod research;
 mod scribe;
 mod scroll;
 mod scry;
-mod sing;
+mod settle;
+mod summon;
 mod unfurl;
 mod wander;
 mod weave;
@@ -52,8 +53,9 @@ mod tests;
 
 #[cfg(debug_assertions)]
 pub use debug::{
-    Asking, COURSE, LEARN, Order as SpawnOrder, REACH, SIEGE, SPAWN, SWAP, TAKE, WARD, beleaguered,
-    giveaway, lesson, order as spawn_order, reaching, shortcut, standing, swapping, taking,
+    Asking, CIRCLE, COURSE, LEARN, Order as SpawnOrder, REACH, SIEGE, SPAWN, SWAP, TAKE, WARD,
+    beckoned, beleaguered, giveaway, lesson, order as spawn_order, reaching, shortcut, standing,
+    swapping, taking,
 };
 #[cfg(debug_assertions)]
 pub use debug_spell::{
@@ -97,8 +99,13 @@ pub use scribe::{Opening, Request, write};
 /// authored in `recipes.toml` has anything behind it. Nothing else outside this
 /// module needs it — `wield` reaches the effect through `spend`.
 pub use scroll::Scroll;
-pub(crate) use sing::{Answered, circle_at, lapse as lapse_chant, strike as strike_syllable};
-pub use sing::{Chorusing, Patient, TROOP};
+pub use summon::TROOP;
+// The circle's republish by `Cwd`, for `debug_circle`, which limns the glyphs
+// without going through `limn`. Debug-only for `refresh_pylon`'s reason.
+#[cfg(debug_assertions)]
+pub(crate) use summon::refresh as refresh_circle;
+// A load whose puzzle was refused but whose readings were not, for every puzzle.
+pub(crate) use settle::settle as settle_puzzles;
 // Crate-internal, and the reason is the defect it closed: `spell::block` has to
 // ask the same question `wield` asks, or a scripted spend is charged a
 // production slot the typed one is not.

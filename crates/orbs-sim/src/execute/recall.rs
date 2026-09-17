@@ -1453,10 +1453,11 @@ mod tests {
                 // of the wall*, and getting the two the wrong way round is the
                 // commonest mistake the verb has.
                 Verb::Pledge => Some(&["die", "area"][..]),
-                // ...and the menagerie's syllables, third time. `sing <place>`
-                // would be true of the type and useless to a player: what they
-                // are choosing is one of four sounds, not somewhere to stand.
-                Verb::Sing => Some(&["syllable"][..]),
+                // ...and the menagerie's glyph and humour, third time. `limn
+                // <place> <place>` would be true of the type and useless to a
+                // player: one is which of three glyphs, the other which of six
+                // gates, and neither is somewhere to stand.
+                Verb::Limn => Some(&["glyph", "humour"][..]),
                 // ...and the forge's tool and charm, fifth time. `imbue <place>
                 // <place>` would be true of the type and useless: one of them is
                 // any tool in the tower and the other is one of five charms, and
@@ -1525,7 +1526,7 @@ mod tests {
         // vocabulary the manual cannot reach, with this test green.
         let readings = crate::tower::maze::readings()
             .into_iter()
-            .chain(crate::tower::chant::readings())
+            .chain(crate::tower::circle::readings())
             .chain(crate::tower::ward::readings())
             .chain(crate::tower::pylon::readings())
             .chain(crate::tower::siege::readings());

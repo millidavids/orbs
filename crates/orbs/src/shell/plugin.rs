@@ -5,9 +5,7 @@ use bevy::input::keyboard::KeyboardInput;
 use bevy::prelude::*;
 use bevy::window::WindowResized;
 
-use super::commanding::{
-    cycle_register, export_trace, quit, quit_requested, submit, toggle_patient,
-};
+use super::commanding::{cycle_register, export_trace, quit, quit_requested, submit};
 use super::input::{SubmittedMessage, type_into_line};
 use super::reading::{scroll_back, scroll_forward, start_reading, stop_reading};
 use super::revealing::{drive_panes, drive_passing, drive_reveal, finish_reveal};
@@ -88,7 +86,6 @@ macro_rules! shell_resources {
             super::Loom,
             super::Standing,
             super::Walk,
-            super::Chorus,
         );
     };
 }
@@ -238,17 +235,6 @@ impl Plugin for ShellPlugin {
                     // the player, and holding the keyboard over a pane with no
                     // map on it is the worst of the three ways that ends.
                     super::wandering::close_when_gone.run_if(super::wandering::walking),
-                    // The menagerie's, on exactly the same three terms. It owns
-                    // no pane either — the figure draws whether or not anybody
-                    // said `chorus` — and it closes itself for a sharper reason
-                    // than the maze does: a chant ends *on its own*, so a player
-                    // left holding the arrows over nothing would have a dead
-                    // prompt and no way to discover why.
-                    super::chorusing::open_requested.run_if(resource_changed::<crate::sim::Tower>),
-                    super::chorusing::type_into_chant
-                        .run_if(on_message::<KeyboardInput>)
-                        .run_if(super::chorusing::chorusing),
-                    super::chorusing::close_when_gone.run_if(super::chorusing::chorusing),
                     // **Ungated, and after every surface that can let go.** It
                     // watches for the keyboard changing hands, which is an edge
                     // `type_into_line` cannot see for itself — that system is
@@ -310,11 +296,12 @@ impl Plugin for ShellPlugin {
                     export_trace.run_if(input_just_pressed(KeyCode::F6)),
                     // §3's tonal register, until Phase 8 drives it from threat.
                     cycle_register.run_if(input_just_pressed(KeyCode::F7)),
-                    // **`F9`, not `F8`** — `F8` is the greyscale accommodation
-                    // and these two are neighbours in what they are for, which
-                    // is exactly why they must not be neighbours a finger can
-                    // slip between. Both join the settings screen in Phase 13.
-                    toggle_patient.run_if(input_just_pressed(KeyCode::F9)),
+                    // **`F9` is unbound**, and was the menagerie's patient chant
+                    // until the menagerie stopped having a clock (§19). Left free
+                    // rather than reassigned: a key that did something a release
+                    // ago and something else now is a key a returning player
+                    // presses expecting the first.
+                    //
                     // F10, not Escape: the moment there is a text field, Escape
                     // is "clear the line" muscle memory, and quitting the game
                     // mid-sentence is not a recoverable surprise.
@@ -1281,12 +1268,11 @@ mod tests {
             ("weave", &["weave"][..]),
             ("maze", &["attend archive", "research", "wander"][..]),
             ("reading", &["unfurl"][..]),
-            // **The fifth, which this table's own doc promised would be a row.**
-            // It was added as a surface and not as a row, so the regression this
-            // test exists to prevent went unasserted for the only surface the
-            // phase introduced — which is the failure the doc describes, made by
-            // the person who wrote the doc.
-            ("chant", &["attend menagerie", "summon", "chorus"][..]),
+            // **There was a fifth row, `chant`**, added late and for the reason
+            // this table's doc gives: a surface that arrives without its row goes
+            // unasserted. The menagerie is typed now (§19), so the row went with
+            // the surface rather than staying to assert something that cannot
+            // open.
         ] {
             let mut app = app();
             for line in opening {
@@ -1484,7 +1470,6 @@ mod tests {
                 .is_open(),
             weaving: app.world().resource::<crate::shell::Loom>().is_open(),
             walking: app.world().resource::<crate::shell::Walk>().is_open(),
-            chorusing: app.world().resource::<crate::shell::Chorus>().is_open(),
             reading: app.world().resource::<orbs_shell::Scroll>().is_reading(),
             menuing: app.world().resource::<crate::shell::Standing>().is_open(),
         })

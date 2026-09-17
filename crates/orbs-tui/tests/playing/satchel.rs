@@ -30,13 +30,13 @@ fn queueing_before_the_loom_grants_it_says_where_to_go() {
     }
     let game = Game::start();
     game.does("attend menagerie", "/tower/menagerie")
-        .does("queue skyward", "not learned to carry a satchel");
+        .does("queue heed", "not learned to carry a satchel");
 }
 
 /// A satchel loaded by hand and read back, in order and with a repeat.
 ///
 /// **A name twice is the point.** It is why the queue is a component rather than
-/// children plus `Stock`, which would collapse the two into `skyward 2` and lose
+/// children plus `Stock`, which would collapse the two into `heed 2` and lose
 /// which came first.
 #[test]
 #[ignore = "plays a real game through tmux; run with scripts/play.sh"]
@@ -47,11 +47,11 @@ fn a_hand_loaded_satchel_reads_back_as_a_queue() {
     let game = Game::start();
     game.does("attend menagerie", "/tower/menagerie")
         .does("debug_take satchel_1", "holds satchel_1")
-        .does("queue skyward", "1 waiting")
-        .does("queue earthward", "2 waiting")
-        .does("queue skyward", "3 waiting")
+        .does("queue heed", "1 waiting")
+        .does("queue yoke", "2 waiting")
+        .does("queue heed", "3 waiting")
         .does("survey satchel", "queued")
-        .expect_drawn("skyward    earthward  skyward");
+        .expect_drawn("heed  yoke  heed");
 }
 
 /// A spell written at the keyboard drains what a hand put in.
@@ -68,8 +68,8 @@ fn a_spell_typed_at_the_keyboard_drains_the_satchel() {
     let game = Game::start();
     game.does("attend menagerie", "/tower/menagerie")
         .does("debug_take satchel_1", "holds satchel_1")
-        .does("queue skyward", "1 waiting")
-        .does("queue earthward", "2 waiting")
+        .does("queue heed", "1 waiting")
+        .does("queue yoke", "2 waiting")
         .opens("scribe drain", "drain.spell in ");
     game.type_raw("edit");
     game.type_raw("repeat 2");
@@ -103,8 +103,8 @@ fn a_forked_spell_feeds_itself() {
         .opens("scribe both", "both.spell in ");
     game.type_raw("edit");
     game.type_raw("part filling()");
-    game.type_raw("queue skyward");
-    game.type_raw("queue earthward");
+    game.type_raw("queue heed");
+    game.type_raw("queue yoke");
     game.type_raw("end");
     game.type_raw("alongside filling()");
     game.type_raw("repeat 2");
@@ -117,8 +117,8 @@ fn a_forked_spell_feeds_itself() {
     game.meditates(16);
     // The producer put both in and the consumer took both out, with nothing
     // between them but the node.
-    game.does("peruse menagerie.log", "skyward goes in the satchel")
-        .expect_drawn("earthward goes in the satchel");
+    game.does("peruse menagerie.log", "heed goes in the satchel")
+        .expect_drawn("yoke goes in the satchel");
     game.does("survey satchel", "holds nothing");
 }
 

@@ -164,8 +164,8 @@ const BRANCHES: &[Branch] = &[
     // is §6's tie-resolution order. Appending leaves every existing reading
     // exactly where it was.
     //
-    // The menagerie is where a chant is sung (§10, `tower::chant`). Like the
-    // lens and the sanctum it holds no materials of its own — what a chant
+    // The menagerie is where a beast is held (§10, `tower::circle`). Like the
+    // lens and the sanctum it holds no materials of its own — what a hold
     // yields is troops, and they keep themselves in the arsenal because they are
     // finished work.
     //
@@ -452,22 +452,22 @@ const BAILEY: &[Branch] = &[
     },
 ];
 
-/// The menagerie: the circle a chant is sung at, and the four syllables.
+/// The menagerie: the circle a beast is held in, its three glyphs, and the six
+/// humours a glyph can be limned with.
 ///
 /// **The circle spends its one `Operation` on `summon`**, which is the pylon's
-/// arrangement — one fixture, one word that opens the puzzle. `sing` is anchored
-/// to it rather than to each syllable, which is the *archive's* shape rather
-/// than the sanctum's: a syllable is a thing you name in an argument, not a
-/// place you stand, and there is one circle to sing at.
+/// arrangement — one fixture, one word that opens the puzzle. `limn` is anchored
+/// to it rather than to each glyph, which is the forge's shape: a glyph is a
+/// thing you name in an argument, not a place you stand, and there is one circle.
 ///
-/// The syllables are `Role::Reading` for the reason the compass bearings and the
-/// sockets are: a spell's question resolves its place half against
-/// `NounKind::Place`, so `if the circle has skyward` needs the word to be one —
-/// and the role is what stops it also being somewhere you can `attend`.
+/// The glyphs and humours are `Role::Reading` for the reason the lens's sockets
+/// and sigils are: `limn keystone heed` resolves both slots against
+/// `NounKind::Place`, and a spell's `if the keystone has heed` resolves its place
+/// half the same way — and the role is what stops either being somewhere you can
+/// `attend`.
 ///
-/// **`group: Some("syllable")` is on these and never on the domain Branch**, so
-/// `for each syllable` walks the four. `groups_at` reads the *children* of where
-/// you stand.
+/// **Named by the model's own `const fn`s**, so the word the tower registers and
+/// the word `limn` looks up are one spelling rather than two that could drift.
 const MENAGERIE: &[Branch] = &[
     Branch {
         name: "circle",
@@ -477,39 +477,40 @@ const MENAGERIE: &[Branch] = &[
         operation: Some(Verb::Summon),
         group: None,
     },
-    Branch {
-        name: "skyward",
-        holds: &[],
-        places: &[],
-        role: Some(Role::Reading),
-        operation: None,
-        group: Some("syllable"),
-    },
-    Branch {
-        name: "earthward",
-        holds: &[],
-        places: &[],
-        role: Some(Role::Reading),
-        operation: None,
-        group: Some("syllable"),
-    },
-    Branch {
-        name: "leftward",
-        holds: &[],
-        places: &[],
-        role: Some(Role::Reading),
-        operation: None,
-        group: Some("syllable"),
-    },
-    Branch {
-        name: "rightward",
-        holds: &[],
-        places: &[],
-        role: Some(Role::Reading),
-        operation: None,
-        group: Some("syllable"),
-    },
+    glyph(super::circle::Glyph::Keystone),
+    glyph(super::circle::Glyph::Sunwise),
+    glyph(super::circle::Glyph::Widdershins),
+    humour(super::circle::Humour::Yoke),
+    humour(super::circle::Humour::Spurn),
+    humour(super::circle::Humour::Heed),
+    humour(super::circle::Humour::Eschew),
+    humour(super::circle::Humour::Oppose),
+    humour(super::circle::Humour::Mirror),
 ];
+
+/// One of the circle's glyphs, as a place `limn` names and `for each glyph` walks.
+const fn glyph(glyph: super::circle::Glyph) -> Branch {
+    Branch {
+        name: glyph.word(),
+        holds: &[],
+        places: &[],
+        role: Some(Role::Reading),
+        operation: None,
+        group: Some(super::circle::GLYPHS),
+    }
+}
+
+/// One of the six humours, as a place `limn` names and `for each humour` walks.
+const fn humour(humour: super::circle::Humour) -> Branch {
+    Branch {
+        name: humour.word(),
+        holds: &[],
+        places: &[],
+        role: Some(Role::Reading),
+        operation: None,
+        group: Some(super::circle::HUMOURS),
+    }
+}
 
 /// The archive's one instrument, and the four ways its reading can go.
 ///
@@ -1096,7 +1097,7 @@ pub fn raise(world: &mut World) {
 /// **`Protected`, on the dispensary's argument.** `purge satchel` would scour a
 /// queue a running pipeline is reading, which is §7's *"a thing the loop depends
 /// on is safe by refusing, not by being emptied."* Emptying it is what `pull`
-/// does, one name at a time, and what a chant ending does to the rest.
+/// does, one name at a time.
 fn raise_satchel(world: &mut World, tower: Entity, room: &str) {
     let Some(at) = super::children_of(world, tower)
         .into_iter()

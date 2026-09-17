@@ -99,6 +99,18 @@ pylon = 1
 # domain that is broken — and the first sweep of this policy did exactly that.
 lattice = 1
 
+# The menagerie (§10). **8 for a beast held, the lens's tier**, and for the lens's
+# reason: both are a deduction with nothing to show for it but what it pays, and
+# both pay full within par and three quarters past it (`tower::worth_within_par`).
+#
+# **First pass, and the rate it gives is the search's, not a player's.** A
+# person who reads the table holds a beast in one call; a bound `taming` tries
+# circles in order and averages 68 calls. What `orbs-balance` measures is the
+# second, because that is what the economy sees — and the gap between the two
+# is this domain's argument for automation arriving through concurrency rather
+# than speed, recorded in §19 with the measured number.
+circle = 8
+
 # ---------------------------------------------------------------------------
 # THE LEY LINE — the tower's line.
 #
@@ -143,7 +155,9 @@ opens = ["domain:grimoire"]
 
 # The first fork, and the first choice in the game: a fifth more fuel, an edge
 # on every roll at a wall the player has not seen yet, or a second instruction a
-# tick. The craft node is the menagerie's whole reason (§19).
+# tick. The craft node was the chant's whole reason, which could not be sung at
+# one step (§19); the circle's search works at one and takes half the ticks at
+# two, so it is a rate now, as it is in every other room.
 [[ley_line]]
 at = 24
 nodes = ["fuel_1", "edge_1", "steps_1"]
@@ -300,7 +314,7 @@ id = "remembered"
 #   done = { potions = 5 }               that many potions, of any kind
 #   done = { scrolls = 1 }               that many scrolls assembled
 #   done = { at = "stacks", times = 3 }  runs finished at an instrument
-#   done = { event = "figure" }          a figure closed, a siege settled or
+#   done = { event = "figure" }          a beast held, a siege settled or
 #                                        won, a spell bound, a secret learned
 #
 # Stations are reached in the file's order within a line: a player who has
@@ -452,16 +466,26 @@ domain = "sanctum"
 id = "sanctum_4"
 done = { event = "siege_won", times = 5 }
 
-# The menagerie. A figure closed is a chant sung to its end.
+# The menagerie. A figure is a beast held at the circle — the event kept the
+# chant's name so a tally carried in a save still counts (§19).
 [[mastery]]
 domain = "menagerie"
 id = "menagerie_1"
 done = { event = "figure" }
 
+# **The second station opens the whole circle** (§19). A sealed tower's beasts
+# are lesser until here — the keystone alone over two senses, *which humour is
+# this?* — because every logic-gate game teaches one gate before a circuit, and
+# five of them is each lesser temper once, give or take the draw.
+#
+# **`fixed`, so five at every length.** A second station is ramped by the game's
+# length like any other, which asked eleven lesser beasts of a medium game and
+# thirty-five of a long one: a lesson that grew with the game it teaches.
 [[mastery]]
 domain = "menagerie"
 id = "menagerie_2"
-done = { event = "figure", times = 5 }
+done = { event = "figure", times = 5, fixed = true }
+opens = ["circle"]
 
 [[mastery]]
 domain = "menagerie"

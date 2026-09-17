@@ -42,7 +42,7 @@ use crate::tick::Tick;
 /// function.
 ///
 /// Adding the other two is then one variant each plus one arm in [`Surface::of`], which
-/// is the shape [`chant::readings`](super::chant::readings) grows by.
+/// is the shape [`circle::readings`](super::circle::readings) grows by.
 ///
 /// **Two is already a decision**, which is the thing to check before dismissing
 /// it as too few: a poisoned log and a swapped pile are the two ways the tower

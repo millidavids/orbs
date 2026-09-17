@@ -189,6 +189,16 @@ pub fn refresh(world: &mut World) {
     let Some(stacks) = stacks(world) else {
         return;
     };
+    publish(world, stacks);
+}
+
+/// [`refresh`], for the stacks wherever they stand.
+///
+/// **Takes the stacks rather than reading `Cwd`**, the lens's rule: a load tidies
+/// every puzzle in the tower from wherever the player saved, and the ways are
+/// found in the stacks' own room rather than the one the player stands in.
+pub(crate) fn publish(world: &mut World, stacks: Entity) {
+    let room = super::readings::room_of(world, stacks);
     let readings: Vec<(Way, Option<&'static str>, bool, bool, Option<u8>)> = {
         let maze = world.get::<Maze>(stacks);
         Way::ALL
@@ -210,7 +220,8 @@ pub fn refresh(world: &mut World) {
     };
 
     for (way, word, came, spoil, marks) in readings {
-        let Some(node) = find_reading(world, way) else {
+        let Some(node) = room.and_then(|room| super::readings::reading(world, room, way.word()))
+        else {
             continue;
         };
         for held in tower::children_of(world, node) {
@@ -589,17 +600,6 @@ pub(crate) fn stacks(world: &World) -> Option<Entity> {
         world
             .get::<tower::Operation>(*node)
             .is_some_and(|operation| operation.0 == Verb::Research)
-    })
-}
-
-/// One of the four readings, by way.
-fn find_reading(world: &World, way: Way) -> Option<Entity> {
-    let cwd = world.resource::<Cwd>().0;
-    tower::children_of(world, cwd).into_iter().find(|node| {
-        world.get::<tower::Reading>(*node).is_some()
-            && world
-                .get::<tower::Name>(*node)
-                .is_some_and(|name| name.0 == way.word())
     })
 }
 

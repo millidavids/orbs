@@ -710,13 +710,6 @@ impl Session {
             KeyCode::F(7) => {
                 orbs_shell::cycle_register(&mut self.sim);
             }
-            // §14's accommodation for the menagerie, and **not inert here**: it
-            // changes what a strike is worth, which is world state, so a chant
-            // sung patiently in a terminal reaches the same troops as one sung
-            // patiently under Bevy. Rule 2 is satisfied by more than usual.
-            KeyCode::F(9) => {
-                orbs_shell::toggle_patient(&mut self.sim);
-            }
             _ => return false,
         }
         true
@@ -888,8 +881,10 @@ pub(crate) fn run(sim: Sim, engine: String) -> std::io::Result<()> {
         // **Read before the old session is dropped**, so a save that will not
         // open leaves the player where they were rather than in a half-built
         // world. `read_save_from` has already set an unreadable one aside.
+        // **A new game gets a seed of its own** (`orbs_shell::new_game_seed`),
+        // both when the player asks for one and when a slot turns out empty.
         let raised = match asked.length {
-            Some(length) => orbs_sim::Sim::begun(orbs_shell::seed(), length),
+            Some(length) => orbs_sim::Sim::begun(orbs_shell::new_game_seed(), length),
             None => match orbs_shell::read_save_from(&asked.path) {
                 orbs_shell::Opened::Restored(save) => {
                     let mut resumed = orbs_sim::Sim::restored(&save);
@@ -907,9 +902,10 @@ pub(crate) fn run(sim: Sim, engine: String) -> std::io::Result<()> {
                     });
                     continue;
                 }
-                orbs_shell::Opened::New => {
-                    orbs_sim::Sim::begun(orbs_shell::seed(), orbs_sim::content::Length::Medium)
-                }
+                orbs_shell::Opened::New => orbs_sim::Sim::begun(
+                    orbs_shell::new_game_seed(),
+                    orbs_sim::content::Length::Medium,
+                ),
             },
         };
 

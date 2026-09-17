@@ -32,15 +32,10 @@
 use orbs_render::{Painter, Rect, Span, Stacks, Style, UtteranceKind};
 use orbs_sim::content::Prose;
 
-/// Cells of transcript that must survive beside the map.
-///
-/// Below this the map is dropped: a transcript squeezed to a couple of words a
-/// line is not a transcript, and the map is the newer thing and therefore the
-/// one that yields.
-const TRANSCRIPT_FLOOR: u16 = 24;
-
-/// The gap between the map's block and the transcript.
-const GUTTER: u16 = 1;
+// The gap and the floor every board beside the transcript keeps. The map pans
+// inside what it is given, so its `split` is its own; the transcript it leaves
+// is not.
+use crate::beside::{GUTTER, TRANSCRIPT_FLOOR};
 
 /// Where the map sits, and what is left for the transcript.
 #[derive(Debug, Clone, Copy)]

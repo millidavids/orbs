@@ -44,7 +44,10 @@ pub enum RngStream {
     /// the cheap thing is to leave it and the expensive thing is to have it
     /// look like a renumber. The index table below is where that is enforced.
     Battlements,
-    /// The menagerie: the figure a chant is drawn to (§10, `tower::chant`).
+    /// The menagerie: the beast a circle is drawn for (§10, `tower::circle`).
+    ///
+    /// It drew a chant's figure until the domain became a logic puzzle; the
+    /// index is the stream's identity, so it kept it (§19).
     Menagerie,
     /// The siege: every die the tower rolls (§10, `tower::dice`).
     ///

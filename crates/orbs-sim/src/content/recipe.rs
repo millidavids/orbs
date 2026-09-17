@@ -511,13 +511,13 @@ impl Recipes {
                 .names()
                 .map(str::to_owned),
         );
-        // **And what the tower makes outside a recipe.** A troop comes out of a
-        // chant, which is not an instrument and has no `[recipe]` — so it is
-        // invisible to `vocabulary` for the same reason charcoal is, and needs
-        // naming here for the same reason.
+        // **And what the tower makes outside a recipe.** A troop comes out of the
+        // menagerie's circle, which is not an instrument with a `[recipe]` — so
+        // it is invisible to `vocabulary` for the same reason charcoal is, and
+        // needs naming here for the same reason.
         //
         // Without it `debug_spawn troop` refused, which means the tester could
-        // not reach a state the game produces every time somebody sings. That is
+        // not reach a state the game produces every time a beast is held. That is
         // exactly what `tower::home`'s three lints exist to guarantee, and none
         // of them could see it: they walk *authored* materials, and a material
         // no file declares is a material no lint iterates.
@@ -543,7 +543,7 @@ impl Recipes {
     pub fn kind_of(&self, name: &str) -> crate::parser::NounKind {
         // **A troop is finished work no recipe makes**, which is the one shape
         // the three arms below cannot see — they all ask which recipe produced
-        // the name, and a chant is not a recipe. Named here rather than given a
+        // the name, and a held beast is not a recipe. Named here rather than given a
         // recipe nobody can fire, which is `tower::home`'s reasoning for the
         // same material and the same sentence.
         if name == crate::execute::TROOP {

@@ -135,7 +135,38 @@ use super::node::NodeSave;
 /// format-10 document read by a format-9 build would drop `opened` in silence
 /// and load a sealed tower as an open one, which is the failure the gate exists
 /// for. No stream moved; a tally is a function of the submissions.
-pub const FORMAT: u32 = 11;
+///
+/// **11 → 12 is the menagerie becoming a logic puzzle** (§19), and it is a
+/// content change of the 6 → 7 kind: nodes this build does not raise. A
+/// format-11 tower carries the chant's four syllables as `Role::Reading` nodes,
+/// and a figure saved mid-song carries readings under them and under the circle —
+/// and `restore` re-spawns any path the tower lacks, so they would come back as
+/// orphans and a leftover `remaining` would make `if the circle is empty` false
+/// for ever. The migration drops them. The chant's own component needs nothing:
+/// `NodeSave` does not deny unknown fields, so a `chant` is simply not read.
+///
+/// **No stream moved.** `RngStream::Menagerie` keeps its index and now draws a
+/// beast, not a figure; a replay across the bump diverges, which a replay
+/// across any change to a domain's draw would.
+///
+/// **12 → 13 is a key that did not exist, and absent means *shut***. `circle`
+/// opens the menagerie's whole circle, and a tower without it draws lesser
+/// beasts — so an *open* tower's document, which lists every key it had and not
+/// this one, would load drawing the lesser circle for ever with nothing able to
+/// open it. The migration adds it to an open tower. A sealed one needs nothing:
+/// `mastery::caught_up` reaches `menagerie_2` on load for a tower whose holds
+/// meet its fixed five — including one the older ramped count had not reached —
+/// and opens the circle with it, saying what a `~` wire is, since that player was
+/// never told; one short of five draws lesser beasts, which is
+/// the new rule. `BeastSave`'s wiring
+/// became optional in the same bump; a format-12 beast always has both pairs.
+///
+/// **13 → 14 is a beast's turned wires**, and it is the 9 → 10 kind: a field
+/// whose absence is the honest reading of an older document — none turned,
+/// which is what every beast before them was — so `migrate` does nothing. What
+/// the bump buys is the version gate: a format-14 document read by a format-13
+/// build would drop `turned` without a word and restore a different beast.
+pub const FORMAT: u32 = 14;
 
 /// Bring an older document up to [`FORMAT`], or say why it cannot be.
 ///
@@ -158,6 +189,9 @@ pub const FORMAT: u32 = 11;
 /// | 8 → 9 | `RngStream::COUNT` 11 → 12 (`Forge`), **and** quintessence moving from the siege to the tower | Yes — pad, and lift the pool |
 /// | 9 → 10 | `[progress]` gains `tally`, `reached` and `opened` — the mastery lines and the sealed tower | Yes — every field defaults to the honest reading; `opened` absent is *everything open* |
 /// | 10 → 11 | `[world]` gains `length`, and `[progress]` gains `stores` — how long the game was begun to be, and what the arsenal is stocked in | Yes — `length` absent is the curve as authored, `stores` absent is *full* |
+/// | 11 → 12 | The menagerie's chant replaced by the circle — four syllable nodes and every reading under them and under the circle, gone | Yes — drop the nodes; a figure mid-song loads as a circle with no beast |
+/// | 12 → 13 | `[progress] opened` gains `circle`, whose absence draws lesser beasts | Yes — an open tower gains the key; a sealed one catches up on its own |
+/// | 13 → 14 | A waiting beast gains `turned`, its turned wires | Yes — absent is none turned, which is what it was |
 ///
 /// **Two of these rows were once missing, and `migrate` performed both.** A
 /// table that stops short of the function beneath it is worse than no table: it
@@ -265,6 +299,38 @@ fn migrate(mut save: Save) -> Result<Save, super::SaveError> {
             .filter_map(|siege| siege.quintessence.take())
             .max();
         save.progress.quintessence = carried;
+    }
+
+    // **11 → 12: the chant's nodes go.** By *prefix*, not by path, because a
+    // syllable carried its `next` and `onward` readings as children, and a
+    // child whose parent was dropped would be restored at the filesystem root.
+    // **And every child of the circle**, which is the one that would have hurt
+    // quietly: a leftover `remaining` makes `if the circle is empty` false for
+    // ever, and the circle's readings are republished on the first `summon`
+    // anyway — there is nothing under it worth keeping.
+    if save.world.format < 12 {
+        const ROOM: &str = "/tower/menagerie/";
+        const SYLLABLES: [&str; 4] = ["skyward", "earthward", "leftward", "rightward"];
+        let chant = |path: &str| {
+            let Some(rest) = path.strip_prefix(ROOM) else {
+                return false;
+            };
+            let head = rest.split('/').next().unwrap_or(rest);
+            SYLLABLES.contains(&head) || rest.starts_with("circle/")
+        };
+        save.nodes.retain(|node| !chant(&node.path));
+    }
+
+    // **12 → 13: an open tower keeps the whole circle.** Every tower before
+    // this had it, so an open document gains the key it could not have named.
+    // A sealed one is left to `mastery::caught_up`, which reaches the station for
+    // a tower whose holds meet it and leaves the rest drawing lesser beasts.
+    if save.world.format < 13
+        && !save.world.sealed
+        && let Some(opened) = save.progress.opened.as_mut()
+        && !opened.iter().any(|key| key == crate::tower::opened::CIRCLE)
+    {
+        opened.push(crate::tower::opened::CIRCLE.to_owned());
     }
 
     save.world.format = FORMAT;

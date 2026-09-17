@@ -20,7 +20,7 @@ mod sim;
 
 use bevy::prelude::*;
 use bevy::window::WindowResolution;
-use orbs_shell::{seed, wizard};
+use orbs_shell::wizard;
 
 /// 1920×1080 puts the 960×720 picture at scale **1.5** — a 12×24 glyph — with
 /// 240 pixels of bar down each side.
@@ -47,14 +47,14 @@ use orbs_shell::{seed, wizard};
 const INITIAL_WINDOW: (u32, u32) = (1920, 1080);
 
 fn main() -> AppExit {
-    let seed = seed();
     // Before the App, because the whole value of it is needing none of the App.
     // See `orbs_shell::dump` — and note it is the *shared* dump, so
-    // `orbs-tui --dump` prints the same text through the same painters.
+    // `orbs-tui --dump` prints the same text through the same painters. **It
+    // chooses its own seed**, the instrument's.
     //
     // The engine line is the one thing this frontend has to tell it: the card is
     // an inventory of the machine, and only this binary knows Bevy is in it.
-    if orbs_shell::dump(seed, wizard(), boot::engine()) {
+    if orbs_shell::dump(wizard(), boot::engine()) {
         return AppExit::Success;
     }
 
@@ -76,7 +76,10 @@ fn main() -> AppExit {
         .insert_resource(ClearColor(Color::srgb(0.10, 0.06, 0.15)))
         .add_plugins((
             sim::SimPlugin {
-                seed,
+                // **A game gets a seed of its own**, unless `ORBS_SEED` names one
+                // or `ORBS_CAPTURE` is taking a screenshot — see
+                // `orbs_shell::new_game_seed`. A save on disk outranks it.
+                seed: orbs_shell::new_game_seed(),
                 wizard: wizard(),
                 // The real game keeps its tower between sessions. Only this
                 // crate's own tests do not — see `SimPlugin::persist`.

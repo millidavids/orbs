@@ -124,8 +124,9 @@ pub(super) fn quit(world: &mut World) {
 
 /// A request to open the orb's menu.
 ///
-/// The sixth take-once handshake, beside `scribe`, `unfurl`, `weave`, `wander`
-/// and `chorus`: the sim records the decision and the frontend owns the screen.
+/// A take-once handshake, beside `scribe`, `unfurl`, `weave` and `wander` (and
+/// the menagerie's `chorus`, until it went with the chant): the sim records the
+/// decision and the frontend owns the screen.
 ///
 /// **Its own resource rather than a second flag on [`Quitting`]**, because the
 /// two are no longer the same question. They were for one iteration — §19 has

@@ -505,8 +505,15 @@ const STATION_AND_STATION: &[Slot] = &[
     Slot::required(NounKind::Place),
     Slot::required(NounKind::Place),
 ];
-/// `sing` takes one syllable, and there is no bare form.
-const SYLLABLE: &[Slot] = &[Slot::required(NounKind::Place)];
+/// `limn <glyph> [<humour>]` — which glyph, and optionally what to limn it with.
+///
+/// `SOCKET_AND_SIGIL`'s shape and its reason: glyphs and humours are both
+/// `Role::Reading` places, and the humour is optional because a variable-free
+/// spell cannot name one it has not tried — bare, the circle steps the glyph.
+const GLYPH_AND_HUMOUR: &[Slot] = &[
+    Slot::required(NounKind::Place),
+    Slot::optional(NounKind::Place),
+];
 /// `pledge` takes a die and an area — the lens's socket-and-sigil shape.
 ///
 /// `to` between them is §6 filler, so `pledge d20 to buckler` and `pledge d20
@@ -757,12 +764,13 @@ pub enum Verb {
     /// against `weave`, `drag` 935 against `dragged`, `bring` 600 against
     /// `grind`. `haul` is clean at 500 against `wall`.
     Haul,
-    /// `summon` — draw up a chant at the circle (§10, `menagerie/`).
+    /// `summon` — draw a beast up at the circle, or call the waiting one in (§10,
+    /// `menagerie/`).
     ///
-    /// Free and instant, as [`Muster`](Self::Muster) and [`Probe`](Self::Probe)
-    /// are: opening the figure is not the work, singing it is. **It costs
-    /// nothing to attempt**, which is what makes the risk — a collapsed chant
-    /// wearing the barrier — the price rather than a resource.
+    /// **Two acts in one word**, which is [`Probe`](Self::Probe)'s: opening a
+    /// reading and pressing it. Free and instant, as `probe` and
+    /// [`Muster`](Self::Muster) are — a balked call costs the call and nothing
+    /// else, so trying is never a resource decision.
     ///
     /// **Takes nothing**, for the reason `muster` and `probe` do: there is one
     /// circle, and naming it would be naming the only thing there is.
@@ -779,9 +787,10 @@ pub enum Verb {
     /// is.
     ///
     /// Swept clean at 500 (`attend`, `decant`, `find`) against a floor of 600,
-    /// with no three-character prefix collision. `siege` itself is **600 against
-    /// `sing`** and so cannot be a word the player types — the domain keeps the
-    /// name and the verb does not.
+    /// with no three-character prefix collision. `siege` itself scored **600
+    /// against `sing`** while the menagerie was a chant, and so was not made a
+    /// word the player types — the domain keeps the name and the verb does not.
+    /// `sing` is gone (§19, `0.15.0`); the split stands on its own.
     Defend,
     /// `deploy <troop>` — send what the menagerie summoned into the line.
     ///
@@ -866,51 +875,28 @@ pub enum Verb {
     ///
     /// Swept clean at 500 (`halt`, `help`, `odd`).
     Hold,
-    /// `sing <syllable>` — answer the syllable at the aperture.
+    /// `limn <glyph> [<humour>]` — limn one of the circle's glyphs; bare, step it
+    /// round the six (§10, `menagerie/`).
     ///
-    /// **The one verb in the game whose value depends on *when* it runs.** A
-    /// syllable lands on a tick; singing the right one on that tick strikes it
-    /// and anything else misses. That is a reversal of §10.1 and it is argued in
-    /// §19 rather than assumed here.
+    /// **The lens's `dial`, one room over**, and for `dial`'s reason the humour
+    /// is optional: a spell has no variables, so it cannot name the humour it has
+    /// not tried, and `limn keystone` asks the circle for the next one. Three
+    /// literal `repeat 6` loops around that are a search over every circle there
+    /// is — which is what makes the room scriptable at all.
     ///
-    /// It is the same word typed and scripted, deliberately: the player asked
-    /// for the typed form to *"inform how the scripting is going to work"*, and
-    /// the exact way to do that is for them to be the same act. A batch form —
-    /// `sing skyward earthward` — was considered and dropped, because a syllable
-    /// lands on a tick, so a batch is only N commands on N ticks with a
-    /// different spelling, and it would have made the two forms diverge for
-    /// nothing.
+    /// Free and instant: limning is not the work, holding the beast is.
     ///
-    /// `sing` is clean. `chant` scores **600** three ways — against `cast`,
-    /// `halt` and `cat` — so the noun keeps the name and the verb does not: you
-    /// sing a chant.
-    Sing,
-    /// `chorus` — hand the arrow keys to a running chant (§10, `menagerie/`).
+    /// # It replaced `sing` and `chorus`, and the names that did not survive
     ///
-    /// `wander`'s shape exactly: `summon` opens the figure and draws the board,
-    /// and this decides *who holds the keyboard*. The two are separate for the
-    /// archive's reason — watching a bound spell sing one and singing it
-    /// yourself are different activities, and only the second wants the keys.
-    ///
-    /// **Barred from a spell** (`may_issue`), unlike `sing`. A spell singing is
-    /// the whole point of the domain; a spell seizing the keyboard on the orb's
-    /// clock is `repeat 100 / chorus` racing the player for the one key that
-    /// ends it.
-    ///
-    /// # It was `perform`, and `per` reaches `peruse`
-    ///
-    /// A similarity sweep cleared `perform` — it scores nothing against anything
-    /// — and `three_character_canonical_prefixes_name_at_most_one_verb` caught
-    /// it anyway: **an abbreviation collision is invisible to a score**, and
-    /// `peruse` is a word players type all day. Its synonym `conduct` went the
-    /// same way against `summon`'s `conjure`.
-    ///
-    /// That is the second time this phase a prefix caught what similarity could
-    /// not (`reply` against `repair` was the first). Sweep both, always.
-    ///
-    /// `chorus` is clean, `cho` is a free prefix, and joining a chorus is what
-    /// the word already means.
-    Chorus,
+    /// The menagerie was a rhythm game and is a logic puzzle now (§19). `etch`
+    /// was the first word and is 750 against `each`, a spell word; `carve` is
+    /// 600 against `carry`, `haul`'s plain synonym; `inscribe` is 750 against
+    /// `scribe`; `trace` 667 against the forge's `graced`; `engrave` 715 against
+    /// `engage`. `limn` — to draw, to paint a likeness — is clean, and `lim` is
+    /// a free prefix. The plain word is `fashion`, because `draw`, `sketch`,
+    /// `pick` and `choose` are phrasing words of other verbs already — see the
+    /// sweep in `vocabulary.rs`.
+    Limn,
     /// `queue <name>` — put a name in the satchel (§8, `tower::satchel`).
     ///
     /// **The push half of the channel between two spells.** The pull half is
@@ -920,7 +906,7 @@ pub enum Verb {
     ///
     /// This one is a verb because it does what verbs do — it changes a node —
     /// and because a player who cannot load a satchel by hand cannot watch a
-    /// consumer drain one. `queue skyward` at the prompt is the See-it line for
+    /// consumer drain one. `queue heed` at the prompt is the See-it line for
     /// the whole mechanic.
     ///
     /// **Unanchored, like `move` and `wield`.** Every domain has a satchel, so
@@ -939,14 +925,14 @@ pub enum Verb {
     /// The alternatives are worse on the same axes: `stow` shares `sto` with
     /// `stop` **and** scores 750 against it, and `stash` shares `sta` with
     /// `status`. `draw` is clean in the parser and wrong in the prose — the game
-    /// already uses it for producing a new random thing (`Chant::draw`, `muster`
-    /// *"draws a course"*, `summon` *"draw a fresh figure"*).
+    /// already uses it for producing a new random thing (`Beast::draw`, `muster`
+    /// *"draws a course"*, `summon` drawing a beast).
     Queue,
 }
 
 impl Verb {
     /// Every verb in the Phase 0 vocabulary, and what the phases since have added.
-    pub const ALL: [Self; 46] = [
+    pub const ALL: [Self; 45] = [
         Self::Attend,
         Self::Survey,
         Self::Peruse,
@@ -984,8 +970,11 @@ impl Verb {
         Self::Muster,
         Self::Haul,
         Self::Summon,
-        Self::Sing,
-        Self::Chorus,
+        // **In `sing`'s place**, which it replaced along with `chorus` when the
+        // menagerie stopped being a rhythm game (§19). Where it sits changes
+        // which pairs `the_tolerated_collision_set_is_pinned` walks in what
+        // order, and the chant's two words were in this slot.
+        Self::Limn,
         Self::Queue,
         // **Appended, for the reason the block above gives.**
         // `the_tolerated_collision_set_is_pinned` walks pairs in this order, so
@@ -1066,11 +1055,10 @@ impl Verb {
             // and hauling a ward are the whole of what this room does.
             | Self::Muster
             | Self::Haul
-            // ...and the menagerie's two, on the same reading. Opening a chant
-            // and singing it are the whole of what this room does.
+            // ...and the menagerie's two, on the same reading. Calling a beast
+            // and limning the circle for it are the whole of what this room does.
             | Self::Summon
-            | Self::Sing
-            | Self::Chorus
+            | Self::Limn
             // ...and the bailey's six, on the same reading. Standing to a
             // siege, buying one down, pledging dice, spending the arsenal on it,
             // and ending a turn are the whole of what this room does.
@@ -1155,8 +1143,7 @@ impl Verb {
             Self::Muster => "muster",
             Self::Haul => "haul",
             Self::Summon => "summon",
-            Self::Sing => "sing",
-            Self::Chorus => "chorus",
+            Self::Limn => "limn",
             Self::Queue => "queue",
             Self::Defend => "defend",
             Self::Petition => "petition",
@@ -1209,7 +1196,7 @@ impl Verb {
                 | Self::Muster
                 | Self::Haul
                 | Self::Summon
-                | Self::Sing
+                | Self::Limn
                 // **The forge takes the slot, and it is the first domain since
                 // brewing to do so.** §10's scarcity for Enchanting is *"the
                 // buff's own lifetime, **and the slot**"* — maintaining a charm
@@ -1287,11 +1274,10 @@ impl Verb {
             Self::Snap | Self::Anneal => Some(Self::Imbue),
             // The maze's other two words, anchored to the stacks.
             Self::Follow | Self::Wander => Some(Self::Research),
-            // **`sing` is anchored to the circle, not to a syllable** — the
-            // archive's shape rather than the sanctum's. A syllable is something
-            // you name in an argument, not somewhere you stand, and there is one
-            // circle to sing at.
-            Self::Sing | Self::Chorus => Some(Self::Summon),
+            // **`limn` is anchored to the circle, not to a glyph** — the forge's
+            // shape rather than the sanctum's. A glyph is something you name in
+            // an argument, not somewhere you stand, and there is one circle.
+            Self::Limn => Some(Self::Summon),
             // **`wield` is deliberately not anchored**, and neither is `empty`,
             // `stop` or `move`: they name their target explicitly and work
             // wherever one stands, which is what a script writes when the
@@ -1383,8 +1369,7 @@ impl Verb {
             Self::Snap => "snapping",
             Self::Anneal => "annealing",
             Self::Summon => "summoning",
-            Self::Sing => "singing",
-            Self::Chorus => "chorusing",
+            Self::Limn => "limning",
             Self::Queue => "queueing",
         }
     }
@@ -1424,12 +1409,9 @@ impl Verb {
             // one pylon, and naming it would be naming the only thing there is.
             // **`summon` takes nothing**, for the reason `muster` does: there is
             // one circle, and naming it would be naming the only thing there is.
-            // **`chorus` takes nothing either**, for `wander`'s reason: it names
-            // no argument because what it does is hand over the keyboard.
-            | Self::Chorus
             | Self::Summon
             // **`defend` takes nothing** for the reason `muster` and `summon` do
-            // — one rampart — and **`hold` takes nothing** for `chorus`'s: it
+            // — one rampart — and **`hold` takes nothing** for `wander`'s: it
             // names no argument because what it does is end your turn.
             | Self::Defend
             // **`petition` takes nothing**, and it is one foe a word rather than
@@ -1441,20 +1423,19 @@ impl Verb {
             | Self::Hold
             | Self::Muster => NOTHING,
             // **What the arsenal holds**, which is `wield`'s shape rather than
-            // `sing`'s: a troop and a potion are things you *have*, carried from
+            // `limn`'s: a troop and a potion are things you *have*, carried from
             // another room, not readings the board publishes. The slot refuses
             // free text, so `deploy asdfgh` is caught here rather than a round
             // later.
             Self::Deploy | Self::Quaff => ANYTHING,
-            // One syllable, a `Role::Reading` place — the socket's shape rather
-            // than the station's, and **required**: there is no bare `sing`,
-            // because unlike `dial` there is nothing for the world to step
-            // round. A spell that knows it is singing knows what.
-            Self::Sing => SYLLABLE,
+            // A glyph and, optionally, a humour — the socket-and-sigil shape,
+            // and bare for `dial`'s reason: the circle steps a glyph a spell
+            // cannot name the next humour for.
+            Self::Limn => GLYPH_AND_HUMOUR,
             // **Anything the room can name**, which is `verify`'s slot and is
             // chosen for what it *refuses*: `NounKind::Name` would take free
             // text, so `queue asdfgh` would store a word nothing can resolve and
-            // the consumer's `sing note` would fail one tick later, a room away
+            // the consumer's `limn keystone note` would fail one tick later, a room away
             // from the mistake. Resolving here also canonicalises an
             // abbreviation, so what comes out of the satchel is a word the game
             // knows however it went in.
@@ -1693,8 +1674,10 @@ mod tests {
         // lowered this number.
         //
         // **`sing` was named here and never counted**, which is the opposite
-        // mistake: it is in `is_operation`, so the old filter excluded it too.
-        // The three above are the ones the old filter got wrong.
+        // mistake: it was in `is_operation`, so the old filter excluded it too.
+        // The three above are the ones the old filter got wrong. (`chorus` and
+        // `sing` went with the chant; `limn` took `sing`'s place and changes
+        // neither number.)
         //
         // **21 with `queue`**, and it belongs in this number rather than the one
         // below: every domain has a satchel, so it is anchored to no fixture and
@@ -1713,7 +1696,8 @@ mod tests {
         // One per instrument that has a word of its own: the laboratory's
         // `grind`, `digest`, `mix`, `distil` and `kindle`, the lens's `probe`
         // and `dial`, the sanctum's `muster` and `haul`, and the menagerie's
-        // `summon` and `sing`.
+        // `summon` and `limn` — which replaced `sing` and left the number where
+        // it was, since `chorus` was anchored and never counted here.
         //
         // **This is the number a new domain is meant to move**, and the one
         // above is not. A domain that scopes its verbs pays here and leaves the

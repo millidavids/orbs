@@ -20,6 +20,7 @@
 use std::collections::BTreeMap;
 
 use orbs_sim::Sim;
+use orbs_sim::tower::circle::{self, Glyph};
 
 use crate::policy::{Body, Policy};
 
@@ -168,7 +169,7 @@ pub fn run(
                 Body::Stacks => walk_one(&mut sim),
                 Body::Scrying => press_one(&mut sim, &mut sweep),
                 Body::Warding => haul_one(&mut sim, &mut cycle),
-                Body::Chanting => sing_one(&mut sim),
+                Body::Taming => tame_one(&mut sim),
                 Body::Besieging => fight_one(&mut sim, &mut fighting),
                 Body::Imbuing => bind_one(&mut sim),
                 Body::Bound {
@@ -565,68 +566,51 @@ const STATIONS: [&str; 3] = ["wellspring", "conduit", "barrier"];
 /// thing that models one without dragging the laboratory into a bailey number.
 const RESTOCK_EVERY: usize = 4;
 
-/// One turn of the cyclic solution, or a fresh course when none is drawn.
+/// One step of the circle's search, taken the way `taming` takes it.
 ///
-/// **The whole algorithm is three pairs in rotation.** Between any two stations
-/// exactly one haul is legal, so the policy never has to search — it picks the
-/// pair whose turn it is and asks the course which way round the haul runs. That
-/// is exactly what `dev_spells.toml`'s `holding` does with `let` and a part, and
-/// no more: the parity comes off the course's own height, and the direction off
-/// two `potency`s.
+/// **The spell's commands, in the spell's order, and nothing it cannot read.**
+/// No beast: `summon` draws one. A beast: step widdershins and call it in; when
+/// widdershins has come back round to the opening, step sunwise, and when
+/// sunwise has too, the keystone — which is the odometer the spell's three
+/// `repeat 6` loops make. Where each glyph stands comes off `Sim::beast` — the
+/// humour each glyph carries, which is what its reading says to a spell — and
+/// not off the board: building the view to read two words was three prose
+/// renders a step on this policy's hot path.
 ///
-/// **The rotation and the direction are the sim's, not a copy of them.**
-/// `tower::pylon::cycle` and `Course::between` are both `pub`, and `between`'s
-/// own doc says it is kept *"even though nothing in the game calls it"* — this is
-/// the caller it was waiting for. Transcribing either here would leave the
-/// harness able to drift into measuring a slower, wrong-station solve while
-/// `tower::pylon`'s optimality tests stayed green, and the code itself records
-/// that the failure is invisible: *"getting this backwards still finishes — in
-/// the conduit"*. `STATIONS` above stays written out for the opposite reason,
-/// which its own doc gives: it is a thing a **player** types.
-/// Answer one syllable, correctly and on the beat.
-///
-/// **The ceiling, which is what a policy measures.** It reads the aperture off
-/// the world exactly as a spell's `if` does, waits out the approach, and then
-/// sings — so nothing here is a second opinion about the rules.
-///
-/// **It reads `until` where a spell now cannot**, and that is the ceiling being
-/// a ceiling rather than a cheat. The circle stopped publishing that reading
-/// when `bide until` was withdrawn, because a spell able to read the clock does
-/// not have to count it — but this takes it from `Sim::figure`, off the model,
-/// which is what a player's eyes do. A policy is a roof, not a solver, and the
-/// number it prints is what perfect timing is worth rather than what the
-/// language can reach.
-///
-/// **It waits with `survey`, and `meditate 1` was wrong.** `run` advances the
-/// clock only inside `issue`, so a driver that returned without issuing anything
-/// would spin with no tick and `while sim.tick() < ticks` would never end — the
-/// hang `haul_one` and `press_one` both guard against. But `meditate` writes
-/// `Skip`, which `Sim::step` drains in a while-loop, so `meditate 1` costs
-/// **two** ticks: `until` went 3 → 1 → landed, the beat was stepped straight
-/// over, and every figure in a 7200-tick run collapsed for a rate of 0.0000.
-///
-/// `survey` costs exactly one tick and changes nothing, which is what a wait
-/// wants here.
-fn sing_one(sim: &mut Sim) {
-    let Some(figure) = sim.figure() else {
+/// **It carries no state between calls**, and that is the check on it: a
+/// search that needed a counter here would be measuring a spell nobody can
+/// write, because a spell has none either.
+fn tame_one(sim: &mut Sim) {
+    if sim.beast().is_none() {
         issue(sim, "summon");
-        return;
-    };
-    // Still travelling: spend the tick rather than the syllable.
-    if figure.until > 0 {
-        issue(sim, "survey circle");
         return;
     }
-    let Some(word) = figure
-        .coming
-        .first()
-        .and_then(|lane| figure.lanes.get(*lane))
-        .map(|(_, name)| *name)
-    else {
-        issue(sim, "summon");
-        return;
-    };
-    issue(sim, &format!("sing {word}"));
+    issue(sim, "limn widdershins");
+    issue(sim, "summon");
+    // **Wrapped means back at the opening**, which the spell's inner loop
+    // reaches exactly on its sixth step — the moment it falls through to the
+    // next `limn`. A beast held on that call has no circle to read, so neither
+    // test passes and the next call draws another.
+    if wrapped(sim, Glyph::Widdershins) {
+        issue(sim, "limn sunwise");
+        if wrapped(sim, Glyph::Sunwise) {
+            issue(sim, "limn keystone");
+        }
+    }
+}
+
+/// Whether a glyph has stepped back round to where every beast opens it, with a
+/// beast still waiting.
+///
+/// **The opening is read from the circle, not spelled out here.** The commands
+/// issued are what a player types, for `STATIONS`' reason; where a search wraps
+/// is nothing anybody types, and a copy of `OPENING` in this file could move
+/// out of step with it — this policy would then never step the outer glyphs, and
+/// the column would measure a search that cannot hold most beasts with nothing
+/// to say so.
+fn wrapped(sim: &Sim, glyph: Glyph) -> bool {
+    sim.beast()
+        .is_some_and(|beast| beast.humour(glyph) == circle::OPENING[glyph.index()])
 }
 
 /// One turn of a siege, decided the way `besieging` decides one.
@@ -830,6 +814,24 @@ fn bind_one(sim: &mut Sim) {
     issue(sim, "anneal");
 }
 
+/// One turn of the cyclic solution, or a fresh course when none is drawn.
+///
+/// **The whole algorithm is three pairs in rotation.** Between any two stations
+/// exactly one haul is legal, so the policy never has to search — it picks the
+/// pair whose turn it is and asks the course which way round the haul runs. That
+/// is exactly what `dev_spells.toml`'s `holding` does with `let` and a part, and
+/// no more: the parity comes off the course's own height, and the direction off
+/// two `potency`s.
+///
+/// **The rotation and the direction are the sim's, not a copy of them.**
+/// `tower::pylon::cycle` and `Course::between` are both `pub`, and `between`'s
+/// own doc says it is kept *"even though nothing in the game calls it"* — this is
+/// the caller it was waiting for. Transcribing either here would leave the
+/// harness able to drift into measuring a slower, wrong-station solve while
+/// `tower::pylon`'s optimality tests stayed green, and the code itself records
+/// that the failure is invisible: *"getting this backwards still finishes — in
+/// the conduit"*. `STATIONS` above stays written out for the opposite reason,
+/// which its own doc gives: it is a thing a **player** types.
 fn haul_one(sim: &mut Sim, cycle: &mut usize) {
     // No course drawn — either the first lap, or the last one finished.
     // `muster` draws the next, which is how a bound spell laps.

@@ -991,7 +991,8 @@ fn gather(body: &Block, names: &mut Vec<String>) {
             // **A `pull` binds a name and is gathered as one.** It is `let`'s
             // arm in every way that matters here — the lint's whole job is to
             // stop a line naming a variable being resolved against the room, and
-            // `sing note` after `pull note from satchel` is exactly that line.
+            // `limn keystone note` after `pull note from satchel` is exactly that
+            // line.
             // Missing it would paint a working line red.
             Kind::Pull { name, .. } => {
                 if !names.iter().any(|already| already == name) {

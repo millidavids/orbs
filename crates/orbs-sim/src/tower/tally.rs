@@ -33,7 +33,11 @@ use bevy_ecs::prelude::*;
 /// nothing can reach. Every name here has exactly one seam that counts it.
 pub const EVENTS: [&str; 5] = [FIGURE, SIEGE, SIEGE_WON, BOUND, SECRET];
 
-/// A chant sung to its end (`execute::sing::settle`).
+/// A beast held at the menagerie's circle (`execute::summon`).
+///
+/// **The chant's name, kept** — a tally is carried in a save, and renaming the
+/// key would have zeroed every menagerie station a tower had already reached
+/// for a word no player sees.
 pub const FIGURE: &str = "figure";
 /// A siege settled, held or fallen (`execute::defend::report::settle`).
 pub const SIEGE: &str = "siege";
@@ -106,8 +110,8 @@ impl Work {
     /// Also record that this run put `product` on a shelf.
     ///
     /// **For the runs that stock the tower without being a recipe.** The
-    /// menagerie's chant closes a *figure* — an event, which is what its mastery
-    /// line counts — and in the same breath gives troops to the arsenal; the
+    /// menagerie's circle holds a beast — a *figure*, the event its mastery line
+    /// counts — and in the same breath gives troops to the arsenal; the
     /// archive's maze finishes at an instrument and shelves a fragment. Both put
     /// a nameable thing on a shelf, which is exactly the question [`sold`] asks,
     /// and both answered no because neither went through [`made`](Self::made).

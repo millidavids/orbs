@@ -5,8 +5,8 @@ pub mod audit;
 mod boot;
 mod brief;
 mod build;
-pub mod chant;
 pub mod charm;
+pub mod circle;
 pub mod dice;
 mod erosion;
 mod experience;
@@ -22,6 +22,7 @@ pub mod maze;
 mod node;
 pub mod opened;
 mod panel;
+pub mod puzzle;
 pub mod pylon;
 pub mod quintessence;
 pub mod reach;
@@ -43,13 +44,14 @@ pub use brief::{
     Brief, Cast, DOMAINS, Mark, Marks, briefs, clear_mark, mark, mark_fault_at, running_spells,
 };
 pub use build::{GRIMOIRE, declared, fixture_of, operated, raise, raise_count, raise_reading};
-pub use chant::{Chant, Strike, Syllable};
 pub use charm::{Charm, Charmed, charm_left, charmed};
 pub use dice::{Die, Effect, Landed, Modifier, Roll};
 pub use erosion::{
     EROSION, Integrity, MENDED_PER_WARD, STANDING, erode, height_for, mend, mend_by, wear_by,
 };
-pub use experience::{Experience, concentration, credit, quintessence_steps, worth};
+pub use experience::{
+    Experience, concentration, credit, quintessence_steps, worth, worth_within_par,
+};
 pub use grant::{Grant, Lane, granted, steps_granted};
 pub use heat::{
     ATHANOR, Ash, Banked, Burning, banked, burn, burning, damp, find as find_athanor, kindle, lit,

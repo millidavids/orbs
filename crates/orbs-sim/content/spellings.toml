@@ -70,8 +70,8 @@ holdout_names = [
     "whisk", "button", "thimble", "spool",
 ]
 groups = [
-    "area", "band", "charm", "column", "die", "sigil", "socket", "station",
-    "store", "syllable", "way",
+    "area", "band", "charm", "column", "die", "glyph", "humour", "sigil",
+    "socket", "station", "store", "way",
 ]
 
 # ---------------------------------------------------------------------------

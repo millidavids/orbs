@@ -1,7 +1,7 @@
 //! What a mastery station asks for (DESIGN.md §11.5).
 //!
 //! A deed is a count of something done in a room — a potion brewed, a walk of
-//! the stacks finished, a figure closed — and a station on a domain's line is
+//! the stacks finished, a beast held — and a station on a domain's line is
 //! reached when its count is met. Authored in `progression.toml`, read against
 //! [`Tally`](crate::tower::Tally).
 //!
@@ -49,13 +49,23 @@ pub enum Deed {
         times: u32,
     },
     /// `done = { event = "figure", times = n }` — something a room does that is
-    /// not a run: a figure closed, a siege settled, a spell bound.
+    /// not a run: a beast held, a siege settled, a spell bound.
     Event {
         /// One of [`EVENTS`](crate::tower::EVENTS).
         event: String,
         /// How many. One, if unsaid.
         #[serde(default = "once")]
         times: u32,
+        /// `fixed = true` — the same count at every length.
+        ///
+        /// **For a lesson, not a grind**, which is [`Made`](Deed::Made)'s reason
+        /// for never stretching, given a count. `menagerie_2` opens the whole
+        /// circle after five lesser beasts, and five is the lesson's size: each
+        /// lesser temper about once. Ramped as its place on the line, it asked
+        /// eleven at the default length and thirty-five at the longest — a
+        /// tutorial that grew with the game it was teaching (§19).
+        #[serde(default)]
+        fixed: bool,
     },
 }
 
@@ -72,8 +82,9 @@ impl Deed {
     /// field in it to stretch. That is a property of the variant rather than an
     /// exemption someone has to remember.
     ///
-    /// Every other variant stretches its own count. The `at` and `event` names
-    /// are what the tally is keyed by and are never touched.
+    /// Every other variant stretches its own count, except an event marked
+    /// `fixed`, which is a lesson's size rather than a grind's. The `at` and
+    /// `event` names are what the tally is keyed by and are never touched.
     #[must_use]
     pub fn stretched(&self, length: crate::content::Length, index: usize, count: usize) -> Self {
         let grown = |n: u32| -> u32 {
@@ -91,9 +102,14 @@ impl Deed {
                 at: at.clone(),
                 times: grown(*times),
             },
-            Self::Event { event, times } => Self::Event {
+            Self::Event {
+                event,
+                times,
+                fixed,
+            } => Self::Event {
                 event: event.clone(),
-                times: grown(*times),
+                times: if *fixed { *times } else { grown(*times) },
+                fixed: *fixed,
             },
         }
     }
@@ -193,6 +209,23 @@ mod tests {
         }
     }
 
+    /// **A lesson keeps its size at every length**, and a deed not marked keeps
+    /// growing with the line — the pair, since either alone passes against a
+    /// `stretched` that ignored the flag in one direction.
+    #[test]
+    fn a_fixed_event_is_the_same_count_at_every_length() {
+        use crate::content::Length;
+        let fixed = parse("done = { event = \"figure\", times = 5, fixed = true }")
+            .unwrap_or_else(|error| panic!("{error}"));
+        let grown = parse("done = { event = \"figure\", times = 5 }")
+            .unwrap_or_else(|error| panic!("{error}"));
+        for length in [Length::Short, Length::Medium, Length::Long] {
+            assert_eq!(fixed.stretched(length, 1, 3).times(), 5, "{length:?}");
+            assert!(grown.stretched(length, 1, 3).times() > 5, "{length:?}");
+        }
+        assert!(parse("done = { event = \"figure\", times = 5, fixd = true }").is_err());
+    }
+
     #[test]
     fn a_misspelled_field_fails_rather_than_defaulting() {
         // **The trap `deny_unknown_fields` is for.** `{ at = "stacks", tims = 3 }`
@@ -228,6 +261,7 @@ mod tests {
             Deed::Event {
                 event: "figure".into(),
                 times: 1,
+                fixed: false,
             }
             .check(&outputs, &instruments)
             .is_ok()
@@ -236,6 +270,7 @@ mod tests {
             Deed::Event {
                 event: "figures".into(),
                 times: 1,
+                fixed: false,
             }
             .check(&outputs, &instruments)
             .is_err()

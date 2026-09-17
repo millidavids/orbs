@@ -97,24 +97,34 @@ const EXPECTED: [(&str, f64); 9] = [
     // §10's stated scarcity for the domain and the thing nothing measured until
     // this column existed.
     ("imbuing", 0.006),
-    // **A ceiling, not a player**, and the arithmetic is exact: a figure is
-    // twelve syllables four ticks apart, so a chant sung perfectly earns twelve
-    // over forty-nine ticks and reads 0.243 on every seed. The draw is uniform
-    // and the cost is the same whichever lane lands, so — like `warding` and
-    // unlike `stacks` — there is nothing here for a seed to move.
+    // **The search, not a player — and it replaced the table's second-best rate
+    // with one of its lowest, on purpose** (§19). The menagerie was a chant, and
+    // a chant sung perfectly read 0.243, because a spell at two steps a tick sang
+    // it perfectly too. The circle is a logic puzzle: a person who reads the
+    // temper holds a beast in one call, and the shipped `taming` tries circles in
+    // order and averages 68 as beasts are drawn. This measures the second — 0.042
+    // over ten seeds, because how far down the order a beast sits is the draw —
+    // since that is what the economy sees.
     //
-    // **It sits above the flagship on purpose**, beside `scrying` and for the
-    // same reason: neither verb takes the production slot, so this is additive
-    // rather than competing. Two things keep it honest that the column cannot
-    // show. A *person* misses syllables and earns less; and a **spell cannot do
-    // this at all** until the weave grants a second step, where every other
-    // domain automates from the first. The policy measures the roof both are
-    // under, which is what a policy is for.
+    // **Its own band, thirty-five percent, and measured rather than widened to
+    // taste.** Since `0.15.4` draws circuits with turned wires, seeds 0–7, 11 and
+    // 42 read 0.0319 to 0.0550 — seed 1 31% over and seed 5 24% under — because a
+    // two-hour run holds only about forty beasts and one beast can take 1 call or
+    // 174. At fifteen percent the sweep CLAUDE.md asks for after every world
+    // change flagged two seeds of ten, and a flag that shows on luck is one
+    // nobody reads. A halved menagerie is 50% out and still flagged; `agrees.rs`
+    // holds the four-world mean, 0.0414, to that band over the square root of
+    // its four worlds — seventeen and a half percent. See [`WIDER`] and
+    // [`tolerance_of_mean`].
     //
-    // It is also the one entry that can make the tower **worse**: a regression
-    // in the timing shows up here as a falling rate *and* as integrity draining,
-    // and the pair is what to read.
-    ("chanting", 0.243),
+    // **Additive, as `scrying` is**: neither word takes the production slot, so
+    // this is earned beside a brew rather than instead of one. And it is the
+    // floor of what a player's knowledge buys: a spell that prunes the keystone
+    // by `fervour` and sunwise by De Morgan averages 38 calls, and a second step
+    // a tick halves the ticks either way. A *bound* `taming` at one step a tick
+    // holds 27 beasts in two hours over the same four worlds — about 80 troops —
+    // against the ~27 `besieging` spends.
+    ("taming", 0.042),
     // **The siege, and it was very nearly left unpinned for the wrong reason.**
     // The first measurement spread 0.043–0.085 across seeds, which read as dice
     // variance over the ~6 sieges a two-hour run fits — the argument `stacks`
@@ -184,6 +194,16 @@ const EXPECTED: [(&str, f64); 9] = [
 /// the tower. `tests/agrees.rs` pins the quotient; this table reports the rate.
 const TOLERANCE: f64 = 0.10;
 
+/// The policies whose single-seed spread is measured wider than [`TOLERANCE`],
+/// and the band each is held to instead.
+///
+/// **An exception has to carry its measurement**, which is why this is a table
+/// of its own rather than a third column every pin fills in: a wider band is a
+/// claim that the draw, not the driver, moves the rate, and the comment beside
+/// the pin is where that claim is argued. Nothing here should be wider than its
+/// worst measured seed needs.
+const WIDER: [(&str, f64); 1] = [("taming", 0.35)];
+
 /// The summary table.
 #[must_use]
 pub fn table(runs: &[Run]) -> String {
@@ -199,7 +219,9 @@ pub fn table(runs: &[Run]) -> String {
         let last = run.last();
         let rate = run.rate();
         let note = match expected(run.policy) {
-            Some(want) if off_by(rate, want) => format!("  {want:.3}  <-- drifted"),
+            Some(want) if off_by(rate, want, tolerance(run.policy)) => {
+                format!("  {want:.3}  <-- drifted")
+            }
             Some(want) => format!("  {want:.3}"),
             None => String::new(),
         };
@@ -280,13 +302,40 @@ pub fn expected(policy: &str) -> Option<f64> {
         .map(|(_, rate)| *rate)
 }
 
-/// Whether a measured rate has left its expectation's tolerance band.
+/// How far a policy's rate may sit from its pin: a tenth (`TOLERANCE`), unless
+/// its measured seeds needed more (`WIDER`, where each wider band is argued).
+#[must_use]
+pub fn tolerance(policy: &str) -> f64 {
+    WIDER
+        .iter()
+        .find(|(name, _)| *name == policy)
+        .map_or(TOLERANCE, |(_, band)| *band)
+}
+
+/// How far a policy's rate **averaged over `worlds` seeds** may sit from its pin.
+///
+/// **Narrower than [`tolerance`] wherever that band was widened for one seed's
+/// luck.** A wider band is a claim about a single run's spread, and a mean of
+/// `n` runs spreads about `1/√n` as far — so `taming`'s thirty-five percent is
+/// seventeen and a half over `agrees.rs`'s four worlds. Held to the whole band,
+/// a menagerie earning thirty percent less still averaged inside it. Never
+/// below `TOLERANCE`, which every pinned mean was already held to.
+#[must_use]
+pub fn tolerance_of_mean(policy: &str, worlds: usize) -> f64 {
+    #[allow(clippy::cast_precision_loss)]
+    let worlds = worlds.max(1) as f64;
+    (tolerance(policy) / worlds.sqrt()).max(TOLERANCE)
+}
+
+/// Whether a measured rate has left its expectation's `tolerance` band.
 ///
 /// Public for the same reason [`expected`] is: the band is half the pin, and a
-/// test asserting one without the other would invent a second tolerance.
+/// test asserting one without the other would invent a second tolerance. **The
+/// band is passed in**, from [`tolerance`], so the table and the test cannot hold
+/// one policy to two widths.
 #[must_use]
-pub fn off_by(measured: f64, want: f64) -> bool {
-    (measured - want).abs() > want * TOLERANCE
+pub fn off_by(measured: f64, want: f64, tolerance: f64) -> bool {
+    (measured - want).abs() > want * tolerance
 }
 
 #[cfg(test)]
@@ -327,11 +376,47 @@ mod tests {
     fn drift_is_flagged_and_agreement_is_not() {
         // The whole point of the reference column: a policy that has wandered
         // out of its band says so in the table rather than in a later phase.
-        assert!(!off_by(0.140, 0.140));
-        assert!(!off_by(0.133, 0.140), "inside a tenth, so not drift");
+        let band = tolerance("clarity");
+        assert!(!off_by(0.140, 0.140, band));
+        assert!(!off_by(0.133, 0.140, band), "inside a tenth, so not drift");
         assert!(
-            off_by(0.100, 0.140),
+            off_by(0.100, 0.140, band),
             "clarity down to the grind loop, unflagged"
+        );
+    }
+
+    /// **`taming`'s band is its measured seeds and no wider** — the lowest and
+    /// highest of ten read inside it, and a menagerie earning half is still out
+    /// of it.
+    #[test]
+    fn the_menageries_wider_band_holds_its_seeds_and_still_flags_a_halving() {
+        let want = expected("taming").expect("taming is pinned");
+        let band = tolerance("taming");
+        assert!(band > TOLERANCE, "taming has no band of its own");
+        for seed_rate in [0.0319, 0.0550] {
+            assert!(!off_by(seed_rate, want, band), "{seed_rate} flagged");
+        }
+        assert!(off_by(want / 2.0, want, band), "a halved menagerie passed");
+
+        // **A mean is held tighter than a seed.** Four worlds of a menagerie
+        // earning thirty percent less sat inside the single-seed band; the
+        // four-world band flags it, and still holds the mean it pins.
+        let mean_band = tolerance_of_mean("taming", 4);
+        assert!(mean_band < band, "a mean held to a single seed's band");
+        assert!(off_by(want * 0.7, want, mean_band), "a 30% cut passed");
+        assert!(
+            !off_by(0.0414, want, mean_band),
+            "the measured mean flagged"
+        );
+        assert!(
+            (tolerance_of_mean("clarity", 4) - TOLERANCE).abs() < f64::EPSILON,
+            "a tenth was loosened or tightened by averaging"
+        );
+        assert!(
+            WIDER
+                .iter()
+                .all(|(name, _)| EXPECTED.iter().any(|(pinned, _)| pinned == name)),
+            "a wider band for a policy nothing pins",
         );
     }
 

@@ -292,7 +292,9 @@ fn node(world: &World, entity: Entity) -> NodeSave {
         maze: at.get::<Maze>().map(Maze::to_save),
         ward: at.get::<Ward>().map(Ward::to_save),
         course: at.get::<tower::Course>().map(tower::Course::to_save),
-        chant: at.get::<tower::Chant>().map(tower::Chant::to_save),
+        beast: at
+            .get::<tower::circle::Beast>()
+            .map(tower::circle::Beast::to_save),
         siege: at.get::<tower::Siege>().cloned(),
         binding: at.get::<tower::lattice::Binding>().cloned(),
         rewritten: at

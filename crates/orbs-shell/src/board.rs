@@ -19,14 +19,9 @@
 use orbs_render::{Board, Painter, Pos, Rect, Role, Style, UtteranceKind, Wash};
 use orbs_sim::content::Prose;
 
-/// The gap between the sheet and the transcript.
-const GUTTER: u16 = 1;
-
-/// The fewest columns the transcript keeps before the sheet yields.
-///
-/// The same figure the map uses, and for the same reason: below it the sheet has
-/// won an argument it should lose.
-const TRANSCRIPT_FLOOR: u16 = 24;
+// The gap and the floor every board beside the transcript keeps. The sheet
+// windows its rows, so its `split` is its own; the transcript it leaves is not.
+use crate::beside::{GUTTER, TRANSCRIPT_FLOOR};
 
 /// Where the sheet sits, and what is left for the transcript.
 #[derive(Debug, Clone, Copy)]

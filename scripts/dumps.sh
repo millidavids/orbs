@@ -262,18 +262,30 @@ run pylon_refuse ORBS_BOOT=0 ORBS_DUMP="attend sanctum; muster; haul wellspring 
 run pylon_worn   ORBS_BOOT=0 ORBS_DUMP="attend sanctum; survey pylon; meditate 3600; survey pylon; muster; survey pylon"
 run pylon_done   ORBS_BOOT=0 ORBS_DUMP="attend sanctum; muster; debug_course; haul conduit barrier; survey pylon; status"
 
-# --- the menagerie ---------------------------------------------------------
-# **Three ticks of one approach**, because the board is the only surface in the
-# game that moves between landings and a single capture cannot show that. It
-# drew four identical frames for a whole approach until `Figure` carried `until`.
-run chant_board   ORBS_BOOT=0 ORBS_DUMP="attend menagerie; summon"
-run chant_rising  ORBS_BOOT=0 ORBS_DUMP="attend menagerie; summon; meditate 2"
-run chant_refuse  ORBS_BOOT=0 ORBS_DUMP="attend menagerie; sing skyward; summon; summon; sing nothing"
-run chant_keys    ORBS_BOOT=0 ORBS_DUMP="attend menagerie; summon; chorus" ORBS_CHANT=$'<up>\n<left>'
-run chant_patient ORBS_BOOT=0 ORBS_PATIENT=1 ORBS_DUMP="attend menagerie; summon; chorus" ORBS_CHANT=$'<up>\n<left>'
-run chant_collapse ORBS_BOOT=0 ORBS_DUMP="attend menagerie; summon; meditate 18; survey pylon"
-run chant_troop   ORBS_BOOT=0 ORBS_DUMP="recall troop; debug_spawn troop 3; survey arsenal"
 run recall_script_sanctum ORBS_BOOT=0 ORBS_GRID=100x40 ORBS_DUMP="attend sanctum; recall scripting"
+
+# --- the menagerie ---------------------------------------------------------
+# **A beast arriving, called in wrong, and held.** The answer row and the marks
+# under it are the half of the circle's board a painter can get wrong — a mark one
+# column off its number sends a player to the wrong row — and only a *called*
+# circle draws them, so a capture of the fresh board alone would be blind to it.
+# The default seed's first beast has two turned wires (`~breath`, `~bone`), so
+# `circle_open` is also the capture of the `~` mark and of the spoken *turned*.
+run circle_open     ORBS_BOOT=0 ORBS_DUMP="attend menagerie; summon"
+run circle_balk     ORBS_BOOT=0 ORBS_DUMP="attend menagerie; summon; limn keystone heed; limn sunwise oppose; summon"
+run circle_held     ORBS_BOOT=0 ORBS_DUMP="attend menagerie; summon; debug_circle; summon; survey arsenal"
+run circle_refuse   ORBS_BOOT=0 ORBS_DUMP="attend menagerie; limn keystone heed; summon; limn keystone sunwise; stop circle"
+run circle_readings ORBS_BOOT=0 ORBS_DUMP="attend menagerie; summon; limn keystone heed; survey keystone; survey circle"
+run circle_troop    ORBS_BOOT=0 ORBS_DUMP="recall troop; debug_spawn troop 3; survey arsenal"
+# A sealed tower's first beast: the lesser circle, a dark glyph refused, and a
+# call that balks — the board with one line and four columns in the same footprint.
+run circle_lesser   ORBS_SEALED=1 ORBS_BOOT=0 \
+  ORBS_DUMP="debug_reach lens_1; attend menagerie; summon; limn sunwise heed; limn keystone mirror; summon"
+# The search that knows the logic, through its log — a spell's records never reach the pane.
+run circle_winnow   ORBS_BOOT=0 ORBS_DUMP="attend menagerie; invoke winnowing" \
+  ORBS_THEN="meditate 400; peruse menagerie.log"
+run recall_circle   ORBS_BOOT=0 ORBS_DUMP="recall yoke; recall oppose; recall sunwise; recall keystone; recall fervour; recall limn"
+run recall_script_menagerie ORBS_BOOT=0 ORBS_GRID=100x40 ORBS_DUMP="attend menagerie; recall scripting"
 
 # --- the bailey ------------------------------------------------------------
 # **The whole domain was absent from this file**, which shipped with Phase 8 and
@@ -325,18 +337,18 @@ done
 # experience and `cursors_1` at 40, so an honest road to these screens is two
 # hundred ticks of the laboratory before the thing being captured appears — the
 # setup cost `debug_spawn` already exists to skip.
-run satchel_gated  ORBS_BOOT=0 ORBS_DUMP="attend menagerie; queue skyward"
+run satchel_gated  ORBS_BOOT=0 ORBS_DUMP="attend menagerie; queue heed"
 run satchel_queued ORBS_BOOT=0 ORBS_DUMP="attend menagerie; debug_take satchel_1; \
-  queue skyward; queue earthward; queue skyward; survey satchel"
+  queue heed; queue yoke; queue heed; survey satchel"
 run satchel_bare   ORBS_BOOT=0 ORBS_DUMP="attend menagerie; debug_take satchel_1; survey satchel"
 run satchel_take   ORBS_BOOT=0 ORBS_DUMP="debug_take; debug_take tbi_b; debug_take cursors_1"
 run satchel_drain  ORBS_BOOT=0 ORBS_GRID=110x40 \
-  ORBS_DUMP="attend menagerie; debug_take satchel_1; queue skyward; queue earthward; scribe drain" \
+  ORBS_DUMP="attend menagerie; debug_take satchel_1; queue heed; queue yoke; scribe drain" \
   ORBS_EDIT=$'edit\nrepeat 2\npull note from satchel\nsurvey note\nend\n<esc>\nquit' \
   ORBS_THEN="invoke drain; meditate 10; survey satchel"
 run satchel_fork   ORBS_BOOT=0 ORBS_GRID=110x40 \
   ORBS_DUMP="attend menagerie; debug_take satchel_1; debug_take cursors_1; scribe both" \
-  ORBS_EDIT=$'edit\npart filling()\nqueue skyward\nqueue earthward\nend\nalongside filling()\nrepeat 2\npull note from satchel\nsurvey note\nend\n<esc>\nquit' \
+  ORBS_EDIT=$'edit\npart filling()\nqueue heed\nqueue yoke\nend\nalongside filling()\nrepeat 2\npull note from satchel\nsurvey note\nend\n<esc>\nquit' \
   ORBS_THEN="invoke both; meditate 12; peruse menagerie.log"
 run recall_satchel ORBS_BOOT=0 ORBS_DUMP="recall queue; recall pull; recall alongside"
 

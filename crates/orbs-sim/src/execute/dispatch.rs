@@ -41,7 +41,8 @@ pub fn run_pending(world: &mut World) {
     let queued = world.resource_mut::<Pending>().drain();
     for item in queued {
         match item {
-            Queued::Command(intent) => execute(&intent, world),
+            Queued::Command(intent) => execute(&intent, world, false),
+            Queued::Divined(intent) => execute(&intent, world, true),
             // A save is not a command — no verb ran, and no `Intent` describes
             // it — but it lands on the same boundary and in the same order.
             Queued::Write {
@@ -71,10 +72,13 @@ pub fn run_pending(world: &mut World) {
 /// through it would manage exactly one instruction per tick whatever its budget
 /// said.
 pub fn execute_one(intent: &Intent, world: &mut World) {
-    execute(intent, world);
+    execute(intent, world, false);
 }
 
-fn execute(intent: &Intent, world: &mut World) {
+/// Run one command. `divined` is whether the augury read it rather than the orb
+/// (§6); a spell's line never is, because the player saw its reading when it
+/// was written.
+fn execute(intent: &Intent, world: &mut World, divined: bool) {
     // **Any other word answers *no* to a pending `quit`.** The question lasts
     // exactly one line, so a `quit` typed and thought better of cannot end a
     // session three commands later. `quit` itself is excluded because it is the
@@ -101,9 +105,8 @@ fn execute(intent: &Intent, world: &mut World) {
         Verb::Dial => super::scry::dial(intent, world),
         Verb::Muster => super::muster::muster(world),
         Verb::Haul => super::muster::haul(intent, world),
-        Verb::Summon => super::sing::summon(world),
-        Verb::Sing => super::sing::sing(intent, world),
-        Verb::Chorus => super::sing::chorus(world),
+        Verb::Summon => super::summon::summon(world, divined),
+        Verb::Limn => super::summon::limn(intent, world),
         Verb::Queue => super::queue::queue(intent, world),
         Verb::Defend => super::defend::defend(world),
         Verb::Deploy => super::defend::deploy(intent, world),
@@ -234,19 +237,18 @@ pub const fn is_live(verb: Verb) -> bool {
             // greater ward onto a lesser — *is* the puzzle rather than a dead end.
             | Verb::Muster
             | Verb::Haul
-            // The menagerie's two. `summon` refuses where there is no circle and
-            // where a chant is already running; `sing` refuses where nothing is
-            // running and where the word is not a syllable. **A missed syllable
-            // is not a refusal** — it is the chant going badly, which is the
-            // puzzle rather than a dead end, exactly as a refused haul is.
+            // The menagerie's two. `summon` refuses only where there is no
+            // circle; `limn` refuses where no beast waits and where a word is not
+            // a glyph or a humour. **A balk is not a refusal** — it is the circle
+            // answering wrongly, which is the puzzle rather than a dead end,
+            // exactly as a refused haul is.
             | Verb::Summon
-            | Verb::Sing
-            | Verb::Chorus
+            | Verb::Limn
             // The bailey's five, on the same reading. `defend` refuses where
             // there is no rampart and where a siege is already running; the
             // other four refuse where none is. **A round that goes badly is not
             // a refusal** — it is the siege going badly, which is the puzzle
-            // rather than a dead end, exactly as a missed syllable is.
+            // rather than a dead end, exactly as a balked call is.
             | Verb::Defend
             | Verb::Deploy
             | Verb::Quaff

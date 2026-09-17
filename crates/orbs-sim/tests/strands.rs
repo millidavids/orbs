@@ -77,7 +77,7 @@ fn the_second_cursor_is_bought_at_the_loom() {
         "early",
         &[
             "part filling()",
-            "    queue skyward",
+            "    queue heed",
             "end",
             "alongside filling()",
         ],
@@ -90,19 +90,19 @@ fn the_second_cursor_is_bought_at_the_loom() {
         said(&sim),
     );
     assert!(
-        !ever_said(&sim, "skyward goes in the satchel"),
+        !ever_said(&sim, "heed goes in the satchel"),
         "an unbought fork ran anyway: {:?}",
         said(&sim),
     );
 
     // **And the two-spell road is open without it**, which is why this node is
     // honestly labelled as ergonomics on the loom.
-    write(&mut sim, "filler", &["queue earthward"]);
+    write(&mut sim, "filler", &["queue yoke"]);
     write(&mut sim, "caller", &["invoke filler", "bide 3"]);
     run(&mut sim, "invoke caller");
     sim.step_n(10);
     assert!(
-        ever_said(&sim, "earthward goes in the satchel"),
+        ever_said(&sim, "yoke goes in the satchel"),
         "two spells could not run together: {:?}",
         said(&sim),
     );
@@ -126,8 +126,8 @@ fn a_blocked_cursor_yields_only_itself() {
         "both",
         &[
             "part filling()",
-            "    queue skyward",
-            "    queue earthward",
+            "    queue heed",
+            "    queue yoke",
             "end",
             // The consumer runs first and finds nothing, every tick, until the
             // forked producer has put something in.
@@ -142,12 +142,12 @@ fn a_blocked_cursor_yields_only_itself() {
     sim.step_n(30);
 
     assert!(
-        ever_said(&sim, "skyward"),
+        ever_said(&sim, "heed"),
         "the consumer never got the first name: {:?}",
         said(&sim),
     );
     assert!(
-        ever_said(&sim, "earthward"),
+        ever_said(&sim, "yoke"),
         "the consumer never got the second: {:?}",
         said(&sim),
     );
@@ -173,7 +173,7 @@ fn a_spell_lasts_as_long_as_its_longest_cursor() {
         &[
             "part filling()",
             "    bide 6",
-            "    queue skyward",
+            "    queue heed",
             "end",
             "alongside filling()",
         ],
@@ -182,7 +182,7 @@ fn a_spell_lasts_as_long_as_its_longest_cursor() {
     sim.step_n(20);
 
     assert!(
-        ever_said(&sim, "skyward goes in the satchel"),
+        ever_said(&sim, "heed goes in the satchel"),
         "the caller running out killed the fork: {:?}",
         said(&sim),
     );
@@ -203,11 +203,11 @@ fn a_forked_cursor_binds_its_own_names() {
         "scoped",
         &[
             "part filling(what)",
-            "    let note be earthward",
+            "    let note be yoke",
             "    queue what",
             "end",
-            "let note be skyward",
-            "alongside filling(leftward)",
+            "let note be heed",
+            "alongside filling(spurn)",
             "bide 4",
             "queue note",
         ],
@@ -218,12 +218,12 @@ fn a_forked_cursor_binds_its_own_names() {
     // The part queued what it was handed; the caller queued its own `note`,
     // which the part's `let` must not have moved.
     assert!(
-        ever_said(&sim, "leftward goes in the satchel"),
+        ever_said(&sim, "spurn goes in the satchel"),
         "the fork did not get its argument: {:?}",
         said(&sim),
     );
     assert!(
-        ever_said(&sim, "skyward goes in the satchel"),
+        ever_said(&sim, "heed goes in the satchel"),
         "the fork overwrote the caller's binding: {:?}",
         said(&sim),
     );
@@ -281,7 +281,7 @@ fn a_fork_without_brackets_says_what_is_missing() {
         "bare",
         &[
             "part filling()",
-            "    queue skyward",
+            "    queue heed",
             "end",
             "alongside filling",
         ],
@@ -337,10 +337,10 @@ fn two_cursors_interleave_the_same_way_at_two_steps_a_tick() {
             "weave_two",
             &[
                 "part filling()",
-                "    queue skyward",
-                "    queue earthward",
-                "    queue leftward",
-                "    queue rightward",
+                "    queue heed",
+                "    queue yoke",
+                "    queue spurn",
+                "    queue mirror",
                 "end",
                 "alongside filling()",
                 "repeat 4",
@@ -358,7 +358,7 @@ fn two_cursors_interleave_the_same_way_at_two_steps_a_tick() {
     let twice = interleaving(11);
     assert_eq!(once, twice, "two runs of one seed interleaved differently");
     assert!(
-        once.iter().any(|line| line.contains("rightward")),
+        once.iter().any(|line| line.contains("mirror")),
         "the pipeline never ran through: {once:?}",
     );
 }
@@ -386,7 +386,7 @@ fn the_rail_counts_every_cursor_and_status_names_them() {
         &[
             "part filling()",
             "    repeat 30",
-            "        queue skyward",
+            "        queue heed",
             "        bide 2",
             "    end",
             "end",
@@ -489,11 +489,11 @@ fn a_forked_spell_comes_back_with_both_cursors() {
         &[
             "part filling()",
             "    bide 20",
-            "    queue skyward",
+            "    queue heed",
             "end",
             "alongside filling()",
             "bide 40",
-            "queue earthward",
+            "queue yoke",
         ],
     );
     run(&mut sim, "invoke both");
@@ -505,12 +505,12 @@ fn a_forked_spell_comes_back_with_both_cursors() {
     restored.step_n(80);
 
     assert!(
-        ever_said(&restored, "skyward goes in the satchel"),
+        ever_said(&restored, "heed goes in the satchel"),
         "the forked cursor did not come back: {:?}",
         said(&restored),
     );
     assert!(
-        ever_said(&restored, "earthward goes in the satchel"),
+        ever_said(&restored, "yoke goes in the satchel"),
         "the caller's cursor did not come back: {:?}",
         said(&restored),
     );

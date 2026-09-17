@@ -108,6 +108,26 @@ pub fn shortcut(line: &str) -> bool {
     line.trim() == COURSE
 }
 
+/// `debug_circle` — limn the circle so the waiting beast's next call holds it.
+///
+/// **The temper is not touched**, which is the difference from `debug_ward`: the
+/// ward's shortcut rewrites the answer, and a beast's temper is a puzzle the
+/// table drew, so a shortcut that rewrote it could leave one no circle answers.
+/// This limns the glyphs to a solution instead, and republishes for
+/// `debug_course`'s reason — the glyphs' readings are what a spell reads next.
+///
+/// Everything downstream runs as it would have: the next `summon` is a real call
+/// through the real verb, and what a hold pays is counted as it always is. It
+/// skips the reasoning, which is not what a See-it line for the *hold* is
+/// looking at.
+pub const CIRCLE: &str = "debug_circle";
+
+/// Whether this line is a `debug_circle`.
+#[must_use]
+pub fn beckoned(line: &str) -> bool {
+    line.trim() == CIRCLE
+}
+
 /// `debug_siege` — leave the standing siege one round from won.
 ///
 /// A siege is a dozen rounds and a `hold` is a whole turn of decisions, so a

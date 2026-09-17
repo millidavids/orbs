@@ -57,6 +57,16 @@ impl Scrollback {
 pub enum Queued {
     /// A resolved command.
     Command(Intent),
+    /// A resolved command the augury read rather than the orb (§6) — see
+    /// [`Sim::submit_divined`](crate::Sim::submit_divined).
+    ///
+    /// **Its own variant, because a verb may answer a guess differently from a
+    /// word the player typed.** `summon` is the first that does: it takes no
+    /// argument and resolves in any menagerie, so it is what a reader reaches
+    /// for when a sentence defeats it — and with a beast waiting it spends a
+    /// call against par. Replay is unaffected, since `Submission::Divined`
+    /// comes back through the same door.
+    Divined(Intent),
     /// A spell to write out — see [`Sim::write_spell`](crate::Sim::write_spell).
     ///
     /// **In the same queue as commands, deliberately.** A save and a typed line
@@ -105,6 +115,11 @@ impl Pending {
     /// Queue an intent for the next tick.
     pub fn push(&mut self, intent: Intent) {
         self.0.push(Queued::Command(intent));
+    }
+
+    /// Queue an intent the augury read, for the next tick.
+    pub fn push_divined(&mut self, intent: Intent) {
+        self.0.push(Queued::Divined(intent));
     }
 
     /// Queue a spell to be written on the next tick.
@@ -416,16 +431,6 @@ pub enum Submission {
     /// It executes at the start of the next tick, like a typed line: the screen
     /// hands the sim a request and the world answers on its own clock.
     Took(String),
-    /// A syllable sung by hand, on the arrow keys.
-    ///
-    /// [`Walked`](Self::Walked)'s twin: it has **already happened** by the time
-    /// it is recorded, because `Sim::sing` does not wait for a clock. Replay a
-    /// tick, then apply the syllables recorded against it in list order.
-    ///
-    /// **The word, and no timing.** The sim grades on the tick a press arrived
-    /// in, so *when inside the tick* changes no world state — and `Wrote`'s rule
-    /// excludes exactly that.
-    Sang(String),
 }
 
 /// Everything the player did, with the tick it landed on.
@@ -473,13 +478,6 @@ impl Submissions {
     /// it is recorded. See [`Submission::Walked`].
     pub fn walked(&mut self, tick: Tick, way: &str) {
         self.0.push((tick, Submission::Walked(way.to_owned())));
-    }
-
-    /// Note that a syllable was sung by hand during `tick`.
-    ///
-    /// Already done by the time it is recorded, like [`walked`](Self::walked).
-    pub fn sang(&mut self, tick: Tick, syllable: &str) {
-        self.0.push((tick, Submission::Sang(syllable.to_owned())));
     }
 
     /// Note that a mastery node was taken during `tick`.
